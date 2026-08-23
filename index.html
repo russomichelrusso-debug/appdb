@@ -3086,13 +3086,28 @@ async function searchManageClients(term){
     wrap.querySelectorAll('[data-del-client]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         const nome = btn.dataset.nomeClient;
+        const id = btn.dataset.delClient;
         if(!confirm(`Excluir "${nome}"? Só funciona se ele não tiver pedido ou levantamento registrado.`)) return;
         try{
-          await apiFetch(`/api/clientes/${btn.dataset.delClient}`, { method:'DELETE' });
+          await apiFetch(`/api/clientes/${id}`, { method:'DELETE' });
           showToast('Cliente excluído: ' + nome);
           searchManageClients(document.getElementById('manageClientSearch').value);
         }catch(e){
-          alert(e.message);
+          // se bloqueado por ter histórico E quem está logado for admin, oferece
+          // a exclusão forçada (apaga o histórico junto) como segunda opção
+          if(state.currentUser?.is_admin && /administrador/i.test(e.message)){
+            if(confirm(`${e.message}\n\nVocê é administrador — quer excluir "${nome}" MESMO ASSIM, apagando o histórico de pedidos/levantamentos dele junto? Essa ação não pode ser desfeita.`)){
+              try{
+                await apiFetch(`/api/clientes/${id}?forcar=1`, { method:'DELETE' });
+                showToast('Cliente e histórico excluídos: ' + nome);
+                searchManageClients(document.getElementById('manageClientSearch').value);
+              }catch(e2){
+                alert(e2.message);
+              }
+            }
+          } else {
+            alert(e.message);
+          }
         }
       });
     });
@@ -4421,7 +4436,7 @@ async function doLogin(){
   try{
     const result = await apiLogin(usuario, senha, lembrar);
     setStoredToken(result.token, lembrar);
-    state.currentUser = { nome: result.nome, usuario: result.usuario };
+    state.currentUser = { nome: result.nome, usuario: result.usuario, is_admin: !!result.is_admin };
     if(!state.seller) state.seller = result.nome;
     clearSessionData();
     hideLoginScreen();
@@ -4445,7 +4460,7 @@ async function doSetup(){
     await apiSetupFirstUser(nome, usuario, senha);
     const result = await apiLogin(usuario, senha, true);
     setStoredToken(result.token, true);
-    state.currentUser = { nome: result.nome, usuario: result.usuario };
+    state.currentUser = { nome: result.nome, usuario: result.usuario, is_admin: !!result.is_admin };
     if(!state.seller) state.seller = result.nome;
     clearSessionData();
     hideLoginScreen();
