@@ -60,6 +60,7 @@ router.post('/sync', async (req, res) => {
       [codigos, nomes, categorias]
     );
     const { criados, atualizados } = result.rows[0];
+    console.log(`Sync de catálogo: ${criados} criado(s), ${atualizados} atualizado(s) de ${produtos.length}.`);
     res.json({ criados: Number(criados), atualizados: Number(atualizados), total: produtos.length });
   } catch (e) {
     console.error(e);

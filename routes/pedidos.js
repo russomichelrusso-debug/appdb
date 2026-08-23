@@ -63,6 +63,7 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    console.log(`Pedido #${pedidoId} gravado (cliente ${clienteId}, ${itens.length} item(ns)).`);
     res.status(201).json({ pedido_id: pedidoId, cliente_id: clienteId, data_pedido: pedidoResult.rows[0].data_pedido });
   } catch (e) {
     await client.query('ROLLBACK');

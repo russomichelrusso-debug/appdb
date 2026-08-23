@@ -131,4 +131,48 @@ router.get('/clientes/:id/consumo-estimado/:produtoId', async (req, res) => {
   }
 });
 
+// Busca reversa: dado um código de produto, quem já comprou ele e/ou quem
+// tem ele no levantamento mais recente. Útil pra "preciso saber quem tem
+// esse produto" sem precisar abrir cliente por cliente.
+router.get('/produtos/:codigo/clientes', async (req, res) => {
+  const { codigo } = req.params;
+  try {
+    const produtoResult = await pool.query('SELECT id, codigo_sku, nome FROM produtos WHERE codigo_sku = $1', [codigo]);
+    if (produtoResult.rows.length === 0) return res.status(404).json({ erro: 'Produto não encontrado — confira o código ou sincronize o catálogo.' });
+    const produtoId = produtoResult.rows[0].id;
+
+    const compradores = await pool.query(
+      `SELECT c.id, c.nome, c.documento, SUM(pi.quantidade) AS total_comprado, MAX(ped.data_pedido) AS ultima_compra
+       FROM pedido_itens pi
+       JOIN pedidos ped ON ped.id = pi.pedido_id
+       JOIN clientes c ON c.id = ped.cliente_id
+       WHERE pi.produto_id = $1
+       GROUP BY c.id, c.nome, c.documento
+       ORDER BY ultima_compra DESC`,
+      [produtoId]
+    );
+
+    // só a leitura mais recente de levantamento por cliente (não o histórico
+    // inteiro) - o que importa aqui é "quanto ele tem agora", não a série toda
+    const levantados = await pool.query(
+      `SELECT DISTINCT ON (c.id) c.id, c.nome, c.documento, li.quantidade_contada, l.data_visita
+       FROM levantamento_itens li
+       JOIN levantamentos l ON l.id = li.levantamento_id
+       JOIN clientes c ON c.id = l.cliente_id
+       WHERE li.produto_id = $1
+       ORDER BY c.id, l.data_visita DESC`,
+      [produtoId]
+    );
+
+    res.json({
+      produto: produtoResult.rows[0],
+      compradores: compradores.rows,
+      levantamentos: levantados.rows,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar clientes desse produto.' });
+  }
+});
+
 module.exports = router;

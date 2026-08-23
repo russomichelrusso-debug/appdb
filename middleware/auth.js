@@ -1,20 +1,26 @@
-// Autenticação simples por chave compartilhada - suficiente pra uma ferramenta
-// interna de uso da equipe. Cada aparelho manda a mesma chave (guardada no app)
-// no cabeçalho "X-API-Key". Pra revogar acesso, troca essa chave nas variáveis
-// de ambiente do Render e reenvia a nova chave pro app.
-function requireApiKey(req, res, next) {
-  const key = req.header('X-API-Key');
-  if (!process.env.API_KEY) {
-    // se ninguém configurou uma chave ainda, não bloqueia (fica só no aviso) -
-    // assim que a variável de ambiente API_KEY for definida no Render, passa
-    // a exigir de verdade.
-    console.warn('Aviso: API_KEY não configurada - endpoint aberto sem autenticação.');
-    return next();
+const { pool } = require('../db');
+
+// Confere se o token enviado (cabeçalho "Authorization: Bearer <token>")
+// corresponde a uma sessão válida e não expirada. Se sim, guarda quem é o
+// usuário em req.usuario pras rotas seguintes usarem (ex: registrar quem
+// fez o pedido).
+async function requireAuth(req, res, next) {
+  const token = (req.header('Authorization') || '').replace('Bearer ', '').trim();
+  if (!token) return res.status(401).json({ erro: 'Não autenticado — faça login novamente.' });
+  try {
+    const result = await pool.query(
+      `SELECT u.id, u.nome, u.usuario FROM sessoes s
+       JOIN usuarios u ON u.id = s.usuario_id
+       WHERE s.token = $1 AND s.expira_em > now()`,
+      [token]
+    );
+    if (result.rows.length === 0) return res.status(401).json({ erro: 'Sessão expirada — faça login novamente.' });
+    req.usuario = result.rows[0];
+    next();
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao verificar autenticação.' });
   }
-  if (key !== process.env.API_KEY) {
-    return res.status(401).json({ erro: 'Chave de API inválida ou ausente.' });
-  }
-  next();
 }
 
-module.exports = { requireApiKey };
+module.exports = { requireAuth };

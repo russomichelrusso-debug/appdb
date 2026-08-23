@@ -1,7 +1,8 @@
 const express = require('express');
 const { runMigrations } = require('./db');
-const { requireApiKey } = require('./middleware/auth');
+const { requireAuth } = require('./middleware/auth');
 
+const authRoutes = require('./routes/auth');
 const clientesRoutes = require('./routes/clientes');
 const produtosRoutes = require('./routes/produtos');
 const pedidosRoutes = require('./routes/pedidos');
@@ -14,7 +15,7 @@ const app = express();
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, X-API-Key');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -24,12 +25,16 @@ app.use(express.json({ limit: '2mb' }));
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// todas as rotas de dados exigem a chave de API (ver middleware/auth.js)
-app.use('/api/clientes', requireApiKey, clientesRoutes);
-app.use('/api/produtos', requireApiKey, produtosRoutes);
-app.use('/api/pedidos', requireApiKey, pedidosRoutes);
-app.use('/api/levantamentos', requireApiKey, levantamentosRoutes);
-app.use('/api', requireApiKey, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
+// login/setup/logout ficam públicos (senão ninguém consegue nem entrar);
+// cadastrar novo usuário exige já estar logado (checado dentro de routes/auth.js).
+app.use('/api/auth', authRoutes);
+
+// todas as rotas de dados exigem estar logado (ver middleware/auth.js)
+app.use('/api/clientes', requireAuth, clientesRoutes);
+app.use('/api/produtos', requireAuth, produtosRoutes);
+app.use('/api/pedidos', requireAuth, pedidosRoutes);
+app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
+app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
 const PORT = process.env.PORT || 3000;
 

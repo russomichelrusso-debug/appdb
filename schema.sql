@@ -61,3 +61,21 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_cliente ON pedidos(cliente_id, data_pedid
 CREATE INDEX IF NOT EXISTS idx_pedido_itens_produto ON pedido_itens(produto_id);
 CREATE INDEX IF NOT EXISTS idx_levantamentos_cliente ON levantamentos(cliente_id, data_visita DESC);
 CREATE INDEX IF NOT EXISTS idx_levantamento_itens_produto ON levantamento_itens(produto_id);
+
+-- Login de usuário (vendedores acessando o app) e sessões ("lembrar-me")
+CREATE TABLE IF NOT EXISTS usuarios (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL,
+  usuario TEXT UNIQUE NOT NULL,
+  senha_hash TEXT NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS sessoes (
+  token TEXT PRIMARY KEY,
+  usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  expira_em TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_sessoes_expira ON sessoes(expira_em);
+

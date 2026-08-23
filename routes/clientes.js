@@ -54,4 +54,44 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Importa clientes em lote (ex: planilha de Razão Social + CNPJ). Mesma
+// lógica de "uma operação só" usada no sync de produtos - evita o mesmo
+// problema de tempo limite que já vimos lá. Não apaga ninguém, só cria ou
+// atualiza o nome de quem já existe (por CNPJ).
+router.post('/import', async (req, res) => {
+  const clientes = req.body.clientes;
+  if (!Array.isArray(clientes)) return res.status(400).json({ erro: 'Envie { clientes: [...] }' });
+
+  const validos = clientes.filter(c => c.nome && c.cnpj);
+  if (validos.length === 0) return res.json({ criados: 0, atualizados: 0, total: clientes.length });
+
+  const nomes = validos.map(c => c.nome);
+  const documentos = validos.map(c => String(c.cnpj));
+
+  try {
+    const result = await pool.query(
+      `WITH entrada AS (
+         SELECT * FROM UNNEST($1::text[], $2::text[]) AS t(nome, documento)
+       ),
+       upsert AS (
+         INSERT INTO clientes (nome, documento)
+         SELECT nome, documento FROM entrada
+         ON CONFLICT (documento) DO UPDATE SET nome = EXCLUDED.nome
+         RETURNING (xmax = 0) AS inserted
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE inserted) AS criados,
+         COUNT(*) FILTER (WHERE NOT inserted) AS atualizados
+       FROM upsert`,
+      [nomes, documentos]
+    );
+    const { criados, atualizados } = result.rows[0];
+    console.log(`Import de clientes: ${criados} criado(s), ${atualizados} atualizado(s) de ${clientes.length}.`);
+    res.json({ criados: Number(criados), atualizados: Number(atualizados), total: clientes.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao importar clientes.' });
+  }
+});
+
 module.exports = router;
