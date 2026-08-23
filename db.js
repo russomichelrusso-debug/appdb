@@ -17,6 +17,16 @@ async function runMigrations() {
   const schemaSql = fs.readFileSync(schemaPath, 'utf8');
   await pool.query(schemaSql);
   console.log('Esquema do banco verificado/criado com sucesso.');
+
+  // Aproveita a subida pra limpar sessões que já venceram. Elas não dão mais
+  // acesso a nada (toda consulta filtra por expira_em), mas sem isso ficariam
+  // acumulando pra sempre e ocupando espaço à toa.
+  try {
+    const limpeza = await pool.query('DELETE FROM sessoes WHERE expira_em < now()');
+    if (limpeza.rowCount > 0) console.log(`Sessões expiradas removidas: ${limpeza.rowCount}`);
+  } catch (e) {
+    console.warn('Não foi possível limpar sessões expiradas:', e.message);
+  }
 }
 
 module.exports = { pool, runMigrations };
