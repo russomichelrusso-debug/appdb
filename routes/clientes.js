@@ -94,4 +94,58 @@ router.post('/import', async (req, res) => {
   }
 });
 
+// Exclui um cliente. Por padrão, se ele já tiver pedidos ou levantamentos
+// registrados, o banco recusa (chave estrangeira) de propósito - evita
+// apagar histórico de venda sem querer. Um administrador pode forçar a
+// exclusão total (cliente + histórico junto) mandando ?forcar=1 - usuários
+// comuns não conseguem, mesmo mandando o mesmo parâmetro.
+router.delete('/:id', async (req, res) => {
+  const { id } = req.params;
+  const forcar = req.query.forcar === '1' && !!req.usuario?.is_admin;
+
+  if (!forcar) {
+    try {
+      const result = await pool.query('DELETE FROM clientes WHERE id = $1 RETURNING nome', [id]);
+      if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+      console.log(`Cliente excluído: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.usuario || '?'}`);
+      return res.json({ ok: true });
+    } catch (e) {
+      if (e.code === '23503') {
+        return res.status(400).json({ erro: 'Esse cliente já tem pedidos ou levantamentos registrados — só um administrador pode excluir junto com o histórico.' });
+      }
+      console.error(e);
+      return res.status(500).json({ erro: 'Erro ao excluir cliente.' });
+    }
+  }
+
+  // exclusão forçada (só admin chega aqui) - apaga o histórico ligado a esse
+  // cliente antes, numa transação só, pra não deixar registro órfão.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `DELETE FROM pedido_itens WHERE pedido_id IN (SELECT id FROM pedidos WHERE cliente_id = $1)`, [id]
+    );
+    await client.query('DELETE FROM pedidos WHERE cliente_id = $1', [id]);
+    await client.query(
+      `DELETE FROM levantamento_itens WHERE levantamento_id IN (SELECT id FROM levantamentos WHERE cliente_id = $1)`, [id]
+    );
+    await client.query('DELETE FROM levantamentos WHERE cliente_id = $1', [id]);
+    const result = await client.query('DELETE FROM clientes WHERE id = $1 RETURNING nome', [id]);
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    }
+    await client.query('COMMIT');
+    console.log(`Cliente EXCLUÍDO COM HISTÓRICO: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.usuario || '?'} (admin)`);
+    res.json({ ok: true, historico_apagado: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao excluir cliente e histórico.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;

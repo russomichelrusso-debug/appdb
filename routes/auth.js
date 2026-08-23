@@ -21,11 +21,13 @@ router.post('/setup', async (req, res) => {
       return res.status(403).json({ erro: 'Já existe usuário cadastrado. Peça pra alguém já logado te cadastrar.' });
     }
     const senha_hash = hashPassword(senha);
+    // o primeiro usuário do sistema vira admin automaticamente - é quem fez
+    // a configuração inicial, faz sentido ele ter controle total desde já.
     const result = await pool.query(
-      'INSERT INTO usuarios (nome, usuario, senha_hash) VALUES ($1, $2, $3) RETURNING id, nome, usuario',
+      'INSERT INTO usuarios (nome, usuario, senha_hash, is_admin) VALUES ($1, $2, $3, true) RETURNING id, nome, usuario, is_admin',
       [nome, usuario, senha_hash]
     );
-    console.log(`Primeiro usuário criado: ${usuario}`);
+    console.log(`Primeiro usuário criado (admin): ${usuario}`);
     res.status(201).json(result.rows[0]);
   } catch (e) {
     console.error(e);
@@ -50,7 +52,7 @@ router.post('/login', async (req, res) => {
       [token, user.id, dias]
     );
     console.log(`Login: ${usuario} (sessão de ${dias} dia(s))`);
-    res.json({ token, nome: user.nome, usuario: user.usuario });
+    res.json({ token, nome: user.nome, usuario: user.usuario, is_admin: user.is_admin });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao entrar.' });
@@ -65,7 +67,7 @@ router.get('/me', async (req, res) => {
   if (!token) return res.status(401).json({ erro: 'Sem sessão.' });
   try {
     const result = await pool.query(
-      `SELECT u.nome, u.usuario FROM sessoes s
+      `SELECT u.nome, u.usuario, u.is_admin FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token = $1 AND s.expira_em > now()`,
       [token]
@@ -91,16 +93,19 @@ router.post('/logout', async (req, res) => {
 
 // Cadastra um novo usuário - exige já estar logado (usa o middleware requireAuth
 // no server.js), pra não deixar aberto pra qualquer um se auto-cadastrar.
+// Só um admin consegue criar outro admin - um usuário comum criando alguém
+// não consegue promover ninguém além do próprio nível dele.
 router.post('/usuarios', requireAuth, async (req, res) => {
-  const { nome, usuario, senha } = req.body;
+  const { nome, usuario, senha, is_admin } = req.body;
   if (!nome || !usuario || !senha) return res.status(400).json({ erro: 'Informe nome, usuário e senha.' });
+  const tornarAdmin = !!is_admin && !!req.usuario.is_admin;
   try {
     const senha_hash = hashPassword(senha);
     const result = await pool.query(
-      'INSERT INTO usuarios (nome, usuario, senha_hash) VALUES ($1, $2, $3) RETURNING id, nome, usuario',
-      [nome, usuario, senha_hash]
+      'INSERT INTO usuarios (nome, usuario, senha_hash, is_admin) VALUES ($1, $2, $3, $4) RETURNING id, nome, usuario, is_admin',
+      [nome, usuario, senha_hash, tornarAdmin]
     );
-    console.log(`Usuário cadastrado por ${req.usuario?.usuario || '?'}: ${usuario}`);
+    console.log(`Usuário cadastrado por ${req.usuario?.usuario || '?'}: ${usuario}${tornarAdmin ? ' (admin)' : ''}`);
     res.status(201).json(result.rows[0]);
   } catch (e) {
     console.error(e);

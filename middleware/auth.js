@@ -9,7 +9,7 @@ async function requireAuth(req, res, next) {
   if (!token) return res.status(401).json({ erro: 'Não autenticado — faça login novamente.' });
   try {
     const result = await pool.query(
-      `SELECT u.id, u.nome, u.usuario FROM sessoes s
+      `SELECT u.id, u.nome, u.usuario, u.is_admin FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token = $1 AND s.expira_em > now()`,
       [token]

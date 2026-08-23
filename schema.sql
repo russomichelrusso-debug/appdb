@@ -68,8 +68,14 @@ CREATE TABLE IF NOT EXISTS usuarios (
   nome TEXT NOT NULL,
   usuario TEXT UNIQUE NOT NULL,
   senha_hash TEXT NOT NULL,
+  is_admin BOOLEAN NOT NULL DEFAULT false,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Garante a coluna também em bancos que já tinham a tabela criada antes
+-- dela existir (sem isso, "CREATE TABLE IF NOT EXISTS" não adicionaria a
+-- coluna nova em quem já tinha rodado o schema antigo).
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
 
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,

@@ -36,6 +36,21 @@ e senha. Por baixo dos panos:
 Senha é guardada com hash `scrypt` (nativo do Node, com salt aleatório por
 usuário) — nunca em texto puro.
 
+### Administrador
+
+O **primeiro usuário criado** (via `/api/auth/setup`) vira administrador
+automaticamente. Só administrador consegue:
+- Excluir um cliente que já tem pedido ou levantamento registrado (mandando
+  `?forcar=1` na exclusão — apaga o histórico junto, de propósito, então use
+  com cuidado)
+- Criar outro usuário já como administrador (passando `is_admin: true` ao
+  cadastrar — um usuário comum tentando isso é ignorado, o novo usuário
+  sempre nasce comum nesse caso)
+
+Usuários comuns conseguem tudo o mais (vender, gravar levantamento, ver
+histórico) — a exclusão forçada é pensada só pra manutenção/teste, não pro
+uso do dia a dia.
+
 ## Rotas principais
 
 | Rota | O que faz |
@@ -48,7 +63,7 @@ usuário) — nunca em texto puro.
 | `GET /api/clientes?busca=` | Busca cliente por nome/documento |
 | `POST /api/clientes` | Cria cliente (não duplica se o documento já existir) |
 | `POST /api/clientes/import` | Importa clientes em lote (planilha de nome+CNPJ) |
-| `DELETE /api/clientes/:id` | Exclui cliente (recusa se ele já tiver pedido/levantamento registrado) |
+| `DELETE /api/clientes/:id` | Exclui cliente. Recusa se tiver pedido/levantamento, a não ser que mande `?forcar=1` **e** quem estiver logado for administrador — nesse caso apaga o histórico junto. |
 | `POST /api/produtos/sync` | Sincroniza o catálogo (rodar sempre que o `precos.json` mudar) |
 | `POST /api/pedidos` | Grava um pedido fechado, com itens |
 | `POST /api/levantamentos` | Grava um levantamento de estoque, com itens |
