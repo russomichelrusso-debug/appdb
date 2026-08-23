@@ -672,10 +672,71 @@
     display:inline-block;background:#FFF4E5;color:#B36B00;font-weight:700;font-size:11px;
     padding:3px 9px;border-radius:20px;margin-top:8px;
   }
+  .abcResumo{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .abcPill{background:var(--white);border-radius:12px;box-shadow:var(--shadow-1);padding:10px 12px;border-left:4px solid var(--hairline);}
+  .abcPill--a{border-left-color:#CC0935;}
+  .abcPill--b{border-left-color:#B36B00;}
+  .abcPill--c{border-left-color:var(--hairline);}
+  .abcPillTitulo{display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--gray);margin-bottom:3px;}
+  .abcPillValor{display:block;font-size:18px;font-weight:800;color:var(--ink);}
+  .abcPillDetalhe{display:block;font-size:11px;color:var(--gray);}
+  .abcChart{background:var(--white);border-radius:14px;box-shadow:var(--shadow-1);padding:12px;margin-bottom:14px;}
+  .badge-classe{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:5px;font-size:10px;font-weight:800;color:#fff;margin-right:4px;}
+  .badge-classe--a{background:#CC0935;}
+  .badge-classe--b{background:#B36B00;}
+  .badge-classe--c{background:var(--gray);}
+  .pdfDropzone{
+    position:relative;border:2px dashed var(--hairline);border-radius:14px;
+    padding:28px 16px;text-align:center;cursor:pointer;background:var(--fill);
+  }
+  .pdfDropzone.dragging{border-color:var(--red);background:#FDECEC;}
+  .pdfDropzone svg{width:32px;height:32px;color:var(--red);margin:0 auto 10px;display:block;}
+  .pdfDropzoneTitle{font-weight:700;font-size:14.5px;color:var(--ink);margin-bottom:3px;}
+  .pdfDropzoneSub{font-size:12px;color:var(--gray);}
+  .pdfQueue{list-style:none;margin:12px 0 0;padding:0;display:flex;flex-direction:column;gap:6px;}
+  .pdfQueueItem{
+    display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:10px;
+    background:var(--fill);font-size:12.5px;
+  }
+  .pdfQueueDot{width:8px;height:8px;border-radius:50%;flex-shrink:0;background:var(--gray);}
+  .pdfQueueItem--processando .pdfQueueDot{background:var(--red);animation:pdfPulse 1s ease-in-out infinite;}
+  .pdfQueueItem--sucesso .pdfQueueDot{background:#1E8E3E;}
+  .pdfQueueItem--jaexistia .pdfQueueDot{background:#B36B00;}
+  .pdfQueueItem--erro .pdfQueueDot{background:#B3261E;}
+  @keyframes pdfPulse{50%{opacity:.3;}}
+  .pdfQueueNome{font-weight:700;flex-shrink:0;max-width:38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink);}
+  .pdfQueueDetalhe{color:var(--gray);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .histProdutoTitle{font-size:15px;font-weight:700;color:var(--ink);padding:2px 2px 12px;}
   .histProdutoTitle .hcCode{font-size:12px;font-weight:500;color:var(--gray);}
   .histSectionLbl{font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.03em;margin:14px 2px 8px;}
   .histSectionLbl:first-of-type{margin-top:0;}
+  .dirListItem{
+    display:block;width:100%;text-align:left;background:var(--white);border:none;border-radius:14px;
+    box-shadow:var(--shadow-1);padding:12px 13px;margin-bottom:8px;cursor:pointer;
+  }
+  .dirListItem .dlName{font-weight:700;font-size:13.5px;color:var(--ink);}
+  .dirListItem .dlMeta{font-size:12px;color:var(--gray);margin-top:2px;}
+  .dirListItem:active{background:var(--fill);}
+  .abcSummary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+  .abcPill{background:var(--white);box-shadow:var(--shadow-1);border-radius:12px;padding:10px 11px;border-left:4px solid var(--gray);}
+  .abcPill.a{border-left-color:var(--red);}
+  .abcPill.b{border-left-color:#B36B00;}
+  .abcPill.c{border-left-color:var(--hairline);}
+  .abcPill .apLbl{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);}
+  .abcPill .apVal{font-size:16px;font-weight:800;color:var(--ink);margin-top:2px;}
+  .abcPill .apSub{font-size:10.5px;color:var(--gray);margin-top:1px;}
+  .abcChart{width:100%;height:auto;display:block;margin-bottom:10px;}
+  .abcRow{display:flex;align-items:center;gap:10px;background:var(--white);box-shadow:var(--shadow-1);border-radius:12px;padding:10px 12px;margin-bottom:7px;}
+  .abcRow .abcBadge{
+    flex-shrink:0;width:22px;height:22px;border-radius:6px;display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:800;color:#fff;
+  }
+  .abcRow .abcBadge.a{background:var(--red);}
+  .abcRow .abcBadge.b{background:#B36B00;}
+  .abcRow .abcBadge.c{background:var(--gray);}
+  .abcRow .abcInfo{flex:1;min-width:0;}
+  .abcRow .abcInfo .aiName{font-size:13px;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .abcRow .abcInfo .aiMeta{font-size:11px;color:var(--gray);}
   .prodResolveMsg{font-size:12px;margin:0 0 14px;min-height:16px;}
   .prodResolveMsg.ok{color:#1E8E3E;}
   .prodResolveMsg.err{color:#B3261E;}
@@ -782,9 +843,9 @@
     border:none;
     color:rgba(255,255,255,.55);
     font-weight:600;
-    font-size:14.5px;
+    font-size:13px;
     letter-spacing:-.01em;
-    padding:13px 6px 12px;
+    padding:13px 4px 12px;
     cursor:pointer;
     border-bottom:2.5px solid transparent;
   }
@@ -792,7 +853,8 @@
     color:#fff;
     border-bottom:2.5px solid var(--red);
   }
-  #tabLevantamento.hidden, #tabPrecos.hidden, #tabHistorico.hidden{display:none;}
+  #tabLevantamento.hidden, #tabPrecos.hidden, #tabProdutos.hidden, #tabClientes.hidden{display:none;}
+  #prodTabDetail.hidden, #clienteTabDetail.hidden, #prodTabListWrap.hidden, #clienteTabListWrap.hidden{display:none;}
   #histClienteMode.hidden, #histProdutoMode.hidden{display:none;}
   #apiConfigWrap.hidden, #basketMinCountWrap.hidden, #clientPickerNewForm.hidden,
   #comboWrap.hidden, #targetProdWrap.hidden, #targetSkuListWrap.hidden{display:none;}
@@ -1041,7 +1103,8 @@
   <div class="tabbar">
     <button type="button" class="tabbtn active" id="tabBtnPrecos" data-tab="precos">Preços</button>
     <button type="button" class="tabbtn" id="tabBtnLev" data-tab="levantamento">Levantamento</button>
-    <button type="button" class="tabbtn" id="tabBtnHist" data-tab="historico">Histórico</button>
+    <button type="button" class="tabbtn" id="tabBtnProdutos" data-tab="produtos">Produtos</button>
+    <button type="button" class="tabbtn" id="tabBtnClientes" data-tab="clientes">Clientes</button>
   </div>
 
   <div id="tabPrecos">
@@ -1143,44 +1206,59 @@
     </div>
   </div>
 
-  <div id="tabHistorico" class="hidden">
-    <div class="segmented" id="histModeSeg" style="margin:14px 16px 12px;">
-      <button type="button" data-v="cliente" class="active">Por cliente</button>
-      <button type="button" data-v="produto">Por produto</button>
+  <div id="tabProdutos" class="hidden">
+    <div class="lev-inputWrap" style="padding-top:12px;">
+      <div class="searchBox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="prodTabSearch" placeholder="Buscar produto por código ou nome" autocomplete="off">
+      </div>
     </div>
+    <div id="prodTabListWrap">
+      <div class="hist-content" id="prodTabList">
+        <div class="lev-empty">Digite pra buscar um produto no catálogo.</div>
+      </div>
+    </div>
+    <div id="prodTabDetail" class="hidden">
+      <div class="hist-clientBar">
+        <div>
+          <div class="hist-clientLabel">Produto</div>
+          <div class="hist-clientName" id="prodDetailName">—</div>
+        </div>
+        <button type="button" class="restoreBtn" id="prodDetailBackBtn" style="width:auto;padding:10px 16px;">Voltar</button>
+      </div>
+      <div class="hist-content" id="prodDetailContent"></div>
+    </div>
+  </div>
 
-    <div id="histClienteMode">
+  <div id="tabClientes" class="hidden">
+    <div class="lev-inputWrap" style="padding-top:12px;">
+      <div class="searchBox">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <input type="text" id="clienteTabSearch" placeholder="Buscar cliente por nome ou CNPJ" autocomplete="off">
+      </div>
+    </div>
+    <div id="clienteTabListWrap">
+      <div class="hist-content" id="clienteTabList">
+        <div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>
+      </div>
+    </div>
+    <div id="clienteTabDetail" class="hidden">
       <div class="hist-clientBar">
         <div>
           <div class="hist-clientLabel">Cliente</div>
-          <div class="hist-clientName" id="histClientName">Nenhum selecionado</div>
+          <div class="hist-clientName" id="clienteDetailName">—</div>
         </div>
-        <button type="button" class="restoreBtn" id="histSelectClientBtn" style="width:auto;padding:10px 16px;">Selecionar</button>
+        <button type="button" class="restoreBtn" id="clienteDetailBackBtn" style="width:auto;padding:10px 16px;">Voltar</button>
       </div>
-      <div class="segmented" id="histViewSeg" style="margin:0 16px 12px;">
+      <div class="segmented" id="clienteViewSeg" style="margin:0 16px 12px;">
         <button type="button" data-v="historico" class="active">Histórico</button>
+        <button type="button" data-v="abc">Curva ABC</button>
         <button type="button" data-v="rotatividade">Rotatividade</button>
         <button type="button" data-v="visitas">Visitas</button>
       </div>
-      <div class="hist-content" id="histContent">
-        <div class="lev-empty">Selecione um cliente pra ver o histórico de compras dele.</div>
-      </div>
-    </div>
-
-    <div id="histProdutoMode" class="hidden">
-      <div class="lev-inputWrap" style="padding-top:0;">
-        <div class="searchBox">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-          <input type="text" id="histProdutoInput" placeholder="Código do produto (ex: 60863)" autocomplete="off">
-        </div>
-        <div class="hint">Mostra todo mundo que já comprou esse produto, ou que tem ele no levantamento mais recente.</div>
-      </div>
-      <div class="hist-content" id="histProdutoContent">
-        <div class="lev-empty">Digite o código do produto.</div>
-      </div>
+      <div class="hist-content" id="clienteDetailContent"></div>
     </div>
   </div>
-</div>
 
 <button class="cartbar hidden" id="cartBar">
   <span class="l"><span class="badge" id="cartCount">0</span> no orçamento</span>
@@ -1382,6 +1460,17 @@
         <input type="text" id="apiBaseUrlInput" placeholder="https://cortag-backend.onrender.com">
         <button class="restoreBtn" id="saveApiConfigBtn">Salvar configuração</button>
       </div>
+    </div>
+    <div class="ap-card">
+      <h3>Consolidar cotações em PDF</h3>
+      <p class="ap-hint" style="margin-bottom:10px;">Arraste os PDFs de cotação/pedido oficiais aqui — cliente, data e itens são extraídos automaticamente e gravados direto no histórico do servidor (não fica só no aparelho). Reprocessar o mesmo PDF não duplica, é identificado pelo número da cotação.</p>
+      <div class="pdfDropzone" id="pdfDropzone" tabindex="0" role="button" aria-label="Arraste PDFs aqui ou toque pra selecionar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0-12 4 4m-4-4-4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div class="pdfDropzoneTitle">Arraste as cotações em PDF aqui</div>
+        <div class="pdfDropzoneSub">ou toque pra selecionar — vários arquivos de uma vez</div>
+        <input type="file" id="pdfFileInput" accept="application/pdf,.pdf" multiple style="display:none;">
+      </div>
+      <ul id="pdfProcessQueue" class="pdfQueue"></ul>
     </div>
     <div class="ap-card hidden" id="manageUsersCard">
       <h3>Gerenciar usuários</h3>
@@ -2476,12 +2565,14 @@ function initTabs(){
   const buttons = {
     precos: document.getElementById('tabBtnPrecos'),
     levantamento: document.getElementById('tabBtnLev'),
-    historico: document.getElementById('tabBtnHist'),
+    produtos: document.getElementById('tabBtnProdutos'),
+    clientes: document.getElementById('tabBtnClientes'),
   };
   const panels = {
     precos: document.getElementById('tabPrecos'),
     levantamento: document.getElementById('tabLevantamento'),
-    historico: document.getElementById('tabHistorico'),
+    produtos: document.getElementById('tabProdutos'),
+    clientes: document.getElementById('tabClientes'),
   };
   function activate(tab){
     Object.keys(buttons).forEach(k=>{
@@ -3258,10 +3349,7 @@ async function finalizeOrder(){
   }
 }
 
-// ---------------- Aba Histórico (dados vêm do backend) ----------------
-let histSelectedClient = null;
-let histActiveView = 'historico';
-
+// ---------------- Abas Produtos e Clientes ----------------
 function formatDateBr(iso){
   if(!iso) return '—';
   return new Date(iso).toLocaleDateString('pt-BR');
@@ -3290,74 +3378,179 @@ function renderHistVisitaCard(v){
     </div>
   </div>`;
 }
-async function loadHistView(){
-  const content = document.getElementById('histContent');
-  if(!histSelectedClient){
-    content.innerHTML = '<div class="lev-empty">Selecione um cliente pra ver o histórico de compras dele.</div>';
-    return;
+
+// Curva ABC (Pareto) por volume: ordena decrescente, calcula % acumulado, e
+// classifica em A (até 80% acumulado), B (até 95%) ou C (resto). Mesma lógica
+// usada no ConsolidaPDF, portada aqui pra funcionar com os dados do servidor.
+function classificarABC(itens, campo){
+  const ordenados = [...itens].sort((a,b)=> b[campo] - a[campo]);
+  const totalGeral = ordenados.reduce((s,p)=> s + p[campo], 0) || 1;
+  let acumulado = 0;
+  return ordenados.map(p=>{
+    const pctAntes = (acumulado / totalGeral) * 100;
+    acumulado += p[campo];
+    const classe = pctAntes < 80 ? 'A' : (pctAntes < 95 ? 'B' : 'C');
+    return { ...p, classe, cumulativoPct: (acumulado/totalGeral)*100 };
+  });
+}
+function renderAbcChart(classificados, campo){
+  const cores = { A:'#CC0935', B:'#B36B00', C:'#B7BDC6' };
+  const exibidos = classificados.slice(0, 40);
+  const W=340, H=140, margemTopo=8, margemBase=4;
+  const alturaUtil = H - margemTopo - margemBase;
+  const n = Math.max(exibidos.length,1);
+  const largBarra = W/n;
+  const maxValor = Math.max(...exibidos.map(p=>p[campo]),1);
+  const barras = exibidos.map((p,i)=>{
+    const x = i*largBarra;
+    const h = Math.max((p[campo]/maxValor)*alturaUtil, 1);
+    const y = margemTopo + (alturaUtil - h);
+    const w = Math.max(largBarra*0.8, 0.5);
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${cores[p.classe]}"><title>${escapeHtml(p.produto||p.nome||'')} — Classe ${p.classe}</title></rect>`;
+  }).join('');
+  const pontos = exibidos.map((p,i)=>{
+    const x = i*largBarra + largBarra/2;
+    const y = margemTopo + (alturaUtil - (p.cumulativoPct/100)*alturaUtil);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
+    <polyline points="${pontos}" fill="none" stroke="#24262B" stroke-width="2"/>
+    ${barras}
+  </svg>`;
+}
+function renderAbcView(classificados, campoLabel, campo){
+  if(classificados.length === 0) return '<div class="lev-empty">Sem dados suficientes pra calcular a curva ABC ainda.</div>';
+  const porClasse = { A:[], B:[], C:[] };
+  classificados.forEach(p=>porClasse[p.classe].push(p));
+  const totalVolume = classificados.reduce((s,p)=>s+p[campo],0);
+  const resumo = ['A','B','C'].map(classe=>{
+    const itens = porClasse[classe];
+    const vol = itens.reduce((s,p)=>s+p[campo],0);
+    const pct = totalVolume ? (vol/totalVolume*100) : 0;
+    return `<div class="abcPill abcPill--${classe.toLowerCase()}">
+      <span class="abcPillTitulo">Classe ${classe}</span>
+      <span class="abcPillValor">${itens.length}</span>
+      <span class="abcPillDetalhe">${pct.toFixed(0)}% do ${campoLabel}</span>
+    </div>`;
+  }).join('');
+  const linhas = classificados.map(p=>`
+    <div class="histCard">
+      <div class="hcName"><span class="badge-classe badge-classe--${p.classe.toLowerCase()}">${p.classe}</span> ${escapeHtml(p.produto)}</div>
+      <div class="hcCode">Cód. ${escapeHtml(String(p.codigo_sku))}</div>
+      <div class="hcStats">
+        <div class="hcStat">Qtd. total<b>${p[campo]}</b></div>
+        <div class="hcStat">Pedidos<b>${p.num_pedidos}</b></div>
+      </div>
+    </div>`).join('');
+  return `<div class="abcResumo">${resumo}</div><div class="abcChart">${renderAbcChart(classificados, campo)}</div>${linhas}`;
+}
+
+// ---- Aba Clientes ----
+let clienteTabSelected = null;
+let clienteTabView = 'historico';
+let clienteTabDebounce;
+
+async function searchClienteTabList(term){
+  const wrap = document.getElementById('clienteTabList');
+  if(!term || term.trim().length < 2){ wrap.innerHTML = '<div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>'; return; }
+  wrap.innerHTML = '<div class="lev-empty">Buscando…</div>';
+  try{
+    const clientes = await apiBuscarClientes(term);
+    wrap.innerHTML = clientes.length
+      ? clientes.map(c=>`
+        <button type="button" class="clientPickerItem" data-cliente-id="${c.id}" data-cliente-nome="${escapeHtml(c.nome)}">
+          <div class="cpName">${escapeHtml(c.nome)}</div>
+          <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento'}</div>
+        </button>`).join('')
+      : '<div class="lev-empty">Nenhum cliente encontrado.</div>';
+    wrap.querySelectorAll('[data-cliente-id]').forEach(btn=>{
+      btn.addEventListener('click', ()=> openClienteDetail({ id:Number(btn.dataset.clienteId), nome:btn.dataset.clienteNome }));
+    });
+  }catch(e){
+    wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
   }
+}
+function openClienteDetail(cliente){
+  clienteTabSelected = cliente;
+  document.getElementById('clienteDetailName').textContent = cliente.nome;
+  document.getElementById('clienteTabListWrap').classList.add('hidden');
+  document.getElementById('clienteTabDetail').classList.remove('hidden');
+  loadClienteDetailView();
+}
+function closeClienteDetail(){
+  clienteTabSelected = null;
+  document.getElementById('clienteTabDetail').classList.add('hidden');
+  document.getElementById('clienteTabListWrap').classList.remove('hidden');
+}
+async function loadClienteDetailView(){
+  const content = document.getElementById('clienteDetailContent');
+  if(!clienteTabSelected) return;
   content.innerHTML = '<div class="lev-empty">Carregando…</div>';
   try{
-    if(histActiveView === 'historico'){
-      const rows = await apiHistoricoCliente(histSelectedClient.id);
-      content.innerHTML = rows.length
-        ? rows.map(r=>renderHistProdutoCard(r, false)).join('')
-        : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
-    } else if(histActiveView === 'rotatividade'){
-      const rows = await apiRotatividadeCliente(histSelectedClient.id);
-      content.innerHTML = rows.length
-        ? rows.map(r=>renderHistProdutoCard(r, true)).join('')
-        : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
-    } else if(histActiveView === 'visitas'){
-      const rows = await apiLevantamentosCliente(histSelectedClient.id);
-      content.innerHTML = rows.length
-        ? rows.map(renderHistVisitaCard).join('')
-        : '<div class="lev-empty">Nenhum levantamento registrado ainda pra esse cliente.</div>';
+    if(clienteTabView === 'historico'){
+      const rows = await apiHistoricoCliente(clienteTabSelected.id);
+      content.innerHTML = rows.length ? rows.map(r=>renderHistProdutoCard(r,false)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
+    } else if(clienteTabView === 'abc'){
+      const rows = await apiHistoricoCliente(clienteTabSelected.id);
+      const classificados = classificarABC(rows.map(r=>({...r, total_acumulado:Number(r.total_acumulado)})), 'total_acumulado');
+      content.innerHTML = renderAbcView(classificados, 'volume', 'total_acumulado');
+    } else if(clienteTabView === 'rotatividade'){
+      const rows = await apiRotatividadeCliente(clienteTabSelected.id);
+      content.innerHTML = rows.length ? rows.map(r=>renderHistProdutoCard(r,true)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
+    } else if(clienteTabView === 'visitas'){
+      const rows = await apiLevantamentosCliente(clienteTabSelected.id);
+      content.innerHTML = rows.length ? rows.map(renderHistVisitaCard).join('') : '<div class="lev-empty">Nenhum levantamento registrado ainda pra esse cliente.</div>';
     }
   }catch(e){
     content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
   }
 }
-async function selectHistClient(){
-  const cliente = await openClientPicker();
-  if(!cliente) return;
-  histSelectedClient = cliente;
-  document.getElementById('histClientName').textContent = cliente.nome;
-  loadHistView();
-}
-function initHistTab(){
-  document.getElementById('histSelectClientBtn').addEventListener('click', selectHistClient);
-  document.getElementById('histViewSeg').querySelectorAll('button').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      document.getElementById('histViewSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
-      histActiveView = b.dataset.v;
-      loadHistView();
-    });
+function initClientesTab(){
+  document.getElementById('clienteTabSearch').addEventListener('input', (e)=>{
+    clearTimeout(clienteTabDebounce);
+    const term = e.target.value;
+    clienteTabDebounce = setTimeout(()=>searchClienteTabList(term), 300);
   });
-  document.getElementById('histModeSeg').querySelectorAll('button').forEach(b=>{
+  document.getElementById('clienteDetailBackBtn').addEventListener('click', closeClienteDetail);
+  document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(b=>{
     b.addEventListener('click', ()=>{
-      document.getElementById('histModeSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
-      document.getElementById('histClienteMode').classList.toggle('hidden', b.dataset.v !== 'cliente');
-      document.getElementById('histProdutoMode').classList.toggle('hidden', b.dataset.v !== 'produto');
+      document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
+      clienteTabView = b.dataset.v;
+      loadClienteDetailView();
     });
-  });
-  let histProdutoDebounce;
-  document.getElementById('histProdutoInput').addEventListener('input', (e)=>{
-    clearTimeout(histProdutoDebounce);
-    const codigo = e.target.value.trim();
-    histProdutoDebounce = setTimeout(()=>loadHistProduto(codigo), 400);
   });
 }
 
-async function loadHistProduto(codigo){
-  const content = document.getElementById('histProdutoContent');
-  if(!codigo){ content.innerHTML = '<div class="lev-empty">Digite o código do produto.</div>'; return; }
+// ---- Aba Produtos ----
+let prodTabSelected = null;
+let prodTabDebounce;
+
+function searchProdutoTabList(term){
+  const wrap = document.getElementById('prodTabList');
+  const t = term.trim().toLowerCase();
+  if(!t){ wrap.innerHTML = '<div class="lev-empty">Digite pra buscar um produto no catálogo.</div>'; return; }
+  const encontrados = DB.products.filter(p => p.c.toLowerCase().includes(t) || p.n.toLowerCase().includes(t)).slice(0, 30);
+  wrap.innerHTML = encontrados.length
+    ? encontrados.map(p=>`
+      <button type="button" class="clientPickerItem" data-prod-cod="${escapeHtml(p.c)}" data-prod-nome="${escapeHtml(p.n)}">
+        <div class="cpName">${escapeHtml(p.n)}</div>
+        <div class="cpMeta">Cód. ${escapeHtml(p.c)}</div>
+      </button>`).join('')
+    : '<div class="lev-empty">Nenhum produto encontrado.</div>';
+  wrap.querySelectorAll('[data-prod-cod]').forEach(btn=>{
+    btn.addEventListener('click', ()=> openProdutoDetail(btn.dataset.prodCod, btn.dataset.prodNome));
+  });
+}
+async function openProdutoDetail(codigo, nome){
+  prodTabSelected = codigo;
+  document.getElementById('prodDetailName').textContent = nome;
+  document.getElementById('prodTabListWrap').classList.add('hidden');
+  document.getElementById('prodTabDetail').classList.remove('hidden');
+  const content = document.getElementById('prodDetailContent');
   content.innerHTML = '<div class="lev-empty">Buscando…</div>';
   try{
     const data = await apiClientesDoProduto(codigo);
     const partes = [];
-    partes.push(`<div class="histProdutoTitle">${escapeHtml(data.produto.nome)} <span class="hcCode">(Cód. ${escapeHtml(data.produto.codigo_sku)})</span></div>`);
-
     if(data.compradores.length === 0 && data.levantamentos.length === 0){
       partes.push('<div class="lev-empty">Nenhum cliente tem registro de compra ou levantamento com esse produto ainda.</div>');
     }
@@ -3389,6 +3582,222 @@ async function loadHistProduto(codigo){
   }catch(e){
     content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
   }
+}
+function closeProdutoDetail(){
+  prodTabSelected = null;
+  document.getElementById('prodTabDetail').classList.add('hidden');
+  document.getElementById('prodTabListWrap').classList.remove('hidden');
+}
+function initProdutosTab(){
+  document.getElementById('prodTabSearch').addEventListener('input', (e)=>{
+    clearTimeout(prodTabDebounce);
+    const term = e.target.value;
+    prodTabDebounce = setTimeout(()=>searchProdutoTabList(term), 250);
+  });
+  document.getElementById('prodDetailBackBtn').addEventListener('click', closeProdutoDetail);
+}
+
+// =================================================================
+// ---------------- Consolidar cotações em PDF ---------------------
+// =================================================================
+// Extrai cliente/data/itens de PDFs de cotação/pedido oficiais (formato real
+// da Cortag) e manda pro histórico do servidor - diferente do app original
+// (ConsolidaPDF), que guardava tudo só no navegador (IndexedDB). Aqui os
+// dados viram pedidos de verdade no banco compartilhado, identificados pelo
+// número da cotação pra não duplicar se o mesmo PDF for processado 2x.
+let pdfJsLoadPromise = null;
+function loadPdfJs(){
+  if(window.__pdfjsLib) return Promise.resolve(window.__pdfjsLib);
+  if(pdfJsLoadPromise) return pdfJsLoadPromise;
+  pdfJsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs').then(lib=>{
+    lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs';
+    window.__pdfjsLib = lib;
+    return lib;
+  });
+  return pdfJsLoadPromise;
+}
+
+function agruparEmLinhasPdf(itens){
+  const tolerancia = 2;
+  const linhas = [];
+  for(const item of itens){
+    if(!item.str) continue;
+    const y = item.transform[5];
+    let linha = linhas.find(l => Math.abs(l.y - y) < tolerancia);
+    if(!linha){ linha = { y, itens: [] }; linhas.push(linha); }
+    linha.itens.push(item);
+  }
+  linhas.sort((a,b)=> b.y - a.y);
+  return linhas.map(l=>{
+    l.itens.sort((a,b)=> a.transform[4] - b.transform[4]);
+    return l.itens.map(it=>it.str).join(' ').replace(/\s+/g,' ').trim();
+  });
+}
+async function extrairTextoPdf(arrayBuffer){
+  const pdfjsLib = await loadPdfJs();
+  const documento = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const linhasTotais = [];
+  for(let i=1; i<=documento.numPages; i++){
+    const pagina = await documento.getPage(i);
+    const conteudo = await pagina.getTextContent();
+    linhasTotais.push(...agruparEmLinhasPdf(conteudo.items));
+  }
+  return linhasTotais.join('\n');
+}
+function limparNumeroPdf(str){
+  if(str === undefined || str === null) return 0;
+  let s = String(str).trim().replace(/[^\d.,-]/g,'');
+  if(!s) return 0;
+  if(s.includes(',')) s = s.replace(/\./g,'').replace(',','.');
+  const valor = parseFloat(s);
+  return isNaN(valor) ? 0 : valor;
+}
+function extrairClientePdf(texto){
+  const m = texto.match(/Cliente\s*:\s*(?:\d{2,10}\s*[-–—]?\s*)?([^\n\r]{2,120})/i);
+  if(!m) return null;
+  let nome = m[1].trim().replace(/\s{2,}.*$/,'').trim();
+  nome = nome.replace(/\s*[-–—]\s*$/,'').trim();
+  return nome || null;
+}
+function extrairDataEmissaoPdf(texto){
+  const m = texto.match(/(?:Data\s+de\s+Emiss[ãa]o|Emiss[ãa]o|Data)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i);
+  if(!m) return { data: null, dataISO: null };
+  const [, dd, mm, aaaa] = m;
+  return { data: `${dd}/${mm}/${aaaa}`, dataISO: `${aaaa}-${mm}-${dd}` };
+}
+function extrairNumeroCotacaoPdf(texto){
+  const m = texto.match(/(?:Cota[çc][ãa]o\s+de\s+Venda|Pedido\s+de\s+Venda|Cota[çc][ãa]o|Pedido)\s*N[ºo°.]{0,2}\s*:?\s*(\d{1,12})/i);
+  return m ? m[1] : null;
+}
+const RE_ITEM_COMPLETA_PDF = /^(\d{4,7})\s+(.+?)\s+([\d.,]+)\s+([A-ZÇÃÕ]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
+const RE_ITEM_SIMPLES_PDF = /^(\d{4,7})\s+(.+?)\s+([\d.,]+)\s+([A-ZÇÃÕ]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
+const RE_INICIO_ITEM_PDF = /^\d{4,7}\s/;
+function tentarCasarLinhaItemPdf(str){
+  let m = str.match(RE_ITEM_COMPLETA_PDF);
+  if(m) return { m, formato: 'completa' };
+  m = str.match(RE_ITEM_SIMPLES_PDF);
+  if(m) return { m, formato: 'simples' };
+  return null;
+}
+function extrairProdutosPdf(texto){
+  const totalNoUltimoGrupo = /c\/\s*Impostos/i.test(texto);
+  const linhas = texto.split(/\r?\n/).map(l=>l.trim().replace(/[ \t]{2,}/g,' ')).filter(Boolean);
+  const produtos = [];
+  let i = 0;
+  while(i < linhas.length){
+    const linha = linhas[i];
+    if(!RE_INICIO_ITEM_PDF.test(linha)){ i++; continue; }
+    let candidata = linha;
+    let linhasConsumidas = 1;
+    let resultado = tentarCasarLinhaItemPdf(candidata);
+    let tentativas = 0;
+    while(!resultado && tentativas < 2){
+      const proxima = linhas[i + linhasConsumidas];
+      if(proxima === undefined || RE_INICIO_ITEM_PDF.test(proxima)) break;
+      candidata += ' ' + proxima;
+      linhasConsumidas++;
+      resultado = tentarCasarLinhaItemPdf(candidata);
+      tentativas++;
+    }
+    if(resultado){
+      const { m, formato } = resultado;
+      const codigo = m[1];
+      const descricao = m[2].trim();
+      const quantidade = limparNumeroPdf(m[3]);
+      const unidade = m[4].toUpperCase();
+      const valorUnitario = limparNumeroPdf(m[5]);
+      let valorTotal;
+      if(formato === 'completa') valorTotal = limparNumeroPdf(totalNoUltimoGrupo ? m[10] : m[9]);
+      else valorTotal = limparNumeroPdf(m[6]);
+      if(valorTotal === 0 && quantidade > 0 && valorUnitario > 0) valorTotal = +(quantidade*valorUnitario).toFixed(2);
+      if(!(quantidade === 0 && valorTotal === 0)) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
+    }
+    i += linhasConsumidas;
+  }
+  return produtos;
+}
+function interpretarCotacaoPdf(texto, nomeArquivo){
+  const cliente = extrairClientePdf(texto);
+  const { data, dataISO } = extrairDataEmissaoPdf(texto);
+  const numero = extrairNumeroCotacaoPdf(texto);
+  const produtos = extrairProdutosPdf(texto);
+  const valorTotalCotacao = +produtos.reduce((s,p)=>s+p.valorTotal,0).toFixed(2);
+  return { numeroCotacao: numero, cliente, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao };
+}
+
+function criarItemFilaPdf(nomeArquivo){
+  const fila = document.getElementById('pdfProcessQueue');
+  const li = document.createElement('li');
+  li.className = 'pdfQueueItem pdfQueueItem--processando';
+  li.innerHTML = `<span class="pdfQueueDot"></span><span class="pdfQueueNome">${escapeHtml(nomeArquivo)}</span><span class="pdfQueueDetalhe">Processando…</span>`;
+  fila.prepend(li);
+  return li;
+}
+function atualizarItemFilaPdf(li, status, detalhe){
+  li.className = `pdfQueueItem pdfQueueItem--${status}`;
+  li.querySelector('.pdfQueueDetalhe').textContent = detalhe;
+}
+
+async function processarArquivosPdf(fileList){
+  const todos = Array.from(fileList);
+  const arquivosPdf = todos.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
+  if(arquivosPdf.length === 0){ showToast('Nenhum PDF selecionado.'); return; }
+
+  let sucesso = 0, jaExistiam = 0, falha = 0;
+  for(const arquivo of arquivosPdf){
+    const li = criarItemFilaPdf(arquivo.name);
+    try{
+      const buffer = await arquivo.arrayBuffer();
+      const texto = await extrairTextoPdf(buffer);
+      if(!texto.trim()) throw new Error('Nenhum texto encontrado — pode ser um PDF escaneado (imagem).');
+      const cotacao = interpretarCotacaoPdf(texto, arquivo.name);
+      if(!cotacao.cliente) throw new Error('Não consegui identificar o cliente neste PDF.');
+      if(cotacao.produtos.length === 0) throw new Error('Nenhum item de produto identificado neste PDF.');
+
+      const payload = {
+        cliente: { nome: cotacao.cliente },
+        numero_cotacao: cotacao.numeroCotacao || undefined,
+        data_pedido: cotacao.dataEmissaoISO || undefined,
+        origem: 'pdf',
+        itens: cotacao.produtos.map(p => ({
+          codigo_sku: p.codigo, quantidade: p.quantidade, preco_unitario: p.valorUnitario, descricao: p.descricao,
+        })),
+      };
+      const result = await apiCriarPedido(payload);
+      if(result.ja_existia){
+        atualizarItemFilaPdf(li, 'jaexistia', `${cotacao.cliente} · já tinha sido importado (cotação ${cotacao.numeroCotacao})`);
+        jaExistiam++;
+      }else{
+        atualizarItemFilaPdf(li, 'sucesso', `${cotacao.cliente} · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}`);
+        sucesso++;
+      }
+    }catch(e){
+      console.error('Erro ao processar', arquivo.name, e);
+      atualizarItemFilaPdf(li, 'erro', e.message || 'Falha ao processar este arquivo.');
+      falha++;
+    }
+  }
+  showToast(`${sucesso} nova(s), ${jaExistiam} já existente(s)${falha ? `, ${falha} com erro` : ''}.`);
+}
+
+function initPdfConsolidacao(){
+  const dropzone = document.getElementById('pdfDropzone');
+  const fileInput = document.getElementById('pdfFileInput');
+  dropzone.addEventListener('click', ()=>fileInput.click());
+  dropzone.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); fileInput.click(); } });
+  fileInput.addEventListener('change', ()=>{
+    if(fileInput.files.length) processarArquivosPdf(fileInput.files);
+    fileInput.value = '';
+  });
+  ['dragenter','dragover'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); dropzone.classList.add('dragging'); });
+  });
+  ['dragleave','drop'].forEach(evt=>{
+    dropzone.addEventListener(evt, (e)=>{ e.preventDefault(); dropzone.classList.remove('dragging'); });
+  });
+  dropzone.addEventListener('drop', (e)=>{
+    if(e.dataTransfer.files.length) processarArquivosPdf(e.dataTransfer.files);
+  });
 }
 
 function splitMdRow(line){
@@ -4598,7 +5007,9 @@ async function init(){
   initBackendAdmin();
   initManageClients();
   document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
-  initHistTab();
+  initProdutosTab();
+  initClientesTab();
+  initPdfConsolidacao();
 
   renderResults();
   renderCartBar();
