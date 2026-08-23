@@ -114,4 +114,44 @@ router.post('/usuarios', requireAuth, async (req, res) => {
   }
 });
 
+// Lista todos os usuários - só admin vê essa lista (painel de gerenciamento).
+router.get('/usuarios', requireAuth, async (req, res) => {
+  if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver a lista de usuários.' });
+  try {
+    const result = await pool.query('SELECT id, nome, usuario, is_admin, criado_em FROM usuarios ORDER BY nome');
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao listar usuários.' });
+  }
+});
+
+// Exclui um usuário - só admin. Duas proteções pra não travar o sistema:
+// não pode se auto-excluir (evita ficar sem acesso sem querer), e não pode
+// excluir o último admin restante (sem isso, ninguém mais conseguiria
+// cadastrar gente nova ou fazer exclusão forçada de cliente).
+router.delete('/usuarios/:id', requireAuth, async (req, res) => {
+  if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode excluir usuário.' });
+  const { id } = req.params;
+  if (Number(id) === req.usuario.id) {
+    return res.status(400).json({ erro: 'Você não pode excluir a própria conta enquanto estiver logado nela.' });
+  }
+  try {
+    const alvo = await pool.query('SELECT is_admin FROM usuarios WHERE id = $1', [id]);
+    if (alvo.rows.length === 0) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    if (alvo.rows[0].is_admin) {
+      const totalAdmins = await pool.query('SELECT COUNT(*) FROM usuarios WHERE is_admin = true');
+      if (Number(totalAdmins.rows[0].count) <= 1) {
+        return res.status(400).json({ erro: 'Esse é o último administrador do sistema — não é possível excluí-lo. Promova outro usuário a admin antes.' });
+      }
+    }
+    const result = await pool.query('DELETE FROM usuarios WHERE id = $1 RETURNING nome, usuario', [id]);
+    console.log(`Usuário excluído: ${result.rows[0].usuario} por ${req.usuario.usuario}`);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao excluir usuário.' });
+  }
+});
+
 module.exports = router;
