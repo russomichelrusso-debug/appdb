@@ -26,32 +26,44 @@ router.get('/', async (req, res) => {
 // Não apaga produtos antigos (mesmo que descontinuados, o histórico de pedidos
 // antigos continua precisando deles) - só cria os que ainda não existem e
 // atualiza nome/categoria dos que já existem.
+//
+// Importante: isso roda numa ÚNICA operação (UNNEST + INSERT ... ON CONFLICT),
+// não um loop item a item - com ~1.700 produtos, fazer uma ida-e-volta ao banco
+// por produto é lento o bastante pra estourar o tempo limite de execução do
+// Supabase (erro 57014/query_canceled). Em lote, é uma soma só, quase instantâneo.
 router.post('/sync', async (req, res) => {
   const produtos = req.body.produtos;
   if (!Array.isArray(produtos)) return res.status(400).json({ erro: 'Envie { produtos: [...] }' });
-  const client = await pool.connect();
+
+  const validos = produtos.filter(p => p.codigo_sku && p.nome);
+  if (validos.length === 0) return res.json({ criados: 0, atualizados: 0, total: produtos.length });
+
+  const codigos = validos.map(p => String(p.codigo_sku));
+  const nomes = validos.map(p => p.nome);
+  const categorias = validos.map(p => p.categoria || null);
+
   try {
-    await client.query('BEGIN');
-    let criados = 0, atualizados = 0;
-    for (const p of produtos) {
-      if (!p.codigo_sku || !p.nome) continue;
-      const result = await client.query(
-        `INSERT INTO produtos (codigo_sku, nome, categoria)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (codigo_sku) DO UPDATE SET nome = $2, categoria = $3
-         RETURNING (xmax = 0) AS inserted`,
-        [p.codigo_sku, p.nome, p.categoria || null]
-      );
-      if (result.rows[0].inserted) criados++; else atualizados++;
-    }
-    await client.query('COMMIT');
-    res.json({ criados, atualizados, total: produtos.length });
+    const result = await pool.query(
+      `WITH entrada AS (
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[]) AS t(codigo_sku, nome, categoria)
+       ),
+       upsert AS (
+         INSERT INTO produtos (codigo_sku, nome, categoria)
+         SELECT codigo_sku, nome, categoria FROM entrada
+         ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria
+         RETURNING (xmax = 0) AS inserted
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE inserted) AS criados,
+         COUNT(*) FILTER (WHERE NOT inserted) AS atualizados
+       FROM upsert`,
+      [codigos, nomes, categorias]
+    );
+    const { criados, atualizados } = result.rows[0];
+    res.json({ criados: Number(criados), atualizados: Number(atualizados), total: produtos.length });
   } catch (e) {
-    await client.query('ROLLBACK');
     console.error(e);
     res.status(500).json({ erro: 'Erro ao sincronizar produtos.' });
-  } finally {
-    client.release();
   }
 });
 
