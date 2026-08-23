@@ -1375,7 +1375,6 @@
       <button class="fileBtn" id="importClientesBtn" style="margin-top:8px;">Importar clientes (JSON)</button>
       <input type="file" id="importClientesFile" accept=".json,application/json" style="display:none;">
       <div id="importClientesMsg" style="margin-top:8px;"></div>
-      <button class="restoreBtn" id="addUserBtn" style="margin-top:8px;background:var(--fill);color:var(--ink);">+ Cadastrar novo usuário</button>
       <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
       <button type="button" class="priceEditResetLink" id="toggleApiConfigBtn" style="text-decoration:none;color:var(--gray);font-weight:600;font-size:12px;margin-top:14px;">Configuração avançada (endereço do servidor)</button>
       <div id="apiConfigWrap" class="hidden" style="margin-top:10px;">
@@ -1383,6 +1382,12 @@
         <input type="text" id="apiBaseUrlInput" placeholder="https://cortag-backend.onrender.com">
         <button class="restoreBtn" id="saveApiConfigBtn">Salvar configuração</button>
       </div>
+    </div>
+    <div class="ap-card hidden" id="manageUsersCard">
+      <h3>Gerenciar usuários</h3>
+      <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin restante).</p>
+      <div id="manageUsersList"></div>
+      <button class="restoreBtn" id="addUserBtn" style="margin-top:10px;background:var(--fill);color:var(--ink);">+ Cadastrar novo usuário</button>
     </div>
     <div class="ap-card">
       <h3>Gerenciar clientes</h3>
@@ -3151,6 +3156,7 @@ function initBackendAdmin(){
     try{
       await apiFetch('/api/auth/usuarios', { method:'POST', body: JSON.stringify({nome, usuario, senha}) });
       showToast('Usuário criado: ' + usuario);
+      renderUsersList();
     }catch(e){
       alert('Não foi possível criar o usuário: ' + e.message);
     }
@@ -3180,7 +3186,47 @@ function initBackendAdmin(){
   });
 
   if(state.currentUser){
-    document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.usuario})`;
+    document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.usuario})${state.currentUser.is_admin ? ' · admin' : ''}`;
+    if(state.currentUser.is_admin){
+      document.getElementById('manageUsersCard').classList.remove('hidden');
+      renderUsersList();
+    }
+  }
+}
+
+async function renderUsersList(){
+  const wrap = document.getElementById('manageUsersList');
+  wrap.innerHTML = '<div class="promoEmpty">Carregando…</div>';
+  try{
+    const usuarios = await apiFetch('/api/auth/usuarios');
+    wrap.innerHTML = usuarios.map(u => `
+      <div class="promoRuleItem">
+        <div class="prTop">
+          <div>
+            <div class="prName">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
+            <div class="prDetail">@${escapeHtml(u.usuario)}</div>
+          </div>
+          <div class="prBtns">
+            <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.usuario)}" aria-label="Excluir" title="Excluir">🗑</button>
+          </div>
+        </div>
+      </div>
+    `).join('');
+    wrap.querySelectorAll('[data-del-user]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const usuario = btn.dataset.nomeUser;
+        if(!confirm(`Excluir o usuário "${usuario}"? Essa ação não pode ser desfeita.`)) return;
+        try{
+          await apiFetch(`/api/auth/usuarios/${btn.dataset.delUser}`, { method:'DELETE' });
+          showToast('Usuário excluído: ' + usuario);
+          renderUsersList();
+        }catch(e){
+          alert(e.message);
+        }
+      });
+    });
+  }catch(e){
+    wrap.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
   }
 }
 
