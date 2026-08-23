@@ -2,12 +2,11 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// O Render preenche DATABASE_URL sozinho quando o banco é conectado ao serviço.
+// Bancos gerenciados na nuvem (Render, Supabase, etc.) exigem conexão criptografada (SSL).
+// Só desliga isso se DATABASE_URL não estiver definida (ex: rodando localmente sem banco real).
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL && process.env.DATABASE_URL.includes('render.com')
-    ? { rejectUnauthorized: false }
-    : false,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
 });
 
 // Roda o schema.sql inteiro na subida do servidor. Como todas as tabelas usam
