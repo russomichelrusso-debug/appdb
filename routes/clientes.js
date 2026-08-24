@@ -97,6 +97,44 @@ router.post('/import', async (req, res) => {
 // Exclui um cliente. Por padrão, se ele já tiver pedidos ou levantamentos
 // registrados, o banco recusa (chave estrangeira) de propósito - evita
 // apagar histórico de venda sem querer. Um administrador pode forçar a
+// Mescla dois clientes duplicados: todo o histórico (pedidos e levantamentos)
+// do cliente "remover" passa a pertencer ao "manter", e o duplicado é
+// excluído. Só admin - é uma operação que reescreve histórico de vendas.
+router.post('/mesclar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode mesclar clientes.' });
+  const { manter_id, remover_id } = req.body;
+  if (!manter_id || !remover_id) return res.status(400).json({ erro: 'Informe manter_id e remover_id.' });
+  if (manter_id === remover_id) return res.status(400).json({ erro: 'Escolha dois clientes diferentes.' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ambos = await client.query('SELECT id, nome FROM clientes WHERE id = ANY($1::int[])', [[manter_id, remover_id]]);
+    if (ambos.rows.length !== 2) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Um dos dois clientes não foi encontrado.' });
+    }
+    const manterInfo = ambos.rows.find(r => r.id === Number(manter_id));
+    const removerInfo = ambos.rows.find(r => r.id === Number(remover_id));
+
+    await client.query('UPDATE pedidos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
+    await client.query('UPDATE levantamentos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
+    await client.query('DELETE FROM clientes WHERE id = $1', [remover_id]);
+    await client.query('COMMIT');
+    console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario.usuario}.`);
+    res.json({ ok: true, manteve: manterInfo.nome, removeu: removerInfo.nome });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao mesclar clientes.' });
+  } finally {
+    client.release();
+  }
+});
+
+// Exclui um cliente. Por padrão, se ele já tiver pedidos ou levantamentos
+// registrados, o banco recusa (chave estrangeira) de propósito - evita
+// apagar histórico de venda sem querer. Um administrador pode forçar a
 // exclusão total (cliente + histórico junto) mandando ?forcar=1 - usuários
 // comuns não conseguem, mesmo mandando o mesmo parâmetro.
 router.delete('/:id', async (req, res) => {
