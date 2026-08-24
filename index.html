@@ -197,6 +197,8 @@
     color:var(--gray);font-size:14px;pointer-events:none;
   }
   .segmented{display:flex;border-radius:var(--r-sm);overflow:hidden;background:#E8E8ED;padding:2px;gap:2px;}
+  .segmented--scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .segmented--scroll button{flex:0 0 auto;padding:8px 14px;white-space:nowrap;}
   .segmented button{
     flex:1;
     border:none;
@@ -1264,11 +1266,12 @@
         </div>
         <button type="button" class="restoreBtn" id="clienteDetailBackBtn" style="width:auto;padding:10px 16px;">Voltar</button>
       </div>
-      <div class="segmented" id="clienteViewSeg" style="margin:0 16px 12px;">
+      <div class="segmented segmented--scroll" id="clienteViewSeg" style="margin:0 16px 12px;">
         <button type="button" data-v="historico" class="active">Histórico</button>
         <button type="button" data-v="abc">Curva ABC</button>
         <button type="button" data-v="rotatividade">Rotatividade</button>
         <button type="button" data-v="visitas">Visitas</button>
+        <button type="button" data-v="recuperar">Recuperar</button>
       </div>
       <div class="hist-content" id="clienteDetailContent"></div>
     </div>
@@ -3230,6 +3233,9 @@ async function apiRotatividadeCliente(clienteId){
 async function apiLevantamentosCliente(clienteId){
   return apiFetch(`/api/clientes/${clienteId}/levantamentos`);
 }
+async function apiRecuperarCliente(clienteId){
+  return apiFetch(`/api/clientes/${clienteId}/recuperar`);
+}
 
 // ---------------- Seletor de cliente (reutilizado em vários lugares) ----------------
 // Retorna uma Promise que resolve com {id, nome} quando o usuário escolhe ou cria
@@ -3752,6 +3758,20 @@ function renderHistVisitaCard(v){
     </div>
   </div>`;
 }
+function renderRecuperarCard(item){
+  const dias = item.ultima_compra ? Math.floor((Date.now() - new Date(item.ultima_compra).getTime()) / 86400000) : null;
+  return `<div class="histCard">
+    <div class="hcName">${escapeHtml(item.produto)}</div>
+    <div class="hcCode">Cód. ${escapeHtml(String(item.codigo_sku))}</div>
+    <div class="hcStats">
+      <div class="hcStat">Última compra<b>${formatDateBr(item.ultima_compra)}</b></div>
+      <div class="hcStat">Total já comprado<b>${item.total_comprado}</b></div>
+      <div class="hcStat">Estoque atual<b>0</b></div>
+    </div>
+    ${dias !== null ? `<div class="hcRotBadge" style="color:#B3261E;">sem repor há ${dias} dias</div>` : ''}
+    ${!item.ultimo_levantamento ? `<div class="hcRotBadge">nunca foi contado no levantamento</div>` : ''}
+  </div>`;
+}
 
 // Curva ABC (Pareto) por volume: ordena decrescente, calcula % acumulado, e
 // classifica em A (até 80% acumulado), B (até 95%) ou C (resto). Mesma lógica
@@ -3874,6 +3894,11 @@ async function loadClienteDetailView(){
     } else if(clienteTabView === 'visitas'){
       const rows = await apiLevantamentosCliente(clienteTabSelected.id);
       content.innerHTML = rows.length ? rows.map(renderHistVisitaCard).join('') : '<div class="lev-empty">Nenhum levantamento registrado ainda pra esse cliente.</div>';
+    } else if(clienteTabView === 'recuperar'){
+      const rows = await apiRecuperarCliente(clienteTabSelected.id);
+      content.innerHTML = rows.length
+        ? '<p class="ap-hint" style="margin-bottom:12px;">Já comprou antes, sem repor há um tempo, e sem estoque no levantamento mais recente — boa chance de oferecer de novo.</p>' + rows.map(renderRecuperarCard).join('')
+        : '<div class="lev-empty">Nenhum produto nessa situação — ou o cliente ainda não tem levantamento registrado pra comparar.</div>';
     }
   }catch(e){
     content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
