@@ -1503,6 +1503,16 @@
       </div>
       <ul id="pdfProcessQueue" class="pdfQueue"></ul>
     </div>
+    <div class="ap-card hidden" id="exportPedidosCard">
+      <h3>Baixar pedidos por período</h3>
+      <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor — funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
+      <label for="exportPedidosInicio">De</label>
+      <input type="date" id="exportPedidosInicio">
+      <label for="exportPedidosFim">Até</label>
+      <input type="date" id="exportPedidosFim">
+      <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
+      <div id="exportPedidosMsg" style="margin-top:8px;"></div>
+    </div>
     <div class="ap-card hidden" id="manageUsersCard">
       <h3>Gerenciar usuários</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin restante).</p>
@@ -3368,6 +3378,7 @@ function initBackendAdmin(){
   });
   document.getElementById('logoutBtn').addEventListener('click', logout);
 
+  document.getElementById('exportPedidosBtn').addEventListener('click', exportPedidosPorPeriodo);
   document.getElementById('addUserBtn').addEventListener('click', async ()=>{
     const nome = prompt('Nome do novo usuário:');
     if(!nome) return;
@@ -3411,8 +3422,50 @@ function initBackendAdmin(){
     document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.usuario})${state.currentUser.is_admin ? ' · admin' : ''}`;
     if(state.currentUser.is_admin){
       document.getElementById('manageUsersCard').classList.remove('hidden');
+      document.getElementById('exportPedidosCard').classList.remove('hidden');
       renderUsersList();
     }
+  }
+}
+
+async function exportPedidosPorPeriodo(){
+  const inicio = document.getElementById('exportPedidosInicio').value;
+  const fim = document.getElementById('exportPedidosFim').value;
+  const msg = document.getElementById('exportPedidosMsg');
+  if(!inicio || !fim){ msg.innerHTML = '<div class="ap-msg error">Escolha as duas datas.</div>'; return; }
+  if(inicio > fim){ msg.innerHTML = '<div class="ap-msg error">A data de início precisa ser antes da data final.</div>'; return; }
+
+  const btn = document.getElementById('exportPedidosBtn');
+  const originalText = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Buscando…';
+  msg.innerHTML = '';
+  try{
+    const rows = await apiFetch(`/api/pedidos/exportar?inicio=${inicio}&fim=${fim}`);
+    if(rows.length === 0){
+      msg.innerHTML = '<div class="promoEmpty">Nenhum pedido nesse período.</div>';
+      return;
+    }
+    const header = 'Data;Cliente;Documento;Vendedor;Código;Produto;Quantidade;Preço Unitário;Origem;Cotação';
+    const linhas = rows.map(r => [
+      formatDateBr(r.data_pedido),
+      r.cliente_nome,
+      r.cliente_documento || '',
+      r.vendedor_nome || '',
+      r.codigo_sku,
+      r.produto_nome,
+      r.quantidade,
+      Number(r.preco_unitario).toFixed(2).replace('.',','),
+      r.origem,
+      r.numero_cotacao || '',
+    ].map(v => String(v).replace(/;/g,',')).join(';'));
+    const blob = new Blob(['\uFEFF' + [header, ...linhas].join('\r\n')], {type:'text/csv;charset=utf-8;'});
+    const fileName = `pedidos-${inicio}-a-${fim}.csv`;
+    shareOrDownloadBlob(blob, fileName, 'Pedidos do período', 'Baixado — verifique a pasta Downloads do celular');
+    msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${rows.length} linha(s) exportada(s).</div>`;
+  }catch(e){
+    msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+  }finally{
+    btn.disabled = false; btn.textContent = originalText;
   }
 }
 
