@@ -8,6 +8,17 @@ async function acharOuCriarCliente(client, { cliente_id, nome, documento, contat
     const existing = await client.query('SELECT id FROM clientes WHERE documento = $1', [documento]);
     if (existing.rows.length > 0) return existing.rows[0].id;
   }
+  // sem documento, tenta achar por nome "normalizado" (maiúsculas/espaços)
+  // antes de criar um novo - mesma lógica usada em pedidos.js.
+  if (!documento && nome) {
+    const existingByName = await client.query(
+      `SELECT id FROM clientes
+       WHERE regexp_replace(upper(trim(nome)), '\\s+', ' ', 'g') = regexp_replace(upper(trim($1)), '\\s+', ' ', 'g')
+       LIMIT 1`,
+      [nome]
+    );
+    if (existingByName.rows.length > 0) return existingByName.rows[0].id;
+  }
   const result = await client.query(
     'INSERT INTO clientes (nome, documento, contato) VALUES ($1, $2, $3) RETURNING id',
     [nome, documento || null, contato || null]
