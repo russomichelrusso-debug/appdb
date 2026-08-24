@@ -22,6 +22,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Lista TODOS os clientes sem limite - usado só pelo diagnóstico de
+// integridade no Admin (comparar com uma planilha de referência). Nome
+// diferente de "/" de propósito, pra não confundir com a busca do dia a dia
+// (que tem limite baixo, pensada pra autocompletar).
+router.get('/todos', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode listar todos os clientes.' });
+  try {
+    const result = await pool.query('SELECT id, nome, documento, contato FROM clientes ORDER BY nome');
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao listar clientes.' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM clientes WHERE id = $1', [req.params.id]);
@@ -97,6 +112,26 @@ router.post('/import', async (req, res) => {
 // Exclui um cliente. Por padrão, se ele já tiver pedidos ou levantamentos
 // registrados, o banco recusa (chave estrangeira) de propósito - evita
 // apagar histórico de venda sem querer. Um administrador pode forçar a
+// Corrige o documento (CNPJ) de um cliente já cadastrado - usado pelo
+// diagnóstico de integridade, pra consertar registros que entraram com o
+// CNPJ errado (ex: o da própria Cortag, por um bug já corrigido na extração
+// de PDF). Só admin.
+router.patch('/:id/documento', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode corrigir o documento de um cliente.' });
+  const { documento } = req.body;
+  if (!documento) return res.status(400).json({ erro: 'Informe o documento correto.' });
+  try {
+    const result = await pool.query('UPDATE clientes SET documento = $1 WHERE id = $2 RETURNING nome', [documento, req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    console.log(`Documento corrigido: ${result.rows[0].nome} (id ${req.params.id}) por ${req.usuario.usuario}.`);
+    res.json({ ok: true, nome: result.rows[0].nome });
+  } catch (e) {
+    if (e.code === '23505') return res.status(400).json({ erro: 'Esse CNPJ já pertence a outro cliente cadastrado — use mesclar em vez de corrigir.' });
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao corrigir documento.' });
+  }
+});
+
 // Mescla dois clientes duplicados: todo o histórico (pedidos e levantamentos)
 // do cliente "remover" passa a pertencer ao "manter", e o duplicado é
 // excluído. Só admin - é uma operação que reescreve histórico de vendas.
