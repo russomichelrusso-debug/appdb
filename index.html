@@ -866,8 +866,8 @@
   .lev-savebtns{display:flex;gap:5px;flex-shrink:0;}
   .lev-savebtns button{
     display:flex;align-items:center;gap:4px;
-    background:var(--white);box-shadow:var(--shadow-1);border:none;border-radius:20px;
-    padding:7px 10px;font-size:12px;font-weight:600;color:var(--ink);cursor:pointer;
+    background:var(--white);border:0.75px solid var(--hairline);box-shadow:none;border-radius:20px;
+    padding:7px 10px;font-size:11.5px;font-weight:600;color:var(--ink);cursor:pointer;
   }
   .lev-savebtns button svg{width:13px;height:13px;flex-shrink:0;}
   .savedSurveyItem{
@@ -1181,6 +1181,10 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>
           Abrir
         </button>
+        <button type="button" id="levShareBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/><line x1="15.4" y1="6.5" x2="8.6" y2="10.5"/></svg>
+          Compartilhar
+        </button>
       </div>
     </div>
     <div class="lev-inputWrap">
@@ -1379,11 +1383,34 @@
 
 <div class="overlay hidden" id="levOpenOverlay"></div>
 <div class="minimodal hidden" id="levOpenModal">
-  <div class="minimodal-card" style="max-height:80vh;overflow-y:auto;">
+  <div class="minimodal-card" style="max-height:80vh;display:flex;flex-direction:column;">
     <h3>Levantamentos salvos</h3>
-    <div id="savedSurveysList"></div>
-    <div class="minimodal-btnrow" style="margin-top:6px;">
+    <input type="text" id="levOpenSearch" placeholder="Buscar por nome do cliente..." autocomplete="off" style="margin-bottom:12px;">
+    <div id="savedSurveysList" style="overflow-y:auto;flex:1;min-height:0;"></div>
+    <div class="minimodal-btnrow" style="margin-top:12px;">
       <button id="levOpenCancel">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay hidden" id="levShareOverlay"></div>
+<div class="minimodal hidden" id="levShareModal">
+  <div class="minimodal-card">
+    <h3>Compartilhar levantamento</h3>
+    <div class="shareSheetGrid" style="margin-bottom:12px;">
+      <button type="button" data-lev-share="texto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        <span>Texto</span>
+        <small>WhatsApp, direto</small>
+      </button>
+      <button type="button" data-lev-share="csv">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        <span>CSV</span>
+        <small>Planilha</small>
+      </button>
+    </div>
+    <div class="minimodal-btnrow">
+      <button id="levShareCancel">Cancelar</button>
     </div>
   </div>
 </div>
@@ -2347,19 +2374,23 @@ async function saveLevantamento(){
 }
 
 function openLevOpenModal(){
+  document.getElementById('levOpenSearch').value = '';
   renderSavedSurveysList();
   document.getElementById('levOpenOverlay').classList.remove('hidden');
   document.getElementById('levOpenModal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('levOpenSearch').focus(), 50);
 }
 function closeLevOpenModal(){
   document.getElementById('levOpenOverlay').classList.add('hidden');
   document.getElementById('levOpenModal').classList.add('hidden');
 }
-function renderSavedSurveysList(){
+function renderSavedSurveysList(filtro){
   const wrap = document.getElementById('savedSurveysList');
-  const list = loadSavedSurveysList().sort((a,b)=>b.savedAt-a.savedAt);
+  let list = loadSavedSurveysList().sort((a,b)=>b.savedAt-a.savedAt);
+  const termo = (filtro||'').trim().toLowerCase();
+  if(termo) list = list.filter(s => s.name.toLowerCase().includes(termo));
   if(list.length === 0){
-    wrap.innerHTML = '<div class="promoEmpty">Nenhum levantamento salvo ainda.</div>';
+    wrap.innerHTML = `<div class="promoEmpty">${termo ? 'Nenhum levantamento com esse nome.' : 'Nenhum levantamento salvo ainda.'}</div>`;
     return;
   }
   wrap.innerHTML = list.map(s=>{
@@ -2426,12 +2457,72 @@ async function selectLevClient(){
   if(!cliente) return;
   setLevCliente(cliente);
 }
+// ---------------- Compartilhar levantamento (texto ou CSV) ----------------
+function buildLevShareText(){
+  const clienteNome = state.levCliente ? state.levCliente.nome : null;
+  const linhas = state.survey.map((it,idx)=>{
+    const p = productByCod(it.cod);
+    const nome = p ? p.n : `Cód. ${it.cod}`;
+    return `${idx+1}. ${nome} (Cód. ${it.cod}) — estoque: ${it.qty}${it.ped ? `, pedido: ${it.ped}` : ''}`;
+  });
+  const partes = [
+    '*Levantamento de estoque*' + (clienteNome ? ' — '+clienteNome : ''),
+    new Date().toLocaleDateString('pt-BR'),
+    '',
+    ...linhas,
+  ];
+  return partes.join('\n');
+}
+async function shareLevAsText(){
+  if(state.survey.length === 0){ showToast('Adicione algum item antes de compartilhar'); return; }
+  const text = buildLevShareText();
+  if(navigator.share){
+    try{ await navigator.share({text, title:'Levantamento de estoque'}); return; }
+    catch(e){ return; }
+  }
+  try{ await navigator.clipboard.writeText(text); showToast('Copiado — cole no WhatsApp ou onde precisar'); }
+  catch(e){ showToast('Não foi possível compartilhar nem copiar automaticamente.'); }
+}
+function exportLevCSV(){
+  if(state.survey.length === 0){ showToast('Adicione algum item antes de exportar'); return; }
+  const header = 'Código;Produto;Estoque;Pedido';
+  const linhas = state.survey.map(it=>{
+    const p = productByCod(it.cod);
+    return `${it.cod};${p ? p.n.replace(/;/g,',') : ''};${it.qty};${it.ped||0}`;
+  });
+  const blob = new Blob(['\uFEFF' + [header, ...linhas].join('\r\n')], {type:'text/csv;charset=utf-8;'});
+  const nome = state.levCliente ? state.levCliente.nome : 'levantamento';
+  shareOrDownloadBlob(blob, csvFileNameFor(nome), 'Levantamento de estoque (CSV)', 'Baixado — verifique a pasta Downloads do celular');
+}
+function openLevShareModal(){
+  if(state.survey.length === 0){ showToast('Adicione algum item antes de compartilhar'); return; }
+  document.getElementById('levShareOverlay').classList.remove('hidden');
+  document.getElementById('levShareModal').classList.remove('hidden');
+}
+function closeLevShareModal(){
+  document.getElementById('levShareOverlay').classList.add('hidden');
+  document.getElementById('levShareModal').classList.add('hidden');
+}
+function initLevShare(){
+  document.getElementById('levShareBtn').addEventListener('click', openLevShareModal);
+  document.getElementById('levShareCancel').addEventListener('click', closeLevShareModal);
+  document.getElementById('levShareOverlay').addEventListener('click', closeLevShareModal);
+  document.querySelectorAll('#levShareModal [data-lev-share]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      closeLevShareModal();
+      if(btn.dataset.levShare === 'texto') shareLevAsText();
+      else exportLevCSV();
+    });
+  });
+}
+
 function initLevSaveOpen(){
   document.getElementById('levSaveBtn').addEventListener('click', saveLevantamento);
   document.getElementById('levOpenBtn').addEventListener('click', openLevOpenModal);
   document.getElementById('levOpenCancel').addEventListener('click', closeLevOpenModal);
   document.getElementById('levOpenOverlay').addEventListener('click', closeLevOpenModal);
   document.getElementById('levSelectClientBtn').addEventListener('click', selectLevClient);
+  document.getElementById('levOpenSearch').addEventListener('input', (e)=>renderSavedSurveysList(e.target.value));
   refreshLevSaveInfo();
 }
 
@@ -5030,6 +5121,7 @@ async function init(){
   initTabs();
   initLevantamento();
   initLevSaveOpen();
+  initLevShare();
   initCsvNamePrompt();
   initPriceEdit();
   initVoiceSearch();
