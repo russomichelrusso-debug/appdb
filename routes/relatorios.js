@@ -175,4 +175,35 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
   }
 });
 
+// Exporta todos os pedidos (com itens) num período - usado pra baixar um CSV
+// direto do servidor, de qualquer aparelho, sem depender de arquivo salvo
+// localmente em algum celular específico. Só admin, já que é o histórico da
+// empresa toda, não só do vendedor logado.
+router.get('/pedidos/exportar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode exportar o histórico completo de pedidos.' });
+  const { inicio, fim } = req.query;
+  if (!inicio || !fim) return res.status(400).json({ erro: 'Informe as datas de início e fim (?inicio=AAAA-MM-DD&fim=AAAA-MM-DD).' });
+  try {
+    const result = await pool.query(
+      `SELECT
+         ped.data_pedido, c.nome AS cliente_nome, c.documento AS cliente_documento,
+         v.nome AS vendedor_nome, p.codigo_sku, p.nome AS produto_nome,
+         pi.quantidade, pi.preco_unitario, ped.origem, ped.numero_cotacao
+       FROM pedidos ped
+       JOIN pedido_itens pi ON pi.pedido_id = ped.id
+       JOIN clientes c ON c.id = ped.cliente_id
+       JOIN produtos p ON p.id = pi.produto_id
+       LEFT JOIN vendedores v ON v.id = ped.vendedor_id
+       WHERE ped.data_pedido >= $1 AND ped.data_pedido < ($2::date + interval '1 day')
+       ORDER BY ped.data_pedido DESC`,
+      [inicio, fim]
+    );
+    console.log(`Exportação de pedidos (${inicio} a ${fim}): ${result.rows.length} linha(s), por ${req.usuario.usuario}.`);
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao exportar pedidos.' });
+  }
+});
+
 module.exports = router;
