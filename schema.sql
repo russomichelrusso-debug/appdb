@@ -30,8 +30,17 @@ CREATE TABLE IF NOT EXISTS pedidos (
   vendedor_id INTEGER REFERENCES vendedores(id),
   data_pedido TIMESTAMPTZ NOT NULL DEFAULT now(),
   status TEXT NOT NULL DEFAULT 'confirmado',
-  observacao TEXT
+  observacao TEXT,
+  numero_cotacao TEXT,
+  origem TEXT NOT NULL DEFAULT 'app'
 );
+-- Número da cotação (vindo do PDF oficial) evita duplicar o mesmo pedido se
+-- o arquivo for consolidado mais de uma vez por engano. Fica opcional (NULL)
+-- pra não quebrar pedidos gravados manualmente pelo "Finalizar pedido", que
+-- não têm essa numeração.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS numero_cotacao TEXT;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT 'app';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_numero_cotacao ON pedidos(numero_cotacao) WHERE numero_cotacao IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS pedido_itens (
   id SERIAL PRIMARY KEY,
@@ -84,4 +93,3 @@ CREATE TABLE IF NOT EXISTS sessoes (
   expira_em TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessoes_expira ON sessoes(expira_em);
-
