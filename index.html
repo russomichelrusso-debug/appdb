@@ -589,20 +589,26 @@
   }
   .ap-header h2{color:#fff;font-size:18px;}
   .ap-body{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;}
-  .ap-card{background:var(--white);border-radius:var(--r-md);padding:16px;box-shadow:var(--shadow-1);}
+  .ap-card{background:var(--white);border-radius:var(--r-md);padding:16px;border:0.75px solid var(--hairline);box-shadow:none;}
   .ap-card h3{
     font-size:12px;text-transform:none;
     letter-spacing:0;color:var(--gray);font-weight:600;margin-bottom:12px;
   }
+  .ap-sectionLbl{
+    font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;
+    color:var(--gray);padding:18px 16px 8px;
+  }
+  .ap-sectionLbl:first-child{padding-top:8px;}
   .ap-status-row{display:flex;justify-content:space-between;gap:10px;align-items:baseline;padding:5px 0;font-size:14.5px;}
   .ap-status-row .k{color:var(--gray);}
   .ap-status-row .v{font-weight:600;text-align:right;}
   .ap-hint{font-size:13px;color:var(--gray);line-height:1.5;margin:0 0 12px;}
   .fileBtn{
     display:block;width:100%;text-align:center;
-    background:var(--red);color:#fff;border:none;border-radius:var(--r-sm);
+    background:var(--fill);color:var(--red);border:none;border-radius:var(--r-sm);
     padding:13px;font-weight:600;font-size:14.5px;cursor:pointer;
   }
+  .fileBtn:active{background:var(--hairline);}
   .ap-msg{padding:11px 13px;border-radius:12px;font-size:13.5px;font-weight:600;margin-top:10px;}
   .ap-msg.error{background:#FDECEC;color:#B3261E;}
   .ap-msg.success{background:#E6F6EA;color:#1E7A34;}
@@ -772,12 +778,12 @@
   }
   .minimodal-card h3{font-size:17px;margin-bottom:6px;letter-spacing:-.01em;}
   .minimodal-card p{font-size:13px;color:var(--gray);line-height:1.45;margin-bottom:16px;}
-  .minimodal-card label{display:block;font-size:12px;font-weight:600;color:var(--gray);margin-bottom:6px;}
-  .minimodal-card input{
+  .minimodal-card label, .ap-card label{display:block;font-size:12px;font-weight:600;color:var(--gray);margin-bottom:6px;}
+  .minimodal-card input, .ap-card input[type="text"]{
     width:100%;border:none;border-radius:var(--r-sm);padding:12px 13px;
     font-size:15px;margin-bottom:18px;color:var(--ink);background:var(--fill);
   }
-  .minimodal-card input:focus{outline:none;box-shadow:0 0 0 3px rgba(204,9,53,.2);}
+  .minimodal-card input:focus, .ap-card input:focus{outline:none;box-shadow:0 0 0 3px rgba(204,9,53,.2);}
   .minimodal-btnrow{display:flex;gap:8px;}
   .minimodal-btnrow button{flex:1;padding:13px;border-radius:var(--r-sm);font-weight:600;font-size:14px;cursor:pointer;border:none;}
   #csvNameCancel{background:var(--fill);color:var(--gray);}
@@ -853,7 +859,7 @@
   #tabLevantamento.hidden, #tabPrecos.hidden, #tabProdutos.hidden, #tabClientes.hidden{display:none;}
   #prodTabDetail.hidden, #clienteTabDetail.hidden, #prodTabListWrap.hidden, #clienteTabListWrap.hidden{display:none;}
   #histClienteMode.hidden, #histProdutoMode.hidden{display:none;}
-  #apiConfigWrap.hidden, #basketMinCountWrap.hidden, #clientPickerNewForm.hidden,
+  #apiConfigWrap.hidden, #basketMinCountWrap.hidden, #clientPickerNewForm.hidden, #addUserForm.hidden,
   #comboWrap.hidden, #targetProdWrap.hidden, #targetSkuListWrap.hidden{display:none;}
 
   /* ---------- Levantamento ---------- */
@@ -1441,6 +1447,7 @@
     <button class="closeBtn" id="closeAdmin" aria-label="Fechar" style="color:#fff;">&times;</button>
   </div>
   <div class="ap-body">
+    <div class="ap-sectionLbl">Catálogo e preços</div>
     <div class="ap-card">
       <h3>Base de preços atual</h3>
       <div class="ap-status-row"><span class="k">Produtos</span><span class="v" id="apCurCount">—</span></div>
@@ -1473,6 +1480,7 @@
       <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
       <p class="ap-hint" style="margin-top:10px;">Pra atualizar a campanha de todo mundo de uma vez: exporte aqui, e substitua o arquivo <code>promocoes.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
     </div>
+    <div class="ap-sectionLbl">Servidor e dados</div>
     <div class="ap-card">
       <h3>Histórico de clientes (servidor)</h3>
       <div class="ap-status-row"><span class="k">Status</span><span class="v" id="apBackendStatus">—</span></div>
@@ -1513,12 +1521,27 @@
       <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
       <div id="exportPedidosMsg" style="margin-top:8px;"></div>
     </div>
+    <div class="ap-sectionLbl">Segurança</div>
     <div class="ap-card hidden" id="manageUsersCard">
       <h3>Gerenciar usuários</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin restante).</p>
       <div id="manageUsersList"></div>
-      <button class="restoreBtn" id="addUserBtn" style="margin-top:10px;background:var(--fill);color:var(--ink);">+ Cadastrar novo usuário</button>
+      <button class="restoreBtn" id="addUserToggleBtn" style="margin-top:10px;">+ Cadastrar novo usuário</button>
+      <div id="addUserForm" class="hidden" style="margin-top:12px;">
+        <label for="addUserNome">Nome</label>
+        <input type="text" id="addUserNome" placeholder="Nome completo">
+        <label for="addUserUsuario">Usuário (login)</label>
+        <input type="text" id="addUserUsuario" placeholder="ex: michel.russo" autocomplete="off">
+        <label for="addUserSenha">Senha inicial</label>
+        <input type="text" id="addUserSenha" placeholder="Peça pra ele trocar depois">
+        <div id="addUserMsg"></div>
+        <div class="minimodal-btnrow" style="margin-top:6px;">
+          <button type="button" id="addUserCancelBtn">Cancelar</button>
+          <button type="button" id="addUserConfirmBtn">Cadastrar</button>
+        </div>
+      </div>
     </div>
+    <div class="ap-sectionLbl">Clientes cadastrados</div>
     <div class="ap-card">
       <h3>Gerenciar clientes</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível excluir quem ainda não tem pedido ou levantamento registrado.</p>
@@ -3379,19 +3402,30 @@ function initBackendAdmin(){
   document.getElementById('logoutBtn').addEventListener('click', logout);
 
   document.getElementById('exportPedidosBtn').addEventListener('click', exportPedidosPorPeriodo);
-  document.getElementById('addUserBtn').addEventListener('click', async ()=>{
-    const nome = prompt('Nome do novo usuário:');
-    if(!nome) return;
-    const usuario = prompt('Usuário (login) do novo usuário:');
-    if(!usuario) return;
-    const senha = prompt('Senha inicial (peça pra ele trocar depois):');
-    if(!senha) return;
+  document.getElementById('addUserToggleBtn').addEventListener('click', ()=>{
+    document.getElementById('addUserForm').classList.remove('hidden');
+    document.getElementById('addUserToggleBtn').classList.add('hidden');
+    document.getElementById('addUserNome').focus();
+  });
+  document.getElementById('addUserCancelBtn').addEventListener('click', ()=>{
+    document.getElementById('addUserForm').classList.add('hidden');
+    document.getElementById('addUserToggleBtn').classList.remove('hidden');
+    document.getElementById('addUserMsg').innerHTML = '';
+    ['addUserNome','addUserUsuario','addUserSenha'].forEach(id=>document.getElementById(id).value='');
+  });
+  document.getElementById('addUserConfirmBtn').addEventListener('click', async ()=>{
+    const nome = document.getElementById('addUserNome').value.trim();
+    const usuario = document.getElementById('addUserUsuario').value.trim();
+    const senha = document.getElementById('addUserSenha').value.trim();
+    const msg = document.getElementById('addUserMsg');
+    if(!nome || !usuario || !senha){ msg.innerHTML = '<div class="ap-msg error">Preencha os 3 campos.</div>'; return; }
     try{
       await apiFetch('/api/auth/usuarios', { method:'POST', body: JSON.stringify({nome, usuario, senha}) });
       showToast('Usuário criado: ' + usuario);
+      document.getElementById('addUserCancelBtn').click();
       renderUsersList();
     }catch(e){
-      alert('Não foi possível criar o usuário: ' + e.message);
+      msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
     }
   });
 
