@@ -61,22 +61,36 @@ async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
 //   cliente: { cliente_id? , nome, documento?, contato? },
 //   vendedor_nome?: "...",
 //   observacao?: "...",
-//   numero_cotacao?: "...",     // se vier e já existir, não duplica - devolve o pedido já existente
-//   data_pedido?: "2026-08-01", // data original do documento, se souber (senão usa agora)
-//   origem?: "app" | "pdf",     // de onde veio esse registro
+//   numero_cotacao?: "...",       // se vier e já existir, compara data (ver pdf_modificado_em) antes de decidir
+//   data_pedido?: "2026-08-01",   // data original do documento, se souber (senão usa agora)
+//   pdf_modificado_em?: "...",    // data de modificação do ARQUIVO PDF (metadado), pra saber qual versão é mais nova
+//   origem?: "app" | "pdf",       // de onde veio esse registro
 //   itens: [{ codigo_sku, quantidade, preco_unitario, descricao? }, ...]
 // }
 router.post('/', async (req, res) => {
-  const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, origem } = req.body;
+  const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, pdf_modificado_em, origem } = req.body;
   if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
 
-  // checa duplicidade ANTES de abrir a transação - reprocessar o mesmo PDF
-  // não deve criar um pedido novo, só avisar que já tinha sido consolidado.
+  // checa duplicidade ANTES de abrir a transação. Se a mesma cotação já foi
+  // consolidada antes, só substitui os itens se o PDF novo for mais recente
+  // que o que já está gravado (comparando a data de modificação do arquivo,
+  // não a data de emissão do documento - a emissão pode não mudar numa
+  // reimpressão/correção, o metadado do arquivo sim). Sem essa informação
+  // dos dois lados, mantém o comportamento antigo: recusa como duplicado.
+  let pedidoParaAtualizar = null;
   if (numero_cotacao) {
-    const existente = await pool.query('SELECT id, cliente_id, data_pedido FROM pedidos WHERE numero_cotacao = $1', [numero_cotacao]);
+    const existente = await pool.query(
+      'SELECT id, cliente_id, data_pedido, pdf_modificado_em FROM pedidos WHERE numero_cotacao = $1',
+      [numero_cotacao]
+    );
     if (existente.rows.length > 0) {
-      return res.status(200).json({ ja_existia: true, pedido_id: existente.rows[0].id, cliente_id: existente.rows[0].cliente_id, data_pedido: existente.rows[0].data_pedido });
+      const atual = existente.rows[0];
+      const novoEhMaisRecente = pdf_modificado_em && (!atual.pdf_modificado_em || new Date(pdf_modificado_em) > new Date(atual.pdf_modificado_em));
+      if (!novoEhMaisRecente) {
+        return res.status(200).json({ ja_existia: true, pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido });
+      }
+      pedidoParaAtualizar = atual.id;
     }
   }
 
@@ -87,13 +101,32 @@ router.post('/', async (req, res) => {
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
     const criarProdutosDesconhecidos = origem === 'pdf';
 
-    const pedidoResult = await client.query(
-      `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido)
-       VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()))
-       RETURNING id, data_pedido`,
-      [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null]
-    );
-    const pedidoId = pedidoResult.rows[0].id;
+    let pedidoId, dataPedidoFinal, atualizado = false;
+    if (pedidoParaAtualizar) {
+      // PDF mais novo pra uma cotação já existente: atualiza o cabeçalho e
+      // substitui os itens (apaga os antigos, grava os novos) em vez de criar
+      // um pedido paralelo - fica um registro só por cotação, sempre a versão mais recente.
+      const upd = await client.query(
+        `UPDATE pedidos SET cliente_id = $1, vendedor_id = $2, observacao = $3,
+                            data_pedido = COALESCE($4::timestamptz, data_pedido),
+                            pdf_modificado_em = $5
+         WHERE id = $6 RETURNING id, data_pedido`,
+        [clienteId, vendedorId, observacao || null, data_pedido || null, pdf_modificado_em || null, pedidoParaAtualizar]
+      );
+      pedidoId = upd.rows[0].id;
+      dataPedidoFinal = upd.rows[0].data_pedido;
+      await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [pedidoId]);
+      atualizado = true;
+    } else {
+      const pedidoResult = await client.query(
+        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7)
+         RETURNING id, data_pedido`,
+        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null, pdf_modificado_em || null]
+      );
+      pedidoId = pedidoResult.rows[0].id;
+      dataPedidoFinal = pedidoResult.rows[0].data_pedido;
+    }
 
     for (const item of itens) {
       const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku, criarProdutosDesconhecidos ? item.descricao : null);
@@ -104,8 +137,8 @@ router.post('/', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`Pedido #${pedidoId} gravado (cliente ${clienteId}, ${itens.length} item(ns))${numero_cotacao ? ` [cotação ${numero_cotacao}]` : ''}.`);
-    res.status(201).json({ pedido_id: pedidoId, cliente_id: clienteId, data_pedido: pedidoResult.rows[0].data_pedido });
+    console.log(`Pedido #${pedidoId} ${atualizado ? 'ATUALIZADO (versão mais nova do PDF)' : 'gravado'} (cliente ${clienteId}, ${itens.length} item(ns))${numero_cotacao ? ` [cotação ${numero_cotacao}]` : ''}.`);
+    res.status(201).json({ pedido_id: pedidoId, cliente_id: clienteId, data_pedido: dataPedidoFinal, atualizado });
   } catch (e) {
     await client.query('ROLLBACK');
     if (e.code === '23505') {
