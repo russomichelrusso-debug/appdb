@@ -4016,7 +4016,29 @@ async function extrairTextoPdf(arrayBuffer){
     const conteudo = await pagina.getTextContent();
     linhasTotais.push(...agruparEmLinhasPdf(conteudo.items));
   }
-  return linhasTotais.join('\n');
+  const metadataModificadoEm = await extrairDataModificacaoPdf(documento);
+  return { texto: linhasTotais.join('\n'), metadataModificadoEm };
+}
+// Lê a data de modificação (ou de criação, se não tiver) do próprio ARQUIVO
+// PDF - metadado técnico do arquivo, diferente da "Emissão" que aparece no
+// texto visível do documento. Usado pra saber se um PDF reprocessado é uma
+// versão mais nova da mesma cotação (ex: cotação corrigida e reexportada).
+function parseDataMetadataPdf(raw){
+  if(!raw) return null;
+  // formato padrão de data em PDF: D:20260525120000-03'00' (hora/fuso podem faltar)
+  const m = String(raw).match(/D:(\d{4})(\d{2})(\d{2})(\d{2})?(\d{2})?(\d{2})?/);
+  if(!m) return null;
+  const [, ano, mes, dia, hora='00', min='00', seg='00'] = m;
+  const iso = `${ano}-${mes}-${dia}T${hora}:${min}:${seg}Z`;
+  const d = new Date(iso);
+  return isNaN(d.getTime()) ? null : d.toISOString();
+}
+async function extrairDataModificacaoPdf(documento){
+  try{
+    const meta = await documento.getMetadata();
+    const info = (meta && meta.info) || {};
+    return parseDataMetadataPdf(info.ModDate) || parseDataMetadataPdf(info.CreationDate);
+  }catch(e){ return null; }
 }
 function limparNumeroPdf(str){
   if(str === undefined || str === null) return 0;
@@ -4121,14 +4143,14 @@ function extrairProdutosPdf(texto){
   }
   return produtos;
 }
-function interpretarCotacaoPdf(texto, nomeArquivo){
+function interpretarCotacaoPdf(texto, nomeArquivo, metadataModificadoEm){
   const cliente = extrairClientePdf(texto);
   const cnpj = extrairCnpjPdf(texto);
   const { data, dataISO } = extrairDataEmissaoPdf(texto);
   const numero = extrairNumeroCotacaoPdf(texto);
   const produtos = extrairProdutosPdf(texto);
   const valorTotalCotacao = +produtos.reduce((s,p)=>s+p.valorTotal,0).toFixed(2);
-  return { numeroCotacao: numero, cliente, cnpj, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao };
+  return { numeroCotacao: numero, cliente, cnpj, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao, metadataModificadoEm };
 }
 
 function criarItemFilaPdf(nomeArquivo){
@@ -4149,14 +4171,14 @@ async function processarArquivosPdf(fileList){
   const arquivosPdf = todos.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
   if(arquivosPdf.length === 0){ showToast('Nenhum PDF selecionado.'); return; }
 
-  let sucesso = 0, jaExistiam = 0, falha = 0;
+  let sucesso = 0, atualizados = 0, jaExistiam = 0, falha = 0;
   for(const arquivo of arquivosPdf){
     const li = criarItemFilaPdf(arquivo.name);
     try{
       const buffer = await arquivo.arrayBuffer();
-      const texto = await extrairTextoPdf(buffer);
+      const { texto, metadataModificadoEm } = await extrairTextoPdf(buffer);
       if(!texto.trim()) throw new Error('Nenhum texto encontrado — pode ser um PDF escaneado (imagem).');
-      const cotacao = interpretarCotacaoPdf(texto, arquivo.name);
+      const cotacao = interpretarCotacaoPdf(texto, arquivo.name, metadataModificadoEm);
       if(!cotacao.cliente) throw new Error('Não consegui identificar o cliente neste PDF.');
       if(cotacao.produtos.length === 0) throw new Error('Nenhum item de produto identificado neste PDF.');
 
@@ -4164,6 +4186,7 @@ async function processarArquivosPdf(fileList){
         cliente: { nome: cotacao.cliente, documento: cotacao.cnpj || undefined },
         numero_cotacao: cotacao.numeroCotacao || undefined,
         data_pedido: cotacao.dataEmissaoISO || undefined,
+        pdf_modificado_em: cotacao.metadataModificadoEm || undefined,
         origem: 'pdf',
         itens: cotacao.produtos.map(p => ({
           codigo_sku: p.codigo, quantidade: p.quantidade, preco_unitario: p.valorUnitario, descricao: p.descricao,
@@ -4173,6 +4196,9 @@ async function processarArquivosPdf(fileList){
       if(result.ja_existia){
         atualizarItemFilaPdf(li, 'jaexistia', `${cotacao.cliente} · já tinha sido importado (cotação ${cotacao.numeroCotacao})`);
         jaExistiam++;
+      }else if(result.atualizado){
+        atualizarItemFilaPdf(li, 'sucesso', `${cotacao.cliente} · atualizado com versão mais nova · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}`);
+        atualizados++;
       }else{
         atualizarItemFilaPdf(li, 'sucesso', `${cotacao.cliente} · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}`);
         sucesso++;
@@ -4183,7 +4209,7 @@ async function processarArquivosPdf(fileList){
       falha++;
     }
   }
-  showToast(`${sucesso} nova(s), ${jaExistiam} já existente(s)${falha ? `, ${falha} com erro` : ''}.`);
+  showToast(`${sucesso} nova(s), ${atualizados} atualizada(s), ${jaExistiam} já existente(s)${falha ? `, ${falha} com erro` : ''}.`);
 }
 
 function initPdfConsolidacao(){
