@@ -1166,6 +1166,13 @@
   </div>
 
   <div id="tabLevantamento" class="hidden">
+    <div class="hist-clientBar">
+      <div>
+        <div class="hist-clientLabel">Cliente deste levantamento</div>
+        <div class="hist-clientName" id="levClientName">Nenhum selecionado</div>
+      </div>
+      <button type="button" class="restoreBtn" id="levSelectClientBtn" style="width:auto;padding:10px 16px;">Selecionar</button>
+    </div>
     <div class="lev-savebar">
       <span class="lev-saveinfo" id="levSaveInfo">Levantamento não salvo</span>
       <div class="lev-savebtns">
@@ -1611,6 +1618,7 @@ const state = {
   cart: [], // {cod, qty}
   survey: [], // {cod, qty, ped} - levantamento de estoque no cliente
   levLoadedId: null, // id do levantamento salvo atualmente aberto (null = ainda não foi salvo com nome)
+  levCliente: null, // {id, nome} - cliente selecionado nesta visita; usado ao salvar o levantamento e ao finalizar o pedido
   levLoadedName: null,
   priceOverrides: {}, // {cod: preçoLíquidoEditado} - preço base manual (antes de impostos), por sessão
   qtyDiscounts: {}, // {cod: percentual} - desconto extra por quantidade, por produto
@@ -2253,6 +2261,7 @@ function clearLevSurvey(){
   state.survey = [];
   state.levLoadedId = null;
   state.levLoadedName = null;
+  setLevCliente(null);
   saveLevSurvey();
   renderLevList();
   refreshLevSaveInfo();
@@ -2292,8 +2301,14 @@ function refreshLevSaveInfo(){
 // (mesmo cliente) pra poder reabrir rapidamente mesmo sem internet.
 async function saveLevantamento(){
   if(state.survey.length === 0){ showToast('Adicione algum item ao levantamento antes de salvar'); return; }
-  const cliente = await openClientPicker();
-  if(!cliente) return;
+  // se já tem cliente selecionado na barra do topo, usa ele direto; só abre o
+  // seletor se ainda não tiver escolhido nenhum pra essa visita.
+  if(!state.levCliente){
+    const cliente = await openClientPicker();
+    if(!cliente) return;
+    setLevCliente(cliente);
+  }
+  const cliente = state.levCliente;
 
   const btn = document.getElementById('levSaveBtn');
   const originalHtml = btn.innerHTML;
@@ -2388,6 +2403,7 @@ function doOpenSavedSurvey(id){
       .map(it => ({cod: it.cod, qty: it.qty||0, ped: it.ped||0, done: !!it.done}));
     state.levLoadedId = entry.id;
     state.levLoadedName = entry.name;
+    setLevCliente(entry.clienteId ? { id: entry.clienteId, nome: entry.name } : null);
     saveLevSurvey();
     renderLevList();
     refreshLevSaveInfo();
@@ -2400,11 +2416,24 @@ function doOpenSavedSurvey(id){
   proceed();
 }
 
+// Guarda o cliente escolhido pra essa visita, e reflete na barra do topo do
+// Levantamento. Esse mesmo cliente é reaproveitado ao salvar o levantamento
+// e ao finalizar o pedido, pra não precisar escolher duas vezes.
+function setLevCliente(cliente){
+  state.levCliente = cliente;
+  document.getElementById('levClientName').textContent = cliente ? cliente.nome : 'Nenhum selecionado';
+}
+async function selectLevClient(){
+  const cliente = await openClientPicker();
+  if(!cliente) return;
+  setLevCliente(cliente);
+}
 function initLevSaveOpen(){
   document.getElementById('levSaveBtn').addEventListener('click', saveLevantamento);
   document.getElementById('levOpenBtn').addEventListener('click', openLevOpenModal);
   document.getElementById('levOpenCancel').addEventListener('click', closeLevOpenModal);
   document.getElementById('levOpenOverlay').addEventListener('click', closeLevOpenModal);
+  document.getElementById('levSelectClientBtn').addEventListener('click', selectLevClient);
   refreshLevSaveInfo();
 }
 
@@ -2701,6 +2730,18 @@ function todayStr(){
   return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 }
 
+// Nome do arquivo no formato NomeDDMMAA (ex: "Joao240826.csv") - primeiro
+// nome do cliente, sem acento/espaço, seguido de dia+mês+ano com 2 dígitos.
+function csvFileNameFor(clientName){
+  const semAcento = (clientName||'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+  const primeiraPalavra = (semAcento.trim().split(/\s+/)[0] || 'Cliente').replace(/[^a-zA-Z0-9]/g,'') || 'Cliente';
+  const nomeAbrev = primeiraPalavra.charAt(0).toUpperCase() + primeiraPalavra.slice(1);
+  const d = new Date();
+  const pad = n => String(n).padStart(2,'0');
+  const ddmmaa = pad(d.getDate()) + pad(d.getMonth()+1) + String(d.getFullYear()).slice(-2);
+  return `${nomeAbrev}${ddmmaa}.csv`;
+}
+
 function exportCartCSV(clientName){
   const {rows} = cartTotals();
   if(rows.length === 0){ showToast('Adicione itens ao orçamento primeiro'); return; }
@@ -2709,8 +2750,7 @@ function exportCartCSV(clientName){
   const csvBody = [header, ...lines].join('\r\n');
   const BOM = '\uFEFF';
   const blob = new Blob([BOM + csvBody], {type:'text/csv;charset=utf-8;'});
-  const namePart = sanitizeFileNamePart(clientName);
-  const fileName = `orcamento-${namePart ? namePart+'-' : ''}${todayStr()}.csv`;
+  const fileName = csvFileNameFor(clientName);
   shareOrDownloadBlob(blob, fileName, 'Orçamento Cortag (CSV)', 'Baixado — verifique a pasta Downloads do celular');
 }
 
@@ -2873,7 +2913,9 @@ function openCsvNamePrompt(){
   const input = document.getElementById('csvClientName');
   let lastName = '';
   try{ lastName = localStorage.getItem(CSV_NAME_LS_KEY) || ''; }catch(e){}
-  input.value = lastName;
+  // se já tem cliente selecionado nesta visita, usa ele em vez do último nome
+  // digitado - é mais provável de estar certo pro pedido de agora.
+  input.value = state.levCliente ? state.levCliente.nome : lastName;
   document.getElementById('csvNameOverlay').classList.remove('hidden');
   document.getElementById('csvNameModal').classList.remove('hidden');
   setTimeout(()=>{ input.focus(); input.select(); }, 50);
@@ -3326,8 +3368,11 @@ async function finalizeOrder(){
   const { rows } = cartTotals();
   if(rows.length === 0){ showToast('Adicione itens ao orçamento primeiro'); return; }
 
-  const cliente = await openClientPicker();
+  // se já tem cliente selecionado nesta visita (aba Levantamento), reaproveita
+  // em vez de perguntar de novo - só abre o seletor se ainda não tiver nenhum.
+  const cliente = state.levCliente || await openClientPicker();
   if(!cliente) return; // cancelou a escolha do cliente
+  if(!state.levCliente) setLevCliente(cliente);
 
   const btn = document.getElementById('finalizeOrderBtn');
   const originalHtml = btn.innerHTML;
@@ -4875,6 +4920,7 @@ function clearSessionData(){
   state.survey = [];
   state.levLoadedId = null;
   state.levLoadedName = null;
+  state.levCliente = null;
   state.priceOverrides = {};
   state.qtyDiscounts = {};
   try{ localStorage.removeItem(LEV_LS_KEY); }catch(e){}
