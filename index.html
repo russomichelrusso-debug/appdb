@@ -3904,9 +3904,13 @@ function extrairClientePdf(texto){
 // do documento (nº da cotação, telefone etc.); se não achar rotulado, cai
 // pra qualquer coisa no formato XX.XXX.XXX/XXXX-XX no texto todo.
 function extrairCnpjPdf(texto){
-  const rotulado = texto.match(/CNPJ(?:\s*\/\s*CPF)?\s*:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i);
+  // busca só a partir de onde "Cliente:" aparece, pra não confundir com o
+  // CNPJ da própria Cortag (que aparece antes, no cabeçalho do documento)
+  const idxCliente = texto.search(/Cliente\s*:/i);
+  const textoBusca = idxCliente >= 0 ? texto.slice(idxCliente) : texto;
+  const rotulado = textoBusca.match(/CNPJ(?:\s*\/\s*CPF)?\s*:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i);
   if(rotulado) return rotulado[1];
-  const generico = texto.match(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/);
+  const generico = textoBusca.match(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/);
   return generico ? generico[1] : null;
 }
 function extrairDataEmissaoPdf(texto){
@@ -3919,9 +3923,17 @@ function extrairNumeroCotacaoPdf(texto){
   const m = texto.match(/(?:Cota[çc][ãa]o\s+de\s+Venda|Pedido\s+de\s+Venda|Cota[çc][ãa]o|Pedido)\s*N[ºo°.]{0,2}\s*:?\s*(\d{1,12})/i);
   return m ? m[1] : null;
 }
-const RE_ITEM_COMPLETA_PDF = /^(\d{4,7})\s+(.+?)\s+([\d.,]+)\s+([A-ZÇÃÕ]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
-const RE_ITEM_SIMPLES_PDF = /^(\d{4,7})\s+(.+?)\s+([\d.,]+)\s+([A-ZÇÃÕ]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
-const RE_INICIO_ITEM_PDF = /^\d{4,7}\s/;
+// Aceita código com prefixo de letra (ex: P60863) e descrição OPCIONAL na
+// mesma linha - em PDFs reais da Cortag, quando a descrição é longa o
+// bastante pra quebrar em 2 linhas, o código+valores ficam sanduichados NO
+// MEIO da descrição (parte 1 antes, parte 2 depois), não sempre no início.
+const RE_ITEM_COMPLETA_PDF = /^(P?\d{4,7})\s*(.*?)\s+([\d.,]+)\s+([A-ZÇÃÕ]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
+const RE_ITEM_SIMPLES_PDF = /^(P?\d{4,7})\s*(.*?)\s+([\d.,]+)\s+([A-ZÇÃÕ]{1,4})\s+([\d.,]+)\s+([\d.,]+)\s*$/i;
+const RE_LINHA_RODAPE_PDF = /^(R\$|O\.C\.|N[úu]mero\s+de\s+Produtos)/i;
+const RE_CABECALHO_TABELA_PDF = /^Item\s+Descri/i;
+// linha que é só ruído do cabeçalho de colunas (Venda/Total/IPI/ST/Impostos
+// repetidos, sem mais nada) - descarta sempre, nunca vira parte de descrição
+const RE_RUIDO_CABECALHO_COLUNA_PDF = /^(R\$\s*)?(Venda|Total|IPI|ST|Impostos|Un\.?|Qtd\.?|c\/)(\s+(R\$|Venda|Total|IPI|ST|Impostos|Un\.?|Qtd\.?|c\/))*\s*$/i;
 function tentarCasarLinhaItemPdf(str){
   let m = str.match(RE_ITEM_COMPLETA_PDF);
   if(m) return { m, formato: 'completa' };
@@ -3930,39 +3942,48 @@ function tentarCasarLinhaItemPdf(str){
   return null;
 }
 function extrairProdutosPdf(texto){
-  const totalNoUltimoGrupo = /c\/\s*Impostos/i.test(texto);
   const linhas = texto.split(/\r?\n/).map(l=>l.trim().replace(/[ \t]{2,}/g,' ')).filter(Boolean);
   const produtos = [];
-  let i = 0;
-  while(i < linhas.length){
+  let bufferAntes = [];
+  let dentroDaTabela = false;
+
+  for(let i=0; i<linhas.length; i++){
     const linha = linhas[i];
-    if(!RE_INICIO_ITEM_PDF.test(linha)){ i++; continue; }
-    let candidata = linha;
-    let linhasConsumidas = 1;
-    let resultado = tentarCasarLinhaItemPdf(candidata);
-    let tentativas = 0;
-    while(!resultado && tentativas < 2){
-      const proxima = linhas[i + linhasConsumidas];
-      if(proxima === undefined || RE_INICIO_ITEM_PDF.test(proxima)) break;
-      candidata += ' ' + proxima;
-      linhasConsumidas++;
-      resultado = tentarCasarLinhaItemPdf(candidata);
-      tentativas++;
+    if(RE_CABECALHO_TABELA_PDF.test(linha)){ dentroDaTabela = true; bufferAntes = []; continue; }
+    if(!dentroDaTabela) continue; // ignora tudo antes da tabela (dados da empresa/cliente)
+    if(RE_LINHA_RODAPE_PDF.test(linha)) break; // fim da tabela de itens
+    if(RE_RUIDO_CABECALHO_COLUNA_PDF.test(linha)) continue;
+
+    const resultado = tentarCasarLinhaItemPdf(linha);
+    if(!resultado){
+      // não é uma linha de dados - é parte de uma descrição quebrada,
+      // guarda pra grudar no próximo item encontrado
+      bufferAntes.push(linha);
+      continue;
     }
-    if(resultado){
-      const { m, formato } = resultado;
-      const codigo = m[1];
-      const descricao = m[2].trim();
-      const quantidade = limparNumeroPdf(m[3]);
-      const unidade = m[4].toUpperCase();
-      const valorUnitario = limparNumeroPdf(m[5]);
-      let valorTotal;
-      if(formato === 'completa') valorTotal = limparNumeroPdf(totalNoUltimoGrupo ? m[10] : m[9]);
-      else valorTotal = limparNumeroPdf(m[6]);
-      if(valorTotal === 0 && quantidade > 0 && valorUnitario > 0) valorTotal = +(quantidade*valorUnitario).toFixed(2);
-      if(!(quantidade === 0 && valorTotal === 0)) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
+    const { m, formato } = resultado;
+    const codigo = m[1];
+    const descricaoPropria = m[2].trim();
+    let descricao = (bufferAntes.join(' ') + ' ' + descricaoPropria).trim();
+    bufferAntes = [];
+    // só "rouba" a próxima linha se a descrição desta linha ficou vazia
+    // (quebrou ao redor da linha de dados) - se já veio completa, não mexe
+    if(!descricaoPropria){
+      const proxima = linhas[i+1];
+      if(proxima && !tentarCasarLinhaItemPdf(proxima) && !RE_LINHA_RODAPE_PDF.test(proxima) && !RE_RUIDO_CABECALHO_COLUNA_PDF.test(proxima)){
+        descricao = (descricao + ' ' + proxima).trim();
+        i++;
+      }
     }
-    i += linhasConsumidas;
+    const quantidade = limparNumeroPdf(m[3]);
+    const unidade = m[4].toUpperCase();
+    // no formato completo, as 6 colunas numéricas são: Venda, Total, IPI, ST,
+    // Unit. c/Impostos, Total c/Impostos - o que interessa gravar é o preço
+    // DE FATO cobrado (com impostos), não o preço base sem imposto.
+    const valorUnitario = formato === 'completa' ? limparNumeroPdf(m[9]) : limparNumeroPdf(m[5]);
+    let valorTotal = formato === 'completa' ? limparNumeroPdf(m[10]) : limparNumeroPdf(m[6]);
+    if(valorTotal === 0 && quantidade > 0 && valorUnitario > 0) valorTotal = +(quantidade*valorUnitario).toFixed(2);
+    if(!(quantidade === 0 && valorTotal === 0)) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
   }
   return produtos;
 }
