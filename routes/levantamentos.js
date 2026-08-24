@@ -5,7 +5,10 @@ const { pool } = require('../db');
 async function acharOuCriarCliente(client, { cliente_id, nome, documento, contato }) {
   if (cliente_id) return cliente_id;
   if (documento) {
-    const existing = await client.query('SELECT id FROM clientes WHERE documento = $1', [documento]);
+    const existing = await client.query(
+      `SELECT id FROM clientes WHERE regexp_replace(documento, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g') LIMIT 1`,
+      [documento]
+    );
     if (existing.rows.length > 0) return existing.rows[0].id;
   }
   // sem documento, tenta achar por nome "normalizado" (maiúsculas/espaços)
