@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
 -- não têm essa numeração.
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS numero_cotacao TEXT;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT 'app';
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pdf_modificado_em TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_numero_cotacao ON pedidos(numero_cotacao) WHERE numero_cotacao IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS pedido_itens (
