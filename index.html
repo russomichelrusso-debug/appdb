@@ -3338,11 +3338,30 @@ async function searchManageClients(term){
             <div class="prDetail">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}</div>
           </div>
           <div class="prBtns">
+            <button data-merge-client="${c.id}" data-nome-client="${escapeHtml(c.nome)}" aria-label="Mesclar com outro cadastro" title="Mesclar com outro cadastro">🔀</button>
             <button data-del-client="${c.id}" data-nome-client="${escapeHtml(c.nome)}" aria-label="Excluir" title="Excluir">🗑</button>
           </div>
         </div>
       </div>
     `).join('');
+    wrap.querySelectorAll('[data-merge-client]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const nomeOrigem = btn.dataset.nomeClient;
+        const idOrigem = Number(btn.dataset.mergeClient);
+        showToast(`Escolha o cadastro correto pra herdar o histórico de "${nomeOrigem}"`);
+        const alvo = await openClientPicker();
+        if(!alvo) return;
+        if(alvo.id === idOrigem){ showToast('Escolha um cliente diferente pra mesclar.'); return; }
+        if(!confirm(`Todo o histórico de "${nomeOrigem}" vai passar pra "${alvo.nome}", e "${nomeOrigem}" será excluído. Confirma?`)) return;
+        try{
+          await apiFetch('/api/clientes/mesclar', { method:'POST', body: JSON.stringify({ manter_id: alvo.id, remover_id: idOrigem }) });
+          showToast(`Mesclado com sucesso em "${alvo.nome}"`);
+          searchManageClients(document.getElementById('manageClientSearch').value);
+        }catch(e){
+          alert('Não foi possível mesclar: ' + e.message);
+        }
+      });
+    });
     wrap.querySelectorAll('[data-del-client]').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
         const nome = btn.dataset.nomeClient;
