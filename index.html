@@ -3899,6 +3899,16 @@ function extrairClientePdf(texto){
   nome = nome.replace(/\s*[-–—]\s*$/,'').trim();
   return nome || null;
 }
+// Procura o CNPJ do cliente em qualquer lugar do documento. Primeiro tenta
+// achar rotulado ("CNPJ:", "CNPJ/CPF:") pra não confundir com outro número
+// do documento (nº da cotação, telefone etc.); se não achar rotulado, cai
+// pra qualquer coisa no formato XX.XXX.XXX/XXXX-XX no texto todo.
+function extrairCnpjPdf(texto){
+  const rotulado = texto.match(/CNPJ(?:\s*\/\s*CPF)?\s*:?\s*(\d{2}\.?\d{3}\.?\d{3}\/?\d{4}-?\d{2})/i);
+  if(rotulado) return rotulado[1];
+  const generico = texto.match(/\b(\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2})\b/);
+  return generico ? generico[1] : null;
+}
 function extrairDataEmissaoPdf(texto){
   const m = texto.match(/(?:Data\s+de\s+Emiss[ãa]o|Emiss[ãa]o|Data)\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i);
   if(!m) return { data: null, dataISO: null };
@@ -3958,11 +3968,12 @@ function extrairProdutosPdf(texto){
 }
 function interpretarCotacaoPdf(texto, nomeArquivo){
   const cliente = extrairClientePdf(texto);
+  const cnpj = extrairCnpjPdf(texto);
   const { data, dataISO } = extrairDataEmissaoPdf(texto);
   const numero = extrairNumeroCotacaoPdf(texto);
   const produtos = extrairProdutosPdf(texto);
   const valorTotalCotacao = +produtos.reduce((s,p)=>s+p.valorTotal,0).toFixed(2);
-  return { numeroCotacao: numero, cliente, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao };
+  return { numeroCotacao: numero, cliente, cnpj, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao };
 }
 
 function criarItemFilaPdf(nomeArquivo){
@@ -3995,7 +4006,7 @@ async function processarArquivosPdf(fileList){
       if(cotacao.produtos.length === 0) throw new Error('Nenhum item de produto identificado neste PDF.');
 
       const payload = {
-        cliente: { nome: cotacao.cliente },
+        cliente: { nome: cotacao.cliente, documento: cotacao.cnpj || undefined },
         numero_cotacao: cotacao.numeroCotacao || undefined,
         data_pedido: cotacao.dataEmissaoISO || undefined,
         origem: 'pdf',
