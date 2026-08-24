@@ -206,4 +206,44 @@ router.get('/pedidos/exportar', async (req, res) => {
   }
 });
 
+// Produtos que esse cliente já comprou antes, mas faz tempo que não repõe, E
+// que o levantamento mais recente mostra em zero (ou nem foi contado) - é a
+// lista de "oportunidade de recuperar venda": já foi cliente desse produto,
+// não tem mais em estoque, provavelmente precisa repor.
+router.get('/clientes/:id/recuperar', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `WITH historico AS (
+         SELECT p.id AS produto_id, p.codigo_sku, p.nome,
+                MAX(ped.data_pedido) AS ultima_compra,
+                SUM(pi.quantidade) AS total_comprado
+         FROM pedidos ped
+         JOIN pedido_itens pi ON pi.pedido_id = ped.id
+         JOIN produtos p ON p.id = pi.produto_id
+         WHERE ped.cliente_id = $1
+         GROUP BY p.id, p.codigo_sku, p.nome
+       ),
+       ultimo_levantamento AS (
+         SELECT DISTINCT ON (li.produto_id) li.produto_id, li.quantidade_contada, l.data_visita
+         FROM levantamento_itens li
+         JOIN levantamentos l ON l.id = li.levantamento_id
+         WHERE l.cliente_id = $1
+         ORDER BY li.produto_id, l.data_visita DESC
+       )
+       SELECT h.codigo_sku, h.nome AS produto, h.ultima_compra, h.total_comprado,
+              COALESCE(ul.quantidade_contada, 0) AS estoque_atual, ul.data_visita AS ultimo_levantamento
+       FROM historico h
+       LEFT JOIN ultimo_levantamento ul ON ul.produto_id = h.produto_id
+       WHERE COALESCE(ul.quantidade_contada, 0) = 0
+       ORDER BY h.ultima_compra ASC
+       LIMIT 30`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar produtos pra recuperar.' });
+  }
+});
+
 module.exports = router;
