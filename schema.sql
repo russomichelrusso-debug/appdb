@@ -7,8 +7,12 @@ CREATE TABLE IF NOT EXISTS clientes (
   nome TEXT NOT NULL,
   documento TEXT UNIQUE,           -- CNPJ/CPF, evita duplicar o mesmo cliente
   contato TEXT,
+  classificatorio_tipo TEXT,       -- Varejo Master/Premium/Exclusive/Rede - vem do relatório de faturamento
+  classificatorio_desconto NUMERIC, -- percentual correspondente (20/17/15/18)
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_tipo TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_desconto NUMERIC;
 
 CREATE TABLE IF NOT EXISTS vendedores (
   id SERIAL PRIMARY KEY,
@@ -94,3 +98,4 @@ CREATE TABLE IF NOT EXISTS sessoes (
   expira_em TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessoes_expira ON sessoes(expira_em);
+

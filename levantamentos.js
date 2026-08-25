@@ -1,19 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-
-async function acharOuCriarCliente(client, { cliente_id, nome, documento, contato }) {
-  if (cliente_id) return cliente_id;
-  if (documento) {
-    const existing = await client.query('SELECT id FROM clientes WHERE documento = $1', [documento]);
-    if (existing.rows.length > 0) return existing.rows[0].id;
-  }
-  const result = await client.query(
-    'INSERT INTO clientes (nome, documento, contato) VALUES ($1, $2, $3) RETURNING id',
-    [nome, documento || null, contato || null]
-  );
-  return result.rows[0].id;
-}
+const { acharOuCriarCliente } = require('../clientMatcher');
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
