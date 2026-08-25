@@ -1576,6 +1576,12 @@
       <div id="integrityResults" style="margin-top:12px;"></div>
     </div>
     <div class="ap-card">
+      <h3>Verificar pedidos duplicados</h3>
+      <p class="ap-hint" style="margin-bottom:10px;">Acontece quando a mesma venda entra por dois caminhos (ex: finalizado no app na hora, e depois o mesmo pedido aparece de novo ao importar o relatório de faturamento). Mostra pedidos do mesmo cliente, no mesmo dia, com produto em comum — revise e exclua o repetido manualmente.</p>
+      <button class="restoreBtn" id="checkDuplicatePedidosBtn">Analisar pedidos</button>
+      <div id="duplicatePedidosResults" style="margin-top:12px;"></div>
+    </div>
+    <div class="ap-card">
       <h3>Gerenciar clientes</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível excluir quem ainda não tem pedido ou levantamento registrado.</p>
       <input type="text" id="manageClientSearch" placeholder="Buscar cliente por nome ou CNPJ...">
@@ -3629,6 +3635,61 @@ function renderIntegrityResults(problemas){
       }
     });
   });
+}
+
+// ---------------- Verificar pedidos duplicados ----------------
+async function checkDuplicatePedidos(){
+  const wrap = document.getElementById('duplicatePedidosResults');
+  wrap.innerHTML = '<div class="promoEmpty">Analisando…</div>';
+  try{
+    const pedidos = await apiFetch('/api/pedidos/duplicados');
+    if(pedidos.length === 0){ wrap.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Nenhum pedido duplicado encontrado.</div>'; return; }
+
+    // agrupa por cliente+dia, pra mostrar como "grupos" em vez de lista solta
+    const grupos = new Map();
+    pedidos.forEach(p=>{
+      const dia = p.data_pedido.slice(0,10);
+      const chave = `${p.cliente_id}|${dia}`;
+      if(!grupos.has(chave)) grupos.set(chave, { cliente_nome: p.cliente_nome, dia, pedidos: [] });
+      grupos.get(chave).pedidos.push(p);
+    });
+
+    wrap.innerHTML = Array.from(grupos.values()).map(g => `
+      <div class="histCard">
+        <div class="hcName">${escapeHtml(g.cliente_nome)}</div>
+        <div class="hcCode">${formatDateBr(g.dia)} · ${g.pedidos.length} pedidos com item em comum</div>
+        ${g.pedidos.map(p => `
+          <div style="margin-top:10px;padding-top:10px;border-top:0.75px solid var(--hairline);">
+            <div style="font-size:12px;font-weight:600;">Pedido #${p.pedido_id} · origem: ${escapeHtml(p.origem)}${p.numero_cotacao ? ' · nº '+escapeHtml(p.numero_cotacao) : ''}</div>
+            <div style="font-size:11.5px;color:var(--gray);margin-top:3px;">
+              ${p.itens.map(it=>`${it.quantidade}x ${escapeHtml(it.produto)} (${escapeHtml(it.codigo_sku)})`).join('<br>')}
+            </div>
+            <button type="button" class="restoreBtn" data-del-pedido="${p.pedido_id}" style="margin-top:8px;color:#B3261E;">Excluir este pedido</button>
+          </div>
+        `).join('')}
+      </div>
+    `).join('');
+
+    wrap.querySelectorAll('[data-del-pedido]').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        if(!confirm(`Excluir o pedido #${btn.dataset.delPedido}? Essa ação não pode ser desfeita.`)) return;
+        btn.disabled = true; btn.textContent = 'Excluindo…';
+        try{
+          await apiFetch(`/api/pedidos/${btn.dataset.delPedido}`, { method:'DELETE' });
+          showToast('Pedido excluído');
+          checkDuplicatePedidos();
+        }catch(e){
+          btn.disabled = false; btn.textContent = 'Excluir este pedido';
+          alert('Não foi possível excluir: ' + e.message);
+        }
+      });
+    });
+  }catch(e){
+    wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+  }
+}
+function initDuplicatePedidosCheck(){
+  document.getElementById('checkDuplicatePedidosBtn').addEventListener('click', checkDuplicatePedidos);
 }
 
 function initIntegrityCheck(){
@@ -5738,6 +5799,7 @@ async function init(){
   initBackendAdmin();
   initPrevisaoUpload();
   initIntegrityCheck();
+  initDuplicatePedidosCheck();
   initManageClients();
   document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
   initProdutosTab();
