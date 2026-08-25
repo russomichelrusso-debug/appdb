@@ -341,12 +341,6 @@
     color:var(--gray);
     margin-bottom:10px;
   }
-  .previsaoBadge{
-    display:inline-block;font-size:11px;font-weight:600;
-    padding:3px 9px;border-radius:20px;margin:-4px 0 10px;
-  }
-  .previsaoBadge--ok{background:#E7F0FE;color:#1155CC;}
-  .previsaoBadge--alerta{background:#FDECEC;color:#B3261E;}
   .card .prow{
     display:flex;
     align-items:center;
@@ -1477,16 +1471,6 @@
       <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
     </div>
     <div class="ap-card">
-      <h3>Previsão de estoque</h3>
-      <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apPrevisaoSource">—</span></div>
-      <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Produtos com chegada prevista ou sem estoque projetado passam a mostrar um aviso na busca de preços.</p>
-      <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
-      <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
-      <div id="previsaoMsgArea" style="margin-top:8px;"></div>
-      <button class="restoreBtn" id="previsaoExportBtn" style="margin-top:10px;">Exportar previsao.json (pra todo mundo ver)</button>
-      <p class="ap-hint" style="margin:12px 0 0;">O upload acima fica só neste aparelho. Pra atualizar todo mundo de uma vez: sobe a planilha aqui primeiro, depois toque em "Exportar" e substitua o arquivo <code>previsao.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
-    </div>
-    <div class="ap-card">
       <h3>Campanhas promocionais</h3>
       <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apPromoSource">—</span></div>
       <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em niveladores = mais 4%).</p>
@@ -1530,13 +1514,6 @@
       </div>
       <ul id="pdfProcessQueue" class="pdfQueue"></ul>
     </div>
-    <div class="ap-card">
-      <h3>Importar relatório de faturamento</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que chegar um relatório atualizado — pedido repetido não duplica.</p>
-      <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
-      <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
-      <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
-    </div>
     <div class="ap-card hidden" id="exportPedidosCard">
       <h3>Baixar pedidos por período</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor — funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
@@ -1574,12 +1551,6 @@
       <button class="fileBtn" id="checkIntegrityBtn">Selecionar planilha de referência e analisar</button>
       <input type="file" id="checkIntegrityFile" accept=".json,application/json" style="display:none;">
       <div id="integrityResults" style="margin-top:12px;"></div>
-    </div>
-    <div class="ap-card">
-      <h3>Verificar pedidos duplicados</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Acontece quando a mesma venda entra por dois caminhos (ex: finalizado no app na hora, e depois o mesmo pedido aparece de novo ao importar o relatório de faturamento). Mostra pedidos do mesmo cliente, no mesmo dia, com produto em comum — revise e exclua o repetido manualmente.</p>
-      <button class="restoreBtn" id="checkDuplicatePedidosBtn">Analisar pedidos</button>
-      <div id="duplicatePedidosResults" style="margin-top:12px;"></div>
     </div>
     <div class="ap-card">
       <h3>Gerenciar clientes</h3>
@@ -1826,7 +1797,6 @@ function initGpsState(){
   });
 }
 
-let setChannelDiscount = ()=>{}; // preenchida de verdade dentro de initChannelSeg, exposta pra ser chamada ao selecionar cliente
 function initChannelSeg(){
   const seg = document.getElementById('channelSeg');
   const btns = [...seg.querySelectorAll('button')];
@@ -1838,7 +1808,6 @@ function initChannelSeg(){
   }
   btns.forEach(b=>b.addEventListener('click', ()=> setActive(Number(b.dataset.v))));
   setActive(15);
-  setChannelDiscount = setActive;
 }
 function initPromoInput(){
   const inp = document.getElementById('promoInput');
@@ -1916,27 +1885,6 @@ function renderResults(){
   });
 }
 
-function renderPrevisaoBadge(codigo){
-  const prev = PREVISAO_MAP[codigo];
-  if(!prev) return '';
-  // só mostra quando é informação de verdade acionável: tem previsão de
-  // chegada AINDA NO FUTURO, ou não tem previsão nenhuma mas o saldo já
-  // ficou negativo - pra não poluir o card de item com estoque normal.
-  if(prev.previsao){
-    const hoje = new Date(); hoje.setHours(0,0,0,0);
-    const dataPrevisao = new Date(prev.previsao + 'T00:00:00');
-    if(dataPrevisao >= hoje){
-      const [aaaa,mm,dd] = prev.previsao.split('-');
-      return `<span class="previsaoBadge previsaoBadge--ok" title="Disponível: ${prev.qtDisponivel} · Em compra: ${prev.qtCompra}">📦 chega ${dd}/${mm}</span>`;
-    }
-    // data já passou sem uma planilha nova confirmar - não mostra mais "chega
-    // no passado", cai pra checagem de saldo abaixo como se não tivesse previsão
-  }
-  if(prev.saldo < 0){
-    return `<span class="previsaoBadge previsaoBadge--alerta" title="Disponível: ${prev.qtDisponivel} · Saldo projetado: ${prev.saldo}">⚠ sem previsão de chegada</span>`;
-  }
-  return '';
-}
 function renderCard(p){
   const lp = listPrice(p, state.uf);
   const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
@@ -1950,7 +1898,6 @@ function renderCard(p){
     ${qtyDisc>0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
     <div class="pname">${escapeHtml(p.n)}</div>
     <div class="psub">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''} · Emb. ${p.emb}</div>
-    ${renderPrevisaoBadge(p.c)}
     <div class="prow">
       <div class="prices">
         ${hasDiscount ? `<div class="list">de <s>${brl(lp)}</s></div>` : ''}
@@ -2215,7 +2162,6 @@ function renderCart(){
           <div>
             <div class="pname">${escapeHtml(p.n)}${p.fx ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c)>0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct>0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName||'')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.emb>1 ? ' · múltiplos de '+p.emb : ''}</div>
-            ${renderPrevisaoBadge(p.c)}
           </div>
           <button class="rm" data-rm="${p.c}" aria-label="Remover">&times;</button>
         </div>
@@ -2548,13 +2494,6 @@ function doOpenSavedSurvey(id){
 function setLevCliente(cliente){
   state.levCliente = cliente;
   document.getElementById('levClientName').textContent = cliente ? cliente.nome : 'Nenhum selecionado';
-  // pré-preenche o desconto de canal (classificatório) do cliente - continua
-  // editável manualmente depois, isso só evita ter que selecionar de novo
-  // toda vez que já se sabe qual é o cliente.
-  if(cliente && cliente.classificatorio_desconto !== undefined && cliente.classificatorio_desconto !== null){
-    setChannelDiscount(Number(cliente.classificatorio_desconto));
-    showToast(`Desconto de canal ajustado pra ${cliente.classificatorio_desconto}% (${cliente.classificatorio_tipo})`);
-  }
 }
 async function selectLevClient(){
   const cliente = await openClientPicker();
@@ -2695,7 +2634,6 @@ function renderLevList(){
           <div>
             <div class="pname">${escapeHtml(p.n)}${p.fx ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc>0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''}</div>
-            ${renderPrevisaoBadge(p.c)}
           </div>
         </div>
         <button class="rm" data-lev-rm="${p.c}" aria-label="Remover">&times;</button>
@@ -3165,142 +3103,6 @@ function initShareSheet(){
 // ---------------- Admin: atualização da tabela de preços --------
 // =================================================================
 const LS_KEY = 'cortagPriceDB_v1';
-const PREVISAO_LS_KEY = 'cortagPrevisaoDB_v1';
-let PREVISAO_MAP = {};
-let PREVISAO_SOURCE = 'Nenhuma previsão carregada';
-
-async function loadActivePrevisao(){
-  // mesmo padrão em 2 níveis usado pra base de preços: override manual deste
-  // aparelho primeiro, depois um arquivo remoto hospedado junto do app.
-  try{
-    const raw = localStorage.getItem(PREVISAO_LS_KEY);
-    if(raw){
-      const saved = JSON.parse(raw);
-      if(saved && saved.mapa && Object.keys(saved.mapa).length){
-        PREVISAO_SOURCE = 'Atualizado em ' + new Date(saved.updatedAt).toLocaleString('pt-BR') + (saved.fileName ? ' · '+saved.fileName : '') + ' · somente este aparelho';
-        return saved.mapa;
-      }
-    }
-  }catch(e){ console.warn('Não foi possível ler a previsão salva localmente:', e); }
-  try{
-    const resp = await fetch('./previsao.json', {cache:'no-store'});
-    if(resp.ok){
-      const remote = await resp.json();
-      if(remote && remote.mapa && Object.keys(remote.mapa).length){
-        const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-        PREVISAO_SOURCE = (remote.version || 'Atualização remota') + (when ? ' · '+when : '') + ' · todos os aparelhos';
-        return remote.mapa;
-      }
-    }
-  }catch(e){ /* sem rede, arquivo local, ou previsao.json ausente - ok, fica sem previsão */ }
-  return {};
-}
-function savePrevisaoLocal(mapa, fileName){
-  try{
-    localStorage.setItem(PREVISAO_LS_KEY, JSON.stringify({ mapa, updatedAt: Date.now(), fileName }));
-  }catch(e){ console.warn('Não foi possível salvar a previsão localmente:', e); }
-}
-
-let sheetJsLoadPromise = null;
-function loadSheetJs(){
-  if(window.XLSX) return Promise.resolve(window.XLSX);
-  if(sheetJsLoadPromise) return sheetJsLoadPromise;
-  sheetJsLoadPromise = new Promise((resolve, reject)=>{
-    const s = document.createElement('script');
-    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-    s.onload = () => resolve(window.XLSX);
-    s.onerror = () => reject(new Error('load-error'));
-    document.head.appendChild(s);
-  });
-  return sheetJsLoadPromise;
-}
-// Lê a planilha de previsão de estoque (relatório tipo ESCE007) e monta um
-// mapa código → dados de previsão. Aceita qualquer nome de arquivo, só
-// espera as colunas: Item, Qt. Disp., Qt. Carteira, Qt. Compra, Previsão, Saldo.
-async function parsePrevisaoXlsx(arrayBuffer){
-  const XLSX = await loadSheetJs();
-  const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
-  const sheet = wb.Sheets[wb.SheetNames[0]];
-  const linhas = XLSX.utils.sheet_to_json(sheet, {defval:null});
-  const mapa = {};
-  linhas.forEach(r=>{
-    const codigo = String(r['Item'] ?? '').trim();
-    if(!codigo) return;
-    let previsaoISO = null;
-    const previsaoRaw = r['Previsão'];
-    if(previsaoRaw && previsaoRaw !== 'Sem Previsão'){
-      const d = previsaoRaw instanceof Date ? previsaoRaw : new Date(previsaoRaw);
-      if(!isNaN(d.getTime())) previsaoISO = d.toISOString().slice(0,10);
-    }
-    mapa[codigo] = {
-      qtDisponivel: Number(r['Qt. Disp.']) || 0,
-      qtCarteira: Number(r['Qt. Carteira']) || 0,
-      qtCompra: Number(r['Qt. Compra']) || 0,
-      previsao: previsaoISO,
-      saldo: Number(r['Saldo']) || 0,
-    };
-  });
-  return mapa;
-}
-
-// Traduz o texto do classificatório ("Varejo Master (20)", "Rede", "Locação")
-// pro par {tipo, desconto}. "Locação" fica sem classificação de propósito -
-// não é uma categoria de cliente de verdade, é aluguel de ferramenta.
-function interpretarClassificatorio(valor){
-  if(!valor) return null;
-  const texto = String(valor).trim();
-  if(texto === 'Locação') return null;
-  const comParenteses = texto.match(/^(.*?)\s*\((\d+)\)\s*$/);
-  if(comParenteses) return { tipo: comParenteses[1].trim(), desconto: Number(comParenteses[2]) };
-  if(texto === 'Rede') return { tipo: 'Rede', desconto: 18 }; // não vem com número na planilha
-  return { tipo: texto, desconto: null };
-}
-
-// Lê a aba "Faturamento" do relatório de pedidos já faturados. Agrupa por
-// Nr.Pedido (pedido com vários itens) e por Cliente (classificatório). Não
-// grava valor - só quantidade (o Vlr.Faturado vem sem impostos, não confiável
-// pra guardar como preço).
-async function parseFaturamentoXlsx(arrayBuffer){
-  const XLSX = await loadSheetJs();
-  const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
-  const sheet = wb.Sheets['Faturamento'] || wb.Sheets[wb.SheetNames[0]];
-  const linhas = XLSX.utils.sheet_to_json(sheet, {defval:null, range:2});
-
-  const classificacoesMap = new Map(); // nome cliente -> {tipo, desconto}
-  const pedidosMap = new Map();        // numero do pedido -> {cliente_nome, data, itens[]}
-
-  linhas.forEach(r=>{
-    const clienteNome = String(r['Cliente'] ?? '').trim();
-    const numeroPedido = String(r['Nr.Pedido'] ?? '').trim();
-    const codigoItem = String(r['Item'] ?? '').trim();
-    const qtd = Number(r['Qte.Faturada']) || 0;
-    if(!clienteNome || !numeroPedido || !codigoItem) return;
-
-    if(!classificacoesMap.has(clienteNome)){
-      const classi = interpretarClassificatorio(r['Classificatório']);
-      if(classi) classificacoesMap.set(clienteNome, classi);
-    }
-
-    if(!pedidosMap.has(numeroPedido)){
-      let dataISO = null;
-      const dataRaw = r['Dt.Emissão'];
-      if(dataRaw){
-        const d = dataRaw instanceof Date ? dataRaw : new Date(dataRaw);
-        if(!isNaN(d.getTime())) dataISO = d.toISOString().slice(0,10);
-      }
-      pedidosMap.set(numeroPedido, { cliente_nome: clienteNome, data: dataISO, itens: [] });
-    }
-    pedidosMap.get(numeroPedido).itens.push({ codigo_sku: codigoItem, quantidade: qtd });
-  });
-
-  const classificacoes = Array.from(classificacoesMap, ([nome, c]) => ({ nome, tipo: c.tipo, desconto: c.desconto }));
-  const pedidos = Array.from(pedidosMap, ([numero_pedido, p]) => ({ numero_pedido, ...p }));
-  return { classificacoes, pedidos };
-}
-async function apiImportarFaturamento(payload){
-  return apiFetch('/api/pedidos/importar-faturamento', { method:'POST', body: JSON.stringify(payload) });
-}
-
 let ACTIVE_SOURCE = 'Base original do app';
 let PROMO_SOURCE = 'Nenhuma campanha ativa';
 const PROMO_LS_KEY = 'cortagPromoRules_v1';
@@ -3470,15 +3272,14 @@ async function runClientSearch(term){
   try{
     const clientes = await apiBuscarClientes(term);
     if(clientes.length === 0){ results.innerHTML = '<div class="promoEmpty">Nenhum cliente encontrado — pode cadastrar um novo abaixo.</div>'; return; }
-    const porId = new Map(clientes.map(c=>[String(c.id), c]));
     results.innerHTML = clientes.map(c => `
-      <button type="button" class="clientPickerItem" data-client-id="${c.id}">
+      <button type="button" class="clientPickerItem" data-client-id="${c.id}" data-client-nome="${escapeHtml(c.nome)}">
         <div class="cpName">${escapeHtml(c.nome)}</div>
-        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · '+escapeHtml(c.contato) : ''}${c.classificatorio_tipo ? ' · '+escapeHtml(c.classificatorio_tipo) : ''}</div>
+        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · '+escapeHtml(c.contato) : ''}</div>
       </button>
     `).join('');
     results.querySelectorAll('[data-client-id]').forEach(btn=>{
-      btn.addEventListener('click', ()=> closeClientPicker(porId.get(btn.dataset.clientId)));
+      btn.addEventListener('click', ()=> closeClientPicker({ id: Number(btn.dataset.clientId), nome: btn.dataset.clientNome }));
     });
   }catch(e){
     results.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
@@ -3637,61 +3438,6 @@ function renderIntegrityResults(problemas){
   });
 }
 
-// ---------------- Verificar pedidos duplicados ----------------
-async function checkDuplicatePedidos(){
-  const wrap = document.getElementById('duplicatePedidosResults');
-  wrap.innerHTML = '<div class="promoEmpty">Analisando…</div>';
-  try{
-    const pedidos = await apiFetch('/api/pedidos/duplicados');
-    if(pedidos.length === 0){ wrap.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Nenhum pedido duplicado encontrado.</div>'; return; }
-
-    // agrupa por cliente+dia, pra mostrar como "grupos" em vez de lista solta
-    const grupos = new Map();
-    pedidos.forEach(p=>{
-      const dia = p.data_pedido.slice(0,10);
-      const chave = `${p.cliente_id}|${dia}`;
-      if(!grupos.has(chave)) grupos.set(chave, { cliente_nome: p.cliente_nome, dia, pedidos: [] });
-      grupos.get(chave).pedidos.push(p);
-    });
-
-    wrap.innerHTML = Array.from(grupos.values()).map(g => `
-      <div class="histCard">
-        <div class="hcName">${escapeHtml(g.cliente_nome)}</div>
-        <div class="hcCode">${formatDateBr(g.dia)} · ${g.pedidos.length} pedidos com item em comum</div>
-        ${g.pedidos.map(p => `
-          <div style="margin-top:10px;padding-top:10px;border-top:0.75px solid var(--hairline);">
-            <div style="font-size:12px;font-weight:600;">Pedido #${p.pedido_id} · origem: ${escapeHtml(p.origem)}${p.numero_cotacao ? ' · nº '+escapeHtml(p.numero_cotacao) : ''}</div>
-            <div style="font-size:11.5px;color:var(--gray);margin-top:3px;">
-              ${p.itens.map(it=>`${it.quantidade}x ${escapeHtml(it.produto)} (${escapeHtml(it.codigo_sku)})`).join('<br>')}
-            </div>
-            <button type="button" class="restoreBtn" data-del-pedido="${p.pedido_id}" style="margin-top:8px;color:#B3261E;">Excluir este pedido</button>
-          </div>
-        `).join('')}
-      </div>
-    `).join('');
-
-    wrap.querySelectorAll('[data-del-pedido]').forEach(btn=>{
-      btn.addEventListener('click', async ()=>{
-        if(!confirm(`Excluir o pedido #${btn.dataset.delPedido}? Essa ação não pode ser desfeita.`)) return;
-        btn.disabled = true; btn.textContent = 'Excluindo…';
-        try{
-          await apiFetch(`/api/pedidos/${btn.dataset.delPedido}`, { method:'DELETE' });
-          showToast('Pedido excluído');
-          checkDuplicatePedidos();
-        }catch(e){
-          btn.disabled = false; btn.textContent = 'Excluir este pedido';
-          alert('Não foi possível excluir: ' + e.message);
-        }
-      });
-    });
-  }catch(e){
-    wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-  }
-}
-function initDuplicatePedidosCheck(){
-  document.getElementById('checkDuplicatePedidosBtn').addEventListener('click', checkDuplicatePedidos);
-}
-
 function initIntegrityCheck(){
   const btn = document.getElementById('checkIntegrityBtn');
   const fileInput = document.getElementById('checkIntegrityFile');
@@ -3793,52 +3539,6 @@ function initManageClients(){
     clearTimeout(manageClientDebounce);
     const term = e.target.value;
     manageClientDebounce = setTimeout(()=>searchManageClients(term), 300);
-  });
-}
-
-function refreshPrevisaoStatus(){
-  const el = document.getElementById('apPrevisaoSource');
-  if(el) el.textContent = PREVISAO_SOURCE;
-}
-function initPrevisaoUpload(){
-  const btn = document.getElementById('previsaoFileBtn');
-  const fileInput = document.getElementById('previsaoFileInput');
-  refreshPrevisaoStatus();
-  document.getElementById('previsaoExportBtn').addEventListener('click', ()=>{
-    if(Object.keys(PREVISAO_MAP).length === 0){ showToast('Selecione uma planilha primeiro.'); return; }
-    const conteudo = { version: 'Previsão '+new Date().toLocaleDateString('pt-BR'), generatedAt: new Date().toISOString(), mapa: PREVISAO_MAP };
-    const blob = new Blob([JSON.stringify(conteudo, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'previsao.json';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 4000);
-    showToast('previsao.json baixado — suba ele junto com o precos.json no GitHub');
-  });
-  btn.addEventListener('click', ()=>fileInput.click());
-  fileInput.addEventListener('change', ()=>{
-    const file = fileInput.files && fileInput.files[0];
-    if(!file) return;
-    const msg = document.getElementById('previsaoMsgArea');
-    msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-    const reader = new FileReader();
-    reader.onload = async ()=>{
-      try{
-        const mapa = await parsePrevisaoXlsx(reader.result);
-        const total = Object.keys(mapa).length;
-        if(total === 0) throw new Error('Nenhuma linha reconhecida — confira se a coluna "Item" existe na planilha.');
-        savePrevisaoLocal(mapa, file.name);
-        PREVISAO_MAP = mapa;
-        PREVISAO_SOURCE = 'Atualizado em ' + new Date().toLocaleString('pt-BR') + ' · ' + file.name + ' · somente este aparelho';
-        refreshPrevisaoStatus();
-        msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produtos com previsão carregados.</div>`;
-        if(document.getElementById('searchInput').value.trim()) renderResults();
-      }catch(e){
-        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    fileInput.value = '';
   });
 }
 
@@ -4554,38 +4254,6 @@ function initPdfConsolidacao(){
   });
   dropzone.addEventListener('drop', (e)=>{
     if(e.dataTransfer.files.length) processarArquivosPdf(e.dataTransfer.files);
-  });
-}
-
-function initFaturamentoImport(){
-  const btn = document.getElementById('faturamentoFileBtn');
-  const fileInput = document.getElementById('faturamentoFileInput');
-  btn.addEventListener('click', ()=>fileInput.click());
-  fileInput.addEventListener('change', ()=>{
-    const file = fileInput.files && fileInput.files[0];
-    if(!file) return;
-    const msg = document.getElementById('faturamentoMsgArea');
-    msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-    const reader = new FileReader();
-    reader.onload = async ()=>{
-      try{
-        const { classificacoes, pedidos } = await parseFaturamentoXlsx(reader.result);
-        if(pedidos.length === 0) throw new Error('Nenhum pedido reconhecido — confira se a aba se chama "Faturamento" e tem as colunas certas.');
-        msg.innerHTML = `<div class="promoEmpty">Enviando ${pedidos.length} pedido(s) e ${classificacoes.length} classificação(ões)…</div>`;
-        const result = await apiImportarFaturamento({ classificacoes, pedidos });
-        msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">
-          ✓ ${result.clientesClassificados} cliente(s) classificado(s) ·
-          ${result.pedidosCriados} pedido(s) novo(s) ·
-          ${result.pedidosIgnorados} já existente(s) ·
-          ${result.itensGravados} item(ns) gravado(s)
-          ${result.itensSemProduto ? ` · ${result.itensSemProduto} item(ns) sem produto no catálogo (sincronize o catálogo)` : ''}
-        </div>`;
-      }catch(e){
-        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-      }
-    };
-    reader.readAsArrayBuffer(file);
-    fileInput.value = '';
   });
 }
 
@@ -5765,7 +5433,6 @@ async function init(){
   // carrega base salva localmente, ou busca precos.json remoto, ou usa a base original
   applyDB(await loadActiveDB());
   state.promoRules = await loadActivePromoRules();
-  PREVISAO_MAP = await loadActivePrevisao();
 
   initStateSelect();
   initGpsState();
@@ -5797,15 +5464,12 @@ async function init(){
   initShareSheet();
   initClientPicker();
   initBackendAdmin();
-  initPrevisaoUpload();
   initIntegrityCheck();
-  initDuplicatePedidosCheck();
   initManageClients();
   document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
   initProdutosTab();
   initClientesTab();
   initPdfConsolidacao();
-  initFaturamentoImport();
 
   renderResults();
   renderCartBar();
