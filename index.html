@@ -2193,6 +2193,7 @@ function renderCart(){
           <div>
             <div class="pname">${escapeHtml(p.n)}${p.fx ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c)>0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct>0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName||'')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.emb>1 ? ' · múltiplos de '+p.emb : ''}</div>
+            ${renderPrevisaoBadge(p.c)}
           </div>
           <button class="rm" data-rm="${p.c}" aria-label="Remover">&times;</button>
         </div>
@@ -2665,6 +2666,7 @@ function renderLevList(){
           <div>
             <div class="pname">${escapeHtml(p.n)}${p.fx ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc>0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''}</div>
+            ${renderPrevisaoBadge(p.c)}
           </div>
         </div>
         <button class="rm" data-lev-rm="${p.c}" aria-label="Remover">&times;</button>
