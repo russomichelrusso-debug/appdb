@@ -1530,6 +1530,13 @@
       </div>
       <ul id="pdfProcessQueue" class="pdfQueue"></ul>
     </div>
+    <div class="ap-card">
+      <h3>Importar relatório de faturamento</h3>
+      <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que chegar um relatório atualizado — pedido repetido não duplica.</p>
+      <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
+      <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
+      <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
+    </div>
     <div class="ap-card hidden" id="exportPedidosCard">
       <h3>Baixar pedidos por período</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor — funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
@@ -1813,6 +1820,7 @@ function initGpsState(){
   });
 }
 
+let setChannelDiscount = ()=>{}; // preenchida de verdade dentro de initChannelSeg, exposta pra ser chamada ao selecionar cliente
 function initChannelSeg(){
   const seg = document.getElementById('channelSeg');
   const btns = [...seg.querySelectorAll('button')];
@@ -1824,6 +1832,7 @@ function initChannelSeg(){
   }
   btns.forEach(b=>b.addEventListener('click', ()=> setActive(Number(b.dataset.v))));
   setActive(15);
+  setChannelDiscount = setActive;
 }
 function initPromoInput(){
   const inp = document.getElementById('promoInput');
@@ -2533,6 +2542,13 @@ function doOpenSavedSurvey(id){
 function setLevCliente(cliente){
   state.levCliente = cliente;
   document.getElementById('levClientName').textContent = cliente ? cliente.nome : 'Nenhum selecionado';
+  // pré-preenche o desconto de canal (classificatório) do cliente - continua
+  // editável manualmente depois, isso só evita ter que selecionar de novo
+  // toda vez que já se sabe qual é o cliente.
+  if(cliente && cliente.classificatorio_desconto !== undefined && cliente.classificatorio_desconto !== null){
+    setChannelDiscount(Number(cliente.classificatorio_desconto));
+    showToast(`Desconto de canal ajustado pra ${cliente.classificatorio_desconto}% (${cliente.classificatorio_tipo})`);
+  }
 }
 async function selectLevClient(){
   const cliente = await openClientPicker();
@@ -3220,6 +3236,65 @@ async function parsePrevisaoXlsx(arrayBuffer){
   });
   return mapa;
 }
+
+// Traduz o texto do classificatório ("Varejo Master (20)", "Rede", "Locação")
+// pro par {tipo, desconto}. "Locação" fica sem classificação de propósito -
+// não é uma categoria de cliente de verdade, é aluguel de ferramenta.
+function interpretarClassificatorio(valor){
+  if(!valor) return null;
+  const texto = String(valor).trim();
+  if(texto === 'Locação') return null;
+  const comParenteses = texto.match(/^(.*?)\s*\((\d+)\)\s*$/);
+  if(comParenteses) return { tipo: comParenteses[1].trim(), desconto: Number(comParenteses[2]) };
+  if(texto === 'Rede') return { tipo: 'Rede', desconto: 18 }; // não vem com número na planilha
+  return { tipo: texto, desconto: null };
+}
+
+// Lê a aba "Faturamento" do relatório de pedidos já faturados. Agrupa por
+// Nr.Pedido (pedido com vários itens) e por Cliente (classificatório). Não
+// grava valor - só quantidade (o Vlr.Faturado vem sem impostos, não confiável
+// pra guardar como preço).
+async function parseFaturamentoXlsx(arrayBuffer){
+  const XLSX = await loadSheetJs();
+  const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
+  const sheet = wb.Sheets['Faturamento'] || wb.Sheets[wb.SheetNames[0]];
+  const linhas = XLSX.utils.sheet_to_json(sheet, {defval:null, range:2});
+
+  const classificacoesMap = new Map(); // nome cliente -> {tipo, desconto}
+  const pedidosMap = new Map();        // numero do pedido -> {cliente_nome, data, itens[]}
+
+  linhas.forEach(r=>{
+    const clienteNome = String(r['Cliente'] ?? '').trim();
+    const numeroPedido = String(r['Nr.Pedido'] ?? '').trim();
+    const codigoItem = String(r['Item'] ?? '').trim();
+    const qtd = Number(r['Qte.Faturada']) || 0;
+    if(!clienteNome || !numeroPedido || !codigoItem) return;
+
+    if(!classificacoesMap.has(clienteNome)){
+      const classi = interpretarClassificatorio(r['Classificatório']);
+      if(classi) classificacoesMap.set(clienteNome, classi);
+    }
+
+    if(!pedidosMap.has(numeroPedido)){
+      let dataISO = null;
+      const dataRaw = r['Dt.Emissão'];
+      if(dataRaw){
+        const d = dataRaw instanceof Date ? dataRaw : new Date(dataRaw);
+        if(!isNaN(d.getTime())) dataISO = d.toISOString().slice(0,10);
+      }
+      pedidosMap.set(numeroPedido, { cliente_nome: clienteNome, data: dataISO, itens: [] });
+    }
+    pedidosMap.get(numeroPedido).itens.push({ codigo_sku: codigoItem, quantidade: qtd });
+  });
+
+  const classificacoes = Array.from(classificacoesMap, ([nome, c]) => ({ nome, tipo: c.tipo, desconto: c.desconto }));
+  const pedidos = Array.from(pedidosMap, ([numero_pedido, p]) => ({ numero_pedido, ...p }));
+  return { classificacoes, pedidos };
+}
+async function apiImportarFaturamento(payload){
+  return apiFetch('/api/pedidos/importar-faturamento', { method:'POST', body: JSON.stringify(payload) });
+}
+
 let ACTIVE_SOURCE = 'Base original do app';
 let PROMO_SOURCE = 'Nenhuma campanha ativa';
 const PROMO_LS_KEY = 'cortagPromoRules_v1';
@@ -3389,14 +3464,15 @@ async function runClientSearch(term){
   try{
     const clientes = await apiBuscarClientes(term);
     if(clientes.length === 0){ results.innerHTML = '<div class="promoEmpty">Nenhum cliente encontrado — pode cadastrar um novo abaixo.</div>'; return; }
+    const porId = new Map(clientes.map(c=>[String(c.id), c]));
     results.innerHTML = clientes.map(c => `
-      <button type="button" class="clientPickerItem" data-client-id="${c.id}" data-client-nome="${escapeHtml(c.nome)}">
+      <button type="button" class="clientPickerItem" data-client-id="${c.id}">
         <div class="cpName">${escapeHtml(c.nome)}</div>
-        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · '+escapeHtml(c.contato) : ''}</div>
+        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · '+escapeHtml(c.contato) : ''}${c.classificatorio_tipo ? ' · '+escapeHtml(c.classificatorio_tipo) : ''}</div>
       </button>
     `).join('');
     results.querySelectorAll('[data-client-id]').forEach(btn=>{
-      btn.addEventListener('click', ()=> closeClientPicker({ id: Number(btn.dataset.clientId), nome: btn.dataset.clientNome }));
+      btn.addEventListener('click', ()=> closeClientPicker(porId.get(btn.dataset.clientId)));
     });
   }catch(e){
     results.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
@@ -4417,6 +4493,38 @@ function initPdfConsolidacao(){
   });
   dropzone.addEventListener('drop', (e)=>{
     if(e.dataTransfer.files.length) processarArquivosPdf(e.dataTransfer.files);
+  });
+}
+
+function initFaturamentoImport(){
+  const btn = document.getElementById('faturamentoFileBtn');
+  const fileInput = document.getElementById('faturamentoFileInput');
+  btn.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', ()=>{
+    const file = fileInput.files && fileInput.files[0];
+    if(!file) return;
+    const msg = document.getElementById('faturamentoMsgArea');
+    msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      try{
+        const { classificacoes, pedidos } = await parseFaturamentoXlsx(reader.result);
+        if(pedidos.length === 0) throw new Error('Nenhum pedido reconhecido — confira se a aba se chama "Faturamento" e tem as colunas certas.');
+        msg.innerHTML = `<div class="promoEmpty">Enviando ${pedidos.length} pedido(s) e ${classificacoes.length} classificação(ões)…</div>`;
+        const result = await apiImportarFaturamento({ classificacoes, pedidos });
+        msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">
+          ✓ ${result.clientesClassificados} cliente(s) classificado(s) ·
+          ${result.pedidosCriados} pedido(s) novo(s) ·
+          ${result.pedidosIgnorados} já existente(s) ·
+          ${result.itensGravados} item(ns) gravado(s)
+          ${result.itensSemProduto ? ` · ${result.itensSemProduto} item(ns) sem produto no catálogo (sincronize o catálogo)` : ''}
+        </div>`;
+      }catch(e){
+        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    fileInput.value = '';
   });
 }
 
@@ -5635,6 +5743,7 @@ async function init(){
   initProdutosTab();
   initClientesTab();
   initPdfConsolidacao();
+  initFaturamentoImport();
 
   renderResults();
   renderCartBar();
