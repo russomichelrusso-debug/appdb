@@ -9,10 +9,12 @@ CREATE TABLE IF NOT EXISTS clientes (
   contato TEXT,
   classificatorio_tipo TEXT,       -- Varejo Master/Premium/Exclusive/Rede - vem do relatório de faturamento
   classificatorio_desconto NUMERIC, -- percentual correspondente (20/17/15/18)
+  classificatorio_atualizado_em DATE, -- data do relatório que definiu esse classificatório (evita voltar pra um valor velho)
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_tipo TEXT;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_desconto NUMERIC;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_atualizado_em DATE;
 
 CREATE TABLE IF NOT EXISTS vendedores (
   id SERIAL PRIMARY KEY,
@@ -98,4 +100,3 @@ CREATE TABLE IF NOT EXISTS sessoes (
   expira_em TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessoes_expira ON sessoes(expira_em);
-
