@@ -1,0 +1,1126 @@
+{
+  "version": "Previsão 24/08/2026",
+  "generatedAt": "2026-08-25T00:48:37.519Z",
+  "mapa": {
+    "60138": {
+      "qtDisponivel": 1,
+      "qtCarteira": 3,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "60164": {
+      "qtDisponivel": 0,
+      "qtCarteira": 6,
+      "qtCompra": 1200,
+      "previsao": "2026-10-22",
+      "saldo": 1194
+    },
+    "60179": {
+      "qtDisponivel": 3,
+      "qtCarteira": 72,
+      "qtCompra": 576,
+      "previsao": "2026-10-22",
+      "saldo": 507
+    },
+    "60258": {
+      "qtDisponivel": 0,
+      "qtCarteira": 42,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -42
+    },
+    "60300": {
+      "qtDisponivel": 0,
+      "qtCarteira": 4,
+      "qtCompra": 1200,
+      "previsao": "2026-10-22",
+      "saldo": 1196
+    },
+    "60304": {
+      "qtDisponivel": 0,
+      "qtCarteira": 6,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -6
+    },
+    "60653": {
+      "qtDisponivel": 10,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 10
+    },
+    "60680": {
+      "qtDisponivel": 2,
+      "qtCarteira": 6,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -4
+    },
+    "60681": {
+      "qtDisponivel": 3,
+      "qtCarteira": 6,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -3
+    },
+    "60682": {
+      "qtDisponivel": 2,
+      "qtCarteira": 18,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -16
+    },
+    "60849": {
+      "qtDisponivel": 0,
+      "qtCarteira": 129,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -129
+    },
+    "60883": {
+      "qtDisponivel": 0,
+      "qtCarteira": 123,
+      "qtCompra": 300,
+      "previsao": "2026-08-25",
+      "saldo": 177
+    },
+    "60914": {
+      "qtDisponivel": 1,
+      "qtCarteira": 11,
+      "qtCompra": 390,
+      "previsao": "2026-09-23",
+      "saldo": 380
+    },
+    "60917": {
+      "qtDisponivel": 5,
+      "qtCarteira": 54,
+      "qtCompra": 1020,
+      "previsao": "2026-09-23",
+      "saldo": 971
+    },
+    "60918": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 180,
+      "previsao": "2026-10-13",
+      "saldo": 181
+    },
+    "60936": {
+      "qtDisponivel": 0,
+      "qtCarteira": 2,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "61003": {
+      "qtDisponivel": 4,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 4
+    },
+    "61038": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61052": {
+      "qtDisponivel": 5,
+      "qtCarteira": 10,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -5
+    },
+    "61057": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61058": {
+      "qtDisponivel": 2,
+      "qtCarteira": 10,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -8
+    },
+    "61059": {
+      "qtDisponivel": 8,
+      "qtCarteira": 10,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "61061": {
+      "qtDisponivel": 5,
+      "qtCarteira": 20,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -15
+    },
+    "61063": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61075": {
+      "qtDisponivel": 2,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 2
+    },
+    "61076": {
+      "qtDisponivel": 8,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 8
+    },
+    "61078": {
+      "qtDisponivel": 8,
+      "qtCarteira": 10,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "61080": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61082": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61083": {
+      "qtDisponivel": 3,
+      "qtCarteira": 20,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -17
+    },
+    "61084": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61086": {
+      "qtDisponivel": 7,
+      "qtCarteira": 80,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -73
+    },
+    "61090": {
+      "qtDisponivel": 4,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 4
+    },
+    "61107": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61108": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61116": {
+      "qtDisponivel": 0,
+      "qtCarteira": 2,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "61117": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61118": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61125": {
+      "qtDisponivel": 1,
+      "qtCarteira": 68,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -67
+    },
+    "61170": {
+      "qtDisponivel": 13,
+      "qtCarteira": 30,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -17
+    },
+    "61235": {
+      "qtDisponivel": 2,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 2
+    },
+    "61238": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61257": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61326": {
+      "qtDisponivel": 0,
+      "qtCarteira": 303,
+      "qtCompra": 300,
+      "previsao": "2026-08-25",
+      "saldo": -3
+    },
+    "61340": {
+      "qtDisponivel": 0,
+      "qtCarteira": 23,
+      "qtCompra": 870,
+      "previsao": "2026-08-26",
+      "saldo": 847
+    },
+    "61442": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61443": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61577": {
+      "qtDisponivel": 0,
+      "qtCarteira": 4111,
+      "qtCompra": 63000,
+      "previsao": "2026-08-30",
+      "saldo": 58889
+    },
+    "61621": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61623": {
+      "qtDisponivel": 0,
+      "qtCarteira": 24,
+      "qtCompra": 1096,
+      "previsao": "2026-08-21",
+      "saldo": 1072
+    },
+    "61632": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61633": {
+      "qtDisponivel": 2,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 2
+    },
+    "61634": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61639": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61640": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61641": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61644": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -1
+    },
+    "61645": {
+      "qtDisponivel": 0,
+      "qtCarteira": 50,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -50
+    },
+    "61646": {
+      "qtDisponivel": 5,
+      "qtCarteira": 160,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -155
+    },
+    "61647": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61648": {
+      "qtDisponivel": 7,
+      "qtCarteira": 50,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -43
+    },
+    "61730": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "61770": {
+      "qtDisponivel": 5,
+      "qtCarteira": 108,
+      "qtCompra": 768,
+      "previsao": "2026-09-22",
+      "saldo": 665
+    },
+    "61790": {
+      "qtDisponivel": 0,
+      "qtCarteira": 66,
+      "qtCompra": 780,
+      "previsao": "2026-11-01",
+      "saldo": 714
+    },
+    "61808": {
+      "qtDisponivel": 0,
+      "qtCarteira": 144,
+      "qtCompra": 2580,
+      "previsao": "2026-10-01",
+      "saldo": 2436
+    },
+    "61902": {
+      "qtDisponivel": 1,
+      "qtCarteira": 18,
+      "qtCompra": 270,
+      "previsao": "2026-08-25",
+      "saldo": 253
+    },
+    "61904": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1131,
+      "qtCompra": 8520,
+      "previsao": "2026-08-25",
+      "saldo": 7389
+    },
+    "62017": {
+      "qtDisponivel": 0,
+      "qtCarteira": 10,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -10
+    },
+    "62022": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "62023": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "62024": {
+      "qtDisponivel": 295,
+      "qtCarteira": 1000,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -705
+    },
+    "62025": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "62026": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "62042": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "62282": {
+      "qtDisponivel": 4,
+      "qtCarteira": 5,
+      "qtCompra": 200,
+      "previsao": "2026-11-10",
+      "saldo": 199
+    },
+    "62305": {
+      "qtDisponivel": 0,
+      "qtCarteira": 190,
+      "qtCompra": 5200,
+      "previsao": "2026-08-25",
+      "saldo": 5010
+    },
+    "62544": {
+      "qtDisponivel": 1,
+      "qtCarteira": 2,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -1
+    },
+    "62745": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1920,
+      "qtCompra": 60000,
+      "previsao": "2026-09-22",
+      "saldo": 58080
+    },
+    "62746": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1221,
+      "qtCompra": 40200,
+      "previsao": "2026-10-01",
+      "saldo": 38979
+    },
+    "62747": {
+      "qtDisponivel": 1,
+      "qtCarteira": 17562,
+      "qtCompra": 60000,
+      "previsao": "2026-09-22",
+      "saldo": 42439
+    },
+    "62804": {
+      "qtDisponivel": 1,
+      "qtCarteira": 147,
+      "qtCompra": 2880,
+      "previsao": "2026-08-20",
+      "saldo": 2734
+    },
+    "62846": {
+      "qtDisponivel": 0,
+      "qtCarteira": 135,
+      "qtCompra": 3000,
+      "previsao": "2026-08-21",
+      "saldo": 2865
+    },
+    "62979": {
+      "qtDisponivel": 5,
+      "qtCarteira": 247,
+      "qtCompra": 3564,
+      "previsao": "2026-11-10",
+      "saldo": 3322
+    },
+    "62980": {
+      "qtDisponivel": 0,
+      "qtCarteira": 97,
+      "qtCompra": 1458,
+      "previsao": "2026-11-10",
+      "saldo": 1361
+    },
+    "63061": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1281,
+      "qtCompra": 16200,
+      "previsao": "2026-10-20",
+      "saldo": 14919
+    },
+    "63063": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1645,
+      "qtCompra": 14400,
+      "previsao": "2026-10-20",
+      "saldo": 12755
+    },
+    "63196": {
+      "qtDisponivel": 0,
+      "qtCarteira": 6,
+      "qtCompra": 300,
+      "previsao": "2026-10-22",
+      "saldo": 294
+    },
+    "63197": {
+      "qtDisponivel": 56,
+      "qtCarteira": 68,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -12
+    },
+    "63207": {
+      "qtDisponivel": 0,
+      "qtCarteira": 63,
+      "qtCompra": 400,
+      "previsao": "2026-10-22",
+      "saldo": 337
+    },
+    "68001": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68004": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68005": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68007": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68011": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68013": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68014": {
+      "qtDisponivel": 0,
+      "qtCarteira": 2,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "68016": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68018": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68019": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68023": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68029": {
+      "qtDisponivel": 0,
+      "qtCarteira": 8,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -8
+    },
+    "68031": {
+      "qtDisponivel": 0,
+      "qtCarteira": 3,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -3
+    },
+    "68034": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68036": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68039": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68041": {
+      "qtDisponivel": 0,
+      "qtCarteira": 4,
+      "qtCompra": 504,
+      "previsao": "2026-09-29",
+      "saldo": 500
+    },
+    "68045": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 504,
+      "previsao": "2026-10-22",
+      "saldo": 504
+    },
+    "68047": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1,
+      "qtCompra": 500,
+      "previsao": "2026-09-29",
+      "saldo": 499
+    },
+    "68049": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68050": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 504,
+      "previsao": "2026-09-29",
+      "saldo": 504
+    },
+    "68051": {
+      "qtDisponivel": 0,
+      "qtCarteira": 3,
+      "qtCompra": 501,
+      "previsao": "2026-10-22",
+      "saldo": 498
+    },
+    "68052": {
+      "qtDisponivel": 0,
+      "qtCarteira": 2,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -2
+    },
+    "68054": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68056": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1,
+      "qtCompra": 200,
+      "previsao": "2026-10-08",
+      "saldo": 199
+    },
+    "68057": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68058": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -1
+    },
+    "68063": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68064": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68070": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 168,
+      "previsao": "2026-09-29",
+      "saldo": 168
+    },
+    "68073": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68074": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68076": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68077": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68080": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68083": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68085": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68086": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68087": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68088": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68092": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68093": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68094": {
+      "qtDisponivel": 0,
+      "qtCarteira": 1,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -1
+    },
+    "68096": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68097": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68098": {
+      "qtDisponivel": 1,
+      "qtCarteira": 4,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -3
+    },
+    "68100": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68101": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68102": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68103": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68104": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68105": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68107": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 300,
+      "previsao": "2026-09-29",
+      "saldo": 300
+    },
+    "68109": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 300,
+      "previsao": "2026-10-08",
+      "saldo": 300
+    },
+    "68110": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68111": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68124": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 500,
+      "previsao": "2026-09-30",
+      "saldo": 501
+    },
+    "68126": {
+      "qtDisponivel": 1,
+      "qtCarteira": 12,
+      "qtCompra": 300,
+      "previsao": "2026-09-22",
+      "saldo": 289
+    },
+    "68127": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 300,
+      "previsao": "2026-09-22",
+      "saldo": 301
+    },
+    "68144": {
+      "qtDisponivel": 0,
+      "qtCarteira": 11,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": -11
+    },
+    "68146": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68149": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68151": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68152": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68154": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68158": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68159": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 0
+    },
+    "68160": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68161": {
+      "qtDisponivel": 1,
+      "qtCarteira": 0,
+      "qtCompra": 0,
+      "previsao": null,
+      "saldo": 1
+    },
+    "68168": {
+      "qtDisponivel": 0,
+      "qtCarteira": 2,
+      "qtCompra": 500,
+      "previsao": "2026-09-22",
+      "saldo": 498
+    },
+    "68174": {
+      "qtDisponivel": 0,
+      "qtCarteira": 0,
+      "qtCompra": 1000,
+      "previsao": "2026-09-22",
+      "saldo": 1000
+    }
+  }
+}
