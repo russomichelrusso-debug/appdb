@@ -1483,7 +1483,8 @@
       <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
       <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
       <div id="previsaoMsgArea" style="margin-top:8px;"></div>
-      <p class="ap-hint" style="margin:12px 0 0;">Fica salvo só neste aparelho. Pra atualizar todo mundo de uma vez, hospede um <code>previsao.json</code> junto do <code>precos.json</code> (mesmo formato: <code>{"version":"...","mapa":{...}}</code>).</p>
+      <button class="restoreBtn" id="previsaoExportBtn" style="margin-top:10px;">Exportar previsao.json (pra todo mundo ver)</button>
+      <p class="ap-hint" style="margin:12px 0 0;">O upload acima fica só neste aparelho. Pra atualizar todo mundo de uma vez: sobe a planilha aqui primeiro, depois toque em "Exportar" e substitua o arquivo <code>previsao.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
     </div>
     <div class="ap-card">
       <h3>Campanhas promocionais</h3>
@@ -1904,11 +1905,17 @@ function renderPrevisaoBadge(codigo){
   const prev = PREVISAO_MAP[codigo];
   if(!prev) return '';
   // só mostra quando é informação de verdade acionável: tem previsão de
-  // chegada, ou não tem previsão nenhuma mas o saldo já ficou negativo -
-  // pra não poluir o card de item com estoque normal e sem pendência.
+  // chegada AINDA NO FUTURO, ou não tem previsão nenhuma mas o saldo já
+  // ficou negativo - pra não poluir o card de item com estoque normal.
   if(prev.previsao){
-    const [aaaa,mm,dd] = prev.previsao.split('-');
-    return `<span class="previsaoBadge previsaoBadge--ok" title="Disponível: ${prev.qtDisponivel} · Em compra: ${prev.qtCompra}">📦 chega ${dd}/${mm}</span>`;
+    const hoje = new Date(); hoje.setHours(0,0,0,0);
+    const dataPrevisao = new Date(prev.previsao + 'T00:00:00');
+    if(dataPrevisao >= hoje){
+      const [aaaa,mm,dd] = prev.previsao.split('-');
+      return `<span class="previsaoBadge previsaoBadge--ok" title="Disponível: ${prev.qtDisponivel} · Em compra: ${prev.qtCompra}">📦 chega ${dd}/${mm}</span>`;
+    }
+    // data já passou sem uma planilha nova confirmar - não mostra mais "chega
+    // no passado", cai pra checagem de saldo abaixo como se não tivesse previsão
   }
   if(prev.saldo < 0){
     return `<span class="previsaoBadge previsaoBadge--alerta" title="Disponível: ${prev.qtDisponivel} · Saldo projetado: ${prev.saldo}">⚠ sem previsão de chegada</span>`;
@@ -3660,6 +3667,17 @@ function initPrevisaoUpload(){
   const btn = document.getElementById('previsaoFileBtn');
   const fileInput = document.getElementById('previsaoFileInput');
   refreshPrevisaoStatus();
+  document.getElementById('previsaoExportBtn').addEventListener('click', ()=>{
+    if(Object.keys(PREVISAO_MAP).length === 0){ showToast('Selecione uma planilha primeiro.'); return; }
+    const conteudo = { version: 'Previsão '+new Date().toLocaleDateString('pt-BR'), generatedAt: new Date().toISOString(), mapa: PREVISAO_MAP };
+    const blob = new Blob([JSON.stringify(conteudo, null, 2)], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'previsao.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url), 4000);
+    showToast('previsao.json baixado — suba ele junto com o precos.json no GitHub');
+  });
   btn.addEventListener('click', ()=>fileInput.click());
   fileInput.addEventListener('change', ()=>{
     const file = fileInput.files && fileInput.files[0];
