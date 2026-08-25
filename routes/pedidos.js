@@ -1,37 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { acharOuCriarCliente } = require('../clientMatcher');
 
-// Acha ou cria o cliente (por documento, se enviado) e o vendedor (por nome).
-async function acharOuCriarCliente(client, { cliente_id, nome, documento, contato }) {
-  if (cliente_id) return cliente_id;
-  if (documento) {
-    const existing = await client.query(
-      `SELECT id FROM clientes WHERE regexp_replace(documento, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g') LIMIT 1`,
-      [documento]
-    );
-    if (existing.rows.length > 0) return existing.rows[0].id;
-  }
-  // sem documento, tenta achar por nome "normalizado" antes de criar um novo -
-  // evita duplicar o mesmo cliente só porque o PDF escreveu o nome com espaço
-  // ou maiúscula diferente da planilha cadastrada. Não é fuzzy demais: ainda
-  // exige que o texto seja o mesmo depois de tirar espaço duplo e maiúscula/
-  // minúscula, então não mistura duas empresas parecidas por engano.
-  if (!documento && nome) {
-    const existingByName = await client.query(
-      `SELECT id FROM clientes
-       WHERE regexp_replace(upper(trim(nome)), '\\s+', ' ', 'g') = regexp_replace(upper(trim($1)), '\\s+', ' ', 'g')
-       LIMIT 1`,
-      [nome]
-    );
-    if (existingByName.rows.length > 0) return existingByName.rows[0].id;
-  }
-  const result = await client.query(
-    'INSERT INTO clientes (nome, documento, contato) VALUES ($1, $2, $3) RETURNING id',
-    [nome, documento || null, contato || null]
-  );
-  return result.rows[0].id;
-}
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
@@ -147,6 +118,79 @@ router.post('/', async (req, res) => {
     }
     console.error(e);
     res.status(400).json({ erro: e.message || 'Erro ao gravar pedido.' });
+  } finally {
+    client.release();
+  }
+});
+
+// Importa em lote um relatório de faturamento (Cliente, Classificatório,
+// Nr.Pedido, Item, Qte.Faturada). Diferente do PDF: NÃO cria produto que não
+// existir no catálogo (só usa o que já está sincronizado) e NÃO grava valor -
+// o relatório vem sem impostos, então o preço fica em 0 de propósito. Feito
+// pra rodar de novo sempre que chegar um relatório novo: pedido repetido
+// (mesmo Nr.Pedido) é ignorado, cliente novo que aparecer é classificado.
+router.post('/importar-faturamento', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar faturamento.' });
+  const { classificacoes, pedidos } = req.body;
+  if (!Array.isArray(pedidos)) return res.status(400).json({ erro: 'Envie { pedidos: [...] }' });
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    let clientesClassificados = 0;
+    for (const c of (classificacoes || [])) {
+      if (!c.nome || !c.tipo) continue;
+      const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
+      await client.query(
+        'UPDATE clientes SET classificatorio_tipo = $1, classificatorio_desconto = $2 WHERE id = $3',
+        [c.tipo, c.desconto ?? null, clienteId]
+      );
+      clientesClassificados++;
+    }
+
+    let pedidosCriados = 0, pedidosIgnorados = 0, itensGravados = 0, itensSemProduto = 0;
+    for (const p of pedidos) {
+      if (!p.numero_pedido || !p.cliente_nome || !Array.isArray(p.itens) || p.itens.length === 0) continue;
+      const existente = await client.query('SELECT id FROM pedidos WHERE numero_cotacao = $1', [p.numero_pedido]);
+      if (existente.rows.length > 0) { pedidosIgnorados++; continue; }
+
+      const clienteId = await acharOuCriarCliente(client, { nome: p.cliente_nome });
+      const pedidoResult = await client.query(
+        `INSERT INTO pedidos (cliente_id, numero_cotacao, origem, data_pedido)
+         VALUES ($1, $2, 'faturamento', COALESCE($3::timestamptz, now()))
+         RETURNING id`,
+        [clienteId, p.numero_pedido, p.data || null]
+      );
+      const pedidoId = pedidoResult.rows[0].id;
+
+      // insere todos os itens desse pedido numa operação só (junta com o
+      // catálogo pelo código - item sem produto correspondente é ignorado,
+      // não trava o pedido inteiro).
+      const codigos = p.itens.map(it => String(it.codigo_sku));
+      const quantidades = p.itens.map(it => Number(it.quantidade) || 0);
+      const inseridos = await client.query(
+        `WITH entrada AS (
+           SELECT * FROM UNNEST($1::text[], $2::numeric[]) AS t(codigo_sku, quantidade)
+         )
+         INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario)
+         SELECT $3, pr.id, e.quantidade, 0
+         FROM entrada e
+         JOIN produtos pr ON pr.codigo_sku = e.codigo_sku`,
+        [codigos, quantidades, pedidoId]
+      );
+      itensGravados += inseridos.rowCount;
+      itensSemProduto += (p.itens.length - inseridos.rowCount);
+      pedidosCriados++;
+    }
+
+    await client.query('COMMIT');
+    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario.usuario}.`);
+    res.json({ clientesClassificados, pedidosCriados, pedidosIgnorados, itensGravados, itensSemProduto });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao importar faturamento: ' + e.message });
   } finally {
     client.release();
   }

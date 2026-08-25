@@ -9,12 +9,12 @@ router.get('/', async (req, res) => {
   try {
     const result = busca
       ? await pool.query(
-          `SELECT id, nome, documento, contato FROM clientes
+          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto FROM clientes
            WHERE nome ILIKE $1 OR documento ILIKE $1
            ORDER BY nome LIMIT 20`,
           [`%${busca}%`]
         )
-      : await pool.query('SELECT id, nome, documento, contato FROM clientes ORDER BY nome LIMIT 50');
+      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto FROM clientes ORDER BY nome LIMIT 50');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
 router.get('/todos', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode listar todos os clientes.' });
   try {
-    const result = await pool.query('SELECT id, nome, documento, contato FROM clientes ORDER BY nome');
+    const result = await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto FROM clientes ORDER BY nome');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
