@@ -341,6 +341,12 @@
     color:var(--gray);
     margin-bottom:10px;
   }
+  .previsaoBadge{
+    display:inline-block;font-size:11px;font-weight:600;
+    padding:3px 9px;border-radius:20px;margin:-4px 0 10px;
+  }
+  .previsaoBadge--ok{background:#E7F0FE;color:#1155CC;}
+  .previsaoBadge--alerta{background:#FDECEC;color:#B3261E;}
   .card .prow{
     display:flex;
     align-items:center;
@@ -1471,6 +1477,15 @@
       <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
     </div>
     <div class="ap-card">
+      <h3>Previsão de estoque</h3>
+      <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apPrevisaoSource">—</span></div>
+      <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Produtos com chegada prevista ou sem estoque projetado passam a mostrar um aviso na busca de preços.</p>
+      <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
+      <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
+      <div id="previsaoMsgArea" style="margin-top:8px;"></div>
+      <p class="ap-hint" style="margin:12px 0 0;">Fica salvo só neste aparelho. Pra atualizar todo mundo de uma vez, hospede um <code>previsao.json</code> junto do <code>precos.json</code> (mesmo formato: <code>{"version":"...","mapa":{...}}</code>).</p>
+    </div>
+    <div class="ap-card">
       <h3>Campanhas promocionais</h3>
       <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apPromoSource">—</span></div>
       <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em niveladores = mais 4%).</p>
@@ -1885,6 +1900,21 @@ function renderResults(){
   });
 }
 
+function renderPrevisaoBadge(codigo){
+  const prev = PREVISAO_MAP[codigo];
+  if(!prev) return '';
+  // só mostra quando é informação de verdade acionável: tem previsão de
+  // chegada, ou não tem previsão nenhuma mas o saldo já ficou negativo -
+  // pra não poluir o card de item com estoque normal e sem pendência.
+  if(prev.previsao){
+    const [aaaa,mm,dd] = prev.previsao.split('-');
+    return `<span class="previsaoBadge previsaoBadge--ok" title="Disponível: ${prev.qtDisponivel} · Em compra: ${prev.qtCompra}">📦 chega ${dd}/${mm}</span>`;
+  }
+  if(prev.saldo < 0){
+    return `<span class="previsaoBadge previsaoBadge--alerta" title="Disponível: ${prev.qtDisponivel} · Saldo projetado: ${prev.saldo}">⚠ sem previsão de chegada</span>`;
+  }
+  return '';
+}
 function renderCard(p){
   const lp = listPrice(p, state.uf);
   const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
@@ -1898,6 +1928,7 @@ function renderCard(p){
     ${qtyDisc>0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
     <div class="pname">${escapeHtml(p.n)}</div>
     <div class="psub">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''} · Emb. ${p.emb}</div>
+    ${renderPrevisaoBadge(p.c)}
     <div class="prow">
       <div class="prices">
         ${hasDiscount ? `<div class="list">de <s>${brl(lp)}</s></div>` : ''}
@@ -3103,6 +3134,83 @@ function initShareSheet(){
 // ---------------- Admin: atualização da tabela de preços --------
 // =================================================================
 const LS_KEY = 'cortagPriceDB_v1';
+const PREVISAO_LS_KEY = 'cortagPrevisaoDB_v1';
+let PREVISAO_MAP = {};
+let PREVISAO_SOURCE = 'Nenhuma previsão carregada';
+
+async function loadActivePrevisao(){
+  // mesmo padrão em 2 níveis usado pra base de preços: override manual deste
+  // aparelho primeiro, depois um arquivo remoto hospedado junto do app.
+  try{
+    const raw = localStorage.getItem(PREVISAO_LS_KEY);
+    if(raw){
+      const saved = JSON.parse(raw);
+      if(saved && saved.mapa && Object.keys(saved.mapa).length){
+        PREVISAO_SOURCE = 'Atualizado em ' + new Date(saved.updatedAt).toLocaleString('pt-BR') + (saved.fileName ? ' · '+saved.fileName : '') + ' · somente este aparelho';
+        return saved.mapa;
+      }
+    }
+  }catch(e){ console.warn('Não foi possível ler a previsão salva localmente:', e); }
+  try{
+    const resp = await fetch('./previsao.json', {cache:'no-store'});
+    if(resp.ok){
+      const remote = await resp.json();
+      if(remote && remote.mapa && Object.keys(remote.mapa).length){
+        const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
+        PREVISAO_SOURCE = (remote.version || 'Atualização remota') + (when ? ' · '+when : '') + ' · todos os aparelhos';
+        return remote.mapa;
+      }
+    }
+  }catch(e){ /* sem rede, arquivo local, ou previsao.json ausente - ok, fica sem previsão */ }
+  return {};
+}
+function savePrevisaoLocal(mapa, fileName){
+  try{
+    localStorage.setItem(PREVISAO_LS_KEY, JSON.stringify({ mapa, updatedAt: Date.now(), fileName }));
+  }catch(e){ console.warn('Não foi possível salvar a previsão localmente:', e); }
+}
+
+let sheetJsLoadPromise = null;
+function loadSheetJs(){
+  if(window.XLSX) return Promise.resolve(window.XLSX);
+  if(sheetJsLoadPromise) return sheetJsLoadPromise;
+  sheetJsLoadPromise = new Promise((resolve, reject)=>{
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload = () => resolve(window.XLSX);
+    s.onerror = () => reject(new Error('load-error'));
+    document.head.appendChild(s);
+  });
+  return sheetJsLoadPromise;
+}
+// Lê a planilha de previsão de estoque (relatório tipo ESCE007) e monta um
+// mapa código → dados de previsão. Aceita qualquer nome de arquivo, só
+// espera as colunas: Item, Qt. Disp., Qt. Carteira, Qt. Compra, Previsão, Saldo.
+async function parsePrevisaoXlsx(arrayBuffer){
+  const XLSX = await loadSheetJs();
+  const wb = XLSX.read(arrayBuffer, {type:'array', cellDates:true});
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const linhas = XLSX.utils.sheet_to_json(sheet, {defval:null});
+  const mapa = {};
+  linhas.forEach(r=>{
+    const codigo = String(r['Item'] ?? '').trim();
+    if(!codigo) return;
+    let previsaoISO = null;
+    const previsaoRaw = r['Previsão'];
+    if(previsaoRaw && previsaoRaw !== 'Sem Previsão'){
+      const d = previsaoRaw instanceof Date ? previsaoRaw : new Date(previsaoRaw);
+      if(!isNaN(d.getTime())) previsaoISO = d.toISOString().slice(0,10);
+    }
+    mapa[codigo] = {
+      qtDisponivel: Number(r['Qt. Disp.']) || 0,
+      qtCarteira: Number(r['Qt. Carteira']) || 0,
+      qtCompra: Number(r['Qt. Compra']) || 0,
+      previsao: previsaoISO,
+      saldo: Number(r['Saldo']) || 0,
+    };
+  });
+  return mapa;
+}
 let ACTIVE_SOURCE = 'Base original do app';
 let PROMO_SOURCE = 'Nenhuma campanha ativa';
 const PROMO_LS_KEY = 'cortagPromoRules_v1';
@@ -3539,6 +3647,41 @@ function initManageClients(){
     clearTimeout(manageClientDebounce);
     const term = e.target.value;
     manageClientDebounce = setTimeout(()=>searchManageClients(term), 300);
+  });
+}
+
+function refreshPrevisaoStatus(){
+  const el = document.getElementById('apPrevisaoSource');
+  if(el) el.textContent = PREVISAO_SOURCE;
+}
+function initPrevisaoUpload(){
+  const btn = document.getElementById('previsaoFileBtn');
+  const fileInput = document.getElementById('previsaoFileInput');
+  refreshPrevisaoStatus();
+  btn.addEventListener('click', ()=>fileInput.click());
+  fileInput.addEventListener('change', ()=>{
+    const file = fileInput.files && fileInput.files[0];
+    if(!file) return;
+    const msg = document.getElementById('previsaoMsgArea');
+    msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+    const reader = new FileReader();
+    reader.onload = async ()=>{
+      try{
+        const mapa = await parsePrevisaoXlsx(reader.result);
+        const total = Object.keys(mapa).length;
+        if(total === 0) throw new Error('Nenhuma linha reconhecida — confira se a coluna "Item" existe na planilha.');
+        savePrevisaoLocal(mapa, file.name);
+        PREVISAO_MAP = mapa;
+        PREVISAO_SOURCE = 'Atualizado em ' + new Date().toLocaleString('pt-BR') + ' · ' + file.name + ' · somente este aparelho';
+        refreshPrevisaoStatus();
+        msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produtos com previsão carregados.</div>`;
+        if(document.getElementById('searchInput').value.trim()) renderResults();
+      }catch(e){
+        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    };
+    reader.readAsArrayBuffer(file);
+    fileInput.value = '';
   });
 }
 
@@ -5433,6 +5576,7 @@ async function init(){
   // carrega base salva localmente, ou busca precos.json remoto, ou usa a base original
   applyDB(await loadActiveDB());
   state.promoRules = await loadActivePromoRules();
+  PREVISAO_MAP = await loadActivePrevisao();
 
   initStateSelect();
   initGpsState();
@@ -5464,6 +5608,7 @@ async function init(){
   initShareSheet();
   initClientPicker();
   initBackendAdmin();
+  initPrevisaoUpload();
   initIntegrityCheck();
   initManageClients();
   document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
