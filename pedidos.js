@@ -196,4 +196,70 @@ router.post('/importar-faturamento', async (req, res) => {
   }
 });
 
+// Encontra pedidos "prováveis duplicados": mesmo cliente, mesmo dia, com pelo
+// menos um produto em comum com outro pedido do mesmo cliente naquele dia.
+// Acontece quando a mesma venda entra por dois caminhos diferentes (ex: o
+// vendedor finaliza no app na hora, e depois o mesmo pedido aparece de novo
+// ao importar o relatório de faturamento oficial - cada caminho tem sua
+// própria identificação, então o bloqueio automático de duplicata não pega
+// esse caso entre origens diferentes).
+router.get('/duplicados', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver pedidos duplicados.' });
+  try {
+    const result = await pool.query(`
+      SELECT ped.id AS pedido_id, ped.cliente_id, c.nome AS cliente_nome,
+             ped.data_pedido, ped.origem, ped.numero_cotacao,
+             json_agg(json_build_object('codigo_sku', pr.codigo_sku, 'produto', pr.nome, 'quantidade', pi.quantidade) ORDER BY pr.nome) AS itens
+      FROM pedidos ped
+      JOIN clientes c ON c.id = ped.cliente_id
+      JOIN pedido_itens pi ON pi.pedido_id = ped.id
+      JOIN produtos pr ON pr.id = pi.produto_id
+      WHERE ped.id IN (
+        SELECT DISTINCT p2.id
+        FROM pedidos p2
+        JOIN pedido_itens pi2 ON pi2.pedido_id = p2.id
+        WHERE EXISTS (
+          SELECT 1 FROM pedidos p3
+          JOIN pedido_itens pi3 ON pi3.pedido_id = p3.id
+          WHERE p3.id <> p2.id
+            AND p3.cliente_id = p2.cliente_id
+            AND DATE(p3.data_pedido) = DATE(p2.data_pedido)
+            AND pi3.produto_id = pi2.produto_id
+        )
+      )
+      GROUP BY ped.id, ped.cliente_id, c.nome, ped.data_pedido, ped.origem, ped.numero_cotacao
+      ORDER BY ped.cliente_id, ped.data_pedido DESC
+    `);
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar pedidos duplicados.' });
+  }
+});
+
+// Exclui um pedido específico (e seus itens) - usado pra limpar duplicata
+// depois de revisar manualmente. Só admin - é destrutivo de histórico real.
+router.delete('/:id', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode excluir pedido.' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [req.params.id]);
+    const result = await client.query('DELETE FROM pedidos WHERE id = $1 RETURNING id', [req.params.id]);
+    if (result.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Pedido não encontrado.' });
+    }
+    await client.query('COMMIT');
+    console.log(`Pedido #${req.params.id} excluído por ${req.usuario.usuario}.`);
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao excluir pedido.' });
+  } finally {
+    client.release();
+  }
+});
+
 module.exports = router;
