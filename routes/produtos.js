@@ -2,17 +2,29 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
+// Só a contagem, sem trazer produto nenhum - usado na checagem automática ao
+// abrir o app, pra decidir rapidinho se vale a pena sincronizar de novo.
+router.get('/contagem', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) FROM produtos');
+    res.json({ total: Number(result.rows[0].count) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao contar produtos.' });
+  }
+});
+
 router.get('/', async (req, res) => {
   const busca = (req.query.busca || '').trim();
   try {
     const result = busca
       ? await pool.query(
           `SELECT id, codigo_sku, nome, categoria FROM produtos
-           WHERE codigo_sku ILIKE $1 OR nome ILIKE $1
-           ORDER BY nome LIMIT 20`,
+           WHERE nome ILIKE $1 OR codigo_sku ILIKE $1
+           ORDER BY nome LIMIT 30`,
           [`%${busca}%`]
         )
-      : await pool.query('SELECT id, codigo_sku, nome, categoria FROM produtos ORDER BY nome LIMIT 50');
+      : await pool.query('SELECT id, codigo_sku, nome, categoria FROM produtos ORDER BY nome');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -20,51 +32,36 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Sincroniza em lote o catálogo de produtos vindo do precos.json do app.
-// Chame isso sempre que a lista de preços for atualizada, mandando um array:
-// [{ codigo_sku, nome, categoria }, ...]
-// Não apaga produtos antigos (mesmo que descontinuados, o histórico de pedidos
-// antigos continua precisando deles) - só cria os que ainda não existem e
-// atualiza nome/categoria dos que já existem.
-//
-// Importante: isso roda numa ÚNICA operação (UNNEST + INSERT ... ON CONFLICT),
-// não um loop item a item - com ~1.700 produtos, fazer uma ida-e-volta ao banco
-// por produto é lento o bastante pra estourar o tempo limite de execução do
-// Supabase (erro 57014/query_canceled). Em lote, é uma soma só, quase instantâneo.
+// Sincroniza o catálogo inteiro em uma operação em lote (UNNEST) - fazer
+// isso item a item com 1700+ produtos já deu timeout antes, por isso o
+// cuidado de sempre inserir/atualizar tudo de uma vez só.
 router.post('/sync', async (req, res) => {
-  const produtos = req.body.produtos;
-  if (!Array.isArray(produtos)) return res.status(400).json({ erro: 'Envie { produtos: [...] }' });
-
-  const validos = produtos.filter(p => p.codigo_sku && p.nome);
-  if (validos.length === 0) return res.json({ criados: 0, atualizados: 0, total: produtos.length });
-
-  const codigos = validos.map(p => String(p.codigo_sku));
-  const nomes = validos.map(p => p.nome);
-  const categorias = validos.map(p => p.categoria || null);
-
+  const { produtos } = req.body;
+  if (!Array.isArray(produtos) || produtos.length === 0) {
+    return res.status(400).json({ erro: 'Envie { produtos: [...] }' });
+  }
   try {
-    const result = await pool.query(
-      `WITH entrada AS (
-         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[]) AS t(codigo_sku, nome, categoria)
-       ),
-       upsert AS (
-         INSERT INTO produtos (codigo_sku, nome, categoria)
-         SELECT codigo_sku, nome, categoria FROM entrada
-         ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria
-         RETURNING (xmax = 0) AS inserted
-       )
-       SELECT
-         COUNT(*) FILTER (WHERE inserted) AS criados,
-         COUNT(*) FILTER (WHERE NOT inserted) AS atualizados
-       FROM upsert`,
+    const codigos = produtos.map(p => String(p.codigo_sku));
+    const nomes = produtos.map(p => p.nome || '');
+    const categorias = produtos.map(p => p.categoria || null);
+
+    const antes = await pool.query('SELECT COUNT(*) FROM produtos');
+    const totalAntes = Number(antes.rows[0].count);
+
+    await pool.query(
+      `INSERT INTO produtos (codigo_sku, nome, categoria)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
+       ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria`,
       [codigos, nomes, categorias]
     );
-    const { criados, atualizados } = result.rows[0];
-    console.log(`Sync de catálogo: ${criados} criado(s), ${atualizados} atualizado(s) de ${produtos.length}.`);
-    res.json({ criados: Number(criados), atualizados: Number(atualizados), total: produtos.length });
+
+    const depois = await pool.query('SELECT COUNT(*) FROM produtos');
+    const totalDepois = Number(depois.rows[0].count);
+
+    res.json({ criados: totalDepois - totalAntes, atualizados: produtos.length - (totalDepois - totalAntes), total: totalDepois });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao sincronizar produtos.' });
+    res.status(500).json({ erro: 'Erro ao sincronizar catálogo: ' + e.message });
   }
 });
 
