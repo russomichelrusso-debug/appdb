@@ -347,6 +347,14 @@
   }
   .previsaoBadge--ok{background:#E7F0FE;color:#1155CC;}
   .previsaoBadge--alerta{background:#FDECEC;color:#B3261E;}
+  .classiBadge{
+    display:inline-block;font-size:11px;font-weight:600;
+    padding:2px 8px;border-radius:20px;white-space:nowrap;flex-shrink:0;
+  }
+  .classiBadge--master{background:#FAEEDA;color:#854F0B;}
+  .classiBadge--premium{background:#E6F1FB;color:#0C447C;}
+  .classiBadge--exclusive{background:#F1EFE8;color:#5F5E5A;}
+  .classiBadge--rede{background:#EAF3DE;color:#3B6D11;}
   .card .prow{
     display:flex;
     align-items:center;
@@ -678,7 +686,7 @@
     padding:14px 16px;
   }
   .hist-clientLabel{font-size:11.5px;color:var(--gray);font-weight:600;}
-  .hist-clientName{font-size:15px;font-weight:700;color:var(--ink);margin-top:2px;}
+  .hist-clientName{font-size:15px;font-weight:700;color:var(--ink);margin-top:2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .hist-content{padding:0 16px 16px;}
   .histCard{
     background:var(--white);border-radius:16px;border:0.75px solid var(--hairline);box-shadow:none;
@@ -1960,6 +1968,20 @@ function renderResults(){
   });
 }
 
+// Badge pequeno e colorido por categoria de classificatório - usado em
+// qualquer lugar que mostre um cliente (seletor, busca, barra do levantamento).
+// Cor muda por categoria pra identificar rápido, sem precisar ler o texto.
+const CLASSI_COR = {
+  'Varejo Master': 'master', 'Varejo Premium': 'premium',
+  'Varejo Exclusive': 'exclusive', 'Rede': 'rede',
+};
+function renderClassificatorioBadge(cliente){
+  if(!cliente || !cliente.classificatorio_tipo) return '';
+  const chave = CLASSI_COR[cliente.classificatorio_tipo] || 'exclusive';
+  const desconto = cliente.classificatorio_desconto != null ? ` · ${cliente.classificatorio_desconto}%` : '';
+  const rotulo = cliente.classificatorio_tipo.replace(/^Varejo /, '');
+  return `<span class="classiBadge classiBadge--${chave}">${escapeHtml(rotulo)}${desconto}</span>`;
+}
 function renderPrevisaoBadge(codigo){
   const prev = PREVISAO_MAP[codigo];
   if(!prev) return '';
@@ -2591,7 +2613,9 @@ function doOpenSavedSurvey(id){
 // e ao finalizar o pedido, pra não precisar escolher duas vezes.
 function setLevCliente(cliente){
   state.levCliente = cliente;
-  document.getElementById('levClientName').textContent = cliente ? cliente.nome : 'Nenhum selecionado';
+  document.getElementById('levClientName').innerHTML = cliente
+    ? `${escapeHtml(cliente.nome)} ${renderClassificatorioBadge(cliente)}`
+    : 'Nenhum selecionado';
   // pré-preenche o desconto de canal (classificatório) do cliente - continua
   // editável manualmente depois, isso só evita ter que selecionar de novo
   // toda vez que já se sabe qual é o cliente.
@@ -3652,8 +3676,11 @@ async function runClientSearch(term){
     const porId = new Map(clientes.map(c=>[String(c.id), c]));
     results.innerHTML = clientes.map(c => `
       <button type="button" class="clientPickerItem" data-client-id="${c.id}">
-        <div class="cpName">${escapeHtml(c.nome)}</div>
-        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · '+escapeHtml(c.contato) : ''}${c.classificatorio_tipo ? ' · '+escapeHtml(c.classificatorio_tipo) : ''}</div>
+        <div class="cpName" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <span>${escapeHtml(c.nome)}</span>
+          ${renderClassificatorioBadge(c)}
+        </div>
+        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · '+escapeHtml(c.contato) : ''}</div>
       </button>
     `).join('');
     results.querySelectorAll('[data-client-id]').forEach(btn=>{
@@ -4397,7 +4424,10 @@ async function searchClienteTabList(term){
     wrap.innerHTML = clientes.length
       ? clientes.map(c=>`
         <button type="button" class="clientPickerItem" data-cliente-id="${c.id}" data-cliente-nome="${escapeHtml(c.nome)}">
-          <div class="cpName">${escapeHtml(c.nome)}</div>
+          <div class="cpName" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+            <span>${escapeHtml(c.nome)}</span>
+            ${renderClassificatorioBadge(c)}
+          </div>
           <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento'}</div>
         </button>`).join('')
       : '<div class="lev-empty">Nenhum cliente encontrado.</div>';
