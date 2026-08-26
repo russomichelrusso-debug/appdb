@@ -1267,6 +1267,10 @@
         </div>
         <button type="button" class="restoreBtn" id="prodDetailBackBtn" style="width:auto;padding:10px 16px;">Voltar</button>
       </div>
+      <div class="segmented" id="prodDetailSeg" style="margin:0 16px 12px;">
+        <button type="button" data-v="compradores" class="active">Já compraram</button>
+        <button type="button" data-v="levantamentos">Levantamento</button>
+      </div>
       <div class="hist-content" id="prodDetailContent"></div>
     </div>
   </div>
@@ -4539,22 +4543,20 @@ function searchProdutoTabList(term){
     btn.addEventListener('click', ()=> openProdutoDetail(btn.dataset.prodCod, btn.dataset.prodNome));
   });
 }
-async function openProdutoDetail(codigo, nome){
-  prodTabSelected = codigo;
-  document.getElementById('prodDetailName').textContent = nome;
-  document.getElementById('prodTabListWrap').classList.add('hidden');
-  document.getElementById('prodTabDetail').classList.remove('hidden');
+let prodDetailData = null; // guarda {compradores, levantamentos} pra trocar de aba sem buscar de novo
+let prodDetailView = 'compradores';
+function renderProdDetailView(){
   const content = document.getElementById('prodDetailContent');
-  content.innerHTML = '<div class="lev-empty">Buscando…</div>';
-  try{
-    const data = await apiClientesDoProduto(codigo);
-    const partes = [];
-    if(data.compradores.length === 0 && data.levantamentos.length === 0){
-      partes.push('<div class="lev-empty">Nenhum cliente tem registro de compra ou levantamento com esse produto ainda.</div>');
-    }
-    if(data.compradores.length > 0){
-      partes.push('<div class="histSectionLbl">Já compraram</div>');
-      partes.push(data.compradores.map(c=>`
+  if(!prodDetailData) return;
+  const lista = prodDetailData[prodDetailView] || [];
+  if(lista.length === 0){
+    content.innerHTML = prodDetailView === 'compradores'
+      ? '<div class="lev-empty">Nenhum cliente comprou esse produto ainda.</div>'
+      : '<div class="lev-empty">Nenhum levantamento recente tem esse produto contado.</div>';
+    return;
+  }
+  content.innerHTML = prodDetailView === 'compradores'
+    ? lista.map(c=>`
         <div class="histCard">
           <div class="hcName">${escapeHtml(c.nome)}</div>
           <div class="hcCode">${c.documento ? escapeHtml(c.documento) : ''}</div>
@@ -4562,11 +4564,8 @@ async function openProdutoDetail(codigo, nome){
             <div class="hcStat">Total comprado<b>${c.total_comprado}</b></div>
             <div class="hcStat">Última compra<b>${formatDateBr(c.ultima_compra)}</b></div>
           </div>
-        </div>`).join(''));
-    }
-    if(data.levantamentos.length > 0){
-      partes.push('<div class="histSectionLbl">Tinham no levantamento mais recente</div>');
-      partes.push(data.levantamentos.map(l=>`
+        </div>`).join('')
+    : lista.map(l=>`
         <div class="histCard">
           <div class="hcName">${escapeHtml(l.nome)}</div>
           <div class="hcCode">${l.documento ? escapeHtml(l.documento) : ''}</div>
@@ -4574,9 +4573,35 @@ async function openProdutoDetail(codigo, nome){
             <div class="hcStat">Estoque contado<b>${l.quantidade_contada}</b></div>
             <div class="hcStat">Data da visita<b>${formatDateBr(l.data_visita)}</b></div>
           </div>
-        </div>`).join(''));
-    }
-    content.innerHTML = partes.join('');
+        </div>`).join('');
+}
+function initProdDetailSeg(){
+  const seg = document.getElementById('prodDetailSeg');
+  const btns = [...seg.querySelectorAll('button')];
+  btns.forEach(b=>b.addEventListener('click', ()=>{
+    prodDetailView = b.dataset.v;
+    btns.forEach(x=>x.classList.toggle('active', x===b));
+    renderProdDetailView();
+  }));
+}
+async function openProdutoDetail(codigo, nome){
+  prodTabSelected = codigo;
+  document.getElementById('prodDetailName').textContent = nome;
+  document.getElementById('prodTabListWrap').classList.add('hidden');
+  document.getElementById('prodTabDetail').classList.remove('hidden');
+  const content = document.getElementById('prodDetailContent');
+  content.innerHTML = '<div class="lev-empty">Buscando…</div>';
+  // sempre volta pra primeira aba ao abrir um produto novo
+  prodDetailView = 'compradores';
+  const seg = document.getElementById('prodDetailSeg');
+  [...seg.querySelectorAll('button')].forEach(b=>b.classList.toggle('active', b.dataset.v==='compradores'));
+  try{
+    const data = await apiClientesDoProduto(codigo);
+    prodDetailData = data;
+    const segBtns = seg.querySelectorAll('button');
+    segBtns[0].textContent = `Já compraram (${data.compradores.length})`;
+    segBtns[1].textContent = `Levantamento (${data.levantamentos.length})`;
+    renderProdDetailView();
   }catch(e){
     content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
   }
@@ -4593,6 +4618,7 @@ function initProdutosTab(){
     prodTabDebounce = setTimeout(()=>searchProdutoTabList(term), 250);
   });
   document.getElementById('prodDetailBackBtn').addEventListener('click', closeProdutoDetail);
+  initProdDetailSeg();
 }
 // =================================================================
 // ---------------- Consolidar cotações em PDF ---------------------
