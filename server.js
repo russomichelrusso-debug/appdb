@@ -8,6 +8,7 @@ const produtosRoutes = require('./routes/produtos');
 const pedidosRoutes = require('./routes/pedidos');
 const levantamentosRoutes = require('./routes/levantamentos');
 const relatoriosRoutes = require('./routes/relatorios');
+const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
 
 const app = express();
 
@@ -16,7 +17,7 @@ const app = express();
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -34,6 +35,7 @@ app.use('/api/clientes', requireAuth, clientesRoutes);
 app.use('/api/produtos', requireAuth, produtosRoutes);
 app.use('/api/pedidos', requireAuth, pedidosRoutes);
 app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
+app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
 const PORT = process.env.PORT || 3000;

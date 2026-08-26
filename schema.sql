@@ -100,3 +100,17 @@ CREATE TABLE IF NOT EXISTS sessoes (
   expira_em TIMESTAMPTZ NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_sessoes_expira ON sessoes(expira_em);
+
+-- Previsão de estoque (relatório tipo ESCE007) - compartilhada, todo mundo vê
+-- a mesma coisa assim que o admin importa a planilha, sem precisar exportar
+-- arquivo nenhum e subir no GitHub (diferente do precos.json).
+CREATE TABLE IF NOT EXISTS previsao_estoque (
+  codigo_sku TEXT PRIMARY KEY,
+  qt_disponivel NUMERIC NOT NULL DEFAULT 0,
+  qt_carteira NUMERIC NOT NULL DEFAULT 0,
+  qt_compra NUMERIC NOT NULL DEFAULT 0,
+  previsao DATE,
+  saldo NUMERIC NOT NULL DEFAULT 0,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+

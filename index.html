@@ -598,6 +598,16 @@
   .ap-header h2{color:#fff;font-size:18px;}
   .ap-body{padding:16px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:14px;}
   .ap-card{background:var(--white);border-radius:var(--r-md);padding:16px;border:0.75px solid var(--hairline);box-shadow:none;}
+  .ap-group summary{
+    list-style:none;cursor:pointer;padding:13px 16px;
+    background:var(--fill);border-radius:var(--r-md);
+    font-size:12px;font-weight:700;color:var(--gray);text-transform:uppercase;letter-spacing:.04em;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .ap-group summary::-webkit-details-marker{display:none;}
+  .ap-group summary::after{content:'▾';font-size:11px;transition:transform .15s;color:var(--gray);}
+  .ap-group[open] summary::after{transform:rotate(180deg);}
+  .ap-group .ap-groupBody{padding-top:12px;display:flex;flex-direction:column;gap:12px;}
   .ap-card h3{
     font-size:12px;text-transform:none;
     letter-spacing:0;color:var(--gray);font-weight:600;margin-bottom:12px;
@@ -868,7 +878,8 @@
   #prodTabDetail.hidden, #clienteTabDetail.hidden, #prodTabListWrap.hidden, #clienteTabListWrap.hidden{display:none;}
   #histClienteMode.hidden, #histProdutoMode.hidden{display:none;}
   #apiConfigWrap.hidden, #basketMinCountWrap.hidden, #clientPickerNewForm.hidden, #addUserForm.hidden,
-  #comboWrap.hidden, #targetProdWrap.hidden, #targetSkuListWrap.hidden{display:none;}
+  #comboWrap.hidden, #targetProdWrap.hidden, #targetSkuListWrap.hidden,
+  #manageUsersGroup.hidden, #exportPedidosCard.hidden{display:none;}
 
   /* ---------- Levantamento ---------- */
   .lev-savebar{
@@ -1456,138 +1467,164 @@
     <button class="closeBtn" id="closeAdmin" aria-label="Fechar" style="color:#fff;">&times;</button>
   </div>
   <div class="ap-body">
-    <div class="ap-sectionLbl">Sua conta</div>
+    <div class="ap-card">
+      <h3>Status de sincronização</h3>
+      <div class="ap-status-row"><span class="k">Servidor</span><span class="v" id="apSyncServidor">—</span></div>
+      <div class="ap-status-row"><span class="k">Catálogo (servidor)</span><span class="v" id="apSyncCatalogo">—</span></div>
+      <div class="ap-status-row"><span class="k">Catálogo (este aparelho)</span><span class="v" id="apCurCount">—</span></div>
+      <div class="ap-status-row"><span class="k">Origem do catálogo</span><span class="v" id="apCurSource">—</span></div>
+      <div class="ap-status-row"><span class="k">Previsão de estoque</span><span class="v" id="apSyncPrevisao">—</span></div>
+      <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
+      <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
+      <button class="restoreBtn" id="apSyncAllBtn" style="margin-top:10px;">Sincronizar tudo agora</button>
+      <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
+    </div>
+
     <div class="ap-card">
       <h3>Google Drive</h3>
       <div class="ap-status-row"><span class="k">Status</span><span class="v" id="apGoogleDriveStatus">Não conectado</span></div>
       <p class="ap-hint" style="margin:10px 0;">Conecta a SUA conta Google (cada vendedor com a própria) — depois de conectado, os CSVs de Orçamento e Levantamento vão direto pro seu Google Drive, sem passar pelo menu de compartilhar do celular.</p>
       <button class="restoreBtn" id="googleDriveConnectBtn">Conectar ao Google Drive</button>
     </div>
-    <div class="ap-sectionLbl">Catálogo e preços</div>
-    <div class="ap-card">
-      <h3>Base de preços atual</h3>
-      <div class="ap-status-row"><span class="k">Produtos</span><span class="v" id="apCurCount">—</span></div>
-      <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apCurSource">—</span></div>
-    </div>
-    <div class="ap-card">
-      <h3>Atualizar tabela de preços</h3>
-      <p class="ap-hint">Selecione o arquivo .md exportado da planilha (com as seções TABELA DE PREÇOS, PRECIFICAÇÃO e TRIBUTAÇÃO). Os preços dos 27 estados são recalculados a partir dele.</p>
-      <input type="file" id="apFileInput" accept=".md,.txt,text/markdown,text/plain" style="display:none;">
-      <button class="fileBtn" id="apFileBtn">Selecionar arquivo</button>
-      <div id="apMsgArea"></div>
-      <div id="apPreviewArea"></div>
-      <p class="ap-hint" style="margin:12px 0 0;">Esse envio fica salvo apenas neste aparelho/navegador e tem prioridade sobre a fonte automática abaixo.</p>
-    </div>
-    <div class="ap-card">
-      <h3>Fonte automática</h3>
-      <p class="ap-hint" style="margin-bottom:8px;">Se o app estiver hospedado com um arquivo <code>precos.json</code> junto, ele é buscado sozinho ao abrir o app — atualiza todo mundo de uma vez, sem precisar reenviar em cada aparelho. Use o botão abaixo pra remover um envio manual deste aparelho, ou pra checar se saiu uma versão nova agora.</p>
-      <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
-    </div>
-    <div class="ap-card">
-      <h3>Previsão de estoque</h3>
-      <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apPrevisaoSource">—</span></div>
-      <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Produtos com chegada prevista ou sem estoque projetado passam a mostrar um aviso na busca de preços.</p>
-      <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
-      <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
-      <div id="previsaoMsgArea" style="margin-top:8px;"></div>
-      <button class="restoreBtn" id="previsaoExportBtn" style="margin-top:10px;">Exportar previsao.json (pra todo mundo ver)</button>
-      <p class="ap-hint" style="margin:12px 0 0;">O upload acima fica só neste aparelho. Pra atualizar todo mundo de uma vez: sobe a planilha aqui primeiro, depois toque em "Exportar" e substitua o arquivo <code>previsao.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
-    </div>
-    <div class="ap-card">
-      <h3>Campanhas promocionais</h3>
-      <div class="ap-status-row"><span class="k">Origem</span><span class="v" id="apPromoSource">—</span></div>
-      <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em niveladores = mais 4%).</p>
-      <div id="promoRulesList"></div>
-      <button class="fileBtn" id="addPromoRuleBtn" style="margin-top:10px;">+ Nova regra</button>
-      <div class="ap-btnrow" style="margin-top:10px;">
-        <button class="ap-cancel" id="exportPromoBtn" style="flex:1;">Exportar campanhas (.json)</button>
-        <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Importar arquivo</button>
-      </div>
-      <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
-      <p class="ap-hint" style="margin-top:10px;">Pra atualizar a campanha de todo mundo de uma vez: exporte aqui, e substitua o arquivo <code>promocoes.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
-    </div>
-    <div class="ap-sectionLbl">Servidor e dados</div>
-    <div class="ap-card">
-      <h3>Histórico de clientes (servidor)</h3>
-      <div class="ap-status-row"><span class="k">Status</span><span class="v" id="apBackendStatus">—</span></div>
-      <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
-      <p class="ap-hint" style="margin:10px 0;">Liga o app ao servidor que guarda pedidos, levantamentos e histórico de compra por cliente. Sincronize o catálogo sempre que os preços forem atualizados, senão pedidos com produtos novos não gravam.</p>
-      <button class="restoreBtn" id="testBackendBtn" style="margin-bottom:10px;">Testar conexão</button>
-      <button class="fileBtn" id="syncProdutosBtn">Sincronizar catálogo de produtos</button>
-      <div id="syncProdutosMsg" style="margin-top:8px;"></div>
-      <button class="fileBtn" id="importClientesBtn" style="margin-top:8px;">Importar clientes (JSON)</button>
-      <input type="file" id="importClientesFile" accept=".json,application/json" style="display:none;">
-      <div id="importClientesMsg" style="margin-top:8px;"></div>
-      <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
-      <button type="button" class="priceEditResetLink" id="toggleApiConfigBtn" style="text-decoration:none;color:var(--gray);font-weight:600;font-size:12px;margin-top:14px;">Configuração avançada (endereço do servidor)</button>
-      <div id="apiConfigWrap" class="hidden" style="margin-top:10px;">
-        <label for="apiBaseUrlInput">Endereço do servidor</label>
-        <input type="text" id="apiBaseUrlInput" placeholder="https://cortag-backend.onrender.com">
-        <button class="restoreBtn" id="saveApiConfigBtn">Salvar configuração</button>
-      </div>
-    </div>
-    <div class="ap-card">
-      <h3>Consolidar cotações em PDF</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Arraste os PDFs de cotação/pedido oficiais aqui — cliente, data e itens são extraídos automaticamente e gravados direto no histórico do servidor (não fica só no aparelho). Reprocessar o mesmo PDF não duplica, é identificado pelo número da cotação.</p>
-      <div class="pdfDropzone" id="pdfDropzone" tabindex="0" role="button" aria-label="Arraste PDFs aqui ou toque pra selecionar">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0-12 4 4m-4-4-4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <div class="pdfDropzoneTitle">Arraste as cotações em PDF aqui</div>
-        <div class="pdfDropzoneSub">ou toque pra selecionar — vários arquivos de uma vez</div>
-        <input type="file" id="pdfFileInput" accept="application/pdf,.pdf" multiple style="display:none;">
-      </div>
-      <ul id="pdfProcessQueue" class="pdfQueue"></ul>
-    </div>
-    <div class="ap-card">
-      <h3>Importar relatório de faturamento</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que chegar um relatório atualizado — pedido repetido não duplica.</p>
-      <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
-      <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
-      <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
-    </div>
-    <div class="ap-card hidden" id="exportPedidosCard">
-      <h3>Baixar pedidos por período</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor — funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
-      <label for="exportPedidosInicio">De</label>
-      <input type="date" id="exportPedidosInicio">
-      <label for="exportPedidosFim">Até</label>
-      <input type="date" id="exportPedidosFim">
-      <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
-      <div id="exportPedidosMsg" style="margin-top:8px;"></div>
-    </div>
-    <div class="ap-sectionLbl">Segurança</div>
-    <div class="ap-card hidden" id="manageUsersCard">
-      <h3>Gerenciar usuários</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin restante).</p>
-      <div id="manageUsersList"></div>
-      <button class="restoreBtn" id="addUserToggleBtn" style="margin-top:10px;">+ Cadastrar novo usuário</button>
-      <div id="addUserForm" class="hidden" style="margin-top:12px;">
-        <label for="addUserNome">Nome</label>
-        <input type="text" id="addUserNome" placeholder="Nome completo">
-        <label for="addUserUsuario">Usuário (login)</label>
-        <input type="text" id="addUserUsuario" placeholder="ex: michel.russo" autocomplete="off">
-        <label for="addUserSenha">Senha inicial</label>
-        <input type="text" id="addUserSenha" placeholder="Peça pra ele trocar depois">
-        <div id="addUserMsg"></div>
-        <div class="minimodal-btnrow" style="margin-top:6px;">
-          <button type="button" id="addUserCancelBtn">Cancelar</button>
-          <button type="button" id="addUserConfirmBtn">Cadastrar</button>
+
+    <details class="ap-group">
+      <summary>Catálogo e preços</summary>
+      <div class="ap-groupBody">
+        <div class="ap-card">
+          <h3>Atualizar tabela de preços</h3>
+          <p class="ap-hint">Selecione o arquivo .md exportado da planilha (com as seções TABELA DE PREÇOS, PRECIFICAÇÃO e TRIBUTAÇÃO). Os preços dos 27 estados são recalculados a partir dele.</p>
+          <input type="file" id="apFileInput" accept=".md,.txt,text/markdown,text/plain" style="display:none;">
+          <button class="fileBtn" id="apFileBtn">Selecionar arquivo</button>
+          <div id="apMsgArea"></div>
+          <div id="apPreviewArea"></div>
+          <p class="ap-hint" style="margin:12px 0 0;">Esse envio fica salvo apenas neste aparelho/navegador e tem prioridade sobre a fonte automática abaixo.</p>
+        </div>
+        <div class="ap-card">
+          <h3>Fonte automática</h3>
+          <p class="ap-hint" style="margin-bottom:8px;">Se o app estiver hospedado com um arquivo <code>precos.json</code> junto, ele é buscado sozinho ao abrir o app — atualiza todo mundo de uma vez, sem precisar reenviar em cada aparelho. Use o botão abaixo pra remover um envio manual deste aparelho, ou pra checar se saiu uma versão nova agora.</p>
+          <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
+        </div>
+        <div class="ap-card">
+          <h3>Previsão de estoque</h3>
+          <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Vai direto pro servidor — todo mundo já vê na hora, sem precisar exportar nem subir arquivo nenhum. Produtos com chegada prevista ou sem estoque projetado passam a mostrar um aviso na busca de preços.</p>
+          <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
+          <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
+          <div id="previsaoMsgArea" style="margin-top:8px;"></div>
+        </div>
+        <div class="ap-card">
+          <h3>Campanhas promocionais</h3>
+          <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em niveladores = mais 4%).</p>
+          <div id="promoRulesList"></div>
+          <button class="fileBtn" id="addPromoRuleBtn" style="margin-top:10px;">+ Nova regra</button>
+          <div class="ap-btnrow" style="margin-top:10px;">
+            <button class="ap-cancel" id="exportPromoBtn" style="flex:1;">Exportar campanhas (.json)</button>
+            <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Importar arquivo</button>
+          </div>
+          <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
+          <p class="ap-hint" style="margin-top:10px;">Pra atualizar a campanha de todo mundo de uma vez: exporte aqui, e substitua o arquivo <code>promocoes.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
         </div>
       </div>
-    </div>
-    <div class="ap-sectionLbl">Clientes cadastrados</div>
-    <div class="ap-card">
-      <h3>Verificar integridade de clientes</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Confere todos os clientes cadastrados contra uma planilha de referência (nome+CNPJ), e encontra: clientes com o CNPJ da própria Cortag (bug antigo da extração de PDF, já corrigido) e clientes duplicados pelo mesmo nome. Selecione o mesmo JSON usado pra importar clientes.</p>
-      <button class="fileBtn" id="checkIntegrityBtn">Selecionar planilha de referência e analisar</button>
-      <input type="file" id="checkIntegrityFile" accept=".json,application/json" style="display:none;">
-      <div id="integrityResults" style="margin-top:12px;"></div>
-    </div>
-    <div class="ap-card">
-      <h3>Verificar pedidos duplicados</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Acontece quando a mesma venda entra por dois caminhos (ex: finalizado no app na hora, e depois o mesmo pedido aparece de novo ao importar o relatório de faturamento). Mostra pedidos do mesmo cliente, no mesmo dia, com produto em comum — revise e exclua o repetido manualmente.</p>
-      <button class="restoreBtn" id="checkDuplicatePedidosBtn">Analisar pedidos</button>
-      <div id="duplicatePedidosResults" style="margin-top:12px;"></div>
-    </div>
+    </details>
+
+    <details class="ap-group">
+      <summary>Dados e relatórios</summary>
+      <div class="ap-groupBody">
+        <div class="ap-card">
+          <h3>Sincronizar catálogo de produtos</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Normalmente acontece sozinho (veja "Status de sincronização" no topo) — use aqui só se quiser forçar de novo na hora.</p>
+          <button class="fileBtn" id="syncProdutosBtn">Sincronizar catálogo de produtos</button>
+          <div id="syncProdutosMsg" style="margin-top:8px;"></div>
+        </div>
+        <div class="ap-card">
+          <h3>Importar clientes (JSON)</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Cadastro em lote de clientes (nome + CNPJ), a partir de um arquivo JSON.</p>
+          <button class="fileBtn" id="importClientesBtn">Importar clientes (JSON)</button>
+          <input type="file" id="importClientesFile" accept=".json,application/json" style="display:none;">
+          <div id="importClientesMsg" style="margin-top:8px;"></div>
+        </div>
+        <div class="ap-card">
+          <h3>Consolidar cotações em PDF</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Arraste os PDFs de cotação/pedido oficiais aqui — cliente, data e itens são extraídos automaticamente e gravados direto no histórico do servidor (não fica só no aparelho). Reprocessar o mesmo PDF não duplica, é identificado pelo número da cotação.</p>
+          <div class="pdfDropzone" id="pdfDropzone" tabindex="0" role="button" aria-label="Arraste PDFs aqui ou toque pra selecionar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3v12m0-12 4 4m-4-4-4 4" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="pdfDropzoneTitle">Arraste as cotações em PDF aqui</div>
+            <div class="pdfDropzoneSub">ou toque pra selecionar — vários arquivos de uma vez</div>
+            <input type="file" id="pdfFileInput" accept="application/pdf,.pdf" multiple style="display:none;">
+          </div>
+          <ul id="pdfProcessQueue" class="pdfQueue"></ul>
+        </div>
+        <div class="ap-card">
+          <h3>Importar relatório de faturamento</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que chegar um relatório atualizado — pedido repetido não duplica.</p>
+          <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
+          <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
+          <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
+        </div>
+        <div class="ap-card hidden" id="exportPedidosCard">
+          <h3>Baixar pedidos por período</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor — funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
+          <label for="exportPedidosInicio">De</label>
+          <input type="date" id="exportPedidosInicio">
+          <label for="exportPedidosFim">Até</label>
+          <input type="date" id="exportPedidosFim">
+          <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
+          <div id="exportPedidosMsg" style="margin-top:8px;"></div>
+        </div>
+      </div>
+    </details>
+
+    <details class="ap-group">
+      <summary>Manutenção</summary>
+      <div class="ap-groupBody">
+        <div class="ap-card">
+          <h3>Verificar integridade de clientes</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Confere todos os clientes cadastrados contra uma planilha de referência (nome+CNPJ), e encontra: clientes com o CNPJ da própria Cortag (bug antigo da extração de PDF, já corrigido) e clientes duplicados pelo mesmo nome. Selecione o mesmo JSON usado pra importar clientes.</p>
+          <button class="fileBtn" id="checkIntegrityBtn">Selecionar planilha de referência e analisar</button>
+          <input type="file" id="checkIntegrityFile" accept=".json,application/json" style="display:none;">
+          <div id="integrityResults" style="margin-top:12px;"></div>
+        </div>
+        <div class="ap-card">
+          <h3>Verificar pedidos duplicados</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Acontece quando a mesma venda entra por dois caminhos (ex: finalizado no app na hora, e depois o mesmo pedido aparece de novo ao importar o relatório de faturamento). Mostra pedidos do mesmo cliente, no mesmo dia, com produto em comum — revise e exclua o repetido manualmente.</p>
+          <button class="restoreBtn" id="checkDuplicatePedidosBtn">Analisar pedidos</button>
+          <div id="duplicatePedidosResults" style="margin-top:12px;"></div>
+        </div>
+        <div class="ap-card">
+          <button type="button" class="priceEditResetLink" id="toggleApiConfigBtn" style="text-decoration:none;color:var(--gray);font-weight:600;font-size:12px;">Configuração avançada (endereço do servidor)</button>
+          <div id="apiConfigWrap" class="hidden" style="margin-top:10px;">
+            <label for="apiBaseUrlInput">Endereço do servidor</label>
+            <input type="text" id="apiBaseUrlInput" placeholder="https://cortag-backend.onrender.com">
+            <button class="restoreBtn" id="saveApiConfigBtn">Salvar configuração</button>
+          </div>
+        </div>
+      </div>
+    </details>
+
+    <details class="ap-group hidden" id="manageUsersGroup">
+      <summary>Segurança</summary>
+      <div class="ap-groupBody">
+        <div class="ap-card" id="manageUsersCard">
+          <h3>Gerenciar usuários</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin restante).</p>
+          <div id="manageUsersList"></div>
+          <button class="restoreBtn" id="addUserToggleBtn" style="margin-top:10px;">+ Cadastrar novo usuário</button>
+          <div id="addUserForm" class="hidden" style="margin-top:12px;">
+            <label for="addUserNome">Nome</label>
+            <input type="text" id="addUserNome" placeholder="Nome completo">
+            <label for="addUserUsuario">Usuário (login)</label>
+            <input type="text" id="addUserUsuario" placeholder="ex: michel.russo" autocomplete="off">
+            <label for="addUserSenha">Senha inicial</label>
+            <input type="text" id="addUserSenha" placeholder="Peça pra ele trocar depois">
+            <div id="addUserMsg"></div>
+            <div class="minimodal-btnrow" style="margin-top:6px;">
+              <button type="button" id="addUserCancelBtn">Cancelar</button>
+              <button type="button" id="addUserConfirmBtn">Cadastrar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <div class="ap-card">
       <h3>Gerenciar clientes</h3>
       <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível excluir quem ainda não tem pedido ou levantamento registrado.</p>
@@ -3193,30 +3230,46 @@ let PREVISAO_MAP = {};
 let PREVISAO_SOURCE = 'Nenhuma previsão carregada';
 
 async function loadActivePrevisao(){
-  // mesmo padrão em 2 níveis usado pra base de preços: override manual deste
-  // aparelho primeiro, depois um arquivo remoto hospedado junto do app.
+  // agora é compartilhada de verdade: vem do servidor, todo mundo vê a mesma
+  // coisa assim que o admin importa a planilha - sem precisar exportar
+  // arquivo nenhum. Mantém 2 fallbacks pra quem ainda não tem nada no banco
+  // (recém migrado) ou está sem internet no momento.
   try{
-    const raw = localStorage.getItem(PREVISAO_LS_KEY);
-    if(raw){
-      const saved = JSON.parse(raw);
-      if(saved && saved.mapa && Object.keys(saved.mapa).length){
-        PREVISAO_SOURCE = 'Atualizado em ' + new Date(saved.updatedAt).toLocaleString('pt-BR') + (saved.fileName ? ' · '+saved.fileName : '') + ' · somente este aparelho';
-        return saved.mapa;
-      }
+    const linhas = await apiPrevisaoEstoque();
+    if(Array.isArray(linhas) && linhas.length > 0){
+      const mapa = {};
+      linhas.forEach(l=>{
+        mapa[l.codigo_sku] = {
+          qtDisponivel: Number(l.qt_disponivel) || 0,
+          qtCarteira: Number(l.qt_carteira) || 0,
+          qtCompra: Number(l.qt_compra) || 0,
+          previsao: l.previsao ? String(l.previsao).slice(0,10) : null,
+          saldo: Number(l.saldo) || 0,
+        };
+      });
+      PREVISAO_SOURCE = `Servidor · atualizado ${new Date(linhas[0].atualizado_em || Date.now()).toLocaleString('pt-BR')} · todos os aparelhos`;
+      return mapa;
     }
-  }catch(e){ console.warn('Não foi possível ler a previsão salva localmente:', e); }
+  }catch(e){ console.warn('Não foi possível buscar a previsão do servidor:', e); }
+  // fallback: arquivo previsao.json antigo, se alguém ainda tiver hospedado
   try{
     const resp = await fetch('./previsao.json', {cache:'no-store'});
     if(resp.ok){
       const remote = await resp.json();
       if(remote && remote.mapa && Object.keys(remote.mapa).length){
         const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-        PREVISAO_SOURCE = (remote.version || 'Atualização remota') + (when ? ' · '+when : '') + ' · todos os aparelhos';
+        PREVISAO_SOURCE = (remote.version || 'Arquivo previsao.json') + (when ? ' · '+when : '') + ' · todos os aparelhos (formato antigo)';
         return remote.mapa;
       }
     }
-  }catch(e){ /* sem rede, arquivo local, ou previsao.json ausente - ok, fica sem previsão */ }
+  }catch(e){ /* sem rede, ou previsao.json ausente - ok, fica sem previsão */ }
   return {};
+}
+async function apiPrevisaoEstoque(){
+  return apiFetch('/api/previsao-estoque');
+}
+async function apiImportarPrevisaoEstoque(itens){
+  return apiFetch('/api/previsao-estoque/importar', { method:'POST', body: JSON.stringify({itens}) });
 }
 function savePrevisaoLocal(mapa, fileName){
   try{
@@ -3539,6 +3592,9 @@ async function apiCriarCliente(cliente){
 async function apiSyncProdutos(produtos){
   return apiFetch('/api/produtos/sync', { method:'POST', body: JSON.stringify({produtos}) });
 }
+async function apiContagemProdutos(){
+  return apiFetch('/api/produtos/contagem');
+}
 async function apiCriarPedido(payload){
   return apiFetch('/api/pedidos', { method:'POST', body: JSON.stringify(payload) });
 }
@@ -3635,16 +3691,45 @@ function initClientPicker(){
 }
 
 // ---------------- Admin: conexão com o backend de histórico ----------------
-async function testBackendConnection(){
-  const statusEl = document.getElementById('apBackendStatus');
-  statusEl.textContent = 'Testando…';
+// Roda ao abrir o Painel Admin (e uma vez no boot do app, se for admin):
+// confere servidor, catálogo e previsão de uma vez, e sincroniza sozinho o
+// que estiver desatualizado - antes disso, cada uma dessas coisas exigia um
+// botão separado (Testar conexão, Sincronizar catálogo...).
+async function verificarESincronizarTudo(silencioso){
+  const elServidor = document.getElementById('apSyncServidor');
+  const elCatalogo = document.getElementById('apSyncCatalogo');
+  const elPrevisao = document.getElementById('apSyncPrevisao');
+  const elPromo = document.getElementById('apSyncPromo');
+  if(!elServidor) return; // painel ainda não foi aberto nessa sessão
+
+  if(elPrevisao) elPrevisao.textContent = (PREVISAO_SOURCE === 'Nenhuma previsão carregada') ? 'Não carregada' : PREVISAO_SOURCE;
+  if(elPromo) elPromo.textContent = PROMO_SOURCE;
+
+  elServidor.textContent = 'Verificando…';
+  elCatalogo.textContent = 'Verificando…';
   try{
-    await apiBuscarClientes('');
-    statusEl.textContent = '✓ Conectado';
-    statusEl.style.color = '#1E8E3E';
+    const { total } = await apiContagemProdutos();
+    elServidor.textContent = '✓ Conectado';
+    elServidor.style.color = '#1E8E3E';
+    if(total === DB.products.length){
+      elCatalogo.textContent = `✓ Atualizado (${total} produtos)`;
+      elCatalogo.style.color = '#1E8E3E';
+    } else if(state.currentUser?.is_admin){
+      elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — sincronizando…`;
+      elCatalogo.style.color = '#B36B00';
+      await syncProductCatalog();
+      const depois = await apiContagemProdutos();
+      elCatalogo.textContent = `✓ Sincronizado agora (${depois.total} produtos)`;
+      elCatalogo.style.color = '#1E8E3E';
+    } else {
+      elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — avise o admin`;
+      elCatalogo.style.color = '#B36B00';
+    }
   }catch(e){
-    statusEl.textContent = '✗ ' + e.message;
-    statusEl.style.color = '#B3261E';
+    elServidor.textContent = '✗ ' + e.message;
+    elServidor.style.color = '#B3261E';
+    elCatalogo.textContent = '—';
+    if(!silencioso) throw e;
   }
 }
 async function syncProductCatalog(){
@@ -3920,7 +4005,7 @@ function initManageClients(){
 }
 
 function refreshPrevisaoStatus(){
-  const el = document.getElementById('apPrevisaoSource');
+  const el = document.getElementById('apSyncPrevisao');
   if(el) el.textContent = PREVISAO_SOURCE;
 }
 function refreshGoogleDriveStatus(){
@@ -3962,17 +4047,6 @@ function initPrevisaoUpload(){
   const btn = document.getElementById('previsaoFileBtn');
   const fileInput = document.getElementById('previsaoFileInput');
   refreshPrevisaoStatus();
-  document.getElementById('previsaoExportBtn').addEventListener('click', ()=>{
-    if(Object.keys(PREVISAO_MAP).length === 0){ showToast('Selecione uma planilha primeiro.'); return; }
-    const conteudo = { version: 'Previsão '+new Date().toLocaleDateString('pt-BR'), generatedAt: new Date().toISOString(), mapa: PREVISAO_MAP };
-    const blob = new Blob([JSON.stringify(conteudo, null, 2)], {type:'application/json'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = 'previsao.json';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(()=>URL.revokeObjectURL(url), 4000);
-    showToast('previsao.json baixado — suba ele junto com o precos.json no GitHub');
-  });
   btn.addEventListener('click', ()=>fileInput.click());
   fileInput.addEventListener('change', ()=>{
     const file = fileInput.files && fileInput.files[0];
@@ -3985,11 +4059,16 @@ function initPrevisaoUpload(){
         const mapa = await parsePrevisaoXlsx(reader.result);
         const total = Object.keys(mapa).length;
         if(total === 0) throw new Error('Nenhuma linha reconhecida — confira se a coluna "Item" existe na planilha.');
-        savePrevisaoLocal(mapa, file.name);
+        msg.innerHTML = `<div class="promoEmpty">Enviando ${total} produtos pro servidor…</div>`;
+        const itens = Object.entries(mapa).map(([codigo_sku, p]) => ({
+          codigo_sku, qt_disponivel: p.qtDisponivel, qt_carteira: p.qtCarteira,
+          qt_compra: p.qtCompra, previsao: p.previsao, saldo: p.saldo,
+        }));
+        await apiImportarPrevisaoEstoque(itens);
         PREVISAO_MAP = mapa;
-        PREVISAO_SOURCE = 'Atualizado em ' + new Date().toLocaleString('pt-BR') + ' · ' + file.name + ' · somente este aparelho';
+        PREVISAO_SOURCE = `Servidor · atualizado ${new Date().toLocaleString('pt-BR')} · todos os aparelhos`;
         refreshPrevisaoStatus();
-        msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produtos com previsão carregados.</div>`;
+        msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produtos enviados — já visível pra todo mundo.</div>`;
         if(document.getElementById('searchInput').value.trim()) renderResults();
       }catch(e){
         msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
@@ -4001,7 +4080,13 @@ function initPrevisaoUpload(){
 }
 
 function initBackendAdmin(){
-  document.getElementById('testBackendBtn').addEventListener('click', testBackendConnection);
+  document.getElementById('apSyncAllBtn').addEventListener('click', async ()=>{
+    const btn = document.getElementById('apSyncAllBtn');
+    btn.disabled = true; btn.textContent = 'Sincronizando…';
+    try{ await verificarESincronizarTudo(false); showToast('Sincronização concluída'); }
+    catch(e){ alert('Não foi possível sincronizar: ' + e.message); }
+    finally{ btn.disabled = false; btn.textContent = 'Sincronizar tudo agora'; }
+  });
   document.getElementById('syncProdutosBtn').addEventListener('click', syncProductCatalog);
   document.getElementById('toggleApiConfigBtn').addEventListener('click', ()=>{
     const wrap = document.getElementById('apiConfigWrap');
@@ -4014,7 +4099,7 @@ function initBackendAdmin(){
     if(!baseUrl){ showToast('Preencha o endereço do servidor.'); return; }
     saveApiConfig(baseUrl);
     showToast('Configuração salva');
-    testBackendConnection();
+    verificarESincronizarTudo(true);
   });
   document.getElementById('logoutBtn').addEventListener('click', logout);
 
@@ -4072,11 +4157,12 @@ function initBackendAdmin(){
   if(state.currentUser){
     document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.usuario})${state.currentUser.is_admin ? ' · admin' : ''}`;
     if(state.currentUser.is_admin){
-      document.getElementById('manageUsersCard').classList.remove('hidden');
+      document.getElementById('manageUsersGroup').classList.remove('hidden');
       document.getElementById('exportPedidosCard').classList.remove('hidden');
       renderUsersList();
     }
   }
+  verificarESincronizarTudo(true).catch(()=>{}); // silencioso - já mostra o erro nos próprios campos de status
 }
 
 async function exportPedidosPorPeriodo(){
@@ -4453,7 +4539,6 @@ function initProdutosTab(){
   });
   document.getElementById('prodDetailBackBtn').addEventListener('click', closeProdutoDetail);
 }
-
 // =================================================================
 // ---------------- Consolidar cotações em PDF ---------------------
 // =================================================================
@@ -4714,6 +4799,7 @@ function initPdfConsolidacao(){
     if(e.dataTransfer.files.length) processarArquivosPdf(e.dataTransfer.files);
   });
 }
+
 
 function initFaturamentoImport(){
   const btn = document.getElementById('faturamentoFileBtn');
@@ -5008,7 +5094,8 @@ function ruleSummaryText(r){
 }
 
 function refreshPromoStatus(){
-  document.getElementById('apPromoSource').textContent = PROMO_SOURCE;
+  const el = document.getElementById('apSyncPromo');
+  if(el) el.textContent = PROMO_SOURCE;
 }
 
 function renderPromoRulesList(){
