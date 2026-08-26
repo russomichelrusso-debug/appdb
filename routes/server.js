@@ -1,0 +1,50 @@
+const express = require('express');
+const { runMigrations } = require('./db');
+const { requireAuth } = require('./middleware/auth');
+
+const authRoutes = require('./routes/auth');
+const clientesRoutes = require('./routes/clientes');
+const produtosRoutes = require('./routes/produtos');
+const pedidosRoutes = require('./routes/pedidos');
+const levantamentosRoutes = require('./routes/levantamentos');
+const relatoriosRoutes = require('./routes/relatorios');
+const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
+
+const app = express();
+
+// CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
+// outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+app.use(express.json({ limit: '2mb' }));
+
+app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
+
+// login/setup/logout ficam públicos (senão ninguém consegue nem entrar);
+// cadastrar novo usuário exige já estar logado (checado dentro de routes/auth.js).
+app.use('/api/auth', authRoutes);
+
+// todas as rotas de dados exigem estar logado (ver middleware/auth.js)
+app.use('/api/clientes', requireAuth, clientesRoutes);
+app.use('/api/produtos', requireAuth, produtosRoutes);
+app.use('/api/pedidos', requireAuth, pedidosRoutes);
+app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
+app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
+app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
+
+const PORT = process.env.PORT || 3000;
+
+runMigrations()
+  .then(() => {
+    app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+  })
+  .catch((e) => {
+    console.error('Falha ao rodar migrações do banco:', e);
+    process.exit(1);
+  });
