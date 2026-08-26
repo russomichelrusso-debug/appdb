@@ -12,7 +12,9 @@ let pedidos = [];
 let pedidoItens = [];
 let levantamentos = [];
 let levantamentoItens = [];
-let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1 };
+let usuarios = [];
+let sessoes = [];
+let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
   queryLog.length = 0;
@@ -22,7 +24,9 @@ function reset() {
   pedidoItens = [];
   levantamentos = [];
   levantamentoItens = [];
-  nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1 };
+  usuarios = [];
+  sessoes = [];
+  nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
 async function query(sql, params = []) {
@@ -41,13 +45,27 @@ async function query(sql, params = []) {
     const found = clientes.filter(c => c.documento === params[0]);
     return { rows: found };
   }
+  if (s.includes('UNNEST') && s.includes('INTO CLIENTES')) {
+    const [nomes, documentos] = params;
+    let criados = 0, atualizados = 0;
+    for (let i = 0; i < nomes.length; i++) {
+      const existing = clientes.find(c => c.documento === documentos[i]);
+      if (existing) { existing.nome = nomes[i]; atualizados++; }
+      else { clientes.push({ id: nextId.clientes++, nome: nomes[i], documento: documentos[i], contato: null }); criados++; }
+    }
+    return { rows: [{ criados: String(criados), atualizados: String(atualizados) }] };
+  }
   if (s.includes('INSERT INTO CLIENTES')) {
-    const c = { id: nextId.clientes++, nome: params[0], documento: params[1], contato: params[2] };
+    const c = { id: nextId.clientes++, nome: params[0], documento: params[1], contato: params[2], classificatorio_tipo: null, classificatorio_desconto: null };
     clientes.push(c);
     return { rows: [s.includes('RETURNING *') ? c : { id: c.id }] };
   }
-  if (s.includes('SELECT ID, NOME, DOCUMENTO, CONTATO FROM CLIENTES')) {
-    return { rows: clientes };
+  if (s.includes('SELECT ID, NOME, DOCUMENTO, CONTATO, CLASSIFICATORIO_TIPO, CLASSIFICATORIO_DESCONTO FROM CLIENTES')) {
+    const busca = params[0] ? params[0].replace(/%/g, '').toUpperCase() : null;
+    const found = busca
+      ? clientes.filter(c => c.nome.toUpperCase().includes(busca) || (c.documento || '').toUpperCase().includes(busca))
+      : clientes;
+    return { rows: found.map(c => ({ classificatorio_tipo: null, classificatorio_desconto: null, ...c })) };
   }
   if (s.includes('SELECT * FROM CLIENTES WHERE ID')) {
     return { rows: clientes.filter(c => c.id == params[0]) };
@@ -66,6 +84,16 @@ async function query(sql, params = []) {
   // produtos
   if (s.includes('SELECT ID FROM PRODUTOS WHERE CODIGO_SKU')) {
     return { rows: produtos.filter(p => p.codigo_sku === params[0]) };
+  }
+  if (s.includes('UNNEST') && s.includes('INTO PRODUTOS')) {
+    const [codigos, nomes, categorias] = params;
+    let criados = 0, atualizados = 0;
+    for (let i = 0; i < codigos.length; i++) {
+      const existing = produtos.find(p => p.codigo_sku === codigos[i]);
+      if (existing) { existing.nome = nomes[i]; existing.categoria = categorias[i]; atualizados++; }
+      else { produtos.push({ id: nextId.produtos++, codigo_sku: codigos[i], nome: nomes[i], categoria: categorias[i] }); criados++; }
+    }
+    return { rows: [{ criados: String(criados), atualizados: String(atualizados) }] };
   }
   if (s.includes('INSERT INTO PRODUTOS') && s.includes('ON CONFLICT')) {
     const existing = produtos.find(p => p.codigo_sku === params[0]);
@@ -108,6 +136,41 @@ async function query(sql, params = []) {
   }
   if (s.includes('FROM LEVANTAMENTOS L') && s.includes('LEFT JOIN VENDEDORES')) {
     return computeLevantamentosDoCliente(params[0]);
+  }
+
+  // usuarios / sessoes (login)
+  if (s.includes('SELECT COUNT(*) FROM USUARIOS')) {
+    return { rows: [{ count: String(usuarios.length) }] };
+  }
+  if (s.includes('INSERT INTO USUARIOS')) {
+    if (usuarios.some(u => u.usuario === params[1])) {
+      const err = new Error('duplicate'); err.code = '23505'; throw err;
+    }
+    // /setup grava "VALUES ($1, $2, $3, true)" com o admin fixo na própria query
+    // (só 3 params); /usuarios manda is_admin como $4 de verdade.
+    const isAdmin = s.includes('VALUES ($1, $2, $3, TRUE)') ? true : !!params[3];
+    const u = { id: nextId.usuarios++, nome: params[0], usuario: params[1], senha_hash: params[2], is_admin: isAdmin };
+    usuarios.push(u);
+    return { rows: [{ id: u.id, nome: u.nome, usuario: u.usuario, is_admin: u.is_admin }] };
+  }
+  if (s.includes('SELECT * FROM USUARIOS WHERE USUARIO')) {
+    return { rows: usuarios.filter(u => u.usuario === params[0]) };
+  }
+  if (s.includes('INSERT INTO SESSOES')) {
+    const dias = Number(params[2]);
+    const expira = new Date(Date.now() + dias * 24 * 60 * 60 * 1000).toISOString();
+    sessoes.push({ token: params[0], usuario_id: params[1], expira_em: expira });
+    return { rows: [] };
+  }
+  if (s.includes('FROM SESSOES S') && s.includes('JOIN USUARIOS U')) {
+    const sessao = sessoes.find(se => se.token === params[0] && new Date(se.expira_em) > new Date());
+    if (!sessao) return { rows: [] };
+    const u = usuarios.find(us => us.id === sessao.usuario_id);
+    return { rows: u ? [{ id: u.id, nome: u.nome, usuario: u.usuario, is_admin: u.is_admin }] : [] };
+  }
+  if (s.includes('DELETE FROM SESSOES')) {
+    sessoes = sessoes.filter(se => se.token !== params[0]);
+    return { rows: [] };
   }
 
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));

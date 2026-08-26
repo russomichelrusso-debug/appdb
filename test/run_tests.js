@@ -12,17 +12,18 @@ Module._resolveFilename = function (request, ...args) {
 };
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: mockDb };
 
-process.env.API_KEY = 'chave-teste-123';
 process.env.PORT = '4123';
 
 const http = require('http');
+
+let authToken = '';
 
 function req(method, urlPath, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const data = body ? JSON.stringify(body) : null;
     const r = http.request({
       hostname: 'localhost', port: 4123, path: urlPath, method,
-      headers: { 'Content-Type': 'application/json', 'X-API-Key': 'chave-teste-123', ...headers, ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}) },
+      headers: { 'Content-Type': 'application/json', ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}), ...headers, ...(data ? { 'Content-Length': Buffer.byteLength(data) } : {}) },
     }, (res) => {
       let chunks = '';
       res.on('data', (c) => chunks += c);
@@ -52,9 +53,17 @@ async function main() {
   let res = await req('GET', '/health');
   assert(res.status === 200 && res.body.status === 'ok', 'health check responde OK');
 
-  // 2) endpoint protegido sem chave -> 401
-  res = await req('GET', '/api/clientes', null, { 'X-API-Key': '' });
-  assert(res.status === 401, 'endpoint protegido rejeita sem chave de API correta');
+  // 2) endpoint protegido sem token -> 401
+  res = await req('GET', '/api/clientes');
+  assert(res.status === 401, 'endpoint protegido rejeita sem token de sessão');
+
+  // 2b) primeiro acesso: cria o usuário admin e faz login pra conseguir um token
+  res = await req('POST', '/api/auth/setup', { nome: 'Michel Russo', usuario: 'michel', senha: 'senha-teste-123' });
+  assert(res.status === 201 && res.body.is_admin === true, 'setup cria o primeiro usuário como admin');
+
+  res = await req('POST', '/api/auth/login', { usuario: 'michel', senha: 'senha-teste-123', lembrar: true });
+  assert(res.status === 200 && res.body.token, 'login devolve token');
+  authToken = res.body.token;
 
   // 3) criar cliente
   res = await req('POST', '/api/clientes', { nome: 'João Silva Materiais', documento: '12345678000199', contato: '11999998888' });
