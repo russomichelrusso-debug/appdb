@@ -246,4 +246,27 @@ router.get('/clientes/:id/recuperar', async (req, res) => {
   }
 });
 
+// Curva ABC de produtos somando TODOS os clientes - diferente da Curva ABC
+// individual (que já existe por cliente), essa mostra o negócio inteiro: quais
+// produtos concentram a maior parte do volume vendido. Por quantidade, não
+// valor, porque pedidos vindos do relatório de faturamento não têm preço
+// confiável (ver importação de faturamento).
+router.get('/produtos-abc-geral', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.codigo_sku, p.nome AS produto,
+              COUNT(DISTINCT pi.pedido_id) AS num_pedidos,
+              SUM(pi.quantidade) AS quantidade_total
+       FROM pedido_itens pi
+       JOIN produtos p ON p.id = pi.produto_id
+       GROUP BY p.id, p.codigo_sku, p.nome
+       ORDER BY quantidade_total DESC`
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao calcular curva ABC geral.' });
+  }
+});
+
 module.exports = router;
