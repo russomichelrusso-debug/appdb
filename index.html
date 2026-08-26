@@ -2348,7 +2348,7 @@ function loadLevSurvey(){
 function levAddOrIncrement(p){
   const existing = state.survey.find(i=>i.cod===p.c);
   if(existing) existing.qty += 1;
-  else state.survey.push({cod:p.c, qty:1, ped:0});
+  else state.survey.unshift({cod:p.c, qty:1, ped:0});
   saveLevSurvey();
   renderLevList();
   showToast(`${p.n} — ${existing ? existing.qty : 1} un. em estoque`);
