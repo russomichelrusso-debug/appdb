@@ -1578,6 +1578,12 @@
           <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
           <div id="exportPedidosMsg" style="margin-top:8px;"></div>
         </div>
+        <div class="ap-card">
+          <h3>Curva ABC geral de produtos</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Soma o histórico de todos os clientes juntos, por quantidade vendida (não valor — pedidos vindos do faturamento não têm preço confiável). Mostra quais produtos concentram a maior parte do volume do negócio.</p>
+          <button class="restoreBtn" id="abcGeralBtn">Analisar</button>
+          <div id="abcGeralResults" style="margin-top:12px;"></div>
+        </div>
       </div>
     </details>
 
@@ -3637,6 +3643,9 @@ async function apiLevantamentosCliente(clienteId){
 async function apiRecuperarCliente(clienteId){
   return apiFetch(`/api/clientes/${clienteId}/recuperar`);
 }
+async function apiProdutosAbcGeral(){
+  return apiFetch('/api/produtos-abc-geral');
+}
 
 // ---------------- Seletor de cliente (reutilizado em vários lugares) ----------------
 // Retorna uma Promise que resolve com {id, nome} quando o usuário escolhe ou cria
@@ -3923,6 +3932,22 @@ async function checkDuplicatePedidos(){
     wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
   }
 }
+async function checkAbcGeral(){
+  const wrap = document.getElementById('abcGeralResults');
+  wrap.innerHTML = '<div class="promoEmpty">Somando o histórico de todos os clientes…</div>';
+  try{
+    const rows = await apiProdutosAbcGeral();
+    if(rows.length === 0){ wrap.innerHTML = '<div class="lev-empty">Ainda não há pedidos suficientes no histórico pra calcular.</div>'; return; }
+    const classificados = classificarABC(rows.map(r=>({...r, quantidade_total:Number(r.quantidade_total)})), 'quantidade_total');
+    wrap.innerHTML = renderAbcView(classificados, 'volume', 'quantidade_total');
+  }catch(e){
+    wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+  }
+}
+function initAbcGeral(){
+  document.getElementById('abcGeralBtn').addEventListener('click', checkAbcGeral);
+}
+
 function initDuplicatePedidosCheck(){
   document.getElementById('checkDuplicatePedidosBtn').addEventListener('click', checkDuplicatePedidos);
 }
@@ -6077,6 +6102,7 @@ async function init(){
   initGoogleDriveButton();
   initIntegrityCheck();
   initDuplicatePedidosCheck();
+  initAbcGeral();
   initManageClients();
   document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
   initProdutosTab();
