@@ -1550,6 +1550,8 @@
       <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v" id="apSyncQueueCount">Nada pendente</span></div>
       <button class="restoreBtn" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar pendências agora</button>
       <button class="restoreBtn" id="apSyncAllBtn" style="margin-top:10px;">Sincronizar tudo agora</button>
+      <button class="restoreBtn" id="apCompareCatalogBtn" style="margin-top:8px;">Ver diferenças entre servidor e aparelho</button>
+      <div id="apCompareCatalogResult" style="margin-top:10px;"></div>
       <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
     </div>
 
@@ -3796,6 +3798,9 @@ async function apiSyncProdutos(produtos){
 async function apiContagemProdutos(){
   return apiFetch('/api/produtos/contagem');
 }
+async function apiTodosProdutosServidor(){
+  return apiFetch('/api/produtos');
+}
 async function apiCriarPedido(payload){
   return apiFetch('/api/pedidos', { method:'POST', body: JSON.stringify(payload) }, { tipo:'pedido', descricao:'Pedido' });
 }
@@ -4322,6 +4327,36 @@ function initPrevisaoUpload(){
   });
 }
 
+async function compararCatalogoServidorLocal(){
+  const wrap = document.getElementById('apCompareCatalogResult');
+  wrap.innerHTML = '<div class="promoEmpty">Comparando…</div>';
+  try{
+    const servidor = await apiTodosProdutosServidor();
+    const codigosServidor = new Set(servidor.map(p=>String(p.codigo_sku)));
+    const codigosLocal = new Set(DB.products.map(p=>String(p.c)));
+
+    const soNoServidor = servidor.filter(p=>!codigosLocal.has(String(p.codigo_sku)));
+    const soNoLocal = DB.products.filter(p=>!codigosServidor.has(String(p.c)));
+
+    if(soNoServidor.length === 0 && soNoLocal.length === 0){
+      wrap.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Servidor e aparelho têm exatamente os mesmos códigos.</div>';
+      return;
+    }
+
+    let html = '';
+    if(soNoServidor.length > 0){
+      html += `<p style="font-size:12.5px;font-weight:600;margin:8px 0 4px;">No servidor mas não no catálogo deste aparelho (${soNoServidor.length}):</p>`;
+      html += soNoServidor.map(p=>`<div class="hcCode">${escapeHtml(p.codigo_sku)} — ${escapeHtml(p.nome)}</div>`).join('');
+    }
+    if(soNoLocal.length > 0){
+      html += `<p style="font-size:12.5px;font-weight:600;margin:8px 0 4px;">No catálogo deste aparelho mas não no servidor (${soNoLocal.length}):</p>`;
+      html += soNoLocal.map(p=>`<div class="hcCode">${escapeHtml(p.c)} — ${escapeHtml(p.n)}</div>`).join('');
+    }
+    wrap.innerHTML = html;
+  }catch(e){
+    wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+  }
+}
 function initBackendAdmin(){
   document.getElementById('apSyncAllBtn').addEventListener('click', async ()=>{
     const btn = document.getElementById('apSyncAllBtn');
@@ -4330,6 +4365,7 @@ function initBackendAdmin(){
     catch(e){ alert('Não foi possível sincronizar: ' + e.message); }
     finally{ btn.disabled = false; btn.textContent = 'Sincronizar tudo agora'; }
   });
+  document.getElementById('apCompareCatalogBtn').addEventListener('click', compararCatalogoServidorLocal);
   document.getElementById('syncProdutosBtn').addEventListener('click', syncProductCatalog);
   document.getElementById('toggleApiConfigBtn').addEventListener('click', ()=>{
     const wrap = document.getElementById('apiConfigWrap');
