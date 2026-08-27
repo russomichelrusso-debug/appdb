@@ -1,5 +1,5 @@
 const express = require('express');
-const { runMigrations } = require('./db');
+const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
 
 const authRoutes = require('./routes/auth');
@@ -9,6 +9,7 @@ const pedidosRoutes = require('./routes/pedidos');
 const levantamentosRoutes = require('./routes/levantamentos');
 const relatoriosRoutes = require('./routes/relatorios');
 const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
+const configuracoesRoutes = require('./routes/configuracoes');
 
 const app = express();
 
@@ -36,15 +37,16 @@ app.use('/api/produtos', requireAuth, produtosRoutes);
 app.use('/api/pedidos', requireAuth, pedidosRoutes);
 app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
 app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
+app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 runMigrations()
   .then(() => {
     app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
   })
-  .catch((e) => {
-    console.error('Falha ao rodar migrações do banco:', e);
+  .catch(err => {
+    console.error('Erro ao rodar migrações do banco:', err);
     process.exit(1);
   });
