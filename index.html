@@ -1592,15 +1592,14 @@
         </div>
         <div class="ap-card">
           <h3>Campanhas promocionais</h3>
-          <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em niveladores = mais 4%).</p>
+          <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em niveladores = mais 4%). Qualquer alteração aqui já vai direto pro servidor — todo mundo vê na hora, sem precisar exportar nem subir arquivo.</p>
           <div id="promoRulesList"></div>
           <button class="fileBtn" id="addPromoRuleBtn" style="margin-top:10px;">+ Nova regra</button>
           <div class="ap-btnrow" style="margin-top:10px;">
-            <button class="ap-cancel" id="exportPromoBtn" style="flex:1;">Exportar campanhas (.json)</button>
-            <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Importar arquivo</button>
+            <button class="ap-cancel" id="exportPromoBtn" style="flex:1;">Baixar backup (.json)</button>
+            <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Restaurar backup</button>
           </div>
           <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
-          <p class="ap-hint" style="margin-top:10px;">Pra atualizar a campanha de todo mundo de uma vez: exporte aqui, e substitua o arquivo <code>promocoes.json</code> no mesmo lugar onde está o <code>precos.json</code>.</p>
         </div>
       </div>
     </details>
@@ -3631,7 +3630,6 @@ async function apiImportarFaturamento(payload){
 
 let ACTIVE_SOURCE = 'Base original do app';
 let PROMO_SOURCE = 'Nenhuma campanha ativa';
-const PROMO_LS_KEY = 'cortagPromoRules_v1';
 
 // =================================================================
 // ---------------- Backend: histórico de clientes/pedidos --------
@@ -5289,16 +5287,17 @@ async function loadActiveDB(){
 }
 
 async function loadActivePromoRules(){
+  // agora é compartilhado de verdade: vem do servidor, todo mundo vê a mesma
+  // campanha assim que o admin salva - sem precisar exportar/subir arquivo.
+  // Mantém 2 fallbacks pra quem ainda não tem nada no banco (recém migrado)
+  // ou está sem internet no momento.
   try{
-    const raw = localStorage.getItem(PROMO_LS_KEY);
-    if(raw){
-      const saved = JSON.parse(raw);
-      if(saved && Array.isArray(saved.rules)){
-        PROMO_SOURCE = 'Atualizado em ' + new Date(saved.updatedAt).toLocaleString('pt-BR') + ' · somente este aparelho';
-        return saved.rules;
-      }
+    const result = await apiFetch('/api/configuracoes/promocoes');
+    if(result && Array.isArray(result.valor)){
+      PROMO_SOURCE = 'Servidor · atualizado ' + new Date(result.atualizado_em).toLocaleString('pt-BR') + ' · todos os aparelhos';
+      return result.valor;
     }
-  }catch(e){ console.warn('Não foi possível ler campanhas salvas localmente:', e); }
+  }catch(e){ console.warn('Não foi possível buscar campanhas do servidor:', e); }
 
   try{
     const resp = await fetch('./promocoes.json', {cache:'no-store'});
@@ -5306,19 +5305,18 @@ async function loadActivePromoRules(){
       const remote = await resp.json();
       if(remote && Array.isArray(remote.rules)){
         const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-        PROMO_SOURCE = (remote.version || 'Campanha remota') + (when ? ' · '+when : '') + ' · todos os aparelhos';
+        PROMO_SOURCE = (remote.version || 'Arquivo promocoes.json') + (when ? ' · '+when : '') + ' · todos os aparelhos (formato antigo)';
         return remote.rules;
       }
     }
-  }catch(e){ /* sem rede, arquivo local, ou promocoes.json ausente - ok, sem campanha ativa */ }
+  }catch(e){ /* sem rede, ou promocoes.json ausente - ok, sem campanha ativa */ }
 
   PROMO_SOURCE = 'Nenhuma campanha ativa';
   return [];
 }
-function savePromoRulesLocal(rules){
-  try{
-    localStorage.setItem(PROMO_LS_KEY, JSON.stringify({rules, updatedAt:Date.now()}));
-  }catch(e){ console.warn('Não foi possível salvar campanhas localmente:', e); }
+async function salvarPromoRulesServidor(rules){
+  await apiFetch('/api/configuracoes/promocoes', { method:'POST', body: JSON.stringify({ valor: rules }) });
+  PROMO_SOURCE = 'Servidor · atualizado agora · todos os aparelhos';
 }
 
 function saveActiveDB(newDb, fileName){
@@ -5404,19 +5402,22 @@ function renderPromoRulesList(){
       </div>
     </div>
   `).join('');
-  wrap.querySelectorAll('[data-toggle-rule]').forEach(b=>b.addEventListener('click', ()=>{
+  wrap.querySelectorAll('[data-toggle-rule]').forEach(b=>b.addEventListener('click', async ()=>{
     const r = state.promoRules.find(x=>x.id===b.dataset.toggleRule);
-    if(r){ r.active = !r.active; savePromoRulesLocal(state.promoRules); PROMO_SOURCE = 'Atualizado agora · somente este aparelho'; refreshPromoStatus(); renderPromoRulesList(); renderCart(); }
+    if(!r) return;
+    r.active = !r.active;
+    renderPromoRulesList(); renderCart();
+    try{ await salvarPromoRulesServidor(state.promoRules); refreshPromoStatus(); }
+    catch(e){ alert('Não foi possível salvar no servidor: ' + e.message); r.active = !r.active; renderPromoRulesList(); renderCart(); }
   }));
   wrap.querySelectorAll('[data-edit-rule]').forEach(b=>b.addEventListener('click', ()=>openPromoRuleForm(b.dataset.editRule)));
-  wrap.querySelectorAll('[data-del-rule]').forEach(b=>b.addEventListener('click', ()=>{
+  wrap.querySelectorAll('[data-del-rule]').forEach(b=>b.addEventListener('click', async ()=>{
     if(!confirm('Excluir essa regra de campanha?')) return;
+    const anterior = state.promoRules;
     state.promoRules = state.promoRules.filter(x=>x.id!==b.dataset.delRule);
-    savePromoRulesLocal(state.promoRules);
-    PROMO_SOURCE = 'Atualizado agora · somente este aparelho';
-    refreshPromoStatus();
-    renderPromoRulesList();
-    renderCart();
+    renderPromoRulesList(); renderCart();
+    try{ await salvarPromoRulesServidor(state.promoRules); refreshPromoStatus(); }
+    catch(e){ alert('Não foi possível salvar no servidor: ' + e.message); state.promoRules = anterior; renderPromoRulesList(); renderCart(); }
   }));
 }
 
@@ -5588,7 +5589,7 @@ function closePromoRuleForm(){
   promoEditingId = null;
 }
 
-function savePromoRuleFromForm(){
+async function savePromoRuleFromForm(){
   const name = document.getElementById('promoName').value.trim();
   const targetType = document.getElementById('targetTypeSeg').querySelector('button.active').dataset.v;
   let targetValue;
@@ -5651,8 +5652,12 @@ function savePromoRuleFromForm(){
   } else {
     state.promoRules.push(rule);
   }
-  savePromoRulesLocal(state.promoRules);
-  PROMO_SOURCE = 'Atualizado agora · somente este aparelho';
+  try{
+    await salvarPromoRulesServidor(state.promoRules);
+  }catch(e){
+    msg.innerHTML = `<div class="ap-msg error">Não foi possível salvar no servidor: ${escapeHtml(e.message)}</div>`;
+    return;
+  }
   refreshPromoStatus();
   renderPromoRulesList();
   renderCart();
@@ -5673,19 +5678,18 @@ function exportPromoRulesJSON(){
 
 function importPromoRulesFromFile(file){
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try{
       const data = JSON.parse(reader.result);
       if(!data || !Array.isArray(data.rules)) throw new Error('Formato inválido');
       state.promoRules = data.rules;
-      savePromoRulesLocal(state.promoRules);
-      PROMO_SOURCE = 'Importado agora · somente este aparelho';
+      await salvarPromoRulesServidor(state.promoRules);
       refreshPromoStatus();
       renderPromoRulesList();
       renderCart();
-      showToast('Campanhas importadas com sucesso');
+      showToast('Campanhas importadas e enviadas pro servidor');
     }catch(e){
-      showToast('Arquivo inválido — confira se é um promocoes.json exportado daqui mesmo');
+      showToast('Não foi possível importar: ' + e.message);
     }
   };
   reader.readAsText(file);
