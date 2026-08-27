@@ -1603,6 +1603,12 @@
           </div>
           <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
         </div>
+        <div class="ap-card">
+          <h3>Produtos promocionais</h3>
+          <p class="ap-hint" style="margin:10px 0;">Cria um código novo pra um produto já existente, com preço promocional próprio (varia por região igual os outros, soma IPI por cima). Não recebe desconto de canal/quantidade — é preço fechado.</p>
+          <div id="promoProdutosList"></div>
+          <button class="fileBtn" id="addPromoProdutoBtn" style="margin-top:10px;">+ Novo produto promocional</button>
+        </div>
       </div>
     </details>
 
@@ -1716,6 +1722,39 @@
       <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível excluir quem ainda não tem pedido ou levantamento registrado.</p>
       <input type="text" id="manageClientSearch" placeholder="Buscar cliente por nome ou CNPJ...">
       <div id="manageClientResults"></div>
+    </div>
+  </div>
+</div>
+
+<div class="minimodal hidden" id="promoProdutoModal">
+  <div class="minimodal-card" style="max-width:400px;max-height:85vh;overflow-y:auto;">
+    <h3>Novo produto promocional</h3>
+    <label for="promoProdutoOriginal">Produto original</label>
+    <input type="text" id="promoProdutoOriginal" placeholder="Código ou nome do produto" autocomplete="off">
+    <div id="promoProdutoOriginalResults"></div>
+    <div id="promoProdutoOriginalSelecionado" class="hidden" style="margin:8px 0;padding:10px;background:var(--fill);border-radius:10px;font-size:12.5px;">
+      <b id="promoProdutoOriginalNome"></b><br>
+      <span style="color:var(--gray);">Categoria/embalagem/IPI herdados desse produto</span>
+    </div>
+
+    <label for="promoProdutoCodigo">Código novo</label>
+    <input type="text" id="promoProdutoCodigo" placeholder="Ex: P60863" style="margin-bottom:12px;">
+
+    <label for="promoProdutoNome">Nome</label>
+    <input type="text" id="promoProdutoNome" placeholder="Nome do produto promocional" style="margin-bottom:12px;">
+
+    <label>Preço líquido de base, por região (IPI/imposto somam por cima, igual os outros)</label>
+    <label for="promoProdutoLsp" style="font-weight:400;font-size:12px;margin-top:8px;">São Paulo</label>
+    <input type="number" id="promoProdutoLsp" step="0.01" min="0">
+    <label for="promoProdutoLss" style="font-weight:400;font-size:12px;">Sul / Sudeste</label>
+    <input type="number" id="promoProdutoLss" step="0.01" min="0">
+    <label for="promoProdutoLnc" style="font-weight:400;font-size:12px;">Norte / Nordeste / Centro-Oeste</label>
+    <input type="number" id="promoProdutoLnc" step="0.01" min="0" style="margin-bottom:12px;">
+
+    <div id="promoProdutoMsg"></div>
+    <div class="minimodal-btnrow">
+      <button type="button" id="promoProdutoCancelBtn">Cancelar</button>
+      <button type="button" id="promoProdutoSalvarBtn">Criar produto</button>
     </div>
   </div>
 </div>
@@ -1985,25 +2024,29 @@ function initPromoInput(){
 
 // ---------------- Search ----------------
 function searchProducts(qRaw){
-  const q = normalize(qRaw.trim());
+  const termo = qRaw.trim();
+  const termoUpper = termo.toUpperCase();
+  const q = normalize(termo);
   if(q.length < 2) return [];
-  const isDigits = /^\d+$/.test(qRaw.trim());
-  const results = [];
   const words = q.split(/\s+/).filter(Boolean);
+  const results = [];
   for(const p of DB.products){
-    let score = -1;
-    if(isDigits){
-      if(p.e && p.e === qRaw.trim()) score = 0;
-      else if(p.c === qRaw.trim()) score = 0;
-      else if(p.e && p.e.startsWith(qRaw.trim())) score = 1;
-      else if(p.c.startsWith(qRaw.trim())) score = 1;
-      else if(p._n.includes(q)) score = 3;
-    } else {
-      if(p._n === q) score = 1;
-      else if(p._n.startsWith(q)) score = 2;
-      else if(p._n.includes(q)) score = 3;
-      else if(words.length > 1 && words.every(w => p._n.includes(w))) score = 4;
-    }
+    // código/EAN - checa sempre, funciona tanto pra código numérico puro
+    // quanto alfanumérico (ex: "P60863", produto promocional)
+    let scoreCodigo = -1;
+    if(p.e && p.e === termo) scoreCodigo = 0;
+    else if(p.c.toUpperCase() === termoUpper) scoreCodigo = 0;
+    else if(p.e && p.e.startsWith(termo)) scoreCodigo = 1;
+    else if(p.c.toUpperCase().startsWith(termoUpper)) scoreCodigo = 1;
+
+    let scoreNome = -1;
+    if(p._n === q) scoreNome = 1;
+    else if(p._n.startsWith(q)) scoreNome = 2;
+    else if(p._n.includes(q)) scoreNome = 3;
+    else if(words.length > 1 && words.every(w => p._n.includes(w))) scoreNome = 4;
+
+    const score = (scoreCodigo>=0 && scoreNome>=0) ? Math.min(scoreCodigo, scoreNome)
+                : (scoreCodigo>=0 ? scoreCodigo : scoreNome);
     if(score >= 0) results.push([score, p]);
   }
   results.sort((a,b)=> a[0]-b[0] || a[1].n.localeCompare(b[1].n));
@@ -5322,6 +5365,26 @@ async function loadActiveDB(){
   return DEFAULT_DB;
 }
 
+async function apiProdutosPromocionaisConfig(){
+  try{ return await apiFetch('/api/configuracoes/produtos_promocionais'); }
+  catch(e){ return { valor: [] }; }
+}
+async function salvarProdutosPromocionaisServidor(lista){
+  await apiFetch('/api/configuracoes/produtos_promocionais', { method:'POST', body: JSON.stringify({ valor: lista }) });
+}
+// Junta os produtos promocionais (código novo, preço próprio, mas herdando
+// categoria/embalagem/IPI/perfil fiscal do produto original) no catálogo já
+// carregado - pra aparecerem na busca normal, como qualquer outro produto.
+function mergeProdutosPromocionais(lista){
+  for(const p of lista){
+    if(DB.productIndex[p.c]) continue; // já existe (evita duplicar ao recarregar)
+    p._n = normalize(p.n);
+    DB.products.push(p);
+    DB.productIndex[p.c] = p;
+  }
+  renderResults();
+}
+
 async function loadActivePromoRules(){
   // agora é compartilhado de verdade: vem do servidor, todo mundo vê a mesma
   // campanha assim que o admin salva - sem precisar exportar/subir arquivo.
@@ -5731,6 +5794,117 @@ function importPromoRulesFromFile(file){
   reader.readAsText(file);
 }
 
+// ---------------- Produtos promocionais (código novo, preço próprio) ------
+let promoProdutoOriginalSelecionado = null;
+async function renderPromoProdutosList(){
+  const wrap = document.getElementById('promoProdutosList');
+  wrap.innerHTML = '<div class="promoEmpty">Carregando…</div>';
+  const lista = (await apiProdutosPromocionaisConfig()).valor || [];
+  if(lista.length === 0){ wrap.innerHTML = '<div class="promoEmpty">Nenhum produto promocional criado ainda.</div>'; return; }
+  wrap.innerHTML = lista.map(p => `
+    <div class="promoRuleItem">
+      <div class="prInfo">
+        <div class="prName">${escapeHtml(p.n)}</div>
+        <div class="prDetail">Cód. ${escapeHtml(p.c)} · originado de ${escapeHtml(p.origemCodigo||'—')}</div>
+        <div class="prDetail">SP ${brl(p.lsp)} · Sul-Sudeste ${brl(p.lss)} · Norte-Nordeste-CO ${brl(p.lnc)}</div>
+      </div>
+      <div class="prBtns">
+        <button data-del-promo-produto="${escapeHtml(p.c)}" aria-label="Excluir" title="Excluir">🗑</button>
+      </div>
+    </div>
+  `).join('');
+  wrap.querySelectorAll('[data-del-promo-produto]').forEach(b=>b.addEventListener('click', async ()=>{
+    if(!confirm('Excluir esse produto promocional? Ele some da busca pra todo mundo.')) return;
+    const atual = (await apiProdutosPromocionaisConfig()).valor || [];
+    const nova = atual.filter(p=>p.c !== b.dataset.delPromoProduto);
+    try{
+      await salvarProdutosPromocionaisServidor(nova);
+      delete DB.productIndex[b.dataset.delPromoProduto];
+      DB.products = DB.products.filter(p=>p.c !== b.dataset.delPromoProduto);
+      renderResults();
+      renderPromoProdutosList();
+      showToast('Produto promocional excluído');
+    }catch(e){ alert('Não foi possível excluir: ' + e.message); }
+  }));
+}
+function openPromoProdutoModal(){
+  promoProdutoOriginalSelecionado = null;
+  document.getElementById('promoProdutoOriginal').value = '';
+  document.getElementById('promoProdutoOriginalResults').innerHTML = '';
+  document.getElementById('promoProdutoOriginalSelecionado').classList.add('hidden');
+  document.getElementById('promoProdutoCodigo').value = '';
+  document.getElementById('promoProdutoNome').value = '';
+  document.getElementById('promoProdutoLsp').value = '';
+  document.getElementById('promoProdutoLss').value = '';
+  document.getElementById('promoProdutoLnc').value = '';
+  document.getElementById('promoProdutoMsg').innerHTML = '';
+  document.getElementById('promoProdutoModal').classList.remove('hidden');
+}
+function closePromoProdutoModal(){
+  document.getElementById('promoProdutoModal').classList.add('hidden');
+}
+function initPromoProdutosAdmin(){
+  document.getElementById('addPromoProdutoBtn').addEventListener('click', openPromoProdutoModal);
+  document.getElementById('promoProdutoCancelBtn').addEventListener('click', closePromoProdutoModal);
+
+  document.getElementById('promoProdutoOriginal').addEventListener('input', (e)=>{
+    const termo = e.target.value.trim();
+    const results = document.getElementById('promoProdutoOriginalResults');
+    if(termo.length < 2){ results.innerHTML = ''; return; }
+    const achados = searchProducts(termo).slice(0, 8);
+    if(achados.length === 0){ results.innerHTML = '<div class="promoEmpty">Nenhum produto encontrado.</div>'; return; }
+    results.innerHTML = achados.map(p=>`<button type="button" class="clientPickerItem" data-orig-cod="${escapeHtml(p.c)}"><div class="cpName">${escapeHtml(p.n)}</div><div class="cpMeta">Cód. ${escapeHtml(p.c)}</div></button>`).join('');
+    results.querySelectorAll('[data-orig-cod]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        promoProdutoOriginalSelecionado = productByCod(btn.dataset.origCod);
+        document.getElementById('promoProdutoOriginal').value = promoProdutoOriginalSelecionado.n;
+        document.getElementById('promoProdutoOriginalResults').innerHTML = '';
+        document.getElementById('promoProdutoOriginalNome').textContent = `${promoProdutoOriginalSelecionado.n} (Cód. ${promoProdutoOriginalSelecionado.c})`;
+        document.getElementById('promoProdutoOriginalSelecionado').classList.remove('hidden');
+        if(!document.getElementById('promoProdutoNome').value){
+          document.getElementById('promoProdutoNome').value = promoProdutoOriginalSelecionado.n + ' PROMOCIONAL';
+        }
+      });
+    });
+  });
+
+  document.getElementById('promoProdutoSalvarBtn').addEventListener('click', async ()=>{
+    const msg = document.getElementById('promoProdutoMsg');
+    if(!promoProdutoOriginalSelecionado){ msg.innerHTML = '<div class="ap-msg error">Selecione o produto original primeiro.</div>'; return; }
+    const codigo = document.getElementById('promoProdutoCodigo').value.trim();
+    const nome = document.getElementById('promoProdutoNome').value.trim();
+    const lsp = parseFloat(document.getElementById('promoProdutoLsp').value);
+    const lss = parseFloat(document.getElementById('promoProdutoLss').value);
+    const lnc = parseFloat(document.getElementById('promoProdutoLnc').value);
+    if(!codigo){ msg.innerHTML = '<div class="ap-msg error">Informe o código novo.</div>'; return; }
+    if(DB.productIndex[codigo]){ msg.innerHTML = '<div class="ap-msg error">Esse código já existe no catálogo — escolha outro.</div>'; return; }
+    if(!nome){ msg.innerHTML = '<div class="ap-msg error">Informe o nome.</div>'; return; }
+    if(!(lsp>0) || !(lss>0) || !(lnc>0)){ msg.innerHTML = '<div class="ap-msg error">Informe os 3 preços (maiores que zero).</div>'; return; }
+
+    const orig = promoProdutoOriginalSelecionado;
+    const novoProduto = {
+      c: codigo, e: '', n: nome, cat: orig.cat, emb: orig.emb, ipi: orig.ipi,
+      lsp, lss, lnc, st: orig.st, fx: 1, origemCodigo: orig.c,
+    };
+
+    const btn = document.getElementById('promoProdutoSalvarBtn');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try{
+      const atual = (await apiProdutosPromocionaisConfig()).valor || [];
+      atual.push(novoProduto);
+      await salvarProdutosPromocionaisServidor(atual);
+      mergeProdutosPromocionais([novoProduto]);
+      renderPromoProdutosList();
+      closePromoProdutoModal();
+      showToast('Produto promocional criado');
+    }catch(e){
+      msg.innerHTML = `<div class="ap-msg error">Não foi possível salvar: ${escapeHtml(e.message)}</div>`;
+    }finally{
+      btn.disabled = false; btn.textContent = 'Criar produto';
+    }
+  });
+}
+
 function initPromoRulesAdmin(){
   document.getElementById('addPromoRuleBtn').addEventListener('click', ()=>openPromoRuleForm(null));
   document.getElementById('promoCancelBtn').addEventListener('click', closePromoRuleForm);
@@ -5816,8 +5990,9 @@ function initAdminPanel(){
             <button class="ap-confirm" id="apConfirmBtn">Confirmar atualização</button>
           </div>`;
         document.getElementById('apCancelBtn').addEventListener('click', ()=>{ previewArea.innerHTML=''; fileInput.value=''; });
-        document.getElementById('apConfirmBtn').addEventListener('click', ()=>{
+        document.getElementById('apConfirmBtn').addEventListener('click', async ()=>{
           applyDB(pendingDb);
+          try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
           const saved = saveActiveDB(pendingDb, pendingFileName);
           ACTIVE_SOURCE = 'Atualizado agora' + (pendingFileName ? ' · '+pendingFileName : '') + ' · somente este aparelho';
           refreshStatus();
@@ -5845,6 +6020,7 @@ function initAdminPanel(){
     try{ localStorage.removeItem(LS_KEY); }catch(e){}
     restoreBtn.disabled = true;
     applyDB(await loadActiveDB());
+    try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
     restoreBtn.disabled = false;
     refreshStatus();
     msgArea.innerHTML = '<div class="ap-msg success">Pronto — usando: '+escapeHtml(ACTIVE_SOURCE)+'</div>';
@@ -6335,6 +6511,7 @@ async function init(){
   applyDB(await loadActiveDB());
   state.promoRules = await loadActivePromoRules();
   PREVISAO_MAP = await loadActivePrevisao();
+  try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
 
   initStateSelect();
   initGpsState();
@@ -6343,6 +6520,8 @@ async function init(){
 
   initAdminPanel();
   initPromoRulesAdmin();
+  initPromoProdutosAdmin();
+  renderPromoProdutosList();
   initTabs();
   initLevantamento();
   initLevSaveOpen();
