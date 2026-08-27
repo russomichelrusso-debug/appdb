@@ -263,6 +263,22 @@
     color:var(--ink);
     box-shadow:0 1px 3px rgba(0,0,0,.15);
   }
+  .classiSeg{align-items:stretch;}
+  .classiBtn{
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:1px;font-size:10.5px;line-height:1.15;padding:6px 2px;
+  }
+  .classiBtn small{font-size:9.5px;font-weight:700;opacity:.85;}
+  #channelSeg .classiBtn--exclusive{background:#F1EFE8;color:#5F5E5A;}
+  #channelSeg .classiBtn--premium{background:#E6F1FB;color:#0C447C;}
+  #channelSeg .classiBtn--master{background:#FAEEDA;color:#854F0B;}
+  #channelSeg .classiBtn--rede{background:#EAF3DE;color:#3B6D11;}
+  #channelSeg .classiBtn.active{box-shadow:0 0 0 2px rgba(0,0,0,.25) inset;}
+  html[data-theme="dark"] #channelSeg .classiBtn--exclusive{background:#2C2C2A;color:#B4B2A9;}
+  html[data-theme="dark"] #channelSeg .classiBtn--premium{background:#042C53;color:#85B7EB;}
+  html[data-theme="dark"] #channelSeg .classiBtn--master{background:#412402;color:#FAC775;}
+  html[data-theme="dark"] #channelSeg .classiBtn--rede{background:#173404;color:#97C459;}
+  html[data-theme="dark"] #channelSeg .classiBtn.active{box-shadow:0 0 0 2px rgba(255,255,255,.4) inset;}
 
   /* ---------- Search ---------- */
   .searchWrap{padding:12px 16px 6px;}
@@ -1199,7 +1215,7 @@
         <select id="stateSelect"></select>
       </div>
       <div class="field">
-        <label for="promoInput">Desconto promocional</label>
+        <label for="promoInput">Desconto adicional</label>
         <div class="pct-wrap">
           <input class="num-input" type="number" id="promoInput" min="0" max="90" step="0.5" value="0" inputmode="decimal">
         </div>
@@ -1207,20 +1223,14 @@
     </div>
     <div class="ctrl-row">
       <div class="field">
-        <label>Desconto do canal</label>
-        <div class="segmented" id="channelSeg">
+        <label>Classificatório</label>
+        <div class="segmented classiSeg" id="channelSeg">
           <button type="button" data-v="0">0%</button>
-          <button type="button" data-v="15">15%</button>
-          <button type="button" data-v="17">17%</button>
-          <button type="button" data-v="18">18%</button>
-          <button type="button" data-v="20">20%</button>
+          <button type="button" data-v="15" class="classiBtn classiBtn--exclusive">Exclusive<small>15%</small></button>
+          <button type="button" data-v="17" class="classiBtn classiBtn--premium">Premium<small>17%</small></button>
+          <button type="button" data-v="20" class="classiBtn classiBtn--master">Master<small>20%</small></button>
+          <button type="button" data-v="18" class="classiBtn classiBtn--rede">Rede<small>18%</small></button>
         </div>
-      </div>
-    </div>
-    <div class="ctrl-row">
-      <div class="field">
-        <label for="sellerInput">Vendedor (opcional, aparece no orçamento)</label>
-        <input class="text-input" type="text" id="sellerInput" placeholder="Seu nome / contato">
       </div>
     </div>
   </div>
@@ -1970,10 +1980,7 @@ function initPromoInput(){
     renderCart();
   });
 }
-function initSellerInput(){
-  const inp = document.getElementById('sellerInput');
-  inp.addEventListener('input', ()=>{ state.seller = inp.value; });
-}
+
 
 // ---------------- Search ----------------
 function searchProducts(qRaw){
@@ -6293,7 +6300,7 @@ async function init(){
   initGpsState();
   initChannelSeg();
   initPromoInput();
-  initSellerInput();
+
   initAdminPanel();
   initPromoRulesAdmin();
   initTabs();
