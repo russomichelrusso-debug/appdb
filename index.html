@@ -399,6 +399,17 @@
     letter-spacing:-.015em;
     margin-bottom:3px;
   }
+  .fichaInfoBtn{
+    display:inline-flex;align-items:center;justify-content:center;
+    width:17px;height:17px;margin-left:5px;vertical-align:middle;
+    border-radius:50%;border:1.4px solid var(--gray);color:var(--gray);
+    background:transparent;font-size:11px;font-weight:700;font-style:italic;
+    line-height:1;cursor:pointer;font-family:Georgia,serif;
+  }
+  .fichaInfoBtn:active{background:var(--fill);}
+  .fichaSpecRow{display:flex;justify-content:space-between;font-size:13px;gap:12px;}
+  .fichaSpecRow span{color:var(--gray);}
+  .fichaSpecRow b{text-align:right;font-weight:600;}
   .card .psub{
     font-size:12px;
     color:var(--gray);
@@ -1462,6 +1473,19 @@
   </div>
 </div>
 
+<div class="overlay hidden" id="fichaTecnicaOverlay"></div>
+<div class="minimodal hidden" id="fichaTecnicaModal">
+  <div class="minimodal-card" style="max-width:400px;max-height:85vh;overflow-y:auto;padding:0;">
+    <img id="fichaTecnicaFoto" src="" alt="" style="width:100%;display:block;background:var(--fill);">
+    <div style="padding:16px 18px;">
+      <h3 id="fichaTecnicaNome" style="margin:0 0 8px;"></h3>
+      <p id="fichaTecnicaDesc" style="font-size:13px;color:var(--gray);line-height:1.5;margin:0 0 12px;"></p>
+      <div id="fichaTecnicaSpecs" style="border-top:1px solid var(--hairline);padding-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
+      <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:16px;">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="priceEditOverlay"></div>
 <div class="minimodal hidden" id="priceEditModal">
   <div class="minimodal-card">
@@ -1608,6 +1632,13 @@
           <p class="ap-hint" style="margin:10px 0;">Cria um código novo pra um produto já existente, com preço promocional próprio (varia por região igual os outros, soma IPI por cima). Não recebe desconto de canal/quantidade — é preço fechado.</p>
           <div id="promoProdutosList"></div>
           <button class="fileBtn" id="addPromoProdutoBtn" style="margin-top:10px;">+ Novo produto promocional</button>
+        </div>
+        <div class="ap-card">
+          <h3>Fichas técnicas (balão de informação)</h3>
+          <p class="ap-hint" style="margin:10px 0;">Importa um arquivo com fotos e especificações extraídas de catálogo, pra aparecer no balão (i) ao lado do produto. Substitui só os códigos que vierem no arquivo — o resto continua como está.</p>
+          <button class="fileBtn" id="importFichasBtn">Importar arquivo de fichas técnicas</button>
+          <input type="file" id="fichasFileInput" accept=".json,application/json" style="display:none;">
+          <div id="importFichasMsg" style="margin-top:8px;"></div>
         </div>
       </div>
     </details>
@@ -2053,6 +2084,42 @@ function searchProducts(qRaw){
   return results.slice(0,50).map(r=>r[1]);
 }
 
+// ---------------- Fichas técnicas (balão de informação) ----------------
+// Carregado em segundo plano, sem bloquear a abertura do app - a maioria
+// dos produtos não tem ficha (só os que já apareceram em catálogo), então
+// não faz sentido atrasar o boot esperando isso.
+let FICHAS_MAP = {};
+async function loadFichasTecnicas(){
+  try{
+    const result = await apiFetch('/api/configuracoes/fichas_tecnicas');
+    FICHAS_MAP = (result && result.valor) || {};
+    renderResults(); // reaplica pra mostrar os balões (i) que já podem se aplicar
+  }catch(e){ /* sem ficha tecnica disponivel ainda, ou sem rede - sem problema */ }
+}
+function openFichaTecnica(cod){
+  const ficha = FICHAS_MAP[cod];
+  if(!ficha) return;
+  document.getElementById('fichaTecnicaNome').textContent = ficha.nome;
+  document.getElementById('fichaTecnicaFoto').src = 'data:image/jpeg;base64,' + ficha.foto;
+  document.getElementById('fichaTecnicaDesc').textContent = ficha.desc || '';
+  const specsEl = document.getElementById('fichaTecnicaSpecs');
+  const rotulos = {
+    corte:'Capacidade de corte', diagonal:'Corte diagonal', espessura:'Espessura máxima',
+    modelo:'Modelo', medida:'Medida', carga:'Capacidade de carga', aplicacao:'Aplicação',
+    voltagem:'Voltagem', potencia:'Potência', disco:'Disco',
+  };
+  const specs = ficha.specs || {};
+  specsEl.innerHTML = Object.keys(specs).filter(k=>rotulos[k]).map(k=>
+    `<div class="fichaSpecRow"><span>${rotulos[k]}</span><b>${escapeHtml(String(specs[k]))}</b></div>`
+  ).join('') || '<div class="fichaSpecRow" style="color:var(--gray);">Sem especificações adicionais.</div>';
+  document.getElementById('fichaTecnicaOverlay').classList.remove('hidden');
+  document.getElementById('fichaTecnicaModal').classList.remove('hidden');
+}
+function closeFichaTecnica(){
+  document.getElementById('fichaTecnicaOverlay').classList.add('hidden');
+  document.getElementById('fichaTecnicaModal').classList.add('hidden');
+}
+
 function renderResults(){
   const q = document.getElementById('searchInput').value;
   const list = document.getElementById('resultsList');
@@ -2083,6 +2150,9 @@ function renderResults(){
   });
   list.querySelectorAll('[data-edit-price]').forEach(btn=>{
     btn.addEventListener('click', ()=>openPriceEditModal(btn.dataset.editPrice));
+  });
+  list.querySelectorAll('[data-ficha]').forEach(btn=>{
+    btn.addEventListener('click', ()=>openFichaTecnica(btn.dataset.ficha));
   });
 }
 
@@ -2132,7 +2202,7 @@ function renderCard(p){
     ${p.fx ? '<span class="fixedbadge">Preço fixo</span>' : ''}
     ${edited ? '<span class="editedbadge">Preço editado</span>' : ''}
     ${qtyDisc>0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
-    <div class="pname">${escapeHtml(p.n)}</div>
+    <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${p.c}" aria-label="Ver informações técnicas">i</button>` : ''}</div>
     <div class="psub">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''} · Emb. ${p.emb}</div>
     ${renderPrevisaoBadge(p.c)}
     <div class="prow">
@@ -2206,6 +2276,10 @@ function resetPriceEdit(){
   closePriceEditModal();
   refreshAllPriceViews();
   showToast('Preço de tabela restaurado');
+}
+function initFichaTecnicaModal(){
+  document.getElementById('fichaTecnicaCloseBtn').addEventListener('click', closeFichaTecnica);
+  document.getElementById('fichaTecnicaOverlay').addEventListener('click', closeFichaTecnica);
 }
 function initPriceEdit(){
   document.getElementById('priceEditCancel').addEventListener('click', closePriceEditModal);
@@ -5843,6 +5917,26 @@ function openPromoProdutoModal(){
 function closePromoProdutoModal(){
   document.getElementById('promoProdutoModal').classList.add('hidden');
 }
+async function importarFichasTecnicasDeArquivo(file){
+  const msg = document.getElementById('importFichasMsg');
+  msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
+  try{
+    const texto = await file.text();
+    const novasFichas = JSON.parse(texto);
+    if(typeof novasFichas !== 'object' || Array.isArray(novasFichas)) throw new Error('Formato inválido — esperado um objeto {codigo: {...}}.');
+    const qtdNovas = Object.keys(novasFichas).length;
+    msg.innerHTML = '<div class="promoEmpty">Mesclando com o que já está no servidor…</div>';
+    let atual = {};
+    try{ atual = (await apiFetch('/api/configuracoes/fichas_tecnicas')).valor || {}; }catch(e){ /* nada salvo ainda - ok */ }
+    const combinado = { ...atual, ...novasFichas };
+    await apiFetch('/api/configuracoes/fichas_tecnicas', { method:'POST', body: JSON.stringify({ valor: combinado }) });
+    FICHAS_MAP = combinado;
+    renderResults();
+    msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${qtdNovas} ficha(s) importada(s) — total agora: ${Object.keys(combinado).length}.</div>`;
+  }catch(e){
+    msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
+  }
+}
 function initPromoProdutosAdmin(){
   document.getElementById('addPromoProdutoBtn').addEventListener('click', openPromoProdutoModal);
   document.getElementById('promoProdutoCancelBtn').addEventListener('click', closePromoProdutoModal);
@@ -6512,6 +6606,7 @@ async function init(){
   state.promoRules = await loadActivePromoRules();
   PREVISAO_MAP = await loadActivePrevisao();
   try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
+  loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
 
   initStateSelect();
   initGpsState();
@@ -6521,6 +6616,11 @@ async function init(){
   initAdminPanel();
   initPromoRulesAdmin();
   initPromoProdutosAdmin();
+  document.getElementById('importFichasBtn').addEventListener('click', ()=>document.getElementById('fichasFileInput').click());
+  document.getElementById('fichasFileInput').addEventListener('change', (e)=>{
+    if(e.target.files[0]) importarFichasTecnicasDeArquivo(e.target.files[0]);
+    e.target.value = '';
+  });
   renderPromoProdutosList();
   initTabs();
   initLevantamento();
@@ -6528,6 +6628,7 @@ async function init(){
   initLevShare();
   initCsvNamePrompt();
   initPriceEdit();
+  initFichaTecnicaModal();
   initVoiceSearch();
   initBarcodeScanner();
 
