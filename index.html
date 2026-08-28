@@ -2107,6 +2107,8 @@ function openFichaTecnica(cod){
     corte:'Capacidade de corte', diagonal:'Corte diagonal', espessura:'Espessura máxima',
     modelo:'Modelo', medida:'Medida', carga:'Capacidade de carga', aplicacao:'Aplicação',
     voltagem:'Voltagem', potencia:'Potência', disco:'Disco',
+    tipo:'Tipo', cor:'Cor', diametro:'Diâmetro', haste:'Haste', embalagem:'Embalagem',
+    altura:'Altura', largura:'Largura', dentes:'Dentes', kit:'Kit', tamanho:'Tamanho',
   };
   const specs = ficha.specs || {};
   specsEl.innerHTML = Object.keys(specs).filter(k=>rotulos[k]).map(k=>
