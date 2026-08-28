@@ -2110,6 +2110,8 @@ function openFichaTecnica(cod){
     tipo:'Tipo', cor:'Cor', diametro:'Diâmetro', haste:'Haste', embalagem:'Embalagem',
     altura:'Altura', largura:'Largura', dentes:'Dentes', kit:'Kit', tamanho:'Tamanho',
     cobertura:'Cobertura', conteudo:'Conteúdo', encaixe:'Encaixe', grao:'Grão', peso:'Peso',
+    tipo_corte:'Tipo de corte', material:'Material', lamina:'Lâmina',
+    velocidade:'Velocidade', capacidade:'Capacidade', rotacao:'Rotação', frequencia:'Frequência',
   };
   const specs = ficha.specs || {};
   specsEl.innerHTML = Object.keys(specs).filter(k=>rotulos[k]).map(k=>
