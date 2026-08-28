@@ -1640,6 +1640,13 @@
           <input type="file" id="fichasFileInput" accept=".json,application/json" style="display:none;">
           <div id="importFichasMsg" style="margin-top:8px;"></div>
         </div>
+        <div class="ap-card">
+          <h3>Códigos EAN-13 / DUN-14</h3>
+          <p class="ap-hint" style="margin:10px 0;">Importa um arquivo com o EAN-13 (unidade) e DUN-14 (caixa fechada) corretos por código. Escanear o DUN-14 no Levantamento soma a embalagem padrão de uma vez, sem abrir a caixa.</p>
+          <button class="fileBtn" id="importCodigosBtn">Importar arquivo de códigos</button>
+          <input type="file" id="codigosFileInput" accept=".json,application/json" style="display:none;">
+          <div id="importCodigosMsg" style="margin-top:8px;"></div>
+        </div>
       </div>
     </details>
 
@@ -2067,8 +2074,10 @@ function searchProducts(qRaw){
     let scoreCodigo = -1;
     if(p.e && p.e === termo) scoreCodigo = 0;
     else if(p.c.toUpperCase() === termoUpper) scoreCodigo = 0;
+    else if(p.dun && p.dun === termo) scoreCodigo = 0;
     else if(p.e && p.e.startsWith(termo)) scoreCodigo = 1;
     else if(p.c.toUpperCase().startsWith(termoUpper)) scoreCodigo = 1;
+    else if(p.dun && p.dun.startsWith(termo)) scoreCodigo = 1;
 
     let scoreNome = -1;
     if(p._n === q) scoreNome = 1;
@@ -2299,6 +2308,27 @@ function initPriceEdit(){
 }
 
 // ---------------- Cart ----------------
+// ---------------- Códigos oficiais (EAN-13 / DUN-14 por SKU) ----------------
+// Carregado em segundo plano - corrige o EAN já existente no catálogo de
+// preços e acrescenta o código da caixa fechada (DUN-14) em cada produto,
+// além de montar um índice pra achar rápido qual produto é dono de qual
+// DUN-14 na hora de escanear.
+let DUN_INDEX = {};
+async function loadCodigosProduto(){
+  try{
+    const result = await apiFetch('/api/codigos-produto');
+    const mapa = (result && result.valor) || {};
+    for(const codigo in mapa){
+      const p = DB.productIndex[codigo];
+      if(!p) continue;
+      const info = mapa[codigo];
+      if(info.ean) p.e = info.ean;
+      if(info.dun14){ p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
+    }
+    renderResults();
+  }catch(e){ /* sem rede ou nada importado ainda - ok, segue sem isso */ }
+}
+
 function packStep(p){
   return (p && p.emb > 0) ? p.emb : 1;
 }
@@ -2567,10 +2597,26 @@ function levAddOrIncrement(p){
   playScanBeep(true);
   showToast(`${p.n} — ${existing ? existing.qty : 1} un. em estoque`);
 }
+function levAddCaixaFechada(p){
+  const qtd = packStep(p);
+  const existing = state.survey.find(i=>i.cod===p.c);
+  if(existing) existing.qty += qtd;
+  else state.survey.unshift({cod:p.c, qty:qtd, ped:0});
+  saveLevSurvey();
+  renderLevList();
+  playScanBeep(true);
+  showToast(`Caixa fechada — ${qtd} un. de ${p.n} adicionadas`);
+}
 
 function processLevScan(rawCode){
   const code = (rawCode||'').toString().trim();
   if(!code) return;
+  // DUN-14 (código da caixa fechada) - soma a embalagem padrão de uma vez,
+  // sem precisar abrir a caixa e escanear unidade por unidade.
+  if(DUN_INDEX[code]){
+    const p = productByCod(DUN_INDEX[code]);
+    if(p){ levAddCaixaFechada(p); return; }
+  }
   const exact = findByExactCode(code);
   if(exact){
     levAddOrIncrement(exact);
@@ -5942,6 +5988,30 @@ async function importarFichasTecnicasDeArquivo(file){
     msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
   }
 }
+async function importarCodigosDeArquivo(file){
+  const msg = document.getElementById('importCodigosMsg');
+  msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
+  try{
+    const texto = await file.text();
+    const novosCodigos = JSON.parse(texto);
+    if(typeof novosCodigos !== 'object' || Array.isArray(novosCodigos)) throw new Error('Formato inválido — esperado um objeto {codigo: {ean, dun14}}.');
+    const qtdNovos = Object.keys(novosCodigos).length;
+    msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
+    const result = await apiFetch('/api/codigos-produto/importar', { method:'POST', body: JSON.stringify({ codigos: novosCodigos }) });
+    // reaplica na hora, sem esperar reload: corrige EAN e liga o DUN-14 no catálogo já carregado
+    for(const codigo in novosCodigos){
+      const p = DB.productIndex[codigo];
+      if(!p) continue;
+      const info = novosCodigos[codigo];
+      if(info.ean) p.e = info.ean;
+      if(info.dun14){ p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
+    }
+    renderResults();
+    msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${qtdNovos} código(s) importado(s) — total agora: ${result.total}.</div>`;
+  }catch(e){
+    msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
+  }
+}
 function initPromoProdutosAdmin(){
   document.getElementById('addPromoProdutoBtn').addEventListener('click', openPromoProdutoModal);
   document.getElementById('promoProdutoCancelBtn').addEventListener('click', closePromoProdutoModal);
@@ -6612,6 +6682,7 @@ async function init(){
   PREVISAO_MAP = await loadActivePrevisao();
   try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
   loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
+  loadCodigosProduto(); // idem
 
   initStateSelect();
   initGpsState();
@@ -6624,6 +6695,11 @@ async function init(){
   document.getElementById('importFichasBtn').addEventListener('click', ()=>document.getElementById('fichasFileInput').click());
   document.getElementById('fichasFileInput').addEventListener('change', (e)=>{
     if(e.target.files[0]) importarFichasTecnicasDeArquivo(e.target.files[0]);
+    e.target.value = '';
+  });
+  document.getElementById('importCodigosBtn').addEventListener('click', ()=>document.getElementById('codigosFileInput').click());
+  document.getElementById('codigosFileInput').addEventListener('change', (e)=>{
+    if(e.target.files[0]) importarCodigosDeArquivo(e.target.files[0]);
     e.target.value = '';
   });
   renderPromoProdutosList();

@@ -123,3 +123,16 @@ CREATE TABLE IF NOT EXISTS fichas_tecnicas (
   specs JSONB NOT NULL DEFAULT '{}',
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Códigos oficiais (EAN-13 da unidade e DUN-14 da caixa fechada) por SKU -
+-- corrige/completa o EAN que já vem no catálogo de preços, e adiciona o
+-- código da caixa fechada, usado no Levantamento pra somar a quantidade da
+-- embalagem padrão de uma vez, sem precisar abrir a caixa e escanear
+-- unidade por unidade.
+CREATE TABLE IF NOT EXISTS codigos_produto (
+  codigo_sku TEXT PRIMARY KEY,
+  ean13 TEXT,
+  dun14 TEXT,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_codigos_produto_dun14 ON codigos_produto(dun14) WHERE dun14 IS NOT NULL AND dun14 != '';

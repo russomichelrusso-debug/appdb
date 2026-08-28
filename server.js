@@ -11,6 +11,7 @@ const relatoriosRoutes = require('./routes/relatorios');
 const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
 const configuracoesRoutes = require('./routes/configuracoes');
 const fichasTecnicasRoutes = require('./routes/fichasTecnicas');
+const codigosProdutoRoutes = require('./routes/codigosProduto');
 
 const app = express();
 
@@ -40,6 +41,7 @@ app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
 app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
 app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
 app.use('/api/fichas-tecnicas', requireAuth, fichasTecnicasRoutes);
+app.use('/api/codigos-produto', requireAuth, codigosProdutoRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
 const PORT = process.env.PORT || 10000;
