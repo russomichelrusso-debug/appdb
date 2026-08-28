@@ -10,6 +10,7 @@ const levantamentosRoutes = require('./routes/levantamentos');
 const relatoriosRoutes = require('./routes/relatorios');
 const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
 const configuracoesRoutes = require('./routes/configuracoes');
+const fichasTecnicasRoutes = require('./routes/fichasTecnicas');
 
 const app = express();
 
@@ -22,7 +23,7 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '6mb' }));
 
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
@@ -38,6 +39,7 @@ app.use('/api/pedidos', requireAuth, pedidosRoutes);
 app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
 app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
 app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
+app.use('/api/fichas-tecnicas', requireAuth, fichasTecnicasRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
 const PORT = process.env.PORT || 10000;

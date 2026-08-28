@@ -110,3 +110,16 @@ CREATE TABLE IF NOT EXISTS configuracoes (
   valor JSONB NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Fichas técnicas (balão de informação) - tabela própria, não um bloco JSON
+-- único em "configuracoes". Cada importação manda só o lote novo, o servidor
+-- mescla por UPSERT - assim o tamanho do envio não cresce a cada catálogo
+-- novo (o que acontecia antes e estourava o limite de tamanho do POST).
+CREATE TABLE IF NOT EXISTS fichas_tecnicas (
+  codigo_sku TEXT PRIMARY KEY,
+  nome TEXT NOT NULL,
+  descricao TEXT,
+  foto TEXT NOT NULL,
+  specs JSONB NOT NULL DEFAULT '{}',
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
