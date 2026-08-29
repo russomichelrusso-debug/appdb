@@ -18,7 +18,11 @@ const app = express();
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  // Antes liberava '*' (qualquer site). Restringe pra origem configurada -
+  // se ALLOWED_ORIGIN não estiver definida, cai de volta pra '*' (mesmo
+  // comportamento de antes) pra não quebrar sem aviso, mas o recomendado é
+  // configurar a variável de ambiente com o domínio real do GitHub Pages.
+  res.header('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
