@@ -136,3 +136,32 @@ CREATE TABLE IF NOT EXISTS codigos_produto (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_codigos_produto_dun14 ON codigos_produto(dun14) WHERE dun14 IS NOT NULL AND dun14 != '';
+
+-- Código do cliente no sistema oficial da empresa (ex: "Cod. Cliente" do
+-- relatório de Carteira/Faturamento) - aprendido automaticamente na primeira
+-- importação (casando por nome), usado depois pra ligar com confiança as
+-- linhas de pedidos_oficiais_itens a esse cliente, sem depender de casar
+-- nome de novo toda vez.
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS codigo_oficial TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_codigo_oficial ON clientes(codigo_oficial) WHERE codigo_oficial IS NOT NULL;
+
+-- Situação de pedidos no sistema OFICIAL da empresa (relatório de Carteira +
+-- Faturamento), guardada separada da tabela "pedidos" (que é só o que o
+-- vendedor bate no próprio app). As duas fontes não têm número em comum,
+-- então em vez de tentar mesclar (arriscado), mostramos as duas lado a lado
+-- no histórico do cliente. "Nr.Pedido" + "codigo_sku" é a chave - o mesmo
+-- Nr.Pedido aparece na Carteira (ainda não faturado) e depois no Faturamento
+-- (já faturado); reimportar não duplica, só atualiza o status pra faturado.
+CREATE TABLE IF NOT EXISTS pedidos_oficiais_itens (
+  nr_pedido TEXT NOT NULL,
+  codigo_sku TEXT NOT NULL,
+  cliente_codigo_oficial TEXT NOT NULL,
+  quantidade NUMERIC NOT NULL DEFAULT 0,
+  valor NUMERIC,
+  data_implantacao DATE,
+  data_faturamento DATE,
+  status TEXT NOT NULL DEFAULT 'carteira',
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (nr_pedido, codigo_sku)
+);
+CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_cliente ON pedidos_oficiais_itens(cliente_codigo_oficial);

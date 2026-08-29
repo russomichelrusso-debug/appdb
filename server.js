@@ -12,17 +12,14 @@ const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
 const configuracoesRoutes = require('./routes/configuracoes');
 const fichasTecnicasRoutes = require('./routes/fichasTecnicas');
 const codigosProdutoRoutes = require('./routes/codigosProduto');
+const pedidosOficiaisRoutes = require('./routes/pedidosOficiais');
 
 const app = express();
 
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
 app.use((req, res, next) => {
-  // Antes liberava '*' (qualquer site). Restringe pra origem configurada -
-  // se ALLOWED_ORIGIN não estiver definida, cai de volta pra '*' (mesmo
-  // comportamento de antes) pra não quebrar sem aviso, mas o recomendado é
-  // configurar a variável de ambiente com o domínio real do GitHub Pages.
-  res.header('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
+  res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -46,6 +43,7 @@ app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
 app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
 app.use('/api/fichas-tecnicas', requireAuth, fichasTecnicasRoutes);
 app.use('/api/codigos-produto', requireAuth, codigosProdutoRoutes);
+app.use('/api/pedidos-oficiais', requireAuth, pedidosOficiaisRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
 const PORT = process.env.PORT || 10000;

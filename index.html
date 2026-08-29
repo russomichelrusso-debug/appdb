@@ -1371,6 +1371,7 @@
         <button type="button" data-v="rotatividade">Rotatividade</button>
         <button type="button" data-v="visitas">Visitas</button>
         <button type="button" data-v="recuperar">Recuperar</button>
+        <button type="button" data-v="pedidosoficiais">Pedidos</button>
       </div>
       <div class="hist-content" id="clienteDetailContent"></div>
     </div>
@@ -1643,6 +1644,13 @@
           <button class="fileBtn" id="importCodigosBtn">Importar arquivo de códigos</button>
           <input type="file" id="codigosFileInput" accept=".json,application/json" style="display:none;">
           <div id="importCodigosMsg" style="margin-top:8px;"></div>
+        </div>
+        <div class="ap-card">
+          <h3>Pedidos oficiais (Carteira / Faturamento)</h3>
+          <p class="ap-hint" style="margin:10px 0;">Importa as abas Carteira e Faturamento do relatório oficial. Não duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra "Faturado") em vez de criar de novo. Aparece na aba "Pedidos" de cada cliente.</p>
+          <button class="fileBtn" id="importPedidosOficiaisBtn">Importar arquivo de pedidos oficiais</button>
+          <input type="file" id="pedidosOficiaisFileInput" accept=".json,application/json" style="display:none;">
+          <div id="importPedidosOficiaisMsg" style="margin-top:8px;"></div>
         </div>
       </div>
     </details>
@@ -3983,6 +3991,9 @@ async function apiLevantamentosCliente(clienteId){
 async function apiRecuperarCliente(clienteId){
   return apiFetch(`/api/clientes/${clienteId}/recuperar`);
 }
+async function apiPedidosOficiaisCliente(clienteId){
+  return apiFetch(`/api/pedidos-oficiais/${clienteId}`);
+}
 async function apiProdutosAbcGeral(){
   return apiFetch('/api/produtos-abc-geral');
 }
@@ -4747,6 +4758,17 @@ function renderHistVisitaCard(v){
     </div>
   </div>`;
 }
+function renderPedidoOficialCard(item){
+  const emCarteira = item.status !== 'faturado';
+  return `<div class="histCard">
+    <div class="hcName">${escapeHtml(item.produto || ('Cód. ' + item.codigo_sku))}</div>
+    <div class="hcCode">Cód. ${escapeHtml(String(item.codigo_sku))} · Nr.Pedido ${escapeHtml(String(item.nr_pedido))} · Qt. ${item.quantidade}</div>
+    <div class="hcStats">
+      <div class="hcStat">Pedido<b>${formatDateBr(item.data_implantacao)}</b></div>
+      <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:#B8860B;' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(item.data_faturamento)}</b></div>
+    </div>
+  </div>`;
+}
 function renderRecuperarCard(item){
   const dias = item.ultima_compra ? Math.floor((Date.now() - new Date(item.ultima_compra).getTime()) / 86400000) : null;
   return `<div class="histCard">
@@ -4892,6 +4914,13 @@ async function loadClienteDetailView(){
       content.innerHTML = rows.length
         ? '<p class="ap-hint" style="margin-bottom:12px;">Já comprou antes, sem repor há um tempo, e sem estoque no levantamento mais recente — boa chance de oferecer de novo.</p>' + rows.map(renderRecuperarCard).join('')
         : '<div class="lev-empty">Nenhum produto nessa situação — ou o cliente ainda não tem levantamento registrado pra comparar.</div>';
+    } else if(clienteTabView === 'pedidosoficiais'){
+      const resp = await apiPedidosOficiaisCliente(clienteTabSelected.id);
+      if(!resp.vinculado){
+        content.innerHTML = '<div class="lev-empty">Esse cliente ainda não foi encontrado no relatório oficial da empresa (Carteira/Faturamento) — o vínculo é feito automaticamente na importação, casando pelo nome.</div>';
+      } else {
+        content.innerHTML = resp.itens.length ? resp.itens.map(renderPedidoOficialCard).join('') : '<div class="lev-empty">Nenhum pedido oficial encontrado pra esse cliente ainda.</div>';
+      }
       content.querySelectorAll('[data-recuperar-add]').forEach(btn=>{
         btn.addEventListener('click', ()=>{
           const cod = btn.dataset.recuperarAdd;
@@ -5985,6 +6014,24 @@ async function importarFichasTecnicasDeArquivo(file){
   }
 }
 
+async function importarPedidosOficiaisDeArquivo(file){
+  const msg = document.getElementById('importPedidosOficiaisMsg');
+  msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
+  try{
+    const texto = await file.text();
+    const dados = JSON.parse(texto);
+    if(!dados || !Array.isArray(dados.itens)) throw new Error('Formato inválido — esperado um objeto { itens: [...] }.');
+    msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
+    const result = await apiFetch('/api/pedidos-oficiais/importar', { method:'POST', body: JSON.stringify({ itens: dados.itens }) });
+    let texto_resultado = `✓ ${result.itens} linha(s) importada(s). ${result.clientesVinculados} cliente(s) vinculado(s) agora.`;
+    if(result.clientesNaoEncontrados && result.clientesNaoEncontrados.length > 0){
+      texto_resultado += ` ${result.clientesNaoEncontrados.length} cliente(s) do relatório não foram encontrados no app pelo nome (ficam sem vínculo até serem cadastrados ou o nome bater).`;
+    }
+    msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">${texto_resultado}</div>`;
+  }catch(e){
+    msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
+  }
+}
 async function importarCodigosDeArquivo(file){
   const msg = document.getElementById('importCodigosMsg');
   msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
@@ -6697,6 +6744,11 @@ async function init(){
   document.getElementById('importCodigosBtn').addEventListener('click', ()=>document.getElementById('codigosFileInput').click());
   document.getElementById('codigosFileInput').addEventListener('change', (e)=>{
     if(e.target.files[0]) importarCodigosDeArquivo(e.target.files[0]);
+    e.target.value = '';
+  });
+  document.getElementById('importPedidosOficiaisBtn').addEventListener('click', ()=>document.getElementById('pedidosOficiaisFileInput').click());
+  document.getElementById('pedidosOficiaisFileInput').addEventListener('change', (e)=>{
+    if(e.target.files[0]) importarPedidosOficiaisDeArquivo(e.target.files[0]);
     e.target.value = '';
   });
   renderPromoProdutosList();
