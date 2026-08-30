@@ -319,6 +319,37 @@
     color:var(--gray);
   }
 
+  /* ---------- Assistente de Voz IA ---------- */
+  .voiceWaveWrap .voiceWaveBar {
+    width: 4px;
+    height: 10px;
+    background: var(--red);
+    border-radius: 4px;
+    transition: height .2s ease;
+  }
+  .voiceWaveWrap.active .voiceWaveBar {
+    animation: waveBounce 0.8s ease-in-out infinite alternate;
+  }
+  .voiceWaveWrap.active .voiceWaveBar:nth-child(1) { animation-delay: 0.1s; }
+  .voiceWaveWrap.active .voiceWaveBar:nth-child(2) { animation-delay: 0.3s; }
+  .voiceWaveWrap.active .voiceWaveBar:nth-child(3) { animation-delay: 0.5s; }
+  .voiceWaveWrap.active .voiceWaveBar:nth-child(4) { animation-delay: 0.2s; }
+  .voiceWaveWrap.active .voiceWaveBar:nth-child(5) { animation-delay: 0.4s; }
+
+  @keyframes waveBounce {
+    0% { height: 6px; }
+    100% { height: 32px; }
+  }
+
+  .assistenteMainMicBtn.listening {
+    animation: micPulse 1.2s ease-in-out infinite;
+    transform: scale(1.08);
+  }
+  .voiceActionBtn:active {
+    opacity: 0.85;
+    transform: scale(0.98);
+  }
+
   /* ---------- Scanner de código de barras ---------- */
   .scannerModal{
     position:fixed;inset:0;z-index:70;
@@ -1200,6 +1231,9 @@
       <div class="tag">Consulta de Preços</div>
       <div class="count" id="prodCount">— produtos</div>
     </div>
+    <button class="gearBtn" id="voiceAssistantHeaderBtn" aria-label="Assistente de Voz IA" title="Assistente de Voz Cortag">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+    </button>
     <button class="gearBtn" id="adminBtn" aria-label="Administração">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09a1.65 1.65 0 00-1-1.51 1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09a1.65 1.65 0 001.51-1 1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
       <span class="syncQueueBadge hidden" id="syncQueueBadge" aria-label="Pendências de sincronização">0</span>
@@ -1480,7 +1514,75 @@
       <h3 id="fichaTecnicaNome" style="margin:0 0 8px;"></h3>
       <p id="fichaTecnicaDesc" style="font-size:13px;color:var(--gray);line-height:1.5;margin:0 0 12px;"></p>
       <div id="fichaTecnicaSpecs" style="border-top:1px solid var(--hairline);padding-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
-      <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:16px;">Fechar</button>
+      
+      <div class="fichaVoiceBtnRow" style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+        <button type="button" id="btnOuvirFichaTecnica" class="voiceActionBtn" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border:none;border-radius:var(--r-sm);background:var(--red);color:#fff;font-weight:600;font-size:14px;cursor:pointer;">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+          <span>Ouvir Ficha Técnica</span>
+        </button>
+        <button type="button" id="btnPerguntarFichaTecnica" class="voiceActionBtn" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:10px 14px;border:1px solid var(--hairline);border-radius:var(--r-sm);background:var(--fill);color:var(--ink);font-weight:600;font-size:13.5px;cursor:pointer;">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/></svg>
+          <span>Tirar Dúvidas com IA</span>
+        </button>
+      </div>
+
+      <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:12px;">Fechar</button>
+  </div>
+</div>
+
+<div class="overlay hidden" id="assistenteVozOverlay"></div>
+<div class="minimodal hidden" id="assistenteVozModal">
+  <div class="minimodal-card assistenteVozCard" style="max-width:440px;padding:18px 20px;display:flex;flex-direction:column;gap:14px;border-radius:var(--r-lg);">
+    <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--hairline);padding-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--red);color:#fff;font-size:14px;">🎙️</span>
+        <div>
+          <h3 style="margin:0;font-size:15.5px;font-weight:700;">Assistente de Voz Cortag</h3>
+          <div id="assistenteVozContextoBadge" style="font-size:11.5px;color:var(--gray);">Pergunte sobre produtos ou fichas</div>
+        </div>
+      </div>
+      <button type="button" id="assistenteVozCloseBtn" style="background:none;border:none;font-size:22px;color:var(--gray);cursor:pointer;line-height:1;">&times;</button>
+    </div>
+
+    <!-- Visualizador de Ondas de Áudio -->
+    <div id="assistenteVozWaveWrap" class="voiceWaveWrap" style="display:flex;align-items:center;justify-content:center;gap:5px;height:38px;">
+      <div class="voiceWaveBar"></div>
+      <div class="voiceWaveBar"></div>
+      <div class="voiceWaveBar"></div>
+      <div class="voiceWaveBar"></div>
+      <div class="voiceWaveBar"></div>
+    </div>
+
+    <div id="assistenteVozStatusText" style="text-align:center;font-size:13px;font-weight:600;color:var(--gray);">Toque no microfone para falar...</div>
+
+    <!-- Área de Diálogo -->
+    <div id="assistenteVozConversation" style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;padding:10px;background:var(--fill);border-radius:var(--r-sm);">
+      <div id="assistenteVozUserQuery" class="voiceUserBubble hidden" style="align-self:flex-end;background:var(--red);color:#fff;padding:8px 12px;border-radius:14px 14px 2px 14px;font-size:13px;max-width:85%;"></div>
+      <div id="assistenteVozAiReply" class="voiceAiBubble" style="align-self:flex-start;background:var(--white);color:var(--ink);padding:10px 14px;border-radius:14px 14px 14px 2px;font-size:13.5px;line-height:1.45;border:1px solid var(--hairline);max-width:92%;box-shadow:var(--shadow-1);">
+        Olá! Sou o Assistente Cortag. Como posso ajudar com dúvidas técnicas ou especificações de ferramentas hoje?
+      </div>
+    </div>
+
+    <!-- Controles de Áudio Principais -->
+    <div style="display:flex;align-items:center;justify-content:center;gap:16px;margin-top:4px;">
+      <button type="button" id="assistenteVozStopSpeechBtn" title="Pausar voz" style="width:38px;height:38px;border-radius:50%;border:1px solid var(--hairline);background:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--gray);">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+
+      <button type="button" id="assistenteVozMicMainBtn" class="assistenteMainMicBtn" style="width:60px;height:60px;border-radius:50%;border:none;background:var(--red);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(204,9,53,.35);transition:transform .15s ease;">
+        <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
+
+      <button type="button" id="assistenteVozReplaySpeechBtn" title="Ouvir novamente" style="width:38px;height:38px;border-radius:50%;border:1px solid var(--hairline);background:var(--white);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--gray);">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+      </button>
+    </div>
+
+    <!-- Entrada de Texto Alternativa -->
+    <div style="display:flex;gap:6px;margin-top:2px;">
+      <input type="text" id="assistenteVozTextInput" placeholder="Ou digite sua pergunta aqui..." style="flex:1;border:1px solid var(--hairline);border-radius:var(--r-sm);padding:8px 12px;font-size:13.5px;background:var(--white);color:var(--ink);">
+      <button type="button" id="assistenteVozTextSendBtn" style="background:var(--ink);color:#fff;border:none;border-radius:var(--r-sm);padding:8px 14px;font-weight:600;font-size:13px;cursor:pointer;">Enviar</button>
+    </div>
   </div>
 </div>
 
@@ -2111,6 +2213,7 @@ async function loadFichasTecnicas(){
   }catch(e){ /* sem ficha tecnica disponivel ainda, ou sem rede - sem problema */ }
 }
 function openFichaTecnica(cod){
+  currentFichaCod = cod;
   const ficha = FICHAS_MAP[cod];
   if(!ficha) return;
   document.getElementById('fichaTecnicaNome').textContent = ficha.nome;
@@ -6332,6 +6435,302 @@ function initVoiceSearch(){
 }
 
 // =================================================================
+// ------------ Assistente de Voz Inteligente (Cortag IA) ----------
+// =================================================================
+let currentFichaCod = null;
+let assistenteSpeechUtterance = null;
+let assistenteRecognition = null;
+let assistenteIsListening = false;
+let assistenteLastResponseText = '';
+let assistenteContextoSku = null;
+
+// Síntese de voz em português
+function speakText(text, onEnd) {
+  if (!('speechSynthesis' in window)) {
+    if (onEnd) onEnd();
+    return;
+  }
+  window.speechSynthesis.cancel();
+  if (!text || !text.trim()) {
+    if (onEnd) onEnd();
+    return;
+  }
+
+  // Remove formatações indesejadas da fala
+  const clean = text
+    .replace(/\*+/g, '')
+    .replace(/#+/g, '')
+    .replace(/[_~`]/g, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .trim();
+
+  const utter = new SpeechSynthesisUtterance(clean);
+  utter.lang = 'pt-BR';
+  utter.rate = 1.05;
+  utter.pitch = 1.0;
+
+  const voices = window.speechSynthesis.getVoices() || [];
+  const ptVoice = voices.find(v => v.lang === 'pt-BR' || v.lang.startsWith('pt')) || voices.find(v => v.lang.includes('pt'));
+  if (ptVoice) utter.voice = ptVoice;
+
+  utter.onstart = () => {
+    document.getElementById('assistenteVozWaveWrap')?.classList.add('active');
+    setAssistenteStatus('Falando...', 'var(--red)');
+  };
+
+  utter.onend = () => {
+    document.getElementById('assistenteVozWaveWrap')?.classList.remove('active');
+    setAssistenteStatus('Pronto! Toque no microfone para continuar...', 'var(--gray)');
+    if (onEnd) onEnd();
+  };
+
+  utter.onerror = () => {
+    document.getElementById('assistenteVozWaveWrap')?.classList.remove('active');
+    setAssistenteStatus('Pronto', 'var(--gray)');
+    if (onEnd) onEnd();
+  };
+
+  assistenteSpeechUtterance = utter;
+  window.speechSynthesis.speak(utter);
+}
+
+function stopAssistenteSpeech() {
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.cancel();
+  }
+  document.getElementById('assistenteVozWaveWrap')?.classList.remove('active');
+  setAssistenteStatus('Pausado', 'var(--gray)');
+}
+
+function replayAssistenteSpeech() {
+  if (assistenteLastResponseText) {
+    speakText(assistenteLastResponseText);
+  } else {
+    showToast('Nenhuma resposta para repetir');
+  }
+}
+
+function setAssistenteStatus(text, color) {
+  const el = document.getElementById('assistenteVozStatusText');
+  if (el) {
+    el.textContent = text;
+    if (color) el.style.color = color;
+  }
+}
+
+function openAssistenteVozModal(skuContexto) {
+  assistenteContextoSku = skuContexto || null;
+  const badge = document.getElementById('assistenteVozContextoBadge');
+  if (skuContexto && FICHAS_MAP[skuContexto]) {
+    const f = FICHAS_MAP[skuContexto];
+    badge.textContent = `Em foco: SKU ${skuContexto} · ${f.nome}`;
+    badge.style.color = 'var(--red)';
+  } else {
+    badge.textContent = 'Pergunte sobre qualquer ferramenta ou ficha';
+    badge.style.color = 'var(--gray)';
+  }
+
+  document.getElementById('assistenteVozOverlay').classList.remove('hidden');
+  document.getElementById('assistenteVozModal').classList.remove('hidden');
+  setAssistenteStatus('Toque no microfone para falar...', 'var(--gray)');
+
+  // Inicia escuta automaticamente
+  setTimeout(() => {
+    startAssistenteRecognition();
+  }, 350);
+}
+
+function closeAssistenteVozModal() {
+  stopAssistenteRecognition();
+  stopAssistenteSpeech();
+  document.getElementById('assistenteVozOverlay').classList.add('hidden');
+  document.getElementById('assistenteVozModal').classList.add('hidden');
+}
+
+function startAssistenteRecognition() {
+  if (!SpeechRecognitionCtor) {
+    showToast('Reconhecimento de voz não suportado neste navegador. Você pode digitar.');
+    setAssistenteStatus('Digite sua pergunta abaixo:', 'var(--gray)');
+    document.getElementById('assistenteVozTextInput')?.focus();
+    return;
+  }
+  stopAssistenteSpeech();
+
+  try {
+    if (assistenteRecognition) {
+      assistenteRecognition.abort();
+    }
+    assistenteRecognition = new SpeechRecognitionCtor();
+    assistenteRecognition.lang = 'pt-BR';
+    assistenteRecognition.interimResults = false;
+    assistenteRecognition.maxAlternatives = 1;
+
+    assistenteRecognition.onstart = () => {
+      assistenteIsListening = true;
+      document.getElementById('assistenteVozMicMainBtn')?.classList.add('listening');
+      document.getElementById('assistenteVozWaveWrap')?.classList.add('active');
+      setAssistenteStatus('Ouvindo você...', 'var(--red)');
+    };
+
+    assistenteRecognition.onend = () => {
+      assistenteIsListening = false;
+      document.getElementById('assistenteVozMicMainBtn')?.classList.remove('listening');
+      document.getElementById('assistenteVozWaveWrap')?.classList.remove('active');
+    };
+
+    assistenteRecognition.onresult = (event) => {
+      const transcript = event.results?.[0]?.[0]?.transcript;
+      if (transcript && transcript.trim()) {
+        processarPerguntaAssistente(transcript.trim());
+      }
+    };
+
+    assistenteRecognition.onerror = (event) => {
+      assistenteIsListening = false;
+      document.getElementById('assistenteVozMicMainBtn')?.classList.remove('listening');
+      document.getElementById('assistenteVozWaveWrap')?.classList.remove('active');
+      const msgs = {
+        'not-allowed': 'Permissão de microfone negada',
+        'no-speech': 'Não ouvi nada. Toque no microfone para tentar de novo.',
+        'network': 'Erro de conexão com o microfone',
+      };
+      setAssistenteStatus(msgs[event.error] || 'Não entendi. Tente novamente.', 'var(--gray)');
+    };
+
+    assistenteRecognition.start();
+  } catch (e) {
+    console.error(e);
+    setAssistenteStatus('Não foi possível ativar o microfone.', 'var(--gray)');
+  }
+}
+
+function stopAssistenteRecognition() {
+  if (assistenteRecognition) {
+    try { assistenteRecognition.stop(); } catch(e){}
+    assistenteIsListening = false;
+  }
+  document.getElementById('assistenteVozMicMainBtn')?.classList.remove('listening');
+  document.getElementById('assistenteVozWaveWrap')?.classList.remove('active');
+}
+
+async function processarPerguntaAssistente(pergunta) {
+  if (!pergunta || !pergunta.trim()) return;
+
+  const userBubble = document.getElementById('assistenteVozUserQuery');
+  const aiBubble = document.getElementById('assistenteVozAiReply');
+  const conv = document.getElementById('assistenteVozConversation');
+
+  userBubble.textContent = pergunta;
+  userBubble.classList.remove('hidden');
+  aiBubble.textContent = 'Consultando ficha técnica e especificações da Cortag...';
+  setAssistenteStatus('Pensando na resposta...', 'var(--blue)');
+  document.getElementById('assistenteVozWaveWrap')?.classList.add('active');
+
+  conv.scrollTop = conv.scrollHeight;
+
+  try {
+    const res = await apiFetch('/api/assistente/perguntar', {
+      method: 'POST',
+      body: JSON.stringify({
+        pergunta: pergunta,
+        skuContexto: assistenteContextoSku
+      })
+    });
+
+    if (res && res.resposta) {
+      assistenteLastResponseText = res.resposta;
+      aiBubble.textContent = res.resposta;
+      conv.scrollTop = conv.scrollHeight;
+      speakText(res.resposta);
+    } else {
+      const msgErro = (res && res.erro) || 'Não consegui obter a resposta no momento.';
+      aiBubble.textContent = msgErro;
+      setAssistenteStatus('Erro ao consultar assistente', 'var(--red)');
+    }
+  } catch (e) {
+    console.error('Erro ao consultar assistente:', e);
+    aiBubble.textContent = 'Erro ao se comunicar com o assistente: ' + (e.message || e);
+    setAssistenteStatus('Erro de conexão', 'var(--red)');
+  }
+}
+
+async function narrarFichaTecnica(sku) {
+  if (!sku) return;
+  showToast('Gerando áudio da ficha técnica...');
+  try {
+    const res = await apiFetch('/api/assistente/resumir-ficha', {
+      method: 'POST',
+      body: JSON.stringify({ sku })
+    });
+    if (res && res.resumoFalado) {
+      assistenteLastResponseText = res.resumoFalado;
+      showToast('🔊 Falando ficha técnica...');
+      speakText(res.resumoFalado);
+    } else {
+      const f = FICHAS_MAP[sku];
+      if (f) {
+        speakText(`${f.nome}. ${f.desc || ''}`);
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    const f = FICHAS_MAP[sku];
+    if (f) {
+      speakText(`${f.nome}. ${f.desc || ''}`);
+    }
+  }
+}
+
+function initAssistenteVoz() {
+  document.getElementById('voiceAssistantHeaderBtn')?.addEventListener('click', () => {
+    openAssistenteVozModal(null);
+  });
+
+  document.getElementById('btnOuvirFichaTecnica')?.addEventListener('click', () => {
+    if (currentFichaCod) narrarFichaTecnica(currentFichaCod);
+  });
+
+  document.getElementById('btnPerguntarFichaTecnica')?.addEventListener('click', () => {
+    const cod = currentFichaCod;
+    closeFichaTecnica();
+    openAssistenteVozModal(cod);
+  });
+
+  document.getElementById('assistenteVozCloseBtn')?.addEventListener('click', closeAssistenteVozModal);
+  document.getElementById('assistenteVozOverlay')?.addEventListener('click', closeAssistenteVozModal);
+
+  document.getElementById('assistenteVozMicMainBtn')?.addEventListener('click', () => {
+    if (assistenteIsListening) {
+      stopAssistenteRecognition();
+    } else {
+      startAssistenteRecognition();
+    }
+  });
+
+  document.getElementById('assistenteVozStopSpeechBtn')?.addEventListener('click', stopAssistenteSpeech);
+  document.getElementById('assistenteVozReplaySpeechBtn')?.addEventListener('click', replayAssistenteSpeech);
+
+  const textInput = document.getElementById('assistenteVozTextInput');
+  const textSendBtn = document.getElementById('assistenteVozTextSendBtn');
+
+  function sendText() {
+    const val = textInput.value.trim();
+    if (val) {
+      textInput.value = '';
+      processarPerguntaAssistente(val);
+    }
+  }
+
+  textSendBtn?.addEventListener('click', sendText);
+  textInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendText();
+    }
+  });
+}
+
+// =================================================================
 // ---------------- Leitura de código de barras pela câmera -------
 // =================================================================
 // Duas engines possíveis: BarcodeDetector nativo do navegador (prioridade,
@@ -6760,6 +7159,7 @@ async function init(){
   initPriceEdit();
   initFichaTecnicaModal();
   initVoiceSearch();
+  initAssistenteVoz();
   initBarcodeScanner();
 
   const searchInput = document.getElementById('searchInput');
