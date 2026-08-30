@@ -8,12 +8,7 @@
 //      vírgula) - resolve casos tipo "EDD AL LTDA." vs "EDD AL LTDA" sem
 //      pedir confirmação, já que a diferença é só um caractere de pontuação.
 
-function sqlNormalizado(coluna, valor){
-  return { sql: `regexp_replace(upper(trim(${coluna})), '\\s+', ' ', 'g') = regexp_replace(upper(trim($N)), '\\s+', ' ', 'g')`, valor };
-}
-
 async function acharClientePorNome(client, nome){
-  // nível 1: normalizado (maiúscula/espaço)
   const exato = await client.query(
     `SELECT id FROM clientes
      WHERE regexp_replace(upper(trim(nome)), '\\s+', ' ', 'g') = regexp_replace(upper(trim($1)), '\\s+', ' ', 'g')
@@ -22,7 +17,6 @@ async function acharClientePorNome(client, nome){
   );
   if(exato.rows.length > 0) return exato.rows[0].id;
 
-  // nível 2: tolerante a pontuação (tira . e , antes de comparar)
   const tolerante = await client.query(
     `SELECT id FROM clientes
      WHERE regexp_replace(upper(trim(nome)), '[.,\\s]+', ' ', 'g') = regexp_replace(upper(trim($1)), '[.,\\s]+', ' ', 'g')

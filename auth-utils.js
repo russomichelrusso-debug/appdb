@@ -1,23 +1,24 @@
-// Hash de senha usando só o módulo "crypto" nativo do Node - sem depender de
-// pacotes externos (bcrypt, etc.), já que a instalação de pacotes novos pode
-// falhar dependendo da rede. scrypt é o algoritmo recomendado pelo próprio
-// Node pra isso, e já vem embutido.
+// Funções auxiliares de autenticação - sem depender de pacote externo (bcrypt
+// etc.), usando só o módulo "crypto" que já vem com o Node. Senha guardada
+// como "salt:hash" (scrypt), nunca em texto puro.
+
 const crypto = require('crypto');
 
-function hashPassword(password) {
+function hashPassword(senha) {
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  const hash = crypto.scryptSync(senha, salt, 64).toString('hex');
   return `${salt}:${hash}`;
 }
 
-function verifyPassword(password, stored) {
-  const [salt, hash] = (stored || '').split(':');
-  if (!salt || !hash) return false;
-  const hashToCompare = crypto.scryptSync(password, salt, 64).toString('hex');
-  const a = Buffer.from(hash, 'hex');
-  const b = Buffer.from(hashToCompare, 'hex');
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+function verifyPassword(senha, senha_hash) {
+  if (!senha_hash || !senha_hash.includes(':')) return false;
+  const [salt, hashGuardado] = senha_hash.split(':');
+  const hashTentativa = crypto.scryptSync(senha, salt, 64).toString('hex');
+  // timingSafeEqual exige mesmo tamanho - se não bater, já é senha errada
+  const bufGuardado = Buffer.from(hashGuardado, 'hex');
+  const bufTentativa = Buffer.from(hashTentativa, 'hex');
+  if (bufGuardado.length !== bufTentativa.length) return false;
+  return crypto.timingSafeEqual(bufGuardado, bufTentativa);
 }
 
 function generateToken() {
