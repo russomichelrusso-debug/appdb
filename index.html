@@ -3923,7 +3923,9 @@ function getApiConfig(){
   let baseUrl = API_BASE_URL_DEFAULT;
   try{
     const saved = JSON.parse(localStorage.getItem(API_CONFIG_LS_KEY) || '{}');
-    if(saved.baseUrl) baseUrl = saved.baseUrl;
+    if(saved && saved.baseUrl && typeof saved.baseUrl === 'string' && saved.baseUrl.trim().startsWith('http')){
+      baseUrl = saved.baseUrl.trim().replace(/\/$/, '');
+    }
   }catch(e){}
   return { baseUrl };
 }
@@ -6649,7 +6651,8 @@ async function processarPerguntaAssistente(pergunta) {
     }
   } catch (e) {
     console.error('Erro ao consultar assistente:', e);
-    aiBubble.textContent = 'Erro ao se comunicar com o assistente: ' + (e.message || e);
+    const { baseUrl } = getApiConfig();
+    aiBubble.textContent = `Erro ao consultar assistente (${e.message || e}). Conectando em: ${baseUrl}`;
     setAssistenteStatus('Erro de conexão', 'var(--red)');
   }
 }
