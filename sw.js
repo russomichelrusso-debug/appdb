@@ -1,4 +1,4 @@
-const CACHE_NAME = 'cortag-precos-v2';
+const CACHE_NAME = 'cortag-precos-v3';
 const APP_SHELL = ['.', './index.html', './manifest.json', './precos.json', './promocoes.json'];
 
 self.addEventListener('install', (event) => {
