@@ -1,5 +1,5 @@
 const express = require('express');
-const { runMigrations } = require('./db');
+const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
 
 const authRoutes = require('./routes/auth');
@@ -9,6 +9,11 @@ const pedidosRoutes = require('./routes/pedidos');
 const levantamentosRoutes = require('./routes/levantamentos');
 const relatoriosRoutes = require('./routes/relatorios');
 const previsaoEstoqueRoutes = require('./routes/previsaoEstoque');
+const configuracoesRoutes = require('./routes/configuracoes');
+const fichasTecnicasRoutes = require('./routes/fichasTecnicas');
+const codigosProdutoRoutes = require('./routes/codigosProduto');
+const pedidosOficiaisRoutes = require('./routes/pedidosOficiais');
+const assistenteRoutes = require('./routes/assistente');
 
 const app = express();
 
@@ -21,7 +26,7 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '6mb' }));
 
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
@@ -36,15 +41,20 @@ app.use('/api/produtos', requireAuth, produtosRoutes);
 app.use('/api/pedidos', requireAuth, pedidosRoutes);
 app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
 app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
+app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
+app.use('/api/fichas-tecnicas', requireAuth, fichasTecnicasRoutes);
+app.use('/api/codigos-produto', requireAuth, codigosProdutoRoutes);
+app.use('/api/pedidos-oficiais', requireAuth, pedidosOficiaisRoutes);
+app.use('/api/assistente', requireAuth, assistenteRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 
 runMigrations()
   .then(() => {
     app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
   })
-  .catch((e) => {
-    console.error('Falha ao rodar migrações do banco:', e);
+  .catch(err => {
+    console.error('Erro ao rodar migrações do banco:', err);
     process.exit(1);
   });
