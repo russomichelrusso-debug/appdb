@@ -34,7 +34,7 @@ router.get('/:clienteId', async (req, res) => {
 // atualiza - e uma vez "faturado", nunca volta pra "carteira" mesmo que uma
 // planilha antiga de carteira seja reimportada por engano depois.
 router.post('/importar', async (req, res) => {
-  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar pedidos oficiais.' });
+  // Qualquer usuário logado pode importar (não só admin) - decisão explícita.
   const { itens } = req.body;
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
 

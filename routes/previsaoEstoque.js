@@ -16,9 +16,9 @@ router.get('/', async (req, res) => {
 
 // Substitui a previsão inteira pela planilha nova, em uma operação em lote
 // (evita o mesmo problema de timeout que já vimos antes com laço item a
-// item). Só admin - some com a previsão antiga, entra só a atual.
+// item). Qualquer usuário logado pode importar (não só admin) - decisão
+// explícita, mesmo essa operação substituindo a previsão antiga inteira.
 router.post('/importar', async (req, res) => {
-  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar previsão de estoque.' });
   const { itens } = req.body;
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
 
