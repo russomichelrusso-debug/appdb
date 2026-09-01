@@ -110,6 +110,7 @@
     padding:24px;
   }
   .loginScreen.hidden{display:none;}
+  @keyframes assistentePulse{0%{transform:scale(1);opacity:.9;}100%{transform:scale(1.35);opacity:0;}}
   #loginFields.hidden, #setupFields.hidden{display:none;}
   .loginCard{width:100%;max-width:360px;}
   .loginLogoWrap{text-align:center;margin-bottom:28px;}
@@ -1491,6 +1492,12 @@
     </div>
   </div>
 </div>
+
+<button type="button" id="assistenteBtn" aria-label="Assistente de voz" style="position:fixed;bottom:22px;right:18px;width:60px;height:60px;border-radius:50%;background:var(--white);border:none;box-shadow:0 3px 12px rgba(0,0,0,.28);z-index:150;display:flex;align-items:center;justify-content:center;padding:0;">
+  <span id="assistenteRing" style="position:absolute;inset:-6px;border-radius:50%;border:3px solid var(--red);opacity:0;"></span>
+  <img id="assistenteLogoImg" src="" alt="" style="width:60%;height:60%;object-fit:contain;pointer-events:none;">
+</button>
+<div id="assistenteStatus" class="hidden" style="position:fixed;bottom:90px;right:18px;max-width:260px;background:var(--white);border-radius:12px;padding:10px 14px;box-shadow:0 3px 12px rgba(0,0,0,.22);font-size:13px;z-index:150;"></div>
 
 <div class="overlay hidden" id="fichaTecnicaOverlay"></div>
 <div class="minimodal hidden" id="fichaTecnicaModal">
@@ -3983,6 +3990,114 @@ async function apiClientesDoProduto(codigo){
 
 async function apiBuscarClientes(busca){
   return apiFetch('/api/clientes?busca=' + encodeURIComponent(busca||''));
+}
+// ---------------- Assistente de voz ----------------
+// Fala -> texto: reconhecimento nativo do navegador (grátis, sem chave).
+// Entender a pergunta: Gemini, só pra classificar intenção e extrair o termo
+// - nunca inventa preço/dado, isso sempre vem do banco do próprio app.
+// Texto -> fala: sintetizador nativo do navegador (grátis, sem chave).
+let assistenteOuvindo = false;
+let assistenteReconhecimento = null;
+
+function assistenteMostrarStatus(texto, tempoMs){
+  const el = document.getElementById('assistenteStatus');
+  el.textContent = texto;
+  el.classList.remove('hidden');
+  clearTimeout(el._timeoutId);
+  if(tempoMs) el._timeoutId = setTimeout(()=> el.classList.add('hidden'), tempoMs);
+}
+function assistenteFalar(texto){
+  assistenteMostrarStatus(texto, 7000);
+  if(!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(texto);
+  u.lang = 'pt-BR';
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+async function assistenteProcessarTexto(texto){
+  assistenteMostrarStatus(`Entendendo: "${texto}"`);
+  let resultado;
+  try{
+    resultado = await apiFetch('/api/assistente/interpretar', { method:'POST', body: JSON.stringify({texto}) });
+  }catch(e){
+    assistenteFalar('Não consegui entender agora. ' + (e.message||''));
+    return;
+  }
+  const { intencao, termo } = resultado;
+
+  if(intencao === 'preco'){
+    const results = searchProducts(termo);
+    if(results.length === 0){ assistenteFalar(`Não encontrei nenhum produto parecido com ${termo}.`); return; }
+    const p = results[0];
+    const lp = listPrice(p, state.uf);
+    const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
+    assistenteFalar(`${p.n} custa ${brl(cp)}, em ${state.uf}.`);
+  } else if(intencao === 'ficha_tecnica'){
+    const results = searchProducts(termo);
+    if(results.length === 0){ assistenteFalar(`Não encontrei nenhum produto parecido com ${termo}.`); return; }
+    const p = results[0];
+    const ficha = FICHAS_MAP[p.c];
+    if(!ficha){ assistenteFalar(`${p.n} ainda não tem ficha técnica cadastrada.`); return; }
+    const specsTexto = Object.values(ficha.specs||{}).join(', ');
+    assistenteFalar(`${ficha.nome}. ${ficha.desc||''} ${specsTexto}`);
+  } else if(intencao === 'cliente'){
+    let clientes;
+    try{ clientes = await apiBuscarClientes(termo); }catch(e){ clientes = []; }
+    if(!clientes || clientes.length === 0){ assistenteFalar(`Não encontrei nenhum cliente parecido com ${termo}.`); return; }
+    const c = clientes[0];
+    try{
+      const resumo = await apiPedidosOficiaisResumo(c.id, '');
+      if(!resumo.vinculado) assistenteFalar(`${c.nome} ainda não está vinculado ao relatório oficial.`);
+      else assistenteFalar(`${c.nome}. Classificatório ${resumo.classificatorio || 'não informado'}. Total já faturado: ${brl(resumo.acumulado)}.`);
+    }catch(e){
+      assistenteFalar(`Encontrei o cliente ${c.nome}, mas não consegui buscar os dados dele agora.`);
+    }
+  } else {
+    assistenteFalar('Não entendi se era sobre preço, ficha técnica ou cliente. Pode repetir?');
+  }
+}
+
+function initAssistente(){
+  const btn = document.getElementById('assistenteBtn');
+  const ring = document.getElementById('assistenteRing');
+  const headerLogo = document.querySelector('.topbar img');
+  if(headerLogo) document.getElementById('assistenteLogoImg').src = headerLogo.src;
+
+  const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SpeechRecognitionClass){
+    btn.addEventListener('click', ()=> assistenteMostrarStatus('Reconhecimento de voz não é suportado neste navegador.', 4000));
+    return;
+  }
+
+  assistenteReconhecimento = new SpeechRecognitionClass();
+  assistenteReconhecimento.lang = 'pt-BR';
+  assistenteReconhecimento.continuous = false;
+  assistenteReconhecimento.interimResults = false;
+
+  assistenteReconhecimento.onstart = () => {
+    assistenteOuvindo = true;
+    ring.style.opacity = '1';
+    ring.style.animation = 'assistentePulse 1.2s infinite';
+    assistenteMostrarStatus('Ouvindo…');
+  };
+  assistenteReconhecimento.onend = () => {
+    assistenteOuvindo = false;
+    ring.style.opacity = '0';
+    ring.style.animation = 'none';
+  };
+  assistenteReconhecimento.onerror = () => {
+    assistenteMostrarStatus('Não peguei — tenta de novo.', 3000);
+  };
+  assistenteReconhecimento.onresult = (e) => {
+    assistenteProcessarTexto(e.results[0][0].transcript);
+  };
+
+  btn.addEventListener('click', () => {
+    if(assistenteOuvindo){ assistenteReconhecimento.stop(); return; }
+    window.speechSynthesis.cancel();
+    try{ assistenteReconhecimento.start(); }catch(e){ /* já estava rodando - ignora */ }
+  });
 }
 async function apiCriarCliente(cliente){
   return apiFetch('/api/clientes', { method:'POST', body: JSON.stringify(cliente) });
@@ -6811,6 +6926,7 @@ async function init(){
   renderPromoProdutosList();
   initTabs();
   initClienteFichaPeriodo();
+  initAssistente();
   initLevantamento();
   initLevSaveOpen();
   initLevShare();

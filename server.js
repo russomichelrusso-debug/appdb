@@ -13,6 +13,7 @@ const configuracoesRoutes = require('./routes/configuracoes');
 const fichasTecnicasRoutes = require('./routes/fichasTecnicas');
 const codigosProdutoRoutes = require('./routes/codigosProduto');
 const pedidosOficiaisRoutes = require('./routes/pedidosOficiais');
+const assistenteRoutes = require('./routes/assistente');
 
 const app = express();
 
@@ -44,6 +45,7 @@ app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
 app.use('/api/fichas-tecnicas', requireAuth, fichasTecnicasRoutes);
 app.use('/api/codigos-produto', requireAuth, codigosProdutoRoutes);
 app.use('/api/pedidos-oficiais', requireAuth, pedidosOficiaisRoutes);
+app.use('/api/assistente', requireAuth, assistenteRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 
 const PORT = process.env.PORT || 10000;
