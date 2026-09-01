@@ -160,8 +160,13 @@ CREATE TABLE IF NOT EXISTS pedidos_oficiais_itens (
   valor NUMERIC,
   data_implantacao DATE,
   data_faturamento DATE,
+  nota_fiscal TEXT,
+  classificatorio TEXT,
   status TEXT NOT NULL DEFAULT 'carteira',
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (nr_pedido, codigo_sku)
 );
 CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_cliente ON pedidos_oficiais_itens(cliente_codigo_oficial);
+-- Adiciona as colunas em bancos que já tinham a tabela criada antes desse ponto
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS nota_fiscal TEXT;
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS classificatorio TEXT;

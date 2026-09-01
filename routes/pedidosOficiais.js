@@ -3,6 +3,48 @@ const router = express.Router();
 const { pool } = require('../db');
 const { acharClientePorNome } = require('../clientMatcher');
 
+// Resumo do cliente pro topo da ficha: classificatório mais recente e valor
+// acumulado faturado (dado oficial, mais confiável que o preço estimado do
+// app) num período selecionável. ?dias=30/90/365, sem o parâmetro = tudo.
+router.get('/:clienteId/resumo', async (req, res) => {
+  try {
+    const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.clienteId]);
+    if (cliente.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const codigoOficial = cliente.rows[0].codigo_oficial;
+    if (!codigoOficial) return res.json({ vinculado: false });
+
+    const classResult = await pool.query(
+      `SELECT classificatorio FROM pedidos_oficiais_itens
+       WHERE cliente_codigo_oficial = $1 AND classificatorio IS NOT NULL
+       ORDER BY data_faturamento DESC NULLS LAST LIMIT 1`,
+      [codigoOficial]
+    );
+    const dias = req.query.dias ? parseInt(req.query.dias, 10) : null;
+    const params = [codigoOficial];
+    let filtroData = '';
+    if (dias && !isNaN(dias)) {
+      params.push(dias);
+      filtroData = ` AND data_faturamento >= (CURRENT_DATE - $2::int)`;
+    }
+    const soma = await pool.query(
+      `SELECT COALESCE(SUM(valor),0) AS acumulado, COUNT(*) AS qtd_itens
+       FROM pedidos_oficiais_itens
+       WHERE cliente_codigo_oficial = $1 AND status = 'faturado'${filtroData}`,
+      params
+    );
+    res.json({
+      vinculado: true,
+      classificatorio: classResult.rows[0]?.classificatorio || null,
+      acumulado: Number(soma.rows[0].acumulado),
+      qtd_itens: Number(soma.rows[0].qtd_itens),
+      dias: dias || null,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar resumo do cliente.' });
+  }
+});
+
 // Devolve as linhas de pedido oficiais de um cliente específico (pelo id
 // interno do app) - só funciona se esse cliente já tiver codigo_oficial
 // aprendido (de uma importação anterior que casou o nome corretamente).
@@ -15,7 +57,7 @@ router.get('/:clienteId', async (req, res) => {
 
     const result = await pool.query(
       `SELECT poi.nr_pedido, poi.codigo_sku, pr.nome AS produto, poi.quantidade, poi.valor,
-              poi.data_implantacao, poi.data_faturamento, poi.status
+              poi.data_implantacao, poi.data_faturamento, poi.nota_fiscal, poi.classificatorio, poi.status
        FROM pedidos_oficiais_itens poi
        LEFT JOIN produtos pr ON pr.codigo_sku = poi.codigo_sku
        WHERE poi.cliente_codigo_oficial = $1
@@ -71,12 +113,14 @@ router.post('/importar', async (req, res) => {
     const valores = itens.map(it => it.valor != null ? Number(it.valor) : null);
     const dataImplant = itens.map(it => it.data_implantacao || null);
     const dataFat = itens.map(it => it.data_faturamento || null);
+    const notasFiscais = itens.map(it => it.nota_fiscal != null ? String(it.nota_fiscal) : null);
+    const classificatorios = itens.map(it => it.classificatorio || null);
     const status = itens.map(it => it.status === 'faturado' ? 'faturado' : 'carteira');
 
     await client.query(
       `INSERT INTO pedidos_oficiais_itens
-         (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, status)
-       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[])
+         (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, nota_fiscal, classificatorio, status)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[], $9::text[], $10::text[])
        ON CONFLICT (nr_pedido, codigo_sku) DO UPDATE SET
          quantidade = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status != 'faturado'
                            THEN EXCLUDED.quantidade ELSE pedidos_oficiais_itens.quantidade END,
@@ -85,10 +129,13 @@ router.post('/importar', async (req, res) => {
          data_implantacao = COALESCE(pedidos_oficiais_itens.data_implantacao, EXCLUDED.data_implantacao),
          data_faturamento = CASE WHEN EXCLUDED.status = 'faturado' THEN EXCLUDED.data_faturamento
                                   ELSE pedidos_oficiais_itens.data_faturamento END,
+         nota_fiscal = CASE WHEN EXCLUDED.status = 'faturado' THEN EXCLUDED.nota_fiscal
+                             ELSE pedidos_oficiais_itens.nota_fiscal END,
+         classificatorio = COALESCE(EXCLUDED.classificatorio, pedidos_oficiais_itens.classificatorio),
          status = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status = 'faturado'
                        THEN 'faturado' ELSE EXCLUDED.status END,
          atualizado_em = now()`,
-      [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, status]
+      [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, status]
     );
 
     await client.query('COMMIT');
@@ -104,3 +151,4 @@ router.post('/importar', async (req, res) => {
 });
 
 module.exports = router;
+

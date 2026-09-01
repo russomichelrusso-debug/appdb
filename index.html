@@ -1365,6 +1365,24 @@
         </div>
         <button type="button" class="restoreBtn" id="clienteDetailBackBtn" style="width:auto;padding:10px 16px;">Voltar</button>
       </div>
+      <div class="ap-card" id="clienteFichaResumo" style="margin:0 16px 12px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+          <div>
+            <div class="hist-clientLabel">Classificatório</div>
+            <div id="clienteFichaClassificatorio" style="font-weight:600;font-size:14px;margin-top:2px;">—</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="hist-clientLabel">Acumulado faturado</div>
+            <div id="clienteFichaAcumulado" style="font-weight:700;font-size:19px;margin-top:2px;">—</div>
+          </div>
+        </div>
+        <div class="segmented" id="clienteFichaPeriodoSeg" style="margin-top:12px;">
+          <button type="button" data-dias="30">30 dias</button>
+          <button type="button" data-dias="90">90 dias</button>
+          <button type="button" data-dias="365">1 ano</button>
+          <button type="button" data-dias="" class="active">Tudo</button>
+        </div>
+      </div>
       <div class="segmented segmented--scroll" id="clienteViewSeg" style="margin:0 16px 12px;">
         <button type="button" data-v="historico" class="active">Histórico</button>
         <button type="button" data-v="abc">Curva ABC</button>
@@ -1608,11 +1626,10 @@
           <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
         </div>
         <div class="ap-card">
-          <h3>Previsão de estoque</h3>
-          <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Vai direto pro servidor — todo mundo já vê na hora, sem precisar exportar nem subir arquivo nenhum. Produtos com chegada prevista ou sem estoque projetado passam a mostrar um aviso na busca de preços.</p>
-          <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
-          <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
-          <div id="previsaoMsgArea" style="margin-top:8px;"></div>
+          <h3>Sincronizar catálogo de produtos</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Normalmente acontece sozinho (veja "Status de sincronização" no topo) — use aqui só se quiser forçar de novo na hora.</p>
+          <button class="fileBtn" id="syncProdutosBtn">Sincronizar catálogo de produtos</button>
+          <div id="syncProdutosMsg" style="margin-top:8px;"></div>
         </div>
         <div class="ap-card">
           <h3>Campanhas promocionais</h3>
@@ -1631,6 +1648,19 @@
           <div id="promoProdutosList"></div>
           <button class="fileBtn" id="addPromoProdutoBtn" style="margin-top:10px;">+ Novo produto promocional</button>
         </div>
+      </div>
+    </details>
+
+    <details class="ap-group">
+      <summary>Informações de produto</summary>
+      <div class="ap-groupBody">
+        <div class="ap-card">
+          <h3>Previsão de estoque</h3>
+          <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Vai direto pro servidor — todo mundo já vê na hora, sem precisar exportar nem subir arquivo nenhum. Produtos com chegada prevista ou sem estoque projetado passam a mostrar um aviso na busca de preços.</p>
+          <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
+          <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
+          <div id="previsaoMsgArea" style="margin-top:8px;"></div>
+        </div>
         <div class="ap-card">
           <h3>Fichas técnicas (balão de informação)</h3>
           <p class="ap-hint" style="margin:10px 0;">Importa um arquivo com nome, descrição e especificações extraídas de catálogo, pra aparecer no balão (i) ao lado do produto. Sem foto — só ficha técnica em texto. Substitui só os códigos que vierem no arquivo — o resto continua como está.</p>
@@ -1645,24 +1675,25 @@
           <input type="file" id="codigosFileInput" accept=".json,application/json" style="display:none;">
           <div id="importCodigosMsg" style="margin-top:8px;"></div>
         </div>
-        <div class="ap-card">
-          <h3>Pedidos oficiais (Carteira / Faturamento)</h3>
-          <p class="ap-hint" style="margin:10px 0;">Importa as abas Carteira e Faturamento do relatório oficial. Não duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra "Faturado") em vez de criar de novo. Aparece na aba "Pedidos" de cada cliente.</p>
-          <button class="fileBtn" id="importPedidosOficiaisBtn">Importar arquivo de pedidos oficiais</button>
-          <input type="file" id="pedidosOficiaisFileInput" accept=".json,application/json" style="display:none;">
-          <div id="importPedidosOficiaisMsg" style="margin-top:8px;"></div>
-        </div>
       </div>
     </details>
 
     <details class="ap-group">
-      <summary>Dados e relatórios</summary>
+      <summary>Relatórios e clientes</summary>
       <div class="ap-groupBody">
         <div class="ap-card">
-          <h3>Sincronizar catálogo de produtos</h3>
-          <p class="ap-hint" style="margin-bottom:10px;">Normalmente acontece sozinho (veja "Status de sincronização" no topo) — use aqui só se quiser forçar de novo na hora.</p>
-          <button class="fileBtn" id="syncProdutosBtn">Sincronizar catálogo de produtos</button>
-          <div id="syncProdutosMsg" style="margin-top:8px;"></div>
+          <h3>Pedidos oficiais (Carteira / Faturamento)</h3>
+          <p class="ap-hint" style="margin:10px 0;">Importa as abas Carteira e Faturamento do relatório oficial. Não duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra "Faturado") em vez de criar de novo. Aparece na aba "Pedidos" de cada cliente, com classificatório e acumulado faturado.</p>
+          <button class="fileBtn" id="importPedidosOficiaisBtn">Importar arquivo de pedidos oficiais</button>
+          <input type="file" id="pedidosOficiaisFileInput" accept=".json,application/json" style="display:none;">
+          <div id="importPedidosOficiaisMsg" style="margin-top:8px;"></div>
+        </div>
+        <div class="ap-card">
+          <h3>Importar relatório de faturamento</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que chegar um relatório atualizado — pedido repetido não duplica.</p>
+          <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
+          <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
+          <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
         </div>
         <div class="ap-card">
           <h3>Importar clientes (JSON)</h3>
@@ -1681,13 +1712,6 @@
             <input type="file" id="pdfFileInput" accept="application/pdf,.pdf" multiple style="display:none;">
           </div>
           <ul id="pdfProcessQueue" class="pdfQueue"></ul>
-        </div>
-        <div class="ap-card">
-          <h3>Importar relatório de faturamento</h3>
-          <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que chegar um relatório atualizado — pedido repetido não duplica.</p>
-          <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
-          <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
-          <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
         </div>
         <div class="ap-card hidden" id="exportPedidosCard">
           <h3>Baixar pedidos por período</h3>
@@ -1736,7 +1760,7 @@
     </details>
 
     <details class="ap-group hidden" id="manageUsersGroup">
-      <summary>Segurança</summary>
+      <summary>Segurança e usuários</summary>
       <div class="ap-groupBody">
         <div class="ap-card" id="manageUsersCard">
           <h3>Gerenciar usuários</h3>
@@ -1757,15 +1781,14 @@
             </div>
           </div>
         </div>
+        <div class="ap-card">
+          <h3>Gerenciar clientes</h3>
+          <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível excluir quem ainda não tem pedido ou levantamento registrado.</p>
+          <input type="text" id="manageClientSearch" placeholder="Buscar cliente por nome ou CNPJ...">
+          <div id="manageClientResults"></div>
+        </div>
       </div>
     </details>
-
-    <div class="ap-card">
-      <h3>Gerenciar clientes</h3>
-      <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível excluir quem ainda não tem pedido ou levantamento registrado.</p>
-      <input type="text" id="manageClientSearch" placeholder="Buscar cliente por nome ou CNPJ...">
-      <div id="manageClientResults"></div>
-    </div>
   </div>
 </div>
 
@@ -3994,6 +4017,36 @@ async function apiRecuperarCliente(clienteId){
 async function apiPedidosOficiaisCliente(clienteId){
   return apiFetch(`/api/pedidos-oficiais/${clienteId}`);
 }
+async function apiPedidosOficiaisResumo(clienteId, dias){
+  return apiFetch(`/api/pedidos-oficiais/${clienteId}/resumo${dias ? '?dias='+dias : ''}`);
+}
+let clienteFichaPeriodoAtual = '';
+async function loadClienteFichaResumo(){
+  const el = document.getElementById('clienteFichaClassificatorio');
+  const elAcum = document.getElementById('clienteFichaAcumulado');
+  try{
+    const resumo = await apiPedidosOficiaisResumo(clienteTabSelected.id, clienteFichaPeriodoAtual);
+    if(!resumo.vinculado){
+      el.textContent = 'Não vinculado ao relatório oficial ainda';
+      elAcum.textContent = '—';
+      return;
+    }
+    el.textContent = resumo.classificatorio || 'Sem classificatório registrado';
+    elAcum.textContent = resumo.acumulado.toLocaleString('pt-BR', {style:'currency', currency:'BRL'});
+  }catch(e){
+    el.textContent = '—';
+    elAcum.textContent = '—';
+  }
+}
+function initClienteFichaPeriodo(){
+  document.getElementById('clienteFichaPeriodoSeg').querySelectorAll('button').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      document.getElementById('clienteFichaPeriodoSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
+      clienteFichaPeriodoAtual = b.dataset.dias;
+      loadClienteFichaResumo();
+    });
+  });
+}
 async function apiProdutosAbcGeral(){
   return apiFetch('/api/produtos-abc-geral');
 }
@@ -4766,6 +4819,7 @@ function renderPedidoOficialCard(item){
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(item.data_implantacao)}</b></div>
       <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:#B8860B;' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(item.data_faturamento)}</b></div>
+      ${!emCarteira && item.nota_fiscal ? `<div class="hcStat">Nota Fiscal<b>${escapeHtml(String(item.nota_fiscal))}</b></div>` : ''}
     </div>
   </div>`;
 }
@@ -4884,6 +4938,9 @@ function openClienteDetail(cliente){
   document.getElementById('clienteDetailName').textContent = cliente.nome;
   document.getElementById('clienteTabListWrap').classList.add('hidden');
   document.getElementById('clienteTabDetail').classList.remove('hidden');
+  clienteFichaPeriodoAtual = '';
+  document.getElementById('clienteFichaPeriodoSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.dias===''));
+  loadClienteFichaResumo();
   loadClienteDetailView();
 }
 function closeClienteDetail(){
@@ -6753,6 +6810,7 @@ async function init(){
   });
   renderPromoProdutosList();
   initTabs();
+  initClienteFichaPeriodo();
   initLevantamento();
   initLevSaveOpen();
   initLevShare();
