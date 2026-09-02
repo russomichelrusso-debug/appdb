@@ -1498,7 +1498,6 @@
   <img id="assistenteLogoImg" src="" alt="" style="width:60%;height:60%;object-fit:contain;pointer-events:none;">
 </button>
 <div id="assistenteStatus" class="hidden" style="position:fixed;bottom:90px;right:18px;max-width:260px;background:var(--white);border-radius:12px;padding:10px 14px;box-shadow:0 3px 12px rgba(0,0,0,.22);font-size:13px;z-index:150;"></div>
-<button type="button" id="assistenteVozToggle" style="position:fixed;bottom:24px;right:88px;background:var(--white);border:none;border-radius:16px;padding:8px 12px;font-size:11px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.2);z-index:150;color:var(--gray);">Voz: navegador</button>
 
 <div class="overlay hidden" id="fichaTecnicaOverlay"></div>
 <div class="minimodal hidden" id="fichaTecnicaModal">
@@ -4007,52 +4006,8 @@ function assistenteMostrarStatus(texto, tempoMs){
   clearTimeout(el._timeoutId);
   if(tempoMs) el._timeoutId = setTimeout(()=> el.classList.add('hidden'), tempoMs);
 }
-// Escolha de voz persistida neste aparelho - 'navegador' (grátis, instantâneo)
-// ou 'gemini' (mais natural, mas com uma chamada de rede extra por resposta).
-let assistenteVoz = localStorage.getItem('cortagAssistenteVoz_v1') || 'navegador';
-
-function pcm16ParaWavBlob(base64Pcm, sampleRate){
-  const binario = atob(base64Pcm);
-  const tamanho = binario.length;
-  const buffer = new ArrayBuffer(44 + tamanho);
-  const view = new DataView(buffer);
-  function escreverTexto(offset, str){ for(let i=0;i<str.length;i++) view.setUint8(offset+i, str.charCodeAt(i)); }
-  escreverTexto(0, 'RIFF');
-  view.setUint32(4, 36 + tamanho, true);
-  escreverTexto(8, 'WAVE');
-  escreverTexto(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);   // PCM
-  view.setUint16(22, 1, true);   // mono
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);  // 16 bits por amostra
-  escreverTexto(36, 'data');
-  view.setUint32(40, tamanho, true);
-  for(let i=0;i<tamanho;i++) view.setUint8(44+i, binario.charCodeAt(i));
-  return new Blob([buffer], {type:'audio/wav'});
-}
-
-async function assistenteFalarComGemini(texto){
-  const resultado = await apiFetch('/api/assistente/falar', { method:'POST', body: JSON.stringify({texto}) });
-  const match = /rate=(\d+)/.exec(resultado.mimeType || '');
-  const sampleRate = match ? parseInt(match[1], 10) : 24000;
-  const blob = pcm16ParaWavBlob(resultado.audioBase64, sampleRate);
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  audio.play();
-  audio.onended = () => URL.revokeObjectURL(url);
-}
-
 function assistenteFalar(texto){
   assistenteMostrarStatus(texto, 7000);
-  if(assistenteVoz === 'gemini'){
-    assistenteFalarComGemini(texto).catch(e=>{
-      assistenteMostrarStatus('Não consegui gerar a voz do Gemini agora: ' + (e.message||''), 5000);
-    });
-    return;
-  }
   if(!('speechSynthesis' in window)) return;
   const u = new SpeechSynthesisUtterance(texto);
   u.lang = 'pt-BR';
@@ -4108,15 +4063,6 @@ function initAssistente(){
   const ring = document.getElementById('assistenteRing');
   const headerLogo = document.querySelector('.topbar img');
   if(headerLogo) document.getElementById('assistenteLogoImg').src = headerLogo.src;
-
-  const vozToggle = document.getElementById('assistenteVozToggle');
-  vozToggle.textContent = assistenteVoz === 'gemini' ? 'Voz: Gemini' : 'Voz: navegador';
-  vozToggle.addEventListener('click', () => {
-    assistenteVoz = assistenteVoz === 'gemini' ? 'navegador' : 'gemini';
-    localStorage.setItem('cortagAssistenteVoz_v1', assistenteVoz);
-    vozToggle.textContent = assistenteVoz === 'gemini' ? 'Voz: Gemini' : 'Voz: navegador';
-    assistenteMostrarStatus(`Voz trocada para: ${assistenteVoz === 'gemini' ? 'Gemini' : 'navegador'}`, 2500);
-  });
 
   const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
   if(!SpeechRecognitionClass){
