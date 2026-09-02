@@ -6,6 +6,29 @@ const router = express.Router();
 // NUNCA responde o preço/ficha/dado em si - só entende a pergunta. O dado
 // real vem sempre do banco do próprio app, pra nunca arriscar inventar um
 // preço ou informação errada.
+// Chama o Gemini uma vez; se vier 503 (sobrecarga temporária do lado do
+// Google), tenta de novo automaticamente antes de desistir - poupa o
+// vendedor de precisar apertar o botão de novo por um problema que passa
+// sozinho na maioria das vezes.
+async function chamarGemini(prompt, apiKey, modelo, tentativasRestantes = 2) {
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+      }),
+    }
+  );
+  if (resp.status === 503 && tentativasRestantes > 0) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return chamarGemini(prompt, apiKey, modelo, tentativasRestantes - 1);
+  }
+  return resp;
+}
+
 router.post('/interpretar', async (req, res) => {
   const { texto } = req.body;
   if (!texto || typeof texto !== 'string') return res.status(400).json({ erro: 'Envie { texto: "..." }' });
@@ -31,17 +54,7 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, exatamente nest
 {"intencao": "preco", "termo": "nome extraído aqui"}`;
 
   try {
-    const resp = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
-        }),
-      }
-    );
+    const resp = await chamarGemini(prompt, apiKey, modelo);
     if (!resp.ok) {
       const erroTexto = await resp.text();
       console.error('Erro do Gemini:', resp.status, erroTexto);
@@ -52,6 +65,8 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, exatamente nest
         mensagem = `O modelo "${modelo}" não foi encontrado — pode ter sido descontinuado. Configure a variável GEMINI_MODEL no Render com um nome de modelo atual.`;
       } else if (resp.status === 429) {
         mensagem = 'Limite de uso do Gemini atingido por agora — espera um pouco e tenta de novo.';
+      } else if (resp.status === 503) {
+        mensagem = 'O Gemini está sobrecarregado nesse momento (problema temporário do lado do Google) — tenta de novo em alguns segundos.';
       } else {
         mensagem = `Erro ao consultar o Gemini (${resp.status}).`;
       }
