@@ -70,15 +70,25 @@ CREATE TABLE IF NOT EXISTS levantamento_itens (
 CREATE TABLE IF NOT EXISTS usuarios (
   id SERIAL PRIMARY KEY,
   nome TEXT NOT NULL,
-  usuario TEXT UNIQUE NOT NULL,
-  senha_hash TEXT NOT NULL,
+  usuario TEXT UNIQUE,             -- sistema antigo (usuário/senha) - mantido só pra não perder histórico, não é mais usado pra login
+  senha_hash TEXT,                 -- idem - login hoje é só via Google (id_token), não por senha
+  email TEXT UNIQUE,               -- e-mail da conta Google - é isso que identifica o login agora
+  google_sub TEXT UNIQUE,          -- "sub" (id único da conta) devolvido pelo Google, gravado no primeiro login de fato
   is_admin BOOLEAN NOT NULL DEFAULT false,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
--- Garante a coluna também em bancos que já tinham a tabela criada antes
--- dela existir (sem isso, "CREATE TABLE IF NOT EXISTS" não adicionaria a
--- coluna nova em quem já tinha rodado o schema antigo).
+-- Garante as colunas também em bancos que já tinham a tabela criada antes
+-- delas existirem (sem isso, "CREATE TABLE IF NOT EXISTS" não adicionaria
+-- coluna nova em quem já tinha rodado uma versão anterior do schema).
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS google_sub TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_email ON usuarios(email) WHERE email IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_google_sub ON usuarios(google_sub) WHERE google_sub IS NOT NULL;
+-- Bancos criados antes da troca pro login por Google tinham usuario/senha_hash
+-- como obrigatórios - relaxa isso pra permitir cadastrar gente só com e-mail.
+ALTER TABLE usuarios ALTER COLUMN usuario DROP NOT NULL;
+ALTER TABLE usuarios ALTER COLUMN senha_hash DROP NOT NULL;
 
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,
