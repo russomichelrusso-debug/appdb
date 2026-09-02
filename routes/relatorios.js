@@ -205,7 +205,7 @@ router.get('/pedidos/exportar', async (req, res) => {
        ORDER BY ped.data_pedido DESC`,
       [inicio, fim]
     );
-    console.log(`Exportação de pedidos (${inicio} a ${fim}): ${result.rows.length} linha(s), por ${req.usuario.usuario}.`);
+    console.log(`Exportação de pedidos (${inicio} a ${fim}): ${result.rows.length} linha(s), por ${req.usuario?.email}.`);
     res.json(result.rows);
   } catch (e) {
     console.error(e);

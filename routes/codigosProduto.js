@@ -42,7 +42,7 @@ router.post('/importar', async (req, res) => {
       ]
     );
     const totalResult = await pool.query('SELECT COUNT(*) FROM codigos_produto');
-    console.log(`Códigos produto: ${skus.length} importado(s) por ${req.usuario.usuario}. Total agora: ${totalResult.rows[0].count}.`);
+    console.log(`Códigos produto: ${skus.length} importado(s) por ${req.usuario?.email}. Total agora: ${totalResult.rows[0].count}.`);
     res.json({ ok: true, importados: skus.length, total: Number(totalResult.rows[0].count) });
   } catch (e) {
     console.error(e);

@@ -27,7 +27,7 @@ router.post('/:chave', async (req, res) => {
        ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
       [req.params.chave, JSON.stringify(valor)]
     );
-    console.log(`Configuração "${req.params.chave}" atualizada por ${req.usuario.usuario}.`);
+    console.log(`Configuração "${req.params.chave}" atualizada por ${req.usuario?.email}.`);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);

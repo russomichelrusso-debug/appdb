@@ -139,7 +139,7 @@ router.post('/importar', async (req, res) => {
     );
 
     await client.query('COMMIT');
-    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s) - por ${req.usuario.usuario}.`);
+    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s) - por ${req.usuario?.email}.`);
     res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados });
   } catch (e) {
     await client.query('ROLLBACK');

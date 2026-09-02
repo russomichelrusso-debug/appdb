@@ -195,7 +195,7 @@ router.post('/importar-faturamento', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${clientesIgnoradosPorSeremMaisAntigos} ignorado(s) (relatório mais antigo que o já registrado), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario.usuario}.`);
+    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${clientesIgnoradosPorSeremMaisAntigos} ignorado(s) (relatório mais antigo que o já registrado), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario?.email}.`);
     res.json({ clientesClassificados, clientesIgnoradosPorSeremMaisAntigos, pedidosCriados, pedidosIgnorados, itensGravados, itensSemProduto });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -261,7 +261,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ erro: 'Pedido não encontrado.' });
     }
     await client.query('COMMIT');
-    console.log(`Pedido #${req.params.id} excluído por ${req.usuario.usuario}.`);
+    console.log(`Pedido #${req.params.id} excluído por ${req.usuario?.email}.`);
     res.json({ ok: true });
   } catch (e) {
     await client.query('ROLLBACK');

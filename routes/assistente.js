@@ -12,10 +12,12 @@ const router = express.Router();
 // sozinho na maioria das vezes.
 async function chamarGemini(prompt, apiKey, modelo, tentativasRestantes = 2) {
   const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
     {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      // chave vai no header, não na URL - evita que fique gravada em logs de
+      // proxy/CDN que registram a query string das requisições.
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },

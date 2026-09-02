@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS levantamento_itens (
 CREATE TABLE IF NOT EXISTS usuarios (
   id SERIAL PRIMARY KEY,
   nome TEXT NOT NULL,
-  usuario TEXT UNIQUE NOT NULL,
-  senha_hash TEXT NOT NULL,
+  usuario TEXT UNIQUE,
+  senha_hash TEXT,
   is_admin BOOLEAN NOT NULL DEFAULT false,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -79,6 +79,15 @@ CREATE TABLE IF NOT EXISTS usuarios (
 -- dela existir (sem isso, "CREATE TABLE IF NOT EXISTS" não adicionaria a
 -- coluna nova em quem já tinha rodado o schema antigo).
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
+
+-- Login trocado de usuário/senha pra "Entrar com Google": a identidade de
+-- cada usuário passa a ser o e-mail da conta Google (e o "sub", o id estável
+-- do Google pra essa conta). usuario/senha_hash ficam como legado (bancos
+-- antigos têm dados ali), por isso viram opcionais em vez de removidos.
+ALTER TABLE usuarios ALTER COLUMN usuario DROP NOT NULL;
+ALTER TABLE usuarios ALTER COLUMN senha_hash DROP NOT NULL;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
 
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,
