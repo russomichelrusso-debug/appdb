@@ -42,7 +42,13 @@ function planilhaParaLinhas(sheet) {
 }
 
 function converterPlanilha(buffer) {
-  const wb = XLSX.read(buffer, { type: 'buffer', cellDates: false });
+  // cellStyles/cellHTML/cellFormula desligados: sem isso, o SheetJS guarda
+  // formatação e fórmula de cada célula junto do valor - com ~250 colunas x
+  // ~1800 linhas na aba TRIBUTAÇÃO, isso sozinho já estourava a memória do
+  // servidor (erro "JavaScript heap out of memory" visto em produção).
+  const wb = XLSX.read(buffer, {
+    type: 'buffer', cellDates: false, cellStyles: false, cellHTML: false, cellFormula: false, sheetStubs: false,
+  });
 
   const wsRef = wb.Sheets['Referência Estados'];
   const wsTrib = wb.Sheets['TRIBUTAÇÃO'];
@@ -64,17 +70,36 @@ function converterPlanilha(buffer) {
   if (Object.keys(estadosColunas).length < 5) {
     throw new Error('Não encontrei os 5 estados esperados (MG,RJ,PR,SC,RS) na aba "Referência Estados". A planilha pode ter mudado de formato.');
   }
+  // índice 0-based de %ST por estado exato, calculado uma vez só (evita
+  // reabrir esse cálculo pra cada uma das ~1800 linhas de produto abaixo)
+  const idxStPorEstado = {};
+  for (const uf of ESTADOS_EXATOS) idxStPorEstado[uf] = estadosColunas[uf].colSt - 1;
 
-  // TRIBUTAÇÃO: linha 3 (indice 2) = cabecalho, dados a partir da linha 4 (indice 3)
-  const linhasTrib = planilhaParaLinhas(wsTrib);
+  // TRIBUTAÇÃO: linha 3 (índice 2) = cabeçalho, dados a partir da linha 4 (índice 3).
+  // Extrai só os campos que realmente precisamos de cada linha (código, nome,
+  // emb, ipi, família, %ST dos 5 estados exatos) - guardar a linha inteira
+  // (250 colunas) por produto era o principal consumo de memória.
+  const wsTribRange = XLSX.utils.decode_range(wsTrib['!ref']);
   const tribPorCodigo = {};
-  for (let i = 3; i < linhasTrib.length; i++) {
-    const row = linhasTrib[i];
-    if (!row || row[0] == null) continue;
-    tribPorCodigo[String(row[0]).trim()] = row;
+  for (let r = 3; r <= wsTribRange.e.r; r++) {
+    const codigoCell = wsTrib[XLSX.utils.encode_cell({ r, c: 0 })];
+    if (!codigoCell || codigoCell.v == null) continue;
+    const codigo = String(codigoCell.v).trim();
+    const cel = (c) => { const x = wsTrib[XLSX.utils.encode_cell({ r, c })]; return x ? x.v : null; };
+    const pctStPorEstado = {};
+    for (const uf of ESTADOS_EXATOS) {
+      const v = cel(idxStPorEstado[uf]);
+      if (typeof v === 'number') pctStPorEstado[uf] = v;
+    }
+    tribPorCodigo[codigo] = {
+      nome: cel(1), emb: cel(2) || 1, ncm: cel(4), ipi: Number(cel(5)) || 0,
+      familia: cel(173), pctStPorEstado,
+    };
   }
+  delete wb.Sheets['TRIBUTAÇÃO']; // libera a planilha bruta da memória assim que já extraímos o que precisava
 
-  // PRECIFICAÇÃO: mesma estrutura de linhas
+  // PRECIFICAÇÃO: mesma ideia - só os preços por canal/região + flag de preço fixo,
+  // não a linha inteira (que tem ~23 colunas, bem menos pesada, mas mantém o padrão).
   const linhasPrec = planilhaParaLinhas(wsPrec);
   const precPorCodigo = {};
   for (let i = 3; i < linhasPrec.length; i++) {
@@ -82,6 +107,7 @@ function converterPlanilha(buffer) {
     if (!row || row[0] == null) continue;
     precPorCodigo[String(row[0]).trim()] = row;
   }
+  delete wb.Sheets['PRECIFICAÇÃO'];
 
   const produtos = [];
   for (const codigo of Object.keys(tribPorCodigo)) {
@@ -89,11 +115,7 @@ function converterPlanilha(buffer) {
     const prec = precPorCodigo[codigo];
     if (!prec) continue; // produto sem precificação, ignora
 
-    const nome = trib[1];
-    const emb = trib[2] || 1;
-    const ncm = trib[4];
-    const ipi = Number(trib[5]) || 0;
-    const familia = trib.length > 173 ? trib[173] : null;
+    const { nome, emb, ncm, ipi, familia, pctStPorEstado } = trib;
     const ehPrecoFixo = prec.length > 21 && prec[21] === 'PF';
 
     const precosPorCanal = {};
@@ -108,11 +130,8 @@ function converterPlanilha(buffer) {
         const precoComIpi = precoLiquido * (1 + ipi);
 
         let precoFinal = precoComIpi;
-        if (ESTADOS_EXATOS.has(uf)) {
-          const idxSt = estadosColunas[uf].colSt - 1; // 1-based -> 0-based
-          const pctSt = trib[idxSt];
-          if (typeof pctSt === 'number') precoFinal = precoComIpi * (1 + pctSt);
-        }
+        const pctSt = pctStPorEstado[uf];
+        if (typeof pctSt === 'number') precoFinal = precoComIpi * (1 + pctSt);
         precosEstado[uf] = Math.round(precoFinal * 10000) / 10000;
       }
       precosPorCanal[canal] = precosEstado;
