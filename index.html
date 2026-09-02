@@ -1210,6 +1210,17 @@
         <select id="stateSelect"></select>
       </div>
       <div class="field">
+        <label for="canalSelect" style="font-size:11px;color:var(--gray);">Canal</label>
+        <select id="canalSelect" style="font-size:13px;padding:6px 8px;">
+          <option value="VAREJO" selected>Varejo</option>
+          <option value="ATACADO">Atacado</option>
+          <option value="E-COMMERCE">E-commerce</option>
+          <option value="MODERNO">Moderno</option>
+          <option value="CONSTRUTORA">Construtora</option>
+          <option value="INSTITUCIONAL">Institucional</option>
+        </select>
+      </div>
+      <div class="field">
         <label for="promoInput">Desconto adicional</label>
         <div class="pct-wrap">
           <input class="num-input" type="number" id="promoInput" min="0" max="90" step="0.5" value="0" inputmode="decimal">
@@ -1932,6 +1943,7 @@ let TAXKEY_IDX = Object.fromEntries(DB.taxKeys.map((k,i)=>[k,i]));
 // ---------------- App state ----------------
 const state = {
   uf: 'PR',
+  canal: 'VAREJO',
   channelDiscount: 15,
   promoDiscount: 0,
   seller: '',
@@ -1961,11 +1973,31 @@ function effectiveLiq(p, uf){
   const liqField = st.region === 'sp' ? 'lsp' : (st.region === 'sulsud' ? 'lss' : 'lnc');
   return p[liqField];
 }
-function listPrice(p, uf){
+// Preço de tabela (sem desconto comercial, só imposto) pro canal+estado dados.
+// Produtos vindos da planilha nova (LISTA PADRÃO por canal) já trazem o valor
+// pronto em p.precos[CANAL][UF] (imposto já incluso, calculado no servidor).
+// Produtos do catálogo antigo (bundle do app) ainda usam o formato por região
+// (lsp/lss/lnc + perfil de ST) - mantido funcionando enquanto os dois convivem.
+function listPrice(p, uf, canal){
+  canal = canal || state.canal || 'VAREJO';
+  if(Object.prototype.hasOwnProperty.call(state.priceOverrides, p.c)) return state.priceOverrides[p.c];
+  if(p.precos){
+    const porCanal = p.precos[canal] || p.precos.VAREJO;
+    if(porCanal && typeof porCanal[uf] === 'number') return porCanal[uf];
+  }
   const st = STATE_BY_UF[uf];
   const liq = effectiveLiq(p, uf);
   const stRate = DB.stProfiles[p.st][TAXKEY_IDX[st.taxKey]];
   return liq * (1 + p.ipi) * (1 + stRate);
+}
+// Preço Fixo (sem desconto, só imposto) - na planilha nova só vale pra
+// Varejo/Atacado/E-commerce (regra confirmada na aba TABELA DE PREÇOS); nos
+// outros 3 canais o item pode receber desconto normalmente mesmo se marcado
+// como fixo. Catálogo antigo não distingue por canal - vale sempre que fx=1.
+function isPrecoFixoParaCanal(p, canal){
+  canal = canal || state.canal || 'VAREJO';
+  if(Array.isArray(p.canaisFx)) return p.canaisFx.includes(canal);
+  return p.fx === 1;
 }
 function qtyDiscountFor(cod){
   return state.qtyDiscounts[cod] || 0;
@@ -1988,6 +2020,12 @@ function initStateSelect(){
   sel.innerHTML = STATES.map(s=>`<option value="${s.uf}"${s.uf==='PR'?' selected':''}>${s.uf} — ${s.name}</option>`).join('');
   sel.addEventListener('change', ()=>{
     state.uf = sel.value;
+    renderResults();
+    renderCart();
+  });
+  const canalSel = document.getElementById('canalSelect');
+  canalSel.addEventListener('change', ()=>{
+    state.canal = canalSel.value;
     renderResults();
     renderCart();
   });
@@ -2223,17 +2261,18 @@ function renderPrevisaoBadge(codigo){
 }
 function renderCard(p){
   const lp = listPrice(p, state.uf);
-  const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
+  const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
   const hasDiscount = cp < lp - 0.005;
   const edited = isPriceEdited(p.c);
   const qtyDisc = qtyDiscountFor(p.c);
+  const rotuloFamilia = p.familia || (p.cat != null ? DB.categories[p.cat] : '');
   return `<div class="card">
-    <span class="catbadge">${escapeHtml(DB.categories[p.cat])}</span>
-    ${p.fx ? '<span class="fixedbadge">Preço fixo</span>' : ''}
+    <span class="catbadge">${escapeHtml(rotuloFamilia)}</span>
+    ${isPrecoFixoParaCanal(p) ? '<span class="fixedbadge">Preço fixo</span>' : ''}
     ${edited ? '<span class="editedbadge">Preço editado</span>' : ''}
     ${qtyDisc>0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
     <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${p.c}" aria-label="Ver informações técnicas">i</button>` : ''}</div>
-    <div class="psub">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''} · Emb. ${p.emb}</div>
+    <div class="psub">Cód. ${p.c} · Emb. ${p.emb}</div>
     ${renderPrevisaoBadge(p.c)}
     <div class="prow">
       <div class="prices">
@@ -2283,7 +2322,7 @@ function updatePriceEditPreview(){
   const st = STATE_BY_UF[state.uf];
   const stRate = DB.stProfiles[p.st][TAXKEY_IDX[st.taxKey]];
   const lp = val * (1 + p.ipi) * (1 + stRate);
-  const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
+  const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
   preview.innerHTML = `Com impostos (${state.uf}): <b>${brl(lp)}</b><br>Preço ao cliente agora: <b>${brl(cp)}</b>`;
 }
 function refreshAllPriceViews(){
@@ -2397,10 +2436,13 @@ function changeQty(cod, direction){
 //   stacks: true, // true = soma com desconto manual do item; false = usa o maior dos dois
 // }
 
+function productFamilia(p){
+  return p.familia || (p.cat != null ? DB.categories[p.cat] : null) || '';
+}
 function scopeMatchesProduct(type, value, p){
   if(type === 'product') return p.c === value;
   if(type === 'skuList') return value.split(',').map(s=>s.trim()).includes(p.c);
-  return DB.categories[p.cat] === value;
+  return productFamilia(p) === value;
 }
 function scopeTotals(rows, type, value){
   let qty = 0, gross = 0;
@@ -2456,7 +2498,7 @@ function computeCampaignBonuses(rows){
 
 function bestBonusForProduct(bonuses, p){
   let best = bonuses['product|'+p.c] || null;
-  const cat = bonuses['category|'+DB.categories[p.cat]];
+  const cat = bonuses['category|'+productFamilia(p)];
   if(cat && (!best || cat.pct > best.pct)) best = cat;
   for(const key in bonuses){
     if(!key.startsWith('skuList|')) continue;
@@ -2474,7 +2516,7 @@ function cartTotals(){
   const baseRows = state.cart.map(it=>{
     const p = productByCod(it.cod);
     const lp = listPrice(p, state.uf);
-    const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
+    const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
     const lineTotal = cp * it.qty;
     return {p, it, lp, cp, lineTotal};
   });
@@ -2522,7 +2564,7 @@ function renderCart(){
       <div class="cartitem">
         <div class="top">
           <div>
-            <div class="pname">${escapeHtml(p.n)}${p.fx ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c)>0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct>0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName||'')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
+            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c)>0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct>0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName||'')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.emb>1 ? ' · múltiplos de '+p.emb : ''}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
@@ -2669,7 +2711,7 @@ function renderLevSearchResults(query){
   wrap.innerHTML = results.slice(0,8).map(p=>`
     <button type="button" class="levsr-item" data-lev-pick="${p.c}">
       <span class="levsr-name">${escapeHtml(p.n)}</span>
-      <span class="levsr-code">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''}</span>
+      <span class="levsr-code">Cód. ${p.c}</span>
     </button>
   `).join('');
   wrap.classList.remove('hidden');
@@ -3109,7 +3151,7 @@ function renderLevList(){
   const totalPedidoValor = state.survey.reduce((a,i)=>{
     const p = productByCod(i.cod);
     if(!p || !i.ped) return a;
-    const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, p.fx===1, qtyDiscountFor(p.c));
+    const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
     return a + cp*i.ped;
   },0);
   summaryEl.innerHTML = `<span class="levCountBig">${state.survey.length}</span> SKU${state.survey.length===1?'':'s'} levantado${state.survey.length===1?'':'s'} · <b>${totalEstoque}</b> un. em estoque` +
@@ -3122,15 +3164,15 @@ function renderLevList(){
     const p = productByCod(it.cod);
     if(!p) return '';
     const qtyDisc = qtyDiscountFor(p.c);
-    const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, p.fx===1, qtyDisc);
+    const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDisc);
     const edited = isPriceEdited(p.c);
     return `<div class="levitem ${it.qty===0?'zero':''}${it.done?' done':''}">
       <div class="top">
         <div class="levNumWrap">
           <span class="levNum">${idx+1}</span>
           <div>
-            <div class="pname">${escapeHtml(p.n)}${p.fx ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc>0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}</div>
-            <div class="pcode">Cód. ${p.c}${p.e ? ' · EAN '+p.e : ''}</div>
+            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc>0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}</div>
+            <div class="pcode">Cód. ${p.c}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
         </div>
@@ -4227,7 +4269,7 @@ async function syncProductCatalog(){
     const produtos = DB.products.map(p => ({
       codigo_sku: p.c,
       nome: p.n,
-      categoria: DB.categories[p.cat] || null,
+      categoria: productFamilia(p) || null,
     }));
     const result = await apiSyncProdutos(produtos);
     msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.criados} novo(s), ${result.atualizados} atualizado(s) de ${result.total} produtos.</div>`;
@@ -5594,7 +5636,29 @@ async function loadActiveDB(){
     }
   }catch(e){ console.warn('Não foi possível ler a base salva localmente:', e); }
 
-  // 2) precos.json hospedado junto com o app (repositório) - atualiza todo mundo de uma vez.
+  // 2) catálogo completo no servidor (planilha por canal/estado, enviada
+  //    pelo Admin) - fonte mais atual quando o servidor está acessível.
+  try{
+    const remoto = await apiFetch('/api/catalogo-precos');
+    if(remoto && Array.isArray(remoto.produtos) && remoto.produtos.length){
+      const produtosConvertidos = remoto.produtos.map(p => ({
+        c: p.codigo_sku,
+        n: p.nome,
+        emb: p.emb,
+        ipi: Number(p.ipi) || 0,
+        familia: p.familia,
+        fx: p.preco_fixo ? 1 : 0,
+        canaisFx: p.canais_fx || [],
+        precos: p.precos,
+      }));
+      const when = remoto.generatedAt ? new Date(remoto.generatedAt).toLocaleString('pt-BR') : '';
+      ACTIVE_SOURCE = (remoto.version || 'Catálogo do servidor') + (when ? ' · '+when : '') + ' · todos os aparelhos';
+      return { products: produtosConvertidos, categories: [] };
+    }
+  }catch(e){ /* servidor fora do ar ou sem catálogo enviado ainda - ok, tenta as fontes abaixo */ }
+
+  // 3) precos.json hospedado junto com o app (repositório) - fallback mais antigo,
+  //    útil se o servidor estiver fora do ar mas o app continuar aberto (PWA).
   //    Só funciona com o app hospedado (http/https); em arquivo local (file://) ou offline,
   //    isso falha silenciosamente e cai pro padrão abaixo - sem quebrar nada.
   try{
@@ -5603,13 +5667,13 @@ async function loadActiveDB(){
       const remote = await resp.json();
       if(remote && Array.isArray(remote.products) && remote.products.length){
         const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-        ACTIVE_SOURCE = (remote.version || 'Atualização remota') + (when ? ' · '+when : '') + ' · todos os aparelhos';
+        ACTIVE_SOURCE = (remote.version || 'Atualização remota') + (when ? ' · '+when : '') + ' · todos os aparelhos (backup)';
         return remote;
       }
     }
   }catch(e){ /* sem rede, arquivo local, ou precos.json ausente - ok, usa o padrão */ }
 
-  // 3) base original embutida no app
+  // 4) base original embutida no app
   ACTIVE_SOURCE = 'Base original do app';
   return DEFAULT_DB;
 }
@@ -5681,10 +5745,10 @@ function saveActiveDB(newDb, fileName){
 }
 function applyDB(newDb){
   DB.products = newDb.products;
-  DB.categories = newDb.categories;
+  DB.categories = newDb.categories || [];
   DB.stProfiles = newDb.stProfiles;
   DB.taxKeys = newDb.taxKeys;
-  TAXKEY_IDX = Object.fromEntries(DB.taxKeys.map((k,i)=>[k,i]));
+  TAXKEY_IDX = DB.taxKeys ? Object.fromEntries(DB.taxKeys.map((k,i)=>[k,i])) : {};
   DB.productIndex = {};
   DB.eanIndex = {};
   for(const p of DB.products){
@@ -5692,6 +5756,12 @@ function applyDB(newDb){
     DB.productIndex[p.c] = p;
     if(p.e) DB.eanIndex[p.e] = p;
   }
+  // Família comercial substitui categoria como critério de campanha - monta a
+  // lista de valores únicos a partir dos produtos (funciona com catálogo novo,
+  // que já vem com p.familia, e com o antigo, caindo pra p.cat como reserva).
+  DB.familias = [...new Set(
+    DB.products.map(p => p.familia || (p.cat != null ? DB.categories[p.cat] : null)).filter(Boolean)
+  )].sort((a,b)=>a.localeCompare(b,'pt-BR'));
   document.getElementById('prodCount').textContent = DB.products.length.toLocaleString('pt-BR') + ' produtos';
   state.cart = state.cart.filter(it => DB.productIndex[it.cod]);
   state.survey = state.survey.filter(it => DB.productIndex[it.cod]);
@@ -5801,7 +5871,7 @@ function readTiersFromForm(){
 }
 
 function populateCategorySelects(){
-  const opts = DB.categories.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+  const opts = DB.familias.map(c=>`<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
   document.getElementById('promoTargetCat').innerHTML = opts;
 }
 
@@ -5861,7 +5931,7 @@ function renderBasketItems(items){
       <div class="biBottom">
         ${it.type==='product'
           ? `<input type="text" data-basket-prod="${i}" placeholder="código do produto" value="${escapeHtml(it.value||'')}">`
-          : `<select data-basket-cat="${i}">${DB.categories.map(c=>`<option value="${escapeHtml(c)}"${it.value===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}</select>`
+          : `<select data-basket-cat="${i}">${DB.familias.map(c=>`<option value="${escapeHtml(c)}"${it.value===c?' selected':''}>${escapeHtml(c)}</option>`).join('')}</select>`
         }
         <span class="biQtyLbl">qtd. mín.</span>
         <input type="number" min="1" step="1" value="${it.minQty||1}" data-basket-minqty="${i}">
@@ -5873,12 +5943,12 @@ function renderBasketItems(items){
   wrap.querySelectorAll('[data-rm-basket]').forEach(b=>b.addEventListener('click', ()=>{
     const items = readBasketItemsFromForm();
     items.splice(Number(b.dataset.rmBasket), 1);
-    renderBasketItems(items.length ? items : [{type:'category', value:DB.categories[0]||'', minQty:1}]);
+    renderBasketItems(items.length ? items : [{type:'category', value:DB.familias[0]||'', minQty:1}]);
   }));
   wrap.querySelectorAll('[data-basket-type]').forEach(sel=>sel.addEventListener('change', ()=>{
     const items = readBasketItemsFromForm();
     const i = Number(sel.dataset.basketType);
-    items[i] = { type: sel.value, value: sel.value==='category' ? (DB.categories[0]||'') : '', minQty: items[i].minQty||1 };
+    items[i] = { type: sel.value, value: sel.value==='category' ? (DB.familias[0]||'') : '', minQty: items[i].minQty||1 };
     renderBasketItems(items);
   }));
   wrap.querySelectorAll('[data-basket-prod]').forEach(inp=>{
@@ -5913,7 +5983,7 @@ function openPromoRuleForm(ruleId){
   const targetType = rule ? rule.targetType : 'category';
   setTargetType(targetType);
   if(targetType === 'category'){
-    document.getElementById('promoTargetCat').value = rule ? rule.targetValue : (DB.categories[0]||'');
+    document.getElementById('promoTargetCat').value = rule ? rule.targetValue : (DB.familias[0]||'');
   } else if(targetType === 'skuList'){
     document.getElementById('promoTargetSkuList').value = rule ? rule.targetValue : '';
     resolveSkuListDisplay(rule ? rule.targetValue : '', document.getElementById('targetSkuListResolve'));
@@ -5928,7 +5998,7 @@ function openPromoRuleForm(ruleId){
   renderTierRows(rule && rule.tiers && rule.tiers.length ? rule.tiers : [{min:0,pct:0}]);
   setBasketMode(rule && rule.basketMode === 'atLeast' ? 'atLeast' : 'all');
   document.getElementById('promoBasketMinCount').value = rule ? (rule.basketMinCount||1) : 1;
-  renderBasketItems(rule && rule.basketItems && rule.basketItems.length ? rule.basketItems : [{type:'category', value:DB.categories[0]||'', minQty:1}]);
+  renderBasketItems(rule && rule.basketItems && rule.basketItems.length ? rule.basketItems : [{type:'category', value:DB.familias[0]||'', minQty:1}]);
   document.getElementById('promoComboPct').value = rule ? (rule.comboPct||'') : '';
 
   document.getElementById('promoStacks').checked = rule ? rule.stacks !== false : true;
@@ -6231,7 +6301,7 @@ function initPromoRulesAdmin(){
   });
   document.getElementById('addBasketItemBtn').addEventListener('click', ()=>{
     const items = readBasketItemsFromForm();
-    items.push({type:'category', value:DB.categories[0]||'', minQty:1});
+    items.push({type:'category', value:DB.familias[0]||'', minQty:1});
     renderBasketItems(items);
   });
   document.getElementById('targetTypeSeg').querySelectorAll('button').forEach(b=>{
