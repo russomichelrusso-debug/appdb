@@ -142,14 +142,21 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
     const produtoId = produtoResult.rows[0].id;
 
     const compradores = await pool.query(
-      `SELECT c.id, c.nome, c.documento, SUM(pi.quantidade) AS total_comprado, MAX(ped.data_pedido) AS ultima_compra
+      `SELECT c.id, c.nome, c.documento, SUM(pi.quantidade) AS total_comprado,
+              po.data_faturamento AS ultima_compra, po.nota_fiscal
        FROM pedido_itens pi
        JOIN pedidos ped ON ped.id = pi.pedido_id
        JOIN clientes c ON c.id = ped.cliente_id
+       LEFT JOIN (
+         SELECT DISTINCT ON (cliente_codigo_oficial) cliente_codigo_oficial, data_faturamento, nota_fiscal
+         FROM pedidos_oficiais_itens
+         WHERE codigo_sku = $2 AND status = 'faturado'
+         ORDER BY cliente_codigo_oficial, data_faturamento DESC NULLS LAST
+       ) po ON po.cliente_codigo_oficial = c.codigo_oficial
        WHERE pi.produto_id = $1
-       GROUP BY c.id, c.nome, c.documento
-       ORDER BY ultima_compra DESC`,
-      [produtoId]
+       GROUP BY c.id, c.nome, c.documento, po.data_faturamento, po.nota_fiscal
+       ORDER BY po.data_faturamento DESC NULLS LAST`,
+      [produtoId, codigo]
     );
 
     // só a leitura mais recente de levantamento por cliente (não o histórico

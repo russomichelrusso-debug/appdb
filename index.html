@@ -110,7 +110,6 @@
     padding:24px;
   }
   .loginScreen.hidden{display:none;}
-  @keyframes assistentePulse{0%{transform:scale(1);opacity:.9;}100%{transform:scale(1.35);opacity:0;}}
   #loginFields.hidden, #setupFields.hidden{display:none;}
   .loginCard{width:100%;max-width:360px;}
   .loginLogoWrap{text-align:center;margin-bottom:28px;}
@@ -1377,20 +1376,23 @@
             <div id="clienteFichaAcumulado" style="font-weight:700;font-size:19px;margin-top:2px;">—</div>
           </div>
         </div>
-        <div class="segmented" id="clienteFichaPeriodoSeg" style="margin-top:12px;">
-          <button type="button" data-dias="30">30 dias</button>
-          <button type="button" data-dias="90">90 dias</button>
-          <button type="button" data-dias="365">1 ano</button>
-          <button type="button" data-dias="" class="active">Tudo</button>
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <div style="flex:1;">
+            <label for="clienteFichaDataInicio" style="font-size:11px;color:var(--gray);">De</label>
+            <input type="date" id="clienteFichaDataInicio" style="width:100%;">
+          </div>
+          <div style="flex:1;">
+            <label for="clienteFichaDataFim" style="font-size:11px;color:var(--gray);">Até</label>
+            <input type="date" id="clienteFichaDataFim" style="width:100%;">
+          </div>
         </div>
+        <button type="button" class="restoreBtn" id="clienteFichaLimparPeriodo" style="margin-top:8px;font-size:12px;">Limpar período (somar tudo)</button>
       </div>
       <div class="segmented segmented--scroll" id="clienteViewSeg" style="margin:0 16px 12px;">
-        <button type="button" data-v="historico" class="active">Histórico</button>
-        <button type="button" data-v="abc">Curva ABC</button>
+        <button type="button" data-v="pedidosoficiais" class="active">Pedidos</button>
+        <button type="button" data-v="historico">Histórico</button>
         <button type="button" data-v="rotatividade">Rotatividade</button>
-        <button type="button" data-v="visitas">Visitas</button>
         <button type="button" data-v="recuperar">Recuperar</button>
-        <button type="button" data-v="pedidosoficiais">Pedidos</button>
       </div>
       <div class="hist-content" id="clienteDetailContent"></div>
     </div>
@@ -1493,12 +1495,6 @@
   </div>
 </div>
 
-<button type="button" id="assistenteBtn" aria-label="Assistente de voz" style="position:fixed;bottom:22px;right:18px;width:60px;height:60px;border-radius:50%;background:var(--white);border:none;box-shadow:0 3px 12px rgba(0,0,0,.28);z-index:150;display:flex;align-items:center;justify-content:center;padding:0;">
-  <span id="assistenteRing" style="position:absolute;inset:-6px;border-radius:50%;border:3px solid var(--red);opacity:0;"></span>
-  <img id="assistenteLogoImg" src="" alt="" style="width:60%;height:60%;object-fit:contain;pointer-events:none;">
-</button>
-<div id="assistenteStatus" class="hidden" style="position:fixed;bottom:90px;right:18px;max-width:260px;background:var(--white);border-radius:12px;padding:10px 14px;box-shadow:0 3px 12px rgba(0,0,0,.22);font-size:13px;z-index:150;"></div>
-
 <div class="overlay hidden" id="fichaTecnicaOverlay"></div>
 <div class="minimodal hidden" id="fichaTecnicaModal">
   <div class="minimodal-card" style="max-width:400px;max-height:85vh;overflow-y:auto;">
@@ -1551,6 +1547,11 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3h18v18H3z"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
         <span>CSV</span>
         <small>Planilha</small>
+      </button>
+      <button type="button" data-lev-share="pdf">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+        <span>PDF</span>
+        <small>Documento</small>
       </button>
     </div>
     <div class="minimodal-btnrow">
@@ -2996,6 +2997,61 @@ function exportLevCSV(){
   const nome = state.levCliente ? state.levCliente.nome : 'levantamento';
   enviarCsvComGoogleDrive(blob, csvFileNameFor(nome), 'Levantamento de estoque (CSV)', 'Baixado — verifique a pasta Downloads do celular');
 }
+async function exportLevPDF(){
+  if(state.survey.length === 0){ showToast('Adicione algum item antes de exportar'); return; }
+  try{
+    await loadJsPdfScripts();
+  }catch(e){
+    showToast('Não foi possível carregar o gerador de PDF — verifique sua internet.');
+    return;
+  }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'mm', format:'a4' });
+  const nomeCliente = state.levCliente ? state.levCliente.nome : '';
+
+  let headerBottomY = 18;
+  try{
+    const logo = await logoToGrayscaleDataURL();
+    const logoWidthMM = 38;
+    const logoHeightMM = logoWidthMM * (logo.height / logo.width);
+    doc.addImage(logo.dataUrl, 'PNG', 14, 10, logoWidthMM, logoHeightMM);
+    headerBottomY = 10 + logoHeightMM + 6;
+  }catch(e){
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(18);
+    doc.setTextColor(20,20,20);
+    doc.text('CORTAG', 14, 18);
+    headerBottomY = 24;
+  }
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  doc.setTextColor(90,90,90);
+  doc.text('Levantamento de estoque', 14, headerBottomY);
+  doc.setFontSize(9);
+  const infoLinha = (nomeCliente ? nomeCliente + '  ·  ' : '') + new Date().toLocaleDateString('pt-BR') + (state.seller ? `  ·  Vendedor: ${state.seller}` : '');
+  doc.text(infoLinha, 14, headerBottomY + 6);
+  doc.setDrawColor(180,180,180);
+  doc.line(14, headerBottomY + 10, 196, headerBottomY + 10);
+
+  doc.autoTable({
+    startY: headerBottomY + 16,
+    head: [['Código', 'Produto', 'Estoque', 'Pedido']],
+    body: state.survey.map(it=>{
+      const p = productByCod(it.cod);
+      return [it.cod, p ? p.n : '', String(it.qty), String(it.ped||0)];
+    }),
+    theme: 'grid',
+    styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [20,20,20], lineColor: [180,180,180] },
+    headStyles: { fillColor: [255,255,255], textColor: [20,20,20], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
+    alternateRowStyles: { fillColor: [242,242,242] },
+    columnStyles: { 0:{cellWidth:24}, 2:{cellWidth:22,halign:'center'}, 3:{cellWidth:22,halign:'center'} },
+  });
+
+  const blob = doc.output('blob');
+  const nomeArquivo = `levantamento-${todayStr()}.pdf`;
+  shareOrDownloadBlob(blob, nomeArquivo, 'Levantamento de estoque (PDF)', 'PDF baixado — verifique a pasta Downloads do celular');
+}
+
 function openLevShareModal(){
   if(state.survey.length === 0){ showToast('Adicione algum item antes de compartilhar'); return; }
   document.getElementById('levShareOverlay').classList.remove('hidden');
@@ -3013,6 +3069,7 @@ function initLevShare(){
     btn.addEventListener('click', ()=>{
       closeLevShareModal();
       if(btn.dataset.levShare === 'texto') shareLevAsText();
+      else if(btn.dataset.levShare === 'pdf') exportLevPDF();
       else exportLevCSV();
     });
   });
@@ -3991,114 +4048,6 @@ async function apiClientesDoProduto(codigo){
 async function apiBuscarClientes(busca){
   return apiFetch('/api/clientes?busca=' + encodeURIComponent(busca||''));
 }
-// ---------------- Assistente de voz ----------------
-// Fala -> texto: reconhecimento nativo do navegador (grátis, sem chave).
-// Entender a pergunta: Gemini, só pra classificar intenção e extrair o termo
-// - nunca inventa preço/dado, isso sempre vem do banco do próprio app.
-// Texto -> fala: sintetizador nativo do navegador (grátis, sem chave).
-let assistenteOuvindo = false;
-let assistenteReconhecimento = null;
-
-function assistenteMostrarStatus(texto, tempoMs){
-  const el = document.getElementById('assistenteStatus');
-  el.textContent = texto;
-  el.classList.remove('hidden');
-  clearTimeout(el._timeoutId);
-  if(tempoMs) el._timeoutId = setTimeout(()=> el.classList.add('hidden'), tempoMs);
-}
-function assistenteFalar(texto){
-  assistenteMostrarStatus(texto, 7000);
-  if(!('speechSynthesis' in window)) return;
-  const u = new SpeechSynthesisUtterance(texto);
-  u.lang = 'pt-BR';
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-}
-
-async function assistenteProcessarTexto(texto){
-  assistenteMostrarStatus(`Entendendo: "${texto}"`);
-  let resultado;
-  try{
-    resultado = await apiFetch('/api/assistente/interpretar', { method:'POST', body: JSON.stringify({texto}) });
-  }catch(e){
-    assistenteFalar('Não consegui entender agora. ' + (e.message||''));
-    return;
-  }
-  const { intencao, termo } = resultado;
-
-  if(intencao === 'preco'){
-    const results = searchProducts(termo);
-    if(results.length === 0){ assistenteFalar(`Não encontrei nenhum produto parecido com ${termo}.`); return; }
-    const p = results[0];
-    const lp = listPrice(p, state.uf);
-    const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, p.fx === 1, qtyDiscountFor(p.c));
-    assistenteFalar(`${p.n} custa ${brl(cp)}, em ${state.uf}.`);
-  } else if(intencao === 'ficha_tecnica'){
-    const results = searchProducts(termo);
-    if(results.length === 0){ assistenteFalar(`Não encontrei nenhum produto parecido com ${termo}.`); return; }
-    const p = results[0];
-    const ficha = FICHAS_MAP[p.c];
-    if(!ficha){ assistenteFalar(`${p.n} ainda não tem ficha técnica cadastrada.`); return; }
-    const specsTexto = Object.values(ficha.specs||{}).join(', ');
-    assistenteFalar(`${ficha.nome}. ${ficha.desc||''} ${specsTexto}`);
-  } else if(intencao === 'cliente'){
-    let clientes;
-    try{ clientes = await apiBuscarClientes(termo); }catch(e){ clientes = []; }
-    if(!clientes || clientes.length === 0){ assistenteFalar(`Não encontrei nenhum cliente parecido com ${termo}.`); return; }
-    const c = clientes[0];
-    try{
-      const resumo = await apiPedidosOficiaisResumo(c.id, '');
-      if(!resumo.vinculado) assistenteFalar(`${c.nome} ainda não está vinculado ao relatório oficial.`);
-      else assistenteFalar(`${c.nome}. Classificatório ${resumo.classificatorio || 'não informado'}. Total já faturado: ${brl(resumo.acumulado)}.`);
-    }catch(e){
-      assistenteFalar(`Encontrei o cliente ${c.nome}, mas não consegui buscar os dados dele agora.`);
-    }
-  } else {
-    assistenteFalar('Não entendi se era sobre preço, ficha técnica ou cliente. Pode repetir?');
-  }
-}
-
-function initAssistente(){
-  const btn = document.getElementById('assistenteBtn');
-  const ring = document.getElementById('assistenteRing');
-  const headerLogo = document.querySelector('.topbar img');
-  if(headerLogo) document.getElementById('assistenteLogoImg').src = headerLogo.src;
-
-  const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if(!SpeechRecognitionClass){
-    btn.addEventListener('click', ()=> assistenteMostrarStatus('Reconhecimento de voz não é suportado neste navegador.', 4000));
-    return;
-  }
-
-  assistenteReconhecimento = new SpeechRecognitionClass();
-  assistenteReconhecimento.lang = 'pt-BR';
-  assistenteReconhecimento.continuous = false;
-  assistenteReconhecimento.interimResults = false;
-
-  assistenteReconhecimento.onstart = () => {
-    assistenteOuvindo = true;
-    ring.style.opacity = '1';
-    ring.style.animation = 'assistentePulse 1.2s infinite';
-    assistenteMostrarStatus('Ouvindo…');
-  };
-  assistenteReconhecimento.onend = () => {
-    assistenteOuvindo = false;
-    ring.style.opacity = '0';
-    ring.style.animation = 'none';
-  };
-  assistenteReconhecimento.onerror = () => {
-    assistenteMostrarStatus('Não peguei — tenta de novo.', 3000);
-  };
-  assistenteReconhecimento.onresult = (e) => {
-    assistenteProcessarTexto(e.results[0][0].transcript);
-  };
-
-  btn.addEventListener('click', () => {
-    if(assistenteOuvindo){ assistenteReconhecimento.stop(); return; }
-    window.speechSynthesis.cancel();
-    try{ assistenteReconhecimento.start(); }catch(e){ /* já estava rodando - ignora */ }
-  });
-}
 async function apiCriarCliente(cliente){
   return apiFetch('/api/clientes', { method:'POST', body: JSON.stringify(cliente) });
 }
@@ -4132,15 +4081,20 @@ async function apiRecuperarCliente(clienteId){
 async function apiPedidosOficiaisCliente(clienteId){
   return apiFetch(`/api/pedidos-oficiais/${clienteId}`);
 }
-async function apiPedidosOficiaisResumo(clienteId, dias){
-  return apiFetch(`/api/pedidos-oficiais/${clienteId}/resumo${dias ? '?dias='+dias : ''}`);
+async function apiPedidosOficiaisResumo(clienteId, inicio, fim){
+  const params = new URLSearchParams();
+  if(inicio) params.set('inicio', inicio);
+  if(fim) params.set('fim', fim);
+  const qs = params.toString();
+  return apiFetch(`/api/pedidos-oficiais/${clienteId}/resumo${qs ? '?'+qs : ''}`);
 }
-let clienteFichaPeriodoAtual = '';
 async function loadClienteFichaResumo(){
   const el = document.getElementById('clienteFichaClassificatorio');
   const elAcum = document.getElementById('clienteFichaAcumulado');
+  const inicio = document.getElementById('clienteFichaDataInicio').value;
+  const fim = document.getElementById('clienteFichaDataFim').value;
   try{
-    const resumo = await apiPedidosOficiaisResumo(clienteTabSelected.id, clienteFichaPeriodoAtual);
+    const resumo = await apiPedidosOficiaisResumo(clienteTabSelected.id, inicio, fim);
     if(!resumo.vinculado){
       el.textContent = 'Não vinculado ao relatório oficial ainda';
       elAcum.textContent = '—';
@@ -4154,12 +4108,12 @@ async function loadClienteFichaResumo(){
   }
 }
 function initClienteFichaPeriodo(){
-  document.getElementById('clienteFichaPeriodoSeg').querySelectorAll('button').forEach(b=>{
-    b.addEventListener('click', ()=>{
-      document.getElementById('clienteFichaPeriodoSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x===b));
-      clienteFichaPeriodoAtual = b.dataset.dias;
-      loadClienteFichaResumo();
-    });
+  document.getElementById('clienteFichaDataInicio').addEventListener('change', loadClienteFichaResumo);
+  document.getElementById('clienteFichaDataFim').addEventListener('change', loadClienteFichaResumo);
+  document.getElementById('clienteFichaLimparPeriodo').addEventListener('click', ()=>{
+    document.getElementById('clienteFichaDataInicio').value = '';
+    document.getElementById('clienteFichaDataFim').value = '';
+    loadClienteFichaResumo();
   });
 }
 async function apiProdutosAbcGeral(){
@@ -5022,7 +4976,7 @@ function renderAbcView(classificados, campoLabel, campo){
 
 // ---- Aba Clientes ----
 let clienteTabSelected = null;
-let clienteTabView = 'historico';
+let clienteTabView = 'pedidosoficiais';
 let clienteTabDebounce;
 
 async function searchClienteTabList(term){
@@ -5053,9 +5007,11 @@ function openClienteDetail(cliente){
   document.getElementById('clienteDetailName').textContent = cliente.nome;
   document.getElementById('clienteTabListWrap').classList.add('hidden');
   document.getElementById('clienteTabDetail').classList.remove('hidden');
-  clienteFichaPeriodoAtual = '';
-  document.getElementById('clienteFichaPeriodoSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.dias===''));
+  document.getElementById('clienteFichaDataInicio').value = '';
+  document.getElementById('clienteFichaDataFim').value = '';
   loadClienteFichaResumo();
+  clienteTabView = 'pedidosoficiais';
+  document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x=>x.classList.toggle('active', x.dataset.v==='pedidosoficiais'));
   loadClienteDetailView();
 }
 function closeClienteDetail(){
@@ -5071,16 +5027,9 @@ async function loadClienteDetailView(){
     if(clienteTabView === 'historico'){
       const rows = await apiHistoricoCliente(clienteTabSelected.id);
       content.innerHTML = rows.length ? rows.map(r=>renderHistProdutoCard(r,false)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
-    } else if(clienteTabView === 'abc'){
-      const rows = await apiHistoricoCliente(clienteTabSelected.id);
-      const classificados = classificarABC(rows.map(r=>({...r, total_acumulado:Number(r.total_acumulado)})), 'total_acumulado');
-      content.innerHTML = renderAbcView(classificados, 'volume', 'total_acumulado');
     } else if(clienteTabView === 'rotatividade'){
       const rows = await apiRotatividadeCliente(clienteTabSelected.id);
       content.innerHTML = rows.length ? rows.map(r=>renderHistProdutoCard(r,true)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
-    } else if(clienteTabView === 'visitas'){
-      const rows = await apiLevantamentosCliente(clienteTabSelected.id);
-      content.innerHTML = rows.length ? rows.map(renderHistVisitaCard).join('') : '<div class="lev-empty">Nenhum levantamento registrado ainda pra esse cliente.</div>';
     } else if(clienteTabView === 'recuperar'){
       const rows = await apiRecuperarCliente(clienteTabSelected.id);
       content.innerHTML = rows.length
@@ -5160,7 +5109,8 @@ function renderProdDetailView(){
           <div class="hcCode">${c.documento ? escapeHtml(c.documento) : ''}</div>
           <div class="hcStats">
             <div class="hcStat">Total comprado<b>${c.total_comprado}</b></div>
-            <div class="hcStat">Última compra<b>${formatDateBr(c.ultima_compra)}</b></div>
+            <div class="hcStat">Faturado<b>${formatDateBr(c.ultima_compra)}</b></div>
+            ${c.nota_fiscal ? `<div class="hcStat">Nota Fiscal<b>${escapeHtml(String(c.nota_fiscal))}</b></div>` : ''}
           </div>
         </div>`).join('')
     : lista.map(l=>`
@@ -6926,7 +6876,6 @@ async function init(){
   renderPromoProdutosList();
   initTabs();
   initClienteFichaPeriodo();
-  initAssistente();
   initLevantamento();
   initLevSaveOpen();
   initLevShare();
