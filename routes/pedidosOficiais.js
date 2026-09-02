@@ -5,7 +5,8 @@ const { acharClientePorNome } = require('../clientMatcher');
 
 // Resumo do cliente pro topo da ficha: classificatório mais recente e valor
 // acumulado faturado (dado oficial, mais confiável que o preço estimado do
-// app) num período selecionável. ?dias=30/90/365, sem o parâmetro = tudo.
+// app) num intervalo de datas escolhido no calendário. ?inicio=AAAA-MM-DD e
+// /ou ?fim=AAAA-MM-DD - sem nenhum dos dois, soma tudo.
 router.get('/:clienteId/resumo', async (req, res) => {
   try {
     const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.clienteId]);
@@ -19,13 +20,11 @@ router.get('/:clienteId/resumo', async (req, res) => {
        ORDER BY data_faturamento DESC NULLS LAST LIMIT 1`,
       [codigoOficial]
     );
-    const dias = req.query.dias ? parseInt(req.query.dias, 10) : null;
+    const { inicio, fim } = req.query;
     const params = [codigoOficial];
     let filtroData = '';
-    if (dias && !isNaN(dias)) {
-      params.push(dias);
-      filtroData = ` AND data_faturamento >= (CURRENT_DATE - $2::int)`;
-    }
+    if (inicio) { params.push(inicio); filtroData += ` AND data_faturamento >= $${params.length}::date`; }
+    if (fim) { params.push(fim); filtroData += ` AND data_faturamento <= $${params.length}::date`; }
     const soma = await pool.query(
       `SELECT COALESCE(SUM(valor),0) AS acumulado, COUNT(*) AS qtd_itens
        FROM pedidos_oficiais_itens
@@ -37,7 +36,8 @@ router.get('/:clienteId/resumo', async (req, res) => {
       classificatorio: classResult.rows[0]?.classificatorio || null,
       acumulado: Number(soma.rows[0].acumulado),
       qtd_itens: Number(soma.rows[0].qtd_itens),
-      dias: dias || null,
+      inicio: inicio || null,
+      fim: fim || null,
     });
   } catch (e) {
     console.error(e);
