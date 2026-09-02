@@ -1604,17 +1604,15 @@
       <summary>Catálogo e preços</summary>
       <div class="ap-groupBody">
         <div class="ap-card">
-          <h3>Atualizar tabela de preços</h3>
-          <p class="ap-hint">Selecione o arquivo .md exportado da planilha (com as seções TABELA DE PREÇOS, PRECIFICAÇÃO e TRIBUTAÇÃO). Os preços dos 27 estados são recalculados a partir dele.</p>
-          <input type="file" id="apFileInput" accept=".md,.txt,text/markdown,text/plain" style="display:none;">
-          <button class="fileBtn" id="apFileBtn">Selecionar arquivo</button>
-          <div id="apMsgArea"></div>
-          <div id="apPreviewArea"></div>
-          <p class="ap-hint" style="margin:12px 0 0;">Esse envio fica salvo apenas neste aparelho/navegador e tem prioridade sobre a fonte automática abaixo.</p>
+          <h3>Enviar planilha de preços</h3>
+          <p class="ap-hint">Selecione o arquivo .xlsx da LISTA PADRÃO (com as abas PRECIFICAÇÃO, TRIBUTAÇÃO e Referência Estados). Os preços de todos os 6 canais e 27 estados são recalculados a partir dela e enviados direto pro servidor — todo mundo recebe a atualização assim que abrir o app de novo.</p>
+          <input type="file" id="apPlanilhaInput" accept=".xlsx" style="display:none;">
+          <button class="fileBtn" id="apPlanilhaBtn">Selecionar planilha</button>
+          <div id="apPlanilhaMsg" style="margin-top:8px;"></div>
         </div>
         <div class="ap-card">
           <h3>Fonte automática</h3>
-          <p class="ap-hint" style="margin-bottom:8px;">Se o app estiver hospedado com um arquivo <code>precos.json</code> junto, ele é buscado sozinho ao abrir o app — atualiza todo mundo de uma vez, sem precisar reenviar em cada aparelho. Use o botão abaixo pra remover um envio manual deste aparelho, ou pra checar se saiu uma versão nova agora.</p>
+          <p class="ap-hint" style="margin-bottom:8px;">O app busca sozinho o catálogo mais atual do servidor ao abrir — não precisa reenviar em cada aparelho. Use o botão abaixo pra forçar essa busca na hora (ex: logo depois de enviar uma planilha nova).</p>
           <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
         </div>
         <div class="ap-card">
@@ -1705,7 +1703,7 @@
           </div>
           <ul id="pdfProcessQueue" class="pdfQueue"></ul>
         </div>
-        <div class="ap-card hidden" id="exportPedidosCard">
+        <div class="ap-card" id="exportPedidosCard">
           <h3>Baixar pedidos por período</h3>
           <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor — funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
           <label for="exportPedidosInicio">De</label>
@@ -4714,7 +4712,6 @@ function initBackendAdmin(){
     document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.email})${state.currentUser.is_admin ? ' · admin' : ''}`;
     if(state.currentUser.is_admin){
       document.getElementById('manageUsersGroup').classList.remove('hidden');
-      document.getElementById('exportPedidosCard').classList.remove('hidden');
       renderUsersList();
     }
   }
@@ -5617,6 +5614,9 @@ async function loadActiveDB(){
   return DEFAULT_DB;
 }
 
+async function apiCatalogoPrecosImportar(arquivoBase64){
+  return apiFetch('/api/catalogo-precos/importar', { method:'POST', body: JSON.stringify({arquivoBase64}) });
+}
 async function apiProdutosPromocionaisConfig(){
   try{ return await apiFetch('/api/configuracoes/produtos_promocionais'); }
   catch(e){ return { valor: [] }; }
@@ -6266,63 +6266,40 @@ function initAdminPanel(){
   const panel = document.getElementById('adminPanel');
   const overlay = document.getElementById('adminOverlay');
   const closeBtn = document.getElementById('closeAdmin');
-  const fileBtn = document.getElementById('apFileBtn');
-  const fileInput = document.getElementById('apFileInput');
-  const msgArea = document.getElementById('apMsgArea');
-  const previewArea = document.getElementById('apPreviewArea');
+  const planilhaBtn = document.getElementById('apPlanilhaBtn');
+  const planilhaInput = document.getElementById('apPlanilhaInput');
+  const planilhaMsg = document.getElementById('apPlanilhaMsg');
   const restoreBtn = document.getElementById('apRestoreBtn');
 
   function refreshStatus(){
     document.getElementById('apCurCount').textContent = DB.products.length.toLocaleString('pt-BR');
     document.getElementById('apCurSource').textContent = ACTIVE_SOURCE;
   }
-  function openPanel(){ refreshStatus(); msgArea.innerHTML=''; previewArea.innerHTML=''; fileInput.value=''; overlay.classList.remove('hidden'); panel.classList.remove('hidden'); }
+  function openPanel(){ refreshStatus(); planilhaMsg.innerHTML=''; planilhaInput.value=''; overlay.classList.remove('hidden'); panel.classList.remove('hidden'); }
   function closePanel(){ overlay.classList.add('hidden'); panel.classList.add('hidden'); }
 
   btn.addEventListener('click', openPanel);
   closeBtn.addEventListener('click', closePanel);
   overlay.addEventListener('click', closePanel);
-  fileBtn.addEventListener('click', ()=>fileInput.click());
+  planilhaBtn.addEventListener('click', ()=>planilhaInput.click());
 
-  let pendingDb = null, pendingFileName = '';
-
-  fileInput.addEventListener('change', (e)=>{
+  planilhaInput.addEventListener('change', (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    msgArea.innerHTML = ''; previewArea.innerHTML = '';
+    planilhaMsg.innerHTML = '<div class="ap-msg">Enviando e processando — isso pode levar um minuto...</div>';
     const reader = new FileReader();
-    reader.onload = ()=>{
+    reader.onload = async ()=>{
       try{
-        const parsed = parseUploadedPriceTable(reader.result);
-        pendingDb = parsed; pendingFileName = file.name;
-        previewArea.innerHTML = `
-          <div class="ap-preview-row"><span class="k">Produtos encontrados</span><span class="v">${parsed._meta.total.toLocaleString('pt-BR')}</span></div>
-          <div class="ap-preview-row"><span class="k">Categorias</span><span class="v">${parsed._meta.categories}</span></div>
-          <div class="ap-preview-row"><span class="k">Perfis fiscais (ST)</span><span class="v">${parsed._meta.profiles}</span></div>
-          ${parsed._meta.skipped>0 ? `<div class="ap-preview-row"><span class="k">Ignorados (sem preço/imposto)</span><span class="v">${parsed._meta.skipped}</span></div>` : ''}
-          <div class="ap-btnrow">
-            <button class="ap-cancel" id="apCancelBtn">Cancelar</button>
-            <button class="ap-confirm" id="apConfirmBtn">Confirmar atualização</button>
-          </div>`;
-        document.getElementById('apCancelBtn').addEventListener('click', ()=>{ previewArea.innerHTML=''; fileInput.value=''; });
-        document.getElementById('apConfirmBtn').addEventListener('click', async ()=>{
-          applyDB(pendingDb);
-          try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
-          const saved = saveActiveDB(pendingDb, pendingFileName);
-          ACTIVE_SOURCE = 'Atualizado agora' + (pendingFileName ? ' · '+pendingFileName : '') + ' · somente este aparelho';
-          refreshStatus();
-          previewArea.innerHTML = '';
-          fileInput.value = '';
-          msgArea.innerHTML = `<div class="ap-msg success">Preços atualizados com sucesso!${saved ? '' : ' (não consegui salvar para a próxima vez que abrir o app neste aparelho — atualize de novo se recarregar a página)'}</div>`;
-          showToast('Tabela de preços atualizada');
-        });
+        const base64 = reader.result.split(',')[1];
+        const resultado = await apiCatalogoPrecosImportar(base64);
+        planilhaMsg.innerHTML = `<div class="ap-msg success">Planilha processada — ${resultado.produtosImportados.toLocaleString('pt-BR')} produtos atualizados no servidor. Toque em "Verificar / restaurar" abaixo pra já usar aqui.</div>`;
+        planilhaInput.value = '';
       }catch(err){
-        previewArea.innerHTML = '';
-        msgArea.innerHTML = `<div class="ap-msg error">${escapeHtml(err.message)}</div>`;
+        planilhaMsg.innerHTML = `<div class="ap-msg error">${escapeHtml(err.message)}</div>`;
       }
     };
-    reader.onerror = ()=>{ msgArea.innerHTML = '<div class="ap-msg error">Não foi possível ler o arquivo selecionado.</div>'; };
-    reader.readAsText(file, 'UTF-8');
+    reader.onerror = ()=>{ planilhaMsg.innerHTML = '<div class="ap-msg error">Não foi possível ler o arquivo selecionado.</div>'; };
+    reader.readAsDataURL(file);
   });
 
   restoreBtn.addEventListener('click', async ()=>{
@@ -6338,8 +6315,7 @@ function initAdminPanel(){
     try{ mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); }catch(e){}
     restoreBtn.disabled = false;
     refreshStatus();
-    msgArea.innerHTML = '<div class="ap-msg success">Pronto — usando: '+escapeHtml(ACTIVE_SOURCE)+'</div>';
-    previewArea.innerHTML = '';
+    planilhaMsg.innerHTML = '<div class="ap-msg success">Pronto — usando: '+escapeHtml(ACTIVE_SOURCE)+'</div>';
     showToast('Base de preços atualizada');
   });
 }
