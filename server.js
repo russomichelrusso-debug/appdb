@@ -1,4 +1,5 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
 
@@ -31,8 +32,20 @@ app.use(express.json({ limit: '6mb' }));
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
-// login/setup/logout ficam públicos (senão ninguém consegue nem entrar);
+// Limite de tentativas na rota de login com Google - protege o endpoint que
+// chama a API do Google pra validar o id_token contra abuso/flood (mesmo sem
+// senha pra "adivinhar", vale limitar chamadas repetidas de um mesmo IP).
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { erro: 'Muitas tentativas de login em pouco tempo — espera alguns minutos e tenta de novo.' },
+});
+
+// login/logout ficam públicos (senão ninguém consegue nem entrar);
 // cadastrar novo usuário exige já estar logado (checado dentro de routes/auth.js).
+app.use('/api/auth/google', authLimiter);
 app.use('/api/auth', authRoutes);
 
 // todas as rotas de dados exigem estar logado (ver middleware/auth.js)

@@ -46,7 +46,7 @@ router.post('/importar', async (req, res) => {
       ]
     );
     const totalResult = await pool.query('SELECT COUNT(*) FROM fichas_tecnicas');
-    console.log(`Fichas técnicas: ${codigos.length} importada(s) por ${req.usuario.usuario}. Total agora: ${totalResult.rows[0].count}.`);
+    console.log(`Fichas técnicas: ${codigos.length} importada(s) por ${req.usuario?.email}. Total agora: ${totalResult.rows[0].count}.`);
     res.json({ ok: true, importadas: codigos.length, total: Number(totalResult.rows[0].count) });
   } catch (e) {
     console.error(e);

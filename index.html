@@ -111,7 +111,7 @@
   }
   .loginScreen.hidden{display:none;}
   @keyframes assistentePulse{0%{transform:scale(1);opacity:.9;}100%{transform:scale(1.35);opacity:0;}}
-  #loginFields.hidden, #setupFields.hidden{display:none;}
+  #loginFields.hidden{display:none;}
   .loginCard{width:100%;max-width:360px;}
   .loginLogoWrap{text-align:center;margin-bottom:28px;}
   .loginLogoImg{width:170px;max-width:60vw;}
@@ -1171,26 +1171,10 @@
     <h2 id="loginTitle">Entrar</h2>
     <div id="loginMsg"></div>
     <div id="loginFields">
-      <label for="loginUsuario">Usuário</label>
-      <input type="text" id="loginUsuario" autocomplete="username" placeholder="seu.usuario">
-      <label for="loginSenha">Senha</label>
-      <input type="password" id="loginSenha" autocomplete="current-password" placeholder="••••••••">
-      <label class="loginRemember">
-        <input type="checkbox" id="loginLembrar" checked>
-        Lembrar-me neste aparelho
-      </label>
-      <button type="button" id="loginSubmitBtn" class="loginSubmitBtn">Entrar</button>
+      <p class="ap-hint" style="text-align:center;margin-bottom:14px;">Entre com a conta Google cadastrada pelo administrador. No primeiro acesso do sistema, a primeira conta Google que entrar vira automaticamente a conta de administrador.</p>
+      <div id="googleSignInBtn" style="display:flex;justify-content:center;"></div>
+      <button type="button" id="loginSubmitBtn" class="loginSubmitBtn hidden">Entrando…</button>
     </div>
-    <div id="setupFields" class="hidden">
-      <label for="setupNome">Seu nome</label>
-      <input type="text" id="setupNome" placeholder="Nome completo">
-      <label for="setupUsuario">Escolha um usuário</label>
-      <input type="text" id="setupUsuario" autocomplete="username" placeholder="ex: michel.russo">
-      <label for="setupSenha">Escolha uma senha</label>
-      <input type="password" id="setupSenha" autocomplete="new-password" placeholder="••••••••">
-      <button type="button" id="setupSubmitBtn" class="loginSubmitBtn">Criar usuário e entrar</button>
-    </div>
-    <button type="button" id="loginToggleSetup" class="loginToggleLink">Primeiro acesso? Cadastre o primeiro usuário</button>
   </div>
 </div>
 
@@ -1772,15 +1756,14 @@
         <div class="ap-card" id="manageUsersCard">
           <h3>Gerenciar usuários</h3>
           <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin restante).</p>
+          <p class="ap-hint" style="margin-bottom:10px;">O login agora é "Entrar com Google": cadastre o e-mail da conta Google da pessoa — ela já consegue entrar assim que o e-mail estiver aqui, sem senha nenhuma.</p>
           <div id="manageUsersList"></div>
           <button class="restoreBtn" id="addUserToggleBtn" style="margin-top:10px;">+ Cadastrar novo usuário</button>
           <div id="addUserForm" class="hidden" style="margin-top:12px;">
             <label for="addUserNome">Nome</label>
             <input type="text" id="addUserNome" placeholder="Nome completo">
-            <label for="addUserUsuario">Usuário (login)</label>
-            <input type="text" id="addUserUsuario" placeholder="ex: michel.russo" autocomplete="off">
-            <label for="addUserSenha">Senha inicial</label>
-            <input type="text" id="addUserSenha" placeholder="Peça pra ele trocar depois">
+            <label for="addUserEmail">E-mail da conta Google</label>
+            <input type="email" id="addUserEmail" placeholder="ex: michel.russo@gmail.com" autocomplete="off">
             <div id="addUserMsg"></div>
             <div class="minimodal-btnrow" style="margin-top:6px;">
               <button type="button" id="addUserCancelBtn">Cancelar</button>
@@ -3668,10 +3651,13 @@ function limparTokenGoogle(){
   googleAccessToken = null;
   try{ sessionStorage.removeItem(GOOGLE_TOKEN_SS_KEY); }catch(e){}
 }
-// Abre a janela de autorização do Google (só aparece de verdade na primeira
-// vez, ou quando o token expira - a pessoa precisa estar na lista de
-// "usuários de teste" configurada no projeto Google, senão a tela recusa).
-async function conectarGoogleDrive(){
+// Pede um access token pro Drive. Com silencioso=true, tenta renovar sem
+// nenhuma tela aparecer (prompt:'') - só funciona se a pessoa já autorizou
+// esse escopo antes nesse navegador e continua com sessão Google ativa; se
+// falhar (silêncio não é garantido pelo Google), quem chamou cai pro modo
+// interativo. Assim, depois da primeira autorização, reabrir o app não pede
+// consentimento de novo na maioria das vezes.
+async function conectarGoogleDrive(silencioso){
   await loadGoogleIdentity();
   return new Promise((resolve, reject)=>{
     try{
@@ -3679,21 +3665,27 @@ async function conectarGoogleDrive(){
         client_id: GOOGLE_CLIENT_ID,
         scope: GOOGLE_DRIVE_SCOPE,
         callback: (response)=>{
-          if(response.error){ reject(new Error('Autorização do Google recusada ou cancelada.')); return; }
+          if(response.error){ reject(new Error(silencioso ? 'renovação silenciosa falhou' : 'Autorização do Google recusada ou cancelada.')); return; }
           googleAccessToken = { token: response.access_token, expiresAt: Date.now() + (response.expires_in*1000) };
           try{ sessionStorage.setItem(GOOGLE_TOKEN_SS_KEY, JSON.stringify(googleAccessToken)); }catch(e){}
           resolve(googleAccessToken);
         },
-        error_callback: (err)=> reject(new Error('Não foi possível abrir a autorização do Google: ' + (err?.type || 'erro desconhecido'))),
+        error_callback: (err)=> reject(new Error(silencioso ? 'renovação silenciosa falhou' : 'Não foi possível abrir a autorização do Google: ' + (err?.type || 'erro desconhecido'))),
       });
-      googleTokenClient.requestAccessToken();
+      googleTokenClient.requestAccessToken(silencioso ? { prompt: '' } : undefined);
     }catch(e){ reject(e); }
   });
 }
 async function garantirTokenGoogle(){
   if(tokenGoogleValido()) return googleAccessToken.token;
-  await conectarGoogleDrive();
-  return googleAccessToken.token;
+  try{
+    // primeiro tenta renovar sem interromper a pessoa com uma tela de consentimento
+    await conectarGoogleDrive(true);
+    return googleAccessToken.token;
+  }catch(e){
+    await conectarGoogleDrive(false);
+    return googleAccessToken.token;
+  }
 }
 // Envia um arquivo já pronto (Blob) direto pro Google Drive da pessoa
 // logada - usa upload multipart simples (arquivo pequeno, CSV não passa de
@@ -3947,27 +3939,16 @@ async function apiFetch(path, options={}, filaInfo){
   return body;
 }
 
-async function apiLogin(usuario, senha, lembrar){
+async function apiGoogleLogin(idToken){
   const { baseUrl } = getApiConfig();
-  const resp = await fetch(baseUrl + '/api/auth/login', {
+  const resp = await fetch(baseUrl + '/api/auth/google', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ usuario, senha, lembrar }),
+    body: JSON.stringify({ id_token: idToken }),
   });
   const body = await resp.json().catch(()=>null);
   if(!resp.ok) throw new Error((body && body.erro) || 'Não foi possível entrar.');
-  return body; // {token, nome, usuario}
-}
-async function apiSetupFirstUser(nome, usuario, senha){
-  const { baseUrl } = getApiConfig();
-  const resp = await fetch(baseUrl + '/api/auth/setup', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ nome, usuario, senha }),
-  });
-  const body = await resp.json().catch(()=>null);
-  if(!resp.ok) throw new Error((body && body.erro) || 'Não foi possível criar o usuário.');
-  return body;
+  return body; // {token, nome, email, is_admin}
 }
 async function apiMe(){
   return apiFetch('/api/auth/me');
@@ -4735,17 +4716,16 @@ function initBackendAdmin(){
     document.getElementById('addUserForm').classList.add('hidden');
     document.getElementById('addUserToggleBtn').classList.remove('hidden');
     document.getElementById('addUserMsg').innerHTML = '';
-    ['addUserNome','addUserUsuario','addUserSenha'].forEach(id=>document.getElementById(id).value='');
+    ['addUserNome','addUserEmail'].forEach(id=>document.getElementById(id).value='');
   });
   document.getElementById('addUserConfirmBtn').addEventListener('click', async ()=>{
     const nome = document.getElementById('addUserNome').value.trim();
-    const usuario = document.getElementById('addUserUsuario').value.trim();
-    const senha = document.getElementById('addUserSenha').value.trim();
+    const email = document.getElementById('addUserEmail').value.trim();
     const msg = document.getElementById('addUserMsg');
-    if(!nome || !usuario || !senha){ msg.innerHTML = '<div class="ap-msg error">Preencha os 3 campos.</div>'; return; }
+    if(!nome || !email){ msg.innerHTML = '<div class="ap-msg error">Preencha os 2 campos.</div>'; return; }
     try{
-      await apiFetch('/api/auth/usuarios', { method:'POST', body: JSON.stringify({nome, usuario, senha}) });
-      showToast('Usuário criado: ' + usuario);
+      await apiFetch('/api/auth/usuarios', { method:'POST', body: JSON.stringify({nome, email}) });
+      showToast('Usuário criado: ' + email);
       document.getElementById('addUserCancelBtn').click();
       renderUsersList();
     }catch(e){
@@ -4777,7 +4757,7 @@ function initBackendAdmin(){
   });
 
   if(state.currentUser){
-    document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.usuario})${state.currentUser.is_admin ? ' · admin' : ''}`;
+    document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.email})${state.currentUser.is_admin ? ' · admin' : ''}`;
     if(state.currentUser.is_admin){
       document.getElementById('manageUsersGroup').classList.remove('hidden');
       document.getElementById('exportPedidosCard').classList.remove('hidden');
@@ -4838,10 +4818,10 @@ async function renderUsersList(){
         <div class="prTop">
           <div>
             <div class="prName">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
-            <div class="prDetail">@${escapeHtml(u.usuario)}</div>
+            <div class="prDetail">${escapeHtml(u.email || '')}</div>
           </div>
           <div class="prBtns">
-            <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.usuario)}" aria-label="Excluir" title="Excluir">🗑</button>
+            <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" aria-label="Excluir" title="Excluir">🗑</button>
           </div>
         </div>
       </div>
@@ -6776,13 +6756,6 @@ function showLoginScreen(message){
 function hideLoginScreen(){
   document.getElementById('loginScreen').classList.add('hidden');
 }
-function setLoginMode(isSetup){
-  document.getElementById('loginFields').classList.toggle('hidden', isSetup);
-  document.getElementById('setupFields').classList.toggle('hidden', !isSetup);
-  document.getElementById('loginTitle').textContent = isSetup ? 'Criar primeiro usuário' : 'Entrar';
-  document.getElementById('loginToggleSetup').textContent = isSetup ? 'Já tem usuário? Entrar' : 'Primeiro acesso? Cadastre o primeiro usuário';
-  document.getElementById('loginMsg').innerHTML = '';
-}
 // Limpa qualquer resquício de uso anterior no aparelho - chamado só num login
 // de verdade (não ao simplesmente reabrir com uma sessão lembrada), pra não
 // apagar trabalho em andamento à toa, mas garantir que um login novo comece
@@ -6800,18 +6773,19 @@ function clearSessionData(){
   try{ localStorage.removeItem(LEV_LS_KEY); }catch(e){}
 }
 
-async function doLogin(){
-  const usuario = document.getElementById('loginUsuario').value.trim();
-  const senha = document.getElementById('loginSenha').value;
-  const lembrar = document.getElementById('loginLembrar').checked;
+// Callback do Google Identity Services (google.accounts.id) quando a pessoa
+// escolhe uma conta no botão "Entrar com Google" - response.credential é o
+// ID token (JWT), verificado no backend antes de qualquer sessão ser aberta.
+async function onGoogleCredential(response){
   const msg = document.getElementById('loginMsg');
-  if(!usuario || !senha){ msg.innerHTML = '<div class="ap-msg error">Preencha usuário e senha.</div>'; return; }
   const btn = document.getElementById('loginSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Entrando…';
+  msg.innerHTML = '';
+  btn.classList.remove('hidden');
+  btn.disabled = true;
   try{
-    const result = await apiLogin(usuario, senha, lembrar);
-    setStoredToken(result.token, lembrar);
-    state.currentUser = { nome: result.nome, usuario: result.usuario, is_admin: !!result.is_admin };
+    const result = await apiGoogleLogin(response.credential);
+    setStoredToken(result.token, true); // login com Google já fica lembrado por padrão
+    state.currentUser = { nome: result.nome, email: result.email, is_admin: !!result.is_admin };
     if(!state.seller) state.seller = result.nome;
     clearSessionData();
     hideLoginScreen();
@@ -6819,48 +6793,24 @@ async function doLogin(){
     await init();
   }catch(e){
     msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-  }finally{
-    btn.disabled = false; btn.textContent = 'Entrar';
-  }
-}
-async function doSetup(){
-  const nome = document.getElementById('setupNome').value.trim();
-  const usuario = document.getElementById('setupUsuario').value.trim();
-  const senha = document.getElementById('setupSenha').value;
-  const msg = document.getElementById('loginMsg');
-  if(!nome || !usuario || !senha){ msg.innerHTML = '<div class="ap-msg error">Preencha todos os campos.</div>'; return; }
-  const btn = document.getElementById('setupSubmitBtn');
-  btn.disabled = true; btn.textContent = 'Criando…';
-  try{
-    await apiSetupFirstUser(nome, usuario, senha);
-    const result = await apiLogin(usuario, senha, true);
-    setStoredToken(result.token, true);
-    state.currentUser = { nome: result.nome, usuario: result.usuario, is_admin: !!result.is_admin };
-    if(!state.seller) state.seller = result.nome;
-    clearSessionData();
-    hideLoginScreen();
-    showLoadingScreen();
-    await init();
-  }catch(e){
-    msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-  }finally{
-    btn.disabled = false; btn.textContent = 'Criar usuário e entrar';
+    btn.classList.add('hidden');
   }
 }
 async function logout(){
   if(!confirm('Sair do app?')) return;
   await apiLogout();
   clearStoredToken();
+  try{ if(window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); }catch(e){}
   window.location.reload();
 }
-function initLoginScreen(){
-  document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
-  document.getElementById('setupSubmitBtn').addEventListener('click', doSetup);
-  document.getElementById('loginToggleSetup').addEventListener('click', ()=>{
-    setLoginMode(document.getElementById('setupFields').classList.contains('hidden'));
-  });
-  document.getElementById('loginSenha').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); doLogin(); } });
-  document.getElementById('setupSenha').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); doSetup(); } });
+async function initLoginScreen(){
+  try{
+    await loadGoogleIdentity();
+    google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential });
+    google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'large', text: 'signin_with' });
+  }catch(e){
+    document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+  }
 }
 
 // Checa se já existe uma sessão válida guardada (localStorage se marcou

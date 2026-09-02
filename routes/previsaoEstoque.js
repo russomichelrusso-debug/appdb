@@ -39,7 +39,7 @@ router.post('/importar', async (req, res) => {
       ]
     );
     await client.query('COMMIT');
-    console.log(`Previsão de estoque importada: ${itens.length} produto(s), por ${req.usuario.usuario}.`);
+    console.log(`Previsão de estoque importada: ${itens.length} produto(s), por ${req.usuario?.email}.`);
     res.json({ ok: true, total: itens.length });
   } catch (e) {
     await client.query('ROLLBACK');

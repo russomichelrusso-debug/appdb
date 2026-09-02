@@ -123,7 +123,7 @@ router.patch('/:id/documento', async (req, res) => {
   try {
     const result = await pool.query('UPDATE clientes SET documento = $1 WHERE id = $2 RETURNING nome', [documento, req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
-    console.log(`Documento corrigido: ${result.rows[0].nome} (id ${req.params.id}) por ${req.usuario.usuario}.`);
+    console.log(`Documento corrigido: ${result.rows[0].nome} (id ${req.params.id}) por ${req.usuario?.email}.`);
     res.json({ ok: true, nome: result.rows[0].nome });
   } catch (e) {
     if (e.code === '23505') return res.status(400).json({ erro: 'Esse CNPJ já pertence a outro cliente cadastrado — use mesclar em vez de corrigir.' });
@@ -156,7 +156,7 @@ router.post('/mesclar', async (req, res) => {
     await client.query('UPDATE levantamentos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
     await client.query('DELETE FROM clientes WHERE id = $1', [remover_id]);
     await client.query('COMMIT');
-    console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario.usuario}.`);
+    console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario?.email}.`);
     res.json({ ok: true, manteve: manterInfo.nome, removeu: removerInfo.nome });
   } catch (e) {
     await client.query('ROLLBACK');
@@ -180,7 +180,7 @@ router.delete('/:id', async (req, res) => {
     try {
       const result = await pool.query('DELETE FROM clientes WHERE id = $1 RETURNING nome', [id]);
       if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
-      console.log(`Cliente excluído: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.usuario || '?'}`);
+      console.log(`Cliente excluído: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.email || '?'}`);
       return res.json({ ok: true });
     } catch (e) {
       if (e.code === '23503') {
@@ -210,7 +210,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ erro: 'Cliente não encontrado.' });
     }
     await client.query('COMMIT');
-    console.log(`Cliente EXCLUÍDO COM HISTÓRICO: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.usuario || '?'} (admin)`);
+    console.log(`Cliente EXCLUÍDO COM HISTÓRICO: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.email || '?'} (admin)`);
     res.json({ ok: true, historico_apagado: true });
   } catch (e) {
     await client.query('ROLLBACK');
