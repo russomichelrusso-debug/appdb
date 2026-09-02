@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS levantamento_itens (
 CREATE TABLE IF NOT EXISTS usuarios (
   id SERIAL PRIMARY KEY,
   nome TEXT NOT NULL,
-  usuario TEXT UNIQUE,
-  senha_hash TEXT,
+  usuario TEXT UNIQUE NOT NULL,
+  senha_hash TEXT NOT NULL,
   is_admin BOOLEAN NOT NULL DEFAULT false,
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -79,15 +79,6 @@ CREATE TABLE IF NOT EXISTS usuarios (
 -- dela existir (sem isso, "CREATE TABLE IF NOT EXISTS" não adicionaria a
 -- coluna nova em quem já tinha rodado o schema antigo).
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT false;
-
--- Login trocado de usuário/senha pra "Entrar com Google": a identidade de
--- cada usuário passa a ser o e-mail da conta Google (e o "sub", o id estável
--- do Google pra essa conta). usuario/senha_hash ficam como legado (bancos
--- antigos têm dados ali), por isso viram opcionais em vez de removidos.
-ALTER TABLE usuarios ALTER COLUMN usuario DROP NOT NULL;
-ALTER TABLE usuarios ALTER COLUMN senha_hash DROP NOT NULL;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS email TEXT UNIQUE;
-ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS google_sub TEXT UNIQUE;
 
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,
@@ -169,13 +160,24 @@ CREATE TABLE IF NOT EXISTS pedidos_oficiais_itens (
   valor NUMERIC,
   data_implantacao DATE,
   data_faturamento DATE,
-  nota_fiscal TEXT,
-  classificatorio TEXT,
   status TEXT NOT NULL DEFAULT 'carteira',
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (nr_pedido, codigo_sku)
 );
 CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_cliente ON pedidos_oficiais_itens(cliente_codigo_oficial);
--- Adiciona as colunas em bancos que já tinham a tabela criada antes desse ponto
-ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS nota_fiscal TEXT;
-ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS classificatorio TEXT;
+
+-- Catálogo completo de preços: um valor por produto x canal x estado (27 UFs
+-- x 6 canais). Guardado em JSONB por produto (não um blob único gigante) pra
+-- não repetir o problema de tamanho que já tivemos com fichas técnicas.
+CREATE TABLE IF NOT EXISTS catalogo_precos (
+  codigo_sku TEXT PRIMARY KEY,
+  nome TEXT,
+  emb INTEGER,
+  ncm TEXT,
+  ipi NUMERIC,
+  familia TEXT,
+  preco_fixo BOOLEAN NOT NULL DEFAULT false,
+  canais_fx TEXT[] NOT NULL DEFAULT '{}',
+  precos JSONB NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
