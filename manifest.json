@@ -1,0 +1,31 @@
+{
+  "name": "Cortag - Consulta de Preços",
+  "short_name": "Cortag",
+  "description": "Consulta de preços, levantamento de estoque, produtos e clientes para vendedores Cortag.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5F5F7",
+  "theme_color": "#CC0935",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
