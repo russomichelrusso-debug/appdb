@@ -17,6 +17,7 @@ const pedidosOficiaisRoutes = require('./routes/pedidosOficiais');
 const assistenteRoutes = require('./routes/assistente');
 
 const app = express();
+app.set('trust proxy', 1);  
 
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
