@@ -3,10 +3,16 @@ const fs = require('fs');
 const path = require('path');
 
 // Bancos gerenciados na nuvem (Render, Supabase, etc.) exigem conexão criptografada (SSL).
-// Só desliga isso se DATABASE_URL não estiver definida (ex: rodando localmente sem banco real).
+// Por padrão agora EXIGE certificado válido (rejectUnauthorized: true) - a maioria dos
+// provedores usa certificado de autoridade reconhecida, então isso deve funcionar sem
+// mudança nenhuma. Se der erro de certificado depois de subir isso, defina
+// DB_SSL_INSECURE=true temporariamente enquanto investiga (não é o ideal, mas evita
+// ficar fora do ar) - e me avisa, porque não deveria ser necessário no caso comum.
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_URL
+    ? { rejectUnauthorized: process.env.DB_SSL_INSECURE === 'true' ? false : true }
+    : false,
 });
 
 // Roda o schema.sql inteiro na subida do servidor. Como todas as tabelas usam

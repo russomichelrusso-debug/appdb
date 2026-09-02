@@ -1,27 +1,29 @@
-// Hash de senha usando só o módulo "crypto" nativo do Node - sem depender de
-// pacotes externos (bcrypt, etc.), já que a instalação de pacotes novos pode
-// falhar dependendo da rede. scrypt é o algoritmo recomendado pelo próprio
-// Node pra isso, e já vem embutido.
+// Funções auxiliares de autenticação. Login é feito com "Entrar com Google" -
+// o token de sessão do próprio app continua sendo gerado aqui (crypto.randomBytes,
+// sem depender de pacote externo), mas quem confirma a identidade agora é o
+// Google, verificando o ID token que o frontend recebe do Google Identity
+// Services.
+
 const crypto = require('crypto');
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
-  return `${salt}:${hash}`;
-}
-
-function verifyPassword(password, stored) {
-  const [salt, hash] = (stored || '').split(':');
-  if (!salt || !hash) return false;
-  const hashToCompare = crypto.scryptSync(password, salt, 64).toString('hex');
-  const a = Buffer.from(hash, 'hex');
-  const b = Buffer.from(hashToCompare, 'hex');
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
-}
 
 function generateToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-module.exports = { hashPassword, verifyPassword, generateToken };
+// Confere o ID token (JWT) que o Google Identity Services devolve no
+// frontend após o login. Em vez de validar a assinatura localmente (exigiria
+// buscar e cachear as chaves públicas do Google), usa o endpoint oficial de
+// tokeninfo do Google, que já confere assinatura, validade e o "aud" (só
+// aceita token emitido pro nosso GOOGLE_CLIENT_ID) - simples e seguro o
+// bastante pro volume de logins desse app.
+async function verificarGoogleIdToken(idToken, clientId) {
+  if (!idToken || typeof idToken !== 'string') return null;
+  const resp = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+  if (!resp.ok) return null;
+  const dados = await resp.json();
+  if (dados.aud !== clientId) return null;
+  if (!dados.email || dados.email_verified !== 'true') return null;
+  return { email: dados.email.toLowerCase(), sub: dados.sub, nome: dados.name || dados.email };
+}
+
+module.exports = { generateToken, verificarGoogleIdToken };

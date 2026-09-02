@@ -138,15 +138,25 @@ router.post('/importar-faturamento', async (req, res) => {
   try {
     await client.query('BEGIN');
 
-    let clientesClassificados = 0;
+    let clientesClassificados = 0, clientesIgnoradosPorSeremMaisAntigos = 0;
     for (const c of (classificacoes || [])) {
       if (!c.nome || !c.tipo) continue;
       const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
-      await client.query(
-        'UPDATE clientes SET classificatorio_tipo = $1, classificatorio_desconto = $2 WHERE id = $3',
-        [c.tipo, c.desconto ?? null, clienteId]
+      // só sobrescreve se esse relatório for mais novo que o que definiu o
+      // classificatório atual - senão, subir um relatório antigo por engano
+      // faria o cliente "voltar" pra uma categoria que já mudou. Sem data de
+      // referência nenhuma até agora (cliente nunca classificado), sempre aplica.
+      const dataRef = c.data_referencia || null;
+      const upd = await client.query(
+        `UPDATE clientes
+         SET classificatorio_tipo = $1, classificatorio_desconto = $2, classificatorio_atualizado_em = COALESCE($4::date, classificatorio_atualizado_em, now()::date)
+         WHERE id = $3
+           AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
+         RETURNING id`,
+        [c.tipo, c.desconto ?? null, clienteId, dataRef]
       );
-      clientesClassificados++;
+      if (upd.rows.length > 0) clientesClassificados++;
+      else clientesIgnoradosPorSeremMaisAntigos++;
     }
 
     let pedidosCriados = 0, pedidosIgnorados = 0, itensGravados = 0, itensSemProduto = 0;
@@ -185,8 +195,8 @@ router.post('/importar-faturamento', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario.usuario}.`);
-    res.json({ clientesClassificados, pedidosCriados, pedidosIgnorados, itensGravados, itensSemProduto });
+    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${clientesIgnoradosPorSeremMaisAntigos} ignorado(s) (relatório mais antigo que o já registrado), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario?.email}.`);
+    res.json({ clientesClassificados, clientesIgnoradosPorSeremMaisAntigos, pedidosCriados, pedidosIgnorados, itensGravados, itensSemProduto });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error(e);
@@ -251,7 +261,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ erro: 'Pedido não encontrado.' });
     }
     await client.query('COMMIT');
-    console.log(`Pedido #${req.params.id} excluído por ${req.usuario.usuario}.`);
+    console.log(`Pedido #${req.params.id} excluído por ${req.usuario?.email}.`);
     res.json({ ok: true });
   } catch (e) {
     await client.query('ROLLBACK');

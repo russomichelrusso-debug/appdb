@@ -1,73 +1,86 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { hashPassword, verifyPassword, generateToken } = require('../auth-utils');
+const { generateToken, verificarGoogleIdToken } = require('../auth-utils');
 const { requireAuth } = require('../middleware/auth');
 
-// Duração da sessão: "lembrar-me" marcado = 90 dias; desmarcado = 1 dia.
-const DURACAO_LEMBRAR_DIAS = 90;
-const DURACAO_PADRAO_DIAS = 1;
+// Mesmo Client ID usado no botão "Entrar com Google" do frontend (index.html)
+// - dá pra sobrescrever por variável de ambiente se o client ID for trocado
+// no futuro, sem precisar reeditar os dois lados (front e back) juntos.
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '587215783588-g9nrt4mq8onu12qkj4r8h4ao307478i4.apps.googleusercontent.com';
 
-// Cria o primeiro usuário do sistema - só funciona se ainda não existir
-// nenhum usuário cadastrado (evita virar uma porta aberta pra sempre).
-// Depois que o primeiro existe, novos usuários precisam ser criados por quem
-// já está logado (ver rota /api/auth/usuarios abaixo).
-router.post('/setup', async (req, res) => {
-  const { nome, usuario, senha } = req.body;
-  if (!nome || !usuario || !senha) return res.status(400).json({ erro: 'Informe nome, usuário e senha.' });
+// Sessão de login já fica "lembrada" por padrão - não depende mais de senha
+// pra ser considerada segura, então não faz sentido pedir login de novo com
+// frequência (a conta Google é quem garante a identidade).
+const DURACAO_SESSAO_DIAS = 90;
+
+// Login único, via "Entrar com Google" (ID token do Google Identity Services).
+// Se ainda não existe NENHUM usuário cadastrado, essa conta vira o primeiro
+// admin automaticamente (substitui o antigo /setup de usuário/senha). Depois
+// que já existe alguém, só entra quem tiver esse e-mail cadastrado antes por
+// um admin (POST /usuarios) - continua não sendo auto-cadastro livre.
+router.post('/google', async (req, res) => {
+  const { id_token } = req.body;
+  if (!id_token) return res.status(400).json({ erro: 'Envie { id_token }.' });
+
+  let google;
   try {
-    const existing = await pool.query('SELECT COUNT(*) FROM usuarios');
-    if (Number(existing.rows[0].count) > 0) {
-      return res.status(403).json({ erro: 'Já existe usuário cadastrado. Peça pra alguém já logado te cadastrar.' });
-    }
-    const senha_hash = hashPassword(senha);
-    // o primeiro usuário do sistema vira admin automaticamente - é quem fez
-    // a configuração inicial, faz sentido ele ter controle total desde já.
-    const result = await pool.query(
-      'INSERT INTO usuarios (nome, usuario, senha_hash, is_admin) VALUES ($1, $2, $3, true) RETURNING id, nome, usuario, is_admin',
-      [nome, usuario, senha_hash]
-    );
-    console.log(`Primeiro usuário criado (admin): ${usuario}`);
-    res.status(201).json(result.rows[0]);
+    google = await verificarGoogleIdToken(id_token, GOOGLE_CLIENT_ID);
   } catch (e) {
-    console.error(e);
-    if (e.code === '23505') return res.status(400).json({ erro: 'Esse nome de usuário já existe.' });
-    res.status(500).json({ erro: 'Erro ao criar usuário.' });
+    console.error('Erro ao verificar token do Google:', e);
+    return res.status(502).json({ erro: 'Não foi possível confirmar sua conta Google agora — tente de novo.' });
   }
-});
+  if (!google) return res.status(401).json({ erro: 'Login do Google inválido ou expirado — tente de novo.' });
 
-router.post('/login', async (req, res) => {
-  const { usuario, senha, lembrar } = req.body;
-  if (!usuario || !senha) return res.status(400).json({ erro: 'Informe usuário e senha.' });
   try {
-    const result = await pool.query('SELECT * FROM usuarios WHERE usuario = $1', [usuario]);
-    const user = result.rows[0];
-    if (!user || !verifyPassword(senha, user.senha_hash)) {
-      return res.status(401).json({ erro: 'Usuário ou senha incorretos.' });
+    const totalUsuarios = await pool.query('SELECT COUNT(*) FROM usuarios');
+    let usuario;
+    if (Number(totalUsuarios.rows[0].count) === 0) {
+      const criado = await pool.query(
+        'INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, true) RETURNING id, nome, email, is_admin',
+        [google.nome, google.email, google.sub]
+      );
+      usuario = criado.rows[0];
+      console.log(`Primeiro usuário criado via Google (admin): ${usuario.email}`);
+    } else {
+      const existente = await pool.query(
+        'SELECT id, nome, email, is_admin, google_sub FROM usuarios WHERE email = $1 OR google_sub = $2',
+        [google.email, google.sub]
+      );
+      if (existente.rows.length === 0) {
+        return res.status(403).json({ erro: 'Esse e-mail do Google não está cadastrado — peça pra um administrador te cadastrar antes.' });
+      }
+      usuario = existente.rows[0];
+      if (!usuario.google_sub) {
+        // primeira vez que esse cadastro (feito por e-mail pelo admin) loga de
+        // fato - grava o "sub" do Google pra próxima vez conferir por ele também.
+        await pool.query('UPDATE usuarios SET google_sub = $1 WHERE id = $2', [google.sub, usuario.id]);
+      }
     }
+
     const token = generateToken();
-    const dias = lembrar ? DURACAO_LEMBRAR_DIAS : DURACAO_PADRAO_DIAS;
     await pool.query(
       `INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, now() + ($3 || ' days')::interval)`,
-      [token, user.id, dias]
+      [token, usuario.id, DURACAO_SESSAO_DIAS]
     );
-    console.log(`Login: ${usuario} (sessão de ${dias} dia(s))`);
-    res.json({ token, nome: user.nome, usuario: user.usuario, is_admin: user.is_admin });
+    console.log(`Login via Google: ${usuario.email}`);
+    res.json({ token, nome: usuario.nome, email: usuario.email, is_admin: usuario.is_admin });
   } catch (e) {
     console.error(e);
+    if (e.code === '23505') return res.status(409).json({ erro: 'Corrida rara no primeiro login — tente de novo.' });
     res.status(500).json({ erro: 'Erro ao entrar.' });
   }
 });
 
 // Confirma se o token guardado no aparelho ainda é válido, e devolve quem é
 // o usuário - usado quando o app abre, pra pular a tela de login se já
-// tiver uma sessão válida guardada ("lembrar-me").
+// tiver uma sessão válida guardada.
 router.get('/me', async (req, res) => {
   const token = (req.header('Authorization') || '').replace('Bearer ', '');
   if (!token) return res.status(401).json({ erro: 'Sem sessão.' });
   try {
     const result = await pool.query(
-      `SELECT u.nome, u.usuario, u.is_admin FROM sessoes s
+      `SELECT u.nome, u.email, u.is_admin FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token = $1 AND s.expira_em > now()`,
       [token]
@@ -91,25 +104,23 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// Cadastra um novo usuário - exige já estar logado (usa o middleware requireAuth
-// no server.js), pra não deixar aberto pra qualquer um se auto-cadastrar.
-// Só um admin consegue criar outro admin - um usuário comum criando alguém
-// não consegue promover ninguém além do próprio nível dele.
+// Cadastra um novo usuário pelo e-mail da conta Google dele - exige já estar
+// logado. A pessoa só consegue de fato entrar depois, fazendo "Entrar com
+// Google" com esse mesmo e-mail. Só um admin consegue criar outro admin.
 router.post('/usuarios', requireAuth, async (req, res) => {
-  const { nome, usuario, senha, is_admin } = req.body;
-  if (!nome || !usuario || !senha) return res.status(400).json({ erro: 'Informe nome, usuário e senha.' });
+  const { nome, email, is_admin } = req.body;
+  if (!nome || !email) return res.status(400).json({ erro: 'Informe nome e e-mail.' });
   const tornarAdmin = !!is_admin && !!req.usuario.is_admin;
   try {
-    const senha_hash = hashPassword(senha);
     const result = await pool.query(
-      'INSERT INTO usuarios (nome, usuario, senha_hash, is_admin) VALUES ($1, $2, $3, $4) RETURNING id, nome, usuario, is_admin',
-      [nome, usuario, senha_hash, tornarAdmin]
+      'INSERT INTO usuarios (nome, email, is_admin) VALUES ($1, $2, $3) RETURNING id, nome, email, is_admin',
+      [nome, String(email).toLowerCase().trim(), tornarAdmin]
     );
-    console.log(`Usuário cadastrado por ${req.usuario?.usuario || '?'}: ${usuario}${tornarAdmin ? ' (admin)' : ''}`);
+    console.log(`Usuário cadastrado por ${req.usuario?.email || '?'}: ${result.rows[0].email}${tornarAdmin ? ' (admin)' : ''}`);
     res.status(201).json(result.rows[0]);
   } catch (e) {
     console.error(e);
-    if (e.code === '23505') return res.status(400).json({ erro: 'Esse nome de usuário já existe.' });
+    if (e.code === '23505') return res.status(400).json({ erro: 'Esse e-mail já está cadastrado.' });
     res.status(500).json({ erro: 'Erro ao criar usuário.' });
   }
 });
@@ -118,7 +129,7 @@ router.post('/usuarios', requireAuth, async (req, res) => {
 router.get('/usuarios', requireAuth, async (req, res) => {
   if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver a lista de usuários.' });
   try {
-    const result = await pool.query('SELECT id, nome, usuario, is_admin, criado_em FROM usuarios ORDER BY nome');
+    const result = await pool.query('SELECT id, nome, email, is_admin, criado_em FROM usuarios ORDER BY nome');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -128,8 +139,7 @@ router.get('/usuarios', requireAuth, async (req, res) => {
 
 // Exclui um usuário - só admin. Duas proteções pra não travar o sistema:
 // não pode se auto-excluir (evita ficar sem acesso sem querer), e não pode
-// excluir o último admin restante (sem isso, ninguém mais conseguiria
-// cadastrar gente nova ou fazer exclusão forçada de cliente).
+// excluir o último admin restante.
 router.delete('/usuarios/:id', requireAuth, async (req, res) => {
   if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode excluir usuário.' });
   const { id } = req.params;
@@ -145,8 +155,8 @@ router.delete('/usuarios/:id', requireAuth, async (req, res) => {
         return res.status(400).json({ erro: 'Esse é o último administrador do sistema — não é possível excluí-lo. Promova outro usuário a admin antes.' });
       }
     }
-    const result = await pool.query('DELETE FROM usuarios WHERE id = $1 RETURNING nome, usuario', [id]);
-    console.log(`Usuário excluído: ${result.rows[0].usuario} por ${req.usuario.usuario}`);
+    const result = await pool.query('DELETE FROM usuarios WHERE id = $1 RETURNING nome, email', [id]);
+    console.log(`Usuário excluído: ${result.rows[0].email} por ${req.usuario.email}`);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);

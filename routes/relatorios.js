@@ -142,14 +142,21 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
     const produtoId = produtoResult.rows[0].id;
 
     const compradores = await pool.query(
-      `SELECT c.id, c.nome, c.documento, SUM(pi.quantidade) AS total_comprado, MAX(ped.data_pedido) AS ultima_compra
+      `SELECT c.id, c.nome, c.documento, SUM(pi.quantidade) AS total_comprado,
+              po.data_faturamento AS ultima_compra, po.nota_fiscal
        FROM pedido_itens pi
        JOIN pedidos ped ON ped.id = pi.pedido_id
        JOIN clientes c ON c.id = ped.cliente_id
+       LEFT JOIN (
+         SELECT DISTINCT ON (cliente_codigo_oficial) cliente_codigo_oficial, data_faturamento, nota_fiscal
+         FROM pedidos_oficiais_itens
+         WHERE codigo_sku = $2 AND status = 'faturado'
+         ORDER BY cliente_codigo_oficial, data_faturamento DESC NULLS LAST
+       ) po ON po.cliente_codigo_oficial = c.codigo_oficial
        WHERE pi.produto_id = $1
-       GROUP BY c.id, c.nome, c.documento
-       ORDER BY ultima_compra DESC`,
-      [produtoId]
+       GROUP BY c.id, c.nome, c.documento, po.data_faturamento, po.nota_fiscal
+       ORDER BY po.data_faturamento DESC NULLS LAST`,
+      [produtoId, codigo]
     );
 
     // só a leitura mais recente de levantamento por cliente (não o histórico
@@ -198,7 +205,7 @@ router.get('/pedidos/exportar', async (req, res) => {
        ORDER BY ped.data_pedido DESC`,
       [inicio, fim]
     );
-    console.log(`Exportação de pedidos (${inicio} a ${fim}): ${result.rows.length} linha(s), por ${req.usuario.usuario}.`);
+    console.log(`Exportação de pedidos (${inicio} a ${fim}): ${result.rows.length} linha(s), por ${req.usuario?.email}.`);
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -243,6 +250,29 @@ router.get('/clientes/:id/recuperar', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar produtos pra recuperar.' });
+  }
+});
+
+// Curva ABC de produtos somando TODOS os clientes - diferente da Curva ABC
+// individual (que já existe por cliente), essa mostra o negócio inteiro: quais
+// produtos concentram a maior parte do volume vendido. Por quantidade, não
+// valor, porque pedidos vindos do relatório de faturamento não têm preço
+// confiável (ver importação de faturamento).
+router.get('/produtos-abc-geral', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.codigo_sku, p.nome AS produto,
+              COUNT(DISTINCT pi.pedido_id) AS num_pedidos,
+              SUM(pi.quantidade) AS quantidade_total
+       FROM pedido_itens pi
+       JOIN produtos p ON p.id = pi.produto_id
+       GROUP BY p.id, p.codigo_sku, p.nome
+       ORDER BY quantidade_total DESC`
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao calcular curva ABC geral.' });
   }
 });
 
