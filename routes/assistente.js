@@ -45,7 +45,17 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, exatamente nest
     if (!resp.ok) {
       const erroTexto = await resp.text();
       console.error('Erro do Gemini:', resp.status, erroTexto);
-      return res.status(502).json({ erro: `Erro ao consultar o Gemini (${resp.status}). Confira se o modelo "${modelo}" ainda existe e se a chave é válida.` });
+      let mensagem;
+      if (resp.status === 401 || resp.status === 403) {
+        mensagem = 'A chave do Gemini (GEMINI_API_KEY) foi rejeitada — confira se foi copiada certinho, sem espaço extra, ou gere uma chave nova em aistudio.google.com.';
+      } else if (resp.status === 404) {
+        mensagem = `O modelo "${modelo}" não foi encontrado — pode ter sido descontinuado. Configure a variável GEMINI_MODEL no Render com um nome de modelo atual.`;
+      } else if (resp.status === 429) {
+        mensagem = 'Limite de uso do Gemini atingido por agora — espera um pouco e tenta de novo.';
+      } else {
+        mensagem = `Erro ao consultar o Gemini (${resp.status}).`;
+      }
+      return res.status(502).json({ erro: mensagem });
     }
     const data = await resp.json();
     const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text;
