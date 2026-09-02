@@ -1,34 +1,45 @@
 const express = require('express');
 const router = express.Router();
 
+// Chama o Gemini uma vez; se vier 503 (sobrecarga temporária do lado do
+// Google), tenta de novo automaticamente antes de desistir - poupa o
+// vendedor de precisar apertar o botão de novo por um problema que passa
+// sozinho na maioria das vezes.
+async function chamarGemini(body, apiKey, modelo, tentativasRestantes = 2) {
+  const resp = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+  );
+  if (resp.status === 503 && tentativasRestantes > 0) {
+    await new Promise((r) => setTimeout(r, 1200));
+    return chamarGemini(body, apiKey, modelo, tentativasRestantes - 1);
+  }
+  return resp;
+}
+
+// Mensagem amigável e específica por tipo de erro comum - reaproveitada
+// pelas duas rotas (interpretar texto e gerar áudio).
+function mensagemDeErro(status, modelo) {
+  if (status === 401 || status === 403) {
+    return 'A chave do Gemini (GEMINI_API_KEY) foi rejeitada — confira se foi copiada certinho, sem espaço extra, ou gere uma chave nova em aistudio.google.com.';
+  }
+  if (status === 404) {
+    return `O modelo "${modelo}" não foi encontrado — pode ter sido descontinuado. Configure a variável GEMINI_MODEL (ou GEMINI_TTS_MODEL) no Render com um nome de modelo atual.`;
+  }
+  if (status === 429) {
+    return 'Limite de uso do Gemini atingido por agora — espera um pouco e tenta de novo.';
+  }
+  if (status === 503) {
+    return 'O Gemini está sobrecarregado nesse momento (problema temporário do lado do Google) — tenta de novo em alguns segundos.';
+  }
+  return `Erro ao consultar o Gemini (${status}).`;
+}
+
 // Interpreta uma pergunta falada (já transcrita pelo navegador) e devolve a
 // intenção (preço / ficha técnica / cliente) + o termo de busca. O Gemini
 // NUNCA responde o preço/ficha/dado em si - só entende a pergunta. O dado
 // real vem sempre do banco do próprio app, pra nunca arriscar inventar um
 // preço ou informação errada.
-// Chama o Gemini uma vez; se vier 503 (sobrecarga temporária do lado do
-// Google), tenta de novo automaticamente antes de desistir - poupa o
-// vendedor de precisar apertar o botão de novo por um problema que passa
-// sozinho na maioria das vezes.
-async function chamarGemini(prompt, apiKey, modelo, tentativasRestantes = 2) {
-  const resp = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
-      }),
-    }
-  );
-  if (resp.status === 503 && tentativasRestantes > 0) {
-    await new Promise((r) => setTimeout(r, 1200));
-    return chamarGemini(prompt, apiKey, modelo, tentativasRestantes - 1);
-  }
-  return resp;
-}
-
 router.post('/interpretar', async (req, res) => {
   const { texto } = req.body;
   if (!texto || typeof texto !== 'string') return res.status(400).json({ erro: 'Envie { texto: "..." }' });
@@ -54,23 +65,14 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, exatamente nest
 {"intencao": "preco", "termo": "nome extraído aqui"}`;
 
   try {
-    const resp = await chamarGemini(prompt, apiKey, modelo);
+    const resp = await chamarGemini(
+      { contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } },
+      apiKey, modelo
+    );
     if (!resp.ok) {
       const erroTexto = await resp.text();
-      console.error('Erro do Gemini:', resp.status, erroTexto);
-      let mensagem;
-      if (resp.status === 401 || resp.status === 403) {
-        mensagem = 'A chave do Gemini (GEMINI_API_KEY) foi rejeitada — confira se foi copiada certinho, sem espaço extra, ou gere uma chave nova em aistudio.google.com.';
-      } else if (resp.status === 404) {
-        mensagem = `O modelo "${modelo}" não foi encontrado — pode ter sido descontinuado. Configure a variável GEMINI_MODEL no Render com um nome de modelo atual.`;
-      } else if (resp.status === 429) {
-        mensagem = 'Limite de uso do Gemini atingido por agora — espera um pouco e tenta de novo.';
-      } else if (resp.status === 503) {
-        mensagem = 'O Gemini está sobrecarregado nesse momento (problema temporário do lado do Google) — tenta de novo em alguns segundos.';
-      } else {
-        mensagem = `Erro ao consultar o Gemini (${resp.status}).`;
-      }
-      return res.status(502).json({ erro: mensagem });
+      console.error('Erro do Gemini (interpretar):', resp.status, erroTexto);
+      return res.status(502).json({ erro: mensagemDeErro(resp.status, modelo) });
     }
     const data = await resp.json();
     const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -89,6 +91,48 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, exatamente nest
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao interpretar pergunta: ' + e.message });
+  }
+});
+
+// Transforma um texto (já pronto, com o dado real já buscado no banco) em
+// áudio, usando a voz nativa do Gemini. O Gemini aqui só NARRA o texto que
+// mandamos - não escolhe o que dizer. Devolve o áudio como PCM em base64
+// (o app monta o cabeçalho WAV do lado do navegador antes de tocar).
+router.post('/falar', async (req, res) => {
+  const { texto } = req.body;
+  if (!texto || typeof texto !== 'string') return res.status(400).json({ erro: 'Envie { texto: "..." }' });
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(500).json({ erro: 'Assistente de voz não configurado — falta GEMINI_API_KEY no servidor.' });
+
+  const modelo = process.env.GEMINI_TTS_MODEL || process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+  const voz = process.env.GEMINI_VOICE || 'Kore';
+
+  try {
+    const resp = await chamarGemini(
+      {
+        contents: [{ parts: [{ text: texto }] }],
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voz } } },
+        },
+      },
+      apiKey, modelo
+    );
+    if (!resp.ok) {
+      const erroTexto = await resp.text();
+      console.error('Erro do Gemini (falar):', resp.status, erroTexto);
+      return res.status(502).json({ erro: mensagemDeErro(resp.status, modelo) });
+    }
+    const data = await resp.json();
+    const part = data.candidates?.[0]?.content?.parts?.[0];
+    const audioBase64 = part?.inlineData?.data;
+    const mimeType = part?.inlineData?.mimeType || 'audio/pcm;rate=24000';
+    if (!audioBase64) return res.status(502).json({ erro: 'Gemini não devolveu áudio dessa vez.' });
+    res.json({ audioBase64, mimeType });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao gerar áudio: ' + e.message });
   }
 });
 
