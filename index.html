@@ -771,6 +771,9 @@
   .histCard .hcStats{display:flex;flex-wrap:wrap;gap:12px;margin-top:9px;}
   .histCard .hcStat{font-size:11.5px;color:var(--gray);}
   .histCard .hcStat b{display:block;font-size:14px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .pedidoBadge{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:4px;font-size:9.5px;font-weight:700;margin-left:5px;position:relative;top:-1px;}
+  .pedidoBadge.total{background:#E6F4EA;color:#1E8E3E;}
+  .pedidoBadge.parcial{background:#FFF4E0;color:#B8860B;}
   .histCard .hcRotBadge{
     display:inline-block;background:none;color:#B36B00;font-weight:600;font-size:11px;
     padding:0;margin-top:8px;
@@ -4901,13 +4904,22 @@ function renderHistVisitaCard(v){
 }
 function renderPedidoOficialCard(item){
   const emCarteira = item.status !== 'faturado';
+  let seloPedido = '';
+  if(!emCarteira && item.situacao_pedido){
+    if(item.situacao_pedido === 'Atendido Total') seloPedido = '<span class="pedidoBadge total" title="Pedido totalmente atendido">T</span>';
+    else if(item.situacao_pedido === 'Atendido Parcial') seloPedido = '<span class="pedidoBadge parcial" title="Pedido parcialmente atendido">P</span>';
+  }
+  let nfTransp = '';
+  if(!emCarteira && (item.nota_fiscal || item.transportadora)){
+    nfTransp = [item.nota_fiscal, item.transportadora].filter(Boolean).join(' · ');
+  }
   return `<div class="histCard">
     <div class="hcName">${escapeHtml(item.produto || ('Cód. ' + item.codigo_sku))}</div>
-    <div class="hcCode">Cód. ${escapeHtml(String(item.codigo_sku))} · Nr.Pedido ${escapeHtml(String(item.nr_pedido))} · Qt. ${item.quantidade}</div>
+    <div class="hcCode">Cód. ${escapeHtml(String(item.codigo_sku))} · Nr.Pedido ${escapeHtml(String(item.nr_pedido))}${seloPedido} · Qt. ${item.quantidade}</div>
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(item.data_implantacao)}</b></div>
       <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:#B8860B;' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(item.data_faturamento)}</b></div>
-      ${!emCarteira && item.nota_fiscal ? `<div class="hcStat">Nota Fiscal<b>${escapeHtml(String(item.nota_fiscal))}</b></div>` : ''}
+      ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}
     </div>
   </div>`;
 }

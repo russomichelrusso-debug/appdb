@@ -175,6 +175,16 @@ CREATE TABLE IF NOT EXISTS pedidos_oficiais_itens (
   PRIMARY KEY (nr_pedido, codigo_sku)
 );
 CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_cliente ON pedidos_oficiais_itens(cliente_codigo_oficial);
+-- Colunas adicionadas depois da criação original da tabela - "ADD COLUMN IF
+-- NOT EXISTS" garante que existam tanto em banco novo quanto no que já
+-- tinha a tabela criada sem elas.
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS nota_fiscal TEXT;
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS classificatorio TEXT;
+-- Transportadora e situação do pedido (Total/Parcial) - só vêm preenchidas
+-- na aba Faturamento do relatório oficial (a Carteira não tem transportadora
+-- ainda, faz sentido: só se sabe depois que foi despachado).
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS transportadora TEXT;
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS situacao_pedido TEXT;
 
 -- Catálogo completo de preços: um valor por produto x canal x estado (27 UFs
 -- x 6 canais). Guardado em JSONB por produto (não um blob único gigante) pra

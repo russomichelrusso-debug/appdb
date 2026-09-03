@@ -1,0 +1,234 @@
+{
+  "version": "Campanha 03/09/2026",
+  "generatedAt": "2026-09-03T03:49:18.727Z",
+  "rules": [
+    {
+      "id": "r1788406268585",
+      "name": "COMBO VAREJO-HCP",
+      "active": true,
+      "targetType": "product",
+      "targetValue": "60863",
+      "basis": "combo",
+      "stacks": true,
+      "basketItems": [
+        {
+          "type": "category",
+          "value": "10 - SERRAS COPO E ACESSÓRIOS",
+          "minQty": 1
+        },
+        {
+          "type": "category",
+          "value": "12 - BROCAS E ACESSÓRIOS",
+          "minQty": 1
+        },
+        {
+          "type": "category",
+          "value": "11 - LÂMINAS DE SERRA CIRCULAR",
+          "minQty": 1
+        },
+        {
+          "type": "category",
+          "value": "13 - ABRASIVOS",
+          "minQty": 1
+        },
+        {
+          "type": "category",
+          "value": "18 - MEDIÇÃO",
+          "minQty": 1
+        },
+        {
+          "type": "category",
+          "value": "09 - CORTE DIAMANTADO",
+          "minQty": 1
+        }
+      ],
+      "comboPct": 15,
+      "basketMode": "atLeast",
+      "basketMinCount": 2
+    },
+    {
+      "id": "r1788406408955",
+      "name": "PROTETOR DE PISO",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "63238,63239,63240",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 1,
+          "pct": 12
+        }
+      ]
+    },
+    {
+      "id": "r1788406528545",
+      "name": "CORTE CERTO",
+      "active": true,
+      "targetType": "product",
+      "targetValue": "60863",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 50,
+          "pct": 5
+        },
+        {
+          "min": 70,
+          "pct": 10
+        },
+        {
+          "min": 80,
+          "pct": 15
+        }
+      ]
+    },
+    {
+      "id": "r1788406642253",
+      "name": "DESCONTOS SERRA COPOS",
+      "active": true,
+      "targetType": "category",
+      "targetValue": "10 - SERRAS COPO E ACESSÓRIOS",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 1,
+          "pct": 30
+        }
+      ]
+    },
+    {
+      "id": "r1788406845459",
+      "name": "HMC 120 - HMCB 120",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "63197,63199,63200",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 1,
+          "pct": 10
+        }
+      ]
+    },
+    {
+      "id": "r1788406938615",
+      "name": "HM 140",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "60399,60404",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 1,
+          "pct": 25
+        }
+      ]
+    },
+    {
+      "id": "r1788406975175",
+      "name": "HM 180",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "61405,61404",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 1,
+          "pct": 30
+        }
+      ]
+    },
+    {
+      "id": "r1788407054635",
+      "name": "DISCO INOX",
+      "active": true,
+      "targetType": "product",
+      "targetValue": "61825",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 75,
+          "pct": 5
+        },
+        {
+          "min": 125,
+          "pct": 10
+        }
+      ]
+    },
+    {
+      "id": "r1788407130113",
+      "name": "REBOLO CONICO",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "61748,61749,62112,62113,62114,61750",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 10,
+          "pct": 5
+        },
+        {
+          "min": 15,
+          "pct": 10
+        }
+      ]
+    },
+    {
+      "id": "r1788407212903",
+      "name": "FLAP BASE FIBRA",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "62031,62032,62033,62034",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 30,
+          "pct": 5
+        },
+        {
+          "min": 40,
+          "pct": 10
+        }
+      ]
+    },
+    {
+      "id": "r1788407331920",
+      "name": "DIAMANTADOS",
+      "active": true,
+      "targetType": "skuList",
+      "targetValue": "60598,61548,60668,61549,61699,60659,61577",
+      "basis": "self",
+      "stacks": true,
+      "selfMetric": "qty",
+      "tiers": [
+        {
+          "min": 40,
+          "pct": 5
+        },
+        {
+          "min": 50,
+          "pct": 10
+        }
+      ]
+    }
+  ]
+}
