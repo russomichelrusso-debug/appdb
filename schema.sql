@@ -201,6 +201,8 @@ BEGIN
     SELECT 1 FROM information_schema.columns
     WHERE table_name = 'catalogo_precos' AND column_name = 'canais_fx' AND data_type = 'ARRAY'
   ) THEN
+    ALTER TABLE catalogo_precos ALTER COLUMN canais_fx DROP DEFAULT;
     ALTER TABLE catalogo_precos ALTER COLUMN canais_fx TYPE JSONB USING to_jsonb(canais_fx);
+    ALTER TABLE catalogo_precos ALTER COLUMN canais_fx SET DEFAULT '[]'::jsonb;
   END IF;
 END $$;
