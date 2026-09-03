@@ -187,7 +187,20 @@ CREATE TABLE IF NOT EXISTS catalogo_precos (
   ipi NUMERIC,
   familia TEXT,
   preco_fixo BOOLEAN NOT NULL DEFAULT false,
-  canais_fx TEXT[] NOT NULL DEFAULT '{}',
+  canais_fx JSONB NOT NULL DEFAULT '[]',
   precos JSONB NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- Converte quem já tinha essa coluna como TEXT[] (versão anterior deste
+-- schema) pra JSONB - sem isso, "CREATE TABLE IF NOT EXISTS" não mudaria o
+-- tipo de coluna que já existe. Se a coluna já for JSONB, o "USING" abaixo
+-- não dá erro (o driver do Postgres ignora conversão pro mesmo tipo).
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'catalogo_precos' AND column_name = 'canais_fx' AND data_type = 'ARRAY'
+  ) THEN
+    ALTER TABLE catalogo_precos ALTER COLUMN canais_fx TYPE JSONB USING to_jsonb(canais_fx);
+  END IF;
+END $$;

@@ -176,7 +176,7 @@ router.post('/importar', async (req, res) => {
     await pool.query(
       `INSERT INTO catalogo_precos (codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, atualizado_em)
        SELECT * FROM UNNEST(
-         $1::text[], $2::text[], $3::int[], $4::text[], $5::numeric[], $6::text[], $7::boolean[], $8::text[][], $9::jsonb[], $10::timestamptz[]
+         $1::text[], $2::text[], $3::int[], $4::text[], $5::numeric[], $6::text[], $7::boolean[], $8::jsonb[], $9::jsonb[], $10::timestamptz[]
        )
        ON CONFLICT (codigo_sku) DO UPDATE SET
          nome = EXCLUDED.nome, emb = EXCLUDED.emb, ncm = EXCLUDED.ncm, ipi = EXCLUDED.ipi,
@@ -190,7 +190,7 @@ router.post('/importar', async (req, res) => {
         produtos.map(p => p.ipi),
         produtos.map(p => p.familia),
         produtos.map(p => p.preco_fixo),
-        produtos.map(p => p.canais_fx),
+        produtos.map(p => JSON.stringify(p.canais_fx)),
         produtos.map(p => JSON.stringify(p.precos)),
         produtos.map(() => new Date()),
       ]
