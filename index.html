@@ -1499,7 +1499,8 @@
       <h3 id="fichaTecnicaNome" style="margin:0 0 8px;"></h3>
       <p id="fichaTecnicaDesc" style="font-size:13px;color:var(--gray);line-height:1.5;margin:0 0 12px;"></p>
       <div id="fichaTecnicaSpecs" style="border-top:1px solid var(--hairline);padding-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
-      <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:16px;">Fechar</button>
+      <a href="#" id="fichaTecnicaCatalogBtn" target="_blank" rel="noopener" class="hidden" style="display:block;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;background:var(--red);color:#fff;border-radius:var(--r-sm);padding:12px;font-weight:700;font-size:13.5px;margin-top:16px;">Ver catálogo técnico completo &#8594;</a>
+      <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:8px;">Fechar</button>
   </div>
 </div>
 
@@ -2163,6 +2164,14 @@ async function loadFichasTecnicas(){
     renderResults(); // reaplica pra mostrar os balões (i) que já podem se aplicar
   }catch(e){ /* sem ficha tecnica disponivel ainda, ou sem rede - sem problema */ }
 }
+let CATALOGO_TECNICO_MAP = null;
+function ensureCatalogoTecnicoMap(){
+  if(CATALOGO_TECNICO_MAP) return Promise.resolve(CATALOGO_TECNICO_MAP);
+  return fetch('https://russomichelrusso-debug.github.io/cortag-catalogo-tecnico/data/codigo-map.json')
+    .then(r => r.ok ? r.json() : {})
+    .then(map => { CATALOGO_TECNICO_MAP = map; return map; })
+    .catch(() => ({}));
+}
 function openFichaTecnica(cod){
   const ficha = FICHAS_MAP[cod];
   if(!ficha) return;
@@ -2185,6 +2194,15 @@ function openFichaTecnica(cod){
   ).join('') || '<div class="fichaSpecRow" style="color:var(--gray);">Sem especificações adicionais.</div>';
   document.getElementById('fichaTecnicaOverlay').classList.remove('hidden');
   document.getElementById('fichaTecnicaModal').classList.remove('hidden');
+  const catalogBtn = document.getElementById('fichaTecnicaCatalogBtn');
+  catalogBtn.classList.add('hidden');
+  ensureCatalogoTecnicoMap().then(map => {
+    const catId = map[cod];
+    if(catId){
+      catalogBtn.href = `https://russomichelrusso-debug.github.io/cortag-catalogo-tecnico/produto.html?id=${encodeURIComponent(catId)}&codigo=${encodeURIComponent(cod)}`;
+      catalogBtn.classList.remove('hidden');
+    }
+  });
 }
 function closeFichaTecnica(){
   document.getElementById('fichaTecnicaOverlay').classList.add('hidden');
