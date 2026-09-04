@@ -1499,7 +1499,7 @@
       <h3 id="fichaTecnicaNome" style="margin:0 0 8px;"></h3>
       <p id="fichaTecnicaDesc" style="font-size:13px;color:var(--gray);line-height:1.5;margin:0 0 12px;"></p>
       <div id="fichaTecnicaSpecs" style="border-top:1px solid var(--hairline);padding-top:10px;display:flex;flex-direction:column;gap:6px;"></div>
-      <a href="#" id="fichaTecnicaCatalogBtn" target="_blank" rel="noopener" class="hidden" style="display:block;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;background:var(--red);color:#fff;border-radius:var(--r-sm);padding:12px;font-weight:700;font-size:13.5px;margin-top:16px;">Ver catálogo técnico completo &#8594;</a>
+      <a href="#" id="fichaTecnicaCatalogBtn" target="_blank" rel="noopener" style="display:none;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;background:var(--red);color:#fff;border-radius:var(--r-sm);padding:12px;font-weight:700;font-size:13.5px;margin-top:16px;">Ver catálogo técnico completo &#8594;</a>
       <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:8px;">Fechar</button>
   </div>
 </div>
@@ -2195,12 +2195,13 @@ function openFichaTecnica(cod){
   document.getElementById('fichaTecnicaOverlay').classList.remove('hidden');
   document.getElementById('fichaTecnicaModal').classList.remove('hidden');
   const catalogBtn = document.getElementById('fichaTecnicaCatalogBtn');
-  catalogBtn.classList.add('hidden');
+  catalogBtn.style.display = 'none';
+  catalogBtn.href = '#';
   ensureCatalogoTecnicoMap().then(map => {
     const catId = map[cod];
     if(catId){
       catalogBtn.href = `https://russomichelrusso-debug.github.io/cortag-catalogo-tecnico/produto.html?id=${encodeURIComponent(catId)}&codigo=${encodeURIComponent(cod)}`;
-      catalogBtn.classList.remove('hidden');
+      catalogBtn.style.display = 'block';
     }
   });
 }
