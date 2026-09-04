@@ -5110,22 +5110,53 @@
       function processLevScan(rawCode) {
         const code = (rawCode || '').toString().trim();
         if (!code) return;
-        // DUN-14 (código da caixa fechada) - soma a embalagem padrão de uma vez,
+        // 1. DUN-14 (código da caixa fechada) - soma a embalagem padrão de uma vez,
         // sem precisar abrir a caixa e escanear unidade por unidade.
         if (DUN_INDEX[code]) {
           const p = productByCod(DUN_INDEX[code]);
           if (p) { levAddCaixaFechada(p); return; }
         }
+        // 2. Busca exata por código SKU ou EAN (com suporte a variações de formato e zeros à esquerda)
         const exact = findByExactCode(code);
         if (exact) {
-          levAddOrIncrement(exact);
+          if (exact.dun && exact.dun === code) {
+            levAddCaixaFechada(exact);
+          } else {
+            levAddOrIncrement(exact);
+          }
           return;
         }
-        // sem correspondência exata de código/EAN: tenta por nome, se não for só dígitos
-        if (!/^\d+$/.test(code) && code.length >= 2) {
+        // 3. Busca no catálogo usando o mesmo mecanismo da aba Preço (funciona para código, EAN, DUN ou nome)
+        if (code.length >= 2) {
           const results = searchProducts(code);
-          if (results.length === 1) { levAddOrIncrement(results[0]); return; }
-          if (results.length > 1) { showToast('Vários resultados — toque no produto certo na lista'); return; }
+          if (results.length === 1) {
+            const p = results[0];
+            if (p.dun && p.dun === code) {
+              levAddCaixaFechada(p);
+            } else {
+              levAddOrIncrement(p);
+            }
+            return;
+          }
+          if (results.length > 1) {
+            const codeUpper = code.toUpperCase();
+            const matchExato = results.find(p =>
+              (p.e && p.e === code) ||
+              (p.c && p.c.toUpperCase() === codeUpper) ||
+              (p.dun && p.dun === code)
+            );
+            if (matchExato) {
+              if (matchExato.dun && matchExato.dun === code) {
+                levAddCaixaFechada(matchExato);
+              } else {
+                levAddOrIncrement(matchExato);
+              }
+              return;
+            }
+            renderLevSearchResults(code);
+            showToast('Vários resultados — toque no produto certo na lista');
+            return;
+          }
         }
         showToast('Código não encontrado: ' + code);
         playScanBeep(false);
@@ -5689,8 +5720,7 @@
           clearTimeout(levDebounce);
           levDebounce = setTimeout(() => {
             const q = input.value.trim();
-            const isPureDigits = /^\d+$/.test(q);
-            if (q.length < 2 || isPureDigits) {
+            if (q.length < 2) {
               hideLevSearchResults();
               return;
             }
@@ -8147,6 +8177,8 @@
           p._n = normalize(p.n);
           DB.products.push(p);
           DB.productIndex[p.c] = p;
+          if (p.e) DB.eanIndex[p.e] = p;
+          if (p.dun) DUN_INDEX[p.dun] = p.c;
         }
         renderResults();
       }
@@ -8205,6 +8237,7 @@
           p._n = normalize(p.n);
           DB.productIndex[p.c] = p;
           if (p.e) DB.eanIndex[p.e] = p;
+          if (p.dun) DUN_INDEX[p.dun] = p.c;
         }
         // Família comercial substitui categoria como critério de campanha - monta a
         // lista de valores únicos a partir dos produtos (funciona com catálogo novo,
@@ -8225,7 +8258,44 @@
       function findByExactCode(raw) {
         const q = (raw || '').toString().trim();
         if (!q) return null;
-        return DB.eanIndex[q] || DB.productIndex[q] || null;
+        if (DB.eanIndex && DB.eanIndex[q]) return DB.eanIndex[q];
+        if (DB.productIndex && DB.productIndex[q]) return DB.productIndex[q];
+        const qUpper = q.toUpperCase();
+        if (DB.productIndex && DB.productIndex[qUpper]) return DB.productIndex[qUpper];
+        if (DUN_INDEX && DUN_INDEX[q]) {
+          const p = productByCod(DUN_INDEX[q]);
+          if (p) return p;
+        }
+        // Tentativa sem zeros à esquerda (ex: 060863 -> 60863)
+        const qNoZero = q.replace(/^0+/, '');
+        if (qNoZero && qNoZero !== q) {
+          if (DB.eanIndex && DB.eanIndex[qNoZero]) return DB.eanIndex[qNoZero];
+          if (DB.productIndex && DB.productIndex[qNoZero]) return DB.productIndex[qNoZero];
+          if (DB.productIndex && DB.productIndex[qNoZero.toUpperCase()]) return DB.productIndex[qNoZero.toUpperCase()];
+        }
+        // Tentativa preenchendo zeros (UPC 12 dígitos -> EAN-13 13 dígitos)
+        if (/^\d+$/.test(q)) {
+          if (q.length === 12) {
+            const ean13 = '0' + q;
+            if (DB.eanIndex && DB.eanIndex[ean13]) return DB.eanIndex[ean13];
+          }
+          if (q.length === 13) {
+            const dun14 = '0' + q;
+            if (DUN_INDEX && DUN_INDEX[dun14]) {
+              const p = productByCod(DUN_INDEX[dun14]);
+              if (p) return p;
+            }
+          }
+        }
+        // Varredura linear em DB.products caso o índice ainda não tenha mapeado
+        if (Array.isArray(DB.products)) {
+          for (const p of DB.products) {
+            if (p.e && (p.e === q || p.e === qNoZero)) return p;
+            if (p.c && (p.c === q || p.c.toUpperCase() === qUpper || p.c === qNoZero)) return p;
+            if (p.dun && (p.dun === q || p.dun === qNoZero)) return p;
+          }
+        }
+        return null;
       }
 
       // ---------------- Admin de campanhas promocionais ----------------
@@ -8669,7 +8739,7 @@
             const p = DB.productIndex[codigo];
             if (!p) continue;
             const info = novosCodigos[codigo];
-            if (info.ean) p.e = info.ean;
+            if (info.ean) { p.e = info.ean; DB.eanIndex[info.ean] = p; }
             if (info.dun14) { p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
           }
           renderResults();
