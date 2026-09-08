@@ -123,88 +123,13 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Importa em lote um relatório de faturamento (Cliente, Classificatório,
-// Nr.Pedido, Item, Qte.Faturada). Diferente do PDF: NÃO cria produto que não
-// existir no catálogo (só usa o que já está sincronizado) e NÃO grava valor -
-// o relatório vem sem impostos, então o preço fica em 0 de propósito. Feito
-// pra rodar de novo sempre que chegar um relatório novo: pedido repetido
-// (mesmo Nr.Pedido) é ignorado, cliente novo que aparecer é classificado.
-router.post('/importar-faturamento', async (req, res) => {
-  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar faturamento.' });
-  const { classificacoes, pedidos } = req.body;
-  if (!Array.isArray(pedidos)) return res.status(400).json({ erro: 'Envie { pedidos: [...] }' });
-
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-
-    let clientesClassificados = 0, clientesIgnoradosPorSeremMaisAntigos = 0;
-    for (const c of (classificacoes || [])) {
-      if (!c.nome || !c.tipo) continue;
-      const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
-      // só sobrescreve se esse relatório for mais novo que o que definiu o
-      // classificatório atual - senão, subir um relatório antigo por engano
-      // faria o cliente "voltar" pra uma categoria que já mudou. Sem data de
-      // referência nenhuma até agora (cliente nunca classificado), sempre aplica.
-      const dataRef = c.data_referencia || null;
-      const upd = await client.query(
-        `UPDATE clientes
-         SET classificatorio_tipo = $1, classificatorio_desconto = $2, classificatorio_atualizado_em = COALESCE($4::date, classificatorio_atualizado_em, now()::date)
-         WHERE id = $3
-           AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
-         RETURNING id`,
-        [c.tipo, c.desconto ?? null, clienteId, dataRef]
-      );
-      if (upd.rows.length > 0) clientesClassificados++;
-      else clientesIgnoradosPorSeremMaisAntigos++;
-    }
-
-    let pedidosCriados = 0, pedidosIgnorados = 0, itensGravados = 0, itensSemProduto = 0;
-    for (const p of pedidos) {
-      if (!p.numero_pedido || !p.cliente_nome || !Array.isArray(p.itens) || p.itens.length === 0) continue;
-      const existente = await client.query('SELECT id FROM pedidos WHERE numero_cotacao = $1', [p.numero_pedido]);
-      if (existente.rows.length > 0) { pedidosIgnorados++; continue; }
-
-      const clienteId = await acharOuCriarCliente(client, { nome: p.cliente_nome });
-      const pedidoResult = await client.query(
-        `INSERT INTO pedidos (cliente_id, numero_cotacao, origem, data_pedido)
-         VALUES ($1, $2, 'faturamento', COALESCE($3::timestamptz, now()))
-         RETURNING id`,
-        [clienteId, p.numero_pedido, p.data || null]
-      );
-      const pedidoId = pedidoResult.rows[0].id;
-
-      // insere todos os itens desse pedido numa operação só (junta com o
-      // catálogo pelo código - item sem produto correspondente é ignorado,
-      // não trava o pedido inteiro).
-      const codigos = p.itens.map(it => String(it.codigo_sku));
-      const quantidades = p.itens.map(it => Number(it.quantidade) || 0);
-      const inseridos = await client.query(
-        `WITH entrada AS (
-           SELECT * FROM UNNEST($1::text[], $2::numeric[]) AS t(codigo_sku, quantidade)
-         )
-         INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario)
-         SELECT $3, pr.id, e.quantidade, 0
-         FROM entrada e
-         JOIN produtos pr ON pr.codigo_sku = e.codigo_sku`,
-        [codigos, quantidades, pedidoId]
-      );
-      itensGravados += inseridos.rowCount;
-      itensSemProduto += (p.itens.length - inseridos.rowCount);
-      pedidosCriados++;
-    }
-
-    await client.query('COMMIT');
-    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${clientesIgnoradosPorSeremMaisAntigos} ignorado(s) (relatório mais antigo que o já registrado), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario?.email}.`);
-    res.json({ clientesClassificados, clientesIgnoradosPorSeremMaisAntigos, pedidosCriados, pedidosIgnorados, itensGravados, itensSemProduto });
-  } catch (e) {
-    await client.query('ROLLBACK');
-    console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar faturamento: ' + e.message });
-  } finally {
-    client.release();
-  }
-});
+// A antiga importação de "relatório de faturamento" (.xlsx só com a aba
+// Faturamento, sem NF/transportadora/valor, gravando em pedidos/pedido_itens
+// com origem='faturamento') foi retirada daqui - substituída pela importação
+// unificada da planilha oficial (Carteira + Faturamento, com todos os dados)
+// em POST /api/pedidos-oficiais/importar. Pedidos antigos com
+// origem='faturamento' continuam no histórico normalmente, só não é mais
+// possível criar novos por essa rota.
 
 // Encontra pedidos "prováveis duplicados": mesmo cliente, mesmo dia, com pelo
 // menos um produto em comum com outro pedido do mesmo cliente naquele dia.
