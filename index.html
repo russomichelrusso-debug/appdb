@@ -6352,9 +6352,12 @@
         cliente_codigo_oficial: ['Cod.Cliente', 'Cod. Cliente', 'Código Cliente', 'Codigo Cliente', 'Cod Cliente', 'Código do Cliente'],
         nr_pedido: ['Nr.Pedido', 'Nr. Pedido', 'Número Pedido', 'Numero Pedido', 'Nº Pedido', 'Pedido'],
         codigo_sku: ['Item', 'Código Item', 'Codigo Item', 'Cod.Item', 'Cód.Item'],
-        quantidade: ['Qte.Faturada', 'Qte.Pedida', 'Quantidade', 'Qtde', 'Qtd', 'Qte'],
-        valor: ['Vlr.Faturado', 'Valor Faturado', 'Vlr.Pedido', 'Valor', 'Vlr.'],
-        data_implantacao: ['Dt.Implantação', 'Dt. Implantação', 'Data Implantação', 'Dt.Implantacao'],
+        quantidade: ['Qte.Faturada', 'Qte.Pedida', 'Qt.Pendente', 'Quantidade', 'Qtde', 'Qtd', 'Qte'],
+        valor: ['Vlr.Faturado', 'Vl.Pendente', 'Valor Faturado', 'Vlr.Pedido', 'Valor', 'Vlr.'],
+        // "Implantação" (aba Carteira) e "Dt.Implant" (aba Faturamento) são os
+        // nomes reais confirmados no relatório oficial da empresa - as outras
+        // variações abaixo ficam de reserva caso um layout diferente apareça.
+        data_implantacao: ['Implantação', 'Dt.Implant', 'Dt.Implantação', 'Dt. Implantação', 'Data Implantação', 'Dt.Implantacao'],
         data_emissao: ['Dt.Emissão', 'Dt. Emissão', 'Data Emissão', 'Dt.Faturamento', 'Data Faturamento'],
         nota_fiscal: ['Nota Fiscal', 'Nº NF', 'Nr.NF', 'NF', 'Numero NF', 'Número NF', 'Nr. Nota Fiscal'],
         transportadora: ['Transportadora', 'Transp.', 'Transp'],
@@ -6364,28 +6367,54 @@
       // Colunas sem as quais uma linha não pode virar um item de pedido
       // oficial (cliente_codigo_oficial é NOT NULL no banco - ver schema.sql).
       const COLUNAS_OBRIGATORIAS = ['cliente_nome', 'cliente_codigo_oficial', 'nr_pedido', 'codigo_sku'];
+      // Transportadora vem SEM cabeçalho na planilha oficial (confirmado com
+      // um arquivo real) - é sempre a coluna logo depois de "Venda/Bonific",
+      // com valores tipo "TRD", "EXPRESSO S M", "CORREIOS". Por posição, não
+      // por nome - só usa esse fallback se a coluna seguinte realmente não
+      // tiver título nenhum (senão, na aba Carteira, pegaria "Qt.Alocada" por
+      // engano - lá a coluna depois de Venda/Bonific tem nome e é outra coisa).
+      const COLUNAS_POSICIONAIS = {
+        transportadora: { apos: ['Venda/Bonific', 'Venda / Bonific', 'Venda Bonific'] },
+      };
 
       function normalizarNomeColuna(texto) {
+        if (texto == null) return '';
         return String(texto).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
       }
-      // Acha, para cada campo lógico, qual coluna real da planilha corresponde
-      // (testando a lista de apelidos contra os cabeçalhos encontrados).
+      function acharIndiceColuna(cabecalhos, apelidos) {
+        const normalizados = cabecalhos.map(normalizarNomeColuna);
+        for (const apelido of apelidos) {
+          const idx = normalizados.indexOf(normalizarNomeColuna(apelido));
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      }
+      // Acha, para cada campo lógico, o ÍNDICE da coluna real na planilha
+      // (testando a lista de apelidos contra os cabeçalhos, mais o fallback
+      // posicional pra Transportadora). Devolve índices, não nomes, porque a
+      // Transportadora não tem nome de coluna nenhum pra usar como chave.
       function mapearColunas(cabecalhos, nomeAba) {
-        const porNomeNormalizado = new Map(cabecalhos.map(h => [normalizarNomeColuna(h), h]));
-        const encontradas = {};
+        const indices = {};
         const faltando = [];
-        for (const [campo, apelidos] of Object.entries(COLUNAS_RELATORIO_OFICIAL)) {
-          const apelidoEncontrado = apelidos.find(a => porNomeNormalizado.has(normalizarNomeColuna(a)));
-          encontradas[campo] = apelidoEncontrado ? porNomeNormalizado.get(normalizarNomeColuna(apelidoEncontrado)) : null;
-          if (!encontradas[campo] && COLUNAS_OBRIGATORIAS.includes(campo)) faltando.push(campo);
+        for (const campo of Object.keys(COLUNAS_RELATORIO_OFICIAL)) {
+          let idx = acharIndiceColuna(cabecalhos, COLUNAS_RELATORIO_OFICIAL[campo]);
+          const posicional = COLUNAS_POSICIONAIS[campo];
+          if (idx === -1 && posicional) {
+            const idxRef = acharIndiceColuna(cabecalhos, posicional.apos);
+            const proximaColuna = idxRef !== -1 ? cabecalhos[idxRef + 1] : undefined;
+            const proximaEstaVazia = proximaColuna == null || String(proximaColuna).trim() === '';
+            if (idxRef !== -1 && proximaEstaVazia) idx = idxRef + 1;
+          }
+          indices[campo] = idx;
+          if (idx === -1 && COLUNAS_OBRIGATORIAS.includes(campo)) faltando.push(campo);
         }
         if (faltando.length > 0) {
           throw new Error(
             `Aba "${nomeAba}": não encontrei a(s) coluna(s) ${faltando.join(', ')}. ` +
-            `Colunas nesta planilha: ${cabecalhos.join(', ') || '(nenhuma - aba vazia?)'}.`
+            `Colunas nesta planilha: ${cabecalhos.filter(Boolean).join(', ') || '(nenhuma - aba vazia?)'}.`
           );
         }
-        return encontradas;
+        return indices;
       }
       function paraDataISO(dataRaw) {
         if (!dataRaw) return null;
@@ -6397,52 +6426,54 @@
       // esperado pelo servidor. `status` é 'carteira' pra aba Carteira e
       // 'faturado' pra aba Faturamento - o servidor nunca deixa um pedido
       // "voltar" de faturado pra carteira, então pode reimportar à vontade.
+      // Lê em modo posicional (header:1 - array por linha, não objeto por
+      // nome de coluna): é o que permite achar a Transportadora, que não tem
+      // título de coluna nenhum na planilha oficial.
       function lerAbaRelatorioOficial(wb, nomeAba, status, itensFora, classifsFora) {
         const sheet = wb.Sheets[nomeAba];
         if (!sheet) return 0; // aba ausente - só pula (relatório pode vir só com uma das duas)
-        const linhas = XLSXutils_sheet_to_json_seguro(wb, sheet, nomeAba);
-        if (linhas.length === 0) return 0;
+        const linhas = window.XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, range: 2 });
+        if (linhas.length < 2) return 0; // só cabeçalho (ou vazia)
 
-        const col = mapearColunas(Object.keys(linhas[0]), nomeAba);
+        const cabecalhos = linhas[0];
+        const dados = linhas.slice(1);
+        const col = mapearColunas(cabecalhos, nomeAba);
+        const campo = (r, nome) => (col[nome] === -1 ? null : r[col[nome]]);
+
         let gravadas = 0;
-        for (const r of linhas) {
-          const clienteNome = String(r[col.cliente_nome] ?? '').trim();
-          const clienteCodigo = String(r[col.cliente_codigo_oficial] ?? '').trim();
-          const nrPedido = String(r[col.nr_pedido] ?? '').trim();
-          const codigoItem = String(r[col.codigo_sku] ?? '').trim();
+        for (const r of dados) {
+          const clienteNome = String(campo(r, 'cliente_nome') ?? '').trim();
+          const clienteCodigo = String(campo(r, 'cliente_codigo_oficial') ?? '').trim();
+          const nrPedido = String(campo(r, 'nr_pedido') ?? '').trim();
+          const codigoItem = String(campo(r, 'codigo_sku') ?? '').trim();
           if (!clienteNome || !clienteCodigo || !nrPedido || !codigoItem) continue; // linha em branco/rodapé
 
-          const dataEmissaoISO = col.data_emissao ? paraDataISO(r[col.data_emissao]) : null;
+          const dataEmissaoISO = paraDataISO(campo(r, 'data_emissao'));
+          const valorBruto = campo(r, 'valor');
+          const notaFiscalBruta = campo(r, 'nota_fiscal');
+          const classificatorioBruto = campo(r, 'classificatorio');
 
           itensFora.push({
             cliente_nome: clienteNome,
             cliente_codigo_oficial: clienteCodigo,
             nr_pedido: nrPedido,
             codigo_sku: codigoItem,
-            quantidade: col.quantidade ? (Number(r[col.quantidade]) || 0) : 0,
-            valor: col.valor && r[col.valor] != null ? Number(r[col.valor]) : null,
-            data_implantacao: col.data_implantacao ? paraDataISO(r[col.data_implantacao]) : null,
+            quantidade: Number(campo(r, 'quantidade')) || 0,
+            valor: valorBruto != null ? Number(valorBruto) : null,
+            data_implantacao: paraDataISO(campo(r, 'data_implantacao')),
             data_faturamento: status === 'faturado' ? dataEmissaoISO : null,
-            nota_fiscal: col.nota_fiscal ? (r[col.nota_fiscal] != null ? String(r[col.nota_fiscal]) : null) : null,
-            classificatorio: col.classificatorio ? (r[col.classificatorio] ?? null) : null,
-            transportadora: col.transportadora ? (r[col.transportadora] ?? null) : null,
-            situacao_pedido: col.situacao_pedido ? (r[col.situacao_pedido] ?? null) : null,
+            nota_fiscal: notaFiscalBruta != null ? String(notaFiscalBruta) : null,
+            classificatorio: classificatorioBruto ?? null,
+            transportadora: campo(r, 'transportadora') ?? null,
+            situacao_pedido: campo(r, 'situacao_pedido') ?? null,
             status,
           });
 
-          if (col.classificatorio) {
-            const classi = interpretarClassificatorio(r[col.classificatorio]);
-            if (classi) classifsFora.push({ nome: clienteNome, tipo: classi.tipo, desconto: classi.desconto, data_referencia: dataEmissaoISO });
-          }
+          const classi = interpretarClassificatorio(classificatorioBruto);
+          if (classi) classifsFora.push({ nome: clienteNome, tipo: classi.tipo, desconto: classi.desconto, data_referencia: dataEmissaoISO });
           gravadas++;
         }
         return gravadas;
-      }
-      // sheet_to_json com range:2 (cabeçalho na 3ª linha) - mesma convenção já
-      // usada antes só pra aba Faturamento; assumindo que a Carteira segue o
-      // mesmo layout de relatório (a confirmar com um arquivo real).
-      function XLSXutils_sheet_to_json_seguro(wb, sheet, _nomeAba) {
-        return window.XLSX.utils.sheet_to_json(sheet, { defval: null, range: 2 });
       }
 
       // Lê o arquivo .xlsx do relatório oficial (abas "Carteira" e/ou
