@@ -1,7 +1,34 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { acharClientePorNome } = require('../clientMatcher');
+const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
+
+// Status geral da importação oficial - pro painel admin mostrar de cara
+// quando foi o último relatório importado, sem precisar abrir cliente por
+// cliente. Existe porque já aconteceu de passar dias sem ninguém notar que
+// o relatório oficial tinha parado de ser importado (rota separada só de
+// consulta, precisa vir ANTES de "/:clienteId" pra não ser confundida com
+// um id de cliente).
+router.get('/status', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT MAX(atualizado_em) AS ultima_atualizacao, COUNT(*) AS total_linhas,
+              COUNT(*) FILTER (WHERE status = 'carteira') AS total_carteira,
+              COUNT(*) FILTER (WHERE status = 'faturado') AS total_faturado
+       FROM pedidos_oficiais_itens`
+    );
+    const row = result.rows[0];
+    res.json({
+      ultima_atualizacao: row.ultima_atualizacao,
+      total_linhas: Number(row.total_linhas),
+      total_carteira: Number(row.total_carteira),
+      total_faturado: Number(row.total_faturado),
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar status da importação oficial.' });
+  }
+});
 
 // Resumo do cliente pro topo da ficha: classificatório mais recente e valor
 // acumulado faturado (dado oficial, mais confiável que o preço estimado do
@@ -72,18 +99,46 @@ router.get('/:clienteId', async (req, res) => {
   }
 });
 
-// Importa em lote as abas "Carteira" e/ou "Faturamento" do relatório oficial.
+// Importa em lote as abas "Carteira" e "Faturamento" do relatório oficial -
+// ÚNICA porta de entrada de pedidos oficiais desde a unificação (antes havia
+// também um upload de JSON pré-preparado à mão pelo usuário, e uma planilha
+// separada só com a aba Faturamento incompleta - os dois foram removidos:
+// o app lê a planilha .xlsx oficial diretamente, sem etapa manual no meio).
 // Pode rodar quantas vezes quiser: o mesmo Nr.Pedido+código não duplica, só
 // atualiza - e uma vez "faturado", nunca volta pra "carteira" mesmo que uma
 // planilha antiga de carteira seja reimportada por engano depois.
 router.post('/importar', async (req, res) => {
-  // Qualquer usuário logado pode importar (não só admin) - decisão explícita.
-  const { itens } = req.body;
+  // Qualquer usuário logado pode importar (não só admin) - decisão explícita
+  // (já valia antes da unificação; mantida aqui inclusive pra classificação
+  // de cliente, que antes exigia admin no fluxo separado que foi removido).
+  const { itens, classificacoes } = req.body;
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Classificatório do cliente (Varejo Master/Premium/Exclusive/Rede),
+    // vindo de qualquer uma das abas que tiver a coluna preenchida. Só
+    // sobrescreve se esse relatório for mais novo que o que definiu o
+    // classificatório atual - senão, subir um relatório antigo por engano
+    // faria o cliente "voltar" pra uma categoria que já mudou.
+    let clientesClassificados = 0, clientesClassifIgnorados = 0;
+    for (const c of (classificacoes || [])) {
+      if (!c.nome || !c.tipo) continue;
+      const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
+      const dataRef = c.data_referencia || null;
+      const upd = await client.query(
+        `UPDATE clientes
+         SET classificatorio_tipo = $1, classificatorio_desconto = $2, classificatorio_atualizado_em = COALESCE($4::date, classificatorio_atualizado_em, now()::date)
+         WHERE id = $3
+           AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
+         RETURNING id`,
+        [c.tipo, c.desconto ?? null, clienteId, dataRef]
+      );
+      if (upd.rows.length > 0) clientesClassificados++;
+      else clientesClassifIgnorados++;
+    }
 
     // Aprende o codigo_oficial de clientes que ainda não têm, casando por
     // nome - só na primeira vez que aquele código aparece. Depois disso, o
@@ -146,8 +201,8 @@ router.post('/importar', async (req, res) => {
     );
 
     await client.query('COMMIT');
-    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s) - por ${req.usuario?.email}.`);
-    res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados });
+    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
+    res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error(e);
@@ -158,4 +213,3 @@ router.post('/importar', async (req, res) => {
 });
 
 module.exports = router;
-
