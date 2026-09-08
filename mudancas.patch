@@ -1,0 +1,614 @@
+diff --git a/README.md b/README.md
+index 7e9b8c8..2ed15ca 100644
+--- a/README.md
++++ b/README.md
+@@ -21,14 +21,14 @@ routes/
+   auth.js             # setup, login, logout, /me, gestão de usuários
+   clientes.js          # CRUD de clientes, import, merge
+   produtos.js           # produtos e sincronização
+-  pedidos.js             # pedidos e importação de faturamento
++  pedidos.js             # pedidos manuais/do app (finalizar pedido, PDF) e export por período
+   levantamentos.js        # levantamentos de estoque em campo
+   relatorios.js            # histórico, rotatividade, consumo estimado, curva ABC etc.
+   previsaoEstoque.js        # previsão de estoque
+   configuracoes.js           # configurações chave/valor
+   fichasTecnicas.js            # fichas técnicas de produtos
+   codigosProduto.js              # códigos alternativos de produto
+-  pedidosOficiais.js               # pedidos oficiais por cliente
++  pedidosOficiais.js               # ÚNICA importação de pedidos oficiais (planilha .xlsx Carteira/Faturamento) e consulta por cliente
+   assistente.js                     # assistente com IA (Gemini)
+ index.html, manifest.json, icon-*.png  # PWA estático servido pelo frontend
+ ```
+@@ -67,14 +67,41 @@ O schema é aplicado automaticamente na subida (`runMigrations`), incluindo limp
+ - `/api/auth` — login, logout, sessão atual, gestão de usuários
+ - `/api/clientes` — cadastro, importação e mesclagem de clientes
+ - `/api/produtos` — catálogo de produtos e sincronização
+-- `/api/pedidos` — pedidos e importação de faturamento
++- `/api/pedidos` — pedidos manuais/do app (POST `/`) e export por período (GET `/exportar`)
+ - `/api/levantamentos` — levantamentos de estoque
+ - `/api/previsao-estoque` — previsão de estoque
+ - `/api/configuracoes` — configurações chave/valor
+ - `/api/fichas-tecnicas` — fichas técnicas de produtos
+ - `/api/codigos-produto` — códigos alternativos de produto
+-- `/api/pedidos-oficiais` — pedidos oficiais por cliente
++- `/api/pedidos-oficiais` — pedidos oficiais por cliente e importação da planilha oficial
+ - `/api/assistente` — assistente com IA (Gemini)
+ - `/api/clientes/:id/historico`, `/rotatividade`, `/levantamentos`, `/consumo-estimado/:produtoId`, `/api/produtos/:codigo/clientes`, `/api/pedidos/exportar`, `/api/produtos-abc-geral` — relatórios
+ 
+ `GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade.
++
++## Importação de pedidos oficiais (Carteira / Faturamento)
++
++Única porta de entrada de dados de pedidos oficiais desde a unificação (a
++importação por JSON preparado à mão, e a planilha .xlsx separada e
++incompleta que só cobria a aba Faturamento, foram retiradas):
++
++- `POST /api/pedidos-oficiais/importar` — recebe `{ itens: [...], classificacoes: [...] }`.
++  O frontend (`index.html`, `parseRelatorioOficialXlsx`) lê as abas "Carteira"
++  e "Faturamento" da planilha .xlsx oficial direto no navegador e monta esse
++  payload - não existe mais preparo manual de arquivo. Grava em
++  `pedidos_oficiais_itens` (chave `nr_pedido` + `codigo_sku`, nunca duplica,
++  nunca "recua" de faturado pra carteira) e atualiza o classificatório do
++  cliente (`clientes.classificatorio_tipo/desconto`), respeitando qual
++  relatório é mais recente.
++  - Qualquer usuário autenticado pode importar (decisão explícita, não só admin).
++  - Os nomes de coluna esperados na planilha (`Cliente`, `Cod.Cliente`,
++    `Nr.Pedido`, `Item`, `Nota Fiscal`, `Transportadora`, `Situação`,
++    `Classificatório` etc., com variações aceitas) estão centralizados em
++    `COLUNAS_RELATORIO_OFICIAL` no `index.html` — se o relatório real usar
++    nomes diferentes, o import falha com um erro dizendo qual coluna faltou
++    e quais existem no arquivo (em vez de gravar dado errado). Ajuste a lista
++    de apelidos ali se necessário.
++- `GET /api/pedidos-oficiais/status` — última data de atualização e totais
++  (carteira/faturado), usado pelo painel admin pra mostrar de cara se o
++  relatório está desatualizado.
++- `GET /api/pedidos-oficiais/:clienteId` e `/:clienteId/resumo` — consulta por cliente (inalteradas).
+diff --git a/index.html b/index.html
+index e841316..88d948f 100644
+--- a/index.html
++++ b/index.html
+@@ -4068,24 +4068,17 @@
+           <summary>Relatórios e clientes</summary>
+           <div class="ap-groupBody">
+             <div class="ap-card">
+-              <h3>Pedidos oficiais (Carteira / Faturamento)</h3>
+-              <p class="ap-hint" style="margin:10px 0;">Importa as abas Carteira e Faturamento do relatório oficial. Não
+-                duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra "Faturado") em vez de criar de novo.
+-                Aparece na aba "Pedidos" de cada cliente, com classificatório e acumulado faturado.</p>
+-              <button class="fileBtn" id="importPedidosOficiaisBtn">Importar arquivo de pedidos oficiais</button>
+-              <input type="file" id="pedidosOficiaisFileInput" accept=".json,application/json" style="display:none;">
+-              <div id="importPedidosOficiaisMsg" style="margin-top:8px;"></div>
+-            </div>
+-            <div class="ap-card">
+-              <h3>Importar relatório de faturamento</h3>
+-              <p class="ap-hint" style="margin-bottom:10px;">Selecione a planilha de faturamento (aba "Faturamento" com
+-                Cliente, Classificatório, Nr.Pedido, Item e Qte.Faturada). Grava produto e quantidade no histórico do
+-                servidor (sem valor — o relatório vem sem impostos), e classifica o cliente (Varejo
+-                Master/Premium/Exclusive/Rede) pra pré-preencher o desconto de canal. Pode subir de novo sempre que
+-                chegar um relatório atualizado — pedido repetido não duplica.</p>
+-              <input type="file" id="faturamentoFileInput" accept=".xlsx,.xls" style="display:none;">
+-              <button class="fileBtn" id="faturamentoFileBtn">Selecionar planilha (.xlsx)</button>
+-              <div id="faturamentoMsgArea" style="margin-top:8px;"></div>
++              <h3>Relatório oficial (Carteira / Faturamento)</h3>
++              <p class="ap-hint" style="margin:10px 0;">Selecione a planilha .xlsx oficial, com as abas "Carteira" e/ou
++                "Faturamento". É a única forma de entrada desses dados — sem preparar arquivo à parte, sem JSON manual.
++                Lê Nr.Pedido, NF, transportadora, situação, valor e classificatório direto da planilha, e grava tudo
++                de uma vez: pedido oficial (aba "Pedidos" de cada cliente, com classificatório e acumulado faturado) e
++                classificação de canal do cliente. Não duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra
++                "Faturado") em vez de criar de novo. Pode subir de novo sempre que sair um relatório atualizado.</p>
++              <div id="relatorioOficialStatus" class="ap-hint" style="margin-bottom:10px;">Carregando status…</div>
++              <input type="file" id="relatorioOficialFileInput" accept=".xlsx,.xls" style="display:none;">
++              <button class="fileBtn" id="relatorioOficialFileBtn">Selecionar planilha (.xlsx)</button>
++              <div id="relatorioOficialMsgArea" style="margin-top:8px;"></div>
+             </div>
+             <div class="ap-card">
+               <h3>Importar clientes (JSON)</h3>
+@@ -6338,58 +6331,148 @@
+         return { tipo: texto, desconto: null };
+       }
+ 
+-      // Lê a aba "Faturamento" do relatório de pedidos já faturados. Agrupa por
+-      // Nr.Pedido (pedido com vários itens) e por Cliente (classificatório). Não
+-      // grava valor - só quantidade (o Vlr.Faturado vem sem impostos, não confiável
+-      // pra guardar como preço).
+-      async function parseFaturamentoXlsx(arrayBuffer) {
++      // ================================================================
++      // Importação unificada do relatório oficial (Carteira + Faturamento)
++      // ================================================================
++      // Única porta de entrada de pedidos oficiais: lê as duas abas da
++      // planilha .xlsx exportada do sistema oficial da empresa e manda tudo
++      // pronto pro servidor (POST /api/pedidos-oficiais/importar) - não tem
++      // mais etapa manual de preparar um JSON à parte. Reduz erro de digitação
++      // e permite rodar de novo sempre que sair um relatório novo.
++      //
++      // ATENÇÃO - nomes de coluna: os nomes abaixo foram inferidos a partir
++      // do código existente (aba Faturamento, já usada antes) e dos comentários
++      // do schema do banco (ex: "Cod. Cliente"). Ainda NÃO foram conferidos
++      // contra um arquivo real de Carteira. Se a planilha oficial usar nomes
++      // diferentes dos listados aqui, o import vai parar com um erro claro
++      // dizendo qual coluna não foi encontrada e quais colunas existem no
++      // arquivo - é só adicionar o nome real na lista de apelidos abaixo.
++      const COLUNAS_RELATORIO_OFICIAL = {
++        cliente_nome: ['Cliente', 'Nome Cliente', 'Nome do Cliente'],
++        cliente_codigo_oficial: ['Cod.Cliente', 'Cod. Cliente', 'Código Cliente', 'Codigo Cliente', 'Cod Cliente', 'Código do Cliente'],
++        nr_pedido: ['Nr.Pedido', 'Nr. Pedido', 'Número Pedido', 'Numero Pedido', 'Nº Pedido', 'Pedido'],
++        codigo_sku: ['Item', 'Código Item', 'Codigo Item', 'Cod.Item', 'Cód.Item'],
++        quantidade: ['Qte.Faturada', 'Qte.Pedida', 'Quantidade', 'Qtde', 'Qtd', 'Qte'],
++        valor: ['Vlr.Faturado', 'Valor Faturado', 'Vlr.Pedido', 'Valor', 'Vlr.'],
++        data_implantacao: ['Dt.Implantação', 'Dt. Implantação', 'Data Implantação', 'Dt.Implantacao'],
++        data_emissao: ['Dt.Emissão', 'Dt. Emissão', 'Data Emissão', 'Dt.Faturamento', 'Data Faturamento'],
++        nota_fiscal: ['Nota Fiscal', 'Nº NF', 'Nr.NF', 'NF', 'Numero NF', 'Número NF', 'Nr. Nota Fiscal'],
++        transportadora: ['Transportadora', 'Transp.', 'Transp'],
++        situacao_pedido: ['Situação', 'Situação do Pedido', 'Sit.Pedido', 'Status Pedido', 'Situação Pedido'],
++        classificatorio: ['Classificatório', 'Classificatorio'],
++      };
++      // Colunas sem as quais uma linha não pode virar um item de pedido
++      // oficial (cliente_codigo_oficial é NOT NULL no banco - ver schema.sql).
++      const COLUNAS_OBRIGATORIAS = ['cliente_nome', 'cliente_codigo_oficial', 'nr_pedido', 'codigo_sku'];
++
++      function normalizarNomeColuna(texto) {
++        return String(texto).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9]/g, '');
++      }
++      // Acha, para cada campo lógico, qual coluna real da planilha corresponde
++      // (testando a lista de apelidos contra os cabeçalhos encontrados).
++      function mapearColunas(cabecalhos, nomeAba) {
++        const porNomeNormalizado = new Map(cabecalhos.map(h => [normalizarNomeColuna(h), h]));
++        const encontradas = {};
++        const faltando = [];
++        for (const [campo, apelidos] of Object.entries(COLUNAS_RELATORIO_OFICIAL)) {
++          const apelidoEncontrado = apelidos.find(a => porNomeNormalizado.has(normalizarNomeColuna(a)));
++          encontradas[campo] = apelidoEncontrado ? porNomeNormalizado.get(normalizarNomeColuna(apelidoEncontrado)) : null;
++          if (!encontradas[campo] && COLUNAS_OBRIGATORIAS.includes(campo)) faltando.push(campo);
++        }
++        if (faltando.length > 0) {
++          throw new Error(
++            `Aba "${nomeAba}": não encontrei a(s) coluna(s) ${faltando.join(', ')}. ` +
++            `Colunas nesta planilha: ${cabecalhos.join(', ') || '(nenhuma - aba vazia?)'}.`
++          );
++        }
++        return encontradas;
++      }
++      function paraDataISO(dataRaw) {
++        if (!dataRaw) return null;
++        const d = dataRaw instanceof Date ? dataRaw : new Date(dataRaw);
++        return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
++      }
++
++      // Lê uma aba (Carteira ou Faturamento) e devolve as linhas já no formato
++      // esperado pelo servidor. `status` é 'carteira' pra aba Carteira e
++      // 'faturado' pra aba Faturamento - o servidor nunca deixa um pedido
++      // "voltar" de faturado pra carteira, então pode reimportar à vontade.
++      function lerAbaRelatorioOficial(wb, nomeAba, status, itensFora, classifsFora) {
++        const sheet = wb.Sheets[nomeAba];
++        if (!sheet) return 0; // aba ausente - só pula (relatório pode vir só com uma das duas)
++        const linhas = XLSXutils_sheet_to_json_seguro(wb, sheet, nomeAba);
++        if (linhas.length === 0) return 0;
++
++        const col = mapearColunas(Object.keys(linhas[0]), nomeAba);
++        let gravadas = 0;
++        for (const r of linhas) {
++          const clienteNome = String(r[col.cliente_nome] ?? '').trim();
++          const clienteCodigo = String(r[col.cliente_codigo_oficial] ?? '').trim();
++          const nrPedido = String(r[col.nr_pedido] ?? '').trim();
++          const codigoItem = String(r[col.codigo_sku] ?? '').trim();
++          if (!clienteNome || !clienteCodigo || !nrPedido || !codigoItem) continue; // linha em branco/rodapé
++
++          const dataEmissaoISO = col.data_emissao ? paraDataISO(r[col.data_emissao]) : null;
++
++          itensFora.push({
++            cliente_nome: clienteNome,
++            cliente_codigo_oficial: clienteCodigo,
++            nr_pedido: nrPedido,
++            codigo_sku: codigoItem,
++            quantidade: col.quantidade ? (Number(r[col.quantidade]) || 0) : 0,
++            valor: col.valor && r[col.valor] != null ? Number(r[col.valor]) : null,
++            data_implantacao: col.data_implantacao ? paraDataISO(r[col.data_implantacao]) : null,
++            data_faturamento: status === 'faturado' ? dataEmissaoISO : null,
++            nota_fiscal: col.nota_fiscal ? (r[col.nota_fiscal] != null ? String(r[col.nota_fiscal]) : null) : null,
++            classificatorio: col.classificatorio ? (r[col.classificatorio] ?? null) : null,
++            transportadora: col.transportadora ? (r[col.transportadora] ?? null) : null,
++            situacao_pedido: col.situacao_pedido ? (r[col.situacao_pedido] ?? null) : null,
++            status,
++          });
++
++          if (col.classificatorio) {
++            const classi = interpretarClassificatorio(r[col.classificatorio]);
++            if (classi) classifsFora.push({ nome: clienteNome, tipo: classi.tipo, desconto: classi.desconto, data_referencia: dataEmissaoISO });
++          }
++          gravadas++;
++        }
++        return gravadas;
++      }
++      // sheet_to_json com range:2 (cabeçalho na 3ª linha) - mesma convenção já
++      // usada antes só pra aba Faturamento; assumindo que a Carteira segue o
++      // mesmo layout de relatório (a confirmar com um arquivo real).
++      function XLSXutils_sheet_to_json_seguro(wb, sheet, _nomeAba) {
++        return window.XLSX.utils.sheet_to_json(sheet, { defval: null, range: 2 });
++      }
++
++      // Lê o arquivo .xlsx do relatório oficial (abas "Carteira" e/ou
++      // "Faturamento") e devolve { itens, classificacoes } prontos pra
++      // POST /api/pedidos-oficiais/importar.
++      async function parseRelatorioOficialXlsx(arrayBuffer) {
+         const XLSX = await loadSheetJs();
+         const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+-        const sheet = wb.Sheets['Faturamento'] || wb.Sheets[wb.SheetNames[0]];
+-        const linhas = XLSX.utils.sheet_to_json(sheet, { defval: null, range: 2 });
+ 
+-        const classificacoesMap = new Map(); // nome cliente -> {tipo, desconto}
+-        const dataRefPorCliente = new Map(); // nome cliente -> data mais recente vista pra ele nesse relatório
+-        const pedidosMap = new Map();        // numero do pedido -> {cliente_nome, data, itens[]}
++        const itens = [];
++        const classificacoesBrutas = []; // pode ter repetição do mesmo cliente entre as duas abas
++        const linhasCarteira = lerAbaRelatorioOficial(wb, 'Carteira', 'carteira', itens, classificacoesBrutas);
++        const linhasFaturamento = lerAbaRelatorioOficial(wb, 'Faturamento', 'faturado', itens, classificacoesBrutas);
+ 
+-        function paraDataISO(dataRaw) {
+-          if (!dataRaw) return null;
+-          const d = dataRaw instanceof Date ? dataRaw : new Date(dataRaw);
+-          return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
++        if (linhasCarteira === 0 && linhasFaturamento === 0) {
++          throw new Error('Não encontrei as abas "Carteira" ou "Faturamento" nesta planilha (ou vieram vazias). Abas encontradas: ' + wb.SheetNames.join(', '));
+         }
+ 
+-        linhas.forEach(r => {
+-          const clienteNome = String(r['Cliente'] ?? '').trim();
+-          const numeroPedido = String(r['Nr.Pedido'] ?? '').trim();
+-          const codigoItem = String(r['Item'] ?? '').trim();
+-          const qtd = Number(r['Qte.Faturada']) || 0;
+-          const dataISO = paraDataISO(r['Dt.Emissão']);
+-          if (!clienteNome || !numeroPedido || !codigoItem) return;
+-
+-          if (!classificacoesMap.has(clienteNome)) {
+-            const classi = interpretarClassificatorio(r['Classificatório']);
+-            if (classi) classificacoesMap.set(clienteNome, classi);
+-          }
+-          // guarda a data MAIS RECENTE vista pra esse cliente no relatório - é ela
+-          // que decide se esse classificatório é mais novo que o já registrado.
+-          if (dataISO && (!dataRefPorCliente.has(clienteNome) || dataISO > dataRefPorCliente.get(clienteNome))) {
+-            dataRefPorCliente.set(clienteNome, dataISO);
+-          }
+-
+-          if (!pedidosMap.has(numeroPedido)) {
+-            pedidosMap.set(numeroPedido, { cliente_nome: clienteNome, data: dataISO, itens: [] });
++        // dedup de classificação por cliente, ficando com a de data mais recente
++        const classificacoesMap = new Map();
++        for (const c of classificacoesBrutas) {
++          const atual = classificacoesMap.get(c.nome);
++          if (!atual || (c.data_referencia && (!atual.data_referencia || c.data_referencia > atual.data_referencia))) {
++            classificacoesMap.set(c.nome, c);
+           }
+-          pedidosMap.get(numeroPedido).itens.push({ codigo_sku: codigoItem, quantidade: qtd });
+-        });
+-
+-        const classificacoes = Array.from(classificacoesMap, ([nome, c]) => ({
+-          nome, tipo: c.tipo, desconto: c.desconto, data_referencia: dataRefPorCliente.get(nome) || null,
+-        }));
+-        const pedidos = Array.from(pedidosMap, ([numero_pedido, p]) => ({ numero_pedido, ...p }));
+-        return { classificacoes, pedidos };
++        }
++        return { itens, classificacoes: Array.from(classificacoesMap.values()) };
+       }
+-      async function apiImportarFaturamento(payload) {
+-        return apiFetch('/api/pedidos/importar-faturamento', { method: 'POST', body: JSON.stringify(payload) });
++      async function apiImportarPedidosOficiais(payload) {
++        return apiFetch('/api/pedidos-oficiais/importar', { method: 'POST', body: JSON.stringify(payload) });
+       }
+ 
+       let ACTIVE_SOURCE = 'Base original do app';
+@@ -7932,30 +8015,53 @@
+       }
+ 
+ 
+-      function initFaturamentoImport() {
+-        const btn = document.getElementById('faturamentoFileBtn');
+-        const fileInput = document.getElementById('faturamentoFileInput');
++      // Mostra quando foi o último relatório oficial importado, direto no
++      // card - já aconteceu de passar dias sem ninguém notar que esse import
++      // tinha parado (o app não avisa sozinho, então o painel precisa deixar
++      // isso óbvio de bater o olho, sem precisar abrir cliente por cliente).
++      async function carregarStatusRelatorioOficial() {
++        const el = document.getElementById('relatorioOficialStatus');
++        if (!el) return;
++        try {
++          const status = await apiFetch('/api/pedidos-oficiais/status');
++          if (!status.ultima_atualizacao) {
++            el.textContent = 'Nenhum relatório oficial importado ainda.';
++            return;
++          }
++          const quando = new Date(status.ultima_atualizacao).toLocaleString('pt-BR');
++          const diasAtras = Math.floor((Date.now() - new Date(status.ultima_atualizacao).getTime()) / 86400000);
++          const aviso = diasAtras >= 3 ? ` ⚠️ (${diasAtras} dias atrás — pode estar desatualizado, confira se saiu relatório novo)` : '';
++          el.innerHTML = `Último relatório importado: <b>${quando}</b>${aviso} · ${status.total_linhas} linha(s) no total (${status.total_carteira} em carteira, ${status.total_faturado} faturadas)`;
++        } catch (e) {
++          el.textContent = 'Não foi possível carregar o status (' + e.message + ').';
++        }
++      }
++
++      function initRelatorioOficialImport() {
++        const btn = document.getElementById('relatorioOficialFileBtn');
++        const fileInput = document.getElementById('relatorioOficialFileInput');
++        carregarStatusRelatorioOficial();
+         btn.addEventListener('click', () => fileInput.click());
+         fileInput.addEventListener('change', () => {
+           const file = fileInput.files && fileInput.files[0];
+           if (!file) return;
+-          const msg = document.getElementById('faturamentoMsgArea');
++          const msg = document.getElementById('relatorioOficialMsgArea');
+           msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+           const reader = new FileReader();
+           reader.onload = async () => {
+             try {
+-              const { classificacoes, pedidos } = await parseFaturamentoXlsx(reader.result);
+-              if (pedidos.length === 0) throw new Error('Nenhum pedido reconhecido — confira se a aba se chama "Faturamento" e tem as colunas certas.');
+-              msg.innerHTML = `<div class="promoEmpty">Enviando ${pedidos.length} pedido(s) e ${classificacoes.length} classificação(ões)…</div>`;
+-              const result = await apiImportarFaturamento({ classificacoes, pedidos });
++              const { itens, classificacoes } = await parseRelatorioOficialXlsx(reader.result);
++              if (itens.length === 0) throw new Error('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
++              msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} item(ns) e ${classificacoes.length} classificação(ões)…</div>`;
++              const result = await apiImportarPedidosOficiais({ itens, classificacoes });
+               msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">
+-          ✓ ${result.clientesClassificados} cliente(s) classificado(s) ·
+-          ${result.pedidosCriados} pedido(s) novo(s) ·
+-          ${result.pedidosIgnorados} já existente(s) ·
+-          ${result.itensGravados} item(ns) gravado(s)
+-          ${result.itensSemProduto ? ` · ${result.itensSemProduto} item(ns) sem produto no catálogo (sincronize o catálogo)` : ''}
+-          ${result.clientesIgnoradosPorSeremMaisAntigos ? ` · ${result.clientesIgnoradosPorSeremMaisAntigos} classificação(ões) ignorada(s) (esse relatório é mais antigo que o já registrado pra esses clientes)` : ''}
++          ✓ ${result.itens} linha(s) importada(s) ·
++          ${result.clientesVinculados} cliente(s) vinculado(s) agora ·
++          ${result.clientesClassificados} classificado(s)
++          ${result.clientesClassifIgnorados ? ` · ${result.clientesClassifIgnorados} classificação(ões) ignorada(s) (relatório mais antigo que o já registrado)` : ''}
++          ${result.clientesNaoEncontrados && result.clientesNaoEncontrados.length > 0 ? ` · ${result.clientesNaoEncontrados.length} cliente(s) não encontrados pelo nome (ficam sem vínculo até serem cadastrados ou o nome bater)` : ''}
+         </div>`;
++              carregarStatusRelatorioOficial();
+             } catch (e) {
+               msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+             }
+@@ -8706,24 +8812,6 @@
+         }
+       }
+ 
+-      async function importarPedidosOficiaisDeArquivo(file) {
+-        const msg = document.getElementById('importPedidosOficiaisMsg');
+-        msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
+-        try {
+-          const texto = await file.text();
+-          const dados = JSON.parse(texto);
+-          if (!dados || !Array.isArray(dados.itens)) throw new Error('Formato inválido — esperado um objeto { itens: [...] }.');
+-          msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
+-          const result = await apiFetch('/api/pedidos-oficiais/importar', { method: 'POST', body: JSON.stringify({ itens: dados.itens }) });
+-          let texto_resultado = `✓ ${result.itens} linha(s) importada(s). ${result.clientesVinculados} cliente(s) vinculado(s) agora.`;
+-          if (result.clientesNaoEncontrados && result.clientesNaoEncontrados.length > 0) {
+-            texto_resultado += ` ${result.clientesNaoEncontrados.length} cliente(s) do relatório não foram encontrados no app pelo nome (ficam sem vínculo até serem cadastrados ou o nome bater).`;
+-          }
+-          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">${texto_resultado}</div>`;
+-        } catch (e) {
+-          msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
+-        }
+-      }
+       async function importarCodigosDeArquivo(file) {
+         const msg = document.getElementById('importCodigosMsg');
+         msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
+@@ -9384,11 +9472,6 @@
+             if (e.target.files[0]) importarCodigosDeArquivo(e.target.files[0]);
+             e.target.value = '';
+           });
+-          document.getElementById('importPedidosOficiaisBtn').addEventListener('click', () => document.getElementById('pedidosOficiaisFileInput').click());
+-          document.getElementById('pedidosOficiaisFileInput').addEventListener('change', (e) => {
+-            if (e.target.files[0]) importarPedidosOficiaisDeArquivo(e.target.files[0]);
+-            e.target.value = '';
+-          });
+           renderPromoProdutosList();
+           initTabs();
+           initClienteFichaPeriodo();
+@@ -9433,7 +9516,7 @@
+           initProdutosTab();
+           initClientesTab();
+           initPdfConsolidacao();
+-          initFaturamentoImport();
++          initRelatorioOficialImport();
+ 
+           renderResults();
+           renderCartBar();
+diff --git a/routes/pedidos.js b/routes/pedidos.js
+index 2480d85..b3da5b3 100644
+--- a/routes/pedidos.js
++++ b/routes/pedidos.js
+@@ -123,88 +123,13 @@ router.post('/', async (req, res) => {
+   }
+ });
+ 
+-// Importa em lote um relatório de faturamento (Cliente, Classificatório,
+-// Nr.Pedido, Item, Qte.Faturada). Diferente do PDF: NÃO cria produto que não
+-// existir no catálogo (só usa o que já está sincronizado) e NÃO grava valor -
+-// o relatório vem sem impostos, então o preço fica em 0 de propósito. Feito
+-// pra rodar de novo sempre que chegar um relatório novo: pedido repetido
+-// (mesmo Nr.Pedido) é ignorado, cliente novo que aparecer é classificado.
+-router.post('/importar-faturamento', async (req, res) => {
+-  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar faturamento.' });
+-  const { classificacoes, pedidos } = req.body;
+-  if (!Array.isArray(pedidos)) return res.status(400).json({ erro: 'Envie { pedidos: [...] }' });
+-
+-  const client = await pool.connect();
+-  try {
+-    await client.query('BEGIN');
+-
+-    let clientesClassificados = 0, clientesIgnoradosPorSeremMaisAntigos = 0;
+-    for (const c of (classificacoes || [])) {
+-      if (!c.nome || !c.tipo) continue;
+-      const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
+-      // só sobrescreve se esse relatório for mais novo que o que definiu o
+-      // classificatório atual - senão, subir um relatório antigo por engano
+-      // faria o cliente "voltar" pra uma categoria que já mudou. Sem data de
+-      // referência nenhuma até agora (cliente nunca classificado), sempre aplica.
+-      const dataRef = c.data_referencia || null;
+-      const upd = await client.query(
+-        `UPDATE clientes
+-         SET classificatorio_tipo = $1, classificatorio_desconto = $2, classificatorio_atualizado_em = COALESCE($4::date, classificatorio_atualizado_em, now()::date)
+-         WHERE id = $3
+-           AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
+-         RETURNING id`,
+-        [c.tipo, c.desconto ?? null, clienteId, dataRef]
+-      );
+-      if (upd.rows.length > 0) clientesClassificados++;
+-      else clientesIgnoradosPorSeremMaisAntigos++;
+-    }
+-
+-    let pedidosCriados = 0, pedidosIgnorados = 0, itensGravados = 0, itensSemProduto = 0;
+-    for (const p of pedidos) {
+-      if (!p.numero_pedido || !p.cliente_nome || !Array.isArray(p.itens) || p.itens.length === 0) continue;
+-      const existente = await client.query('SELECT id FROM pedidos WHERE numero_cotacao = $1', [p.numero_pedido]);
+-      if (existente.rows.length > 0) { pedidosIgnorados++; continue; }
+-
+-      const clienteId = await acharOuCriarCliente(client, { nome: p.cliente_nome });
+-      const pedidoResult = await client.query(
+-        `INSERT INTO pedidos (cliente_id, numero_cotacao, origem, data_pedido)
+-         VALUES ($1, $2, 'faturamento', COALESCE($3::timestamptz, now()))
+-         RETURNING id`,
+-        [clienteId, p.numero_pedido, p.data || null]
+-      );
+-      const pedidoId = pedidoResult.rows[0].id;
+-
+-      // insere todos os itens desse pedido numa operação só (junta com o
+-      // catálogo pelo código - item sem produto correspondente é ignorado,
+-      // não trava o pedido inteiro).
+-      const codigos = p.itens.map(it => String(it.codigo_sku));
+-      const quantidades = p.itens.map(it => Number(it.quantidade) || 0);
+-      const inseridos = await client.query(
+-        `WITH entrada AS (
+-           SELECT * FROM UNNEST($1::text[], $2::numeric[]) AS t(codigo_sku, quantidade)
+-         )
+-         INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario)
+-         SELECT $3, pr.id, e.quantidade, 0
+-         FROM entrada e
+-         JOIN produtos pr ON pr.codigo_sku = e.codigo_sku`,
+-        [codigos, quantidades, pedidoId]
+-      );
+-      itensGravados += inseridos.rowCount;
+-      itensSemProduto += (p.itens.length - inseridos.rowCount);
+-      pedidosCriados++;
+-    }
+-
+-    await client.query('COMMIT');
+-    console.log(`Importação de faturamento: ${clientesClassificados} cliente(s) classificado(s), ${clientesIgnoradosPorSeremMaisAntigos} ignorado(s) (relatório mais antigo que o já registrado), ${pedidosCriados} pedido(s) novo(s), ${pedidosIgnorados} já existente(s), ${itensGravados} item(ns), ${itensSemProduto} sem produto no catálogo - por ${req.usuario?.email}.`);
+-    res.json({ clientesClassificados, clientesIgnoradosPorSeremMaisAntigos, pedidosCriados, pedidosIgnorados, itensGravados, itensSemProduto });
+-  } catch (e) {
+-    await client.query('ROLLBACK');
+-    console.error(e);
+-    res.status(500).json({ erro: 'Erro ao importar faturamento: ' + e.message });
+-  } finally {
+-    client.release();
+-  }
+-});
++// A antiga importação de "relatório de faturamento" (.xlsx só com a aba
++// Faturamento, sem NF/transportadora/valor, gravando em pedidos/pedido_itens
++// com origem='faturamento') foi retirada daqui - substituída pela importação
++// unificada da planilha oficial (Carteira + Faturamento, com todos os dados)
++// em POST /api/pedidos-oficiais/importar. Pedidos antigos com
++// origem='faturamento' continuam no histórico normalmente, só não é mais
++// possível criar novos por essa rota.
+ 
+ // Encontra pedidos "prováveis duplicados": mesmo cliente, mesmo dia, com pelo
+ // menos um produto em comum com outro pedido do mesmo cliente naquele dia.
+diff --git a/routes/pedidosOficiais.js b/routes/pedidosOficiais.js
+index 0abc966..cdf9c14 100644
+--- a/routes/pedidosOficiais.js
++++ b/routes/pedidosOficiais.js
+@@ -1,7 +1,34 @@
+ const express = require('express');
+ const router = express.Router();
+ const { pool } = require('../db');
+-const { acharClientePorNome } = require('../clientMatcher');
++const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
++
++// Status geral da importação oficial - pro painel admin mostrar de cara
++// quando foi o último relatório importado, sem precisar abrir cliente por
++// cliente. Existe porque já aconteceu de passar dias sem ninguém notar que
++// o relatório oficial tinha parado de ser importado (rota separada só de
++// consulta, precisa vir ANTES de "/:clienteId" pra não ser confundida com
++// um id de cliente).
++router.get('/status', async (req, res) => {
++  try {
++    const result = await pool.query(
++      `SELECT MAX(atualizado_em) AS ultima_atualizacao, COUNT(*) AS total_linhas,
++              COUNT(*) FILTER (WHERE status = 'carteira') AS total_carteira,
++              COUNT(*) FILTER (WHERE status = 'faturado') AS total_faturado
++       FROM pedidos_oficiais_itens`
++    );
++    const row = result.rows[0];
++    res.json({
++      ultima_atualizacao: row.ultima_atualizacao,
++      total_linhas: Number(row.total_linhas),
++      total_carteira: Number(row.total_carteira),
++      total_faturado: Number(row.total_faturado),
++    });
++  } catch (e) {
++    console.error(e);
++    res.status(500).json({ erro: 'Erro ao buscar status da importação oficial.' });
++  }
++});
+ 
+ // Resumo do cliente pro topo da ficha: classificatório mais recente e valor
+ // acumulado faturado (dado oficial, mais confiável que o preço estimado do
+@@ -72,19 +99,47 @@ router.get('/:clienteId', async (req, res) => {
+   }
+ });
+ 
+-// Importa em lote as abas "Carteira" e/ou "Faturamento" do relatório oficial.
++// Importa em lote as abas "Carteira" e "Faturamento" do relatório oficial -
++// ÚNICA porta de entrada de pedidos oficiais desde a unificação (antes havia
++// também um upload de JSON pré-preparado à mão pelo usuário, e uma planilha
++// separada só com a aba Faturamento incompleta - os dois foram removidos:
++// o app lê a planilha .xlsx oficial diretamente, sem etapa manual no meio).
+ // Pode rodar quantas vezes quiser: o mesmo Nr.Pedido+código não duplica, só
+ // atualiza - e uma vez "faturado", nunca volta pra "carteira" mesmo que uma
+ // planilha antiga de carteira seja reimportada por engano depois.
+ router.post('/importar', async (req, res) => {
+-  // Qualquer usuário logado pode importar (não só admin) - decisão explícita.
+-  const { itens } = req.body;
++  // Qualquer usuário logado pode importar (não só admin) - decisão explícita
++  // (já valia antes da unificação; mantida aqui inclusive pra classificação
++  // de cliente, que antes exigia admin no fluxo separado que foi removido).
++  const { itens, classificacoes } = req.body;
+   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+ 
+   const client = await pool.connect();
+   try {
+     await client.query('BEGIN');
+ 
++    // Classificatório do cliente (Varejo Master/Premium/Exclusive/Rede),
++    // vindo de qualquer uma das abas que tiver a coluna preenchida. Só
++    // sobrescreve se esse relatório for mais novo que o que definiu o
++    // classificatório atual - senão, subir um relatório antigo por engano
++    // faria o cliente "voltar" pra uma categoria que já mudou.
++    let clientesClassificados = 0, clientesClassifIgnorados = 0;
++    for (const c of (classificacoes || [])) {
++      if (!c.nome || !c.tipo) continue;
++      const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
++      const dataRef = c.data_referencia || null;
++      const upd = await client.query(
++        `UPDATE clientes
++         SET classificatorio_tipo = $1, classificatorio_desconto = $2, classificatorio_atualizado_em = COALESCE($4::date, classificatorio_atualizado_em, now()::date)
++         WHERE id = $3
++           AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
++         RETURNING id`,
++        [c.tipo, c.desconto ?? null, clienteId, dataRef]
++      );
++      if (upd.rows.length > 0) clientesClassificados++;
++      else clientesClassifIgnorados++;
++    }
++
+     // Aprende o codigo_oficial de clientes que ainda não têm, casando por
+     // nome - só na primeira vez que aquele código aparece. Depois disso, o
+     // vínculo já fica salvo e não precisa casar nome de novo.
+@@ -146,8 +201,8 @@ router.post('/importar', async (req, res) => {
+     );
+ 
+     await client.query('COMMIT');
+-    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s) - por ${req.usuario?.email}.`);
+-    res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados });
++    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
++    res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
+   } catch (e) {
+     await client.query('ROLLBACK');
+     console.error(e);

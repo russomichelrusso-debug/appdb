@@ -21,14 +21,14 @@ routes/
   auth.js             # setup, login, logout, /me, gestão de usuários
   clientes.js          # CRUD de clientes, import, merge
   produtos.js           # produtos e sincronização
-  pedidos.js             # pedidos e importação de faturamento
+  pedidos.js             # pedidos manuais/do app (finalizar pedido, PDF) e export por período
   levantamentos.js        # levantamentos de estoque em campo
   relatorios.js            # histórico, rotatividade, consumo estimado, curva ABC etc.
   previsaoEstoque.js        # previsão de estoque
   configuracoes.js           # configurações chave/valor
   fichasTecnicas.js            # fichas técnicas de produtos
   codigosProduto.js              # códigos alternativos de produto
-  pedidosOficiais.js               # pedidos oficiais por cliente
+  pedidosOficiais.js               # ÚNICA importação de pedidos oficiais (planilha .xlsx Carteira/Faturamento) e consulta por cliente
   assistente.js                     # assistente com IA (Gemini)
 index.html, manifest.json, icon-*.png  # PWA estático servido pelo frontend
 ```
@@ -67,14 +67,41 @@ O schema é aplicado automaticamente na subida (`runMigrations`), incluindo limp
 - `/api/auth` — login, logout, sessão atual, gestão de usuários
 - `/api/clientes` — cadastro, importação e mesclagem de clientes
 - `/api/produtos` — catálogo de produtos e sincronização
-- `/api/pedidos` — pedidos e importação de faturamento
+- `/api/pedidos` — pedidos manuais/do app (POST `/`) e export por período (GET `/exportar`)
 - `/api/levantamentos` — levantamentos de estoque
 - `/api/previsao-estoque` — previsão de estoque
 - `/api/configuracoes` — configurações chave/valor
 - `/api/fichas-tecnicas` — fichas técnicas de produtos
 - `/api/codigos-produto` — códigos alternativos de produto
-- `/api/pedidos-oficiais` — pedidos oficiais por cliente
+- `/api/pedidos-oficiais` — pedidos oficiais por cliente e importação da planilha oficial
 - `/api/assistente` — assistente com IA (Gemini)
 - `/api/clientes/:id/historico`, `/rotatividade`, `/levantamentos`, `/consumo-estimado/:produtoId`, `/api/produtos/:codigo/clientes`, `/api/pedidos/exportar`, `/api/produtos-abc-geral` — relatórios
 
 `GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade.
+
+## Importação de pedidos oficiais (Carteira / Faturamento)
+
+Única porta de entrada de dados de pedidos oficiais desde a unificação (a
+importação por JSON preparado à mão, e a planilha .xlsx separada e
+incompleta que só cobria a aba Faturamento, foram retiradas):
+
+- `POST /api/pedidos-oficiais/importar` — recebe `{ itens: [...], classificacoes: [...] }`.
+  O frontend (`index.html`, `parseRelatorioOficialXlsx`) lê as abas "Carteira"
+  e "Faturamento" da planilha .xlsx oficial direto no navegador e monta esse
+  payload - não existe mais preparo manual de arquivo. Grava em
+  `pedidos_oficiais_itens` (chave `nr_pedido` + `codigo_sku`, nunca duplica,
+  nunca "recua" de faturado pra carteira) e atualiza o classificatório do
+  cliente (`clientes.classificatorio_tipo/desconto`), respeitando qual
+  relatório é mais recente.
+  - Qualquer usuário autenticado pode importar (decisão explícita, não só admin).
+  - Os nomes de coluna esperados na planilha (`Cliente`, `Cod.Cliente`,
+    `Nr.Pedido`, `Item`, `Nota Fiscal`, `Transportadora`, `Situação`,
+    `Classificatório` etc., com variações aceitas) estão centralizados em
+    `COLUNAS_RELATORIO_OFICIAL` no `index.html` — se o relatório real usar
+    nomes diferentes, o import falha com um erro dizendo qual coluna faltou
+    e quais existem no arquivo (em vez de gravar dado errado). Ajuste a lista
+    de apelidos ali se necessário.
+- `GET /api/pedidos-oficiais/status` — última data de atualização e totais
+  (carteira/faturado), usado pelo painel admin pra mostrar de cara se o
+  relatório está desatualizado.
+- `GET /api/pedidos-oficiais/:clienteId` e `/:clienteId/resumo` — consulta por cliente (inalteradas).
