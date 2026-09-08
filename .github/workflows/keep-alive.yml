@@ -1,0 +1,22 @@
+name: Manter backend acordado
+
+# Roda a cada 10 minutos - o Render gratuito "dorme" depois de ~15 minutos
+# sem nenhuma requisicao, entao esse intervalo evita que isso aconteca.
+# Tambem pode ser disparado manualmente (aba Actions do GitHub, botao
+# "Run workflow") pra testar sem esperar o horario programado.
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Chamar /health do backend
+        run: |
+          resposta=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 https://appdb-z6uh.onrender.com/health)
+          echo "Status recebido: $resposta"
+          if [ "$resposta" != "200" ]; then
+            echo "Aviso: resposta inesperada (pode ser o servidor ainda acordando de um sono mais longo)"
+          fi
