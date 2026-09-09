@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cortag · Curva ABC de Produtos</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#CC0935">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root {
+      --red: #CC0935;
+      --red-deep: #A30729;
+      --amber: #B36B00;
+      --ink: #1D1D1F;
+      --gray: #6E6E73;
+      --fill: #F5F5F7;
+      --hairline: #D2D2D7;
+      --blue: #0071E3;
+      --white: #FFFFFF;
+      --r-sm: 10px;
+      --r-md: 16px;
+      --r-lg: 22px;
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 1px 1px rgba(0, 0, 0, .04);
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
+    }
+
+    html[data-theme="dark"] {
+      --ink: #F2F2F4;
+      --gray: #98989D;
+      --fill: #1C1C1E;
+      --hairline: #3A3A3C;
+      --white: #2C2C2E;
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .2);
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .3);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--fill);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+    }
+
+    /* ---------- loading / login (mesmo esquema do app principal) ---------- */
+    .loadingScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      transition: opacity .35s ease;
+    }
+
+    .loadingScreen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loadingScreen .brand {
+      color: #fff;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
+
+    .loadingBar {
+      width: 130px;
+      height: 3px;
+      background: rgba(255, 255, 255, .16);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .loadingBarFill {
+      width: 40%;
+      height: 100%;
+      background: var(--red);
+      border-radius: 2px;
+      animation: loadingSlide 1.1s ease-in-out infinite;
+    }
+
+    @keyframes loadingSlide {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(360%); }
+    }
+
+    .loginScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .loginScreen.hidden { display: none; }
+
+    .loginCard {
+      background: var(--white);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-2);
+      padding: 32px 26px;
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+    }
+
+    .loginCard .brandDot {
+      width: 46px;
+      height: 46px;
+      border-radius: 13px;
+      background: var(--red);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 19px;
+      margin: 0 auto 16px;
+    }
+
+    .loginCard h2 { font-size: 18px; margin: 0 0 4px; }
+    .loginCard .ap-hint { font-size: 12.5px; color: var(--gray); line-height: 1.5; margin: 0 0 18px; }
+    .ap-msg.error { background: #FDECEC; color: var(--red-deep); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; text-align: left; }
+
+    /* ---------- topbar ---------- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 0 14px;
+      flex-wrap: wrap;
+    }
+
+    .backLink {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--gray);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .backLink:active { opacity: .6; }
+
+    .topbar h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; flex: 1; min-width: 200px; }
+    .topbar .sub { font-size: 12px; color: var(--gray); margin: 2px 0 0; }
+
+    .controlsRow { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+
+    .segmented {
+      display: inline-flex;
+      background: var(--hairline);
+      border-radius: 10px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .segmented button {
+      border: none;
+      background: transparent;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--gray);
+      padding: 7px 13px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .segmented button.active { background: var(--white); color: var(--ink); box-shadow: var(--shadow-1); }
+
+    /* ---------- KPIs ---------- */
+    .kpiRow {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    @media (max-width: 720px) { .kpiRow { grid-template-columns: repeat(2, 1fr); } }
+
+    .kpi { background: var(--white); border-radius: var(--r-md); box-shadow: var(--shadow-1); padding: 13px 15px; }
+    .kpi .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin-bottom: 5px; display: block; }
+    .kpi .val { font-size: 20px; font-weight: 700; letter-spacing: -.01em; display: block; }
+    .kpi .sub { font-size: 11px; color: var(--gray); margin-top: 2px; display: block; }
+    .kpi.classA .val { color: var(--red); }
+    .kpi.classB .val { color: var(--amber); }
+
+    /* ---------- chart card ---------- */
+    .chartCard { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 18px 18px 12px; margin-bottom: 14px; }
+    .chartCard .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px; }
+    .chartCard h2 { font-size: 14.5px; margin: 0; }
+    .chartCard .head p { font-size: 11.5px; color: var(--gray); margin: 2px 0 0; }
+    .legend { display: flex; gap: 13px; font-size: 11px; color: var(--gray); flex-wrap: wrap; }
+    .legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .legend .sw { width: 11px; height: 8px; border-radius: 2px; display: inline-block; }
+    .legend .ln { width: 13px; height: 2px; background: var(--ink); display: inline-block; border-radius: 1px; }
+    .chartScroll { overflow-x: auto; }
+    .chartEmpty, .lev-empty { font-size: 13px; color: var(--gray); text-align: center; padding: 30px 10px; }
+    .ap-msg.error.inline { text-align: center; }
+
+    /* ---------- bottom row ---------- */
+    .bottomRow { display: grid; grid-template-columns: 1.3fr 1fr; gap: 14px; }
+    @media (max-width: 860px) { .bottomRow { grid-template-columns: 1fr; } }
+    .card { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; }
+    .card h3 { font-size: 13.5px; margin: 0 0 10px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: .03em; color: var(--gray); font-weight: 700; padding: 0 8px 8px 0; border-bottom: 1px solid var(--hairline); }
+    td { padding: 8px 8px 8px 0; border-bottom: 1px solid var(--hairline); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    .prodName { font-weight: 600; display: block; }
+    .prodCat { font-size: 10.5px; color: var(--gray); }
+    .badge { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 5px; font-size: 10px; font-weight: 800; color: #fff; }
+    .badge.a { background: var(--red); } .badge.b { background: var(--amber); } .badge.c { background: var(--gray); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .catBar { display: flex; align-items: center; gap: 9px; margin-bottom: 11px; }
+    .catBar:last-child { margin-bottom: 0; }
+    .catBar .name { width: 108px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .catBar .track { flex: 1; height: 14px; background: var(--fill); border-radius: 4px; overflow: hidden; }
+    .catBar .fillbar { height: 100%; background: var(--blue); border-radius: 4px 0 0 4px; }
+    .catBar .amt { width: 62px; text-align: right; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+    .footNote { font-size: 10.5px; color: var(--gray); margin-top: 12px; line-height: 1.5; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+
+<body>
+  <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
+
+  <div id="loadingScreen" class="loadingScreen">
+    <div class="brand">Cortag</div>
+    <div class="loadingBar"><div class="loadingBarFill"></div></div>
+  </div>
+
+  <div id="loginScreen" class="loginScreen hidden">
+    <div class="loginCard">
+      <div class="brandDot">C</div>
+      <h2>Entrar</h2>
+      <div id="loginMsg"></div>
+      <p class="ap-hint">Entre com a mesma conta Google usada no app de preços — a sessão é compartilhada.</p>
+      <div id="googleSignInBtn" style="display:flex;justify-content:center;"></div>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="dashboardWrap">
+    <div class="topbar">
+      <a class="backLink" href="index.html">← App</a>
+      <div style="flex:1;min-width:200px;">
+        <h1>Curva ABC de Produtos</h1>
+        <p class="sub" id="topSub">Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores</p>
+      </div>
+    </div>
+
+    <div class="controlsRow">
+      <div class="segmented" id="periodoSeg">
+        <button data-dias="">Tudo</button>
+        <button data-dias="30">30d</button>
+        <button data-dias="90">90d</button>
+        <button data-dias="365">365d</button>
+      </div>
+      <div class="segmented" id="campoSeg">
+        <button data-campo="faturamento_total">Faturamento</button>
+        <button data-campo="quantidade_total">Quantidade</button>
+      </div>
+    </div>
+
+    <div class="kpiRow" id="kpiRow"></div>
+
+    <div class="chartCard">
+      <div class="head">
+        <div>
+          <h2>Curva de Pareto — participação por produto</h2>
+          <p>Ranking decrescente · linha = % acumulado</p>
+        </div>
+        <div class="legend" id="chartLegend"></div>
+      </div>
+      <div class="chartScroll" id="chartHost"></div>
+    </div>
+
+    <div class="bottomRow">
+      <div class="card">
+        <h3>Top produtos</h3>
+        <div id="topTableHost"></div>
+      </div>
+      <div class="card">
+        <h3>Por categoria</h3>
+        <div id="catHost"></div>
+        <p class="footNote">Fonte: relatório oficial de Faturamento (Painel Administrativo → Relatórios e clientes).</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // =================================================================
+    // ---- Login/sessão: mesmíssimo esquema do index.html (Google      -
+    // ---- Identity Services + token de sessão verificado no backend). -
+    // ---- Como as duas páginas são do mesmo domínio, o token salvo no -
+    // ---- localStorage já é compartilhado — quem já está logado no    -
+    // ---- app principal cai direto aqui sem precisar logar de novo.   -
+    // =================================================================
+    const API_CONFIG_LS_KEY = 'cortagApiConfig_v1';
+    const API_BASE_URL_DEFAULT = 'https://appdb-z6uh.onrender.com';
+    const AUTH_TOKEN_LS_KEY = 'cortagAuthToken_v1';
+    const AUTH_TOKEN_SS_KEY = 'cortagAuthToken_v1';
+    const GOOGLE_CLIENT_ID = '587215783588-g9nrt4mq8onu12qkj4r8h4ao307478i4.apps.googleusercontent.com';
+
+    function getApiConfig() {
+      let baseUrl = API_BASE_URL_DEFAULT;
+      try {
+        const saved = JSON.parse(localStorage.getItem(API_CONFIG_LS_KEY) || '{}');
+        if (saved.baseUrl) baseUrl = saved.baseUrl;
+      } catch (e) { }
+      return { baseUrl };
+    }
+    function getStoredToken() {
+      try { return localStorage.getItem(AUTH_TOKEN_LS_KEY) || sessionStorage.getItem(AUTH_TOKEN_SS_KEY) || null; }
+      catch (e) { return null; }
+    }
+    function setStoredToken(token) {
+      try { localStorage.setItem(AUTH_TOKEN_LS_KEY, token); } catch (e) { }
+    }
+    function clearStoredToken() {
+      try { localStorage.removeItem(AUTH_TOKEN_LS_KEY); sessionStorage.removeItem(AUTH_TOKEN_SS_KEY); } catch (e) { }
+    }
+
+    async function apiFetch(path, options = {}) {
+      const { baseUrl } = getApiConfig();
+      const token = getStoredToken();
+      let resp;
+      try {
+        resp = await fetch(baseUrl + path, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) },
+        });
+      } catch (e) {
+        throw new Error('Não foi possível conectar ao servidor (sem internet, ou o serviço está fora do ar).');
+      }
+      let body = null;
+      try { body = await resp.json(); } catch (e) { }
+      if (resp.status === 401) {
+        clearStoredToken();
+        showLoginScreen('Sessão expirada — entre de novo.');
+      }
+      if (!resp.ok) throw new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+      return body;
+    }
+    async function apiGoogleLogin(idToken) {
+      const { baseUrl } = getApiConfig();
+      const resp = await fetch(baseUrl + '/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      const body = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error((body && body.erro) || 'Não foi possível entrar.');
+      return body;
+    }
+    async function apiMe() { return apiFetch('/api/auth/me'); }
+
+    function loadGoogleIdentity() {
+      if (window.google && window.google.accounts && window.google.accounts.id) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Não consegui carregar o serviço de login do Google — confira sua internet.'));
+        document.head.appendChild(s);
+      });
+    }
+    async function onGoogleCredential(response) {
+      const msg = document.getElementById('loginMsg');
+      msg.innerHTML = '';
+      try {
+        const result = await apiGoogleLogin(response.credential);
+        setStoredToken(result.token);
+        hideLoginScreen();
+        showLoadingScreen();
+        await boot();
+      } catch (e) {
+        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    async function initLoginScreen() {
+      try {
+        await loadGoogleIdentity();
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential });
+        google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'large', text: 'signin_with' });
+      } catch (e) {
+        document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    function showLoadingScreen() { document.getElementById('loadingScreen').classList.remove('hidden'); }
+    function hideLoadingScreen() { document.getElementById('loadingScreen').classList.add('hidden'); }
+    function showLoginScreen(message) {
+      hideLoadingScreen();
+      document.getElementById('dashboardWrap').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+      initLoginScreen();
+      if (message) document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(message)}</div>`;
+    }
+    function hideLoginScreen() { document.getElementById('loginScreen').classList.add('hidden'); }
+
+    function escapeHtml(s) {
+      return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function boot() {
+      const token = getStoredToken();
+      if (!token) { showLoginScreen(); return; }
+      try {
+        await apiMe();
+        hideLoginScreen();
+        document.getElementById('dashboardWrap').classList.remove('hidden');
+        hideLoadingScreen();
+        startDashboard();
+      } catch (e) {
+        if (!document.getElementById('loginScreen').classList.contains('hidden')) return; // apiFetch já mostrou a tela de login (401)
+        hideLoadingScreen();
+        document.getElementById('dashboardWrap').classList.remove('hidden');
+        document.getElementById('kpiRow').innerHTML = `<div class="ap-msg error inline" style="grid-column:1/-1;">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    document.addEventListener('DOMContentLoaded', boot);
+
+    // =================================================================
+    // ---------------------------- Dashboard ---------------------------
+    // =================================================================
+    const state = { campo: 'faturamento_total', dias: null, raw: [], carregando: false };
+
+    function startDashboard() {
+      document.querySelectorAll('#periodoSeg button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.classList.contains('active')) return;
+          document.querySelectorAll('#periodoSeg button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.dias = btn.dataset.dias ? Number(btn.dataset.dias) : null;
+          carregarDados();
+        });
+      });
+      document.querySelectorAll('#campoSeg button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.classList.contains('active')) return;
+          document.querySelectorAll('#campoSeg button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.campo = btn.dataset.campo;
+          document.getElementById('topSub').textContent = state.campo === 'faturamento_total'
+            ? 'Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores'
+            : 'Classificação por quantidade vendida (relatório oficial de Faturamento) · todos os vendedores';
+          render();
+        });
+      });
+      document.querySelector('#periodoSeg button[data-dias=""]').classList.add('active');
+      document.querySelector('#campoSeg button[data-campo="faturamento_total"]').classList.add('active');
+      carregarDados();
+    }
+
+    function datasDoPeriodo(dias) {
+      if (!dias) return { inicio: null, fim: null };
+      const fim = new Date();
+      const inicio = new Date(fim.getTime() - dias * 86400000);
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      return { inicio: fmt(inicio), fim: fmt(fim) };
+    }
+
+    async function carregarDados() {
+      if (state.carregando) return;
+      state.carregando = true;
+      document.getElementById('chartHost').innerHTML = '<div class="chartEmpty">Somando o histórico de faturamento…</div>';
+      document.getElementById('kpiRow').innerHTML = '';
+      document.getElementById('topTableHost').innerHTML = '';
+      document.getElementById('catHost').innerHTML = '';
+      try {
+        const { inicio, fim } = datasDoPeriodo(state.dias);
+        const qs = [];
+        if (inicio) qs.push('inicio=' + inicio);
+        if (fim) qs.push('fim=' + fim);
+        const rows = await apiFetch('/api/produtos-abc-geral' + (qs.length ? '?' + qs.join('&') : ''));
+        state.raw = (rows || []).map(r => ({
+          codigo_sku: r.codigo_sku,
+          produto: r.produto || r.codigo_sku,
+          categoria: r.categoria || 'Sem categoria',
+          num_pedidos: Number(r.num_pedidos) || 0,
+          quantidade_total: Number(r.quantidade_total) || 0,
+          faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
+        }));
+        render();
+      } catch (e) {
+        document.getElementById('chartHost').innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
+      } finally {
+        state.carregando = false;
+      }
+    }
+
+    // Curva ABC (Pareto): ordena decrescente pelo campo escolhido, calcula %
+    // acumulado, e classifica em A (até 80% acumulado), B (até 95%) ou C
+    // (resto) — mesma regra usada no restante do app.
+    function classificarABC(itens, campo) {
+      const ordenados = [...itens].sort((a, b) => b[campo] - a[campo]);
+      const total = ordenados.reduce((s, p) => s + p[campo], 0) || 1;
+      let acumulado = 0;
+      return ordenados.map(p => {
+        const pctAntes = (acumulado / total) * 100;
+        acumulado += p[campo];
+        const classe = pctAntes < 80 ? 'A' : (pctAntes < 95 ? 'B' : 'C');
+        return { ...p, classe, pct: (p[campo] / total) * 100, cumulativoPct: (acumulado / total) * 100 };
+      });
+    }
+
+    function formatCompact(v, moeda) {
+      const abs = Math.abs(v);
+      let out;
+      if (abs >= 1e6) out = (v / 1e6).toFixed(1).replace('.', ',') + 'M';
+      else if (abs >= 1e3) out = (v / 1e3).toFixed(1).replace('.', ',') + 'K';
+      else out = Math.round(v).toLocaleString('pt-BR');
+      return moeda ? 'R$ ' + out : out;
+    }
+    function formatValor(v) {
+      return state.campo === 'faturamento_total'
+        ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+        : Math.round(v).toLocaleString('pt-BR');
+    }
+    function formatValorCompact(v) {
+      return formatCompact(v, state.campo === 'faturamento_total');
+    }
+
+    function render() {
+      if (state.raw.length === 0) {
+        document.getElementById('kpiRow').innerHTML = '';
+        document.getElementById('chartHost').innerHTML = '<div class="chartEmpty">Ainda não há dados de faturamento oficial suficientes nesse período pra calcular a curva ABC.</div>';
+        document.getElementById('topTableHost').innerHTML = '<div class="lev-empty">Sem dados.</div>';
+        document.getElementById('catHost').innerHTML = '<div class="lev-empty">Sem dados.</div>';
+        return;
+      }
+      const classificados = classificarABC(state.raw, state.campo);
+      renderKPIs(classificados);
+      renderChart(classificados);
+      renderTopTable(classificados);
+      renderCategorias(classificados);
+    }
+
+    function renderKPIs(classificados) {
+      const campo = state.campo;
+      const total = classificados.reduce((s, p) => s + p[campo], 0);
+      const porClasse = { A: [], B: [], C: [] };
+      classificados.forEach(p => porClasse[p.classe].push(p));
+      const somaClasse = (arr) => arr.reduce((s, p) => s + p[campo], 0);
+      const pctClasse = (arr) => total ? (somaClasse(arr) / total * 100) : 0;
+      const totalLbl = campo === 'faturamento_total' ? 'Faturamento no período' : 'Quantidade no período';
+      const caudaCount = porClasse.B.length + porClasse.C.length;
+      const caudaPct = pctClasse(porClasse.B) + pctClasse(porClasse.C);
+      document.getElementById('kpiRow').innerHTML = `
+        <div class="kpi">
+          <span class="lbl">${totalLbl}</span>
+          <span class="val">${formatValorCompact(total)}</span>
+          <span class="sub">${classificados.length} produto${classificados.length === 1 ? '' : 's'} com faturamento</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Produtos ativos</span>
+          <span class="val">${classificados.length}</span>
+          <span class="sub">no período selecionado</span>
+        </div>
+        <div class="kpi classA">
+          <span class="lbl">Classe A</span>
+          <span class="val">${porClasse.A.length} produto${porClasse.A.length === 1 ? '' : 's'}</span>
+          <span class="sub">${pctClasse(porClasse.A).toFixed(0)}% do ${campo === 'faturamento_total' ? 'faturamento' : 'volume'}</span>
+        </div>
+        <div class="kpi classB">
+          <span class="lbl">Cauda (B + C)</span>
+          <span class="val">${caudaCount} produto${caudaCount === 1 ? '' : 's'}</span>
+          <span class="sub">${caudaPct.toFixed(0)}% do ${campo === 'faturamento_total' ? 'faturamento' : 'volume'}</span>
+        </div>`;
+    }
+
+    const CORES_CLASSE = { A: 'var(--red)', B: 'var(--amber)', C: 'var(--hairline)', outros: '#9AA0A6' };
+
+    function renderChart(classificados) {
+      document.getElementById('chartLegend').innerHTML = `
+        <span><i class="sw" style="background:var(--red)"></i>Classe A</span>
+        <span><i class="sw" style="background:var(--amber)"></i>Classe B</span>
+        <span><i class="sw" style="background:var(--hairline)"></i>Classe C</span>
+        <span><i class="ln"></i>Acumulado</span>`;
+
+      const totalGeral = classificados.reduce((s, p) => s + p[state.campo], 0) || 1;
+      const LIMITE = 18;
+      const shown = classificados.slice(0, LIMITE).map(p => ({ label: p.produto, valor: p[state.campo], pct: p.pct, classe: p.classe, cum: p.cumulativoPct }));
+      const tail = classificados.slice(LIMITE);
+      if (tail.length > 0) {
+        const tailValor = tail.reduce((s, p) => s + p[state.campo], 0);
+        shown.push({ label: `+${tail.length} outros`, valor: tailValor, pct: (tailValor / totalGeral) * 100, classe: 'outros', cum: 100, isOutros: true });
+      }
+
+      const n = shown.length;
+      const slot = 52;
+      const plotLeft = 54, plotRight = plotLeft + n * slot, plotTop = 20, plotBottom = 220;
+      const W = plotRight + 20, H = 258;
+      const alturaUtil = plotBottom - plotTop;
+      const barW = Math.min(24, slot * 0.55);
+
+      const yFor = (pct) => plotBottom - (pct / 100) * alturaUtil;
+
+      const barsSvg = shown.map((b, i) => {
+        const x = plotLeft + i * slot + (slot - barW) / 2;
+        const y = yFor(b.pct);
+        const h = plotBottom - y;
+        const cor = CORES_CLASSE[b.classe] || CORES_CLASSE.C;
+        const titulo = `${b.label} — ${formatValor(b.valor)}${b.isOutros ? '' : ' · Classe ' + b.classe}`;
+        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="4" fill="${cor}"${b.isOutros ? ' opacity="0.75"' : ''}><title>${escapeHtml(titulo)}</title></rect>`;
+      }).join('');
+
+      const pontos = shown.map((b, i) => {
+        const x = plotLeft + i * slot + slot / 2;
+        const y = yFor(b.cum);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      }).join(' ');
+
+      const rotulos = shown.map((b, i) => {
+        if (i >= 6 && !b.isOutros) return '';
+        const x = plotLeft + i * slot + slot / 2;
+        const texto = b.label.length > 16 ? b.label.slice(0, 15) + '…' : b.label;
+        return `<text x="${x.toFixed(1)}" y="${(plotBottom + 16).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--gray)"${b.isOutros ? ' font-weight="700" fill="var(--ink)"' : ''}>${escapeHtml(texto)}</text>`;
+      }).join('');
+
+      const y80 = yFor(80), y95 = yFor(95);
+
+      const svg = `
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W, 640)}px;height:auto;display:block;" role="img" aria-label="Curva de Pareto de produtos">
+        <line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="var(--hairline)" stroke-width="1"/>
+        <line x1="${plotLeft}" y1="${yFor(50)}" x2="${plotRight}" y2="${yFor(50)}" stroke="var(--hairline)" stroke-width="1" opacity="0.5"/>
+        <line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="var(--hairline)" stroke-width="1" opacity="0.5"/>
+        <text x="${plotLeft - 8}" y="${plotBottom + 3}" text-anchor="end" font-size="10" fill="var(--gray)">0%</text>
+        <text x="${plotLeft - 8}" y="${(yFor(50) + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--gray)">50%</text>
+        <text x="${plotLeft - 8}" y="${plotTop + 3}" text-anchor="end" font-size="10" fill="var(--gray)">100%</text>
+        <line x1="${plotLeft}" y1="${y80.toFixed(1)}" x2="${plotRight}" y2="${y80.toFixed(1)}" stroke="var(--red)" stroke-width="1" stroke-opacity="0.3"/>
+        <text x="${plotRight}" y="${(y80 - 3).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--red)" opacity="0.8">80%</text>
+        <line x1="${plotLeft}" y1="${y95.toFixed(1)}" x2="${plotRight}" y2="${y95.toFixed(1)}" stroke="var(--amber)" stroke-width="1" stroke-opacity="0.3"/>
+        <text x="${plotRight}" y="${(y95 - 3).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--amber)" opacity="0.85">95%</text>
+        ${barsSvg}
+        <polyline fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pontos}"/>
+        ${rotulos}
+      </svg>`;
+      document.getElementById('chartHost').innerHTML = svg;
+    }
+
+    function renderTopTable(classificados) {
+      const linhas = classificados.slice(0, 12).map(p => `
+        <tr>
+          <td><span class="prodName">${escapeHtml(p.produto)}</span><span class="prodCat">${escapeHtml(p.categoria)}</span></td>
+          <td><span class="badge ${p.classe.toLowerCase()}">${p.classe}</span></td>
+          <td class="num">${formatValor(p[state.campo])}</td>
+          <td class="num">${p.cumulativoPct.toFixed(0)}%</td>
+        </tr>`).join('');
+      document.getElementById('topTableHost').innerHTML = `
+        <table>
+          <thead><tr><th>Produto</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th></tr></thead>
+          <tbody>${linhas}</tbody>
+        </table>`;
+    }
+
+    function renderCategorias(classificados) {
+      const porCategoria = new Map();
+      classificados.forEach(p => {
+        const atual = porCategoria.get(p.categoria) || { valor: 0, n: 0 };
+        atual.valor += p[state.campo];
+        atual.n += 1;
+        porCategoria.set(p.categoria, atual);
+      });
+      const lista = [...porCategoria.entries()].sort((a, b) => b[1].valor - a[1].valor).slice(0, 10);
+      const max = Math.max(...lista.map(([, v]) => v.valor), 1);
+      document.getElementById('catHost').innerHTML = lista.map(([nome, v]) => `
+        <div class="catBar">
+          <span class="name" title="${escapeHtml(nome)}">${escapeHtml(nome)}</span>
+          <div class="track"><div class="fillbar" style="width:${Math.max((v.valor / max) * 100, 3).toFixed(1)}%"></div></div>
+          <span class="amt">${formatValorCompact(v.valor)}</span>
+        </div>`).join('');
+    }
+  </script>
+</body>
+
+</html>

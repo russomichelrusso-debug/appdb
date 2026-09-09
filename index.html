@@ -3417,6 +3417,13 @@
         <div class="tag">Consulta de Preços</div>
         <div class="count" id="prodCount">— produtos</div>
       </div>
+      <a class="gearBtn" href="curva-abc.html" id="abcDashboardLink" aria-label="Curva ABC de Produtos" title="Curva ABC de Produtos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M3 3v18h18" />
+          <path d="M7 16v-4M12 16V8M17 16v-7" />
+        </svg>
+      </a>
       <button class="gearBtn" id="adminBtn" aria-label="Administração">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round">
@@ -4117,12 +4124,11 @@
               <div id="exportPedidosMsg" style="margin-top:8px;"></div>
             </div>
             <div class="ap-card">
-              <h3>Curva ABC geral de produtos</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Soma o histórico de todos os clientes juntos, por
-                quantidade vendida (não valor — pedidos vindos do faturamento não têm preço confiável). Mostra quais
-                produtos concentram a maior parte do volume do negócio.</p>
-              <button class="restoreBtn" id="abcGeralBtn">Analisar</button>
-              <div id="abcGeralResults" style="margin-top:12px;"></div>
+              <h3>Curva ABC de produtos</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">Virou um painel completo, com filtro de período,
+                faturamento por categoria e a Curva de Pareto — acessível a qualquer pessoa logada pelo ícone de
+                gráfico no topo do app, não só por aqui.</p>
+              <a class="restoreBtn" href="curva-abc.html" style="display:inline-block;text-decoration:none;text-align:center;">Abrir painel de Curva ABC</a>
             </div>
           </div>
         </details>
@@ -6726,9 +6732,8 @@
           loadClienteFichaResumo();
         });
       }
-      async function apiProdutosAbcGeral() {
-        return apiFetch('/api/produtos-abc-geral');
-      }
+      // (a Curva ABC geral virou o painel curva-abc.html, que busca
+      // /api/produtos-abc-geral por conta própria — ver esse arquivo)
 
       // ---------------- Seletor de cliente (reutilizado em vários lugares) ----------------
       // Retorna uma Promise que resolve com {id, nome} quando o usuário escolhe ou cria
@@ -7015,22 +7020,6 @@
           wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
         }
       }
-      async function checkAbcGeral() {
-        const wrap = document.getElementById('abcGeralResults');
-        wrap.innerHTML = '<div class="promoEmpty">Somando o histórico de todos os clientes…</div>';
-        try {
-          const rows = await apiProdutosAbcGeral();
-          if (rows.length === 0) { wrap.innerHTML = '<div class="lev-empty">Ainda não há pedidos suficientes no histórico pra calcular.</div>'; return; }
-          const classificados = classificarABC(rows.map(r => ({ ...r, quantidade_total: Number(r.quantidade_total) })), 'quantidade_total');
-          wrap.innerHTML = renderAbcView(classificados, 'volume', 'quantidade_total');
-        } catch (e) {
-          wrap.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-        }
-      }
-      function initAbcGeral() {
-        document.getElementById('abcGeralBtn').addEventListener('click', checkAbcGeral);
-      }
-
       function initDuplicatePedidosCheck() {
         document.getElementById('checkDuplicatePedidosBtn').addEventListener('click', checkDuplicatePedidos);
       }
@@ -7525,71 +7514,7 @@
   </div>`;
       }
 
-      // Curva ABC (Pareto) por volume: ordena decrescente, calcula % acumulado, e
-      // classifica em A (até 80% acumulado), B (até 95%) ou C (resto). Mesma lógica
-      // usada no ConsolidaPDF, portada aqui pra funcionar com os dados do servidor.
-      function classificarABC(itens, campo) {
-        const ordenados = [...itens].sort((a, b) => b[campo] - a[campo]);
-        const totalGeral = ordenados.reduce((s, p) => s + p[campo], 0) || 1;
-        let acumulado = 0;
-        return ordenados.map(p => {
-          const pctAntes = (acumulado / totalGeral) * 100;
-          acumulado += p[campo];
-          const classe = pctAntes < 80 ? 'A' : (pctAntes < 95 ? 'B' : 'C');
-          return { ...p, classe, cumulativoPct: (acumulado / totalGeral) * 100 };
-        });
-      }
-      function renderAbcChart(classificados, campo) {
-        const cores = { A: '#CC0935', B: '#B36B00', C: '#B7BDC6' };
-        const exibidos = classificados.slice(0, 40);
-        const W = 340, H = 140, margemTopo = 8, margemBase = 4;
-        const alturaUtil = H - margemTopo - margemBase;
-        const n = Math.max(exibidos.length, 1);
-        const largBarra = W / n;
-        const maxValor = Math.max(...exibidos.map(p => p[campo]), 1);
-        const barras = exibidos.map((p, i) => {
-          const x = i * largBarra;
-          const h = Math.max((p[campo] / maxValor) * alturaUtil, 1);
-          const y = margemTopo + (alturaUtil - h);
-          const w = Math.max(largBarra * 0.8, 0.5);
-          return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${cores[p.classe]}"><title>${escapeHtml(p.produto || p.nome || '')} — Classe ${p.classe}</title></rect>`;
-        }).join('');
-        const pontos = exibidos.map((p, i) => {
-          const x = i * largBarra + largBarra / 2;
-          const y = margemTopo + (alturaUtil - (p.cumulativoPct / 100) * alturaUtil);
-          return `${x.toFixed(1)},${y.toFixed(1)}`;
-        }).join(' ');
-        return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;">
-    <polyline points="${pontos}" fill="none" stroke="#24262B" stroke-width="2"/>
-    ${barras}
-  </svg>`;
-      }
-      function renderAbcView(classificados, campoLabel, campo) {
-        if (classificados.length === 0) return '<div class="lev-empty">Sem dados suficientes pra calcular a curva ABC ainda.</div>';
-        const porClasse = { A: [], B: [], C: [] };
-        classificados.forEach(p => porClasse[p.classe].push(p));
-        const totalVolume = classificados.reduce((s, p) => s + p[campo], 0);
-        const resumo = ['A', 'B', 'C'].map(classe => {
-          const itens = porClasse[classe];
-          const vol = itens.reduce((s, p) => s + p[campo], 0);
-          const pct = totalVolume ? (vol / totalVolume * 100) : 0;
-          return `<div class="abcPill abcPill--${classe.toLowerCase()}">
-      <span class="abcPillTitulo">Classe ${classe}</span>
-      <span class="abcPillValor">${itens.length}</span>
-      <span class="abcPillDetalhe">${pct.toFixed(0)}% do ${campoLabel}</span>
-    </div>`;
-        }).join('');
-        const linhas = classificados.map(p => `
-    <div class="histCard">
-      <div class="hcName"><span class="badge-classe badge-classe--${p.classe.toLowerCase()}">${p.classe}</span> ${escapeHtml(p.produto)}</div>
-      <div class="hcCode">Cód. ${escapeHtml(String(p.codigo_sku))}</div>
-      <div class="hcStats">
-        <div class="hcStat">Qtd. total<b>${p[campo]}</b></div>
-        <div class="hcStat">Pedidos<b>${p.num_pedidos}</b></div>
-      </div>
-    </div>`).join('');
-        return `<div class="abcResumo">${resumo}</div><div class="abcChart">${renderAbcChart(classificados, campo)}</div>${linhas}`;
-      }
+      // (classificação/gráfico da Curva ABC agora vivem só em curva-abc.html)
 
       // ---- Aba Clientes ----
       let clienteTabSelected = null;
@@ -9595,7 +9520,6 @@
           initTheme();
           initIntegrityCheck();
           initDuplicatePedidosCheck();
-          initAbcGeral();
           initManageClients();
           document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
           initProdutosTab();

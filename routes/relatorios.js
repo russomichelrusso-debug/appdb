@@ -253,21 +253,35 @@ router.get('/clientes/:id/recuperar', async (req, res) => {
   }
 });
 
-// Curva ABC de produtos somando TODOS os clientes - diferente da Curva ABC
-// individual (que já existe por cliente), essa mostra o negócio inteiro: quais
-// produtos concentram a maior parte do volume vendido. Por quantidade, não
-// valor, porque pedidos vindos do relatório de faturamento não têm preço
-// confiável (ver importação de faturamento).
+// Curva ABC de produtos somando TODOS os clientes - mostra o negócio inteiro:
+// quais produtos concentram a maior parte do faturamento (e do volume). Usa
+// pedidos_oficiais_itens (relatório oficial de Faturamento, status='faturado'),
+// não pedido_itens: é a única fonte com valor (R$) confiável — pedido_itens vem
+// de cotações do app/PDF, cujo preço pode não refletir o valor realmente
+// faturado. Aceita ?inicio=AAAA-MM-DD e/ou ?fim=AAAA-MM-DD (por data de
+// faturamento) pra restringir a um período; sem nenhum dos dois, soma tudo.
+// Devolve os dois campos (quantidade_total e faturamento_total) juntos pra o
+// dashboard poder alternar entre eles sem precisar buscar de novo.
 router.get('/produtos-abc-geral', async (req, res) => {
+  const { inicio, fim } = req.query;
+  const params = [];
+  let filtroData = '';
+  if (inicio) { params.push(inicio); filtroData += ` AND poi.data_faturamento >= $${params.length}::date`; }
+  if (fim) { params.push(fim); filtroData += ` AND poi.data_faturamento <= $${params.length}::date`; }
   try {
     const result = await pool.query(
-      `SELECT p.codigo_sku, p.nome AS produto,
-              COUNT(DISTINCT pi.pedido_id) AS num_pedidos,
-              SUM(pi.quantidade) AS quantidade_total
-       FROM pedido_itens pi
-       JOIN produtos p ON p.id = pi.produto_id
-       GROUP BY p.id, p.codigo_sku, p.nome
-       ORDER BY quantidade_total DESC`
+      `SELECT poi.codigo_sku,
+              COALESCE(p.nome, poi.codigo_sku) AS produto,
+              p.categoria,
+              COUNT(DISTINCT poi.nr_pedido) AS num_pedidos,
+              SUM(poi.quantidade) AS quantidade_total,
+              SUM(poi.valor) AS faturamento_total
+       FROM pedidos_oficiais_itens poi
+       LEFT JOIN produtos p ON p.codigo_sku = poi.codigo_sku
+       WHERE poi.status = 'faturado'${filtroData}
+       GROUP BY poi.codigo_sku, p.nome, p.categoria
+       ORDER BY faturamento_total DESC NULLS LAST`,
+      params
     );
     res.json(result.rows);
   } catch (e) {
