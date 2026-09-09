@@ -8981,6 +8981,7 @@
           restoreBtn.disabled = true;
           applyDB(await loadActiveDB());
           try { mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); } catch (e) { }
+          await loadCodigosProduto(); // catálogo foi recarregado do zero - reaplica o EAN/DUN-14, senão o scanner para de achar produto
           restoreBtn.disabled = false;
           refreshStatus();
           planilhaMsg.innerHTML = '<div class="ap-msg success">Pronto — usando: ' + escapeHtml(ACTIVE_SOURCE) + '</div>';
@@ -9459,10 +9460,14 @@
         try {
           // dispara o carregamento do catálogo em paralelo, sem esperar por ele -
           // é o que fazia a aba Clientes (que não precisa de catálogo nenhum) ficar
-          // presa atrás da tela de carregamento junto com Preços/Produtos
-          carregarCatalogoEExtras();
+          // presa atrás da tela de carregamento junto com Preços/Produtos.
+          // loadCodigosProduto ENCADEADO depois (.then), não disparado junto - ele
+          // precisa que DB.productIndex já esteja preenchido pra conseguir grudar o
+          // EAN/DUN-14 em cada produto; sem isso, o scanner de código de barras
+          // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
+          const catalogoPromise = carregarCatalogoEExtras();
+          catalogoPromise.then(() => loadCodigosProduto());
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
-          loadCodigosProduto(); // idem
 
           initStateSelect();
           initGpsState();
