@@ -216,3 +216,7 @@ BEGIN
     ALTER TABLE catalogo_precos ALTER COLUMN canais_fx SET DEFAULT '[]'::jsonb;
   END IF;
 END $$;
+-- Preço líquido por produto x canal x estado, sem IPI nem ICMS-ST embutido
+-- (mesma forma de "precos", só que antes dos impostos) - usado só pro
+-- orçamento mostrar o "Total S/ Impostos" pequeno acima do Total normal.
+ALTER TABLE catalogo_precos ADD COLUMN IF NOT EXISTS precos_sem_imposto JSONB;

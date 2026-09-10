@@ -119,9 +119,11 @@ function converterPlanilha(buffer) {
     const ehPrecoFixo = prec.length > 21 && prec[21] === 'PF';
 
     const precosPorCanal = {};
+    const precosSemImpostoPorCanal = {};
     for (let ci = 0; ci < CANAIS.length; ci++) {
       const canal = CANAIS[ci];
       const precosEstado = {};
+      const precosEstadoSemImposto = {};
       for (const uf of TODOS_ESTADOS) {
         const regiaoIdx = regiaoIndice(uf);
         const idxPreco = colPrecificacao(ci, regiaoIdx);
@@ -133,8 +135,10 @@ function converterPlanilha(buffer) {
         const pctSt = pctStPorEstado[uf];
         if (typeof pctSt === 'number') precoFinal = precoComIpi * (1 + pctSt);
         precosEstado[uf] = Math.round(precoFinal * 10000) / 10000;
+        precosEstadoSemImposto[uf] = Math.round(precoLiquido * 10000) / 10000;
       }
       precosPorCanal[canal] = precosEstado;
+      precosSemImpostoPorCanal[canal] = precosEstadoSemImposto;
     }
 
     produtos.push({
@@ -147,6 +151,7 @@ function converterPlanilha(buffer) {
       preco_fixo: ehPrecoFixo,
       canais_fx: ehPrecoFixo ? ['VAREJO', 'ATACADO', 'E-COMMERCE'] : [],
       precos: precosPorCanal,
+      precos_sem_imposto: precosSemImpostoPorCanal,
     });
   }
 
@@ -174,14 +179,14 @@ router.post('/importar', async (req, res) => {
 
   try {
     await pool.query(
-      `INSERT INTO catalogo_precos (codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, atualizado_em)
+      `INSERT INTO catalogo_precos (codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto, atualizado_em)
        SELECT * FROM UNNEST(
-         $1::text[], $2::text[], $3::int[], $4::text[], $5::numeric[], $6::text[], $7::boolean[], $8::jsonb[], $9::jsonb[], $10::timestamptz[]
+         $1::text[], $2::text[], $3::int[], $4::text[], $5::numeric[], $6::text[], $7::boolean[], $8::jsonb[], $9::jsonb[], $10::jsonb[], $11::timestamptz[]
        )
        ON CONFLICT (codigo_sku) DO UPDATE SET
          nome = EXCLUDED.nome, emb = EXCLUDED.emb, ncm = EXCLUDED.ncm, ipi = EXCLUDED.ipi,
          familia = EXCLUDED.familia, preco_fixo = EXCLUDED.preco_fixo, canais_fx = EXCLUDED.canais_fx,
-         precos = EXCLUDED.precos, atualizado_em = EXCLUDED.atualizado_em`,
+         precos = EXCLUDED.precos, precos_sem_imposto = EXCLUDED.precos_sem_imposto, atualizado_em = EXCLUDED.atualizado_em`,
       [
         produtos.map(p => p.codigo_sku),
         produtos.map(p => p.nome),
@@ -192,6 +197,7 @@ router.post('/importar', async (req, res) => {
         produtos.map(p => p.preco_fixo),
         produtos.map(p => JSON.stringify(p.canais_fx)),
         produtos.map(p => JSON.stringify(p.precos)),
+        produtos.map(p => JSON.stringify(p.precos_sem_imposto)),
         produtos.map(() => new Date()),
       ]
     );
@@ -207,7 +213,7 @@ router.post('/importar', async (req, res) => {
 // todo aparelho busca direto do servidor).
 router.get('/', async (req, res) => {
   try {
-    const r = await pool.query('SELECT codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos FROM catalogo_precos ORDER BY codigo_sku');
+    const r = await pool.query('SELECT codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto FROM catalogo_precos ORDER BY codigo_sku');
     res.json({
       version: 'Catálogo do servidor',
       generatedAt: new Date().toISOString(),
