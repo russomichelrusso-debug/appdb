@@ -4460,6 +4460,11 @@
           const porCanal = p.precosSemImposto[canal] || p.precosSemImposto.VAREJO;
           if (porCanal && typeof porCanal[uf] === 'number') return porCanal[uf];
         }
+        // Catálogo novo (p.precos) sem precosSemImposto ainda (planilha não foi
+        // reenviada desde essa mudança) - não tem lsp/lss/lnc pra effectiveLiq()
+        // calcular, então cairia em NaN. Mostra o preço cheio (igual ao Total)
+        // até a próxima importação da planilha popular precosSemImposto de verdade.
+        if (p.precos) return listPrice(p, uf, canal);
         return effectiveLiq(p, uf);
       }
       // Preço Fixo (sem desconto, só imposto) - na planilha nova só vale pra
