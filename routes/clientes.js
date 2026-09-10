@@ -22,6 +22,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Lista enxuta (id, nome, documento) de TODOS os clientes - usada pra manter
+// uma cópia local no aparelho (qualquer usuário logado, não só admin), pra
+// dar pra escolher o cliente de um levantamento/pedido mesmo sem internet no
+// momento. Roda sozinha em segundo plano (ver carregarCatalogoEExtras no
+// front); por isso só os campos que a busca offline precisa, nada mais.
+router.get('/sync', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT id, nome, documento FROM clientes ORDER BY nome');
+    res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao sincronizar clientes.' });
+  }
+});
+
 // Lista TODOS os clientes sem limite - usado só pelo diagnóstico de
 // integridade no Admin (comparar com uma planilha de referência). Nome
 // diferente de "/" de propósito, pra não confundir com a busca do dia a dia

@@ -1387,6 +1387,24 @@
       padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
     }
 
+    .subtotalrow {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 2px;
+    }
+
+    .subtotalrow .lbl {
+      font-size: 11.5px;
+      color: var(--gray);
+    }
+
+    .subtotalrow .val {
+      font-size: 12.5px;
+      color: var(--gray);
+      font-variant-numeric: tabular-nums;
+    }
+
     .totalrow {
       display: flex;
       justify-content: space-between;
@@ -1980,6 +1998,13 @@
       align-items: center;
       gap: 8px;
       flex-wrap: wrap;
+    }
+
+    .hist-clientDoc {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--gray);
+      margin-top: 1px;
     }
 
     .hist-content {
@@ -3531,6 +3556,7 @@
         <div>
           <div class="hist-clientLabel">Cliente deste levantamento</div>
           <div class="hist-clientName" id="levClientName">Nenhum selecionado</div>
+          <div class="hist-clientDoc" id="levClientDoc"></div>
         </div>
         <button type="button" class="restoreBtn" id="levSelectClientBtn"
           style="width:auto;padding:10px 16px;">Selecionar</button>
@@ -3660,6 +3686,7 @@
           <div>
             <div class="hist-clientLabel">Cliente</div>
             <div class="hist-clientName" id="clienteDetailName">—</div>
+            <div class="hist-clientDoc" id="clienteDetailDoc"></div>
           </div>
           <button type="button" class="restoreBtn" id="clienteDetailBackBtn"
             style="width:auto;padding:10px 16px;">Voltar</button>
@@ -3711,6 +3738,10 @@
       </div>
       <div class="drawer-body" id="cartItems"></div>
       <div class="drawer-footer">
+        <div class="subtotalrow">
+          <span class="lbl">Total S/ Impostos</span>
+          <span class="val" id="cartTotalSemImpostos">R$ 0,00</span>
+        </div>
         <div class="totalrow">
           <span class="lbl">Total</span>
           <span class="val" id="cartTotal">R$ 0,00</span>
@@ -4024,15 +4055,16 @@
                 <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Restaurar backup</button>
               </div>
               <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
-            </div>
-            <div class="ap-card">
-              <h3>Produtos promocionais</h3>
-              <p class="ap-hint" style="margin:10px 0;">Cria um código novo pra um produto já existente, com preço
-                promocional próprio (varia por região igual os outros, soma IPI por cima). Não recebe desconto de
-                canal/quantidade — é preço fechado.</p>
-              <div id="promoProdutosList"></div>
-              <button class="fileBtn" id="addPromoProdutoBtn" style="margin-top:10px;">+ Novo produto
-                promocional</button>
+
+              <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--hairline);">
+                <h3>Produtos promocionais</h3>
+                <p class="ap-hint" style="margin:10px 0;">Cria um código novo pra um produto já existente, com preço
+                  promocional próprio (varia por região igual os outros, soma IPI por cima). Não recebe desconto de
+                  canal/quantidade — é preço fechado.</p>
+                <div id="promoProdutosList"></div>
+                <button class="fileBtn" id="addPromoProdutoBtn" style="margin-top:10px;">+ Novo produto
+                  promocional</button>
+              </div>
             </div>
           </div>
         </details>
@@ -4416,6 +4448,20 @@
         const stRate = DB.stProfiles[p.st][TAXKEY_IDX[st.taxKey]];
         return liq * (1 + p.ipi) * (1 + stRate);
       }
+      // Mesmo preço de listPrice(), mas sem IPI nem ICMS-ST embutido - só pro
+      // "Total S/ Impostos" pequeno do orçamento. Produto do catálogo novo usa o
+      // preço líquido que já veio calculado do servidor (precosSemImposto);
+      // catálogo antigo e produtos promocionais usam effectiveLiq (que já é
+      // líquido, sem imposto nenhum, por natureza desse formato).
+      function listPriceSemImposto(p, uf, canal) {
+        canal = canal || state.canal || 'VAREJO';
+        if (Object.prototype.hasOwnProperty.call(state.priceOverrides, p.c)) return state.priceOverrides[p.c];
+        if (p.precosSemImposto) {
+          const porCanal = p.precosSemImposto[canal] || p.precosSemImposto.VAREJO;
+          if (porCanal && typeof porCanal[uf] === 'number') return porCanal[uf];
+        }
+        return effectiveLiq(p, uf);
+      }
       // Preço Fixo (sem desconto, só imposto) - na planilha nova só vale pra
       // Varejo/Atacado/E-commerce (regra confirmada na aba TABELA DE PREÇOS); nos
       // outros 3 canais o item pode receber desconto normalmente mesmo se marcado
@@ -4732,6 +4778,12 @@
         return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
 
+      // Texto do CNPJ/CPF que sempre acompanha o nome do cliente, exibido abaixo
+      // dele nas barras de "cliente selecionado" (levantamento, ficha do cliente).
+      function clienteDocText(cliente) {
+        return cliente && cliente.documento ? cliente.documento : 'CNPJ não cadastrado';
+      }
+
       // ---------------- Edição de preço base (antes de impostos) ----------------
       const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
       let priceEditingCod = null;
@@ -4956,38 +5008,46 @@
       }
 
       function cartTotals() {
-        let total = 0;
+        let total = 0, totalSemImpostos = 0;
         const baseRows = state.cart.map(it => {
           const p = productByCod(it.cod);
           const lp = listPrice(p, state.uf);
-          const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
+          const lpSemImposto = listPriceSemImposto(p, state.uf);
+          const fixo = isPrecoFixoParaCanal(p);
+          const qtyPct = qtyDiscountFor(p.c);
+          const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, fixo, qtyPct);
+          const cpSemImposto = clientPrice(lpSemImposto, state.channelDiscount, state.promoDiscount, fixo, qtyPct);
           const lineTotal = cp * it.qty;
-          return { p, it, lp, cp, lineTotal };
+          return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal };
         });
 
         const bonuses = computeCampaignBonuses(baseRows);
 
         const rows = baseRows.map(r => {
           const bonus = bestBonusForProduct(bonuses, r.p);
-          let cp = r.cp;
+          let cp = r.cp, cpSemImposto = r.cpSemImposto;
           let campaignPct = 0, campaignName = null;
           if (bonus && r.p.fx !== 1) { // Preço Fixo bloqueia bônus de campanha, igual aos outros descontos
             campaignPct = bonus.pct;
             campaignName = bonus.ruleName;
             if (bonus.stacks) {
               cp = r.cp * (1 - bonus.pct / 100);
+              cpSemImposto = r.cpSemImposto * (1 - bonus.pct / 100);
             } else {
               const manualPct = qtyDiscountFor(r.p.c);
               const effectivePct = Math.max(manualPct, bonus.pct);
               cp = clientPrice(r.lp, state.channelDiscount, state.promoDiscount, false, effectivePct);
+              cpSemImposto = clientPrice(r.lpSemImposto, state.channelDiscount, state.promoDiscount, false, effectivePct);
             }
           }
           const lineTotal = cp * r.it.qty;
+          const lineTotalSemImpostos = cpSemImposto * r.it.qty;
           total += lineTotal;
-          return { p: r.p, it: r.it, lp: r.lp, cp, lineTotal, campaignPct, campaignName };
+          totalSemImpostos += lineTotalSemImpostos;
+          return { p: r.p, it: r.it, lp: r.lp, cp, lineTotal, cpSemImposto, lineTotalSemImpostos, campaignPct, campaignName };
         });
 
-        return { rows, total };
+        return { rows, total, totalSemImpostos };
       }
       function renderCartBar() {
         const bar = document.getElementById('cartBar');
@@ -4999,7 +5059,8 @@
         document.getElementById('cartTotalPreview').textContent = brl(total) + ' ▸';
       }
       function renderCart() {
-        const { rows, total } = cartTotals();
+        const { rows, total, totalSemImpostos } = cartTotals();
+        document.getElementById('cartTotalSemImpostos').textContent = brl(totalSemImpostos);
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
           body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>`;
@@ -5419,6 +5480,7 @@
         nameEl.innerHTML = cliente
           ? `${escapeHtml(cliente.nome)} ${renderClassificatorioBadge(cliente)}`
           : 'Nenhum selecionado';
+        document.getElementById('levClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
         const badge = nameEl.querySelector('.classiBadge');
         if (badge) {
           badge.style.cursor = 'pointer';
@@ -6598,8 +6660,9 @@
         syncQueueDraining = false;
         if (enviados > 0 && !silencioso) showToast(`${enviados} pendente(s) sincronizado(s) agora`);
       }
-      window.addEventListener('online', () => drenarFilaSync(false));
+      window.addEventListener('online', () => { drenarFilaSync(false); syncClientesLocais(); });
       setInterval(() => drenarFilaSync(true), 30000); // reforço - 'online' nem sempre dispara de forma confiável no celular
+      setInterval(() => syncClientesLocais(), 5 * 60000); // mantém a cópia local de clientes fresca em segundo plano
 
       async function apiFetch(path, options = {}, filaInfo) {
         const { baseUrl } = getApiConfig();
@@ -6661,8 +6724,42 @@
         return apiFetch(`/api/produtos/${encodeURIComponent(codigo)}/clientes`);
       }
 
+      // Cópia local (Nome + CNPJ) de todos os clientes, sincronizada em segundo
+      // plano (ver syncClientesLocais, chamada no boot junto com o catálogo). Existe
+      // só pra buscar/escolher um cliente já cadastrado quando a busca ao vivo no
+      // servidor falha (sem internet, ou servidor "acordando") - sem isso, um
+      // levantamento ou pedido não tinha como ser salvo offline mesmo já tendo a
+      // fila de sincronização, porque faltava o cliente pra vincular.
+      const CLIENTES_LOCAIS_LS_KEY = 'cortagClientesLocais_v1';
+      function loadClientesLocais() {
+        try { return JSON.parse(localStorage.getItem(CLIENTES_LOCAIS_LS_KEY))?.clientes || []; }
+        catch (e) { return []; }
+      }
+      function saveClientesLocais(clientes) {
+        try { localStorage.setItem(CLIENTES_LOCAIS_LS_KEY, JSON.stringify({ clientes, updatedAt: Date.now() })); }
+        catch (e) { console.warn('Não foi possível salvar a cópia local de clientes:', e); }
+      }
+      async function syncClientesLocais() {
+        try {
+          const result = await apiFetch('/api/clientes/sync');
+          if (result && Array.isArray(result.clientes)) saveClientesLocais(result.clientes);
+        } catch (e) { /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }
+      }
+      function buscarClientesLocais(busca) {
+        const termo = normalize((busca || '').trim());
+        if (!termo) return loadClientesLocais().slice(0, 50);
+        return loadClientesLocais()
+          .filter(c => normalize(c.nome).includes(termo) || (c.documento || '').replace(/\D/g, '').includes(termo.replace(/\D/g, '')))
+          .slice(0, 20);
+      }
       async function apiBuscarClientes(busca) {
-        return apiFetch('/api/clientes?busca=' + encodeURIComponent(busca || ''));
+        try {
+          return await apiFetch('/api/clientes?busca=' + encodeURIComponent(busca || ''));
+        } catch (e) {
+          const locais = buscarClientesLocais(busca);
+          if (locais.length > 0) return locais;
+          throw e;
+        }
       }
       async function apiCriarCliente(cliente) {
         return apiFetch('/api/clientes', { method: 'POST', body: JSON.stringify(cliente) });
@@ -7527,9 +7624,10 @@
         wrap.innerHTML = '<div class="lev-empty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          const porId = new Map(clientes.map(c => [String(c.id), c]));
           wrap.innerHTML = clientes.length
             ? clientes.map(c => `
-        <button type="button" class="clientPickerItem" data-cliente-id="${c.id}" data-cliente-nome="${escapeHtml(c.nome)}">
+        <button type="button" class="clientPickerItem" data-cliente-id="${c.id}">
           <div class="cpName" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
             <span>${escapeHtml(c.nome)}</span>
             ${renderClassificatorioBadge(c)}
@@ -7538,7 +7636,7 @@
         </button>`).join('')
             : '<div class="lev-empty">Nenhum cliente encontrado.</div>';
           wrap.querySelectorAll('[data-cliente-id]').forEach(btn => {
-            btn.addEventListener('click', () => openClienteDetail({ id: Number(btn.dataset.clienteId), nome: btn.dataset.clienteNome }));
+            btn.addEventListener('click', () => openClienteDetail(porId.get(btn.dataset.clienteId)));
           });
         } catch (e) {
           wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
@@ -7547,6 +7645,7 @@
       function openClienteDetail(cliente) {
         clienteTabSelected = cliente;
         document.getElementById('clienteDetailName').textContent = cliente.nome;
+        document.getElementById('clienteDetailDoc').textContent = clienteDocText(cliente);
         document.getElementById('clienteTabListWrap').classList.add('hidden');
         document.getElementById('clienteTabDetail').classList.remove('hidden');
         document.getElementById('clienteFichaDataInicio').value = '';
@@ -8196,6 +8295,7 @@
               fx: p.preco_fixo ? 1 : 0,
               canaisFx: p.canais_fx || [],
               precos: p.precos,
+              precosSemImposto: p.precos_sem_imposto,
             }));
             const when = remoto.generatedAt ? new Date(remoto.generatedAt).toLocaleString('pt-BR') : '';
             ACTIVE_SOURCE = (remoto.version || 'Catálogo do servidor') + (when ? ' · ' + when : '') + ' · todos os aparelhos';
@@ -9450,10 +9550,14 @@
         }
         try { state.promoRules = await loadActivePromoRules(); } catch (e) { }
         try { PREVISAO_MAP = await loadActivePrevisao(); } catch (e) { }
+        syncClientesLocais(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
         // corrige a busca/carrinho depois que o catálogo terminar de chegar, caso o
-        // vendedor já tenha aberto Preços ou mexido no carrinho antes disso
+        // vendedor já tenha aberto Preços ou mexido no carrinho antes disso - inclui
+        // renderCart() (não só a barrinha) pra campanha recém-carregada aparecer de
+        // cara mesmo se o orçamento já estava aberto na tela antes do servidor responder.
         renderResults();
         renderCartBar();
+        renderCart();
       }
 
       async function init() {
