@@ -3736,6 +3736,12 @@
         <h2>Orçamento</h2>
         <button class="closeBtn" id="closeDrawer" aria-label="Fechar">&times;</button>
       </div>
+      <div class="field" style="padding:0 16px 12px;">
+        <label for="paymentTermSelect">Condição de pagamento</label>
+        <select id="paymentTermSelect">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
       <div class="drawer-body" id="cartItems"></div>
       <div class="drawer-footer">
         <div class="subtotalrow">
@@ -4398,6 +4404,24 @@
       const STATE_BY_UF = Object.fromEntries(STATES.map(s => [s.uf, s]));
       let TAXKEY_IDX = Object.fromEntries(DB.taxKeys.map((k, i) => [k, i]));
 
+      // Condições de pagamento disponíveis pro orçamento - lista fixa combinada com
+      // o financeiro, mesma ordem sempre (curta pra longa).
+      const PAYMENT_TERMS = [
+        'A Vista',
+        '14 dias',
+        '28 dias',
+        '42 dias',
+        '56 dias',
+        '28/56 dias',
+        '28/56/84 dias',
+        '28/42/56 dias',
+        '28/56/84/112 dias',
+        '42/56/70/84 dias',
+        '28/42/56/70/84/98/112 dias',
+        '42/56/70/84/112 dias',
+        '28/42/56/70/84 dias',
+      ];
+
       // ---------------- App state ----------------
       const state = {
         uf: 'PR',
@@ -4405,6 +4429,7 @@
         channelDiscount: 15,
         promoDiscount: 0,
         seller: '',
+        paymentTerm: '', // condição de pagamento escolhida pro orçamento atual (texto, ex: "28/56 dias")
         cart: [], // {cod, qty}
         survey: [], // {cod, qty, ped} - levantamento de estoque no cliente
         levLoadedId: null, // id do levantamento salvo atualmente aberto (null = ainda não foi salvo com nome)
@@ -4589,6 +4614,12 @@
           renderResults();
           renderCart();
         });
+      }
+
+      function initPaymentTermSelect() {
+        const sel = document.getElementById('paymentTermSelect');
+        sel.insertAdjacentHTML('beforeend', PAYMENT_TERMS.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join(''));
+        sel.addEventListener('change', () => { state.paymentTerm = sel.value; });
       }
 
 
@@ -5860,6 +5891,9 @@
         if (state.cart.length === 0) { showToast('O orçamento já está vazio'); return; }
         if (confirm('Limpar todos os itens do orçamento?')) {
           state.cart = [];
+          state.paymentTerm = '';
+          const sel = document.getElementById('paymentTermSelect');
+          if (sel) sel.value = '';
           renderCart();
         }
       }
@@ -5884,6 +5918,7 @@
     <div class="ex-meta">
       <div><div class="k">Estado</div><div class="v">${st.uf} — ${st.name}</div></div>
       ${state.seller.trim() ? `<div><div class="k">Atendimento</div><div class="v">${escapeHtml(state.seller)}</div></div>` : ''}
+      ${state.paymentTerm ? `<div><div class="k">Cond. pagamento</div><div class="v">${escapeHtml(state.paymentTerm)}</div></div>` : ''}
     </div>
     <table class="ex-table">
       <thead><tr>
@@ -6000,6 +6035,7 @@
           ...linhas,
           '',
           `*Total: ${brl(total)}*`,
+          ...(state.paymentTerm ? [`Cond. pagamento: ${state.paymentTerm}`] : []),
         ];
         return partes.join('\n');
       }
@@ -6106,7 +6142,7 @@
         doc.setTextColor(90, 90, 90);
         doc.text('Orçamento', 14, headerBottomY);
         doc.setFontSize(9);
-        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}` + (state.seller ? `  ·  Vendedor: ${state.seller}` : '');
+        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}` + (state.seller ? `  ·  Vendedor: ${state.seller}` : '') + (state.paymentTerm ? `  ·  Cond. pagamento: ${state.paymentTerm}` : '');
         doc.text(infoLinha, 14, headerBottomY + 6);
         doc.setDrawColor(180, 180, 180);
         doc.line(14, headerBottomY + 10, 196, headerBottomY + 10);
@@ -9470,6 +9506,7 @@
         state.levCliente = null;
         state.priceOverrides = {};
         state.qtyDiscounts = {};
+        state.paymentTerm = '';
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
       }
 
@@ -9582,6 +9619,7 @@
           initGpsState();
           initChannelSeg();
           initPromoInput();
+          initPaymentTermSelect();
 
           initAdminPanel();
           initPromoRulesAdmin();
