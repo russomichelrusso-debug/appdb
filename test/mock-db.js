@@ -14,6 +14,7 @@ let levantamentos = [];
 let levantamentoItens = [];
 let usuarios = [];
 let sessoes = [];
+let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
@@ -26,6 +27,7 @@ function reset() {
   levantamentoItens = [];
   usuarios = [];
   sessoes = [];
+  rascunhos = {};
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
@@ -170,6 +172,20 @@ async function query(sql, params = []) {
   }
   if (s.includes('DELETE FROM SESSOES')) {
     sessoes = sessoes.filter(se => se.token !== params[0]);
+    return { rows: [] };
+  }
+
+  // rascunho de levantamento
+  if (s.includes('INSERT INTO LEVANTAMENTO_RASCUNHOS')) {
+    rascunhos[params[0]] = { rascunho: JSON.parse(params[1]), atualizado_em: new Date().toISOString() };
+    return { rows: [] };
+  }
+  if (s.includes('SELECT RASCUNHO, ATUALIZADO_EM FROM LEVANTAMENTO_RASCUNHOS')) {
+    const r = rascunhos[params[0]];
+    return { rows: r ? [r] : [] };
+  }
+  if (s.includes('DELETE FROM LEVANTAMENTO_RASCUNHOS')) {
+    delete rascunhos[params[0]];
     return { rows: [] };
   }
 

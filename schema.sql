@@ -220,3 +220,14 @@ END $$;
 -- (mesma forma de "precos", só que antes dos impostos) - usado só pro
 -- orçamento mostrar o "Total S/ Impostos" pequeno acima do Total normal.
 ALTER TABLE catalogo_precos ADD COLUMN IF NOT EXISTS precos_sem_imposto JSONB;
+
+-- Rascunho de levantamento em andamento (ainda não salvo de verdade), um por
+-- usuário - reforço do que já fica no localStorage do aparelho: sobrevive a
+-- trocar de aparelho, reinstalar o app ou limpar dados do navegador. Sempre
+-- sobrescrito por completo (upsert), nunca um histórico - é só "o que estava
+-- em andamento agora", apagado assim que o levantamento é salvo de verdade.
+CREATE TABLE IF NOT EXISTS levantamento_rascunhos (
+  usuario_id INTEGER PRIMARY KEY REFERENCES usuarios(id) ON DELETE CASCADE,
+  rascunho JSONB NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);

@@ -5149,20 +5149,76 @@
       // =================================================================
       const LEV_LS_KEY = 'cortagLevantamento_v1';
 
+      // Guarda o cliente junto com os itens - sem isso, um fechamento inesperado
+      // do app recuperava a contagem mas perdia de vista pra quem era, obrigando
+      // escolher o cliente de novo (e arriscando salvar no cliente errado).
       function saveLevSurvey() {
-        try { localStorage.setItem(LEV_LS_KEY, JSON.stringify(state.survey)); } catch (e) { /* ok se indisponivel */ }
+        try {
+          localStorage.setItem(LEV_LS_KEY, JSON.stringify({
+            survey: state.survey,
+            cliente: state.levCliente,
+            loadedId: state.levLoadedId,
+            loadedName: state.levLoadedName,
+          }));
+        } catch (e) { /* ok se indisponivel */ }
+        agendarSyncRascunhoServidor();
       }
+      // Reforça o autosave local mandando o mesmo rascunho pro servidor, com
+      // debounce (não a cada tecla) - sobrevive a trocar de aparelho ou limpar
+      // dados do navegador. Melhor esforço só: sem internet, falha em silêncio
+      // e tenta de novo na próxima alteração (o localStorage já cobre esse caso).
+      let syncRascunhoTimer = null;
+      function agendarSyncRascunhoServidor() {
+        clearTimeout(syncRascunhoTimer);
+        syncRascunhoTimer = setTimeout(async () => {
+          try {
+            if (state.survey.length === 0 && !state.levCliente) {
+              await apiApagarRascunhoLevantamento();
+            } else {
+              await apiSalvarRascunhoLevantamento({
+                survey: state.survey, cliente: state.levCliente,
+                loadedId: state.levLoadedId, loadedName: state.levLoadedName,
+              });
+            }
+          } catch (e) { /* sem rede agora, ou sessão ainda não pronta - ok, tenta de novo na próxima alteração */ }
+        }, 2500);
+      }
+      // IMPORTANTE: não filtra por DB.productIndex aqui - essa função roda no boot,
+      // ANTES do catálogo terminar de carregar (DB.productIndex começa vazio; o
+      // catálogo só chega depois, em segundo plano). Filtrar aqui apagava o
+      // levantamento inteiro sozinho, silenciosamente, TODA vez que o app abria -
+      // provavelmente a causa real por trás de "perdi o levantamento". A validação
+      // contra o catálogo (produto pode ter sido descontinuado) acontece depois, em
+      // revalidarLevSurveyContraCatalogo(), já com o catálogo carregado de verdade.
       function loadLevSurvey() {
         try {
           const raw = localStorage.getItem(LEV_LS_KEY);
           if (raw) {
-            const arr = JSON.parse(raw);
-            if (Array.isArray(arr)) return arr
-              .filter(it => it && it.cod !== undefined && DB.productIndex[it.cod])
+            const parsed = JSON.parse(raw);
+            // formato antigo (rascunho salvo antes dessa mudança) era só o array de
+            // itens, sem cliente - ainda funciona, só sem o vínculo de cliente.
+            const bruto = Array.isArray(parsed) ? parsed : (parsed && parsed.survey) || [];
+            const survey = bruto
+              .filter(it => it && it.cod !== undefined)
               .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
+            const extra = Array.isArray(parsed) ? {} : (parsed || {});
+            return { survey, cliente: extra.cliente || null, loadedId: extra.loadedId || null, loadedName: extra.loadedName || null };
           }
         } catch (e) { console.warn('Não foi possível carregar o levantamento salvo:', e); }
-        return [];
+        return { survey: [], cliente: null, loadedId: null, loadedName: null };
+      }
+      // Roda depois que o catálogo termina de carregar (ver chamada em init()) -
+      // só aí dá pra saber de verdade se algum item do rascunho é de um produto
+      // descontinuado/inexistente. Remove só esses (avisando), mantém o resto.
+      function revalidarLevSurveyContraCatalogo() {
+        if (state.survey.length === 0) return;
+        const antes = state.survey.length;
+        state.survey = state.survey.filter(it => DB.productIndex[it.cod]);
+        if (state.survey.length !== antes) {
+          console.warn(`${antes - state.survey.length} item(ns) do levantamento removido(s) - código não encontrado no catálogo atual.`);
+          saveLevSurvey();
+          renderLevList();
+        }
       }
 
       // Feedback sonoro/tátil ao escanear - sem depender de arquivo de áudio (gera
@@ -5423,6 +5479,7 @@
           saveSavedSurveysList(list);
           state.levLoadedId = entry.id;
           state.levLoadedName = entry.name;
+          saveLevSurvey(); // marca o rascunho local como já salvo (evita re-avisar "não salvo" se o app fechar logo em seguida)
           refreshLevSaveInfo();
           showToast(result && result.__filaOffline
             ? `Sem conexão agora — "${cliente.nome}" fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
@@ -5479,7 +5536,7 @@
             if (!confirm('Excluir esse levantamento salvo? Essa ação não pode ser desfeita.')) return;
             const list = loadSavedSurveysList().filter(s => s.id !== btn.dataset.delSurvey);
             saveSavedSurveysList(list);
-            if (state.levLoadedId === btn.dataset.delSurvey) { state.levLoadedId = null; state.levLoadedName = null; refreshLevSaveInfo(); }
+            if (state.levLoadedId === btn.dataset.delSurvey) { state.levLoadedId = null; state.levLoadedName = null; saveLevSurvey(); refreshLevSaveInfo(); }
             renderSavedSurveysList();
           });
         });
@@ -5534,6 +5591,7 @@
           setChannelDiscount(Number(cliente.classificatorio_desconto));
           showToast(`Desconto de canal ajustado pra ${cliente.classificatorio_desconto}% (${cliente.classificatorio_tipo})`);
         }
+        saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
       }
       async function selectLevClient() {
         const cliente = await openClientPicker();
@@ -5830,8 +5888,46 @@
         });
         document.getElementById('levClearBtn').addEventListener('click', clearLevSurvey);
         document.getElementById('levAddAllBtn').addEventListener('click', addAllLevToCart);
-        state.survey = loadLevSurvey();
+
+        const draft = loadLevSurvey();
+        state.survey = draft.survey;
+        state.levLoadedId = draft.loadedId;
+        state.levLoadedName = draft.loadedName;
+        if (draft.cliente) setLevCliente(draft.cliente);
+        // avisa explicitamente quando recupera um rascunho não salvo (itens contados
+        // mas ainda sem "Salvar" clicado) - sem isso a restauração é silenciosa e o
+        // vendedor pode nem perceber que os itens de antes ainda estão lá.
+        if (draft.survey.length > 0 && !draft.loadedId) {
+          const quemEra = draft.cliente ? ` de ${draft.cliente.nome}` : '';
+          showToast(`Recuperamos um levantamento não salvo${quemEra} — ${draft.survey.length} item(ns)`);
+        }
+        // Nada no aparelho (ex: reinstalou o app, trocou de celular, limpou dados do
+        // navegador) - busca no servidor por via das dúvidas, sem travar a tela.
+        if (draft.survey.length === 0 && !draft.cliente) restaurarRascunhoDoServidorSeVazio();
         renderLevList();
+      }
+      async function restaurarRascunhoDoServidorSeVazio() {
+        try {
+          const result = await apiBuscarRascunhoLevantamento();
+          const r = result && result.rascunho;
+          if (!r || !Array.isArray(r.survey) || r.survey.length === 0) return;
+          // confere de novo, caso o vendedor já tenha começado um levantamento novo
+          // no aparelho enquanto essa busca ainda estava em andamento
+          if (state.survey.length > 0 || state.levCliente) return;
+          // sem filtrar por DB.productIndex aqui de propósito - o catálogo pode não
+          // ter terminado de carregar ainda; revalidarLevSurveyContraCatalogo() limpa
+          // itens de produto descontinuado depois, já com o catálogo carregado.
+          state.survey = r.survey
+            .filter(it => it && it.cod !== undefined)
+            .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
+          state.levLoadedId = r.loadedId || null;
+          state.levLoadedName = r.loadedName || null;
+          if (r.cliente) setLevCliente(r.cliente);
+          saveLevSurvey();
+          renderLevList();
+          const quemEra = r.cliente ? ` de ${r.cliente.nome}` : '';
+          showToast(`Recuperamos do servidor um levantamento não salvo${quemEra} — ${state.survey.length} item(ns)`);
+        } catch (e) { /* sem rascunho no servidor, ou sem rede agora - ok, segue sem nada */ }
       }
 
       let activateMainTab = () => { }; // preenchida de verdade dentro de initTabs, exposta pra navegar de qualquer lugar (ex: badge de classificatório)
@@ -6819,6 +6915,19 @@
       }
       async function apiCriarLevantamento(payload) {
         return apiFetch('/api/levantamentos', { method: 'POST', body: JSON.stringify(payload) }, { tipo: 'levantamento', descricao: 'Levantamento' });
+      }
+      // Rascunho de levantamento no servidor - reforço do autosave local (ver
+      // saveLevSurvey/loadLevSurvey), sobrevive a trocar de aparelho ou limpar
+      // dados do navegador. Sem fila offline de propósito: é só um "melhor
+      // esforço" em segundo plano, o localStorage já cobre o caso sem internet.
+      async function apiSalvarRascunhoLevantamento(valor) {
+        return apiFetch('/api/levantamentos/rascunho', { method: 'POST', body: JSON.stringify({ valor }) });
+      }
+      async function apiBuscarRascunhoLevantamento() {
+        return apiFetch('/api/levantamentos/rascunho');
+      }
+      async function apiApagarRascunhoLevantamento() {
+        return apiFetch('/api/levantamentos/rascunho', { method: 'DELETE' });
       }
       async function apiHistoricoCliente(clienteId) {
         return apiFetch(`/api/clientes/${clienteId}/historico`);
@@ -9507,6 +9616,7 @@
         state.priceOverrides = {};
         state.qtyDiscounts = {};
         state.paymentTerm = '';
+        clearTimeout(syncRascunhoTimer); // evita que um rascunho pendente do usuário anterior vaze pro rascunho do próximo
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
       }
 
@@ -9612,7 +9722,7 @@
           // EAN/DUN-14 em cada produto; sem isso, o scanner de código de barras
           // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
           const catalogoPromise = carregarCatalogoEExtras();
-          catalogoPromise.then(() => loadCodigosProduto());
+          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); });
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
 
           initStateSelect();
