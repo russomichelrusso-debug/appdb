@@ -61,4 +61,45 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Rascunho de levantamento em andamento, por usuário - reforço do autosave
+// que já existe no localStorage do aparelho (sobrevive a trocar de aparelho,
+// reinstalar o app, ou limpar dados do navegador). Sobrescrito por completo
+// a cada chamada (upsert), sem histórico - é só "o que está em andamento".
+router.post('/rascunho', async (req, res) => {
+  const { valor } = req.body;
+  if (valor === undefined) return res.status(400).json({ erro: 'Envie { valor: ... }' });
+  try {
+    await pool.query(
+      `INSERT INTO levantamento_rascunhos (usuario_id, rascunho, atualizado_em) VALUES ($1, $2, now())
+       ON CONFLICT (usuario_id) DO UPDATE SET rascunho = EXCLUDED.rascunho, atualizado_em = now()`,
+      [req.usuario.id, JSON.stringify(valor)]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao salvar rascunho.' });
+  }
+});
+
+router.get('/rascunho', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT rascunho, atualizado_em FROM levantamento_rascunhos WHERE usuario_id = $1', [req.usuario.id]);
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Nenhum rascunho salvo.' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar rascunho.' });
+  }
+});
+
+router.delete('/rascunho', async (req, res) => {
+  try {
+    await pool.query('DELETE FROM levantamento_rascunhos WHERE usuario_id = $1', [req.usuario.id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao apagar rascunho.' });
+  }
+});
+
 module.exports = router;
