@@ -151,8 +151,14 @@
     }
     .productSuggestion b { color: var(--ink); }
 
+    .btnRow {
+      display: flex;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
     .addBtn {
-      width: 100%;
+      flex: 2;
       border: none;
       border-radius: var(--r-sm);
       background: var(--red);
@@ -161,10 +167,22 @@
       font-size: 15px;
       padding: 14px;
       cursor: pointer;
-      margin-top: 14px;
     }
     .addBtn:active { opacity: .85; }
     .addBtn[disabled] { opacity: .5; cursor: default; }
+
+    .clearBtn {
+      flex: 1;
+      border: none;
+      border-radius: var(--r-sm);
+      background: var(--fill);
+      color: var(--ink);
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px;
+      cursor: pointer;
+    }
+    .clearBtn:active { opacity: .7; }
 
     .toast {
       position: fixed;
@@ -233,17 +251,19 @@
       </div>
       <div class="fieldRow">
         <div class="field">
-          <label for="juntaSelect">Junta desejada</label>
-          <select id="juntaSelect">
-            <option value="0.5">0,5 mm</option>
-            <option value="1.0">1,0 mm</option>
-            <option value="1.5" selected>1,5 mm</option>
-            <option value="2.0">2,0 mm</option>
-            <option value="3.0">3,0 mm</option>
-            <option value="4.0">4,0 mm</option>
-            <option value="5.0">5,0 mm</option>
+          <label for="modeloSelect">Modelo do espaçador</label>
+          <select id="modeloSelect">
+            <option value="standard" selected>Standard</option>
+            <option value="eco">ECO</option>
+            <option value="slim">Slim</option>
           </select>
         </div>
+        <div class="field">
+          <label for="juntaSelect">Junta desejada</label>
+          <select id="juntaSelect"></select>
+        </div>
+      </div>
+      <div class="fieldRow">
         <div class="field">
           <label for="perdaInput">Perda estimada (%)</label>
           <input type="number" id="perdaInput" min="0" max="50" step="1" inputmode="decimal" value="10">
@@ -276,7 +296,10 @@
       <div class="productSuggestion">
         Produto sugerido: <b id="resProdutoNome">—</b>
       </div>
-      <button type="button" class="addBtn" id="addBtn">Adicionar ao orçamento</button>
+      <div class="btnRow">
+        <button type="button" class="clearBtn" id="clearBtn">Limpar</button>
+        <button type="button" class="addBtn" id="addBtn">Adicionar ao orçamento</button>
+      </div>
       <p class="footNote">Cálculo calibrado pra bater com a calculadora oficial da Cortag — pode variar um pouco
         da quantidade real, sempre bom levar uma margem extra pro dia da obra.</p>
     </div>
@@ -303,6 +326,25 @@
     }
     function juntaLabel(juntaMm) {
       return juntaMm.toFixed(1).replace('.', ',') + ' mm';
+    }
+
+    // Os 3 modelos de espaçador nivelador mais vendidos da Cortag, cada um só
+    // com as juntas que existem de verdade no catálogo pra esse modelo (Slim,
+    // por exemplo, não vem em 4,0/5,0 mm) - evita deixar escolher uma
+    // combinação que não existe e dar "produto não encontrado" depois.
+    const MODELOS_ESPACADOR = {
+      standard: { label: 'Standard', juntas: [0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0] },
+      eco: { label: 'ECO', juntas: [1.0, 1.5, 2.0, 3.0, 4.0, 5.0] },
+      slim: { label: 'Slim', juntas: [1.0, 1.5, 2.0, 3.0] },
+    };
+    function popularJuntasDoModelo() {
+      const modelo = document.getElementById('modeloSelect').value;
+      const juntaSelect = document.getElementById('juntaSelect');
+      const atual = parseFloat(juntaSelect.value);
+      const juntas = MODELOS_ESPACADOR[modelo].juntas;
+      juntaSelect.innerHTML = juntas.map(j => `<option value="${j}">${juntaLabel(j)}</option>`).join('');
+      const preferida = juntas.includes(atual) ? atual : (juntas.includes(1.5) ? 1.5 : juntas[0]);
+      juntaSelect.value = String(preferida);
     }
 
     // Clipes recomendados por lado da peça - calibrado batendo com 2 exemplos
@@ -358,18 +400,22 @@
       document.getElementById('resArea').textContent = brNumber(areaAmbienteM2, 2) + ' m²';
       document.getElementById('resPecas').textContent = brNumber(pecasComPerda) + ' un.';
       document.getElementById('resNiveladores').textContent = brNumber(niveladores) + ' un.';
-      document.getElementById('resProdutoNome').textContent = `Espaçador nivelador ${juntaLabel(juntaMm)}`;
+      const modelo = document.getElementById('modeloSelect').value;
+      document.getElementById('resProdutoNome').textContent =
+        `Espaçador nivelador ${MODELOS_ESPACADOR[modelo].label} ${juntaLabel(juntaMm)}`;
       document.getElementById('resLadoX').textContent = `${ladoX} pçs`;
       document.getElementById('resLadoY').textContent = `${ladoY} pçs`;
       addBtn.disabled = false;
 
-      ultimoCalculo = { juntaMm, qty: niveladores };
+      ultimoCalculo = { modelo, juntaMm, qty: niveladores };
     }
 
     ['pecaComprimento', 'pecaLargura', 'ambienteComprimento', 'ambienteLargura', 'perdaInput'].forEach(id => {
       document.getElementById(id).addEventListener('input', calcular);
     });
     document.getElementById('juntaSelect').addEventListener('change', calcular);
+    document.getElementById('modeloSelect').addEventListener('change', () => { popularJuntasDoModelo(); calcular(); });
+    popularJuntasDoModelo();
 
     function showToast(msg) {
       const t = document.getElementById('toast');
@@ -384,13 +430,29 @@
       try {
         localStorage.setItem(CALC_HANDOFF_LS_KEY, JSON.stringify({
           geradoEm: Date.now(),
-          itens: [{ tipo: 'espacador_nivelador', juntaMm: ultimoCalculo.juntaMm, qty: ultimoCalculo.qty }],
+          itens: [{
+            tipo: 'espacador_nivelador',
+            modelo: ultimoCalculo.modelo,
+            juntaMm: ultimoCalculo.juntaMm,
+            qty: ultimoCalculo.qty,
+          }],
         }));
       } catch (e) {
         showToast('Não foi possível preparar o item — tente de novo.');
         return;
       }
       window.location.href = 'index.html?importarCalculo=1';
+    });
+
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      ['pecaComprimento', 'pecaLargura', 'ambienteComprimento', 'ambienteLargura'].forEach(id => {
+        document.getElementById(id).value = '';
+      });
+      document.getElementById('perdaInput').value = '10';
+      document.getElementById('modeloSelect').value = 'standard';
+      popularJuntasDoModelo();
+      document.getElementById('pecaComprimento').focus();
+      calcular();
     });
 
     calcular();
