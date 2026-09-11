@@ -120,13 +120,15 @@ function converterPlanilha(buffer) {
     if (!prec) continue; // produto sem precificação, ignora
 
     const { nome, emb, ncm, ipi, familia, pctStPorEstado } = trib;
-    // Coluna U (índice 0-based 20) = "PREÇO FIXO", marcada com o texto literal
-    // "PREÇO FIXO" na célula. A coluna V (índice 21, "NOVA PRECIFICAÇÃO
-    // CORTADORES", marcada com "PF") é uma flag DIFERENTE e não relacionada -
-    // não é preço fixo. Ler a coluna errada (V) fazia produtos genuinamente
-    // Preço Fixo (ex: TRENA AÇO) nunca serem reconhecidos como tal e por isso
-    // receberem desconto comercial indevidamente.
-    const ehPrecoFixo = prec.length > 20 && normalizarFlagTexto(prec[20]) === 'PRECO FIXO';
+    // Duas colunas indicam Preço Fixo: coluna U (índice 0-based 20), marcada
+    // com o texto literal "PREÇO FIXO", e coluna V (índice 21, "NOVA
+    // PRECIFICAÇÃO CORTADORES"), marcada com "PF" - essa segunda também é
+    // Preço Fixo (categoria de cortadores com a nova precificação), não uma
+    // flag à parte. Antes só a coluna V era lida, então produtos marcados só
+    // na coluna U (ex: TRENA AÇO) nunca eram reconhecidos como Preço Fixo e
+    // recebiam desconto comercial indevidamente.
+    const ehPrecoFixo = (prec.length > 20 && normalizarFlagTexto(prec[20]) === 'PRECO FIXO') ||
+      (prec.length > 21 && normalizarFlagTexto(prec[21]) === 'PF');
 
     const precosPorCanal = {};
     const precosSemImpostoPorCanal = {};
