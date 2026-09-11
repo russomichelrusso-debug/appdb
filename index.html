@@ -1907,6 +1907,10 @@
       color: #1E8E3E;
     }
 
+    .promoRuleItem .prBtns button.prDeleteBtn {
+      color: #B3261E;
+    }
+
     .promoTierRow {
       display: flex;
       align-items: center;
@@ -9159,13 +9163,15 @@
         if (lista.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhum produto promocional criado ainda.</div>'; return; }
         wrap.innerHTML = lista.map(p => `
     <div class="promoRuleItem">
-      <div class="prInfo">
-        <div class="prName">${escapeHtml(p.n)}</div>
-        <div class="prDetail">Cód. ${escapeHtml(p.c)} · originado de ${escapeHtml(p.origemCodigo || '—')}</div>
-        <div class="prDetail">SP ${brl(p.lsp)} · Sul-Sudeste ${brl(p.lss)} · Norte-Nordeste-CO ${brl(p.lnc)}</div>
-      </div>
-      <div class="prBtns">
-        <button data-del-promo-produto="${escapeHtml(p.c)}" aria-label="Excluir" title="Excluir">🗑</button>
+      <div class="prTop">
+        <div class="prInfo">
+          <div class="prName">${escapeHtml(p.n)}</div>
+          <div class="prDetail">Cód. ${escapeHtml(p.c)} · originado de ${escapeHtml(p.origemCodigo || '—')}</div>
+          <div class="prDetail">SP ${brl(p.lsp)} · Sul-Sudeste ${brl(p.lss)} · Norte-Nordeste-CO ${brl(p.lnc)}</div>
+        </div>
+        <div class="prBtns">
+          <button data-del-promo-produto="${escapeHtml(p.c)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">🗑</button>
+        </div>
       </div>
     </div>
   `).join('');
