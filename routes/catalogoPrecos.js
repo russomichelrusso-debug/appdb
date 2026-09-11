@@ -21,6 +21,10 @@ const { pool } = require('../db');
 // Moderno/Construtora/Institucional não têm essa trava).
 // ---------------------------------------------------------------------
 
+function normalizarFlagTexto(v) {
+  return (v == null ? '' : String(v)).normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
+}
+
 const CANAIS = ['VAREJO', 'ATACADO', 'E-COMMERCE', 'MODERNO', 'CONSTRUTORA', 'INSTITUCIONAL'];
 const TODOS_ESTADOS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB',
                        'PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
@@ -116,7 +120,13 @@ function converterPlanilha(buffer) {
     if (!prec) continue; // produto sem precificação, ignora
 
     const { nome, emb, ncm, ipi, familia, pctStPorEstado } = trib;
-    const ehPrecoFixo = prec.length > 21 && prec[21] === 'PF';
+    // Coluna U (índice 0-based 20) = "PREÇO FIXO", marcada com o texto literal
+    // "PREÇO FIXO" na célula. A coluna V (índice 21, "NOVA PRECIFICAÇÃO
+    // CORTADORES", marcada com "PF") é uma flag DIFERENTE e não relacionada -
+    // não é preço fixo. Ler a coluna errada (V) fazia produtos genuinamente
+    // Preço Fixo (ex: TRENA AÇO) nunca serem reconhecidos como tal e por isso
+    // receberem desconto comercial indevidamente.
+    const ehPrecoFixo = prec.length > 20 && normalizarFlagTexto(prec[20]) === 'PRECO FIXO';
 
     const precosPorCanal = {};
     const precosSemImpostoPorCanal = {};
@@ -227,3 +237,4 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.converterPlanilha = converterPlanilha; // exposto só pra teste da conversão sem precisar subir o servidor inteiro
