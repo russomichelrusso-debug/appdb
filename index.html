@@ -4967,12 +4967,24 @@
       // chamada em init()) - mesmo cuidado do rascunho de levantamento, pra não
       // rodar contra um DB.productIndex ainda vazio.
       const CALC_HANDOFF_LS_KEY = 'cortagCalcHandoff_v1';
+      // Palavras que marcam uma linha diferente da "Standard" (sem sufixo) -
+      // precisa excluir todas pra achar o Standard certo, já que o nome dele
+      // ("ESPAÇADOR NIVELADOR 1,5 mm") é substring de vários outros
+      // ("... SMART...", "... SUPRA...", etc.).
+      const LINHAS_ESPACADOR_NAO_STANDARD = ['eco', 'slim', 'smart', 'supra', 'easy spin'];
       function resolverProdutoCalculadora(item) {
         if (item.tipo === 'espacador_nivelador') {
-          const juntaTxt = Number(item.juntaMm).toFixed(1).replace('.', ',');
+          const juntaTxt = Number(item.juntaMm).toFixed(1).replace('.', ',') + ' mm';
+          const modelo = item.modelo || 'standard';
           return DB.products.find(p => {
+            // só a caixinha pequena (emb>1) - a versão a granel/balde (emb=1,
+            // "C/ 500 PÇS" etc.) é vendida como 1 balde inteiro, não dá pra somar
+            // direto com a quantidade calculada de espaçadores individuais.
+            if (!(p.emb > 1)) return false;
             const n = normalize(p.n);
-            return n.includes('espacador') && n.includes('nivelador') && n.includes(juntaTxt);
+            if (!n.includes('espacador') || !n.includes('nivelador') || !n.includes(juntaTxt)) return false;
+            if (modelo === 'standard') return !LINHAS_ESPACADOR_NAO_STANDARD.some(l => n.includes(l));
+            return n.includes(modelo);
           }) || null;
         }
         return null;
