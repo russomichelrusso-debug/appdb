@@ -72,6 +72,9 @@ async function query(sql, params = []) {
   if (s.includes('SELECT * FROM CLIENTES WHERE ID')) {
     return { rows: clientes.filter(c => c.id == params[0]) };
   }
+  if (s.includes('SELECT ID, NOME, DOCUMENTO FROM CLIENTES')) {
+    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento })) };
+  }
 
   // vendedores
   if (s.includes('SELECT ID FROM VENDEDORES WHERE NOME')) {

@@ -6880,7 +6880,21 @@
         try {
           const result = await apiFetch('/api/clientes/sync');
           if (result && Array.isArray(result.clientes)) saveClientesLocais(result.clientes);
-        } catch (e) { /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }
+          return true;
+        } catch (e) { return false; /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }
+      }
+      // Insiste mais rápido logo no início (só ali, ver chamada em
+      // carregarCatalogoEExtras) - o servidor no Render pode estar "acordando" do
+      // sono (plano free, dorme depois de ~15min sem uso; o keep-alive automático
+      // ajuda mas não garante 100%) bem na hora que o app abre. Sem isso, se a
+      // primeira tentativa cair nessa janela, a cópia local só tentaria de novo 5
+      // minutos depois - tempo demais pra quem já quer selecionar um cliente.
+      async function syncClientesLocaisComInsistenciaNoInicio() {
+        const atrasosMs = [0, 4000, 8000, 15000];
+        for (const atraso of atrasosMs) {
+          if (atraso > 0) await new Promise(r => setTimeout(r, atraso));
+          if (await syncClientesLocais()) return;
+        }
       }
       function buscarClientesLocais(busca) {
         const termo = normalize((busca || '').trim());
@@ -6889,14 +6903,27 @@
           .filter(c => normalize(c.nome).includes(termo) || (c.documento || '').replace(/\D/g, '').includes(termo.replace(/\D/g, '')))
           .slice(0, 20);
       }
+      // Antes de desistir (ou cair pro cache local), tenta mais 2 vezes com um
+      // pequeno atraso crescente - cobre bem a janela de alguns segundos em que o
+      // servidor no Render ainda está "acordando" do sono (ver
+      // syncClientesLocaisComInsistenciaNoInicio), que antes já ia direto pro erro
+      // "sem internet" mesmo com o vendedor tendo internet normal.
       async function apiBuscarClientes(busca) {
-        try {
-          return await apiFetch('/api/clientes?busca=' + encodeURIComponent(busca || ''));
-        } catch (e) {
-          const locais = buscarClientesLocais(busca);
-          if (locais.length > 0) return locais;
-          throw e;
+        const path = '/api/clientes?busca=' + encodeURIComponent(busca || '');
+        const atrasosRetryMs = [2500, 4000];
+        let ultimoErro;
+        for (let tentativa = 0; ; tentativa++) {
+          try {
+            return await apiFetch(path);
+          } catch (e) {
+            ultimoErro = e;
+            if (tentativa >= atrasosRetryMs.length) break;
+            await new Promise(r => setTimeout(r, atrasosRetryMs[tentativa]));
+          }
         }
+        const locais = buscarClientesLocais(busca);
+        if (locais.length > 0) return locais;
+        throw ultimoErro;
       }
       async function apiCriarCliente(cliente) {
         return apiFetch('/api/clientes', { method: 'POST', body: JSON.stringify(cliente) });
@@ -9702,7 +9729,7 @@
         }
         try { state.promoRules = await loadActivePromoRules(); } catch (e) { }
         try { PREVISAO_MAP = await loadActivePrevisao(); } catch (e) { }
-        syncClientesLocais(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
+        syncClientesLocaisComInsistenciaNoInicio(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
         // corrige a busca/carrinho depois que o catálogo terminar de chegar, caso o
         // vendedor já tenha aberto Preços ou mexido no carrinho antes disso - inclui
         // renderCart() (não só a barrinha) pra campanha recém-carregada aparecer de
