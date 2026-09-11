@@ -105,7 +105,8 @@
     }
 
     html[data-theme="dark"] .cartitem .rm,
-    html[data-theme="dark"] .levitem .rm {
+    html[data-theme="dark"] .levitem .rm,
+    html[data-theme="dark"] .priceListItem .rm {
       background: #48484A;
     }
 
@@ -913,7 +914,9 @@
       position: relative;
     }
 
-    .card .catbadge {
+    .card .catbadge,
+    .levitem .catbadge,
+    .cartitem .catbadge {
       display: block;
       font-size: 11px;
       font-weight: 600;
@@ -926,7 +929,9 @@
       margin-bottom: 5px;
     }
 
-    .card .fixedbadge {
+    .card .fixedbadge,
+    .levitem .fixedbadge,
+    .cartitem .fixedbadge {
       display: inline-block;
       font-size: 10.5px;
       font-weight: 700;
@@ -1276,7 +1281,8 @@
       margin-top: 2px;
     }
 
-    .cartitem .rm {
+    .cartitem .rm,
+    .priceListItem .rm {
       background: #E8E8ED;
       border: none;
       color: var(--gray);
@@ -1290,6 +1296,44 @@
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    /* ---------- Lista de preços (aba Preços) ---------- */
+    .priceListSection {
+      padding: 0 16px;
+    }
+
+    .priceListSection.hidden {
+      display: none;
+    }
+
+    .priceListHeader {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 10px 0 8px;
+    }
+
+    .priceListHeader h3 {
+      margin: 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .priceList {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .priceListItem {
+      position: relative;
+    }
+
+    .priceListItem .rm {
+      position: absolute;
+      top: 10px;
+      right: 10px;
     }
 
     .cartitem .bottom {
@@ -3599,6 +3643,14 @@
         <div class="hint" id="searchHint">Digite ao menos 2 caracteres para buscar.</div>
       </div>
 
+      <div class="priceListSection hidden" id="priceListSection">
+        <div class="priceListHeader">
+          <h3>Lista de preços</h3>
+          <button type="button" class="clientClearBtn" id="clearPriceListBtn">Limpar lista</button>
+        </div>
+        <div class="priceList" id="priceList"></div>
+      </div>
+
       <div class="results" id="resultsList"></div>
     </div>
 
@@ -4492,7 +4544,8 @@
         levLoadedName: null,
         priceOverrides: {}, // {cod: preçoLíquidoEditado} - preço base manual (antes de impostos), por sessão
         qtyDiscounts: {}, // {cod: percentual} - desconto extra por quantidade, por produto
-        promoRules: [] // regras de campanha sazonal, por categoria
+        promoRules: [], // regras de campanha sazonal, por categoria
+        priceList: [] // [cod, ...] - lista de preços da aba Preços, cresce a cada código inserido
       };
 
       // ---------------- Helpers ----------------
@@ -4774,6 +4827,26 @@
         document.getElementById('fichaTecnicaModal').classList.add('hidden');
       }
 
+      // Liga os botões comuns de um card de produto (Adicionar/editar preço/ficha
+      // técnica) - usado tanto pelos resultados de busca quanto pela lista de
+      // preços, que reaproveita o mesmo renderCard().
+      function wireProductCardButtons(container) {
+        container.querySelectorAll('[data-add]').forEach(btn => {
+          const originalHtml = btn.innerHTML;
+          btn.addEventListener('click', () => {
+            addToCart(btn.dataset.add);
+            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+            btn.classList.add('added');
+            setTimeout(() => { btn.innerHTML = originalHtml; btn.classList.remove('added'); }, 900);
+          });
+        });
+        container.querySelectorAll('[data-edit-price]').forEach(btn => {
+          btn.addEventListener('click', () => openPriceEditModal(btn.dataset.editPrice));
+        });
+        container.querySelectorAll('[data-ficha]').forEach(btn => {
+          btn.addEventListener('click', () => openFichaTecnica(btn.dataset.ficha));
+        });
+      }
       function renderResults() {
         const q = document.getElementById('searchInput').value;
         const list = document.getElementById('resultsList');
@@ -4793,21 +4866,83 @@
           return;
         }
         list.innerHTML = items.map(p => renderCard(p)).join('');
-        list.querySelectorAll('[data-add]').forEach(btn => {
-          const originalHtml = btn.innerHTML;
-          btn.addEventListener('click', () => {
-            addToCart(btn.dataset.add);
-            btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
-            btn.classList.add('added');
-            setTimeout(() => { btn.innerHTML = originalHtml; btn.classList.remove('added'); }, 900);
-          });
+        wireProductCardButtons(list);
+      }
+
+      // ---------------- Lista de preços (aba Preços) ----------------
+      // Cresce a cada código inserido (escâner, digitado + Enter, ou voz) - fica
+      // separada do filtro ao vivo de #resultsList, que continua sendo só uma
+      // busca por nome/código que substitui a cada tecla.
+      const PRICE_LIST_LS_KEY = 'cortagPriceList_v1';
+      function savePriceList() {
+        try { localStorage.setItem(PRICE_LIST_LS_KEY, JSON.stringify(state.priceList)); } catch (e) { /* sem localStorage - segue sem persistir */ }
+      }
+      function loadPriceListFromLS() {
+        try {
+          const raw = localStorage.getItem(PRICE_LIST_LS_KEY);
+          state.priceList = raw ? (JSON.parse(raw) || []) : [];
+        } catch (e) { state.priceList = []; }
+      }
+      function renderPriceList() {
+        const section = document.getElementById('priceListSection');
+        const wrap = document.getElementById('priceList');
+        if (!section || !wrap) return;
+        const produtos = state.priceList.map(cod => productByCod(cod)).filter(Boolean);
+        if (produtos.length === 0) {
+          section.classList.add('hidden');
+          wrap.innerHTML = '';
+          return;
+        }
+        section.classList.remove('hidden');
+        wrap.innerHTML = produtos.map(p => `
+    <div class="priceListItem">
+      ${renderCard(p)}
+      <button class="rm" data-pricelist-rm="${p.c}" aria-label="Remover">&times;</button>
+    </div>
+  `).join('');
+        wireProductCardButtons(wrap);
+        wrap.querySelectorAll('[data-pricelist-rm]').forEach(btn => {
+          btn.addEventListener('click', () => removeFromPriceList(btn.dataset.pricelistRm));
         });
-        list.querySelectorAll('[data-edit-price]').forEach(btn => {
-          btn.addEventListener('click', () => openPriceEditModal(btn.dataset.editPrice));
-        });
-        list.querySelectorAll('[data-ficha]').forEach(btn => {
-          btn.addEventListener('click', () => openFichaTecnica(btn.dataset.ficha));
-        });
+      }
+      function addToPriceList(cod) {
+        if (state.priceList.includes(cod)) { showToast('Esse produto já está na lista'); return; }
+        state.priceList.push(cod);
+        savePriceList();
+        renderPriceList();
+      }
+      function removeFromPriceList(cod) {
+        state.priceList = state.priceList.filter(c => c !== cod);
+        savePriceList();
+        renderPriceList();
+      }
+      function clearPriceList() {
+        if (state.priceList.length === 0) return;
+        if (!confirm('Limpar a lista de preços?')) return;
+        state.priceList = [];
+        savePriceList();
+        renderPriceList();
+      }
+      // Resolve um código (escaneado, digitado + Enter, ou reconhecido por voz)
+      // igual ao mecanismo já usado no Levantamento (findByExactCode + busca
+      // única sem ambiguidade) e adiciona à lista de preços, limpando o campo
+      // de busca pra já deixar pronto pro próximo código.
+      function processPrecoCodigo(rawCode) {
+        const code = (rawCode || '').toString().trim();
+        if (!code) return;
+        let p = findByExactCode(code);
+        if (!p && code.length >= 2) {
+          const results = searchProducts(code);
+          if (results.length === 1) p = results[0];
+        }
+        if (!p) { showToast('Código não encontrado: ' + code); return; }
+        addToPriceList(p.c);
+        const input = document.getElementById('searchInput');
+        if (input) {
+          input.value = '';
+          renderResults();
+          input.focus();
+        }
       }
 
       // Badge pequeno e colorido por categoria de classificatório - usado em
@@ -5243,6 +5378,7 @@
       <div class="cartitem">
         <div class="top">
           <div>
+            <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
             <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c) > 0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
             ${renderPrevisaoBadge(p.c)}
@@ -5947,6 +6083,7 @@
         <div class="levNumWrap">
           <span class="levNum">${idx + 1}</span>
           <div>
+            <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
             <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc > 0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}</div>
             <div class="pcode">Cód. ${p.c}</div>
             ${renderPrevisaoBadge(p.c)}
@@ -9440,7 +9577,14 @@
             return;
           }
         }
-        // não bateu com nenhum comando conhecido: trata como termo de busca
+        // na aba Preços, voz também entra na lista de preços (mesmo mecanismo
+        // do código escaneado/digitado) - não bateu com comando conhecido, então
+        // trata o que foi dito como um código/nome de produto.
+        if (targetInputId === 'searchInput') {
+          processPrecoCodigo(clean);
+          return;
+        }
+        // outros campos (ex: levInput): só preenche e dispara a busca normal
         const input = document.getElementById(targetInputId);
         if (!input) return;
         input.value = clean;
@@ -9523,10 +9667,15 @@
       let scannerTargetInput = 'levInput';
 
       // Decide o que fazer com o código lido: no Levantamento, soma ao estoque;
-      // na busca de Preços (ou qualquer outro campo), só preenche e dispara a busca.
+      // na aba Preços, entra na lista de preços; em qualquer outro campo, só
+      // preenche e dispara a busca.
       function onScanSuccess(text) {
         if (scannerTargetInput === 'levInput') {
           processLevScan(text);
+          return;
+        }
+        if (scannerTargetInput === 'searchInput') {
+          processPrecoCodigo(text);
           return;
         }
         const input = document.getElementById(scannerTargetInput);
@@ -9790,8 +9939,10 @@
         state.priceOverrides = {};
         state.qtyDiscounts = {};
         state.paymentTerm = '';
+        state.priceList = [];
         clearTimeout(syncRascunhoTimer); // evita que um rascunho pendente do usuário anterior vaze pro rascunho do próximo
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
+        try { localStorage.removeItem(PRICE_LIST_LS_KEY); } catch (e) { }
       }
 
       // Callback do Google Identity Services (google.accounts.id) quando a pessoa
@@ -9896,8 +10047,9 @@
           // EAN/DUN-14 em cada produto; sem isso, o scanner de código de barras
           // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
           const catalogoPromise = carregarCatalogoEExtras();
-          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); });
+          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
+          loadPriceListFromLS();
 
           initStateSelect();
           initGpsState();
@@ -9936,6 +10088,16 @@
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(renderResults, 90);
           });
+          // código digitado + Enter entra na lista de preços, igual escanear/falar -
+          // a busca ao vivo por nome (renderResults) continua funcionando normalmente
+          // enquanto a pessoa só está digitando, sem interferir uma coisa na outra.
+          searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              processPrecoCodigo(searchInput.value);
+            }
+          });
+          document.getElementById('clearPriceListBtn').addEventListener('click', clearPriceList);
 
           document.getElementById('cartBar').addEventListener('click', openDrawer);
           document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
