@@ -261,6 +261,14 @@
         <span class="k">Peças necessárias (com perda)</span>
         <span class="v" id="resPecas">—</span>
       </div>
+      <div class="resultRow">
+        <span class="k">Recomendado pro lado "X" (comprimento)</span>
+        <span class="v" id="resLadoX">—</span>
+      </div>
+      <div class="resultRow">
+        <span class="k">Recomendado pro lado "Y" (largura)</span>
+        <span class="v" id="resLadoY">—</span>
+      </div>
       <div class="resultRow main">
         <span class="k">Espaçadores niveladores</span>
         <span class="v" id="resNiveladores">—</span>
@@ -269,8 +277,8 @@
         Produto sugerido: <b id="resProdutoNome">—</b>
       </div>
       <button type="button" class="addBtn" id="addBtn">Adicionar ao orçamento</button>
-      <p class="footNote">Estimativa baseada na fórmula usual do mercado (4 pontos de nivelamento por m² de peça) —
-        pode variar um pouco da quantidade real, sempre bom levar uma margem extra pro dia da obra.</p>
+      <p class="footNote">Cálculo calibrado pra bater com a calculadora oficial da Cortag — pode variar um pouco
+        da quantidade real, sempre bom levar uma margem extra pro dia da obra.</p>
     </div>
   </div>
 
@@ -297,6 +305,20 @@
       return juntaMm.toFixed(1).replace('.', ',') + ' mm';
     }
 
+    // Clipes recomendados por lado da peça - calibrado batendo com 2 exemplos
+    // reais da calculadora oficial da Cortag (cortag.com/pt-br/calculadora-de-
+    // materiais/, que o ambiente aqui não consegue acessar direto):
+    //   peça 60x60cm, 12m²   -> recomendado 2 (X) e 2 (Y), total 134 espaçadores
+    //   peça 90x130cm, 20m²  -> recomendado 3 (X) e 4 (Y), total 120 espaçadores
+    // "arredondar(lado/40) pra cima" bate exato nos dois casos (60/40->2,
+    // 90/40->3, 130/40->4), e o total = (área total / área da peça) x (clipes
+    // lado X + clipes lado Y) também bate exato nos dois (133,33->134 e
+    // 119,66->120). Sem acesso à calculadora oficial pra testar mais casos,
+    // mas os dois pontos batendo com exatidão dá boa confiança na fórmula.
+    function clipsPorLado(cm) {
+      return Math.max(1, Math.ceil(cm / 40));
+    }
+
     let ultimoCalculo = null;
 
     function calcular() {
@@ -311,6 +333,8 @@
         document.getElementById('resPecas').textContent = '—';
         document.getElementById('resNiveladores').textContent = '—';
         document.getElementById('resProdutoNome').textContent = '—';
+        document.getElementById('resLadoX').textContent = '—';
+        document.getElementById('resLadoY').textContent = '—';
         addBtn.disabled = true;
         ultimoCalculo = null;
         return;
@@ -318,16 +342,25 @@
 
       const areaAmbienteM2 = (ambC / 100) * (ambL / 100);
       const areaPecaM2 = (pecaC / 100) * (pecaL / 100);
-      const pecasBrutas = areaAmbienteM2 / areaPecaM2;
-      const pecasComPerda = Math.ceil(pecasBrutas * (1 + perdaPct / 100));
-      // fórmula usual do setor: ~4 pontos de nivelamento por m² de peça
-      // (cada espaçador atende ao encontro de até 4 peças vizinhas)
-      const niveladores = Math.ceil(areaAmbienteM2 * (4 / areaPecaM2));
+      // Peças em grade (linhas x colunas) - conta toda peça cortada na borda como
+      // uma peça inteira gasta, igual acontece na obra de verdade (diferente de
+      // só dividir a área, que subestima o tanto que precisa comprar). A Cortag
+      // não mostra isso na calculadora deles (só pede a área pronta), é um
+      // extra nosso.
+      const nx = Math.ceil(ambC / pecaC);
+      const ny = Math.ceil(ambL / pecaL);
+      const pecasComPerda = Math.ceil(nx * ny * (1 + perdaPct / 100));
+
+      const ladoX = clipsPorLado(pecaC);
+      const ladoY = clipsPorLado(pecaL);
+      const niveladores = Math.ceil((areaAmbienteM2 / areaPecaM2) * (ladoX + ladoY));
 
       document.getElementById('resArea').textContent = brNumber(areaAmbienteM2, 2) + ' m²';
       document.getElementById('resPecas').textContent = brNumber(pecasComPerda) + ' un.';
       document.getElementById('resNiveladores').textContent = brNumber(niveladores) + ' un.';
       document.getElementById('resProdutoNome').textContent = `Espaçador nivelador ${juntaLabel(juntaMm)}`;
+      document.getElementById('resLadoX').textContent = `${ladoX} pçs`;
+      document.getElementById('resLadoY').textContent = `${ladoY} pçs`;
       addBtn.disabled = false;
 
       ultimoCalculo = { juntaMm, qty: niveladores };
