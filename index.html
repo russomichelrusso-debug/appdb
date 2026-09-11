@@ -4521,7 +4521,12 @@
         }
         const st = STATE_BY_UF[uf];
         const liq = effectiveLiq(p, uf);
-        const stRate = DB.stProfiles[p.st][TAXKEY_IDX[st.taxKey]];
+        // perfil de ICMS-ST não existe mais no cliente pra nenhum produto real
+        // (nem catálogo atual, nem promocionais criados no Admin) - trata como
+        // os "outros 22 estados" da planilha (sem ICMS-ST adicional) em vez de
+        // quebrar quando DB.stProfiles/p.st estiverem ausentes.
+        const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
+        const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
         return liq * (1 + p.ipi) * (1 + stRate);
       }
       // Mesmo preço de listPrice(), mas sem IPI nem ICMS-ST embutido - só pro
@@ -4903,7 +4908,10 @@
         const val = parseFloat(document.getElementById('priceEditInput').value);
         if (isNaN(val) || val < 0) { preview.innerHTML = 'Digite um preço válido.'; return; }
         const st = STATE_BY_UF[state.uf];
-        const stRate = DB.stProfiles[p.st][TAXKEY_IDX[st.taxKey]];
+        // mesma blindagem de listPrice() - sem perfil de ICMS-ST disponível no
+        // cliente, considera 0% em vez de quebrar (ver comentário em listPrice).
+        const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
+        const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
         const lp = val * (1 + p.ipi) * (1 + stRate);
         const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
         preview.innerHTML = `Com impostos (${state.uf}): <b>${brl(lp)}</b><br>Preço ao cliente agora: <b>${brl(cp)}</b>`;
