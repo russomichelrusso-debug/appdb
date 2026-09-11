@@ -4999,6 +4999,11 @@
       // ("ESPAÇADOR NIVELADOR 1,5 mm") é substring de vários outros
       // ("... SMART...", "... SUPRA...", etc.).
       const LINHAS_ESPACADOR_NAO_STANDARD = ['eco', 'slim', 'smart', 'supra', 'easy spin'];
+      // A quantidade calculada é em unidades físicas de espaçador, mas o SKU no
+      // catálogo é vendido por pacote (não por unidade avulsa) - Standard e ECO
+      // vêm em pacotes de 50 un., Slim em pacotes de 100 un. Precisa converter
+      // unidades -> pacotes antes de arredondar pelo múltiplo da caixa (emb).
+      const UNIDADES_POR_PACOTE_NIVELADOR = { standard: 50, eco: 50, slim: 100 };
       function resolverProdutoCalculadora(item) {
         if (item.tipo === 'espacador_nivelador') {
           const juntaTxt = Number(item.juntaMm).toFixed(1).replace('.', ',') + ' mm';
@@ -5030,11 +5035,15 @@
         for (const item of dados.itens) {
           const p = item.qty > 0 ? resolverProdutoCalculadora(item) : null;
           if (!p) { naoEncontrados++; continue; }
-          // arredonda pra cima até o múltiplo da embalagem - não dá pra comprar
-          // quantidade fracionada de caixa (ex: precisa de 134, vem em caixa de
-          // 12, então soma 144 - o vendedor prefere sobrar um pouco a faltar).
+          // primeiro converte unidades físicas -> pacotes (unidade real do SKU),
+          // só depois arredonda pra cima até o múltiplo da caixa (emb) - não dá
+          // pra comprar quantidade fracionada de caixa nem de pacote avulso.
+          const unidadesPorPacote = item.tipo === 'espacador_nivelador'
+            ? (UNIDADES_POR_PACOTE_NIVELADOR[item.modelo || 'standard'] || 1)
+            : 1;
+          const pacotesNecessarios = Math.ceil(item.qty / unidadesPorPacote);
           const passo = packStep(p);
-          const qty = Math.ceil(item.qty / passo) * passo;
+          const qty = Math.ceil(pacotesNecessarios / passo) * passo;
           const existing = state.cart.find(i => i.cod === p.c);
           if (existing) existing.qty += qty;
           else state.cart.push({ cod: p.c, qty });
