@@ -1987,6 +1987,33 @@
       padding: 14px 16px;
     }
 
+    .hist-clientBar > div:first-child {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .hist-clientBtns {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+
+    .clientClearBtn {
+      background: none;
+      border: none;
+      color: var(--gray);
+      font-weight: 600;
+      font-size: 12.5px;
+      cursor: pointer;
+      padding: 2px 4px;
+    }
+
+    .clientClearBtn.hidden {
+      display: none;
+    }
+
     .hist-clientLabel {
       font-size: 11.5px;
       color: var(--gray);
@@ -3578,11 +3605,11 @@
           <div class="hist-clientName" id="levClientName">Nenhum selecionado</div>
           <div class="hist-clientDoc" id="levClientDoc"></div>
         </div>
-        <div style="display:flex;gap:8px;">
-          <button type="button" class="restoreBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
-            title="Limpar cliente" style="width:auto;padding:10px 16px;color:#B3261E;">Limpar</button>
+        <div class="hist-clientBtns">
           <button type="button" class="restoreBtn" id="levSelectClientBtn"
             style="width:auto;padding:10px 16px;">Selecionar</button>
+          <button type="button" class="clientClearBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
+            title="Limpar cliente">Limpar</button>
         </div>
       </div>
       <div class="lev-savebar">
