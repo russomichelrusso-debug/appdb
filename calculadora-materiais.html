@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cortag · Calculadora de Materiais</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#CC0935">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root {
+      --red: #CC0935;
+      --red-deep: #A30729;
+      --ink: #1D1D1F;
+      --gray: #6E6E73;
+      --fill: #F5F5F7;
+      --hairline: #D2D2D7;
+      --white: #FFFFFF;
+      --r-sm: 10px;
+      --r-md: 16px;
+      --r-lg: 22px;
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 1px 1px rgba(0, 0, 0, .04);
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
+    }
+
+    html[data-theme="dark"] {
+      --ink: #F2F2F4;
+      --gray: #98989D;
+      --fill: #1C1C1E;
+      --hairline: #3A3A3C;
+      --white: #2C2C2E;
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .2);
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .3);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--fill);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 0 14px;
+      flex-wrap: wrap;
+    }
+
+    .backLink {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--gray);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .backLink:active { opacity: .6; }
+
+    .topbar h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; flex: 1; min-width: 200px; }
+    .topbar .sub { font-size: 12px; color: var(--gray); margin: 2px 0 0; }
+
+    .card {
+      background: var(--white);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-1);
+      padding: 18px;
+      margin-bottom: 14px;
+    }
+    .card h2 { font-size: 14.5px; margin: 0 0 4px; }
+    .card p.hint { font-size: 12px; color: var(--gray); margin: 0 0 14px; line-height: 1.5; }
+
+    .fieldRow { display: flex; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .field { flex: 1; min-width: 130px; }
+    .field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray);
+      margin-bottom: 6px;
+    }
+    .field input, .field select {
+      width: 100%;
+      border: none;
+      border-radius: var(--r-sm);
+      padding: 11px 12px;
+      font-size: 15px;
+      color: var(--ink);
+      background: var(--fill);
+      appearance: none;
+      -webkit-appearance: none;
+    }
+    .field select {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='7'><path d='M0 0l5.5 6.5L11 0' fill='none' stroke='%236E6E73' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right 13px center;
+      padding-right: 30px;
+    }
+
+    .fieldset-label {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      color: var(--gray);
+      margin: 4px 0 8px;
+    }
+
+    .resultRow {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: 10px 0;
+      border-top: 1px solid var(--hairline);
+    }
+    .resultRow:first-child { border-top: none; padding-top: 0; }
+    .resultRow .k { font-size: 13px; color: var(--gray); }
+    .resultRow .v { font-size: 17px; font-weight: 700; }
+    .resultRow.main .v { color: var(--red); font-size: 22px; }
+
+    .productSuggestion {
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      padding: 12px 14px;
+      margin-top: 12px;
+      font-size: 13px;
+      color: var(--gray);
+    }
+    .productSuggestion b { color: var(--ink); }
+
+    .addBtn {
+      width: 100%;
+      border: none;
+      border-radius: var(--r-sm);
+      background: var(--red);
+      color: #fff;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px;
+      cursor: pointer;
+      margin-top: 14px;
+    }
+    .addBtn:active { opacity: .85; }
+    .addBtn[disabled] { opacity: .5; cursor: default; }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translate(-50%, 12px);
+      background: var(--ink);
+      color: var(--white);
+      padding: 12px 18px;
+      border-radius: 12px;
+      font-size: 13.5px;
+      font-weight: 600;
+      box-shadow: var(--shadow-2);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s ease, transform .2s ease;
+      z-index: 999;
+      max-width: calc(100% - 32px);
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    .footNote { font-size: 11.5px; color: var(--gray); text-align: center; margin-top: 4px; line-height: 1.5; }
+  </style>
+</head>
+
+<body>
+  <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
+
+  <div class="wrap">
+    <div class="topbar">
+      <a class="backLink" href="index.html">← App</a>
+      <div style="flex:1;min-width:200px;">
+        <h1>Calculadora de Materiais</h1>
+        <p class="sub">Quantidade de espaçadores niveladores pro seu ambiente</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Peça (piso/porcelanato)</h2>
+      <p class="hint">Medida de uma peça só, em centímetros.</p>
+      <div class="fieldRow">
+        <div class="field">
+          <label for="pecaComprimento">Comprimento (cm)</label>
+          <input type="number" id="pecaComprimento" min="1" step="0.1" inputmode="decimal" value="60">
+        </div>
+        <div class="field">
+          <label for="pecaLargura">Largura (cm)</label>
+          <input type="number" id="pecaLargura" min="1" step="0.1" inputmode="decimal" value="60">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Ambiente</h2>
+      <p class="hint">Medida total do local onde as peças serão instaladas, em centímetros.</p>
+      <div class="fieldRow">
+        <div class="field">
+          <label for="ambienteComprimento">Comprimento (cm)</label>
+          <input type="number" id="ambienteComprimento" min="1" step="1" inputmode="decimal" value="400">
+        </div>
+        <div class="field">
+          <label for="ambienteLargura">Largura (cm)</label>
+          <input type="number" id="ambienteLargura" min="1" step="1" inputmode="decimal" value="300">
+        </div>
+      </div>
+      <div class="fieldRow">
+        <div class="field">
+          <label for="juntaSelect">Junta desejada</label>
+          <select id="juntaSelect">
+            <option value="0.5">0,5 mm</option>
+            <option value="1.0">1,0 mm</option>
+            <option value="1.5" selected>1,5 mm</option>
+            <option value="2.0">2,0 mm</option>
+            <option value="3.0">3,0 mm</option>
+            <option value="4.0">4,0 mm</option>
+            <option value="5.0">5,0 mm</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="perdaInput">Perda estimada (%)</label>
+          <input type="number" id="perdaInput" min="0" max="50" step="1" inputmode="decimal" value="10">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Resultado</h2>
+      <div class="resultRow">
+        <span class="k">Área do ambiente</span>
+        <span class="v" id="resArea">—</span>
+      </div>
+      <div class="resultRow">
+        <span class="k">Peças necessárias (com perda)</span>
+        <span class="v" id="resPecas">—</span>
+      </div>
+      <div class="resultRow main">
+        <span class="k">Espaçadores niveladores</span>
+        <span class="v" id="resNiveladores">—</span>
+      </div>
+      <div class="productSuggestion">
+        Produto sugerido: <b id="resProdutoNome">—</b>
+      </div>
+      <button type="button" class="addBtn" id="addBtn">Adicionar ao orçamento</button>
+      <p class="footNote">Estimativa baseada na fórmula usual do mercado (4 pontos de nivelamento por m² de peça) —
+        pode variar um pouco da quantidade real, sempre bom levar uma margem extra pro dia da obra.</p>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // Handoff pro app principal (index.html): grava a lista de itens calculados
+    // numa chave compartilhada do localStorage e manda o usuário de volta pro
+    // app, que lê essa chave (depois que o catálogo de produtos terminar de
+    // carregar), resolve o código real do produto e adiciona no orçamento -
+    // ver CALC_HANDOFF_LS_KEY / processarHandoffCalculadora() em index.html.
+    // Essa página em si não faz nenhuma chamada de API nem exige login - é só
+    // matemática, fica bem leve.
+    const CALC_HANDOFF_LS_KEY = 'cortagCalcHandoff_v1';
+
+    function num(id) {
+      const v = parseFloat(document.getElementById(id).value);
+      return isFinite(v) && v > 0 ? v : 0;
+    }
+    function brNumber(v, casas) {
+      return v.toLocaleString('pt-BR', { minimumFractionDigits: casas || 0, maximumFractionDigits: casas || 0 });
+    }
+    function juntaLabel(juntaMm) {
+      return juntaMm.toFixed(1).replace('.', ',') + ' mm';
+    }
+
+    let ultimoCalculo = null;
+
+    function calcular() {
+      const pecaC = num('pecaComprimento'), pecaL = num('pecaLargura');
+      const ambC = num('ambienteComprimento'), ambL = num('ambienteLargura');
+      const perdaPct = num('perdaInput');
+      const juntaMm = parseFloat(document.getElementById('juntaSelect').value);
+
+      const addBtn = document.getElementById('addBtn');
+      if (!pecaC || !pecaL || !ambC || !ambL) {
+        document.getElementById('resArea').textContent = '—';
+        document.getElementById('resPecas').textContent = '—';
+        document.getElementById('resNiveladores').textContent = '—';
+        document.getElementById('resProdutoNome').textContent = '—';
+        addBtn.disabled = true;
+        ultimoCalculo = null;
+        return;
+      }
+
+      const areaAmbienteM2 = (ambC / 100) * (ambL / 100);
+      const areaPecaM2 = (pecaC / 100) * (pecaL / 100);
+      const pecasBrutas = areaAmbienteM2 / areaPecaM2;
+      const pecasComPerda = Math.ceil(pecasBrutas * (1 + perdaPct / 100));
+      // fórmula usual do setor: ~4 pontos de nivelamento por m² de peça
+      // (cada espaçador atende ao encontro de até 4 peças vizinhas)
+      const niveladores = Math.ceil(areaAmbienteM2 * (4 / areaPecaM2));
+
+      document.getElementById('resArea').textContent = brNumber(areaAmbienteM2, 2) + ' m²';
+      document.getElementById('resPecas').textContent = brNumber(pecasComPerda) + ' un.';
+      document.getElementById('resNiveladores').textContent = brNumber(niveladores) + ' un.';
+      document.getElementById('resProdutoNome').textContent = `Espaçador nivelador ${juntaLabel(juntaMm)}`;
+      addBtn.disabled = false;
+
+      ultimoCalculo = { juntaMm, qty: niveladores };
+    }
+
+    ['pecaComprimento', 'pecaLargura', 'ambienteComprimento', 'ambienteLargura', 'perdaInput'].forEach(id => {
+      document.getElementById(id).addEventListener('input', calcular);
+    });
+    document.getElementById('juntaSelect').addEventListener('change', calcular);
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => t.classList.remove('show'), 2200);
+    }
+
+    document.getElementById('addBtn').addEventListener('click', () => {
+      if (!ultimoCalculo) return;
+      try {
+        localStorage.setItem(CALC_HANDOFF_LS_KEY, JSON.stringify({
+          geradoEm: Date.now(),
+          itens: [{ tipo: 'espacador_nivelador', juntaMm: ultimoCalculo.juntaMm, qty: ultimoCalculo.qty }],
+        }));
+      } catch (e) {
+        showToast('Não foi possível preparar o item — tente de novo.');
+        return;
+      }
+      window.location.href = 'index.html?importarCalculo=1';
+    });
+
+    calcular();
+  </script>
+</body>
+
+</html>
