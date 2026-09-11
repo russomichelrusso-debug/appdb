@@ -3453,6 +3453,22 @@
           <path d="M7 16v-4M12 16V8M17 16v-7" />
         </svg>
       </a>
+      <a class="gearBtn" href="calculadora-materiais.html" id="calcMateriaisLink" aria-label="Calculadora de Materiais"
+        title="Calculadora de Materiais">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <rect x="4" y="2" width="16" height="20" rx="2" />
+          <line x1="8" y1="6" x2="16" y2="6" />
+          <line x1="8" y1="11" x2="8" y2="11.01" />
+          <line x1="12" y1="11" x2="12" y2="11.01" />
+          <line x1="16" y1="11" x2="16" y2="11.01" />
+          <line x1="8" y1="15" x2="8" y2="15.01" />
+          <line x1="12" y1="15" x2="12" y2="15.01" />
+          <line x1="16" y1="15" x2="16" y2="15.01" />
+          <line x1="8" y1="19" x2="8" y2="19.01" />
+          <line x1="12" y1="19" x2="12" y2="19.01" />
+        </svg>
+      </a>
       <button class="gearBtn" id="adminBtn" aria-label="Administração">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round">
@@ -4940,6 +4956,60 @@
         state.cart = state.cart.filter(i => i.cod !== cod);
         renderCart();
         renderCartBar();
+      }
+
+      // Handoff da calculadora de materiais (calculadora-materiais.html, página
+      // separada e leve, sem tocar a API) - ela só calcula a quantidade e grava
+      // um "pedido" genérico (tipo + especificação) numa chave compartilhada do
+      // localStorage; quem resolve o código real do produto no catálogo e
+      // finalmente adiciona ao orçamento é o index.html, já que só ele carrega o
+      // catálogo completo. Roda depois que o catálogo termina de carregar (ver
+      // chamada em init()) - mesmo cuidado do rascunho de levantamento, pra não
+      // rodar contra um DB.productIndex ainda vazio.
+      const CALC_HANDOFF_LS_KEY = 'cortagCalcHandoff_v1';
+      function resolverProdutoCalculadora(item) {
+        if (item.tipo === 'espacador_nivelador') {
+          const juntaTxt = Number(item.juntaMm).toFixed(1).replace('.', ',');
+          return DB.products.find(p => {
+            const n = normalize(p.n);
+            return n.includes('espacador') && n.includes('nivelador') && n.includes(juntaTxt);
+          }) || null;
+        }
+        return null;
+      }
+      function processarHandoffCalculadora() {
+        let dados;
+        try {
+          const raw = localStorage.getItem(CALC_HANDOFF_LS_KEY);
+          if (!raw) return;
+          dados = JSON.parse(raw);
+        } catch (e) { return; }
+        localStorage.removeItem(CALC_HANDOFF_LS_KEY);
+        if (!dados || !Array.isArray(dados.itens) || dados.itens.length === 0) return;
+
+        let adicionados = 0, naoEncontrados = 0;
+        for (const item of dados.itens) {
+          const p = item.qty > 0 ? resolverProdutoCalculadora(item) : null;
+          if (!p) { naoEncontrados++; continue; }
+          // arredonda pra cima até o múltiplo da embalagem - não dá pra comprar
+          // quantidade fracionada de caixa (ex: precisa de 134, vem em caixa de
+          // 12, então soma 144 - o vendedor prefere sobrar um pouco a faltar).
+          const passo = packStep(p);
+          const qty = Math.ceil(item.qty / passo) * passo;
+          const existing = state.cart.find(i => i.cod === p.c);
+          if (existing) existing.qty += qty;
+          else state.cart.push({ cod: p.c, qty });
+          adicionados++;
+        }
+        if (adicionados > 0) {
+          renderCartBar();
+          renderCart();
+          showToast(`${adicionados} item(ns) da calculadora adicionado(s) ao orçamento` +
+            (naoEncontrados > 0 ? ' — algum item não foi encontrado no catálogo atual' : ''));
+          openDrawer();
+        } else if (naoEncontrados > 0) {
+          showToast('Não encontrei no catálogo atual o produto calculado.');
+        }
       }
       function changeQty(cod, direction) {
         const it = state.cart.find(i => i.cod === cod);
@@ -9764,7 +9834,7 @@
           // EAN/DUN-14 em cada produto; sem isso, o scanner de código de barras
           // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
           const catalogoPromise = carregarCatalogoEExtras();
-          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); });
+          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); });
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
 
           initStateSelect();
