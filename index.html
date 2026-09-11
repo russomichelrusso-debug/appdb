@@ -1846,6 +1846,10 @@
       width: 100%;
     }
 
+    .restoreBtn.hidden {
+      display: none;
+    }
+
     /* ---------- Campanhas promocionais ---------- */
     .promoRuleItem {
       background: var(--fill);
@@ -3558,8 +3562,12 @@
           <div class="hist-clientName" id="levClientName">Nenhum selecionado</div>
           <div class="hist-clientDoc" id="levClientDoc"></div>
         </div>
-        <button type="button" class="restoreBtn" id="levSelectClientBtn"
-          style="width:auto;padding:10px 16px;">Selecionar</button>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="restoreBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
+            title="Limpar cliente" style="width:auto;padding:10px 16px;color:#B3261E;">Limpar</button>
+          <button type="button" class="restoreBtn" id="levSelectClientBtn"
+            style="width:auto;padding:10px 16px;">Selecionar</button>
+        </div>
       </div>
       <div class="lev-savebar">
         <span class="lev-saveinfo" id="levSaveInfo">Levantamento não salvo</span>
@@ -5574,6 +5582,7 @@
           ? `${escapeHtml(cliente.nome)} ${renderClassificatorioBadge(cliente)}`
           : 'Nenhum selecionado';
         document.getElementById('levClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
+        document.getElementById('levClearClientBtn').classList.toggle('hidden', !cliente);
         const badge = nameEl.querySelector('.classiBadge');
         if (badge) {
           badge.style.cursor = 'pointer';
@@ -5735,6 +5744,12 @@
         document.getElementById('levOpenCancel').addEventListener('click', closeLevOpenModal);
         document.getElementById('levOpenOverlay').addEventListener('click', closeLevOpenModal);
         document.getElementById('levSelectClientBtn').addEventListener('click', selectLevClient);
+        document.getElementById('levClearClientBtn').addEventListener('click', () => {
+          state.levLoadedId = null;
+          state.levLoadedName = null;
+          setLevCliente(null); // já persiste o rascunho (cliente + loadedId juntos) no fim
+          refreshLevSaveInfo();
+        });
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
         refreshLevSaveInfo();
       }
