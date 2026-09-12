@@ -290,4 +290,41 @@ router.get('/produtos-abc-geral', async (req, res) => {
   }
 });
 
+// Curva ABC de CLIENTES (mesma ideia da de produtos, mas agrupando por quem
+// comprou) - responde "quais clientes concentram a maior parte do
+// faturamento", pra saber onde focar atenção comercial. Mesma fonte
+// (pedidos_oficiais_itens faturado) e mesmos filtros de período; liga em
+// clientes por codigo_oficial (aprendido na primeira importação do
+// relatório oficial - ver comentário na coluna, em schema.sql). Cliente sem
+// classificatório cadastrado ainda entra na conta, só cai em "Sem
+// classificação" em vez de sumir da lista.
+router.get('/clientes-abc-geral', async (req, res) => {
+  const { inicio, fim } = req.query;
+  const params = [];
+  let filtroData = '';
+  if (inicio) { params.push(inicio); filtroData += ` AND poi.data_faturamento >= $${params.length}::date`; }
+  if (fim) { params.push(fim); filtroData += ` AND poi.data_faturamento <= $${params.length}::date`; }
+  try {
+    const result = await pool.query(
+      `SELECT c.id AS cliente_id,
+              c.nome AS cliente,
+              c.documento,
+              COALESCE(c.classificatorio_tipo, 'Sem classificação') AS classificatorio_tipo,
+              COUNT(DISTINCT poi.nr_pedido) AS num_pedidos,
+              SUM(poi.quantidade) AS quantidade_total,
+              SUM(poi.valor) AS faturamento_total
+       FROM pedidos_oficiais_itens poi
+       JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
+       WHERE poi.status = 'faturado'${filtroData}
+       GROUP BY c.id, c.nome, c.documento, c.classificatorio_tipo
+       ORDER BY faturamento_total DESC NULLS LAST`,
+      params
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao calcular curva ABC de clientes.' });
+  }
+});
+
 module.exports = router;
