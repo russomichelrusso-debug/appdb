@@ -15,6 +15,7 @@ let levantamentoItens = [];
 let usuarios = [];
 let sessoes = [];
 let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
+let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
@@ -28,6 +29,7 @@ function reset() {
   usuarios = [];
   sessoes = [];
   rascunhos = {};
+  codigosProduto = {};
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
@@ -102,6 +104,25 @@ async function query(sql, params = []) {
       c.classificatorio_tipo = classifTipo; c.classificatorio_desconto = classifDesconto; c.classificatorio_atualizado_em = classifAtualizado;
     }
     return { rows: [] };
+  }
+
+  // codigos_produto (EAN-13 / DUN-14)
+  if (s.includes('SELECT CODIGO_SKU, EAN13, DUN14 FROM CODIGOS_PRODUTO')) {
+    return { rows: Object.entries(codigosProduto).map(([codigo_sku, v]) => ({ codigo_sku, ean13: v.ean13, dun14: v.dun14 })) };
+  }
+  if (s.includes('INTO CODIGOS_PRODUTO')) {
+    const [skus, eans, duns] = params;
+    for (let i = 0; i < skus.length; i++) {
+      const existing = codigosProduto[skus[i]];
+      codigosProduto[skus[i]] = {
+        ean13: eans[i] || (existing ? existing.ean13 : ''),
+        dun14: duns[i] || (existing ? existing.dun14 : ''),
+      };
+    }
+    return { rows: [] };
+  }
+  if (s.includes('SELECT COUNT(*) FROM CODIGOS_PRODUTO')) {
+    return { rows: [{ count: String(Object.keys(codigosProduto).length) }] };
   }
 
   // vendedores

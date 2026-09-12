@@ -30,11 +30,16 @@ router.post('/importar', async (req, res) => {
   if (skus.length === 0) return res.status(400).json({ erro: 'Nenhum código no arquivo.' });
 
   try {
+    // COALESCE(NULLIF(...), valor atual): um arquivo que só traz EAN-13 (sem
+    // dun14), ou vice-versa, não apaga o campo que já estava preenchido -
+    // preenche em branco só quando o produto for novo pra essa tabela.
     await pool.query(
       `INSERT INTO codigos_produto (codigo_sku, ean13, dun14)
        SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
        ON CONFLICT (codigo_sku) DO UPDATE SET
-         ean13 = EXCLUDED.ean13, dun14 = EXCLUDED.dun14, atualizado_em = now()`,
+         ean13 = COALESCE(NULLIF(EXCLUDED.ean13, ''), codigos_produto.ean13),
+         dun14 = COALESCE(NULLIF(EXCLUDED.dun14, ''), codigos_produto.dun14),
+         atualizado_em = now()`,
       [
         skus,
         skus.map(c => codigos[c].ean || ''),
