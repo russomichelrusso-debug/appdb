@@ -5420,8 +5420,14 @@
 
       function cartTotals() {
         let total = 0, totalSemImpostos = 0;
+        // productByCod pode não achar o produto se o carrinho (persistido no
+        // aparelho) já foi restaurado mas o catálogo ainda não terminou de
+        // carregar - ignora esse item POR ORA, sem quebrar o carrinho inteiro;
+        // ele reaparece sozinho assim que o catálogo chegar e o carrinho for
+        // re-renderizado (ver applyDB).
         const baseRows = state.cart.map(it => {
           const p = productByCod(it.cod);
+          if (!p) return null;
           const lp = listPrice(p, state.uf);
           const lpSemImposto = listPriceSemImposto(p, state.uf);
           const fixo = isPrecoFixoParaCanal(p);
@@ -5430,7 +5436,7 @@
           const cpSemImposto = clientPrice(lpSemImposto, state.channelDiscount, state.promoDiscount, fixo, qtyPct);
           const lineTotal = cp * it.qty;
           return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal };
-        });
+        }).filter(Boolean);
 
         const bonuses = computeCampaignBonuses(baseRows);
 
