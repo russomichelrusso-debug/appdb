@@ -2712,6 +2712,10 @@
       background: var(--red-deep);
     }
 
+    #appConfirmMsg {
+      white-space: pre-line;
+    }
+
     #appConfirmCancelBtn {
       background: var(--fill);
       color: var(--gray);
@@ -5030,9 +5034,9 @@
         savePriceList();
         renderPriceList();
       }
-      function clearPriceList() {
+      async function clearPriceList() {
         if (state.priceList.length === 0) return;
-        if (!confirm('Limpar a lista de preços?')) return;
+        if (!await askConfirm('Limpar a lista de preços?')) return;
         state.priceList = [];
         savePriceList();
         renderPriceList();
@@ -5805,9 +5809,9 @@
         saveLevSurvey();
         renderLevList();
       }
-      function clearLevSurvey() {
+      async function clearLevSurvey() {
         if (state.survey.length === 0) return;
-        if (!confirm('Limpar todo o levantamento deste cliente?')) return;
+        if (!await askConfirm('Limpar todo o levantamento deste cliente?')) return;
         state.survey = [];
         state.levLoadedId = null;
         state.levLoadedName = null;
@@ -5940,9 +5944,9 @@
           });
         });
         wrap.querySelectorAll('[data-del-survey]').forEach(btn => {
-          btn.addEventListener('click', (e) => {
+          btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!confirm('Excluir esse levantamento salvo? Essa ação não pode ser desfeita.')) return;
+            if (!await askConfirm('Excluir esse levantamento salvo? Essa ação não pode ser desfeita.')) return;
             const list = loadSavedSurveysList().filter(s => s.id !== btn.dataset.delSurvey);
             saveSavedSurveysList(list);
             if (state.levLoadedId === btn.dataset.delSurvey) { state.levLoadedId = null; state.levLoadedName = null; saveLevSurvey(); refreshLevSaveInfo(); }
@@ -5950,27 +5954,24 @@
           });
         });
       }
-      function doOpenSavedSurvey(id) {
+      async function doOpenSavedSurvey(id) {
         const list = loadSavedSurveysList();
         const entry = list.find(s => s.id === id);
         if (!entry) return;
-        const proceed = () => {
-          state.survey = entry.items
-            .filter(it => it && it.cod !== undefined && DB.productIndex[it.cod])
-            .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
-          state.levLoadedId = entry.id;
-          state.levLoadedName = entry.name;
-          setLevCliente(entry.clienteId ? { id: entry.clienteId, nome: entry.name } : null);
-          saveLevSurvey();
-          renderLevList();
-          refreshLevSaveInfo();
-          closeLevOpenModal();
-          showToast('Levantamento aberto: ' + entry.name);
-        };
         if (state.survey.length > 0 && state.levLoadedId !== id) {
-          if (!confirm('Isso vai substituir o levantamento atual (não salvo será perdido). Continuar?')) return;
+          if (!await askConfirm('Isso vai substituir o levantamento atual (não salvo será perdido). Continuar?')) return;
         }
-        proceed();
+        state.survey = entry.items
+          .filter(it => it && it.cod !== undefined && DB.productIndex[it.cod])
+          .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
+        state.levLoadedId = entry.id;
+        state.levLoadedName = entry.name;
+        setLevCliente(entry.clienteId ? { id: entry.clienteId, nome: entry.name } : null);
+        saveLevSurvey();
+        renderLevList();
+        refreshLevSaveInfo();
+        closeLevOpenModal();
+        showToast('Levantamento aberto: ' + entry.name);
       }
 
       // Guarda o cliente escolhido pra essa visita, e reflete na barra do topo do
@@ -5988,9 +5989,9 @@
         if (badge) {
           badge.style.cursor = 'pointer';
           badge.title = 'Ver histórico deste cliente';
-          badge.addEventListener('click', () => {
+          badge.addEventListener('click', async () => {
             clienteTabView = 'historico';
-            activateMainTab('clientes');
+            await activateMainTab('clientes');
             openClienteDetail(cliente);
           });
         }
@@ -6364,12 +6365,12 @@
           produtos: document.getElementById('tabProdutos'),
           clientes: document.getElementById('tabClientes'),
         };
-        function activate(tab) {
+        async function activate(tab) {
           // sai do levantamento com itens contados mas nunca salvos com nome -
           // avisa antes, já que é fácil perder de vista o que já foi levantado.
           const saindoDoLevantamento = tab !== 'levantamento' && !panels.levantamento.classList.contains('hidden');
           if (saindoDoLevantamento && hasUnsavedLevantamento()) {
-            if (!confirm('Esse levantamento tem itens contados mas ainda não foi salvo com nome. Sair mesmo assim?')) return;
+            if (!await askConfirm('Esse levantamento tem itens contados mas ainda não foi salvo com nome. Sair mesmo assim?')) return;
           }
           Object.keys(buttons).forEach(k => {
             buttons[k].classList.toggle('active', k === tab);
@@ -7842,7 +7843,7 @@
 
           wrap.querySelectorAll('[data-del-pedido]').forEach(btn => {
             btn.addEventListener('click', async () => {
-              if (!confirm(`Excluir o pedido #${btn.dataset.delPedido}? Essa ação não pode ser desfeita.`)) return;
+              if (!await askConfirm(`Excluir o pedido #${btn.dataset.delPedido}? Essa ação não pode ser desfeita.`)) return;
               btn.disabled = true; btn.textContent = 'Excluindo…';
               try {
                 await apiFetch(`/api/pedidos/${btn.dataset.delPedido}`, { method: 'DELETE' });
@@ -7923,7 +7924,7 @@
             btn.addEventListener('click', async () => {
               const nome = btn.dataset.nomeClient;
               const id = btn.dataset.delClient;
-              if (!confirm(`Excluir "${nome}"? Só funciona se ele não tiver pedido ou levantamento registrado.`)) return;
+              if (!await askConfirm(`Excluir "${nome}"? Só funciona se ele não tiver pedido ou levantamento registrado.`)) return;
               try {
                 await apiFetch(`/api/clientes/${id}`, { method: 'DELETE' });
                 showToast('Cliente excluído: ' + nome);
@@ -7932,7 +7933,7 @@
                 // se bloqueado por ter histórico E quem está logado for admin, oferece
                 // a exclusão forçada (apaga o histórico junto) como segunda opção
                 if (state.currentUser?.is_admin && /administrador/i.test(e.message)) {
-                  if (confirm(`${e.message}\n\nVocê é administrador — quer excluir "${nome}" MESMO ASSIM, apagando o histórico de pedidos/levantamentos dele junto? Essa ação não pode ser desfeita.`)) {
+                  if (await askConfirm(`${e.message}\n\nVocê é administrador — quer excluir "${nome}" MESMO ASSIM, apagando o histórico de pedidos/levantamentos dele junto? Essa ação não pode ser desfeita.`)) {
                     try {
                       await apiFetch(`/api/clientes/${id}?forcar=1`, { method: 'DELETE' });
                       showToast('Cliente e histórico excluídos: ' + nome);
@@ -8231,7 +8232,7 @@
           wrap.querySelectorAll('[data-del-user]').forEach(btn => {
             btn.addEventListener('click', async () => {
               const usuario = btn.dataset.nomeUser;
-              if (!confirm(`Excluir o usuário "${usuario}"? Essa ação não pode ser desfeita.`)) return;
+              if (!await askConfirm(`Excluir o usuário "${usuario}"? Essa ação não pode ser desfeita.`)) return;
               try {
                 await apiFetch(`/api/auth/usuarios/${btn.dataset.delUser}`, { method: 'DELETE' });
                 showToast('Usuário excluído: ' + usuario);
@@ -9283,7 +9284,7 @@
         }));
         wrap.querySelectorAll('[data-edit-rule]').forEach(b => b.addEventListener('click', () => openPromoRuleForm(b.dataset.editRule)));
         wrap.querySelectorAll('[data-del-rule]').forEach(b => b.addEventListener('click', async () => {
-          if (!confirm('Excluir essa regra de campanha?')) return;
+          if (!await askConfirm('Excluir essa regra de campanha?')) return;
           const anterior = state.promoRules;
           state.promoRules = state.promoRules.filter(x => x.id !== b.dataset.delRule);
           renderPromoRulesList(); renderCart();
@@ -9588,7 +9589,7 @@
     </div>
   `).join('');
         wrap.querySelectorAll('[data-del-promo-produto]').forEach(b => b.addEventListener('click', async () => {
-          if (!confirm('Excluir esse produto promocional? Ele some da busca pra todo mundo.')) return;
+          if (!await askConfirm('Excluir esse produto promocional? Ele some da busca pra todo mundo.')) return;
           const atual = (await apiProdutosPromocionaisConfig()).valor || [];
           const nova = atual.filter(p => p.c !== b.dataset.delPromoProduto);
           try {
@@ -9845,7 +9846,7 @@
           const question = hasLocalOverride
             ? 'Remover a atualização feita neste aparelho e voltar a usar a fonte automática (remota, se disponível, ou a original do app)?'
             : 'Buscar agora se há uma versão mais recente disponível?';
-          if (!confirm(question)) return;
+          if (!await askConfirm(question)) return;
           try { localStorage.removeItem(LS_KEY); } catch (e) { }
           restoreBtn.disabled = true;
           applyDB(await loadActiveDB());
@@ -10278,7 +10279,7 @@
         }
       }
       async function logout() {
-        if (!confirm('Sair do app?')) return;
+        if (!await askConfirm('Sair do app?')) return;
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
