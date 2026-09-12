@@ -267,6 +267,14 @@
     .catBar .amt { width: 62px; text-align: right; font-size: 11px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
 
     .footNote { font-size: 10.5px; color: var(--gray); margin-top: 12px; line-height: 1.5; }
+
+    .clientResultItem {
+      display: block; width: 100%; text-align: left; border: none; background: transparent;
+      font: inherit; color: inherit; padding: 8px 6px; border-radius: 8px; cursor: pointer;
+    }
+    .clientResultItem:hover { background: var(--fill); }
+    .clientResultItem .crName { font-size: 13px; font-weight: 600; display: block; }
+    .clientResultItem .crDoc { font-size: 11px; color: var(--gray); }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -300,8 +308,8 @@
 
     <div class="controlsRow">
       <div class="segmented" id="verSeg">
-        <button data-modo="produtos" class="active">Produtos</button>
-        <button data-modo="clientes">Clientes</button>
+        <button data-modo="produtos" class="active">Todos os produtos</button>
+        <button data-modo="porCliente">Por cliente</button>
       </div>
       <div class="segmented" id="periodoSeg">
         <button data-dias="">Tudo</button>
@@ -312,6 +320,21 @@
       <div class="segmented" id="campoSeg">
         <button data-campo="faturamento_total">Faturamento</button>
         <button data-campo="quantidade_total">Quantidade</button>
+      </div>
+    </div>
+
+    <div class="card hidden" id="clientPickerCard" style="margin-bottom:14px;">
+      <div id="clientPickerSearch">
+        <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver o que ele mais e menos compra (mesma classificação A/B/C, só que sobre o histórico faturado desse cliente).</p>
+        <input type="text" id="clientPickerInput" placeholder="Buscar cliente por nome ou CNPJ…" style="font:inherit;font-size:13px;border:1px solid var(--hairline);border-radius:9px;padding:9px 12px;width:100%;background:var(--white);color:var(--ink);">
+        <div id="clientPickerResults" style="margin-top:8px;"></div>
+      </div>
+      <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);display:block;">Cliente selecionado</span>
+          <span id="clientPickerNome" style="font-size:15px;font-weight:700;"></span>
+        </div>
+        <button type="button" id="clientPickerTrocar" class="fileBtnLike" style="border:1px solid var(--hairline);background:var(--white);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;">Trocar</button>
       </div>
     </div>
 
@@ -493,72 +516,106 @@
     // classificação/gráfico/tabela (Pareto genérico sobre {produto, categoria,
     // quantidade_total, faturamento_total}) - só troca o endpoint e os textos.
     // Isso evita duplicar a página inteira só pra mudar "produto" por "cliente".
+    // Curva ABC de todos os produtos e curva ABC "por cliente" (o que UM
+    // cliente específico mais/menos compra) usam a mesma classificação de
+    // Pareto e a mesma tabela de produtos — só muda o endpoint (geral x
+    // escopado a um cliente) e alguns textos. Por isso os dois modos
+    // compartilham mapRow (o formato que a API devolve é idêntico nos dois).
+    function mapProdutoRow(r) {
+      return {
+        codigo_sku: r.codigo_sku,
+        produto: r.produto || r.codigo_sku,
+        categoria: r.categoria || 'Sem categoria',
+        num_pedidos: Number(r.num_pedidos) || 0,
+        quantidade_total: Number(r.quantidade_total) || 0,
+        faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
+      };
+    }
     const MODOS = {
       produtos: {
         titulo: 'Curva ABC de Produtos',
         chartTitulo: 'Curva de Pareto — participação por produto',
-        itemLabel: 'produto', itemLabelCap: 'Produto',
         categoriaCardTitle: 'Por categoria',
         categoriaCardHint: 'Toque numa categoria pra filtrar a lista de produtos ao lado.',
         itemCardTitle: 'Produtos',
         itemCardHint: 'Todas as classes ficam disponíveis aqui — use os filtros pra achar o que precisa pra planejar venda ou recomendar ao cliente.',
-        buscaPlaceholder: 'Buscar por nome ou código…',
-        categoriaOptionTodas: 'Todas as categorias',
         subFaturamento: 'Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores',
         subQuantidade: 'Classificação por quantidade vendida (relatório oficial de Faturamento) · todos os vendedores',
-        endpoint: '/api/produtos-abc-geral',
-        mapRow: (r) => ({
-          codigo_sku: r.codigo_sku,
-          produto: r.produto || r.codigo_sku,
-          categoria: r.categoria || 'Sem categoria',
-          num_pedidos: Number(r.num_pedidos) || 0,
-          quantidade_total: Number(r.quantidade_total) || 0,
-          faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
-        }),
+        endpoint: () => '/api/produtos-abc-geral',
       },
-      clientes: {
-        titulo: 'Curva ABC de Clientes',
-        chartTitulo: 'Curva de Pareto — participação por cliente',
-        itemLabel: 'cliente', itemLabelCap: 'Cliente',
-        categoriaCardTitle: 'Por classificação',
-        categoriaCardHint: 'Toque numa classificação pra filtrar a lista de clientes ao lado.',
-        itemCardTitle: 'Clientes',
-        itemCardHint: 'Todas as classes ficam disponíveis aqui — use os filtros pra achar quem priorizar na visita ou negociação comercial.',
-        buscaPlaceholder: 'Buscar por nome ou CNPJ…',
-        categoriaOptionTodas: 'Todas as classificações',
-        subFaturamento: 'Classificação de clientes por faturamento oficial (relatório de Faturamento) · todos os vendedores',
-        subQuantidade: 'Classificação de clientes por quantidade comprada (relatório oficial de Faturamento) · todos os vendedores',
-        endpoint: '/api/clientes-abc-geral',
-        mapRow: (r) => ({
-          codigo_sku: r.documento || ('cliente-' + r.cliente_id),
-          produto: r.cliente || r.documento || ('Cliente ' + r.cliente_id),
-          categoria: r.classificatorio_tipo || 'Sem classificação',
-          num_pedidos: Number(r.num_pedidos) || 0,
-          quantidade_total: Number(r.quantidade_total) || 0,
-          faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
-        }),
+      porCliente: {
+        titulo: 'Curva ABC por Cliente',
+        chartTitulo: 'Curva de Pareto — o que o cliente mais compra',
+        categoriaCardTitle: 'Por categoria',
+        categoriaCardHint: 'Toque numa categoria pra filtrar a lista de produtos ao lado.',
+        itemCardTitle: 'Produtos',
+        itemCardHint: 'Do que ele mais compra (Classe A) até o que quase não compra (Classe C) — use pra saber o que oferecer numa visita ou o que já não faz sentido insistir.',
+        subFaturamento: 'Produtos que esse cliente mais e menos compra, por faturamento oficial (relatório de Faturamento)',
+        subQuantidade: 'Produtos que esse cliente mais e menos compra, por quantidade comprada (relatório oficial de Faturamento)',
+        endpoint: () => `/api/clientes/${state.clienteId}/produtos-abc`,
       },
     };
+    const itemLabel = 'produto', itemLabelCap = 'Produto'; // os dois modos classificam produtos - só muda o escopo (geral x um cliente)
 
     const state = {
       modo: 'produtos',
       campo: 'faturamento_total', dias: null, raw: [], carregando: false,
       classificados: [], // cache da última classificação (KPIs/gráfico/categorias usam sempre a lista inteira)
       filtroClasse: '', filtroCategoria: '', busca: '',
+      clienteId: null, clienteNome: '',
     };
 
-    // Aplica os textos do modo atual (Produtos/Clientes) nos elementos fixos da
-    // tela - chamado ao trocar de modo, antes de recarregar os dados.
+    // Aplica os textos do modo atual (Produtos/Por cliente) nos elementos
+    // fixos da tela - chamado ao trocar de modo ou de cliente, antes de
+    // recarregar os dados.
     function aplicarTextosModo() {
       const m = MODOS[state.modo];
       document.getElementById('pageTitle').textContent = m.titulo;
-      document.getElementById('chartTitle').textContent = m.chartTitulo;
+      document.getElementById('chartTitle').textContent = state.modo === 'porCliente' && state.clienteNome
+        ? `Curva de Pareto — o que ${state.clienteNome} mais compra`
+        : m.chartTitulo;
       document.getElementById('catCardTitle').textContent = m.categoriaCardTitle;
       document.getElementById('catCardHint').textContent = m.categoriaCardHint;
       document.getElementById('itemCardTitle').textContent = m.itemCardTitle;
       document.getElementById('itemCardHint').textContent = m.itemCardHint;
-      document.getElementById('produtoBusca').placeholder = m.buscaPlaceholder;
-      document.getElementById('topSub').textContent = state.campo === 'faturamento_total' ? m.subFaturamento : m.subQuantidade;
+      document.getElementById('produtoBusca').placeholder = 'Buscar por nome ou código…';
+      const subBase = state.campo === 'faturamento_total' ? m.subFaturamento : m.subQuantidade;
+      document.getElementById('topSub').textContent = state.modo === 'porCliente' && state.clienteNome
+        ? subBase.replace('esse cliente', state.clienteNome)
+        : subBase;
+      document.getElementById('clientPickerCard').classList.toggle('hidden', state.modo !== 'porCliente');
+    }
+
+    function renderClientResults(lista) {
+      const host = document.getElementById('clientPickerResults');
+      if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Nenhum cliente encontrado.</div>'; return; }
+      host.innerHTML = lista.map(c => `
+        <button type="button" class="clientResultItem" data-id="${c.id}" data-nome="${escapeHtml(c.nome)}">
+          <span class="crName">${escapeHtml(c.nome)}</span>
+          <span class="crDoc">${escapeHtml(c.documento || 'Sem CNPJ cadastrado')}</span>
+        </button>`).join('');
+      host.querySelectorAll('.clientResultItem').forEach(btn => {
+        btn.addEventListener('click', () => selecionarCliente(Number(btn.dataset.id), btn.dataset.nome));
+      });
+    }
+
+    function selecionarCliente(id, nome) {
+      state.clienteId = id; state.clienteNome = nome;
+      document.getElementById('clientPickerNome').textContent = nome;
+      document.getElementById('clientPickerSelected').classList.remove('hidden');
+      document.getElementById('clientPickerSearch').classList.add('hidden');
+      document.getElementById('clientPickerResults').innerHTML = '';
+      document.getElementById('clientPickerInput').value = '';
+      aplicarTextosModo();
+      carregarDados();
+    }
+
+    function esqueceCliente() {
+      state.clienteId = null; state.clienteNome = '';
+      document.getElementById('clientPickerSelected').classList.add('hidden');
+      document.getElementById('clientPickerSearch').classList.remove('hidden');
+      aplicarTextosModo();
+      carregarDados();
     }
 
     function startDashboard() {
@@ -578,6 +635,22 @@
           carregarDados();
         });
       });
+      let clientBuscaDebounce;
+      document.getElementById('clientPickerInput').addEventListener('input', (e) => {
+        clearTimeout(clientBuscaDebounce);
+        const termo = e.target.value.trim();
+        const host = document.getElementById('clientPickerResults');
+        if (termo.length < 2) { host.innerHTML = ''; return; }
+        clientBuscaDebounce = setTimeout(async () => {
+          try {
+            const resultados = await apiFetch('/api/clientes?busca=' + encodeURIComponent(termo));
+            renderClientResults(resultados);
+          } catch (e) {
+            host.innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
+          }
+        }, 250);
+      });
+      document.getElementById('clientPickerTrocar').addEventListener('click', esqueceCliente);
       document.querySelectorAll('#periodoSeg button').forEach(btn => {
         btn.addEventListener('click', () => {
           if (btn.classList.contains('active')) return;
@@ -631,19 +704,26 @@
 
     async function carregarDados() {
       if (state.carregando) return;
-      state.carregando = true;
-      document.getElementById('chartHost').innerHTML = '<div class="chartEmpty">Somando o histórico de faturamento…</div>';
       document.getElementById('kpiRow').innerHTML = '';
       document.getElementById('topTableHost').innerHTML = '';
       document.getElementById('catHost').innerHTML = '';
+      // modo "Por cliente" sem cliente escolhido ainda - nada pra buscar.
+      if (state.modo === 'porCliente' && !state.clienteId) {
+        state.raw = [];
+        state.classificados = [];
+        document.getElementById('chartHost').innerHTML = '<div class="chartEmpty">Selecione um cliente acima pra ver a curva ABC dele.</div>';
+        document.getElementById('prodFiltroCount').textContent = '';
+        return;
+      }
+      state.carregando = true;
+      document.getElementById('chartHost').innerHTML = '<div class="chartEmpty">Somando o histórico de faturamento…</div>';
       try {
         const { inicio, fim } = datasDoPeriodo(state.dias);
         const qs = [];
         if (inicio) qs.push('inicio=' + inicio);
         if (fim) qs.push('fim=' + fim);
-        const m = MODOS[state.modo];
-        const rows = await apiFetch(m.endpoint + (qs.length ? '?' + qs.join('&') : ''));
-        state.raw = (rows || []).map(m.mapRow);
+        const rows = await apiFetch(MODOS[state.modo].endpoint() + (qs.length ? '?' + qs.join('&') : ''));
+        state.raw = (rows || []).map(mapProdutoRow);
         render();
       } catch (e) {
         document.getElementById('chartHost').innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
@@ -723,7 +803,7 @@
       const select = document.getElementById('categoriaFiltro');
       const atual = select.value;
       const categorias = [...new Set(classificados.map(p => p.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      select.innerHTML = `<option value="">${escapeHtml(MODOS[state.modo].categoriaOptionTodas)}</option>` +
+      select.innerHTML = '<option value="">Todas as categorias</option>' +
         categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
       // preserva a seleção anterior se a categoria ainda existir na lista (ex: trocou o período)
       if (categorias.includes(atual)) select.value = atual;
@@ -733,8 +813,7 @@
 
     function renderKPIs(classificados) {
       const campo = state.campo;
-      const item = MODOS[state.modo].itemLabel; // "produto" ou "cliente" - plural regular (+s), sem exceção nos dois casos
-      const plural = (n) => `${item}${n === 1 ? '' : 's'}`;
+      const plural = (n) => `${itemLabel}${n === 1 ? '' : 's'}`;
       const total = classificados.reduce((s, p) => s + p[campo], 0);
       const porClasse = { A: [], B: [], C: [] };
       classificados.forEach(p => porClasse[p.classe].push(p));
@@ -750,7 +829,7 @@
           <span class="sub">${classificados.length} ${plural(classificados.length)} com faturamento</span>
         </div>
         <div class="kpi">
-          <span class="lbl">${MODOS[state.modo].itemCardTitle} ativos</span>
+          <span class="lbl">Produtos ativos</span>
           <span class="val">${classificados.length}</span>
           <span class="sub">no período selecionado</span>
         </div>
@@ -853,7 +932,7 @@
         : `${total} produtos`;
 
       if (filtrados.length === 0) {
-        document.getElementById('topTableHost').innerHTML = `<div class="lev-empty">Nenhum ${MODOS[state.modo].itemLabel} encontrado com esses filtros.</div>`;
+        document.getElementById('topTableHost').innerHTML = `<div class="lev-empty">Nenhum ${itemLabel} encontrado com esses filtros.</div>`;
         return;
       }
       const linhas = filtrados.map(p => `
@@ -865,7 +944,7 @@
         </tr>`).join('');
       document.getElementById('topTableHost').innerHTML = `
         <table>
-          <thead><tr><th>${escapeHtml(MODOS[state.modo].itemLabelCap)}</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th></tr></thead>
+          <thead><tr><th>${itemLabelCap}</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th></tr></thead>
           <tbody>${linhas}</tbody>
         </table>`;
     }

@@ -255,37 +255,25 @@ async function query(sql, params = []) {
   }
 
   // curva ABC (produtos e clientes) - lê pedidos_oficiais_itens faturados,
-  // com filtro opcional de período; os params são [inicio?, fim?] na ordem
-  // em que cada filtro apareceu na query real (ver routes/relatorios.js).
+  // com filtro opcional de período. Na curva "por cliente" o $1 é sempre o
+  // codigo_oficial (pesquisado antes, à parte); na curva geral os params são
+  // só [inicio?, fim?], nessa ordem - ver routes/relatorios.js.
+  if (s.includes('SELECT CODIGO_OFICIAL FROM CLIENTES WHERE ID')) {
+    const cli = clientes.find(c => String(c.id) === String(params[0]));
+    return { rows: cli ? [{ codigo_oficial: cli.codigo_oficial || null }] : [] };
+  }
   if (s.includes('FROM PEDIDOS_OFICIAIS_ITENS POI')) {
-    let idx = 0;
+    const porCliente = s.includes('CLIENTE_CODIGO_OFICIAL = $1');
+    let idx = porCliente ? 1 : 0;
+    const codigoOficial = porCliente ? params[0] : null;
     const inicio = s.includes('DATA_FATURAMENTO >=') ? params[idx++] : null;
     const fim = s.includes('DATA_FATURAMENTO <=') ? params[idx++] : null;
     const itens = pedidosOficiaisItens.filter(it =>
       it.status === 'faturado' &&
+      (!porCliente || it.cliente_codigo_oficial === codigoOficial) &&
       (!inicio || it.data_faturamento >= inicio) &&
       (!fim || it.data_faturamento <= fim)
     );
-    if (s.includes('JOIN CLIENTES C')) {
-      const porCliente = new Map();
-      for (const it of itens) {
-        const cli = clientes.find(c => c.codigo_oficial === it.cliente_codigo_oficial);
-        if (!cli) continue;
-        const atual = porCliente.get(cli.id) || {
-          cliente_id: cli.id, cliente: cli.nome, documento: cli.documento,
-          classificatorio_tipo: cli.classificatorio_tipo || 'Sem classificação',
-          pedidos: new Set(), quantidade_total: 0, faturamento_total: 0,
-        };
-        atual.pedidos.add(it.nr_pedido);
-        atual.quantidade_total += Number(it.quantidade) || 0;
-        atual.faturamento_total += Number(it.valor) || 0;
-        porCliente.set(cli.id, atual);
-      }
-      const rows = [...porCliente.values()]
-        .map(r => ({ ...r, num_pedidos: r.pedidos.size, pedidos: undefined }))
-        .sort((a, b) => b.faturamento_total - a.faturamento_total);
-      return { rows };
-    }
     const porProduto = new Map();
     for (const it of itens) {
       const prod = produtos.find(p => p.codigo_sku === it.codigo_sku);
