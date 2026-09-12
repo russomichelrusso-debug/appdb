@@ -4298,6 +4298,8 @@
               <button class="fileBtn" id="importCodigosBtn">Importar arquivo de códigos</button>
               <input type="file" id="codigosFileInput" accept=".json,application/json" style="display:none;">
               <div id="importCodigosMsg" style="margin-top:8px;"></div>
+              <button class="fileBtn" id="exportCodigosFaltantesBtn" style="margin-top:10px;">Baixar planilha de produtos sem EAN-13/DUN-14</button>
+              <div id="exportCodigosFaltantesMsg" style="margin-top:8px;"></div>
             </div>
           </div>
         </details>
@@ -9556,6 +9558,39 @@
           msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
         }
       }
+      // Lista, num arquivo .xlsx pra conferência manual, todo produto do
+      // catálogo carregado que está sem EAN-13 e/ou sem DUN-14 (já considerando
+      // o que veio de codigos_produto, aplicado em cima do catálogo por
+      // loadCodigosProduto/applyDB) - não inventa nada, só aponta o que falta.
+      async function exportarProdutosSemCodigos() {
+        const msg = document.getElementById('exportCodigosFaltantesMsg');
+        try {
+          const produtos = (DB.products || []).filter(p => !p.e || !p.dun);
+          if (produtos.length === 0) {
+            msg.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Todos os produtos do catálogo já têm EAN-13 e DUN-14.</div>';
+            return;
+          }
+          msg.innerHTML = '<div class="promoEmpty">Gerando planilha…</div>';
+          const XLSX = await loadSheetJs();
+          const linhas = produtos.map(p => ({
+            'Código': p.c,
+            'Produto': p.n,
+            'Família': p.familia || '',
+            'EAN-13 atual': p.e || '',
+            'DUN-14 atual': p.dun || '',
+            'Faltando': [!p.e ? 'EAN-13' : null, !p.dun ? 'DUN-14' : null].filter(Boolean).join(' + '),
+          }));
+          const sheet = XLSX.utils.json_to_sheet(linhas);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, sheet, 'Sem EAN-DUN');
+          const arrayBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+          const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          await shareOrDownloadBlob(blob, `produtos-sem-ean-dun-${Date.now()}.xlsx`, 'Produtos sem EAN-13/DUN-14', `Planilha gerada com ${produtos.length} produto(s).`);
+          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${produtos.length} produto(s) sem EAN-13 e/ou DUN-14 — planilha baixada.</div>`;
+        } catch (e) {
+          msg.innerHTML = `<div class="ap-msg error">Não foi possível gerar a planilha: ${escapeHtml(e.message)}</div>`;
+        }
+      }
       function initPromoProdutosAdmin() {
         document.getElementById('addPromoProdutoBtn').addEventListener('click', openPromoProdutoModal);
         document.getElementById('promoProdutoCancelBtn').addEventListener('click', closePromoProdutoModal);
@@ -10239,6 +10274,7 @@
             if (e.target.files[0]) importarCodigosDeArquivo(e.target.files[0]);
             e.target.value = '';
           });
+          document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);
           renderPromoProdutosList();
           initTabs();
           initClienteFichaPeriodo();
