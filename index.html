@@ -2712,6 +2712,20 @@
       background: var(--red-deep);
     }
 
+    #appConfirmCancelBtn {
+      background: var(--fill);
+      color: var(--gray);
+    }
+
+    #appConfirmOkBtn {
+      background: var(--red);
+      color: #fff;
+    }
+
+    #appConfirmOkBtn:active {
+      background: var(--red-deep);
+    }
+
     /* ---------- Comparação de clientes ao mesclar ---------- */
     .mergeCards {
       display: flex;
@@ -4047,6 +4061,18 @@
     </div>
 
     <div class="overlay hidden" id="csvNameOverlay"></div>
+    <div class="overlay hidden" id="appConfirmOverlay"></div>
+    <div class="minimodal hidden" id="appConfirmModal">
+      <div class="minimodal-card" style="max-width:360px;">
+        <h3 id="appConfirmTitle">Confirmar</h3>
+        <p id="appConfirmMsg"></p>
+        <div class="minimodal-btnrow">
+          <button id="appConfirmCancelBtn">Cancelar</button>
+          <button id="appConfirmOkBtn">Confirmar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="minimodal hidden" id="csvNameModal">
       <div class="minimodal-card">
         <h3>Salvar orçamento em CSV</h3>
@@ -6374,9 +6400,38 @@
         document.getElementById('overlay').classList.add('hidden');
         document.getElementById('drawer').classList.add('hidden');
       }
-      function clearCartWithConfirm() {
+      // Confirmação própria do app em vez de window.confirm() - em muitos
+      // navegadores/PWAs instalados na tela inicial (principalmente iOS "Adicionar
+      // à Tela de Início"), confirm()/alert()/prompt() nativos simplesmente não
+      // aparecem e a chamada volta falsa na hora, sem avisar nada - o botão que
+      // depende disso parece só não fazer nada. Esse modal usa o mesmo
+      // overlay/minimodal do resto do app, então funciona igual em qualquer modo.
+      let appConfirmResolve = null;
+      function askConfirm(message, okLabel) {
+        return new Promise((resolve) => {
+          appConfirmResolve = resolve;
+          document.getElementById('appConfirmMsg').textContent = message;
+          document.getElementById('appConfirmOkBtn').textContent = okLabel || 'Confirmar';
+          document.getElementById('appConfirmOverlay').classList.remove('hidden');
+          document.getElementById('appConfirmModal').classList.remove('hidden');
+        });
+      }
+      function closeAppConfirm(result) {
+        document.getElementById('appConfirmOverlay').classList.add('hidden');
+        document.getElementById('appConfirmModal').classList.add('hidden');
+        const resolve = appConfirmResolve;
+        appConfirmResolve = null;
+        if (resolve) resolve(result);
+      }
+      function initAppConfirmModal() {
+        document.getElementById('appConfirmCancelBtn').addEventListener('click', () => closeAppConfirm(false));
+        document.getElementById('appConfirmOverlay').addEventListener('click', () => closeAppConfirm(false));
+        document.getElementById('appConfirmOkBtn').addEventListener('click', () => closeAppConfirm(true));
+      }
+      async function clearCartWithConfirm() {
         if (state.cart.length === 0) { showToast('O orçamento já está vazio'); return; }
-        if (confirm('Limpar todos os itens do orçamento?')) {
+        const ok = await askConfirm('Limpar todos os itens do orçamento?', 'Limpar');
+        if (ok) {
           state.cart = [];
           state.paymentTerm = '';
           const sel = document.getElementById('paymentTermSelect');
@@ -10356,6 +10411,7 @@
           });
           document.getElementById('clearPriceListBtn').addEventListener('click', clearPriceList);
 
+          initAppConfirmModal();
           document.getElementById('cartBar').addEventListener('click', openDrawer);
           document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
           document.getElementById('overlay').addEventListener('click', closeDrawer);
