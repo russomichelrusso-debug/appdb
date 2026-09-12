@@ -7203,11 +7203,18 @@
 
       async function apiGoogleLogin(idToken) {
         const { baseUrl } = getApiConfig();
-        const resp = await fetch(baseUrl + '/api/auth/google', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id_token: idToken }),
-        });
+        let resp;
+        try {
+          resp = await fetch(baseUrl + '/api/auth/google', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id_token: idToken }),
+          });
+        } catch (e) {
+          // "Failed to fetch" (erro cru do navegador) não diz nada pro vendedor -
+          // mesma mensagem amigável que apiFetch já usa pro resto do app.
+          throw new Error('Não foi possível conectar ao servidor de histórico (sem internet, ou o serviço está fora do ar).');
+        }
         const body = await resp.json().catch(() => null);
         if (!resp.ok) throw new Error((body && body.erro) || 'Não foi possível entrar.');
         return body; // {token, nome, email, is_admin}
