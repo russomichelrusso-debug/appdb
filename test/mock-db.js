@@ -16,6 +16,7 @@ let usuarios = [];
 let sessoes = [];
 let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
+let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
@@ -30,12 +31,24 @@ function reset() {
   sessoes = [];
   rascunhos = {};
   codigosProduto = {};
+  pedidosOficiaisItens = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
+}
+
+// Só pra teste: injeta dados diretamente no estado em memória, sem passar
+// pela rota de import real (que faz UNNEST em lote) - o que importa aqui é
+// testar a leitura (curva ABC), não o pipeline de importação em si.
+function seed(partial) {
+  if (partial.clientes) clientes.push(...partial.clientes);
+  if (partial.pedidosOficiaisItens) pedidosOficiaisItens.push(...partial.pedidosOficiaisItens);
 }
 
 async function query(sql, params = []) {
   queryLog.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
-  const s = sql.toUpperCase();
+  // normaliza espaço/quebra de linha antes de comparar - as queries reais são
+  // template literals multi-linha, então um substring de match precisa ficar
+  // igual independente de indentação/quebra de linha.
+  const s = sql.replace(/\s+/g, ' ').toUpperCase();
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };
@@ -241,6 +254,56 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
 
+  // curva ABC (produtos e clientes) - lê pedidos_oficiais_itens faturados,
+  // com filtro opcional de período; os params são [inicio?, fim?] na ordem
+  // em que cada filtro apareceu na query real (ver routes/relatorios.js).
+  if (s.includes('FROM PEDIDOS_OFICIAIS_ITENS POI')) {
+    let idx = 0;
+    const inicio = s.includes('DATA_FATURAMENTO >=') ? params[idx++] : null;
+    const fim = s.includes('DATA_FATURAMENTO <=') ? params[idx++] : null;
+    const itens = pedidosOficiaisItens.filter(it =>
+      it.status === 'faturado' &&
+      (!inicio || it.data_faturamento >= inicio) &&
+      (!fim || it.data_faturamento <= fim)
+    );
+    if (s.includes('JOIN CLIENTES C')) {
+      const porCliente = new Map();
+      for (const it of itens) {
+        const cli = clientes.find(c => c.codigo_oficial === it.cliente_codigo_oficial);
+        if (!cli) continue;
+        const atual = porCliente.get(cli.id) || {
+          cliente_id: cli.id, cliente: cli.nome, documento: cli.documento,
+          classificatorio_tipo: cli.classificatorio_tipo || 'Sem classificação',
+          pedidos: new Set(), quantidade_total: 0, faturamento_total: 0,
+        };
+        atual.pedidos.add(it.nr_pedido);
+        atual.quantidade_total += Number(it.quantidade) || 0;
+        atual.faturamento_total += Number(it.valor) || 0;
+        porCliente.set(cli.id, atual);
+      }
+      const rows = [...porCliente.values()]
+        .map(r => ({ ...r, num_pedidos: r.pedidos.size, pedidos: undefined }))
+        .sort((a, b) => b.faturamento_total - a.faturamento_total);
+      return { rows };
+    }
+    const porProduto = new Map();
+    for (const it of itens) {
+      const prod = produtos.find(p => p.codigo_sku === it.codigo_sku);
+      const atual = porProduto.get(it.codigo_sku) || {
+        codigo_sku: it.codigo_sku, produto: (prod && prod.nome) || it.codigo_sku, categoria: prod && prod.categoria,
+        pedidos: new Set(), quantidade_total: 0, faturamento_total: 0,
+      };
+      atual.pedidos.add(it.nr_pedido);
+      atual.quantidade_total += Number(it.quantidade) || 0;
+      atual.faturamento_total += Number(it.valor) || 0;
+      porProduto.set(it.codigo_sku, atual);
+    }
+    const rows = [...porProduto.values()]
+      .map(r => ({ ...r, num_pedidos: r.pedidos.size, pedidos: undefined }))
+      .sort((a, b) => b.faturamento_total - a.faturamento_total);
+    return { rows };
+  }
+
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 
@@ -283,4 +346,5 @@ module.exports = {
   runMigrations: async () => {},
   __queryLog: queryLog,
   __reset: reset,
+  __seed: seed,
 };

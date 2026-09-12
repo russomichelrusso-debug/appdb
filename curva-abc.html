@@ -293,12 +293,16 @@
     <div class="topbar">
       <a class="backLink" href="index.html">← App</a>
       <div style="flex:1;min-width:200px;">
-        <h1>Curva ABC de Produtos</h1>
+        <h1 id="pageTitle">Curva ABC de Produtos</h1>
         <p class="sub" id="topSub">Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores</p>
       </div>
     </div>
 
     <div class="controlsRow">
+      <div class="segmented" id="verSeg">
+        <button data-modo="produtos" class="active">Produtos</button>
+        <button data-modo="clientes">Clientes</button>
+      </div>
       <div class="segmented" id="periodoSeg">
         <button data-dias="">Tudo</button>
         <button data-dias="30">30d</button>
@@ -316,7 +320,7 @@
     <div class="chartCard">
       <div class="head">
         <div>
-          <h2>Curva de Pareto — participação por produto</h2>
+          <h2 id="chartTitle">Curva de Pareto — participação por produto</h2>
           <p>Ranking decrescente · linha = % acumulado</p>
         </div>
         <div class="legend" id="chartLegend"></div>
@@ -326,14 +330,14 @@
 
     <div class="bottomRow">
       <div class="card">
-        <h3>Por categoria</h3>
-        <p class="cardHint">Toque numa categoria pra filtrar a lista de produtos ao lado.</p>
+        <h3 id="catCardTitle">Por categoria</h3>
+        <p class="cardHint" id="catCardHint">Toque numa categoria pra filtrar a lista de produtos ao lado.</p>
         <div id="catHost"></div>
         <p class="footNote">Fonte: relatório oficial de Faturamento (Painel Administrativo → Relatórios e clientes).</p>
       </div>
       <div class="card">
-        <h3>Produtos</h3>
-        <p class="cardHint">Todas as classes ficam disponíveis aqui — use os filtros pra achar o que precisa pra planejar venda ou recomendar ao cliente.</p>
+        <h3 id="itemCardTitle">Produtos</h3>
+        <p class="cardHint" id="itemCardHint">Todas as classes ficam disponíveis aqui — use os filtros pra achar o que precisa pra planejar venda ou recomendar ao cliente.</p>
         <div class="prodFilters">
           <div class="segmented" id="classeSeg">
             <button data-classe="" class="active">Todas</button>
@@ -485,13 +489,95 @@
     // =================================================================
     // ---------------------------- Dashboard ---------------------------
     // =================================================================
+    // Curva ABC de Produtos e de Clientes usam exatamente a mesma lógica de
+    // classificação/gráfico/tabela (Pareto genérico sobre {produto, categoria,
+    // quantidade_total, faturamento_total}) - só troca o endpoint e os textos.
+    // Isso evita duplicar a página inteira só pra mudar "produto" por "cliente".
+    const MODOS = {
+      produtos: {
+        titulo: 'Curva ABC de Produtos',
+        chartTitulo: 'Curva de Pareto — participação por produto',
+        itemLabel: 'produto', itemLabelCap: 'Produto',
+        categoriaCardTitle: 'Por categoria',
+        categoriaCardHint: 'Toque numa categoria pra filtrar a lista de produtos ao lado.',
+        itemCardTitle: 'Produtos',
+        itemCardHint: 'Todas as classes ficam disponíveis aqui — use os filtros pra achar o que precisa pra planejar venda ou recomendar ao cliente.',
+        buscaPlaceholder: 'Buscar por nome ou código…',
+        categoriaOptionTodas: 'Todas as categorias',
+        subFaturamento: 'Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores',
+        subQuantidade: 'Classificação por quantidade vendida (relatório oficial de Faturamento) · todos os vendedores',
+        endpoint: '/api/produtos-abc-geral',
+        mapRow: (r) => ({
+          codigo_sku: r.codigo_sku,
+          produto: r.produto || r.codigo_sku,
+          categoria: r.categoria || 'Sem categoria',
+          num_pedidos: Number(r.num_pedidos) || 0,
+          quantidade_total: Number(r.quantidade_total) || 0,
+          faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
+        }),
+      },
+      clientes: {
+        titulo: 'Curva ABC de Clientes',
+        chartTitulo: 'Curva de Pareto — participação por cliente',
+        itemLabel: 'cliente', itemLabelCap: 'Cliente',
+        categoriaCardTitle: 'Por classificação',
+        categoriaCardHint: 'Toque numa classificação pra filtrar a lista de clientes ao lado.',
+        itemCardTitle: 'Clientes',
+        itemCardHint: 'Todas as classes ficam disponíveis aqui — use os filtros pra achar quem priorizar na visita ou negociação comercial.',
+        buscaPlaceholder: 'Buscar por nome ou CNPJ…',
+        categoriaOptionTodas: 'Todas as classificações',
+        subFaturamento: 'Classificação de clientes por faturamento oficial (relatório de Faturamento) · todos os vendedores',
+        subQuantidade: 'Classificação de clientes por quantidade comprada (relatório oficial de Faturamento) · todos os vendedores',
+        endpoint: '/api/clientes-abc-geral',
+        mapRow: (r) => ({
+          codigo_sku: r.documento || ('cliente-' + r.cliente_id),
+          produto: r.cliente || r.documento || ('Cliente ' + r.cliente_id),
+          categoria: r.classificatorio_tipo || 'Sem classificação',
+          num_pedidos: Number(r.num_pedidos) || 0,
+          quantidade_total: Number(r.quantidade_total) || 0,
+          faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
+        }),
+      },
+    };
+
     const state = {
+      modo: 'produtos',
       campo: 'faturamento_total', dias: null, raw: [], carregando: false,
       classificados: [], // cache da última classificação (KPIs/gráfico/categorias usam sempre a lista inteira)
       filtroClasse: '', filtroCategoria: '', busca: '',
     };
 
+    // Aplica os textos do modo atual (Produtos/Clientes) nos elementos fixos da
+    // tela - chamado ao trocar de modo, antes de recarregar os dados.
+    function aplicarTextosModo() {
+      const m = MODOS[state.modo];
+      document.getElementById('pageTitle').textContent = m.titulo;
+      document.getElementById('chartTitle').textContent = m.chartTitulo;
+      document.getElementById('catCardTitle').textContent = m.categoriaCardTitle;
+      document.getElementById('catCardHint').textContent = m.categoriaCardHint;
+      document.getElementById('itemCardTitle').textContent = m.itemCardTitle;
+      document.getElementById('itemCardHint').textContent = m.itemCardHint;
+      document.getElementById('produtoBusca').placeholder = m.buscaPlaceholder;
+      document.getElementById('topSub').textContent = state.campo === 'faturamento_total' ? m.subFaturamento : m.subQuantidade;
+    }
+
     function startDashboard() {
+      document.querySelectorAll('#verSeg button').forEach(btn => {
+        btn.addEventListener('click', () => {
+          if (btn.classList.contains('active')) return;
+          document.querySelectorAll('#verSeg button').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          state.modo = btn.dataset.modo;
+          // troca de modo reseta os filtros da lista - "Classe B" ou uma busca
+          // de produto não fazem sentido carregados sozinhos pro outro modo.
+          state.filtroClasse = ''; state.filtroCategoria = ''; state.busca = '';
+          document.querySelectorAll('#classeSeg button').forEach(b => b.classList.remove('active'));
+          document.querySelector('#classeSeg button[data-classe=""]').classList.add('active');
+          document.getElementById('produtoBusca').value = '';
+          aplicarTextosModo();
+          carregarDados();
+        });
+      });
       document.querySelectorAll('#periodoSeg button').forEach(btn => {
         btn.addEventListener('click', () => {
           if (btn.classList.contains('active')) return;
@@ -507,9 +593,7 @@
           document.querySelectorAll('#campoSeg button').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           state.campo = btn.dataset.campo;
-          document.getElementById('topSub').textContent = state.campo === 'faturamento_total'
-            ? 'Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores'
-            : 'Classificação por quantidade vendida (relatório oficial de Faturamento) · todos os vendedores';
+          aplicarTextosModo();
           render();
         });
       });
@@ -557,15 +641,9 @@
         const qs = [];
         if (inicio) qs.push('inicio=' + inicio);
         if (fim) qs.push('fim=' + fim);
-        const rows = await apiFetch('/api/produtos-abc-geral' + (qs.length ? '?' + qs.join('&') : ''));
-        state.raw = (rows || []).map(r => ({
-          codigo_sku: r.codigo_sku,
-          produto: r.produto || r.codigo_sku,
-          categoria: r.categoria || 'Sem categoria',
-          num_pedidos: Number(r.num_pedidos) || 0,
-          quantidade_total: Number(r.quantidade_total) || 0,
-          faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
-        }));
+        const m = MODOS[state.modo];
+        const rows = await apiFetch(m.endpoint + (qs.length ? '?' + qs.join('&') : ''));
+        state.raw = (rows || []).map(m.mapRow);
         render();
       } catch (e) {
         document.getElementById('chartHost').innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
@@ -645,7 +723,7 @@
       const select = document.getElementById('categoriaFiltro');
       const atual = select.value;
       const categorias = [...new Set(classificados.map(p => p.categoria))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-      select.innerHTML = '<option value="">Todas as categorias</option>' +
+      select.innerHTML = `<option value="">${escapeHtml(MODOS[state.modo].categoriaOptionTodas)}</option>` +
         categorias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
       // preserva a seleção anterior se a categoria ainda existir na lista (ex: trocou o período)
       if (categorias.includes(atual)) select.value = atual;
@@ -655,6 +733,8 @@
 
     function renderKPIs(classificados) {
       const campo = state.campo;
+      const item = MODOS[state.modo].itemLabel; // "produto" ou "cliente" - plural regular (+s), sem exceção nos dois casos
+      const plural = (n) => `${item}${n === 1 ? '' : 's'}`;
       const total = classificados.reduce((s, p) => s + p[campo], 0);
       const porClasse = { A: [], B: [], C: [] };
       classificados.forEach(p => porClasse[p.classe].push(p));
@@ -667,21 +747,21 @@
         <div class="kpi">
           <span class="lbl">${totalLbl}</span>
           <span class="val">${formatValorCompact(total)}</span>
-          <span class="sub">${classificados.length} produto${classificados.length === 1 ? '' : 's'} com faturamento</span>
+          <span class="sub">${classificados.length} ${plural(classificados.length)} com faturamento</span>
         </div>
         <div class="kpi">
-          <span class="lbl">Produtos ativos</span>
+          <span class="lbl">${MODOS[state.modo].itemCardTitle} ativos</span>
           <span class="val">${classificados.length}</span>
           <span class="sub">no período selecionado</span>
         </div>
         <div class="kpi classA">
           <span class="lbl">Classe A</span>
-          <span class="val">${porClasse.A.length} produto${porClasse.A.length === 1 ? '' : 's'}</span>
+          <span class="val">${porClasse.A.length} ${plural(porClasse.A.length)}</span>
           <span class="sub">${pctClasse(porClasse.A).toFixed(0)}% do ${campo === 'faturamento_total' ? 'faturamento' : 'volume'}</span>
         </div>
         <div class="kpi classB">
           <span class="lbl">Cauda (B + C)</span>
-          <span class="val">${caudaCount} produto${caudaCount === 1 ? '' : 's'}</span>
+          <span class="val">${caudaCount} ${plural(caudaCount)}</span>
           <span class="sub">${caudaPct.toFixed(0)}% do ${campo === 'faturamento_total' ? 'faturamento' : 'volume'}</span>
         </div>`;
     }
@@ -773,7 +853,7 @@
         : `${total} produtos`;
 
       if (filtrados.length === 0) {
-        document.getElementById('topTableHost').innerHTML = '<div class="lev-empty">Nenhum produto encontrado com esses filtros.</div>';
+        document.getElementById('topTableHost').innerHTML = `<div class="lev-empty">Nenhum ${MODOS[state.modo].itemLabel} encontrado com esses filtros.</div>`;
         return;
       }
       const linhas = filtrados.map(p => `
@@ -785,7 +865,7 @@
         </tr>`).join('');
       document.getElementById('topTableHost').innerHTML = `
         <table>
-          <thead><tr><th>Produto</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th></tr></thead>
+          <thead><tr><th>${escapeHtml(MODOS[state.modo].itemLabelCap)}</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th></tr></thead>
           <tbody>${linhas}</tbody>
         </table>`;
     }
