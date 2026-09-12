@@ -10349,22 +10349,17 @@
 
 
 
+      // sw.js foi removido do projeto (não existe mais no servidor) - em vez de
+      // registrar de novo, desregistra qualquer Service Worker antigo que ainda
+      // esteja ativo em aparelhos que instalaram o app antes disso. Sem isso, um
+      // SW antigo nunca consegue se atualizar (o arquivo que ele tentaria buscar
+      // não existe mais) e fica pra sempre interceptando requisições GET do app
+      // com sua lógica de cache antiga.
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('sw.js').then((reg) => {
-            // sempre confere se saiu versão nova ao abrir o app, em vez de esperar
-            // o navegador decidir sozinho quando checar
-            reg.update().catch(() => { });
-          }).catch(() => { /* ok se falhar (ex: aberto como arquivo local) */ });
-        });
-        // quando uma versão nova assume o controle, recarrega a página sozinho pra
-        // já usar ela - sem isso o usuário ficaria preso na versão antiga até
-        // fechar e abrir o app de novo
-        let jaRecarregou = false;
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-          if (jaRecarregou) return;
-          jaRecarregou = true;
-          window.location.reload();
+          navigator.serviceWorker.getRegistrations()
+            .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+            .catch(() => { /* ok se falhar (ex: aberto como arquivo local) */ });
         });
       }
     </script>
