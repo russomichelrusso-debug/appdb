@@ -5205,6 +5205,20 @@
       function packStep(p) {
         return (p && p.emb > 0) ? p.emb : 1;
       }
+      // Sem isso o orçamento só vive na memória da aba - sair pra outra página
+      // (ex: a calculadora de materiais, que é uma página HTML separada) descarrega
+      // o app inteiro e some com os itens já colocados. Mesmo padrão já usado pra
+      // lista de preços (PRICE_LIST_LS_KEY) e rascunho de levantamento (LEV_LS_KEY).
+      const CART_LS_KEY = 'cortagCart_v1';
+      function saveCartLocal() {
+        try { localStorage.setItem(CART_LS_KEY, JSON.stringify(state.cart)); } catch (e) { /* sem localStorage - segue sem persistir */ }
+      }
+      function loadCartFromLS() {
+        try {
+          const raw = localStorage.getItem(CART_LS_KEY);
+          state.cart = raw ? (JSON.parse(raw) || []) : [];
+        } catch (e) { state.cart = []; }
+      }
       function addToCart(cod, explicitQty) {
         const p = productByCod(cod);
         const amount = (explicitQty !== undefined && explicitQty > 0) ? explicitQty : packStep(p);
@@ -5447,6 +5461,7 @@
         return { rows, total, totalSemImpostos };
       }
       function renderCartBar() {
+        saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
         const bar = document.getElementById('cartBar');
         const n = state.cart.reduce((a, i) => a + i.qty, 0);
         if (n === 0) { bar.classList.add('hidden'); return; }
@@ -10154,6 +10169,7 @@
         clearTimeout(syncRascunhoTimer); // evita que um rascunho pendente do usuário anterior vaze pro rascunho do próximo
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PRICE_LIST_LS_KEY); } catch (e) { }
+        try { localStorage.removeItem(CART_LS_KEY); } catch (e) { }
       }
 
       // Callback do Google Identity Services (google.accounts.id) quando a pessoa
@@ -10261,6 +10277,7 @@
           catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
           loadPriceListFromLS();
+          loadCartFromLS();
 
           initStateSelect();
           initGpsState();
