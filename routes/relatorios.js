@@ -290,40 +290,46 @@ router.get('/produtos-abc-geral', async (req, res) => {
   }
 });
 
-// Curva ABC de CLIENTES (mesma ideia da de produtos, mas agrupando por quem
-// comprou) - responde "quais clientes concentram a maior parte do
-// faturamento", pra saber onde focar atenção comercial. Mesma fonte
-// (pedidos_oficiais_itens faturado) e mesmos filtros de período; liga em
-// clientes por codigo_oficial (aprendido na primeira importação do
-// relatório oficial - ver comentário na coluna, em schema.sql). Cliente sem
-// classificatório cadastrado ainda entra na conta, só cai em "Sem
-// classificação" em vez de sumir da lista.
-router.get('/clientes-abc-geral', async (req, res) => {
+// Curva ABC "por cliente" - mesma classificação de Pareto da geral, mas
+// escopada a UM cliente: responde "o que esse cliente mais compra e o que
+// ele quase não compra", pra saber o que oferecer numa visita ou negociação.
+// Mesma fonte (pedidos_oficiais_itens faturado) e mesmos filtros de período
+// da curva geral; liga em pedidos_oficiais_itens pelo codigo_oficial do
+// cliente (aprendido na primeira importação do relatório oficial - ver
+// comentário na coluna, em schema.sql). Cliente que nunca apareceu no
+// relatório oficial (sem codigo_oficial ainda) simplesmente não tem
+// nenhuma linha pra somar - devolve lista vazia, não erro.
+router.get('/clientes/:id/produtos-abc', async (req, res) => {
   const { inicio, fim } = req.query;
-  const params = [];
+  const clienteResult = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]).catch((e) => { console.error(e); return null; });
+  if (!clienteResult) return res.status(500).json({ erro: 'Erro ao calcular curva ABC do cliente.' });
+  if (clienteResult.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+  const codigoOficial = clienteResult.rows[0].codigo_oficial;
+  if (!codigoOficial) return res.json([]); // ainda não apareceu em nenhum relatório oficial de faturamento
+
+  const params = [codigoOficial];
   let filtroData = '';
   if (inicio) { params.push(inicio); filtroData += ` AND poi.data_faturamento >= $${params.length}::date`; }
   if (fim) { params.push(fim); filtroData += ` AND poi.data_faturamento <= $${params.length}::date`; }
   try {
     const result = await pool.query(
-      `SELECT c.id AS cliente_id,
-              c.nome AS cliente,
-              c.documento,
-              COALESCE(c.classificatorio_tipo, 'Sem classificação') AS classificatorio_tipo,
+      `SELECT poi.codigo_sku,
+              COALESCE(p.nome, poi.codigo_sku) AS produto,
+              p.categoria,
               COUNT(DISTINCT poi.nr_pedido) AS num_pedidos,
               SUM(poi.quantidade) AS quantidade_total,
               SUM(poi.valor) AS faturamento_total
        FROM pedidos_oficiais_itens poi
-       JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
-       WHERE poi.status = 'faturado'${filtroData}
-       GROUP BY c.id, c.nome, c.documento, c.classificatorio_tipo
+       LEFT JOIN produtos p ON p.codigo_sku = poi.codigo_sku
+       WHERE poi.status = 'faturado' AND poi.cliente_codigo_oficial = $1${filtroData}
+       GROUP BY poi.codigo_sku, p.nome, p.categoria
        ORDER BY faturamento_total DESC NULLS LAST`,
       params
     );
     res.json(result.rows);
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao calcular curva ABC de clientes.' });
+    res.status(500).json({ erro: 'Erro ao calcular curva ABC do cliente.' });
   }
 });
 
