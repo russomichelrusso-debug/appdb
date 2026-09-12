@@ -6771,13 +6771,16 @@
       }
 
       // ---------------- Google Drive (cada vendedor salva no próprio Drive) ----------------
-      // Cada aparelho autoriza uma vez com a própria conta Google; o token fica
-      // guardado só nessa sessão do navegador (não persiste depois de fechar).
-      // Escopo usado (drive.file) só dá acesso aos arquivos que O PRÓPRIO APP cria
-      // - nunca enxerga o resto do Drive da pessoa.
+      // Cada aparelho autoriza uma vez com a própria conta Google; o token
+      // (validade de ~1h, é como o Google entrega esse tipo de autorização,
+      // sem refresh token) fica guardado em localStorage - sobrevive a fechar
+      // o navegador/PWA e abrir de novo, mesmo padrão já usado pro login do
+      // app (setStoredToken). Escopo usado (drive.file) só dá acesso aos
+      // arquivos que O PRÓPRIO APP cria - nunca enxerga o resto do Drive da
+      // pessoa.
       const GOOGLE_CLIENT_ID = '587215783588-g9nrt4mq8onu12qkj4r8h4ao307478i4.apps.googleusercontent.com';
       const GOOGLE_DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-      const GOOGLE_TOKEN_SS_KEY = 'cortagGoogleDriveToken_v1';
+      const GOOGLE_TOKEN_LS_KEY = 'cortagGoogleDriveToken_v1';
       let googleAccessToken = null; // {token, expiresAt}
       let googleTokenClient = null;
 
@@ -6794,7 +6797,7 @@
       function tokenGoogleValido() {
         if (googleAccessToken && googleAccessToken.expiresAt > Date.now() + 10000) return true;
         try {
-          const raw = sessionStorage.getItem(GOOGLE_TOKEN_SS_KEY);
+          const raw = localStorage.getItem(GOOGLE_TOKEN_LS_KEY);
           if (raw) {
             const saved = JSON.parse(raw);
             if (saved.expiresAt > Date.now() + 10000) { googleAccessToken = saved; return true; }
@@ -6804,7 +6807,25 @@
       }
       function limparTokenGoogle() {
         googleAccessToken = null;
-        try { sessionStorage.removeItem(GOOGLE_TOKEN_SS_KEY); } catch (e) { }
+        try { localStorage.removeItem(GOOGLE_TOKEN_LS_KEY); } catch (e) { }
+      }
+      // Se esse aparelho já autorizou o Drive antes (mesmo que o token daquela
+      // vez já tenha expirado), tenta renovar em segundo plano, sem popup, logo
+      // na abertura do app - assim, na hora de salvar/compartilhar um CSV, o
+      // token já está pronto na maioria das vezes, em vez de só tentar (e
+      // eventualmente falhar de forma visível) no momento do envio. Só funciona
+      // de verdade "sempre logado" enquanto a pessoa continuar com a conta
+      // Google ativa nesse navegador - se ela sair da conta Google ou limpar os
+      // dados do site, a renovação silenciosa falha e volta a pedir consentimento.
+      async function tentarReconectarGoogleDriveEmSegundoPlano() {
+        if (tokenGoogleValido()) return;
+        let jaConectouAntes = false;
+        try { jaConectouAntes = !!localStorage.getItem(GOOGLE_TOKEN_LS_KEY); } catch (e) { }
+        if (!jaConectouAntes) return;
+        try {
+          await conectarGoogleDrive(true);
+          refreshGoogleDriveStatus();
+        } catch (e) { /* sessão do Google inativa no navegador agora, ou sem rede - tenta de novo na próxima vez que precisar */ }
       }
       // Pede um access token pro Drive. Com silencioso=true, tenta renovar sem
       // nenhuma tela aparecer (prompt:'') - só funciona se a pessoa já autorizou
@@ -6822,7 +6843,7 @@
               callback: (response) => {
                 if (response.error) { reject(new Error(silencioso ? 'renovação silenciosa falhou' : 'Autorização do Google recusada ou cancelada.')); return; }
                 googleAccessToken = { token: response.access_token, expiresAt: Date.now() + (response.expires_in * 1000) };
-                try { sessionStorage.setItem(GOOGLE_TOKEN_SS_KEY, JSON.stringify(googleAccessToken)); } catch (e) { }
+                try { localStorage.setItem(GOOGLE_TOKEN_LS_KEY, JSON.stringify(googleAccessToken)); } catch (e) { }
                 resolve(googleAccessToken);
               },
               error_callback: (err) => reject(new Error(silencioso ? 'renovação silenciosa falhou' : 'Não foi possível abrir a autorização do Google: ' + (err?.type || 'erro desconhecido'))),
@@ -10276,6 +10297,7 @@
           const catalogoPromise = carregarCatalogoEExtras();
           catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
+          tentarReconectarGoogleDriveEmSegundoPlano(); // idem - deixa o token do Drive pronto antes de precisar dele
           loadPriceListFromLS();
           loadCartFromLS();
 
