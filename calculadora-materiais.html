@@ -128,18 +128,18 @@
       color: var(--gray);
       margin: 4px 0 8px;
     }
+    .fieldset-label.notFirst { margin-top: 20px; }
 
-    .resultRow {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      padding: 10px 0;
+    .divider {
       border-top: 1px solid var(--hairline);
+      margin: 16px 0 14px;
     }
-    .resultRow:first-child { border-top: none; padding-top: 0; }
-    .resultRow .k { font-size: 13px; color: var(--gray); }
-    .resultRow .v { font-size: 17px; font-weight: 700; }
-    .resultRow.main .v { color: var(--red); font-size: 22px; }
+
+    .resultBig { text-align: center; padding: 2px 0 4px; }
+    .resultBig .num { font-size: 34px; font-weight: 800; color: var(--red); letter-spacing: -.02em; }
+    .resultBig .label { font-size: 12.5px; color: var(--gray); margin-top: 2px; }
+
+    .detailLine { font-size: 12px; color: var(--gray); text-align: center; margin: 6px 0 0; }
 
     .productSuggestion {
       background: var(--fill);
@@ -222,8 +222,7 @@
     </div>
 
     <div class="card">
-      <h2>Peça (piso/porcelanato)</h2>
-      <p class="hint">Medida de uma peça só, em centímetros.</p>
+      <p class="fieldset-label">Peça (piso/porcelanato)</p>
       <div class="fieldRow">
         <div class="field">
           <label for="pecaComprimento">Comprimento (cm)</label>
@@ -234,19 +233,12 @@
           <input type="number" id="pecaLargura" min="1" step="0.1" inputmode="decimal" value="60">
         </div>
       </div>
-    </div>
 
-    <div class="card">
-      <h2>Ambiente</h2>
-      <p class="hint">Medida total do local onde as peças serão instaladas, em centímetros.</p>
+      <p class="fieldset-label notFirst">Ambiente e espaçador</p>
       <div class="fieldRow">
         <div class="field">
-          <label for="ambienteComprimento">Comprimento (cm)</label>
-          <input type="number" id="ambienteComprimento" min="1" step="1" inputmode="decimal" value="400">
-        </div>
-        <div class="field">
-          <label for="ambienteLargura">Largura (cm)</label>
-          <input type="number" id="ambienteLargura" min="1" step="1" inputmode="decimal" value="300">
+          <label for="ambienteArea">Área do ambiente (m²)</label>
+          <input type="number" id="ambienteArea" min="0.1" step="0.1" inputmode="decimal" value="12">
         </div>
       </div>
       <div class="fieldRow">
@@ -263,36 +255,13 @@
           <select id="juntaSelect"></select>
         </div>
       </div>
-      <div class="fieldRow">
-        <div class="field">
-          <label for="perdaInput">Perda estimada (%)</label>
-          <input type="number" id="perdaInput" min="0" max="50" step="1" inputmode="decimal" value="10">
-        </div>
-      </div>
-    </div>
 
-    <div class="card">
-      <h2>Resultado</h2>
-      <div class="resultRow">
-        <span class="k">Área do ambiente</span>
-        <span class="v" id="resArea">—</span>
+      <div class="divider"></div>
+      <div class="resultBig">
+        <div class="num" id="resNiveladores">—</div>
+        <div class="label">Espaçadores niveladores</div>
       </div>
-      <div class="resultRow">
-        <span class="k">Peças necessárias (com perda)</span>
-        <span class="v" id="resPecas">—</span>
-      </div>
-      <div class="resultRow">
-        <span class="k">Recomendado pro lado "X" (comprimento)</span>
-        <span class="v" id="resLadoX">—</span>
-      </div>
-      <div class="resultRow">
-        <span class="k">Recomendado pro lado "Y" (largura)</span>
-        <span class="v" id="resLadoY">—</span>
-      </div>
-      <div class="resultRow main">
-        <span class="k">Espaçadores niveladores</span>
-        <span class="v" id="resNiveladores">—</span>
-      </div>
+      <p class="detailLine" id="resDetalhe"></p>
       <div class="productSuggestion">
         Produto sugerido: <b id="resProdutoNome">—</b>
       </div>
@@ -365,52 +334,36 @@
 
     function calcular() {
       const pecaC = num('pecaComprimento'), pecaL = num('pecaLargura');
-      const ambC = num('ambienteComprimento'), ambL = num('ambienteLargura');
-      const perdaPct = num('perdaInput');
+      const areaAmbienteM2 = num('ambienteArea');
       const juntaMm = parseFloat(document.getElementById('juntaSelect').value);
 
       const addBtn = document.getElementById('addBtn');
-      if (!pecaC || !pecaL || !ambC || !ambL) {
-        document.getElementById('resArea').textContent = '—';
-        document.getElementById('resPecas').textContent = '—';
+      if (!pecaC || !pecaL || !areaAmbienteM2) {
         document.getElementById('resNiveladores').textContent = '—';
+        document.getElementById('resDetalhe').textContent = '';
         document.getElementById('resProdutoNome').textContent = '—';
-        document.getElementById('resLadoX').textContent = '—';
-        document.getElementById('resLadoY').textContent = '—';
         addBtn.disabled = true;
         ultimoCalculo = null;
         return;
       }
 
-      const areaAmbienteM2 = (ambC / 100) * (ambL / 100);
       const areaPecaM2 = (pecaC / 100) * (pecaL / 100);
-      // Peças em grade (linhas x colunas) - conta toda peça cortada na borda como
-      // uma peça inteira gasta, igual acontece na obra de verdade (diferente de
-      // só dividir a área, que subestima o tanto que precisa comprar). A Cortag
-      // não mostra isso na calculadora deles (só pede a área pronta), é um
-      // extra nosso.
-      const nx = Math.ceil(ambC / pecaC);
-      const ny = Math.ceil(ambL / pecaL);
-      const pecasComPerda = Math.ceil(nx * ny * (1 + perdaPct / 100));
-
       const ladoX = clipsPorLado(pecaC);
       const ladoY = clipsPorLado(pecaL);
       const niveladores = Math.ceil((areaAmbienteM2 / areaPecaM2) * (ladoX + ladoY));
 
-      document.getElementById('resArea').textContent = brNumber(areaAmbienteM2, 2) + ' m²';
-      document.getElementById('resPecas').textContent = brNumber(pecasComPerda) + ' un.';
       document.getElementById('resNiveladores').textContent = brNumber(niveladores) + ' un.';
+      document.getElementById('resDetalhe').textContent =
+        `${ladoX} encaixe${ladoX === 1 ? '' : 's'} por lado (X) · ${ladoY} por lado (Y)`;
       const modelo = document.getElementById('modeloSelect').value;
       document.getElementById('resProdutoNome').textContent =
         `Espaçador nivelador ${MODELOS_ESPACADOR[modelo].label} ${juntaLabel(juntaMm)}`;
-      document.getElementById('resLadoX').textContent = `${ladoX} pçs`;
-      document.getElementById('resLadoY').textContent = `${ladoY} pçs`;
       addBtn.disabled = false;
 
       ultimoCalculo = { modelo, juntaMm, qty: niveladores };
     }
 
-    ['pecaComprimento', 'pecaLargura', 'ambienteComprimento', 'ambienteLargura', 'perdaInput'].forEach(id => {
+    ['pecaComprimento', 'pecaLargura', 'ambienteArea'].forEach(id => {
       document.getElementById(id).addEventListener('input', calcular);
     });
     document.getElementById('juntaSelect').addEventListener('change', calcular);
@@ -445,10 +398,9 @@
     });
 
     document.getElementById('clearBtn').addEventListener('click', () => {
-      ['pecaComprimento', 'pecaLargura', 'ambienteComprimento', 'ambienteLargura'].forEach(id => {
+      ['pecaComprimento', 'pecaLargura', 'ambienteArea'].forEach(id => {
         document.getElementById(id).value = '';
       });
-      document.getElementById('perdaInput').value = '10';
       document.getElementById('modeloSelect').value = 'standard';
       popularJuntasDoModelo();
       document.getElementById('pecaComprimento').focus();
