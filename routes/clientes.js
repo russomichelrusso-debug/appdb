@@ -150,6 +150,12 @@ router.patch('/:id/documento', async (req, res) => {
 // Mescla dois clientes duplicados: todo o histórico (pedidos e levantamentos)
 // do cliente "remover" passa a pertencer ao "manter", e o duplicado é
 // excluído. Só admin - é uma operação que reescreve histórico de vendas.
+//
+// Além de reatribuir o histórico, completa no cliente mantido qualquer campo
+// que esteja vazio (documento/CNPJ, contato, código oficial, classificatório)
+// usando o valor do cliente removido - nunca sobrescreve um valor que já
+// existe. Classificatório (tipo+desconto+data) é tratado como um pacote só,
+// pra não misturar o tipo de um cliente com o desconto do outro.
 router.post('/mesclar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode mesclar clientes.' });
   const { manter_id, remover_id } = req.body;
@@ -159,7 +165,11 @@ router.post('/mesclar', async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const ambos = await client.query('SELECT id, nome FROM clientes WHERE id = ANY($1::int[])', [[manter_id, remover_id]]);
+    const ambos = await client.query(
+      `SELECT id, nome, documento, contato, codigo_oficial, classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em
+       FROM clientes WHERE id = ANY($1::int[])`,
+      [[manter_id, remover_id]]
+    );
     if (ambos.rows.length !== 2) {
       await client.query('ROLLBACK');
       return res.status(404).json({ erro: 'Um dos dois clientes não foi encontrado.' });
@@ -169,10 +179,42 @@ router.post('/mesclar', async (req, res) => {
 
     await client.query('UPDATE pedidos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
     await client.query('UPDATE levantamentos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
+    // Apaga o duplicado ANTES de completar os campos do mantido - documento e
+    // codigo_oficial têm índice único, então só dá pra copiar o valor do
+    // removido depois que a linha dele já não existe mais (senão as duas
+    // linhas teriam o mesmo valor ao mesmo tempo e o UPDATE seguinte falharia).
     await client.query('DELETE FROM clientes WHERE id = $1', [remover_id]);
+
+    const usaClassificatorioDoRemovido = !manterInfo.classificatorio_tipo && !!removerInfo.classificatorio_tipo;
+    const novoDocumento = manterInfo.documento || removerInfo.documento || null;
+    const novoContato = manterInfo.contato || removerInfo.contato || null;
+    const novoCodigoOficial = manterInfo.codigo_oficial || removerInfo.codigo_oficial || null;
+
+    const camposCompletados = [];
+    if (!manterInfo.documento && novoDocumento) camposCompletados.push('CNPJ/CPF');
+    if (!manterInfo.contato && novoContato) camposCompletados.push('contato');
+    if (!manterInfo.codigo_oficial && novoCodigoOficial) camposCompletados.push('código oficial');
+    if (usaClassificatorioDoRemovido) camposCompletados.push('classificatório');
+
+    await client.query(
+      `UPDATE clientes SET
+         documento = $2, contato = $3, codigo_oficial = $4,
+         classificatorio_tipo = $5, classificatorio_desconto = $6, classificatorio_atualizado_em = $7
+       WHERE id = $1`,
+      [
+        manter_id,
+        novoDocumento,
+        novoContato,
+        novoCodigoOficial,
+        usaClassificatorioDoRemovido ? removerInfo.classificatorio_tipo : manterInfo.classificatorio_tipo,
+        usaClassificatorioDoRemovido ? removerInfo.classificatorio_desconto : manterInfo.classificatorio_desconto,
+        usaClassificatorioDoRemovido ? removerInfo.classificatorio_atualizado_em : manterInfo.classificatorio_atualizado_em,
+      ]
+    );
+
     await client.query('COMMIT');
-    console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario?.email}.`);
-    res.json({ ok: true, manteve: manterInfo.nome, removeu: removerInfo.nome });
+    console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario?.email}. Campos completados: ${camposCompletados.join(', ') || 'nenhum'}.`);
+    res.json({ ok: true, manteve: manterInfo.nome, removeu: removerInfo.nome, camposCompletados });
   } catch (e) {
     await client.query('ROLLBACK');
     console.error(e);

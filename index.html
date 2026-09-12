@@ -2703,6 +2703,78 @@
       background: var(--red-deep);
     }
 
+    #mergeReviewCancel {
+      background: var(--fill);
+      color: var(--gray);
+    }
+
+    #mergeReviewConfirm:active {
+      background: var(--red-deep);
+    }
+
+    /* ---------- Comparação de clientes ao mesclar ---------- */
+    .mergeCards {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .mergeCard {
+      text-align: left;
+      width: 100%;
+      border: 2px solid var(--hairline);
+      border-radius: 12px;
+      background: var(--fill);
+      padding: 12px 13px;
+      cursor: pointer;
+      font: inherit;
+      color: inherit;
+    }
+
+    .mergeCard.selected {
+      border-color: var(--red);
+      background: var(--white);
+    }
+
+    .mergeCard .mcName {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .mergeCard .mcDetail {
+      font-size: 12.5px;
+      color: var(--gray);
+      margin-top: 3px;
+      line-height: 1.5;
+    }
+
+    .mergeCard .mcTag {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 700;
+      color: #fff;
+      background: var(--red);
+      padding: 2px 9px;
+      border-radius: 20px;
+      margin-top: 8px;
+    }
+
+    .mergeAutoFill {
+      font-size: 12.5px;
+      color: var(--gray);
+      background: var(--fill);
+      border-radius: 10px;
+      padding: 10px 12px;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+
+    .mergeAutoFill b {
+      color: var(--ink);
+    }
+
     /* ---------- Edição de preço base ---------- */
     .editedbadge {
       display: inline-block;
@@ -3907,6 +3979,20 @@
         <div id="clientPickerMsg"></div>
         <div class="minimodal-btnrow">
           <button id="clientPickerCancel">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="mergeReviewOverlay"></div>
+    <div class="minimodal hidden" id="mergeReviewModal">
+      <div class="minimodal-card" style="max-width:400px;">
+        <h3>Mesclar clientes</h3>
+        <p>Toque no cadastro que deve <b>continuar existindo</b> — o outro será excluído e todo o histórico (pedidos e levantamentos) passa pro escolhido.</p>
+        <div class="mergeCards" id="mergeReviewCards"></div>
+        <div class="mergeAutoFill" id="mergeReviewAutoFill"></div>
+        <div class="minimodal-btnrow">
+          <button type="button" id="mergeReviewCancel">Cancelar</button>
+          <button type="button" id="mergeReviewConfirm" style="background:var(--red);color:#fff;">Confirmar mesclagem</button>
         </div>
       </div>
     </div>
@@ -7370,6 +7456,96 @@
         document.getElementById('clientPickerOverlay').addEventListener('click', () => closeClientPicker(null));
       }
 
+      // ---------------- Revisão de mesclagem de clientes ----------------
+      // Antes, o clique no ícone 🔀 marcava esse cliente pra ser EXCLUÍDO e o
+      // escolhido no seletor seguinte era quem sobrevivia - ordem invertida do
+      // que a maioria espera, fácil de errar. Agora os dois clientes entram
+      // num modal de comparação e quem sobrevive é sempre o que a pessoa tocar
+      // ali, já com uma sugestão marcada (quem tem mais campos preenchidos).
+      let mergeReviewClientes = null;
+      let mergeReviewSelecionadoId = null;
+
+      function contarCamposPreenchidos(c) {
+        let n = 0;
+        if (c.documento) n++;
+        if (c.contato) n++;
+        if (c.classificatorio_tipo) n++;
+        return n;
+      }
+
+      function renderMergeReviewCards() {
+        const wrap = document.getElementById('mergeReviewCards');
+        wrap.innerHTML = mergeReviewClientes.map(c => `
+      <button type="button" class="mergeCard${c.id === mergeReviewSelecionadoId ? ' selected' : ''}" data-merge-pick="${c.id}">
+        <div class="mcName">${escapeHtml(c.nome)}</div>
+        <div class="mcDetail">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · ' + escapeHtml(c.contato) : ''}</div>
+        ${renderClassificatorioBadge(c)}
+        ${c.id === mergeReviewSelecionadoId ? '<div class="mcTag">✓ vai continuar existindo</div>' : ''}
+      </button>
+    `).join('');
+        wrap.querySelectorAll('[data-merge-pick]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            mergeReviewSelecionadoId = Number(btn.dataset.mergePick);
+            renderMergeReviewCards();
+            renderMergeReviewAutoFill();
+          });
+        });
+      }
+
+      function renderMergeReviewAutoFill() {
+        const wrap = document.getElementById('mergeReviewAutoFill');
+        const manter = mergeReviewClientes.find(c => c.id === mergeReviewSelecionadoId);
+        const remover = mergeReviewClientes.find(c => c.id !== mergeReviewSelecionadoId);
+        const completa = [];
+        if (!manter.documento && remover.documento) completa.push(`CNPJ/CPF (${escapeHtml(remover.documento)})`);
+        if (!manter.contato && remover.contato) completa.push(`contato (${escapeHtml(remover.contato)})`);
+        if (!manter.classificatorio_tipo && remover.classificatorio_tipo) completa.push('classificatório');
+        wrap.innerHTML = completa.length
+          ? `Ao confirmar, <b>${escapeHtml(manter.nome)}</b> vai herdar automaticamente: ${completa.join(', ')}.`
+          : `<b>${escapeHtml(manter.nome)}</b> já tem esses dados preenchidos — nada a completar.`;
+      }
+
+      function openMergeReviewModal(origem, alvo) {
+        mergeReviewClientes = [origem, alvo];
+        // sugestão inicial: quem já tem mais campos preenchidos (em empate, o
+        // cliente escolhido no seletor, já que foi uma escolha deliberada)
+        mergeReviewSelecionadoId = contarCamposPreenchidos(alvo) >= contarCamposPreenchidos(origem) ? alvo.id : origem.id;
+        renderMergeReviewCards();
+        renderMergeReviewAutoFill();
+        document.getElementById('mergeReviewOverlay').classList.remove('hidden');
+        document.getElementById('mergeReviewModal').classList.remove('hidden');
+      }
+      function closeMergeReviewModal() {
+        document.getElementById('mergeReviewOverlay').classList.add('hidden');
+        document.getElementById('mergeReviewModal').classList.add('hidden');
+        mergeReviewClientes = null;
+        mergeReviewSelecionadoId = null;
+      }
+      function initMergeReviewModal() {
+        document.getElementById('mergeReviewCancel').addEventListener('click', closeMergeReviewModal);
+        document.getElementById('mergeReviewOverlay').addEventListener('click', closeMergeReviewModal);
+        document.getElementById('mergeReviewConfirm').addEventListener('click', async () => {
+          if (!mergeReviewClientes) return;
+          const manter = mergeReviewClientes.find(c => c.id === mergeReviewSelecionadoId);
+          const remover = mergeReviewClientes.find(c => c.id !== mergeReviewSelecionadoId);
+          const btn = document.getElementById('mergeReviewConfirm');
+          btn.disabled = true; btn.textContent = 'Mesclando…';
+          try {
+            const resultado = await apiFetch('/api/clientes/mesclar', { method: 'POST', body: JSON.stringify({ manter_id: manter.id, remover_id: remover.id }) });
+            const campos = (resultado.camposCompletados || []).length
+              ? ` (completou: ${resultado.camposCompletados.join(', ')})`
+              : '';
+            showToast(`Mesclado em "${manter.nome}"${campos}`);
+            closeMergeReviewModal();
+            searchManageClients(document.getElementById('manageClientSearch').value);
+          } catch (e) {
+            alert('Não foi possível mesclar: ' + e.message);
+          } finally {
+            btn.disabled = false; btn.textContent = 'Confirmar mesclagem';
+          }
+        });
+      }
+
       // ---------------- Admin: conexão com o backend de histórico ----------------
       // Roda ao abrir o Painel Admin (e uma vez no boot do app, se for admin):
       // confere servidor, catálogo e previsão de uma vez, e sincroniza sozinho o
@@ -7626,22 +7802,15 @@
         </div>
       </div>
     `).join('');
+          const porIdMerge = new Map(clientes.map(c => [String(c.id), c]));
           wrap.querySelectorAll('[data-merge-client]').forEach(btn => {
             btn.addEventListener('click', async () => {
-              const nomeOrigem = btn.dataset.nomeClient;
-              const idOrigem = Number(btn.dataset.mergeClient);
-              showToast(`Escolha o cadastro correto pra herdar o histórico de "${nomeOrigem}"`);
+              const origem = porIdMerge.get(btn.dataset.mergeClient);
+              showToast(`Escolha o outro cadastro de "${origem.nome}" pra mesclar`);
               const alvo = await openClientPicker();
               if (!alvo) return;
-              if (alvo.id === idOrigem) { showToast('Escolha um cliente diferente pra mesclar.'); return; }
-              if (!confirm(`Todo o histórico de "${nomeOrigem}" vai passar pra "${alvo.nome}", e "${nomeOrigem}" será excluído. Confirma?`)) return;
-              try {
-                await apiFetch('/api/clientes/mesclar', { method: 'POST', body: JSON.stringify({ manter_id: alvo.id, remover_id: idOrigem }) });
-                showToast(`Mesclado com sucesso em "${alvo.nome}"`);
-                searchManageClients(document.getElementById('manageClientSearch').value);
-              } catch (e) {
-                alert('Não foi possível mesclar: ' + e.message);
-              }
+              if (alvo.id === origem.id) { showToast('Escolha um cliente diferente pra mesclar.'); return; }
+              openMergeReviewModal(origem, alvo);
             });
           });
           wrap.querySelectorAll('[data-del-client]').forEach(btn => {
@@ -10105,6 +10274,7 @@
           document.getElementById('clearCartBtn').addEventListener('click', clearCartWithConfirm);
           initShareSheet();
           initClientPicker();
+          initMergeReviewModal();
           initBackendAdmin();
           initPrevisaoUpload();
           initGoogleDriveButton();

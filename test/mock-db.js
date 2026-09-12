@@ -75,6 +75,34 @@ async function query(sql, params = []) {
   if (s.includes('SELECT ID, NOME, DOCUMENTO FROM CLIENTES')) {
     return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento })) };
   }
+  if (s.includes('FROM CLIENTES WHERE ID = ANY')) {
+    const ids = params[0].map(Number);
+    return { rows: clientes.filter(c => ids.includes(Number(c.id))) };
+  }
+  if (s.includes('UPDATE PEDIDOS SET CLIENTE_ID')) {
+    const [novoId, antigoId] = params;
+    pedidos.forEach(p => { if (p.cliente_id == antigoId) p.cliente_id = novoId; });
+    return { rows: [] };
+  }
+  if (s.includes('UPDATE LEVANTAMENTOS SET CLIENTE_ID')) {
+    const [novoId, antigoId] = params;
+    levantamentos.forEach(l => { if (l.cliente_id == antigoId) l.cliente_id = novoId; });
+    return { rows: [] };
+  }
+  if (s.includes('DELETE FROM CLIENTES WHERE ID')) {
+    const idRemover = Number(params[0]);
+    clientes = clientes.filter(c => Number(c.id) !== idRemover);
+    return { rows: [] };
+  }
+  if (s.startsWith('UPDATE CLIENTES SET') && s.includes('DOCUMENTO = $2')) {
+    const [manterId, documento, contato, codigoOficial, classifTipo, classifDesconto, classifAtualizado] = params;
+    const c = clientes.find(x => Number(x.id) === Number(manterId));
+    if (c) {
+      c.documento = documento; c.contato = contato; c.codigo_oficial = codigoOficial;
+      c.classificatorio_tipo = classifTipo; c.classificatorio_desconto = classifDesconto; c.classificatorio_atualizado_em = classifAtualizado;
+    }
+    return { rows: [] };
+  }
 
   // vendedores
   if (s.includes('SELECT ID FROM VENDEDORES WHERE NOME')) {
