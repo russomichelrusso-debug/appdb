@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cortag · Ficha Cadastral do Cliente</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#CC0935">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root {
+      --red: #CC0935;
+      --red-deep: #A30729;
+      --amber: #B36B00;
+      --green: #1E7E34;
+      --ink: #1D1D1F;
+      --gray: #6E6E73;
+      --fill: #F5F5F7;
+      --hairline: #D2D2D7;
+      --blue: #0071E3;
+      --white: #FFFFFF;
+      --r-sm: 10px;
+      --r-md: 16px;
+      --r-lg: 22px;
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 1px 1px rgba(0, 0, 0, .04);
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
+    }
+
+    html[data-theme="dark"] {
+      --ink: #F2F2F4;
+      --gray: #98989D;
+      --fill: #1C1C1E;
+      --hairline: #3A3A3C;
+      --white: #2C2C2E;
+      --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .2);
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .3);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--fill);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.4;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .wrap {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 16px 40px;
+    }
+
+    /* ---------- loading / login (mesmo esquema do app principal) ---------- */
+    .loadingScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      transition: opacity .35s ease;
+    }
+
+    .loadingScreen.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .loadingScreen .brand {
+      color: #fff;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -.01em;
+    }
+
+    .loadingBar {
+      width: 130px;
+      height: 3px;
+      background: rgba(255, 255, 255, .16);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .loadingBarFill {
+      width: 40%;
+      height: 100%;
+      background: var(--red);
+      border-radius: 2px;
+      animation: loadingSlide 1.1s ease-in-out infinite;
+    }
+
+    @keyframes loadingSlide {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(360%); }
+    }
+
+    .loginScreen {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: var(--ink);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .loginScreen.hidden { display: none; }
+
+    .loginCard {
+      background: var(--white);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-2);
+      padding: 32px 26px;
+      width: 100%;
+      max-width: 340px;
+      text-align: center;
+    }
+
+    .loginCard .brandDot {
+      width: 46px;
+      height: 46px;
+      border-radius: 13px;
+      background: var(--red);
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 19px;
+      margin: 0 auto 16px;
+    }
+
+    .loginCard h2 { font-size: 18px; margin: 0 0 4px; }
+    .loginCard .ap-hint { font-size: 12.5px; color: var(--gray); line-height: 1.5; margin: 0 0 18px; }
+    .ap-msg.error { background: #FDECEC; color: var(--red-deep); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; text-align: left; }
+    .ap-msg.error.inline { text-align: center; }
+
+    /* ---------- topbar ---------- */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 0 14px;
+      flex-wrap: wrap;
+    }
+
+    .backLink {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--gray);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .backLink:active { opacity: .6; }
+
+    .topbar h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; flex: 1; min-width: 200px; }
+    .topbar .sub { font-size: 12px; color: var(--gray); margin: 2px 0 0; }
+
+    .card { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; margin-bottom: 14px; }
+    .card h3 { font-size: 13.5px; margin: 0 0 4px; }
+    .cardHint { font-size: 11px; color: var(--gray); margin: 0 0 12px; line-height: 1.4; }
+
+    #clientPickerInput {
+      font: inherit; font-size: 13px; border: 1px solid var(--hairline); border-radius: 9px;
+      padding: 9px 12px; width: 100%; background: var(--white); color: var(--ink);
+    }
+    .clientResultItem {
+      display: block; width: 100%; text-align: left; border: none; background: transparent;
+      font: inherit; color: inherit; padding: 8px 6px; border-radius: 8px; cursor: pointer;
+    }
+    .clientResultItem:hover { background: var(--fill); }
+    .clientResultItem .crName { font-size: 13px; font-weight: 600; display: block; }
+    .clientResultItem .crDoc { font-size: 11px; color: var(--gray); }
+    .lev-empty { font-size: 13px; color: var(--gray); text-align: center; padding: 30px 10px; }
+
+    .fichaHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+    .fichaHead h2 { font-size: 17px; margin: 0 0 2px; }
+    .fichaHead .doc { font-size: 12px; color: var(--gray); }
+    .fileBtnLike {
+      border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit;
+      font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+    }
+    .fileBtnLike:active { opacity: .7; }
+
+    .situacaoBadge {
+      display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700;
+      padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;
+    }
+    .situacaoBadge.ativa { background: #E6F4EA; color: var(--green); }
+    .situacaoBadge.alerta { background: #FDECEC; color: var(--red-deep); }
+
+    .fichaGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
+    @media (max-width: 520px) { .fichaGrid { grid-template-columns: 1fr; } }
+    .fichaField { padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+    .fichaField .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 2px; }
+    .fichaField .val { font-size: 13.5px; }
+
+    .fonteNota { font-size: 10.5px; color: var(--gray); margin-top: 14px; line-height: 1.5; }
+    .avisoCache { background: #FFF6E5; color: var(--amber); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+
+<body>
+  <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
+
+  <div id="loadingScreen" class="loadingScreen">
+    <div class="brand">Cortag</div>
+    <div class="loadingBar"><div class="loadingBarFill"></div></div>
+  </div>
+
+  <div id="loginScreen" class="loginScreen hidden">
+    <div class="loginCard">
+      <div class="brandDot">C</div>
+      <h2>Entrar</h2>
+      <div id="loginMsg"></div>
+      <p class="ap-hint">Entre com a mesma conta Google usada no app de preços — a sessão é compartilhada.</p>
+      <div id="googleSignInBtn" style="display:flex;justify-content:center;"></div>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="pageWrap">
+    <div class="topbar">
+      <a class="backLink" href="index.html">← App</a>
+      <div style="flex:1;min-width:200px;">
+        <h1>Ficha Cadastral do Cliente</h1>
+        <p class="sub">Dados de CNPJ direto da Receita Federal (via radar-cnpj.com), guardados aos poucos conforme você consulta cada cliente.</p>
+      </div>
+    </div>
+
+    <div class="card" id="clientPickerCard">
+      <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver a ficha cadastral dele.</p>
+      <div id="clientPickerSearch">
+        <input type="text" id="clientPickerInput" placeholder="Buscar cliente por nome ou CNPJ…">
+        <div id="clientPickerResults" style="margin-top:8px;"></div>
+      </div>
+      <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+        <div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);display:block;">Cliente selecionado</span>
+          <span id="clientPickerNome" style="font-size:15px;font-weight:700;"></span>
+        </div>
+        <button type="button" id="clientPickerTrocar" class="fileBtnLike">Trocar</button>
+      </div>
+    </div>
+
+    <div id="fichaHost"></div>
+  </div>
+
+  <script>
+    // =================================================================
+    // ---- Login/sessão: mesmíssimo esquema de curva-abc.html (Google  -
+    // ---- Identity Services + token de sessão verificado no backend). -
+    // ---- Mesmo domínio => o token salvo no localStorage já é         -
+    // ---- compartilhado com o app principal, sem precisar logar de novo. -
+    // =================================================================
+    const API_CONFIG_LS_KEY = 'cortagApiConfig_v1';
+    const API_BASE_URL_DEFAULT = 'https://appdb-z6uh.onrender.com';
+    const AUTH_TOKEN_LS_KEY = 'cortagAuthToken_v1';
+    const AUTH_TOKEN_SS_KEY = 'cortagAuthToken_v1';
+    const GOOGLE_CLIENT_ID = '587215783588-g9nrt4mq8onu12qkj4r8h4ao307478i4.apps.googleusercontent.com';
+
+    function getApiConfig() {
+      let baseUrl = API_BASE_URL_DEFAULT;
+      try {
+        const saved = JSON.parse(localStorage.getItem(API_CONFIG_LS_KEY) || '{}');
+        if (saved.baseUrl) baseUrl = saved.baseUrl;
+      } catch (e) { }
+      return { baseUrl };
+    }
+    function getStoredToken() {
+      try { return localStorage.getItem(AUTH_TOKEN_LS_KEY) || sessionStorage.getItem(AUTH_TOKEN_SS_KEY) || null; }
+      catch (e) { return null; }
+    }
+    function setStoredToken(token) {
+      try { localStorage.setItem(AUTH_TOKEN_LS_KEY, token); } catch (e) { }
+    }
+    function clearStoredToken() {
+      try { localStorage.removeItem(AUTH_TOKEN_LS_KEY); sessionStorage.removeItem(AUTH_TOKEN_SS_KEY); } catch (e) { }
+    }
+
+    async function apiFetch(path, options = {}) {
+      const { baseUrl } = getApiConfig();
+      const token = getStoredToken();
+      let resp;
+      try {
+        resp = await fetch(baseUrl + path, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) },
+        });
+      } catch (e) {
+        throw new Error('Não foi possível conectar ao servidor (sem internet, ou o serviço está fora do ar).');
+      }
+      let body = null;
+      try { body = await resp.json(); } catch (e) { }
+      if (resp.status === 401) {
+        clearStoredToken();
+        showLoginScreen('Sessão expirada — entre de novo.');
+      }
+      if (!resp.ok) throw new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+      return body;
+    }
+    async function apiGoogleLogin(idToken) {
+      const { baseUrl } = getApiConfig();
+      const resp = await fetch(baseUrl + '/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      const body = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error((body && body.erro) || 'Não foi possível entrar.');
+      return body;
+    }
+    async function apiMe() { return apiFetch('/api/auth/me'); }
+
+    function loadGoogleIdentity() {
+      if (window.google && window.google.accounts && window.google.accounts.id) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Não consegui carregar o serviço de login do Google — confira sua internet.'));
+        document.head.appendChild(s);
+      });
+    }
+    async function onGoogleCredential(response) {
+      const msg = document.getElementById('loginMsg');
+      msg.innerHTML = '';
+      try {
+        const result = await apiGoogleLogin(response.credential);
+        setStoredToken(result.token);
+        hideLoginScreen();
+        showLoadingScreen();
+        await boot();
+      } catch (e) {
+        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    async function initLoginScreen() {
+      try {
+        await loadGoogleIdentity();
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential });
+        google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'large', text: 'signin_with' });
+      } catch (e) {
+        document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    function showLoadingScreen() { document.getElementById('loadingScreen').classList.remove('hidden'); }
+    function hideLoadingScreen() { document.getElementById('loadingScreen').classList.add('hidden'); }
+    function showLoginScreen(message) {
+      hideLoadingScreen();
+      document.getElementById('pageWrap').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+      initLoginScreen();
+      if (message) document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(message)}</div>`;
+    }
+    function hideLoginScreen() { document.getElementById('loginScreen').classList.add('hidden'); }
+
+    function escapeHtml(s) {
+      return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    async function boot() {
+      const token = getStoredToken();
+      if (!token) { showLoginScreen(); return; }
+      try {
+        await apiMe();
+        hideLoginScreen();
+        document.getElementById('pageWrap').classList.remove('hidden');
+        hideLoadingScreen();
+        startPage();
+      } catch (e) {
+        if (!document.getElementById('loginScreen').classList.contains('hidden')) return; // apiFetch já mostrou a tela de login (401)
+        hideLoadingScreen();
+        document.getElementById('pageWrap').classList.remove('hidden');
+        document.getElementById('fichaHost').innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    document.addEventListener('DOMContentLoaded', boot);
+
+    // =================================================================
+    // ------------------------------ Página -----------------------------
+    // =================================================================
+    const state = { clienteId: null, clienteNome: '', clienteDoc: '' };
+
+    function formatDataBr(v) {
+      if (!v) return '—';
+      // aceita tanto "YYYY-MM-DD" quanto ISO completo, sem depender do
+      // formato exato que a origem devolver.
+      const m = String(v).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+      return String(v);
+    }
+    function formatMoedaBr(v) {
+      if (v == null || v === '') return '—';
+      const n = Number(v);
+      if (Number.isNaN(n)) return String(v);
+      return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    function formatEndereco(f) {
+      const partes = [
+        [f.logradouro, f.numero].filter(Boolean).join(', '),
+        f.bairro,
+        [f.municipio, f.uf].filter(Boolean).join(' - '),
+        f.cep,
+      ].filter(Boolean);
+      return partes.length ? partes.join(' · ') : '—';
+    }
+
+    function renderFicha(ficha, fonte, aviso) {
+      const host = document.getElementById('fichaHost');
+      const situacao = (ficha.situacao_cadastral || '').toUpperCase();
+      const ehAtiva = situacao.includes('ATIVA');
+      const badgeClasse = situacao ? (ehAtiva ? 'ativa' : 'alerta') : '';
+      host.innerHTML = `
+        <div class="card">
+          ${aviso ? `<div class="avisoCache">Não consegui atualizar agora — mostrando o último dado salvo. (${escapeHtml(aviso)})</div>` : ''}
+          <div class="fichaHead">
+            <div>
+              <h2>${escapeHtml(ficha.razao_social || state.clienteNome)}</h2>
+              ${ficha.nome_fantasia ? `<div class="doc">Nome fantasia: ${escapeHtml(ficha.nome_fantasia)}</div>` : ''}
+              <div class="doc">CNPJ: ${escapeHtml(state.clienteDoc)}</div>
+            </div>
+            <button type="button" class="fileBtnLike" id="atualizarFichaBtn">Atualizar agora</button>
+          </div>
+          ${situacao ? `<span class="situacaoBadge ${badgeClasse}">${escapeHtml(situacao)}</span>` : ''}
+          <div class="fichaGrid">
+            <div class="fichaField"><span class="lbl">Natureza jurídica</span><span class="val">${escapeHtml(ficha.natureza_juridica || '—')}</span></div>
+            <div class="fichaField"><span class="lbl">Porte</span><span class="val">${escapeHtml(ficha.porte || '—')}</span></div>
+            <div class="fichaField"><span class="lbl">CNAE principal</span><span class="val">${escapeHtml([ficha.cnae_principal_codigo, ficha.cnae_principal_descricao].filter(Boolean).join(' — ') || '—')}</span></div>
+            <div class="fichaField"><span class="lbl">Data de abertura</span><span class="val">${formatDataBr(ficha.data_abertura)}</span></div>
+            <div class="fichaField"><span class="lbl">Capital social</span><span class="val">${formatMoedaBr(ficha.capital_social)}</span></div>
+            <div class="fichaField"><span class="lbl">Situação desde</span><span class="val">${formatDataBr(ficha.data_situacao_cadastral)}</span></div>
+            <div class="fichaField" style="grid-column:1/-1;"><span class="lbl">Endereço</span><span class="val">${escapeHtml(formatEndereco(ficha))}</span></div>
+            <div class="fichaField"><span class="lbl">Telefone</span><span class="val">${escapeHtml(ficha.telefone || '—')}</span></div>
+            <div class="fichaField"><span class="lbl">E-mail</span><span class="val">${escapeHtml(ficha.email || '—')}</span></div>
+          </div>
+          <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + formatDataBr(ficha.atualizado_em)}.</p>
+        </div>`;
+      document.getElementById('atualizarFichaBtn').addEventListener('click', () => carregarFicha(true));
+    }
+
+    async function carregarFicha(forcar) {
+      const host = document.getElementById('fichaHost');
+      host.innerHTML = '<div class="card"><div class="lev-empty">Consultando…</div></div>';
+      try {
+        const path = `/api/clientes/${state.clienteId}/ficha-cnpj` + (forcar ? '/atualizar' : '');
+        const resp = await apiFetch(path, forcar ? { method: 'POST' } : {});
+        renderFicha(resp.ficha, resp.fonte, resp.aviso);
+      } catch (e) {
+        host.innerHTML = `<div class="card"><div class="ap-msg error inline">${escapeHtml(e.message)}</div></div>`;
+      }
+    }
+
+    function renderClientResults(lista) {
+      const host = document.getElementById('clientPickerResults');
+      if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Nenhum cliente encontrado.</div>'; return; }
+      host.innerHTML = lista.map(c => `
+        <button type="button" class="clientResultItem" data-id="${c.id}" data-nome="${escapeHtml(c.nome)}" data-doc="${escapeHtml(c.documento || '')}">
+          <span class="crName">${escapeHtml(c.nome)}</span>
+          <span class="crDoc">${escapeHtml(c.documento || 'Sem CNPJ cadastrado')}</span>
+        </button>`).join('');
+      host.querySelectorAll('.clientResultItem').forEach(btn => {
+        btn.addEventListener('click', () => selecionarCliente(Number(btn.dataset.id), btn.dataset.nome, btn.dataset.doc));
+      });
+    }
+
+    function selecionarCliente(id, nome, doc) {
+      state.clienteId = id; state.clienteNome = nome; state.clienteDoc = doc;
+      document.getElementById('clientPickerNome').textContent = nome;
+      document.getElementById('clientPickerSelected').classList.remove('hidden');
+      document.getElementById('clientPickerSearch').classList.add('hidden');
+      document.getElementById('clientPickerResults').innerHTML = '';
+      document.getElementById('clientPickerInput').value = '';
+      if (!doc) {
+        document.getElementById('fichaHost').innerHTML = '<div class="card"><div class="lev-empty">Esse cliente ainda não tem CNPJ cadastrado — cadastre no app principal pra poder ver a ficha aqui.</div></div>';
+        return;
+      }
+      carregarFicha(false);
+    }
+
+    function esqueceCliente() {
+      state.clienteId = null; state.clienteNome = ''; state.clienteDoc = '';
+      document.getElementById('clientPickerSelected').classList.add('hidden');
+      document.getElementById('clientPickerSearch').classList.remove('hidden');
+      document.getElementById('fichaHost').innerHTML = '';
+    }
+
+    function startPage() {
+      let clientBuscaDebounce;
+      document.getElementById('clientPickerInput').addEventListener('input', (e) => {
+        clearTimeout(clientBuscaDebounce);
+        const termo = e.target.value.trim();
+        const host = document.getElementById('clientPickerResults');
+        if (termo.length < 2) { host.innerHTML = ''; return; }
+        clientBuscaDebounce = setTimeout(async () => {
+          try {
+            const resultados = await apiFetch('/api/clientes?busca=' + encodeURIComponent(termo));
+            renderClientResults(resultados);
+          } catch (e) {
+            host.innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
+          }
+        }, 250);
+      });
+      document.getElementById('clientPickerTrocar').addEventListener('click', esqueceCliente);
+      document.getElementById('fichaHost').innerHTML = '<div class="lev-empty">Selecione um cliente acima pra ver a ficha cadastral dele.</div>';
+    }
+  </script>
+</body>
+
+</html>

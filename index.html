@@ -3634,6 +3634,16 @@
           <line x1="12" y1="19" x2="12" y2="19.01" />
         </svg>
       </a>
+      <a class="gearBtn" href="ficha-cnpj.html" id="fichaCnpjLink" aria-label="Ficha Cadastral do Cliente"
+        title="Ficha Cadastral do Cliente (CNPJ)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+          <path d="M14 2v6h6" />
+          <line x1="8" y1="13" x2="16" y2="13" />
+          <line x1="8" y1="17" x2="16" y2="17" />
+        </svg>
+      </a>
       <button class="gearBtn" id="adminBtn" aria-label="Administração">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round">
@@ -3988,6 +3998,7 @@
           <input type="text" id="clientPickerNewNome" placeholder="Nome do cliente">
           <label for="clientPickerNewDoc">CNPJ/CPF (opcional)</label>
           <input type="text" id="clientPickerNewDoc" placeholder="Só números">
+          <div id="clientPickerNewDocHint" style="font-size:11px;color:var(--gray);margin:2px 0 10px;"></div>
           <label for="clientPickerNewContato">Contato (opcional)</label>
           <input type="text" id="clientPickerNewContato" placeholder="Telefone/e-mail">
           <button type="button" id="clientPickerNewConfirm"
@@ -7499,6 +7510,13 @@
       async function apiCriarCliente(cliente) {
         return apiFetch('/api/clientes', { method: 'POST', body: JSON.stringify(cliente) });
       }
+      // Autopreenchimento no cadastro de cliente novo - consulta a Receita
+      // Federal (via radar-cnpj.com) pelo CNPJ digitado. Best effort: quem
+      // chama trata qualquer erro como "não preencheu nada", nunca trava o
+      // cadastro manual.
+      async function apiConsultarRadarCnpj(cnpj) {
+        return apiFetch('/api/radar-cnpj/' + encodeURIComponent(cnpj));
+      }
       async function apiSyncProdutos(produtos) {
         return apiFetch('/api/produtos/sync', { method: 'POST', body: JSON.stringify({ produtos }) });
       }
@@ -7594,6 +7612,7 @@
           document.getElementById('clientPickerNewForm').classList.add('hidden');
           document.getElementById('clientPickerNewNome').value = '';
           document.getElementById('clientPickerNewDoc').value = '';
+          document.getElementById('clientPickerNewDocHint').textContent = '';
           document.getElementById('clientPickerNewContato').value = '';
           document.getElementById('clientPickerMsg').innerHTML = '';
           document.getElementById('clientPickerOverlay').classList.remove('hidden');
@@ -7645,6 +7664,32 @@
           msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
         }
       }
+      // Consulta a Receita pelo CNPJ digitado no cadastro de cliente novo e
+      // preenche o nome sozinho - só quando o campo nome ainda está vazio,
+      // pra nunca sobrescrever o que a pessoa já digitou. Best effort: sem
+      // internet ou CNPJ não encontrado, só não preenche nada, sem travar
+      // o cadastro manual.
+      async function autopreencherPorCnpj(cnpj) {
+        const hint = document.getElementById('clientPickerNewDocHint');
+        hint.textContent = 'Consultando CNPJ…';
+        try {
+          const dados = await apiConsultarRadarCnpj(cnpj);
+          const nomeInput = document.getElementById('clientPickerNewNome');
+          const nomeEncontrado = dados.razao_social || dados.nome_fantasia;
+          if (nomeEncontrado && !nomeInput.value.trim()) {
+            nomeInput.value = nomeEncontrado;
+            hint.textContent = 'Preenchido a partir do CNPJ — confira antes de salvar.';
+          } else {
+            hint.textContent = '';
+          }
+          const situacao = (dados.situacao_cadastral || '').toUpperCase();
+          if (situacao && !situacao.includes('ATIVA')) {
+            hint.textContent = (hint.textContent ? hint.textContent + ' ' : '') + `⚠️ CNPJ com situação: ${dados.situacao_cadastral}.`;
+          }
+        } catch (e) {
+          hint.textContent = ''; // best effort - offline ou CNPJ não encontrado não bloqueia o cadastro manual
+        }
+      }
       function initClientPicker() {
         document.getElementById('clientPickerSearch').addEventListener('input', (e) => {
           clearTimeout(clientPickerDebounce);
@@ -7653,6 +7698,14 @@
         });
         document.getElementById('clientPickerNewToggle').addEventListener('click', () => {
           document.getElementById('clientPickerNewForm').classList.toggle('hidden');
+        });
+        let clientPickerNewDocDebounce = null;
+        document.getElementById('clientPickerNewDoc').addEventListener('input', (e) => {
+          clearTimeout(clientPickerNewDocDebounce);
+          const cnpj = e.target.value.replace(/\D/g, '');
+          const hint = document.getElementById('clientPickerNewDocHint');
+          if (cnpj.length !== 14) { hint.textContent = ''; return; }
+          clientPickerNewDocDebounce = setTimeout(() => autopreencherPorCnpj(cnpj), 400);
         });
         document.getElementById('clientPickerNewConfirm').addEventListener('click', confirmNewClient);
         document.getElementById('clientPickerCancel').addEventListener('click', () => closeClientPicker(null));

@@ -231,3 +231,33 @@ CREATE TABLE IF NOT EXISTS levantamento_rascunhos (
   rascunho JSONB NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Cache da ficha cadastral de CNPJ (Receita Federal, via radar-cnpj.com) de
+-- cada cliente. Construído aos poucos, sob demanda - só ganha uma linha
+-- quando alguém abre a ficha desse cliente pela primeira vez, nunca em lote.
+-- `dados_brutos` guarda a resposta inteira da origem, pra não perder nada
+-- que ainda não tenha coluna própria.
+CREATE TABLE IF NOT EXISTS cliente_cnpj_ficha (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  razao_social TEXT,
+  nome_fantasia TEXT,
+  situacao_cadastral TEXT,
+  data_situacao_cadastral TEXT,
+  motivo_situacao TEXT,
+  cnae_principal_codigo TEXT,
+  cnae_principal_descricao TEXT,
+  natureza_juridica TEXT,
+  porte TEXT,
+  data_abertura TEXT,
+  capital_social NUMERIC,
+  logradouro TEXT,
+  numero TEXT,
+  bairro TEXT,
+  municipio TEXT,
+  uf TEXT,
+  cep TEXT,
+  telefone TEXT,
+  email TEXT,
+  dados_brutos JSONB,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
