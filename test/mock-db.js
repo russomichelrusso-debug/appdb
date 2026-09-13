@@ -16,6 +16,7 @@ let usuarios = [];
 let sessoes = [];
 let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
+let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -31,6 +32,7 @@ function reset() {
   sessoes = [];
   rascunhos = {};
   codigosProduto = {};
+  clienteCnpjFicha = {};
   pedidosOficiaisItens = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
@@ -136,6 +138,29 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT COUNT(*) FROM CODIGOS_PRODUTO')) {
     return { rows: [{ count: String(Object.keys(codigosProduto).length) }] };
+  }
+
+  // cliente_cnpj_ficha (ficha de CNPJ, radar-cnpj.com)
+  if (s.includes('SELECT * FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
+    const row = clienteCnpjFicha[params[0]];
+    return { rows: row ? [row] : [] };
+  }
+  if (s.includes('INSERT INTO CLIENTE_CNPJ_FICHA')) {
+    const [
+      cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
+      motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
+      data_abertura, capital_social, logradouro, numero, bairro, municipio, uf, cep, telefone, email,
+      dados_brutos,
+    ] = params;
+    const row = {
+      cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
+      motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
+      data_abertura, capital_social, logradouro, numero, bairro, municipio, uf, cep, telefone, email,
+      dados_brutos: typeof dados_brutos === 'string' ? JSON.parse(dados_brutos) : dados_brutos,
+      atualizado_em: new Date().toISOString(),
+    };
+    clienteCnpjFicha[cliente_id] = row;
+    return { rows: [row] };
   }
 
   // vendedores
