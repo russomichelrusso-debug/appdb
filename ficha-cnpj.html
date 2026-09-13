@@ -455,6 +455,11 @@
             <div class="fichaField"><span class="lbl">E-mail</span><span class="val">${escapeHtml(ficha.email || '—')}</span></div>
           </div>
           <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + formatDataBr(ficha.atualizado_em)}.</p>
+          ${ficha.dados_brutos ? `
+          <details style="margin-top:10px;">
+            <summary style="cursor:pointer;font-size:11px;color:var(--gray);">Ver dados técnicos (resposta original da consulta)</summary>
+            <pre style="white-space:pre-wrap;word-break:break-word;font-size:10.5px;background:var(--fill);border-radius:8px;padding:10px;margin-top:8px;max-height:280px;overflow-y:auto;">${escapeHtml(JSON.stringify(ficha.dados_brutos, null, 2))}</pre>
+          </details>` : ''}
         </div>`;
       document.getElementById('atualizarFichaBtn').addEventListener('click', () => carregarFicha(true));
     }

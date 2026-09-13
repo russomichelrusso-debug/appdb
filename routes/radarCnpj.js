@@ -26,32 +26,49 @@ async function buscarFichaNaOrigem(cnpj) {
   return body.data || body;
 }
 
-// Os nomes de campo exatos da ficha da origem ainda não foram confirmados
-// contra uma resposta real (sem acesso de rede neste ambiente de dev) - por
-// isso aceitamos variações prováveis e guardamos a resposta crua inteira em
-// `dados_brutos`, pra nunca perder informação mesmo se o mapeamento abaixo
-// precisar de ajuste depois de ver o formato real em produção.
+// Vários campos da origem vêm como objeto aninhado {codigo, label/descricao}
+// em vez de string solta (confirmado com uma resposta real em produção:
+// situacao_cadastral, natureza_juridica e porte chegam assim). Esse helper
+// desembrulha isso pro texto que interessa mostrar.
+function campoTexto(v) {
+  if (v == null) return null;
+  if (typeof v === 'object') return v.label || v.descricao || v.nome || v.texto || null;
+  return v;
+}
+
+// Alguns campos ainda não foram confirmados contra uma resposta real (CNAE,
+// endereço, telefone, data de abertura) - mantemos várias tentativas de
+// nome/formato prováveis, e a resposta crua inteira fica sempre guardada em
+// `dados_brutos`, pra nunca perder informação se o mapeamento abaixo ainda
+// estiver errado pra algum campo.
 function mapearFicha(data) {
+  const situacao = data.situacao_cadastral;
+  const situacaoObj = situacao && typeof situacao === 'object' ? situacao : null;
+  const cnae = data.cnae_principal || data.cnae_fiscal;
+  const cnaeObj = cnae && typeof cnae === 'object' ? cnae : null;
+  const endereco = data.endereco && typeof data.endereco === 'object' ? data.endereco : data;
+  const contato = data.contato && typeof data.contato === 'object' ? data.contato : data;
+
   return {
     razao_social: data.razao_social || data.nome || data.razaoSocial || null,
     nome_fantasia: data.nome_fantasia || data.fantasia || data.nomeFantasia || null,
-    situacao_cadastral: data.situacao_cadastral || data.situacao || data.situacaoCadastral || null,
-    data_situacao_cadastral: data.data_situacao_cadastral || data.data_situacao || data.dataSituacaoCadastral || null,
-    motivo_situacao: data.motivo_situacao || data.motivoSituacao || null,
-    cnae_principal_codigo: data.cnae_fiscal || data.cnae_principal_codigo || data.cnaePrincipal || null,
-    cnae_principal_descricao: data.cnae_fiscal_descricao || data.cnae_principal_descricao || data.cnaePrincipalDescricao || null,
-    natureza_juridica: data.natureza_juridica || data.naturezaJuridica || null,
-    porte: data.porte || null,
+    situacao_cadastral: situacaoObj ? campoTexto(situacaoObj) : (campoTexto(situacao) || data.situacao || data.situacaoCadastral || null),
+    data_situacao_cadastral: (situacaoObj && situacaoObj.data) || data.data_situacao_cadastral || data.data_situacao || data.dataSituacaoCadastral || null,
+    motivo_situacao: (situacaoObj && situacaoObj.motivo) || data.motivo_situacao || data.motivoSituacao || null,
+    cnae_principal_codigo: (cnaeObj && cnaeObj.codigo) || data.cnae_principal_codigo || (typeof cnae === 'string' || typeof cnae === 'number' ? cnae : null),
+    cnae_principal_descricao: campoTexto(cnaeObj) || data.cnae_fiscal_descricao || data.cnae_principal_descricao || data.cnaePrincipalDescricao || null,
+    natureza_juridica: campoTexto(data.natureza_juridica) || data.naturezaJuridica || null,
+    porte: campoTexto(data.porte) || null,
     data_abertura: data.data_inicio_atividade || data.data_abertura || data.dataAbertura || null,
     capital_social: data.capital_social != null ? Number(data.capital_social) : (data.capitalSocial != null ? Number(data.capitalSocial) : null),
-    logradouro: data.logradouro || null,
-    numero: data.numero || null,
-    bairro: data.bairro || null,
-    municipio: data.municipio || null,
-    uf: data.uf || null,
-    cep: data.cep || null,
-    telefone: data.ddd_telefone_1 || data.telefone || null,
-    email: data.email || null,
+    logradouro: endereco.logradouro || null,
+    numero: endereco.numero || null,
+    bairro: endereco.bairro || null,
+    municipio: campoTexto(endereco.municipio) || null,
+    uf: endereco.uf || null,
+    cep: endereco.cep || null,
+    telefone: contato.ddd_telefone_1 || contato.telefone || null,
+    email: contato.email || null,
   };
 }
 
@@ -90,6 +107,17 @@ function fichaEstaFresca(row) {
   return idadeMs < CACHE_MAX_IDADE_DIAS * 24 * 60 * 60 * 1000;
 }
 
+// Sinal de que essa linha foi gravada por uma versão antiga do mapeamento,
+// que salvava o objeto aninhado inteiro (ex: situacao_cadastral) em vez do
+// texto - o driver pg serializa objeto em coluna TEXT como JSON, então o
+// valor gravado começa com "{".
+function pareceCacheComBugAntigo(row) {
+  if (!row) return false;
+  return [row.situacao_cadastral, row.natureza_juridica, row.porte].some(
+    (v) => typeof v === 'string' && v.trim().startsWith('{')
+  );
+}
+
 async function obterFicha(clienteId, forcarAtualizacao) {
   const clienteResult = await pool.query('SELECT * FROM clientes WHERE id = $1', [clienteId]);
   const cliente = clienteResult.rows[0];
@@ -100,6 +128,14 @@ async function obterFicha(clienteId, forcarAtualizacao) {
 
   const cacheResult = await pool.query('SELECT * FROM cliente_cnpj_ficha WHERE cliente_id = $1', [clienteId]);
   const cache = cacheResult.rows[0] || null;
+
+  // Cache já existe mas foi gravado com o bug de mapeamento antigo - reprocessa
+  // a partir do dado bruto já salvo (sem gastar uma nova chamada à origem) e
+  // corrige sozinho, sem esperar os 30 dias de validade do cache vencerem.
+  if (cache && cache.dados_brutos && pareceCacheComBugAntigo(cache)) {
+    const corrigida = await salvarFichaEmCache(clienteId, cache.dados_brutos, cache.dados_brutos);
+    if (!forcarAtualizacao) return { ficha: corrigida, fonte: 'cache' };
+  }
 
   if (!forcarAtualizacao && fichaEstaFresca(cache)) {
     return { ficha: cache, fonte: 'cache' };
