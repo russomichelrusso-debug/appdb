@@ -4220,6 +4220,8 @@
           <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
           <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v"
               id="apSyncQueueCount">Nada pendente</span></div>
+          <div class="ap-status-row"><span class="k">CSVs de pedido pendentes no Drive</span><span class="v"
+              id="apDriveCsvQueueCount">Nada pendente</span></div>
           <button class="restoreBtn" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar pendências
             agora</button>
           <button class="restoreBtn" id="apSyncAllBtn" style="margin-top:10px;">Sincronizar tudo agora</button>
@@ -6925,11 +6927,21 @@
           return googleAccessToken.token;
         }
       }
+      // Versão que NUNCA abre a tela de consentimento sozinha (usada por fluxos
+      // automáticos, como o backup de CSV ao finalizar pedido) - se a renovação
+      // silenciosa falhar, deixa a exceção subir em vez de interromper a pessoa
+      // com um popup do Google que ela não pediu.
+      async function garantirTokenGoogleSilencioso() {
+        if (tokenGoogleValido()) return googleAccessToken.token;
+        await conectarGoogleDrive(true);
+        return googleAccessToken.token;
+      }
       // Envia um arquivo já pronto (Blob) direto pro Google Drive da pessoa
       // logada - usa upload multipart simples (arquivo pequeno, CSV não passa de
-      // poucos KB, não precisa do upload resumível).
-      async function enviarParaGoogleDrive(blob, fileName) {
-        const token = await garantirTokenGoogle();
+      // poucos KB, não precisa do upload resumível). silencioso=true nunca abre
+      // popup de login sozinho (ver garantirTokenGoogleSilencioso).
+      async function enviarParaGoogleDrive(blob, fileName, silencioso) {
+        const token = silencioso ? await garantirTokenGoogleSilencioso() : await garantirTokenGoogle();
         const metadata = { name: fileName, mimeType: blob.type || 'application/octet-stream' };
         const boundary = '-------cortag' + Date.now();
         const delimiter = `\r\n--${boundary}\r\n`;
@@ -7265,8 +7277,92 @@
         syncQueueDraining = false;
         if (enviados > 0 && !silencioso) showToast(`${enviados} pendente(s) sincronizado(s) agora`);
       }
-      window.addEventListener('online', () => { drenarFilaSync(false); syncClientesLocais(); });
-      setInterval(() => drenarFilaSync(true), 30000); // reforço - 'online' nem sempre dispara de forma confiável no celular
+
+      // ---------------- Backup automático em CSV no Google Drive ao finalizar pedido ----------------
+      // Mesma ideia da fila de sincronização acima, só que pro Drive em vez da
+      // API: se o envio do CSV falhar (sem internet, Drive fora do ar, token
+      // expirado sem conseguir renovar em silêncio), fica pendente aqui e é
+      // reenviado sozinho quando a conexão voltar - sem precisar reabrir o
+      // pedido nem apertar nada. Só entra em ação em aparelhos que JÁ
+      // conectaram o Google Drive alguma vez (ver GOOGLE_TOKEN_LS_KEY) - não
+      // força ninguém a configurar Drive só por finalizar um pedido.
+      const DRIVE_CSV_QUEUE_LS_KEY = 'cortagDriveCsvQueue_v1';
+      function loadDriveCsvQueue() {
+        try { return JSON.parse(localStorage.getItem(DRIVE_CSV_QUEUE_LS_KEY)) || []; } catch (e) { return []; }
+      }
+      function saveDriveCsvQueue(queue) {
+        try { localStorage.setItem(DRIVE_CSV_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
+        refreshDriveCsvQueueBadge();
+      }
+      function refreshDriveCsvQueueBadge() {
+        const el = document.getElementById('apDriveCsvQueueCount');
+        if (!el) return;
+        const n = loadDriveCsvQueue().length;
+        el.textContent = n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente';
+      }
+      // Mesmo formato/nome já usado no "Baixar CSV" manual do orçamento, só
+      // com hora:min:seg no carimbo (não só a data) - evita sobrescrever no
+      // Drive se o mesmo cliente tiver mais de um pedido finalizado no dia.
+      function pedidoCsvFileNameFor(clientName) {
+        const semAcento = (clientName || 'Cliente').normalize('NFD').replace(/[̀-ͯ]/g, '');
+        const primeiraPalavra = (semAcento.trim().split(/\s+/)[0] || 'Cliente').replace(/[^a-zA-Z0-9]/g, '') || 'Cliente';
+        const nomeAbrev = primeiraPalavra.charAt(0).toUpperCase() + primeiraPalavra.slice(1);
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const carimbo = pad(d.getDate()) + pad(d.getMonth() + 1) + String(d.getFullYear()).slice(-2) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+        return `Pedido-${nomeAbrev}${carimbo}.csv`;
+      }
+      function buildPedidoCsvText(rows) {
+        const header = 'Código do Item;Quantidade;Preço';
+        const linhas = rows.map(({ p, it, cp }) => `${p.c};${it.qty};${cp.toFixed(2).replace('.', ',')}`);
+        return [header, ...linhas].join('\r\n');
+      }
+      let driveCsvQueueDraining = false;
+      async function drenarFilaDriveCsv(silencioso) {
+        if (driveCsvQueueDraining) return;
+        const fila = loadDriveCsvQueue();
+        if (fila.length === 0) return;
+        driveCsvQueueDraining = true;
+        let enviados = 0;
+        const restantes = [];
+        for (const item of fila) {
+          try {
+            const blob = new Blob(['\uFEFF' + item.csvText], { type: 'text/csv;charset=utf-8;' });
+            await enviarParaGoogleDrive(blob, item.fileName, true); // silencioso: nunca abre popup de login sozinho
+            enviados++;
+          } catch (e) {
+            restantes.push(item); // continua sem rede/Drive, ou falhou de novo - mantém na fila
+          }
+        }
+        saveDriveCsvQueue(restantes);
+        driveCsvQueueDraining = false;
+        if (enviados > 0 && !silencioso) showToast(`${enviados} CSV(s) de pedido enviado(s) ao Drive agora`);
+      }
+      // Chamado logo depois de gravar um pedido (online ou já enfileirado pro
+      // servidor) - gera o CSV e tenta mandar pro Drive na hora; se não
+      // conseguir, guarda na fila acima pra reenviar sozinho depois. Devolve
+      // 'nao-aplicavel' (Drive nunca conectado - não faz nada), 'enviado' ou
+      // 'pendente', pra finalizeOrder() montar uma única mensagem combinada.
+      async function backupPedidoCsvNoGoogleDrive(rows, clientName) {
+        let jaConectouAntes = false;
+        try { jaConectouAntes = !!localStorage.getItem(GOOGLE_TOKEN_LS_KEY); } catch (e) { }
+        if (!jaConectouAntes) return 'nao-aplicavel';
+        const csvText = buildPedidoCsvText(rows);
+        const fileName = pedidoCsvFileNameFor(clientName);
+        try {
+          const blob = new Blob(['\uFEFF' + csvText], { type: 'text/csv;charset=utf-8;' });
+          await enviarParaGoogleDrive(blob, fileName, true);
+          return 'enviado';
+        } catch (e) {
+          const fila = loadDriveCsvQueue();
+          fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), csvText, fileName, criadoEm: Date.now() });
+          saveDriveCsvQueue(fila);
+          return 'pendente';
+        }
+      }
+
+      window.addEventListener('online', () => { drenarFilaSync(false); drenarFilaDriveCsv(false); syncClientesLocais(); });
+      setInterval(() => { drenarFilaSync(true); drenarFilaDriveCsv(true); }, 30000); // reforço - 'online' nem sempre dispara de forma confiável no celular
       setInterval(() => syncClientesLocais(), 5 * 60000); // mantém a cópia local de clientes fresca em segundo plano
 
       async function apiFetch(path, options = {}, filaInfo) {
@@ -8269,9 +8365,17 @@
             itens: rows.map(({ p, it, cp }) => ({ codigo_sku: p.c, quantidade: it.qty, preco_unitario: Number(cp.toFixed(2)) })),
           };
           const result = await apiCriarPedido(payload);
-          showToast(result && result.__filaOffline
+          // Cópia de segurança em CSV no Drive - independente do pedido em si já
+          // ter ido pro servidor ou ter ficado pendente na fila acima; sem
+          // conexão nenhuma, entra na fila própria do Drive (ver
+          // backupPedidoCsvNoGoogleDrive) e é reenviada sozinha depois.
+          const driveResultado = await backupPedidoCsvNoGoogleDrive(rows, cliente.nome);
+          let msg = result && result.__filaOffline
             ? `Sem conexão agora — pedido de ${cliente.nome} fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
-            : `Pedido registrado no histórico de ${cliente.nome}`);
+            : `Pedido registrado no histórico de ${cliente.nome}`;
+          if (driveResultado === 'enviado') msg += ' · cópia CSV salva no Drive';
+          else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
+          showToast(msg);
         } catch (e) {
           alert('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.');
         } finally {
@@ -10424,10 +10528,13 @@
           initPrevisaoUpload();
           initGoogleDriveButton();
           refreshSyncQueueBadge();
+          refreshDriveCsvQueueBadge();
+          drenarFilaDriveCsv(true); // se tiver CSV de pedido pendente de uma sessão anterior, tenta mandar já na abertura do app
           document.getElementById('apSyncQueueBtn').addEventListener('click', async () => {
             const btn = document.getElementById('apSyncQueueBtn');
             btn.disabled = true; btn.textContent = 'Tentando…';
             await drenarFilaSync(false);
+            await drenarFilaDriveCsv(false);
             btn.disabled = false; btn.textContent = 'Tentar enviar pendências agora';
           });
           initTheme();
