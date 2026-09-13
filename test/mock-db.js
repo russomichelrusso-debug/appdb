@@ -152,6 +152,9 @@ async function query(sql, params = []) {
   if (s.includes('SELECT ID FROM PRODUTOS WHERE CODIGO_SKU')) {
     return { rows: produtos.filter(p => p.codigo_sku === params[0]) };
   }
+  if (s.includes('SELECT COUNT(*) FROM PRODUTOS')) {
+    return { rows: [{ count: String(produtos.length) }] };
+  }
   if (s.includes('UNNEST') && s.includes('INTO PRODUTOS')) {
     const [codigos, nomes, categorias] = params;
     let criados = 0, atualizados = 0;
