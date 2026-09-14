@@ -5146,6 +5146,15 @@
         return cliente && cliente.documento ? cliente.documento : 'CNPJ não cadastrado';
       }
 
+      // Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão.
+      // Valor incompleto ou de outro tamanho volta como veio (sem travar digitação).
+      function formatarDocumento(v) {
+        const d = String(v || '').replace(/\D/g, '');
+        if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+        if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        return String(v || '').trim();
+      }
+
       // ---------------- Edição de preço base (antes de impostos) ----------------
       const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
       let priceEditingCod = null;
@@ -7653,7 +7662,7 @@
       }
       async function confirmNewClient() {
         const nome = document.getElementById('clientPickerNewNome').value.trim();
-        const documento = document.getElementById('clientPickerNewDoc').value.trim();
+        const documento = formatarDocumento(document.getElementById('clientPickerNewDoc').value.trim());
         const contato = document.getElementById('clientPickerNewContato').value.trim();
         const msg = document.getElementById('clientPickerMsg');
         if (!nome) { msg.innerHTML = '<div class="ap-msg error">Informe o nome do cliente.</div>'; return; }
@@ -7706,6 +7715,9 @@
           const hint = document.getElementById('clientPickerNewDocHint');
           if (cnpj.length !== 14) { hint.textContent = ''; return; }
           clientPickerNewDocDebounce = setTimeout(() => autopreencherPorCnpj(cnpj), 400);
+        });
+        document.getElementById('clientPickerNewDoc').addEventListener('blur', (e) => {
+          e.target.value = formatarDocumento(e.target.value);
         });
         document.getElementById('clientPickerNewConfirm').addEventListener('click', confirmNewClient);
         document.getElementById('clientPickerCancel').addEventListener('click', () => closeClientPicker(null));
