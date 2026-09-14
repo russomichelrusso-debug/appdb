@@ -322,6 +322,27 @@ async function query(sql, params = []) {
     return { rows };
   }
 
+  // Carteira antiga (60+ dias, nunca faturado) - contagem e exclusão. O
+  // corte de data é calculado aqui em JS (o mock não interpreta SQL de
+  // datas de verdade), reproduzindo o mesmo filtro da query real:
+  // status = 'carteira' AND data_implantacao < CURRENT_DATE - INTERVAL 'N days'.
+  if (s.includes("WHERE STATUS = 'CARTEIRA' AND DATA_IMPLANTACAO <")) {
+    const diasMatch = sql.match(/INTERVAL '(\d+) days'/);
+    const dias = diasMatch ? Number(diasMatch[1]) : 60;
+    const corte = new Date();
+    corte.setDate(corte.getDate() - dias);
+    const corteISO = corte.toISOString().slice(0, 10);
+    const antigos = pedidosOficiaisItens.filter(it => it.status === 'carteira' && it.data_implantacao && it.data_implantacao < corteISO);
+    if (s.startsWith('SELECT COUNT(*)')) {
+      return { rows: [{ total: antigos.length }] };
+    }
+    if (s.startsWith('DELETE FROM PEDIDOS_OFICIAIS_ITENS')) {
+      const antigosSet = new Set(antigos);
+      pedidosOficiaisItens = pedidosOficiaisItens.filter(it => !antigosSet.has(it));
+      return { rowCount: antigos.length, rows: [] };
+    }
+  }
+
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 
