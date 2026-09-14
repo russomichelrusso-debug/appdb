@@ -149,13 +149,14 @@ async function query(sql, params = []) {
     const [
       cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
       motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
-      data_abertura, capital_social, logradouro, numero, bairro, municipio, uf, cep, telefone, email,
-      socios, dados_brutos,
+      data_abertura, capital_social, logradouro, numero, complemento, bairro, municipio, uf, cep,
+      telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos,
     ] = params;
     const row = {
       cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
       motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
-      data_abertura, capital_social, logradouro, numero, bairro, municipio, uf, cep, telefone, email,
+      data_abertura, capital_social, logradouro, numero, complemento, bairro, municipio, uf, cep,
+      telefone, email, matriz_filial, cnae_secundario,
       socios: typeof socios === 'string' ? JSON.parse(socios) : socios,
       dados_brutos: typeof dados_brutos === 'string' ? JSON.parse(dados_brutos) : dados_brutos,
       atualizado_em: new Date().toISOString(),

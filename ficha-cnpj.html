@@ -194,26 +194,30 @@
     .lev-empty { font-size: 13px; color: var(--gray); text-align: center; padding: 30px 10px; }
 
     .fichaHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-    .fichaHead h2 { font-size: 17px; margin: 0 0 2px; }
-    .fichaHead .doc { font-size: 12px; color: var(--gray); }
+    .fichaHead h2 { font-size: 15px; margin: 0; }
     .fileBtnLike {
       border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit;
       font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 9px; cursor: pointer; white-space: nowrap;
     }
     .fileBtnLike:active { opacity: .7; }
 
-    .situacaoBadge {
-      display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700;
-      padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;
-    }
-    .situacaoBadge.ativa { background: #E6F4EA; color: var(--green); }
-    .situacaoBadge.alerta { background: #FDECEC; color: var(--red-deep); }
-
-    .fichaGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 18px; }
-    @media (max-width: 520px) { .fichaGrid { grid-template-columns: 1fr; } }
-    .fichaField { padding: 8px 0; border-bottom: 1px solid var(--hairline); }
-    .fichaField .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 2px; }
-    .fichaField .val { font-size: 13.5px; }
+    /* Layout em caixas/linhas evocando o Comprovante de Inscrição e de
+       Situação Cadastral oficial (CNPJ.gov) - mesma distribuição espacial
+       dos campos, sem replicar o brasão/título/rodapé regulatório do
+       documento em si (a página continua sendo do app, não um comprovante
+       emitido por nós). */
+    .formTable { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
+    .formRow { display: flex; border-bottom: 1px solid var(--hairline); }
+    .formRow:last-child { border-bottom: none; }
+    @media (max-width: 560px) { .formRow { flex-direction: column; } }
+    .fichaField { flex: 1; padding: 8px 10px; border-right: 1px solid var(--hairline); min-width: 0; }
+    .fichaField:last-child { border-right: none; }
+    @media (max-width: 560px) { .fichaField { border-right: none; border-bottom: 1px solid var(--hairline); } .fichaField:last-child { border-bottom: none; } }
+    .fichaField .lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 3px; }
+    .fichaField .val { font-size: 13px; word-break: break-word; }
+    .quadroSocietario { padding: 4px 0 0; }
+    .quadroSocietario .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 4px; }
+    .quadroSocietario .val { font-size: 13px; }
 
     .fonteNota { font-size: 10.5px; color: var(--gray); margin-top: 14px; line-height: 1.5; }
     .avisoCache { background: #FFF6E5; color: var(--amber); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
@@ -416,49 +420,80 @@
       if (Number.isNaN(n)) return String(v);
       return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
-    function formatEndereco(f) {
-      const partes = [
-        [f.logradouro, f.numero].filter(Boolean).join(', '),
-        f.bairro,
-        [f.municipio, f.uf].filter(Boolean).join(' - '),
-        f.cep,
-      ].filter(Boolean);
-      return partes.length ? partes.join(' · ') : '—';
+
+    function campo(lbl, val) {
+      return `<div class="fichaField"><span class="lbl">${escapeHtml(lbl)}</span><span class="val">${val}</span></div>`;
     }
 
     function renderFicha(ficha, fonte, aviso) {
       const host = document.getElementById('fichaHost');
       const situacao = (ficha.situacao_cadastral || '').toUpperCase();
       const ehAtiva = situacao.includes('ATIVA');
-      const badgeClasse = situacao ? (ehAtiva ? 'ativa' : 'alerta') : '';
+      const situacaoCor = situacao ? (ehAtiva ? 'var(--green)' : 'var(--red-deep)') : 'inherit';
+      const motivoRelevante = ficha.motivo_situacao && ficha.motivo_situacao.trim().toUpperCase() !== 'SEM MOTIVO';
+
+      // Mesma distribuição espacial do Comprovante de Inscrição e de
+      // Situação Cadastral oficial (Receita Federal): campos em
+      // caixas/linhas na mesma ordem e agrupamento do documento - sem
+      // replicar o brasão, título ou rodapé regulatório dele, já que essa
+      // página é do app, não um comprovante emitido por nós.
+      const linhas = [
+        [
+          campo('Nº de inscrição', `${escapeHtml(state.clienteDoc)}${ficha.matriz_filial ? `<br><span style="font-size:11px;color:var(--gray);">${escapeHtml(ficha.matriz_filial.toUpperCase())}</span>` : ''}`),
+          campo('Data de abertura', escapeHtml(formatDataBr(ficha.data_abertura))),
+        ],
+        [campo('Nome empresarial', escapeHtml(ficha.razao_social || state.clienteNome))],
+        [
+          campo('Nome de fantasia', escapeHtml(ficha.nome_fantasia || '—')),
+          campo('Porte', escapeHtml(ficha.porte || '—')),
+        ],
+        [campo('Atividade econômica principal', escapeHtml([ficha.cnae_principal_codigo, ficha.cnae_principal_descricao].filter(Boolean).join(' — ') || '—'))],
+      ];
+      if (ficha.cnae_secundario) {
+        linhas.push([campo('Atividades econômicas secundárias', escapeHtml(ficha.cnae_secundario.split(',').join(', ')))]);
+      }
+      linhas.push(
+        [campo('Natureza jurídica', escapeHtml(ficha.natureza_juridica || '—'))],
+        [
+          campo('Logradouro', escapeHtml(ficha.logradouro || '—')),
+          campo('Número', escapeHtml(ficha.numero || '—')),
+          campo('Complemento', escapeHtml(ficha.complemento || '—')),
+        ],
+        [
+          campo('CEP', escapeHtml(ficha.cep || '—')),
+          campo('Bairro/Distrito', escapeHtml(ficha.bairro || '—')),
+          campo('Município', escapeHtml(ficha.municipio || '—')),
+          campo('UF', escapeHtml(ficha.uf || '—')),
+        ],
+        [
+          campo('Endereço eletrônico', escapeHtml(ficha.email || '—')),
+          campo('Telefone', escapeHtml(ficha.telefone || '—')),
+        ],
+        [
+          campo('Situação cadastral', situacao ? `<b style="color:${situacaoCor};">${escapeHtml(situacao)}</b>` : '—'),
+          campo('Data da situação cadastral', escapeHtml(formatDataBr(ficha.data_situacao_cadastral))),
+        ],
+      );
+      if (motivoRelevante) {
+        linhas.push([campo('Motivo de situação cadastral', escapeHtml(ficha.motivo_situacao))]);
+      }
+      linhas.push([campo('Capital social', escapeHtml(formatMoedaBr(ficha.capital_social)))]);
+
+      const formTableHtml = linhas.map(cols => `<div class="formRow">${cols.join('')}</div>`).join('');
+
       host.innerHTML = `
         <div class="card">
           ${aviso ? `<div class="avisoCache">Não consegui atualizar agora — mostrando o último dado salvo. (${escapeHtml(aviso)})</div>` : ''}
           <div class="fichaHead">
-            <div>
-              <h2>${escapeHtml(ficha.razao_social || state.clienteNome)}</h2>
-              ${ficha.nome_fantasia ? `<div class="doc">Nome fantasia: ${escapeHtml(ficha.nome_fantasia)}</div>` : ''}
-              <div class="doc">CNPJ: ${escapeHtml(state.clienteDoc)}</div>
-            </div>
+            <h2>Dados cadastrais</h2>
             <button type="button" class="fileBtnLike" id="atualizarFichaBtn">Atualizar agora</button>
           </div>
-          ${situacao ? `<span class="situacaoBadge ${badgeClasse}">${escapeHtml(situacao)}</span>` : ''}
-          <div class="fichaGrid">
-            <div class="fichaField"><span class="lbl">Natureza jurídica</span><span class="val">${escapeHtml(ficha.natureza_juridica || '—')}</span></div>
-            <div class="fichaField"><span class="lbl">Porte</span><span class="val">${escapeHtml(ficha.porte || '—')}</span></div>
-            <div class="fichaField"><span class="lbl">CNAE principal</span><span class="val">${escapeHtml([ficha.cnae_principal_codigo, ficha.cnae_principal_descricao].filter(Boolean).join(' — ') || '—')}</span></div>
-            <div class="fichaField"><span class="lbl">Data de abertura</span><span class="val">${formatDataBr(ficha.data_abertura)}</span></div>
-            <div class="fichaField"><span class="lbl">Capital social</span><span class="val">${formatMoedaBr(ficha.capital_social)}</span></div>
-            <div class="fichaField"><span class="lbl">Situação desde</span><span class="val">${formatDataBr(ficha.data_situacao_cadastral)}</span></div>
-            <div class="fichaField" style="grid-column:1/-1;"><span class="lbl">Endereço</span><span class="val">${escapeHtml(formatEndereco(ficha))}</span></div>
-            <div class="fichaField"><span class="lbl">Telefone</span><span class="val">${escapeHtml(ficha.telefone || '—')}</span></div>
-            <div class="fichaField"><span class="lbl">E-mail</span><span class="val">${escapeHtml(ficha.email || '—')}</span></div>
-            ${Array.isArray(ficha.socios) && ficha.socios.length ? `
-            <div class="fichaField" style="grid-column:1/-1;">
-              <span class="lbl">Quadro Societário</span>
-              <span class="val">${ficha.socios.map(s => escapeHtml([s.nome, s.qualificacao].filter(Boolean).join(' - '))).join('<br>')}</span>
-            </div>` : ''}
-          </div>
+          <div class="formTable">${formTableHtml}</div>
+          ${Array.isArray(ficha.socios) && ficha.socios.length ? `
+          <div class="quadroSocietario">
+            <span class="lbl">Quadro Societário</span>
+            <span class="val">${ficha.socios.map(s => escapeHtml([s.nome, s.qualificacao].filter(Boolean).join(' - '))).join('<br>')}</span>
+          </div>` : ''}
           <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + formatDataBr(ficha.atualizado_em)}.</p>
           ${ficha.dados_brutos ? `
           <details style="margin-top:10px;">
