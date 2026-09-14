@@ -4359,9 +4359,10 @@
                 classificação de canal do cliente. Não duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra
                 "Faturado") em vez de criar de novo. Pode subir de novo sempre que sair um relatório atualizado.</p>
               <div id="relatorioOficialStatus" class="ap-hint" style="margin-bottom:10px;">Carregando status…</div>
-              <input type="file" id="relatorioOficialFileInput" accept=".xlsx,.xls" style="display:none;">
-              <button class="fileBtn" id="relatorioOficialFileBtn">Selecionar planilha (.xlsx)</button>
+              <input type="file" id="relatorioOficialFileInput" accept=".xlsx,.xls" multiple style="display:none;">
+              <button class="fileBtn" id="relatorioOficialFileBtn">Selecionar planilha(s) (.xlsx)</button>
               <div id="relatorioOficialMsgArea" style="margin-top:8px;"></div>
+              <ul id="relatorioOficialQueue" class="pdfQueue" style="max-height:320px;overflow-y:auto;"></ul>
             </div>
             <div class="ap-card">
               <h3>Importar clientes (JSON)</h3>
@@ -8895,8 +8896,8 @@
         return { numeroCotacao: numero, cliente, cnpj, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao, metadataModificadoEm };
       }
 
-      function criarItemFilaPdf(nomeArquivo) {
-        const fila = document.getElementById('pdfProcessQueue');
+      function criarItemFilaPdf(nomeArquivo, filaId) {
+        const fila = document.getElementById(filaId || 'pdfProcessQueue');
         const li = document.createElement('li');
         li.className = 'pdfQueueItem pdfQueueItem--processando';
         li.innerHTML = `<span class="pdfQueueDot"></span><span class="pdfQueueNome">${escapeHtml(nomeArquivo)}</span><span class="pdfQueueDetalhe">Processando…</span>`;
@@ -9000,23 +9001,43 @@
         }
       }
 
+      // Lê um arquivo (FileReader) e devolve o ArrayBuffer, como Promise -
+      // mesma leitura que antes era feita inline dentro do listener de change.
+      function lerArquivoComoArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = () => reject(reader.error || new Error('Falha ao ler o arquivo.'));
+          reader.readAsArrayBuffer(file);
+        });
+      }
+
+      // Processa uma única planilha do relatório oficial: lê, interpreta as
+      // abas "Carteira"/"Faturamento" e manda pro backend. Usada tanto pra
+      // importação avulsa quanto em lote (várias planilhas selecionadas).
+      async function processarUmaPlanilhaOficial(file) {
+        const arrayBuffer = await lerArquivoComoArrayBuffer(file);
+        const { itens, classificacoes } = await parseRelatorioOficialXlsx(arrayBuffer);
+        if (itens.length === 0) throw new Error('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
+        return apiImportarPedidosOficiais({ itens, classificacoes });
+      }
+
       function initRelatorioOficialImport() {
         const btn = document.getElementById('relatorioOficialFileBtn');
         const fileInput = document.getElementById('relatorioOficialFileInput');
         carregarStatusRelatorioOficial();
         btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files && fileInput.files[0];
-          if (!file) return;
+        fileInput.addEventListener('change', async () => {
+          const arquivos = Array.from(fileInput.files || []);
+          fileInput.value = '';
+          if (arquivos.length === 0) return;
           const msg = document.getElementById('relatorioOficialMsgArea');
-          msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-          const reader = new FileReader();
-          reader.onload = async () => {
+
+          // Um arquivo só: mantém a mensagem simples de sempre, sem lista.
+          if (arquivos.length === 1) {
+            msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
             try {
-              const { itens, classificacoes } = await parseRelatorioOficialXlsx(reader.result);
-              if (itens.length === 0) throw new Error('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
-              msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} item(ns) e ${classificacoes.length} classificação(ões)…</div>`;
-              const result = await apiImportarPedidosOficiais({ itens, classificacoes });
+              const result = await processarUmaPlanilhaOficial(arquivos[0]);
               msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">
           ✓ ${result.itens} linha(s) importada(s) ·
           ${result.clientesVinculados} cliente(s) vinculado(s) agora ·
@@ -9028,9 +9049,35 @@
             } catch (e) {
               msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
             }
-          };
-          reader.readAsArrayBuffer(file);
-          fileInput.value = '';
+            return;
+          }
+
+          // Várias planilhas: processa uma de cada vez (sequencial, não em
+          // paralelo - evita sobrecarregar o servidor com centenas de envios
+          // simultâneos) e mostra uma fila com o resultado de cada arquivo,
+          // sem parar no primeiro erro.
+          msg.innerHTML = `<div class="promoEmpty">Processando 0/${arquivos.length}…</div>`;
+          let sucesso = 0, falha = 0, totalLinhas = 0;
+          for (let i = 0; i < arquivos.length; i++) {
+            const arquivo = arquivos[i];
+            const li = criarItemFilaPdf(arquivo.name, 'relatorioOficialQueue');
+            msg.innerHTML = `<div class="promoEmpty">Processando ${i + 1}/${arquivos.length}…</div>`;
+            try {
+              const result = await processarUmaPlanilhaOficial(arquivo);
+              totalLinhas += result.itens;
+              atualizarItemFilaPdf(li, 'sucesso', `✓ ${result.itens} linha(s) · ${result.clientesVinculados} vinculado(s) · ${result.clientesClassificados} classificado(s)`);
+              sucesso++;
+            } catch (e) {
+              console.error('Erro ao importar', arquivo.name, e);
+              atualizarItemFilaPdf(li, 'erro', e.message || 'Falha ao processar esta planilha.');
+              falha++;
+            }
+          }
+          msg.innerHTML = `<div class="ap-msg" style="color:${falha ? '#B36B00' : '#1E8E3E'};">
+        ${sucesso}/${arquivos.length} planilha(s) importada(s) com sucesso · ${totalLinhas} linha(s) no total
+        ${falha ? ` · ${falha} com erro (veja a lista acima)` : ''}
+      </div>`;
+          carregarStatusRelatorioOficial();
         });
       }
 
