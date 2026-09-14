@@ -71,6 +71,9 @@ function mapearFicha(data) {
     cep: endereco.cep || null,
     telefone: contato.telefone1 || contato.telefone || null,
     email: contato.email || null,
+    socios: Array.isArray(data.socios)
+      ? data.socios.map((s) => ({ nome: s.nome || null, qualificacao: campoTexto(s.qualificacao) })).filter((s) => s.nome)
+      : null,
   };
 }
 
@@ -81,8 +84,8 @@ async function salvarFichaEmCache(clienteId, ficha, dadosBrutos) {
        cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
        motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
        data_abertura, capital_social, logradouro, numero, bairro, municipio, uf, cep, telefone, email,
-       dados_brutos, atualizado_em
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21, now())
+       socios, dados_brutos, atualizado_em
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22, now())
      ON CONFLICT (cliente_id) DO UPDATE SET
        razao_social = EXCLUDED.razao_social, nome_fantasia = EXCLUDED.nome_fantasia,
        situacao_cadastral = EXCLUDED.situacao_cadastral, data_situacao_cadastral = EXCLUDED.data_situacao_cadastral,
@@ -91,13 +94,13 @@ async function salvarFichaEmCache(clienteId, ficha, dadosBrutos) {
        porte = EXCLUDED.porte, data_abertura = EXCLUDED.data_abertura, capital_social = EXCLUDED.capital_social,
        logradouro = EXCLUDED.logradouro, numero = EXCLUDED.numero, bairro = EXCLUDED.bairro,
        municipio = EXCLUDED.municipio, uf = EXCLUDED.uf, cep = EXCLUDED.cep, telefone = EXCLUDED.telefone,
-       email = EXCLUDED.email, dados_brutos = EXCLUDED.dados_brutos, atualizado_em = now()
+       email = EXCLUDED.email, socios = EXCLUDED.socios, dados_brutos = EXCLUDED.dados_brutos, atualizado_em = now()
      RETURNING *`,
     [
       clienteId, campos.razao_social, campos.nome_fantasia, campos.situacao_cadastral, campos.data_situacao_cadastral,
       campos.motivo_situacao, campos.cnae_principal_codigo, campos.cnae_principal_descricao, campos.natureza_juridica, campos.porte,
       campos.data_abertura, campos.capital_social, campos.logradouro, campos.numero, campos.bairro, campos.municipio,
-      campos.uf, campos.cep, campos.telefone, campos.email, JSON.stringify(dadosBrutos),
+      campos.uf, campos.cep, campos.telefone, campos.email, campos.socios ? JSON.stringify(campos.socios) : null, JSON.stringify(dadosBrutos),
     ]
   );
   return result.rows[0];

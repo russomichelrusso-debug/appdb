@@ -258,6 +258,8 @@ CREATE TABLE IF NOT EXISTS cliente_cnpj_ficha (
   cep TEXT,
   telefone TEXT,
   email TEXT,
+  socios JSONB,
   dados_brutos JSONB,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS socios JSONB;
