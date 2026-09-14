@@ -252,14 +252,20 @@ CREATE TABLE IF NOT EXISTS cliente_cnpj_ficha (
   capital_social NUMERIC,
   logradouro TEXT,
   numero TEXT,
+  complemento TEXT,
   bairro TEXT,
   municipio TEXT,
   uf TEXT,
   cep TEXT,
   telefone TEXT,
   email TEXT,
+  matriz_filial TEXT,
+  cnae_secundario TEXT,
   socios JSONB,
   dados_brutos JSONB,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS socios JSONB;
+ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS complemento TEXT;
+ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS matriz_filial TEXT;
+ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS cnae_secundario TEXT;

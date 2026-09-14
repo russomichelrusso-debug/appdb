@@ -65,12 +65,15 @@ function mapearFicha(data) {
     capital_social: data.capitalSocial != null ? Number(data.capitalSocial) : (data.capital_social != null ? Number(data.capital_social) : null),
     logradouro: endereco.logradouro || null,
     numero: endereco.numero || null,
+    complemento: endereco.complemento || null,
     bairro: endereco.bairro || null,
     municipio: campoTexto(endereco.municipio) || null,
     uf: endereco.uf || null,
     cep: endereco.cep || null,
     telefone: contato.telefone1 || contato.telefone || null,
     email: contato.email || null,
+    matriz_filial: campoTexto(data.matrizFilial),
+    cnae_secundario: typeof data.cnaeSecundario === 'string' ? data.cnaeSecundario : null,
     socios: Array.isArray(data.socios)
       ? data.socios.map((s) => ({ nome: s.nome || null, qualificacao: campoTexto(s.qualificacao) })).filter((s) => s.nome)
       : null,
@@ -83,24 +86,27 @@ async function salvarFichaEmCache(clienteId, ficha, dadosBrutos) {
     `INSERT INTO cliente_cnpj_ficha (
        cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
        motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
-       data_abertura, capital_social, logradouro, numero, bairro, municipio, uf, cep, telefone, email,
-       socios, dados_brutos, atualizado_em
-     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22, now())
+       data_abertura, capital_social, logradouro, numero, complemento, bairro, municipio, uf, cep,
+       telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos, atualizado_em
+     ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25, now())
      ON CONFLICT (cliente_id) DO UPDATE SET
        razao_social = EXCLUDED.razao_social, nome_fantasia = EXCLUDED.nome_fantasia,
        situacao_cadastral = EXCLUDED.situacao_cadastral, data_situacao_cadastral = EXCLUDED.data_situacao_cadastral,
        motivo_situacao = EXCLUDED.motivo_situacao, cnae_principal_codigo = EXCLUDED.cnae_principal_codigo,
        cnae_principal_descricao = EXCLUDED.cnae_principal_descricao, natureza_juridica = EXCLUDED.natureza_juridica,
        porte = EXCLUDED.porte, data_abertura = EXCLUDED.data_abertura, capital_social = EXCLUDED.capital_social,
-       logradouro = EXCLUDED.logradouro, numero = EXCLUDED.numero, bairro = EXCLUDED.bairro,
-       municipio = EXCLUDED.municipio, uf = EXCLUDED.uf, cep = EXCLUDED.cep, telefone = EXCLUDED.telefone,
-       email = EXCLUDED.email, socios = EXCLUDED.socios, dados_brutos = EXCLUDED.dados_brutos, atualizado_em = now()
+       logradouro = EXCLUDED.logradouro, numero = EXCLUDED.numero, complemento = EXCLUDED.complemento,
+       bairro = EXCLUDED.bairro, municipio = EXCLUDED.municipio, uf = EXCLUDED.uf, cep = EXCLUDED.cep,
+       telefone = EXCLUDED.telefone, email = EXCLUDED.email, matriz_filial = EXCLUDED.matriz_filial,
+       cnae_secundario = EXCLUDED.cnae_secundario, socios = EXCLUDED.socios, dados_brutos = EXCLUDED.dados_brutos,
+       atualizado_em = now()
      RETURNING *`,
     [
       clienteId, campos.razao_social, campos.nome_fantasia, campos.situacao_cadastral, campos.data_situacao_cadastral,
       campos.motivo_situacao, campos.cnae_principal_codigo, campos.cnae_principal_descricao, campos.natureza_juridica, campos.porte,
-      campos.data_abertura, campos.capital_social, campos.logradouro, campos.numero, campos.bairro, campos.municipio,
-      campos.uf, campos.cep, campos.telefone, campos.email, campos.socios ? JSON.stringify(campos.socios) : null, JSON.stringify(dadosBrutos),
+      campos.data_abertura, campos.capital_social, campos.logradouro, campos.numero, campos.complemento, campos.bairro, campos.municipio,
+      campos.uf, campos.cep, campos.telefone, campos.email, campos.matriz_filial, campos.cnae_secundario,
+      campos.socios ? JSON.stringify(campos.socios) : null, JSON.stringify(dadosBrutos),
     ]
   );
   return result.rows[0];
