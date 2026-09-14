@@ -5143,7 +5143,7 @@
       // Texto do CNPJ/CPF que sempre acompanha o nome do cliente, exibido abaixo
       // dele nas barras de "cliente selecionado" (levantamento, ficha do cliente).
       function clienteDocText(cliente) {
-        return cliente && cliente.documento ? cliente.documento : 'CNPJ não cadastrado';
+        return cliente && cliente.documento ? formatarDocumento(cliente.documento) : 'CNPJ não cadastrado';
       }
 
       // Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão.
@@ -7650,7 +7650,7 @@
           <span>${escapeHtml(c.nome)}</span>
           ${renderClassificatorioBadge(c)}
         </div>
-        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento cadastrado'}${c.contato ? ' · ' + escapeHtml(c.contato) : ''}</div>
+        <div class="cpMeta">${c.documento ? escapeHtml(formatarDocumento(c.documento)) : 'sem documento cadastrado'}${c.contato ? ' · ' + escapeHtml(c.contato) : ''}</div>
       </button>
     `).join('');
           results.querySelectorAll('[data-client-id]').forEach(btn => {
