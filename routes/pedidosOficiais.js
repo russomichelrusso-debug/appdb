@@ -99,6 +99,41 @@ router.get('/:clienteId', async (req, res) => {
   }
 });
 
+// Mescla dois itens com o mesmo nr_pedido+codigo_sku, seguindo exatamente
+// a mesma regra de precedência do ON CONFLICT DO UPDATE do INSERT logo
+// abaixo - usada pra deduplicar o array `itens` ANTES do INSERT (o
+// Postgres proíbe que o UPSERT afete a mesma linha duas vezes dentro do
+// mesmo comando, e é comum o mesmo par aparecer nas duas abas da mesma
+// planilha, ex: um pedido que já foi faturado mas a linha antiga ainda
+// consta na aba "Carteira").
+function mesclarItemOficial(atual, novo) {
+  const novoFaturado = novo.status === 'faturado';
+  const atualFaturado = atual.status === 'faturado';
+  return {
+    ...atual,
+    quantidade: (novoFaturado || !atualFaturado) ? novo.quantidade : atual.quantidade,
+    valor: (novoFaturado || !atualFaturado) ? novo.valor : atual.valor,
+    data_implantacao: atual.data_implantacao ?? novo.data_implantacao,
+    data_faturamento: novoFaturado ? novo.data_faturamento : atual.data_faturamento,
+    nota_fiscal: novoFaturado ? novo.nota_fiscal : atual.nota_fiscal,
+    classificatorio: novo.classificatorio ?? atual.classificatorio,
+    transportadora: novoFaturado ? novo.transportadora : atual.transportadora,
+    situacao_pedido: novoFaturado ? novo.situacao_pedido : atual.situacao_pedido,
+    status: (novoFaturado || atualFaturado) ? 'faturado' : novo.status,
+  };
+}
+
+// Deduplica itens pelo par (nr_pedido, codigo_sku) - ver mesclarItemOficial.
+function deduplicarItensOficiais(itens) {
+  const porChave = new Map();
+  for (const item of itens) {
+    const chave = `${item.nr_pedido}::${item.codigo_sku}`;
+    const existente = porChave.get(chave);
+    porChave.set(chave, existente ? mesclarItemOficial(existente, item) : item);
+  }
+  return Array.from(porChave.values());
+}
+
 // Importa em lote as abas "Carteira" e "Faturamento" do relatório oficial -
 // ÚNICA porta de entrada de pedidos oficiais desde a unificação (antes havia
 // também um upload de JSON pré-preparado à mão pelo usuário, e uma planilha
@@ -111,8 +146,9 @@ router.post('/importar', async (req, res) => {
   // Qualquer usuário logado pode importar (não só admin) - decisão explícita
   // (já valia antes da unificação; mantida aqui inclusive pra classificação
   // de cliente, que antes exigia admin no fluxo separado que foi removido).
-  const { itens, classificacoes } = req.body;
-  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const { itens: itensBrutos, classificacoes } = req.body;
+  if (!Array.isArray(itensBrutos) || itensBrutos.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const itens = deduplicarItensOficiais(itensBrutos);
 
   const client = await pool.connect();
   try {
@@ -213,3 +249,7 @@ router.post('/importar', async (req, res) => {
 });
 
 module.exports = router;
+// Exportado só pra teste direto da lógica de deduplicação, sem precisar
+// subir servidor/banco - não afeta o roteamento (router continua sendo o
+// export default usado pelo server.js).
+module.exports.deduplicarItensOficiais = deduplicarItensOficiais;
