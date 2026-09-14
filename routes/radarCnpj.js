@@ -27,47 +27,49 @@ async function buscarFichaNaOrigem(cnpj) {
 }
 
 // Vários campos da origem vêm como objeto aninhado {codigo, label/descricao}
-// em vez de string solta (confirmado com uma resposta real em produção:
-// situacao_cadastral, natureza_juridica e porte chegam assim). Esse helper
-// desembrulha isso pro texto que interessa mostrar.
+// em vez de string solta (confirmado com uma resposta real em produção,
+// cruzada com o comprovante oficial do CNPJ: situacao, naturezaJuridica,
+// porte e cnae chegam assim). Esse helper desembrulha isso pro texto que
+// interessa mostrar.
 function campoTexto(v) {
   if (v == null) return null;
   if (typeof v === 'object') return v.label || v.descricao || v.nome || v.texto || null;
   return v;
 }
 
-// Alguns campos ainda não foram confirmados contra uma resposta real (CNAE,
-// endereço, telefone, data de abertura) - mantemos várias tentativas de
-// nome/formato prováveis, e a resposta crua inteira fica sempre guardada em
-// `dados_brutos`, pra nunca perder informação se o mapeamento abaixo ainda
-// estiver errado pra algum campo.
+// Contrato confirmado contra uma resposta real da origem (comparada com o
+// comprovante oficial do Cadastro Nacional da Pessoa Jurídica): a API usa
+// camelCase e agrupa situação/natureza jurídica/porte/CNAE em objetos
+// aninhados {codigo, label/descricao}. As variantes snake_case ficam só
+// como fallback (robustez caso a origem mude de formato de novo) - mas todo
+// valor candidato passa por campoTexto() antes de virar o campo final, pra
+// nunca devolver o objeto cru independente de qual branch bateu.
 function mapearFicha(data) {
-  const situacao = data.situacao_cadastral;
-  const situacaoObj = situacao && typeof situacao === 'object' ? situacao : null;
-  const cnae = data.cnae_principal || data.cnae_fiscal;
-  const cnaeObj = cnae && typeof cnae === 'object' ? cnae : null;
-  const endereco = data.endereco && typeof data.endereco === 'object' ? data.endereco : data;
-  const contato = data.contato && typeof data.contato === 'object' ? data.contato : data;
+  const situacao = data.situacao || data.situacao_cadastral;
+  const naturezaJuridica = data.naturezaJuridica || data.natureza_juridica;
+  const cnae = data.cnae || data.cnae_principal || data.cnae_fiscal;
+  const endereco = data.endereco && typeof data.endereco === 'object' ? data.endereco : {};
+  const contato = data.contato && typeof data.contato === 'object' ? data.contato : {};
 
   return {
-    razao_social: data.razao_social || data.nome || data.razaoSocial || null,
-    nome_fantasia: data.nome_fantasia || data.fantasia || data.nomeFantasia || null,
-    situacao_cadastral: situacaoObj ? campoTexto(situacaoObj) : (campoTexto(situacao) || data.situacao || data.situacaoCadastral || null),
-    data_situacao_cadastral: (situacaoObj && situacaoObj.data) || data.data_situacao_cadastral || data.data_situacao || data.dataSituacaoCadastral || null,
-    motivo_situacao: (situacaoObj && situacaoObj.motivo) || data.motivo_situacao || data.motivoSituacao || null,
-    cnae_principal_codigo: (cnaeObj && cnaeObj.codigo) || data.cnae_principal_codigo || (typeof cnae === 'string' || typeof cnae === 'number' ? cnae : null),
-    cnae_principal_descricao: campoTexto(cnaeObj) || data.cnae_fiscal_descricao || data.cnae_principal_descricao || data.cnaePrincipalDescricao || null,
-    natureza_juridica: campoTexto(data.natureza_juridica) || data.naturezaJuridica || null,
-    porte: campoTexto(data.porte) || null,
-    data_abertura: data.data_inicio_atividade || data.data_abertura || data.dataAbertura || null,
-    capital_social: data.capital_social != null ? Number(data.capital_social) : (data.capitalSocial != null ? Number(data.capitalSocial) : null),
+    razao_social: data.razaoSocial || data.razao_social || data.nome || null,
+    nome_fantasia: data.nomeFantasia || data.nome_fantasia || data.fantasia || null,
+    situacao_cadastral: campoTexto(situacao),
+    data_situacao_cadastral: (situacao && typeof situacao === 'object' && situacao.data) || data.data_situacao_cadastral || null,
+    motivo_situacao: (situacao && typeof situacao === 'object' && situacao.motivo) || data.motivo_situacao || null,
+    cnae_principal_codigo: (cnae && typeof cnae === 'object' && cnae.codigo) || (typeof cnae === 'string' || typeof cnae === 'number' ? cnae : null),
+    cnae_principal_descricao: campoTexto(cnae),
+    natureza_juridica: campoTexto(naturezaJuridica),
+    porte: campoTexto(data.porte),
+    data_abertura: data.dataInicio || data.data_abertura || null,
+    capital_social: data.capitalSocial != null ? Number(data.capitalSocial) : (data.capital_social != null ? Number(data.capital_social) : null),
     logradouro: endereco.logradouro || null,
     numero: endereco.numero || null,
     bairro: endereco.bairro || null,
     municipio: campoTexto(endereco.municipio) || null,
     uf: endereco.uf || null,
     cep: endereco.cep || null,
-    telefone: contato.ddd_telefone_1 || contato.telefone || null,
+    telefone: contato.telefone1 || contato.telefone || null,
     email: contato.email || null,
   };
 }
