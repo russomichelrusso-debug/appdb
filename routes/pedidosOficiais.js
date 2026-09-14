@@ -30,6 +30,49 @@ router.get('/status', async (req, res) => {
   }
 });
 
+const CARTEIRA_ANTIGA_DIAS = 60;
+
+// Quantos itens "em carteira" (nunca faturados) já passaram de 60 dias
+// desde que o pedido foi implantado - pro admin ver antes de decidir
+// excluir. Usa data_implantacao (não muda em reimportações) como âncora
+// de idade, não atualizado_em (que reseta toda vez que a mesma planilha é
+// reimportada mesmo sem mudança de status). Rota separada de /status, só
+// pra quem tem permissão de admin (ver rota de limpeza logo abaixo).
+router.get('/carteira-antiga/contagem', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver a carteira antiga.' });
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*) AS total FROM pedidos_oficiais_itens
+       WHERE status = 'carteira' AND data_implantacao < CURRENT_DATE - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
+    );
+    res.json({ total: Number(result.rows[0].total), dias: CARTEIRA_ANTIGA_DIAS });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao contar carteira antiga.' });
+  }
+});
+
+// Exclui itens "em carteira" com mais de 60 dias - o vendedor confirmou
+// que, na prática, isso significa que o pedido não foi faturado por falta
+// de mercadoria (nunca chegou a ser atendido). Ação manual e irreversível,
+// por isso só admin e só depois de confirmação no app (não roda sozinha).
+// Um item já "faturado" NUNCA é afetado, mesmo que tenha mais de 60 dias -
+// o filtro é sempre status = 'carteira'.
+router.post('/carteira-antiga/limpar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode limpar a carteira antiga.' });
+  try {
+    const result = await pool.query(
+      `DELETE FROM pedidos_oficiais_itens
+       WHERE status = 'carteira' AND data_implantacao < CURRENT_DATE - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
+    );
+    console.log(`Carteira antiga limpa: ${result.rowCount} item(ns) excluído(s) (>${CARTEIRA_ANTIGA_DIAS} dias em carteira) por ${req.usuario?.email}.`);
+    res.json({ excluidos: result.rowCount });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao limpar carteira antiga.' });
+  }
+});
+
 // Resumo do cliente pro topo da ficha: classificatório mais recente e valor
 // acumulado faturado (dado oficial, mais confiável que o preço estimado do
 // app) num intervalo de datas escolhido no calendário. ?inicio=AAAA-MM-DD e

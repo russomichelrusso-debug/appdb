@@ -3663,6 +3663,19 @@
     </div>
 
     <div id="tabPrecos">
+      <div class="hist-clientBar">
+        <div>
+          <div class="hist-clientLabel">Cliente (opcional)</div>
+          <div class="hist-clientName" id="precosClientName">Nenhum selecionado</div>
+          <div class="hist-clientDoc" id="precosClientDoc"></div>
+        </div>
+        <div class="hist-clientBtns">
+          <button type="button" class="restoreBtn" id="precosSelectClientBtn"
+            style="width:auto;padding:10px 16px;">Selecionar</button>
+          <button type="button" class="clientClearBtn hidden" id="precosClearClientBtn" aria-label="Limpar cliente"
+            title="Limpar cliente">Limpar</button>
+        </div>
+      </div>
       <div class="controls">
         <div class="ctrl-row">
           <div class="field">
@@ -4363,6 +4376,14 @@
               <button class="fileBtn" id="relatorioOficialFileBtn">Selecionar planilha(s) (.xlsx)</button>
               <div id="relatorioOficialMsgArea" style="margin-top:8px;"></div>
               <ul id="relatorioOficialQueue" class="pdfQueue" style="max-height:320px;overflow-y:auto;"></ul>
+              <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline);">
+                <p class="ap-hint" style="margin:0 0 8px;">Pedidos em carteira há mais de 60 dias normalmente não vão
+                  ser mais faturados (faltou mercadoria) - dá pra excluir do sistema. Um item já faturado nunca é
+                  afetado.</p>
+                <div id="carteiraAntigaStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
+                <button class="fileBtn" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
+                <div id="carteiraAntigaMsg" style="margin-top:8px;"></div>
+              </div>
             </div>
             <div class="ap-card">
               <h3>Importar clientes (JSON)</h3>
@@ -5997,17 +6018,17 @@
         showToast('Levantamento aberto: ' + entry.name);
       }
 
-      // Guarda o cliente escolhido pra essa visita, e reflete na barra do topo do
-      // Levantamento. Esse mesmo cliente é reaproveitado ao salvar o levantamento
-      // e ao finalizar o pedido, pra não precisar escolher duas vezes.
-      function setLevCliente(cliente) {
-        state.levCliente = cliente;
-        const nameEl = document.getElementById('levClientName');
+      // Atualiza uma barra "cliente selecionado" - existem duas hoje
+      // (Levantamento e Preços), ambas refletindo o mesmo state.levCliente,
+      // identificadas pelo prefixo dos ids (`${prefixo}ClientName` etc).
+      function atualizarClienteBar(prefixo, cliente) {
+        const nameEl = document.getElementById(prefixo + 'ClientName');
+        if (!nameEl) return; // barra pode não existir em todo contexto (ex: testes isolados)
         nameEl.innerHTML = cliente
           ? `${escapeHtml(cliente.nome)} ${renderClassificatorioBadge(cliente)}`
           : 'Nenhum selecionado';
-        document.getElementById('levClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
-        document.getElementById('levClearClientBtn').classList.toggle('hidden', !cliente);
+        document.getElementById(prefixo + 'ClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
+        document.getElementById(prefixo + 'ClearClientBtn').classList.toggle('hidden', !cliente);
         const badge = nameEl.querySelector('.classiBadge');
         if (badge) {
           badge.style.cursor = 'pointer';
@@ -6018,6 +6039,17 @@
             openClienteDetail(cliente);
           });
         }
+      }
+      // Guarda o cliente escolhido pra essa visita, e reflete nas barras do
+      // topo do Levantamento e da aba Preços (mesmo cliente nas duas - não
+      // tem "cliente do levantamento" e "cliente do orçamento" separados).
+      // Esse mesmo cliente é reaproveitado ao salvar o levantamento, ao
+      // finalizar o pedido, e nos compartilhamentos do orçamento (PDF/
+      // imagem/texto), pra não precisar escolher de novo em cada tela.
+      function setLevCliente(cliente) {
+        state.levCliente = cliente;
+        atualizarClienteBar('lev', cliente);
+        atualizarClienteBar('precos', cliente);
         // pré-preenche o desconto de canal (classificatório) do cliente - continua
         // editável manualmente depois, isso só evita ter que selecionar de novo
         // toda vez que já se sabe qual é o cliente.
@@ -6177,6 +6209,15 @@
         });
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
         refreshLevSaveInfo();
+      }
+      // Barra "cliente selecionado" da aba Preços - reaproveita selectLevClient()/
+      // setLevCliente() (mesmo state.levCliente do Levantamento, ver comentário
+      // em setLevCliente). O botão "Limpar" aqui é mais simples que o do
+      // Levantamento: não mexe em levLoadedId/levLoadedName, que são só do
+      // fluxo de levantamento salvo e não fazem sentido vindos da aba Preços.
+      function initPrecosCliente() {
+        document.getElementById('precosSelectClientBtn').addEventListener('click', selectLevClient);
+        document.getElementById('precosClearClientBtn').addEventListener('click', () => setLevCliente(null));
       }
 
       function addLevPedidoToCart(cod) {
@@ -6483,6 +6524,7 @@
     </div>
     <div class="ex-meta">
       <div><div class="k">Estado</div><div class="v">${st.uf} — ${st.name}</div></div>
+      ${state.levCliente ? `<div><div class="k">Cliente</div><div class="v">${escapeHtml(state.levCliente.nome)} · ${escapeHtml(clienteDocText(state.levCliente))}</div></div>` : ''}
       ${state.seller.trim() ? `<div><div class="k">Atendimento</div><div class="v">${escapeHtml(state.seller)}</div></div>` : ''}
       ${state.paymentTerm ? `<div><div class="k">Cond. pagamento</div><div class="v">${escapeHtml(state.paymentTerm)}</div></div>` : ''}
     </div>
@@ -6597,6 +6639,7 @@
         const partes = [
           `*Orçamento Cortag*`,
           `${st.uf} — ${st.name} · ${new Date().toLocaleDateString('pt-BR')}`,
+          ...(state.levCliente ? [`Cliente: ${state.levCliente.nome} · CNPJ: ${clienteDocText(state.levCliente)}`] : []),
           '',
           ...linhas,
           '',
@@ -6708,7 +6751,7 @@
         doc.setTextColor(90, 90, 90);
         doc.text('Orçamento', 14, headerBottomY);
         doc.setFontSize(9);
-        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}` + (state.seller ? `  ·  Vendedor: ${state.seller}` : '') + (state.paymentTerm ? `  ·  Cond. pagamento: ${state.paymentTerm}` : '');
+        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}` + (state.levCliente ? `  ·  Cliente: ${state.levCliente.nome} (${clienteDocText(state.levCliente)})` : '') + (state.seller ? `  ·  Vendedor: ${state.seller}` : '') + (state.paymentTerm ? `  ·  Cond. pagamento: ${state.paymentTerm}` : '');
         doc.text(infoLinha, 14, headerBottomY + 6);
         doc.setDrawColor(180, 180, 180);
         doc.line(14, headerBottomY + 10, 196, headerBottomY + 10);
@@ -9022,6 +9065,43 @@
         return apiImportarPedidosOficiais({ itens, classificacoes });
       }
 
+      // Pedidos em carteira há mais de 60 dias, que na prática nunca mais
+      // vão ser faturados (faltou mercadoria) - o admin decide excluir
+      // manualmente, com confirmação, depois de ver quantos itens seriam
+      // afetados.
+      async function carregarStatusCarteiraAntiga() {
+        const el = document.getElementById('carteiraAntigaStatus');
+        if (!el) return;
+        try {
+          const status = await apiFetch('/api/pedidos-oficiais/carteira-antiga/contagem');
+          el.textContent = status.total > 0
+            ? `${status.total} item(ns) em carteira há mais de ${status.dias} dias.`
+            : `Nenhum item em carteira há mais de ${status.dias} dias.`;
+        } catch (e) {
+          el.textContent = 'Não foi possível carregar (' + e.message + ').';
+        }
+      }
+      function initCarteiraAntigaLimpar() {
+        carregarStatusCarteiraAntiga();
+        document.getElementById('carteiraAntigaLimparBtn').addEventListener('click', async () => {
+          const msg = document.getElementById('carteiraAntigaMsg');
+          const ok = await askConfirm(
+            'Excluir do sistema todos os pedidos que estão em carteira (nunca faturados) há mais de 60 dias? Essa ação não pode ser desfeita.',
+            'Excluir'
+          );
+          if (!ok) return;
+          msg.innerHTML = '<div class="promoEmpty">Excluindo…</div>';
+          try {
+            const result = await apiFetch('/api/pedidos-oficiais/carteira-antiga/limpar', { method: 'POST' });
+            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.excluidos} item(ns) excluído(s).</div>`;
+            carregarStatusCarteiraAntiga();
+            carregarStatusRelatorioOficial();
+          } catch (e) {
+            msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+          }
+        });
+      }
+
       function initRelatorioOficialImport() {
         const btn = document.getElementById('relatorioOficialFileBtn');
         const fileInput = document.getElementById('relatorioOficialFileInput');
@@ -10604,6 +10684,7 @@
           initClienteFichaPeriodo();
           initLevantamento();
           initLevSaveOpen();
+          initPrecosCliente();
           initLevShare();
           initCsvNamePrompt();
           initPriceEdit();
@@ -10658,6 +10739,7 @@
           initClientesTab();
           initPdfConsolidacao();
           initRelatorioOficialImport();
+          initCarteiraAntigaLimpar();
 
           renderResults();
           renderCartBar();
