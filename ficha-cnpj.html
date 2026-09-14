@@ -383,6 +383,15 @@
       return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    // Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão.
+    // Valor incompleto ou de outro tamanho volta como veio (sem travar exibição).
+    function formatarDocumento(v) {
+      const d = String(v || '').replace(/\D/g, '');
+      if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+      if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+      return String(v || '').trim();
+    }
+
     async function boot() {
       const token = getStoredToken();
       if (!token) { showLoginScreen(); return; }
@@ -439,7 +448,7 @@
       // página é do app, não um comprovante emitido por nós.
       const linhas = [
         [
-          campo('Nº de inscrição', `${escapeHtml(state.clienteDoc)}${ficha.matriz_filial ? `<br><span style="font-size:11px;color:var(--gray);">${escapeHtml(ficha.matriz_filial.toUpperCase())}</span>` : ''}`),
+          campo('Nº de inscrição', `${escapeHtml(formatarDocumento(state.clienteDoc))}${ficha.matriz_filial ? `<br><span style="font-size:11px;color:var(--gray);">${escapeHtml(ficha.matriz_filial.toUpperCase())}</span>` : ''}`),
           campo('Data de abertura', escapeHtml(formatDataBr(ficha.data_abertura))),
         ],
         [campo('Nome empresarial', escapeHtml(ficha.razao_social || state.clienteNome))],
@@ -522,7 +531,7 @@
       host.innerHTML = lista.map(c => `
         <button type="button" class="clientResultItem" data-id="${c.id}" data-nome="${escapeHtml(c.nome)}" data-doc="${escapeHtml(c.documento || '')}">
           <span class="crName">${escapeHtml(c.nome)}</span>
-          <span class="crDoc">${escapeHtml(c.documento || 'Sem CNPJ cadastrado')}</span>
+          <span class="crDoc">${c.documento ? escapeHtml(formatarDocumento(c.documento)) : 'Sem CNPJ cadastrado'}</span>
         </button>`).join('');
       host.querySelectorAll('.clientResultItem').forEach(btn => {
         btn.addEventListener('click', () => selecionarCliente(Number(btn.dataset.id), btn.dataset.nome, btn.dataset.doc));

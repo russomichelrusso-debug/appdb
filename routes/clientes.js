@@ -2,6 +2,18 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
+// Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão -
+// mesma regra usada no formulário de cliente novo (index.html). Aplicada
+// aqui também nos caminhos de escrita que não passam por esse formulário
+// (import em lote, correção administrativa), pra não gravar documento sem
+// pontuação por esses caminhos.
+function formatarDocumento(v) {
+  const d = String(v || '').replace(/\D/g, '');
+  if (d.length === 14) return d.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  if (d.length === 11) return d.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  return String(v || '').trim();
+}
+
 // Busca clientes por nome ou documento - usado pelo app pra autocompletar
 // "qual cliente é esse" ao salvar um levantamento ou pedido.
 router.get('/', async (req, res) => {
@@ -96,7 +108,7 @@ router.post('/import', async (req, res) => {
   if (validos.length === 0) return res.json({ criados: 0, atualizados: 0, total: clientes.length });
 
   const nomes = validos.map(c => c.nome);
-  const documentos = validos.map(c => String(c.cnpj));
+  const documentos = validos.map(c => formatarDocumento(c.cnpj));
 
   try {
     const result = await pool.query(
@@ -136,7 +148,7 @@ router.patch('/:id/documento', async (req, res) => {
   const { documento } = req.body;
   if (!documento) return res.status(400).json({ erro: 'Informe o documento correto.' });
   try {
-    const result = await pool.query('UPDATE clientes SET documento = $1 WHERE id = $2 RETURNING nome', [documento, req.params.id]);
+    const result = await pool.query('UPDATE clientes SET documento = $1 WHERE id = $2 RETURNING nome', [formatarDocumento(documento), req.params.id]);
     if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
     console.log(`Documento corrigido: ${result.rows[0].nome} (id ${req.params.id}) por ${req.usuario?.email}.`);
     res.json({ ok: true, nome: result.rows[0].nome });
