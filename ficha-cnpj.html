@@ -453,6 +453,11 @@
             <div class="fichaField" style="grid-column:1/-1;"><span class="lbl">Endereço</span><span class="val">${escapeHtml(formatEndereco(ficha))}</span></div>
             <div class="fichaField"><span class="lbl">Telefone</span><span class="val">${escapeHtml(ficha.telefone || '—')}</span></div>
             <div class="fichaField"><span class="lbl">E-mail</span><span class="val">${escapeHtml(ficha.email || '—')}</span></div>
+            ${Array.isArray(ficha.socios) && ficha.socios.length ? `
+            <div class="fichaField" style="grid-column:1/-1;">
+              <span class="lbl">Quadro Societário</span>
+              <span class="val">${ficha.socios.map(s => escapeHtml([s.nome, s.qualificacao].filter(Boolean).join(' - '))).join('<br>')}</span>
+            </div>` : ''}
           </div>
           <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + formatDataBr(ficha.atualizado_em)}.</p>
           ${ficha.dados_brutos ? `
