@@ -15,6 +15,15 @@ const pool = new Pool({
     : false,
 });
 
+// Sem esse listener, um cliente ocioso do pool que perde a conexão (comum
+// com poolers gerenciados, tipo o "Session pooler" do Supabase, que fecham
+// conexões ociosas de vez em quando) derruba o processo inteiro - o `pg`
+// emite um evento 'error' no Pool, e sem ninguém ouvindo esse evento o
+// Node trata como exceção não tratada e mata o servidor.
+pool.on('error', (err) => {
+  console.error('Erro inesperado numa conexão ociosa do pool:', err);
+});
+
 // Roda o schema.sql inteiro na subida do servidor. Como todas as tabelas usam
 // "CREATE TABLE IF NOT EXISTS", isso é seguro de rodar toda vez (não apaga nada
 // que já existe) - funciona como uma migração automática simples.
