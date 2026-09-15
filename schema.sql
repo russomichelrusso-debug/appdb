@@ -15,6 +15,13 @@ CREATE TABLE IF NOT EXISTS clientes (
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_tipo TEXT;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_desconto NUMERIC;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_atualizado_em DATE;
+-- Vindos da planilha "Classificatório" do ERP (agrupamento de empresas
+-- irmãs/Matriz-Filial pra somar faturamento, e metas individuais
+-- negociadas à parte - ver routes/clientesClassificatorio.js).
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS matriz_grupo TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_pic BOOLEAN DEFAULT false;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_vl_acordo NUMERIC;
+CREATE INDEX IF NOT EXISTS idx_clientes_matriz_grupo ON clientes (matriz_grupo) WHERE matriz_grupo IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS produtos (
   id SERIAL PRIMARY KEY,
