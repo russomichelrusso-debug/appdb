@@ -7789,22 +7789,69 @@
         }
 
         if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
-          const linhas = status.trimestral.historico.map(t => {
-            const d = new Date(t.trimestre);
-            return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;"><span>T${Math.floor(d.getMonth() / 3) + 1}/${d.getFullYear()}</span><span>${brl(t.faturado)}</span></div>`;
-          }).join('');
           const situacaoTexto = { no_ritmo: '✓ no ritmo', atrasado: '⚠️ atrasado', adiantado: '✓ adiantado' }[status.trimestral.situacao] || '';
           partes.push(`
-            <details style="margin-top:10px;">
-              <summary style="cursor:pointer;font-size:12px;color:var(--gray);">Meta trimestral ${situacaoTexto ? `— ${situacaoTexto}` : ''}</summary>
-              <div style="margin-top:6px;">
-                ${linhas || '<div class="ap-hint">Sem faturamento nos últimos trimestres.</div>'}
-                ${status.trimestral.ritmoNecessarioProximoTrimestre != null ? `<div style="font-size:12px;margin-top:4px;color:var(--gray);">Ritmo necessário no próximo trimestre: ${brl(status.trimestral.ritmoNecessarioProximoTrimestre)}</div>` : ''}
-              </div>
-            </details>`);
+            <div style="margin-top:10px;">
+              <div style="font-size:12px;color:var(--gray);">Meta trimestral ${situacaoTexto ? `— ${situacaoTexto}` : ''}</div>
+              ${renderMiniGraficoTrimestral(status.trimestral)}
+              ${status.trimestral.ritmoNecessarioProximoTrimestre != null ? `<div style="font-size:12px;margin-top:4px;color:var(--gray);">Ritmo necessário no próximo trimestre: ${brl(status.trimestral.ritmoNecessarioProximoTrimestre)}</div>` : ''}
+            </div>`);
         }
 
         content.innerHTML = partes.join('');
+      }
+      // Mini gráfico de barras (SVG inline, sem dependência) mostrando o
+      // faturamento de cada trimestre com duas linhas de referência: a meta
+      // (pra subir de faixa) e o piso (pra não cair) - cada barra sai verde
+      // (bateu a meta), âmbar (entre o piso e a meta) ou vermelha (abaixo
+      // do piso, risco de queda naquele trimestre).
+      function renderMiniGraficoTrimestral(trimestral) {
+        const historico = trimestral.historico || [];
+        const { metaPorTrimestre, pisoPorTrimestre } = trimestral;
+        if (!historico.length || !historico.some(t => t.faturado > 0)) {
+          return '<div class="ap-hint" style="margin-top:6px;">Sem faturamento nos últimos trimestres.</div>';
+        }
+        const W = 280, H = 84, padTop = 6, padBottom = 16, chartH = H - padTop - padBottom;
+        const valores = historico.map(t => t.faturado).concat([metaPorTrimestre || 0, pisoPorTrimestre || 0]);
+        const maxValor = Math.max(...valores, 1) * 1.15;
+        const escY = v => padTop + chartH - (Math.max(0, v) / maxValor) * chartH;
+        const larguraBarra = Math.min(40, (W - 20) / historico.length - 14);
+        const passo = (W - 20) / historico.length;
+
+        const barras = historico.map((t, i) => {
+          const x = 10 + i * passo + (passo - larguraBarra) / 2;
+          const y = escY(t.faturado);
+          const alturaBarra = Math.max(0, (padTop + chartH) - y);
+          let cor = '#1E8E3E';
+          if (pisoPorTrimestre != null && t.faturado < pisoPorTrimestre) cor = '#B3261E';
+          else if (metaPorTrimestre != null && t.faturado < metaPorTrimestre) cor = '#B36B00';
+          const d = new Date(t.trimestre);
+          const rotulo = `T${Math.floor(d.getMonth() / 3) + 1}/${d.getFullYear()}`;
+          return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${alturaBarra.toFixed(1)}" rx="2" fill="${cor}"/>
+            <text x="${(x + larguraBarra / 2).toFixed(1)}" y="${H - 2}" font-size="9" fill="var(--gray)" text-anchor="middle">${rotulo}</text>`;
+        }).join('');
+
+        // Linhas de referência desenhadas por cima das barras (sem rótulo
+        // dentro do SVG - vai numa legenda em HTML normal embaixo, pra não
+        // cortar/sobrepor texto quando uma barra passa da linha). Quando o
+        // piso é igual à meta (ex: Master, que não tem próxima faixa - a
+        // meta É o mínimo), desenha só uma linha, pra não duplicar.
+        const pisoDistinto = pisoPorTrimestre != null && pisoPorTrimestre !== metaPorTrimestre ? pisoPorTrimestre : null;
+        const linhaMeta = metaPorTrimestre != null
+          ? `<line x1="10" y1="${escY(metaPorTrimestre).toFixed(1)}" x2="${W - 10}" y2="${escY(metaPorTrimestre).toFixed(1)}" stroke="var(--red)" stroke-width="1" stroke-dasharray="4,3"/>`
+          : '';
+        const linhaPiso = pisoDistinto != null
+          ? `<line x1="10" y1="${escY(pisoDistinto).toFixed(1)}" x2="${W - 10}" y2="${escY(pisoDistinto).toFixed(1)}" stroke="#B36B00" stroke-width="1" stroke-dasharray="2,3"/>`
+          : '';
+
+        const legenda = `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--gray);margin-top:2px;">
+            ${metaPorTrimestre != null ? `<span><span style="color:var(--red);">┄</span> ${pisoDistinto != null ? 'meta' : 'mínimo'} ${brl(metaPorTrimestre)}/trim.</span>` : ''}
+            ${pisoDistinto != null ? `<span><span style="color:#B36B00;">┄</span> não cair ${brl(pisoDistinto)}/trim.</span>` : ''}
+          </div>`;
+
+        return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:4px;" role="img" aria-label="Gráfico de faturamento trimestral">
+            ${barras}${linhaMeta}${linhaPiso}
+          </svg>${legenda}`;
       }
       async function loadClienteClassificatorioStatus() {
         const card = document.getElementById('clienteClassificatorioCard');

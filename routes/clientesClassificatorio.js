@@ -86,6 +86,13 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres }) {
   else if (FAIXAS[tipo]) metaAnual = FAIXAS[tipo].max != null ? FAIXAS[tipo].max : FAIXAS[tipo].min;
   if (metaAnual == null) return { historico, semMeta: true };
 
+  // Piso por trimestre = quanto precisa faturar por trimestre pra não cair
+  // da faixa atual (mínimo da própria faixa, dividido em 4). Não se aplica
+  // quando não há risco de queda possível (Exclusive, min=0) nem quando a
+  // meta é individual (PIC/Vl.Acordo não tem "piso" separado, só a meta).
+  const faixaAtual = !pic || !vlAcordo ? FAIXAS[tipo] : null;
+  const pisoPorTrimestre = faixaAtual && faixaAtual.min > 0 ? faixaAtual.min / 4 : null;
+
   const metaPorTrimestre = metaAnual / 4;
   const hoje = new Date();
   const trimestreAtualIdx = Math.floor(hoje.getMonth() / 3);
@@ -111,7 +118,7 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres }) {
   if (deficitAcumulado > metaPorTrimestre * 0.05) situacao = 'atrasado';
   else if (deficitAcumulado < -metaPorTrimestre * 0.05) situacao = 'adiantado';
 
-  return { historico, metaAnual, metaPorTrimestre, situacao, ritmoNecessarioProximoTrimestre };
+  return { historico, metaAnual, metaPorTrimestre, pisoPorTrimestre, situacao, ritmoNecessarioProximoTrimestre };
 }
 
 // Monta a subconsulta que soma faturamento (últimos 12 meses, faturado)
