@@ -3895,8 +3895,14 @@
           </svg>
           <input type="text" id="clienteTabSearch" placeholder="Buscar cliente por nome ou CNPJ" autocomplete="off">
         </div>
+        <button type="button" class="restoreBtn" id="classificatorioAlertasBtn"
+          style="width:auto;margin:10px 16px 0;padding:8px 14px;font-size:12.5px;">Ver alertas de
+          classificatório</button>
       </div>
       <div id="clienteTabListWrap">
+        <div id="classificatorioAlertasWrap" class="hidden" style="padding:0 16px 12px;">
+          <div id="classificatorioAlertasContent"></div>
+        </div>
         <div class="hist-content" id="clienteTabList">
           <div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>
         </div>
@@ -3934,6 +3940,9 @@
           </div>
           <button type="button" class="restoreBtn" id="clienteFichaLimparPeriodo"
             style="margin-top:8px;font-size:12px;">Limpar período (somar tudo)</button>
+        </div>
+        <div class="ap-card hidden" id="clienteClassificatorioCard" style="margin:0 16px 12px;">
+          <div id="clienteClassificatorioContent"></div>
         </div>
         <div class="segmented segmented--scroll" id="clienteViewSeg" style="margin:0 16px 12px;">
           <button type="button" data-v="pedidosoficiais" class="active">Pedidos</button>
@@ -4384,6 +4393,17 @@
                 <button class="fileBtn" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
                 <div id="carteiraAntigaMsg" style="margin-top:8px;"></div>
               </div>
+            </div>
+            <div class="ap-card">
+              <h3>Importar Classificatório (planilha ERP)</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">Planilha "Classificatorio" exportada do ERP (aba
+                "Cliente"). Traz o agrupamento por Matriz/empresas-irmãs (usado pra somar faturamento de lojas do
+                mesmo grupo ou rede) e metas individuais negociadas à parte (PIC/Vl.Acordo). Casa pelo código do
+                cliente no ERP (mais confiável) ou pelo CNPJ. Não mexe no classificatório/desconto se o cliente já
+                tiver um vindo do relatório de Carteira/Faturamento - só preenche se ainda estiver vazio.</p>
+              <button class="fileBtn" id="importClassificatorioBtn">Importar Classificatório (.xlsx)</button>
+              <input type="file" id="importClassificatorioFile" accept=".xlsx,.xls" style="display:none;">
+              <div id="importClassificatorioMsg" style="margin-top:8px;"></div>
             </div>
             <div class="ap-card">
               <h3>Importar clientes (JSON)</h3>
@@ -7084,6 +7104,84 @@
         return { tipo: texto, desconto: null };
       }
 
+      function acharIndiceColunaClassi(cabecalhos, nomes) {
+        const normalizados = cabecalhos.map(h => String(h || '').trim().toLowerCase());
+        for (const nome of nomes) {
+          const idx = normalizados.indexOf(nome.toLowerCase());
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      }
+      // Lê a planilha "Classificatorio" exportada do ERP (aba "Cliente") - traz
+      // o agrupamento por Matriz/empresas-irmãs e metas individuais (PIC/Vl.Acordo)
+      // que não existem no relatório de Carteira/Faturamento. Ignora a maioria das
+      // linhas (a maior parte dos clientes não tem classificatório relevante aqui).
+      async function parseClassificatorioXlsx(arrayBuffer) {
+        const XLSX = await loadSheetJs();
+        const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const linhas = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(linhas.length, 10); i++) {
+          if ((linhas[i] || []).some(c => String(c || '').trim().toLowerCase() === 'classificatorio')) { headerIdx = i; break; }
+        }
+        if (headerIdx === -1) throw new Error('Não encontrei a coluna "Classificatorio" nesta planilha — confira se é o arquivo certo.');
+        const cabecalhos = linhas[headerIdx];
+        const idxCod = acharIndiceColunaClassi(cabecalhos, ['cod.cliente', 'cod']);
+        const idxMatriz = acharIndiceColunaClassi(cabecalhos, ['matriz']);
+        const idxClassi = acharIndiceColunaClassi(cabecalhos, ['classificatorio']);
+        const idxCnpj = acharIndiceColunaClassi(cabecalhos, ['cnpj']);
+        const idxPic = acharIndiceColunaClassi(cabecalhos, ['pic']);
+        const idxVlAcordo = acharIndiceColunaClassi(cabecalhos, ['vl.acordo', 'vlacordo']);
+        if (idxCod === -1 || idxClassi === -1 || idxCnpj === -1) {
+          throw new Error('Colunas esperadas não encontradas (Cod.Cliente/Classificatorio/CNPJ) — confira o arquivo.');
+        }
+
+        const itens = [];
+        for (let i = headerIdx + 1; i < linhas.length; i++) {
+          const r = linhas[i];
+          if (!r) continue;
+          const interpretado = interpretarClassificatorio(r[idxClassi]);
+          if (!interpretado) continue;
+          itens.push({
+            codigoOficial: r[idxCod] != null ? String(r[idxCod]) : null,
+            cnpj: r[idxCnpj] != null ? String(r[idxCnpj]) : null,
+            matrizGrupo: idxMatriz !== -1 && r[idxMatriz] ? String(r[idxMatriz]).trim() : null,
+            classificatorioTipo: interpretado.tipo,
+            classificatorioDesconto: interpretado.desconto,
+            pic: idxPic !== -1 ? !!r[idxPic] : false,
+            vlAcordo: idxVlAcordo !== -1 && r[idxVlAcordo] ? Number(r[idxVlAcordo]) : null,
+          });
+        }
+        if (itens.length === 0) throw new Error('Nenhuma linha com classificatório encontrada nesta planilha.');
+        return itens;
+      }
+      async function apiImportarClassificatorio(itens) {
+        return apiFetch('/api/clientes/classificatorio/importar', { method: 'POST', body: JSON.stringify({ itens }) });
+      }
+      function initImportClassificatorio() {
+        const btn = document.getElementById('importClassificatorioBtn');
+        const fileInput = document.getElementById('importClassificatorioFile');
+        const msg = document.getElementById('importClassificatorioMsg');
+        btn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', async () => {
+          const file = fileInput.files && fileInput.files[0];
+          fileInput.value = '';
+          if (!file) return;
+          msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+          try {
+            const buffer = await file.arrayBuffer();
+            const itens = await parseClassificatorioXlsx(buffer);
+            msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} linha(s)…</div>`;
+            const result = await apiImportarClassificatorio(itens);
+            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.atualizados} cliente(s) atualizado(s)${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ correspondente)` : ''}</div>`;
+          } catch (e) {
+            msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+          }
+        });
+      }
+
       // ================================================================
       // Importação unificada do relatório oficial (Carteira + Faturamento)
       // ================================================================
@@ -7637,6 +7735,85 @@
         } catch (e) {
           el.textContent = '—';
           elAcum.textContent = '—';
+        }
+      }
+      async function apiClassificatorioStatus(clienteId) {
+        return apiFetch(`/api/clientes/${clienteId}/classificatorio/status`);
+      }
+      const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master', 'Atacado Premium': 'Atacado Premium' };
+      function renderClienteClassificatorioCard(status) {
+        const card = document.getElementById('clienteClassificatorioCard');
+        const content = document.getElementById('clienteClassificatorioContent');
+        if (!status || !status.classificado) { card.classList.add('hidden'); return; }
+        card.classList.remove('hidden');
+
+        if (status.ehRede) {
+          content.innerHTML = `
+            <div class="hist-clientLabel">Classificatório</div>
+            <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}</div>
+            <p class="ap-hint" style="margin-top:8px;">Acordo bilateral com a rede/cooperativa — o desconto vale
+              independente do faturamento deste cliente, não tem faixa pra subir ou cair.</p>`;
+          return;
+        }
+
+        const partes = [];
+        partes.push(`<div class="hist-clientLabel">Classificatório</div>
+          <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}${status.matrizGrupo ? ` <span style="font-weight:400;color:var(--gray);font-size:12px;">· grupo ${escapeHtml(status.matrizGrupo)}</span>` : ''}</div>
+          <div class="hist-clientLabel" style="margin-top:10px;">Faturamento últimos 12 meses${status.matrizGrupo ? ' (grupo)' : ''}</div>
+          <div style="font-weight:700;font-size:18px;margin-top:2px;">${brl(status.faturamento12m)}</div>`);
+
+        if (status.faixaMin != null && status.faixaMax != null) {
+          const pct = Math.max(0, Math.min(100, ((status.faturamento12m - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
+          const cor = status.emRiscoDeQueda ? '#B3261E' : 'var(--red)';
+          partes.push(`
+            <div style="background:var(--fill);border-radius:6px;height:8px;margin-top:10px;overflow:hidden;">
+              <div style="background:${cor};height:100%;width:${pct}%;"></div>
+            </div>`);
+        }
+
+        if (status.emRiscoDeQueda) {
+          partes.push(`<div style="margin-top:8px;color:#B3261E;font-weight:600;font-size:13px;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}.</div>`);
+        } else if (status.faltaPraMeta != null) {
+          partes.push(`<div style="margin-top:8px;font-size:13px;">Meta individual negociada: <b>${brl(status.metaIndividual)}</b> — faltam <b>${brl(status.faltaPraMeta)}</b>.</div>`);
+        } else if (status.faltaPraProximaFaixa != null) {
+          partes.push(`<div style="margin-top:8px;font-size:13px;">Faltam <b>${brl(status.faltaPraProximaFaixa)}</b> pra subir pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}.</div>`);
+        } else if (status.jaQualificaProximaFaixa) {
+          partes.push(`<div style="margin-top:8px;color:#1E8E3E;font-size:13px;">✓ Já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}.</div>`);
+        }
+
+        if (status.ultimaCompra) {
+          const dias = Math.floor((Date.now() - new Date(status.ultimaCompra).getTime()) / 86400000);
+          if (dias >= 60) {
+            partes.push(`<div style="margin-top:6px;color:#B36B00;font-size:12px;">Sem comprar há ${dias} dias (última compra: ${new Date(status.ultimaCompra).toLocaleDateString('pt-BR')}).</div>`);
+          }
+        }
+
+        if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
+          const linhas = status.trimestral.historico.map(t => {
+            const d = new Date(t.trimestre);
+            return `<div style="display:flex;justify-content:space-between;font-size:12px;padding:3px 0;"><span>T${Math.floor(d.getMonth() / 3) + 1}/${d.getFullYear()}</span><span>${brl(t.faturado)}</span></div>`;
+          }).join('');
+          const situacaoTexto = { no_ritmo: '✓ no ritmo', atrasado: '⚠️ atrasado', adiantado: '✓ adiantado' }[status.trimestral.situacao] || '';
+          partes.push(`
+            <details style="margin-top:10px;">
+              <summary style="cursor:pointer;font-size:12px;color:var(--gray);">Meta trimestral ${situacaoTexto ? `— ${situacaoTexto}` : ''}</summary>
+              <div style="margin-top:6px;">
+                ${linhas || '<div class="ap-hint">Sem faturamento nos últimos trimestres.</div>'}
+                ${status.trimestral.ritmoNecessarioProximoTrimestre != null ? `<div style="font-size:12px;margin-top:4px;color:var(--gray);">Ritmo necessário no próximo trimestre: ${brl(status.trimestral.ritmoNecessarioProximoTrimestre)}</div>` : ''}
+              </div>
+            </details>`);
+        }
+
+        content.innerHTML = partes.join('');
+      }
+      async function loadClienteClassificatorioStatus() {
+        const card = document.getElementById('clienteClassificatorioCard');
+        card.classList.add('hidden');
+        try {
+          const status = await apiClassificatorioStatus(clienteTabSelected.id);
+          renderClienteClassificatorioCard(status);
+        } catch (e) {
+          card.classList.add('hidden'); // best effort - não trava a ficha do cliente por causa disso
         }
       }
       function initClienteFichaPeriodo() {
@@ -8590,6 +8767,52 @@
           wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
+      async function apiClassificatorioAlertas() {
+        return apiFetch('/api/clientes/classificatorio/alertas');
+      }
+      function renderClassificatorioAlertaItem(c, detalhe) {
+        return `
+      <button type="button" class="clientPickerItem" data-alerta-cliente-id="${c.id}">
+        <div class="cpName"><span>${escapeHtml(c.nome)}</span></div>
+        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento'} · ${detalhe}</div>
+      </button>`;
+      }
+      async function toggleClassificatorioAlertas() {
+        const wrap = document.getElementById('classificatorioAlertasWrap');
+        const listWrap = document.getElementById('clienteTabList');
+        const content = document.getElementById('classificatorioAlertasContent');
+        const abrindo = wrap.classList.contains('hidden');
+        if (!abrindo) { wrap.classList.add('hidden'); listWrap.classList.remove('hidden'); return; }
+
+        wrap.classList.remove('hidden');
+        listWrap.classList.add('hidden');
+        content.innerHTML = '<div class="lev-empty">Carregando alertas…</div>';
+        try {
+          const { pertoDeSubir, riscoDeQueda, semComprarRecente } = await apiClassificatorioAlertas();
+          const secoes = [];
+          if (riscoDeQueda.length) secoes.push(`<h3 style="font-size:13px;color:#B3261E;margin:12px 0 6px;">⚠️ Em risco de cair de faixa (${riscoDeQueda.length})</h3>` +
+            riscoDeQueda.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}`)).join(''));
+          if (pertoDeSubir.length) secoes.push(`<h3 style="font-size:13px;color:#1E8E3E;margin:12px 0 6px;">📈 Perto de subir de faixa (${pertoDeSubir.length})</h3>` +
+            pertoDeSubir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}`)).join(''));
+          if (semComprarRecente.length) secoes.push(`<h3 style="font-size:13px;color:#B36B00;margin:12px 0 6px;">🕒 Sem comprar há mais de 60 dias (${semComprarRecente.length})</h3>` +
+            semComprarRecente.map(c => renderClassificatorioAlertaItem(c, `${c.diasSemComprar} dias sem comprar`)).join(''));
+          content.innerHTML = secoes.length ? secoes.join('') : '<div class="lev-empty">Nenhum alerta no momento — todos os clientes classificados estão em dia.</div>';
+          content.querySelectorAll('[data-alerta-cliente-id]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const id = btn.dataset.alertaClienteId;
+              try {
+                const cliente = await apiFetch(`/api/clientes/${id}`);
+                openClienteDetail(cliente);
+              } catch (e) { showToast('Não foi possível abrir esse cliente.'); }
+            });
+          });
+        } catch (e) {
+          content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
+        }
+      }
+      function initClassificatorioAlertas() {
+        document.getElementById('classificatorioAlertasBtn').addEventListener('click', toggleClassificatorioAlertas);
+      }
       function openClienteDetail(cliente) {
         clienteTabSelected = cliente;
         document.getElementById('clienteDetailName').textContent = cliente.nome;
@@ -8599,6 +8822,7 @@
         document.getElementById('clienteFichaDataInicio').value = '';
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
+        loadClienteClassificatorioStatus();
         clienteTabView = 'pedidosoficiais';
         document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.v === 'pedidosoficiais'));
         loadClienteDetailView();
@@ -8607,6 +8831,8 @@
         clienteTabSelected = null;
         document.getElementById('clienteTabDetail').classList.add('hidden');
         document.getElementById('clienteTabListWrap').classList.remove('hidden');
+        document.getElementById('classificatorioAlertasWrap').classList.add('hidden');
+        document.getElementById('clienteTabList').classList.remove('hidden');
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
@@ -10737,9 +10963,11 @@
           document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
           initProdutosTab();
           initClientesTab();
+          initClassificatorioAlertas();
           initPdfConsolidacao();
           initRelatorioOficialImport();
           initCarteiraAntigaLimpar();
+          initImportClassificatorio();
 
           renderResults();
           renderCartBar();

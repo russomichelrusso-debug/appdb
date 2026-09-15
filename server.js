@@ -17,6 +17,7 @@ const pedidosOficiaisRoutes = require('./routes/pedidosOficiais');
 const assistenteRoutes = require('./routes/assistente');
 const catalogoPrecosRoutes = require('./routes/catalogoPrecos');
 const radarCnpjRoutes = require('./routes/radarCnpj');
+const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio');
 
 const app = express();
 app.set('trust proxy', 1);  
@@ -53,6 +54,7 @@ app.use('/api/auth', authRoutes);
 
 // todas as rotas de dados exigem estar logado (ver middleware/auth.js)
 app.use('/api/clientes', requireAuth, clientesRoutes);
+app.use('/api/clientes', requireAuth, clientesClassificatorioRoutes); // /classificatorio/... - registrado depois, cai aqui só se clientesRoutes não bater
 app.use('/api/produtos', requireAuth, produtosRoutes);
 app.use('/api/pedidos', requireAuth, pedidosRoutes);
 app.use('/api/levantamentos', requireAuth, levantamentosRoutes);

@@ -121,6 +121,59 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
 
+  // classificatório (matriz/rede, PIC, "quanto falta") - routes/clientesClassificatorio.js
+  if (s.includes('ID, CODIGO_OFICIAL FROM CLIENTES WHERE CODIGO_OFICIAL')) {
+    const found = clientes.filter(c => c.codigo_oficial === params[0]);
+    return { rows: found.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
+  }
+  if (s.includes('ID, CODIGO_OFICIAL FROM CLIENTES WHERE REGEXP_REPLACE(DOCUMENTO')) {
+    const found = clientes.filter(c => (c.documento || '').replace(/\D/g, '') === params[0]);
+    return { rows: found.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
+  }
+  if (s.startsWith('UPDATE CLIENTES SET') && s.includes('CODIGO_OFICIAL = COALESCE')) {
+    const [codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id] = params;
+    const c = clientes.find(x => Number(x.id) === Number(id));
+    if (c) {
+      if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
+      c.matriz_grupo = matrizGrupo;
+      c.classificatorio_pic = pic;
+      c.classificatorio_vl_acordo = vlAcordo;
+      if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
+      if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
+    }
+    return { rows: [] };
+  }
+  if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
+    const { faturamento_12m, ultima_compra } = calcularFaturamento12mParaCliente(params[0]);
+    return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, ultima_compra }] };
+  }
+  if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
+    const classificados = clientes.filter(c => c.classificatorio_tipo);
+    const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamento12mParaCliente(c.id) }));
+    return { rows };
+  }
+  if (s.includes("DATE_TRUNC('QUARTER'")) {
+    const cliente = clientes.find(c => Number(c.id) === Number(params[0]));
+    if (!cliente) return { rows: [] };
+    const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
+    const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= cutoffStr);
+    const porTrimestre = {};
+    for (const it of itens) {
+      const d = new Date(it.data_faturamento);
+      const q = Math.floor(d.getMonth() / 3);
+      const key = `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`;
+      porTrimestre[key] = (porTrimestre[key] || 0) + (Number(it.valor) || 0);
+    }
+    const rows = Object.entries(porTrimestre).sort(([a], [b]) => a.localeCompare(b)).map(([trimestre, faturado]) => ({ trimestre, faturado }));
+    return { rows };
+  }
+  if (s.includes('NOME, DOCUMENTO, CLASSIFICATORIO_TIPO, CLASSIFICATORIO_PIC')) {
+    return { rows: clientes.filter(c => c.classificatorio_tipo) };
+  }
+
   // codigos_produto (EAN-13 / DUN-14)
   if (s.includes('SELECT CODIGO_SKU, EAN13, DUN14 FROM CODIGOS_PRODUTO')) {
     return { rows: Object.entries(codigosProduto).map(([codigo_sku, v]) => ({ codigo_sku, ean13: v.ean13, dun14: v.dun14 })) };
@@ -344,6 +397,24 @@ async function query(sql, params = []) {
   }
 
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
+}
+
+// Reproduz a query SQL_FATURAMENTO_12M_POR_CLIENTE de routes/clientesClassificatorio.js -
+// soma faturado nos últimos 12 meses, agrupado por matriz_grupo (ou o próprio
+// cliente, se não tiver grupo).
+function calcularFaturamento12mParaCliente(clienteId) {
+  const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
+  if (!cliente) return { faturamento_12m: 0, ultima_compra: null };
+  const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
+  const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
+  const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado');
+  const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const itensJanela = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= cutoffStr);
+  const faturamento_12m = itensJanela.reduce((s, it) => s + (Number(it.valor) || 0), 0);
+  const datas = itensFaturados.map(it => it.data_faturamento).filter(Boolean).sort();
+  const ultima_compra = datas.length ? datas[datas.length - 1] : null;
+  return { faturamento_12m, ultima_compra };
 }
 
 function computeHistorico(clienteId) {
