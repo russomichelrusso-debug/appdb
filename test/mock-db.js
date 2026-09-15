@@ -152,7 +152,7 @@ async function query(sql, params = []) {
     const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamento12mParaCliente(c.id) }));
     return { rows };
   }
-  if (s.includes("DATE_TRUNC('QUARTER'")) {
+  if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_FATURAMENTO)")) {
     const cliente = clientes.find(c => Number(c.id) === Number(params[0]));
     if (!cliente) return { rows: [] };
     const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
@@ -170,6 +170,49 @@ async function query(sql, params = []) {
     const rows = Object.entries(porTrimestre).sort(([a], [b]) => a.localeCompare(b)).map(([trimestre, faturado]) => ({ trimestre, faturado }));
     return { rows };
   }
+
+  // Dashboard principal (curva-abc.html, GET /api/dashboard/resumo) -
+  // agregações mensal/semanal/trimestral pro negócio inteiro (sem JOIN em
+  // clientes, diferente do trimestral por cliente do classificatório acima)
+  // + top 5 clientes por faturamento.
+  if (s.includes("DATE_TRUNC('MONTH', DATA_FATURAMENTO)") || s.includes("DATE_TRUNC('WEEK', DATA_FATURAMENTO)") || s.includes("DATE_TRUNC('QUARTER', DATA_FATURAMENTO)")) {
+    const tipo = s.includes("'MONTH'") ? 'month' : s.includes("'WEEK'") ? 'week' : 'quarter';
+    const diasCorte = { month: 365, week: 70, quarter: 730 }[tipo];
+    const corte = new Date(); corte.setDate(corte.getDate() - diasCorte);
+    const corteStr = corte.toISOString().slice(0, 10);
+    const itens = pedidosOficiaisItens.filter(it => it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= corteStr);
+    const grupos = new Map();
+    for (const it of itens) {
+      const d = new Date(it.data_faturamento);
+      let key;
+      if (tipo === 'month') key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+      else if (tipo === 'quarter') { const q = Math.floor(d.getMonth() / 3); key = `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`; }
+      else { const dia = new Date(d); dia.setDate(dia.getDate() - ((dia.getDay() + 6) % 7)); key = dia.toISOString().slice(0, 10); } // segunda-feira da semana
+      const atual = grupos.get(key) || { periodo: key, faturamento: 0, pedidosSet: new Set() };
+      atual.faturamento += Number(it.valor) || 0;
+      atual.pedidosSet.add(it.nr_pedido);
+      grupos.set(key, atual);
+    }
+    const rows = [...grupos.values()].sort((a, b) => a.periodo.localeCompare(b.periodo))
+      .map(g => ({ periodo: g.periodo, faturamento: g.faturamento, pedidos: g.pedidosSet.size }));
+    return { rows };
+  }
+  if (s.includes('GROUP BY C.ID, C.NOME')) {
+    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const porCliente = new Map();
+    for (const it of pedidosOficiaisItens) {
+      if (it.status !== 'faturado' || !it.data_faturamento || it.data_faturamento < cutoffStr) continue;
+      const cli = clientes.find(c => c.codigo_oficial === it.cliente_codigo_oficial);
+      if (!cli) continue;
+      const atual = porCliente.get(cli.id) || { id: cli.id, nome: cli.nome, faturamento: 0 };
+      atual.faturamento += Number(it.valor) || 0;
+      porCliente.set(cli.id, atual);
+    }
+    const rows = [...porCliente.values()].sort((a, b) => b.faturamento - a.faturamento).slice(0, 5);
+    return { rows };
+  }
+
   if (s.includes('NOME, DOCUMENTO, CLASSIFICATORIO_TIPO, CLASSIFICATORIO_PIC')) {
     return { rows: clientes.filter(c => c.classificatorio_tipo) };
   }

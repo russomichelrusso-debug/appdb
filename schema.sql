@@ -192,6 +192,10 @@ ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS classificatorio TEXT
 -- ainda, faz sentido: só se sabe depois que foi despachado).
 ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS transportadora TEXT;
 ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS situacao_pedido TEXT;
+-- Apoia as agregações por mês/semana/trimestre do Dashboard principal
+-- (ver routes/relatorios.js, GET /dashboard/resumo) - antes só havia
+-- índice por cliente_codigo_oficial.
+CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_status_data ON pedidos_oficiais_itens (status, data_faturamento);
 
 -- Catálogo completo de preços: um valor por produto x canal x estado (27 UFs
 -- x 6 canais). Guardado em JSONB por produto (não um blob único gigante) pra

@@ -333,4 +333,44 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
   }
 });
 
+// Resumo do Dashboard principal (curva-abc.html, aba "Dashboard"): faturamento
+// mensal (12 meses), semanal (10 semanas) e trimestral (8 trimestres), + top 5
+// clientes por faturamento (12 meses) - tudo a partir de pedidos_oficiais_itens
+// (mesma fonte oficial usada na Curva ABC), num só round-trip. Sem filtro de
+// vendedor: o relatório oficial do ERP não tem essa granularidade (só
+// `pedidos`, a tabela antiga de cotação do app, tem vendedor_id). Aberto a
+// qualquer usuário logado - é informação de uso diário do vendedor, mesmo
+// padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
+router.get('/dashboard/resumo', async (req, res) => {
+  try {
+    const [mensal, semanal, trimestral, topClientes] = await Promise.all([
+      pool.query(
+        `SELECT date_trunc('month', data_faturamento) AS periodo, SUM(valor) AS faturamento, COUNT(DISTINCT nr_pedido) AS pedidos
+         FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+         GROUP BY 1 ORDER BY 1`
+      ),
+      pool.query(
+        `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
+         FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
+         GROUP BY 1 ORDER BY 1`
+      ),
+      pool.query(
+        `SELECT date_trunc('quarter', data_faturamento) AS periodo, SUM(valor) AS faturamento
+         FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '24 months'
+         GROUP BY 1 ORDER BY 1`
+      ),
+      pool.query(
+        `SELECT c.id, c.nome, SUM(poi.valor) AS faturamento
+         FROM pedidos_oficiais_itens poi JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
+         WHERE poi.status = 'faturado' AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+         GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
+      ),
+    ]);
+    res.json({ mensal: mensal.rows, semanal: semanal.rows, trimestral: trimestral.rows, topClientes: topClientes.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao montar o resumo do dashboard.' });
+  }
+});
+
 module.exports = router;
