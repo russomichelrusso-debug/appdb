@@ -275,6 +275,23 @@
     .clientResultItem:hover { background: var(--fill); }
     .clientResultItem .crName { font-size: 13px; font-weight: 600; display: block; }
     .clientResultItem .crDoc { font-size: 11px; color: var(--gray); }
+
+    /* ---------- Dashboard principal ---------- */
+    .kpi .delta { font-size: 11px; font-weight: 700; }
+    .kpi .delta.up { color: #1E8E3E; }
+    .kpi .delta.down { color: #B3261E; }
+    .dashRow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-bottom: 14px; }
+    @media (max-width: 720px) { .dashRow { grid-template-columns: 1fr; } }
+    .listaAlerta { display: flex; flex-direction: column; gap: 2px; }
+    .listaAlertaItem { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 12.5px; }
+    .listaAlertaItem:last-child { border-bottom: none; }
+    .listaAlertaItem .nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .listaAlertaItem .valor { flex-shrink: 0; font-size: 11.5px; color: var(--gray); text-align: right; }
+    .rankItem { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--hairline); }
+    .rankItem:last-child { border-bottom: none; }
+    .rankItem .pos { width: 20px; height: 20px; border-radius: 6px; background: var(--fill); color: var(--gray); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .rankItem .nome { flex: 1; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .rankItem .valor { font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
     .hidden { display: none !important; }
   </style>
 </head>
@@ -301,11 +318,85 @@
     <div class="topbar">
       <a class="backLink" href="index.html">← App</a>
       <div style="flex:1;min-width:200px;">
-        <h1 id="pageTitle">Curva ABC de Produtos</h1>
-        <p class="sub" id="topSub">Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores</p>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p class="sub" id="topSub">Faturamento, metas de classificatório e vendas — visão geral pra ajudar na visita/negociação.</p>
       </div>
     </div>
 
+    <div class="segmented" id="tabSegPrincipal" style="margin-bottom:14px;">
+      <button type="button" data-tab="dashboard" class="active">Dashboard</button>
+      <button type="button" data-tab="curvaAbc">Curva ABC</button>
+    </div>
+
+    <section id="tabDashboardPrincipal">
+      <div class="kpiRow" id="kpiRowPrincipal"></div>
+
+      <div class="chartCard">
+        <div class="head">
+          <div>
+            <h2>Faturamento mensal</h2>
+            <p>Últimos 12 meses · relatório oficial de Faturamento</p>
+          </div>
+        </div>
+        <div class="chartScroll" id="chartMensalHost"></div>
+      </div>
+
+      <div class="dashRow">
+        <div class="chartCard" style="margin-bottom:0;">
+          <div class="head">
+            <div>
+              <h2>Vendas semanal</h2>
+              <p>Últimas 10 semanas</p>
+            </div>
+          </div>
+          <div class="chartScroll" id="chartSemanalHost"></div>
+        </div>
+        <div class="chartCard" style="margin-bottom:0;">
+          <div class="head">
+            <div>
+              <h2>Vendas trimestral</h2>
+              <p>Últimos 8 trimestres</p>
+            </div>
+          </div>
+          <div class="chartScroll" id="chartTrimestralHost"></div>
+        </div>
+      </div>
+
+      <div class="dashRow">
+        <div class="card">
+          <h3 style="color:#B3261E;">⚠️ Em risco de cair de faixa</h3>
+          <p class="cardHint">Clientes classificados abaixo do mínimo da própria faixa — risco de perder o desconto negociado.</p>
+          <div class="listaAlerta" id="listaRiscoQueda"></div>
+        </div>
+        <div class="card">
+          <h3 style="color:#1E8E3E;">📈 Perto de subir de faixa</h3>
+          <p class="cardHint">Falta pouco pra promover — boa hora pra empurrar mais um pedido.</p>
+          <div class="listaAlerta" id="listaPertoSubir"></div>
+        </div>
+      </div>
+
+      <div class="dashRow">
+        <div class="card">
+          <h3 style="color:#B36B00;">🕒 Sem comprar há mais de 60 dias</h3>
+          <p class="cardHint">Clientes classificados que sumiram — vale uma ligação antes que percam a faixa.</p>
+          <div class="listaAlerta" id="listaSemComprar"></div>
+        </div>
+        <div class="card">
+          <h3>Top 5 clientes por faturamento</h3>
+          <p class="cardHint">Últimos 12 meses · relatório oficial de Faturamento.</p>
+          <div id="rankTopClientes"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Produtos mais vendidos</h3>
+        <p class="cardHint">Top 3 por faturamento no período — veja a curva completa na aba Curva ABC.</p>
+        <div id="rankTopProdutos"></div>
+        <button type="button" id="verCurvaAbcBtn" class="fileBtnLike" style="margin-top:10px;border:1px solid var(--hairline);background:var(--white);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;">Ver Curva ABC completa →</button>
+      </div>
+    </section>
+
+    <section id="tabCurvaAbc" class="hidden">
     <div class="controlsRow">
       <div class="segmented" id="verSeg">
         <button data-modo="produtos" class="active">Todos os produtos</button>
@@ -375,6 +466,7 @@
         <div class="prodTableScroll" id="topTableHost"></div>
       </div>
     </div>
+    </section>
   </div>
 
   <script>
@@ -500,11 +592,12 @@
         document.getElementById('dashboardWrap').classList.remove('hidden');
         hideLoadingScreen();
         startDashboard();
+        ativarTabPrincipal('dashboard'); // Dashboard é a aba inicial - dispara a carga dela
       } catch (e) {
         if (!document.getElementById('loginScreen').classList.contains('hidden')) return; // apiFetch já mostrou a tela de login (401)
         hideLoadingScreen();
         document.getElementById('dashboardWrap').classList.remove('hidden');
-        document.getElementById('kpiRow').innerHTML = `<div class="ap-msg error inline" style="grid-column:1/-1;">${escapeHtml(e.message)}</div>`;
+        document.getElementById('kpiRowPrincipal').innerHTML = `<div class="ap-msg error inline" style="grid-column:1/-1;">${escapeHtml(e.message)}</div>`;
       }
     }
     document.addEventListener('DOMContentLoaded', boot);
@@ -691,7 +784,177 @@
       });
       document.querySelector('#periodoSeg button[data-dias=""]').classList.add('active');
       document.querySelector('#campoSeg button[data-campo="faturamento_total"]').classList.add('active');
-      carregarDados();
+      // Carga inicial fica a cargo de ativarTabPrincipal() - só busca dados da
+      // aba que realmente está visível (Dashboard é a inicial agora).
+      document.querySelectorAll('#tabSegPrincipal button').forEach(btn => {
+        btn.addEventListener('click', () => ativarTabPrincipal(btn.dataset.tab));
+      });
+      document.getElementById('verCurvaAbcBtn').addEventListener('click', () => ativarTabPrincipal('curvaAbc'));
+    }
+
+    // Alterna entre a aba "Dashboard" (visão geral) e "Curva ABC" (o que já
+    // existia antes) - cada uma só busca seus dados na primeira vez que é
+    // aberta, pra não gastar 2 rounds de rede logo no boot.
+    let dashboardPrincipalCarregado = false;
+    let curvaAbcCarregada = false;
+    function ativarTabPrincipal(nome) {
+      document.querySelectorAll('#tabSegPrincipal button').forEach(b => b.classList.toggle('active', b.dataset.tab === nome));
+      document.getElementById('tabDashboardPrincipal').classList.toggle('hidden', nome !== 'dashboard');
+      document.getElementById('tabCurvaAbc').classList.toggle('hidden', nome !== 'curvaAbc');
+      if (nome === 'dashboard') {
+        document.getElementById('pageTitle').textContent = 'Dashboard';
+        document.getElementById('topSub').textContent = 'Faturamento, metas de classificatório e vendas — visão geral pra ajudar na visita/negociação.';
+        if (!dashboardPrincipalCarregado) { dashboardPrincipalCarregado = true; carregarDashboardPrincipal(); }
+      } else {
+        aplicarTextosModo();
+        if (!curvaAbcCarregada) { curvaAbcCarregada = true; carregarDados(); }
+      }
+    }
+
+    function brl(v) {
+      return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
+    }
+
+    function rotuloMes(iso) {
+      const d = new Date(iso);
+      return d.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '') + '/' + String(d.getFullYear()).slice(2);
+    }
+    function rotuloSemana(iso) {
+      const d = new Date(iso);
+      return String(d.getDate()).padStart(2, '0') + '/' + String(d.getMonth() + 1).padStart(2, '0');
+    }
+    function rotuloTrimestre(iso) {
+      const d = new Date(iso);
+      return `T${Math.floor(d.getMonth() / 3) + 1}/${d.getFullYear()}`;
+    }
+
+    // Gráfico de barras genérico pra série temporal (mensal/semanal/
+    // trimestral) - mesma linguagem visual do renderChart() da Curva ABC
+    // (SVG inline, barra por período), só que sem a linha de acumulado/
+    // classes A/B/C, que não fazem sentido aqui.
+    function renderBarrasSerieTemporal(hostId, pontos, opts) {
+      const host = document.getElementById(hostId);
+      const dados = (pontos || []).map(p => ({ data: p.periodo, valor: Number(p[opts.valorKey]) || 0 }));
+      if (!dados.length || !dados.some(d => d.valor > 0)) {
+        host.innerHTML = '<div class="chartEmpty">Sem faturamento suficiente nesse período ainda.</div>';
+        return;
+      }
+      const n = dados.length;
+      const slot = 46;
+      const plotLeft = 40, plotRight = plotLeft + n * slot, plotTop = 14, plotBottom = 150;
+      const W = plotRight + 12, H = 176;
+      const alturaUtil = plotBottom - plotTop;
+      const barW = Math.min(28, slot * 0.6);
+      const maxValor = Math.max(...dados.map(d => d.valor), 1) * 1.15;
+      const yFor = (v) => plotBottom - (v / maxValor) * alturaUtil;
+      const barras = dados.map((d, i) => {
+        const x = plotLeft + i * slot + (slot - barW) / 2;
+        const y = yFor(d.valor);
+        const h = plotBottom - y;
+        const titulo = `${opts.rotulo(d.data)} — ${brl(d.valor)}`;
+        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="3" fill="var(--red)"><title>${escapeHtml(titulo)}</title></rect>`;
+      }).join('');
+      const rotulos = dados.map((d, i) => {
+        const x = plotLeft + i * slot + slot / 2;
+        return `<text x="${x.toFixed(1)}" y="${(plotBottom + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--gray)">${escapeHtml(opts.rotulo(d.data))}</text>`;
+      }).join('');
+      host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W, 520)}px;height:auto;display:block;" role="img" aria-label="Gráfico de vendas">
+        <line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="var(--hairline)" stroke-width="1"/>
+        ${barras}${rotulos}
+      </svg>`;
+    }
+
+    function renderListaAlerta(hostId, lista, detalheFn) {
+      const host = document.getElementById(hostId);
+      if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Nenhum cliente nessa situação agora.</div>'; return; }
+      host.innerHTML = lista.slice(0, 5).map(c => `
+        <div class="listaAlertaItem">
+          <span class="nome">${escapeHtml(c.nome)}</span>
+          <span class="valor">${escapeHtml(detalheFn(c))}</span>
+        </div>`).join('');
+    }
+
+    function renderRankTopClientes(lista) {
+      const host = document.getElementById('rankTopClientes');
+      if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Sem dados suficientes.</div>'; return; }
+      host.innerHTML = lista.map((c, i) => `
+        <div class="rankItem">
+          <span class="pos">${i + 1}</span>
+          <span class="nome">${escapeHtml(c.nome)}</span>
+          <span class="valor">${brl(c.faturamento)}</span>
+        </div>`).join('');
+    }
+
+    async function carregarTopProdutos() {
+      const host = document.getElementById('rankTopProdutos');
+      try {
+        const rows = await apiFetch('/api/produtos-abc-geral');
+        const top3 = (rows || []).map(mapProdutoRow).slice(0, 3); // já vem ordenado por faturamento_total DESC
+        if (top3.length === 0) { host.innerHTML = '<div class="lev-empty">Sem dados suficientes.</div>'; return; }
+        host.innerHTML = top3.map((p, i) => `
+          <div class="rankItem">
+            <span class="pos">${i + 1}</span>
+            <span class="nome">${escapeHtml(p.produto)}</span>
+            <span class="valor">${brl(p.faturamento_total)}</span>
+          </div>`).join('');
+      } catch (e) {
+        host.innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
+      }
+    }
+
+    function renderKpisPrincipal(resumo, alertas) {
+      const mensal = resumo.mensal || [];
+      const atual = mensal[mensal.length - 1];
+      const anterior = mensal[mensal.length - 2];
+      const fatAtual = atual ? Number(atual.faturamento) || 0 : 0;
+      const pedidosAtual = atual ? Number(atual.pedidos) || 0 : 0;
+      const fatAnterior = anterior ? Number(anterior.faturamento) || 0 : 0;
+      const deltaPct = fatAnterior ? ((fatAtual - fatAnterior) / fatAnterior) * 100 : null;
+      const ticketMedio = pedidosAtual ? fatAtual / pedidosAtual : 0;
+      const deltaHtml = deltaPct == null ? 'vs mês anterior — sem dado' : `<span class="delta ${deltaPct >= 0 ? 'up' : 'down'}">${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1)}%</span> vs mês anterior`;
+      document.getElementById('kpiRowPrincipal').innerHTML = `
+        <div class="kpi">
+          <span class="lbl">Faturamento do mês</span>
+          <span class="val">${formatCompact(fatAtual, true)}</span>
+          <span class="sub">${deltaHtml}</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Ticket médio</span>
+          <span class="val">${formatCompact(ticketMedio, true)}</span>
+          <span class="sub">${pedidosAtual} pedido${pedidosAtual === 1 ? '' : 's'} faturado${pedidosAtual === 1 ? '' : 's'} no mês</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Em risco de queda</span>
+          <span class="val" style="color:#B3261E;">${(alertas.riscoDeQueda || []).length}</span>
+          <span class="sub">clientes classificados</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Perto de subir</span>
+          <span class="val" style="color:#1E8E3E;">${(alertas.pertoDeSubir || []).length}</span>
+          <span class="sub">oportunidade de promover</span>
+        </div>`;
+    }
+
+    async function carregarDashboardPrincipal() {
+      const kpiHost = document.getElementById('kpiRowPrincipal');
+      kpiHost.innerHTML = '<div class="chartEmpty" style="grid-column:1/-1;">Carregando…</div>';
+      try {
+        const [resumo, alertas] = await Promise.all([
+          apiFetch('/api/dashboard/resumo'),
+          apiFetch('/api/clientes/classificatorio/alertas'),
+        ]);
+        renderKpisPrincipal(resumo, alertas);
+        renderBarrasSerieTemporal('chartMensalHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'faturamento' });
+        renderBarrasSerieTemporal('chartSemanalHost', resumo.semanal, { rotulo: rotuloSemana, valorKey: 'faturamento' });
+        renderBarrasSerieTemporal('chartTrimestralHost', resumo.trimestral, { rotulo: rotuloTrimestre, valorKey: 'faturamento' });
+        renderListaAlerta('listaRiscoQueda', alertas.riscoDeQueda, c => `Faltam ${brl(c.faltaPraManter)}`);
+        renderListaAlerta('listaPertoSubir', alertas.pertoDeSubir, c => `Faltam ${brl(c.faltaPraProximaFaixa)}`);
+        renderListaAlerta('listaSemComprar', alertas.semComprarRecente, c => `${c.diasSemComprar} dias`);
+        renderRankTopClientes(resumo.topClientes);
+        carregarTopProdutos();
+      } catch (e) {
+        kpiHost.innerHTML = `<div class="ap-msg error inline" style="grid-column:1/-1;">${escapeHtml(e.message)}</div>`;
+      }
     }
 
     function datasDoPeriodo(dias) {
