@@ -2086,6 +2086,15 @@
       margin-top: 1px;
     }
 
+    .hist-clientProgress:empty {
+      display: none;
+    }
+
+    .hist-clientProgress {
+      margin-top: 6px;
+      max-width: 260px;
+    }
+
     .hist-content {
       padding: 0 16px 16px;
     }
@@ -3668,6 +3677,7 @@
           <div class="hist-clientLabel">Cliente (opcional)</div>
           <div class="hist-clientName" id="precosClientName">Nenhum selecionado</div>
           <div class="hist-clientDoc" id="precosClientDoc"></div>
+          <div class="hist-clientProgress" id="precosClientProgress"></div>
         </div>
         <div class="hist-clientBtns">
           <button type="button" class="restoreBtn" id="precosSelectClientBtn"
@@ -3773,6 +3783,7 @@
           <div class="hist-clientLabel">Cliente deste levantamento</div>
           <div class="hist-clientName" id="levClientName">Nenhum selecionado</div>
           <div class="hist-clientDoc" id="levClientDoc"></div>
+          <div class="hist-clientProgress" id="levClientProgress"></div>
         </div>
         <div class="hist-clientBtns">
           <button type="button" class="restoreBtn" id="levSelectClientBtn"
@@ -6059,6 +6070,52 @@
             openClienteDetail(cliente);
           });
         }
+        const progressEl = document.getElementById(prefixo + 'ClientProgress');
+        if (progressEl) {
+          progressEl.innerHTML = ''; // limpa na hora - não deixa o progresso do cliente anterior aparecer enquanto busca o novo
+          if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
+        }
+      }
+      // Busca o status de classificatório (ao vivo, mesma rota da ficha
+      // completa) só pra preencher a barrinha compacta de progresso nas
+      // barras de cliente das abas Preços/Levantamento. Guarda contra corrida
+      // (trocar de cliente rápido antes da resposta chegar) conferindo se
+      // ainda é o cliente selecionado no momento em que a resposta volta.
+      async function carregarProgressoClienteBar(prefixo, cliente) {
+        try {
+          const status = await apiClassificatorioStatus(cliente.id);
+          if (!state.levCliente || state.levCliente.id !== cliente.id) return;
+          const progressEl = document.getElementById(prefixo + 'ClientProgress');
+          if (progressEl) progressEl.innerHTML = renderBarraProgressoCompacta(status);
+        } catch (e) {
+          // best-effort - não deixa a barra de cliente travar por causa disso
+        }
+      }
+      // Versão compacta da barra de progresso já usada na ficha completa do
+      // cliente (renderClienteClassificatorioCard) - só a barrinha + uma
+      // linha de texto, sem cabeçalho de faturamento/matriz nem trimestral.
+      function renderBarraProgressoCompacta(status) {
+        if (!status || !status.classificado || status.ehRede) return '';
+        const partes = [];
+        if (status.faixaMin != null && status.faixaMax != null) {
+          const pct = Math.max(0, Math.min(100, ((status.faturamento12m - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
+          const cor = status.emRiscoDeQueda ? '#B3261E' : 'var(--red)';
+          partes.push(`<div style="background:var(--fill);border-radius:6px;height:6px;overflow:hidden;">
+            <div style="background:${cor};height:100%;width:${pct}%;"></div>
+          </div>`);
+        }
+        let linha = '';
+        if (status.emRiscoDeQueda) {
+          linha = `<span style="color:#B3261E;font-weight:600;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}</span>`;
+        } else if (status.faltaPraMeta != null) {
+          linha = `Faltam ${brl(status.faltaPraMeta)} (meta individual)`;
+        } else if (status.faltaPraProximaFaixa != null) {
+          linha = `Faltam ${brl(status.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}`;
+        } else if (status.jaQualificaProximaFaixa) {
+          linha = `<span style="color:#1E8E3E;">✓ já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}</span>`;
+        }
+        if (linha) partes.push(`<div style="font-size:11.5px;margin-top:3px;">${linha}</div>`);
+        return partes.join('');
       }
       // Guarda o cliente escolhido pra essa visita, e reflete nas barras do
       // topo do Levantamento e da aba Preços (mesmo cliente nas duas - não
