@@ -238,6 +238,11 @@ CREATE TABLE IF NOT EXISTS levantamento_rascunhos (
   rascunho JSONB NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- RLS ligado pra fechar o acesso público via PostgREST/API REST do Supabase
+-- (o app não usa isso, conecta direto via DATABASE_URL como dono da tabela,
+-- então continua acessando normalmente - RLS só bloqueia roles sem bypass,
+-- tipo anon/authenticated). Sem política = nega tudo pra quem não é dono.
+ALTER TABLE levantamento_rascunhos ENABLE ROW LEVEL SECURITY;
 
 -- Cache da ficha cadastral de CNPJ (Receita Federal, via radar-cnpj.com) de
 -- cada cliente. Construído aos poucos, sob demanda - só ganha uma linha
@@ -276,3 +281,6 @@ ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS socios JSONB;
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS complemento TEXT;
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS matriz_filial TEXT;
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS cnae_secundario TEXT;
+-- RLS ligado (mesmo motivo de levantamento_rascunhos acima) - guarda dados
+-- de CNPJ/sócios que não podem ficar públicos via PostgREST.
+ALTER TABLE cliente_cnpj_ficha ENABLE ROW LEVEL SECURITY;
