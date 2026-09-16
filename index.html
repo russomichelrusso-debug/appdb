@@ -11623,16 +11623,17 @@
 
 
 
-      // sw.js foi removido do projeto (não existe mais no servidor) - em vez de
-      // registrar de novo, desregistra qualquer Service Worker antigo que ainda
-      // esteja ativo em aparelhos que instalaram o app antes disso. Sem isso, um
-      // SW antigo nunca consegue se atualizar (o arquivo que ele tentaria buscar
-      // não existe mais) e fica pra sempre interceptando requisições GET do app
-      // com sua lógica de cache antiga.
+      // Registra o Service Worker (sw.js) - só cuida de assets estáticos
+      // (ícones/manifest) e de um fallback offline básico pras páginas HTML;
+      // nunca intercepta chamadas de API (ver comentário no topo de sw.js).
+      // IMPORTANTE: se sw.js for removido do projeto de novo no futuro, essa
+      // chamada TEM que virar um desregistro (getRegistrations +
+      // unregister()) no mesmo commit - foi exatamente o inverso disso que
+      // deixou um Service Worker velho preso pra sempre em aparelhos que já
+      // tinham instalado o app (PR #27).
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.getRegistrations()
-            .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+          navigator.serviceWorker.register('sw.js')
             .catch(() => { /* ok se falhar (ex: aberto como arquivo local) */ });
         });
       }
