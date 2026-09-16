@@ -3665,7 +3665,7 @@
     </header>
 
     <div class="tabbar">
-      <button type="button" class="tabbtn active" id="tabBtnPrecos" data-tab="precos">Preços</button>
+      <button type="button" class="tabbtn active" id="tabBtnPrecos" data-tab="precos">Pedido</button>
       <button type="button" class="tabbtn" id="tabBtnLev" data-tab="levantamento">Levantamento</button>
       <button type="button" class="tabbtn" id="tabBtnProdutos" data-tab="produtos">Produtos</button>
       <button type="button" class="tabbtn" id="tabBtnClientes" data-tab="clientes">Clientes</button>
@@ -3769,11 +3769,17 @@
       <div class="priceListSection hidden" id="priceListSection">
         <div class="priceListHeader">
           <h3>Lista de preços</h3>
-          <button type="button" class="clientClearBtn" id="clearPriceListBtn">Limpar lista</button>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="clientClearBtn" id="addAllPriceListBtn">Adicionar todos ao orçamento</button>
+            <button type="button" class="clientClearBtn" id="clearPriceListBtn">Limpar lista</button>
+          </div>
         </div>
         <div class="priceList" id="priceList"></div>
       </div>
 
+      <div class="resultsAddAllBar hidden" id="resultsAddAllBar" style="display:flex;justify-content:flex-end;margin-bottom:8px;">
+        <button type="button" class="clientClearBtn" id="addAllResultsBtn">Adicionar todos ao orçamento</button>
+      </div>
       <div class="results" id="resultsList"></div>
     </div>
 
@@ -4404,6 +4410,15 @@
                 <button class="fileBtn" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
                 <div id="carteiraAntigaMsg" style="margin-top:8px;"></div>
               </div>
+              <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline);">
+                <p class="ap-hint" style="margin:0 0 8px;color:#B3261E;">⚠️ Apaga TODAS as linhas do relatório
+                  oficial (Carteira + Faturamento) - use só antes de reimportar tudo do zero, pra não misturar dado
+                  velho com o novo. Classificatório e histórico de pedidos ligados a essa tabela somem até a
+                  reimportação.</p>
+                <div id="apagarTudoFaturamentoStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
+                <button class="fileBtn" id="apagarTudoFaturamentoBtn" style="border-color:#B3261E;color:#B3261E;">Apagar todo o relatório oficial</button>
+                <div id="apagarTudoFaturamentoMsg" style="margin-top:8px;"></div>
+              </div>
             </div>
             <div class="ap-card">
               <h3>Importar Classificatório (planilha ERP)</h3>
@@ -4722,6 +4737,7 @@
         seller: '',
         paymentTerm: '', // condição de pagamento escolhida pro orçamento atual (texto, ex: "28/56 dias")
         cart: [], // {cod, qty}
+        pendingQty: {}, // {cod: qty} - quantidade escolhida no card antes de "Adicionar" (aba Pedido), não persiste
         survey: [], // {cod, qty, ped} - levantamento de estoque no cliente
         levLoadedId: null, // id do levantamento salvo atualmente aberto (null = ainda não foi salvo com nome)
         levCliente: null, // {id, nome} - cliente selecionado nesta visita; usado ao salvar o levantamento e ao finalizar o pedido
@@ -5018,11 +5034,23 @@
         container.querySelectorAll('[data-add]').forEach(btn => {
           const originalHtml = btn.innerHTML;
           btn.addEventListener('click', () => {
-            addToCart(btn.dataset.add);
+            const cod = btn.dataset.add;
+            const p = productByCod(cod);
+            addToCart(cod, getPendingQty(p));
+            delete state.pendingQty[cod]; // volta pro múltiplo padrão pro próximo "Adicionar"
             btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
             btn.classList.add('added');
             setTimeout(() => { btn.innerHTML = originalHtml; btn.classList.remove('added'); }, 900);
           });
+        });
+        container.querySelectorAll('[data-pending-inc]').forEach(btn => {
+          btn.addEventListener('click', () => changePendingQty(btn.dataset.pendingInc, 1));
+        });
+        container.querySelectorAll('[data-pending-dec]').forEach(btn => {
+          btn.addEventListener('click', () => changePendingQty(btn.dataset.pendingDec, -1));
+        });
+        container.querySelectorAll('[data-item-disc]').forEach(inp => {
+          inp.addEventListener('change', () => setItemDiscount(inp.dataset.itemDisc, inp.value));
         });
         container.querySelectorAll('[data-edit-price]').forEach(btn => {
           btn.addEventListener('click', () => openPriceEditModal(btn.dataset.editPrice));
@@ -5031,26 +5059,59 @@
           btn.addEventListener('click', () => openFichaTecnica(btn.dataset.ficha));
         });
       }
+      // Guarda os últimos resultados de busca exibidos - usado pelo botão
+      // "Adicionar todos ao orçamento" (index.html:3775-3777), que precisa
+      // saber exatamente quais produtos estão visíveis agora.
+      let ultimosResultados = [];
       function renderResults() {
         const q = document.getElementById('searchInput').value;
         const list = document.getElementById('resultsList');
         const hint = document.getElementById('searchHint');
+        const addAllBar = document.getElementById('resultsAddAllBar');
         if (q.trim().length < 2) {
           list.innerHTML = '';
           hint.style.display = 'block';
+          addAllBar.classList.add('hidden');
+          ultimosResultados = [];
           return;
         }
         hint.style.display = 'none';
         const items = searchProducts(q);
+        ultimosResultados = items;
         if (items.length === 0) {
           list.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <p>Nenhum produto encontrado para "${escapeHtml(q)}"</p>
     </div>`;
+          addAllBar.classList.add('hidden');
           return;
         }
+        addAllBar.classList.remove('hidden');
         list.innerHTML = items.map(p => renderCard(p)).join('');
         wireProductCardButtons(list);
+      }
+      // Adiciona ao orçamento todos os produtos visíveis agora (na busca ou na
+      // lista escaneada), cada um com a quantidade/desconto já ajustados no
+      // card - não faz sentido montar um pedido de vários itens clicando
+      // "Adicionar" um por um.
+      function addAllResultsToCart() {
+        if (ultimosResultados.length === 0) return;
+        for (const p of ultimosResultados) {
+          addToCart(p.c, getPendingQty(p));
+          delete state.pendingQty[p.c];
+        }
+        showToast(`${ultimosResultados.length} produto(s) adicionado(s) ao orçamento`);
+        renderResults();
+      }
+      function addAllPriceListToCart() {
+        const produtos = state.priceList.map(cod => productByCod(cod)).filter(Boolean);
+        if (produtos.length === 0) return;
+        for (const p of produtos) {
+          addToCart(p.c, getPendingQty(p));
+          delete state.pendingQty[p.c];
+        }
+        showToast(`${produtos.length} produto(s) adicionado(s) ao orçamento`);
+        renderPriceList();
       }
 
       // ---------------- Lista de preços (aba Preços) ----------------
@@ -5179,6 +5240,16 @@
     <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${p.c}" aria-label="Ver informações técnicas">i</button>` : ''}</div>
     <div class="psub">Cód. ${p.c} · Emb. ${p.emb}</div>
     ${renderPrevisaoBadge(p.c)}
+    <div class="qtyrow" style="margin-top:8px;">
+      <div class="qtybox">
+        <button data-pending-dec="${p.c}" aria-label="Diminuir quantidade">−</button>
+        <span>${getPendingQty(p)}</span>
+        <button data-pending-inc="${p.c}" aria-label="Aumentar quantidade">+</button>
+      </div>
+      <div class="pct-wrap mini">
+        <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${p.c}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
+      </div>
+    </div>
     <div class="prow">
       <div class="prices">
         ${hasDiscount ? `<div class="list">de <s>${brl(lp)}</s></div>` : ''}
@@ -5309,6 +5380,20 @@
 
       function packStep(p) {
         return (p && p.emb > 0) ? p.emb : 1;
+      }
+      // Quantidade escolhida no card antes de "Adicionar" (aba Pedido) - nasce
+      // já no múltiplo de embalagem, igual ao carrinho já faz.
+      function getPendingQty(p) {
+        return state.pendingQty[p.c] > 0 ? state.pendingQty[p.c] : packStep(p);
+      }
+      function changePendingQty(cod, direction) {
+        const p = productByCod(cod);
+        if (!p) return;
+        const step = packStep(p);
+        const atual = getPendingQty(p);
+        state.pendingQty[cod] = Math.max(step, atual + direction * step);
+        renderResults();
+        renderPriceList();
       }
       // Sem isso o orçamento só vive na memória da aba - sair pra outra página
       // (ex: a calculadora de materiais, que é uma página HTML separada) descarrega
@@ -5876,7 +5961,11 @@
         let v = parseFloat(rawValue);
         if (isNaN(v) || v <= 0) { delete state.qtyDiscounts[cod]; }
         else { state.qtyDiscounts[cod] = Math.min(v, 90); }
-        refreshAllPriceViews();
+        // Adia pro próximo tick - o "change" desse input dispara durante o blur
+        // dele mesmo, e o card com esse input pode estar dentro da lista que
+        // vai ser recriada (aba Pedido); trocar o innerHTML no meio do próprio
+        // evento do input derruba o navegador com "node no longer a child".
+        setTimeout(refreshAllPriceViews, 0);
       }
 
       function removeLevItem(cod) {
@@ -6612,7 +6701,7 @@
       <tbody>
         ${rows.map(({ p, it, lp, cp, lineTotal }) => `
           <tr>
-            <td><div class="exn">${escapeHtml(p.n)}</div><div class="exc">Cód. ${p.c}${p.e ? ' · EAN ' + p.e : ''}</div></td>
+            <td><div class="exn">${escapeHtml(p.n)}</div><div class="exc">Cód. ${p.c}</div></td>
             <td class="num">${it.qty}</td>
             <td class="num">${brl(cp)}</td>
             <td class="num">${brl(lineTotal)}</td>
@@ -7357,6 +7446,7 @@
           if (!clienteNome || !clienteCodigo || !nrPedido || !codigoItem) continue; // linha em branco/rodapé
 
           const dataEmissaoISO = paraDataISO(campo(r, 'data_emissao'));
+          const dataImplantISO = paraDataISO(campo(r, 'data_implantacao'));
           const valorBruto = campo(r, 'valor');
           const notaFiscalBruta = campo(r, 'nota_fiscal');
           const classificatorioBruto = campo(r, 'classificatorio');
@@ -7368,7 +7458,7 @@
             codigo_sku: codigoItem,
             quantidade: Number(campo(r, 'quantidade')) || 0,
             valor: valorBruto != null ? Number(valorBruto) : null,
-            data_implantacao: paraDataISO(campo(r, 'data_implantacao')),
+            data_implantacao: dataImplantISO,
             data_faturamento: status === 'faturado' ? dataEmissaoISO : null,
             nota_fiscal: notaFiscalBruta != null ? String(notaFiscalBruta) : null,
             classificatorio: classificatorioBruto ?? null,
@@ -7378,7 +7468,10 @@
           });
 
           const classi = interpretarClassificatorio(classificatorioBruto);
-          if (classi) classifsFora.push({ nome: clienteNome, tipo: classi.tipo, desconto: classi.desconto, data_referencia: dataEmissaoISO });
+          // Classificatório oscila - a data que decide qual é "a mais recente"
+          // é a do Dt.Implant do pedido (não a de emissão/faturamento), pra
+          // bater com a ordem em que os pedidos realmente entraram no sistema.
+          if (classi) classifsFora.push({ nome: clienteNome, codigo_oficial: clienteCodigo, tipo: classi.tipo, desconto: classi.desconto, data_referencia: dataImplantISO });
           gravadas++;
         }
         return gravadas;
@@ -7400,12 +7493,17 @@
           throw new Error('Não encontrei as abas "Carteira" ou "Faturamento" nesta planilha (ou vieram vazias). Abas encontradas: ' + wb.SheetNames.join(', '));
         }
 
-        // dedup de classificação por cliente, ficando com a de data mais recente
+        // dedup de classificação por cliente, ficando com a de data mais
+        // recente - chave por codigo_oficial (Cod.Cliente), nunca por nome:
+        // dois clientes reais podem ter o mesmo nome com CNPJ/código
+        // diferentes, e deduplicar por nome misturaria a classificação de um
+        // com a do outro.
         const classificacoesMap = new Map();
         for (const c of classificacoesBrutas) {
-          const atual = classificacoesMap.get(c.nome);
+          const chave = c.codigo_oficial || c.nome;
+          const atual = classificacoesMap.get(chave);
           if (!atual || (c.data_referencia && (!atual.data_referencia || c.data_referencia > atual.data_referencia))) {
-            classificacoesMap.set(c.nome, c);
+            classificacoesMap.set(chave, c);
           }
         }
         return { itens, classificacoes: Array.from(classificacoesMap.values()) };
@@ -8803,25 +8901,34 @@
     </div>
   </div>`;
       }
-      function renderPedidoOficialCard(item) {
-        const emCarteira = item.status !== 'faturado';
+      // Um card por PEDIDO (não por item) - antes cada produto do mesmo
+      // pedido virava um card repetindo o mesmo Nr.Pedido, parecendo pedido
+      // duplicado. Agrupa por nr_pedido e lista os produtos dentro do card.
+      function renderPedidoOficialGrupo(nrPedido, itens) {
+        const emCarteira = itens.every(it => it.status !== 'faturado');
+        const itemFaturado = itens.find(it => it.status === 'faturado');
         let seloPedido = '';
-        if (!emCarteira && item.situacao_pedido) {
-          if (item.situacao_pedido === 'Atendido Total') seloPedido = '<span class="pedidoBadge total" title="Pedido totalmente atendido">T</span>';
-          else if (item.situacao_pedido === 'Atendido Parcial') seloPedido = '<span class="pedidoBadge parcial" title="Pedido parcialmente atendido">P</span>';
+        if (itemFaturado && itemFaturado.situacao_pedido) {
+          if (itemFaturado.situacao_pedido === 'Atendido Total') seloPedido = '<span class="pedidoBadge total" title="Pedido totalmente atendido">T</span>';
+          else if (itemFaturado.situacao_pedido === 'Atendido Parcial') seloPedido = '<span class="pedidoBadge parcial" title="Pedido parcialmente atendido">P</span>';
         }
         let nfTransp = '';
-        if (!emCarteira && (item.nota_fiscal || item.transportadora)) {
-          nfTransp = [item.nota_fiscal, item.transportadora].filter(Boolean).join(' · ');
+        if (itemFaturado && (itemFaturado.nota_fiscal || itemFaturado.transportadora)) {
+          nfTransp = [itemFaturado.nota_fiscal, itemFaturado.transportadora].filter(Boolean).join(' · ');
         }
+        const primeiro = itens[0];
+        const listaProdutos = itens.map(it => `
+          <div class="hcCode" style="margin-top:4px;">${escapeHtml(it.produto || ('Cód. ' + it.codigo_sku))} · Qt. ${it.quantidade}</div>
+        `).join('');
         return `<div class="histCard">
-    <div class="hcName">${escapeHtml(item.produto || ('Cód. ' + item.codigo_sku))}</div>
-    <div class="hcCode">Cód. ${escapeHtml(String(item.codigo_sku))} · Nr.Pedido ${escapeHtml(String(item.nr_pedido))}${seloPedido} · Qt. ${item.quantidade}</div>
+    <div class="hcName">Nr.Pedido ${escapeHtml(String(nrPedido))}${seloPedido}</div>
+    <div class="hcCode">${itens.length} produto${itens.length === 1 ? '' : 's'}</div>
     <div class="hcStats">
-      <div class="hcStat">Pedido<b>${formatDateBr(item.data_implantacao)}</b></div>
-      <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:#B8860B;' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(item.data_faturamento)}</b></div>
+      <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
+      <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:#B8860B;' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(itemFaturado.data_faturamento)}</b></div>
       ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}
     </div>
+    ${listaProdutos}
   </div>`;
       }
       function renderRecuperarCard(item) {
@@ -8958,8 +9065,20 @@
             const resp = await apiPedidosOficiaisCliente(clienteTabSelected.id);
             if (!resp.vinculado) {
               content.innerHTML = '<div class="lev-empty">Esse cliente ainda não foi encontrado no relatório oficial da empresa (Carteira/Faturamento) — o vínculo é feito automaticamente na importação, casando pelo nome.</div>';
+            } else if (resp.itens.length === 0) {
+              content.innerHTML = '<div class="lev-empty">Nenhum pedido oficial encontrado pra esse cliente ainda.</div>';
             } else {
-              content.innerHTML = resp.itens.length ? resp.itens.map(renderPedidoOficialCard).join('') : '<div class="lev-empty">Nenhum pedido oficial encontrado pra esse cliente ainda.</div>';
+              // Agrupa por Nr.Pedido - a API devolve uma linha por produto, e um
+              // pedido com vários produtos não pode virar vários cards repetindo
+              // o mesmo número (parece pedido duplicado, mas não é).
+              const porPedido = new Map();
+              for (const item of resp.itens) {
+                if (!porPedido.has(item.nr_pedido)) porPedido.set(item.nr_pedido, []);
+                porPedido.get(item.nr_pedido).push(item);
+              }
+              content.innerHTML = Array.from(porPedido.entries())
+                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens))
+                .join('');
             }
             content.querySelectorAll('[data-recuperar-add]').forEach(btn => {
               btn.addEventListener('click', () => {
@@ -9423,7 +9542,43 @@
           msg.innerHTML = '<div class="promoEmpty">Excluindo…</div>';
           try {
             const result = await apiFetch('/api/pedidos-oficiais/carteira-antiga/limpar', { method: 'POST' });
-            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.excluidos} item(ns) excluído(s).</div>`;
+            const extraTxt = result.atualizados > 0 ? ` · ${result.atualizados} pedido(s) passou(aram) de "Atendido Parcial" pra "Atendido Total".` : '';
+            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.excluidos} item(ns) excluído(s).${extraTxt}</div>`;
+            carregarStatusCarteiraAntiga();
+            carregarStatusRelatorioOficial();
+          } catch (e) {
+            msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+          }
+        });
+      }
+
+      // Apaga TODO o relatório oficial (Carteira + Faturamento) - usado
+      // quando o admin vai reimportar tudo do zero (várias planilhas
+      // corrigidas) e quer evitar dado velho misturado com o novo.
+      async function carregarStatusApagarTudoFaturamento() {
+        const el = document.getElementById('apagarTudoFaturamentoStatus');
+        if (!el) return;
+        try {
+          const status = await apiFetch('/api/pedidos-oficiais/tudo/contagem');
+          el.textContent = `${status.total} linha(s) no relatório oficial hoje.`;
+        } catch (e) {
+          el.textContent = 'Não foi possível carregar (' + e.message + ').';
+        }
+      }
+      function initApagarTudoFaturamento() {
+        carregarStatusApagarTudoFaturamento();
+        document.getElementById('apagarTudoFaturamentoBtn').addEventListener('click', async () => {
+          const msg = document.getElementById('apagarTudoFaturamentoMsg');
+          const ok = await askConfirm(
+            'Apagar TODAS as linhas do relatório oficial (Carteira + Faturamento)? Isso inclui o histórico de pedidos oficiais e some com o classificatório aprendido por esse relatório até você reimportar tudo de novo. Essa ação não pode ser desfeita.',
+            'Apagar tudo'
+          );
+          if (!ok) return;
+          msg.innerHTML = '<div class="promoEmpty">Apagando…</div>';
+          try {
+            const result = await apiFetch('/api/pedidos-oficiais/tudo/limpar', { method: 'POST' });
+            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.excluidos} linha(s) apagada(s). Pode reimportar as planilhas agora.</div>`;
+            carregarStatusApagarTudoFaturamento();
             carregarStatusCarteiraAntiga();
             carregarStatusRelatorioOficial();
           } catch (e) {
@@ -11038,6 +11193,8 @@
             }
           });
           document.getElementById('clearPriceListBtn').addEventListener('click', clearPriceList);
+          document.getElementById('addAllPriceListBtn').addEventListener('click', addAllPriceListToCart);
+          document.getElementById('addAllResultsBtn').addEventListener('click', addAllResultsToCart);
 
           initAppConfirmModal();
           document.getElementById('cartBar').addEventListener('click', openDrawer);
@@ -11071,6 +11228,7 @@
           initPdfConsolidacao();
           initRelatorioOficialImport();
           initCarteiraAntigaLimpar();
+          initApagarTudoFaturamento();
           initImportClassificatorio();
 
           renderResults();

@@ -60,16 +60,59 @@ router.get('/carteira-antiga/contagem', async (req, res) => {
 // o filtro é sempre status = 'carteira'.
 router.post('/carteira-antiga/limpar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode limpar a carteira antiga.' });
+  const client = await pool.connect();
   try {
-    const result = await pool.query(
+    await client.query('BEGIN');
+    const excluidos = await client.query(
       `DELETE FROM pedidos_oficiais_itens
        WHERE status = 'carteira' AND data_implantacao < CURRENT_DATE - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
     );
-    console.log(`Carteira antiga limpa: ${result.rowCount} item(ns) excluído(s) (>${CARTEIRA_ANTIGA_DIAS} dias em carteira) por ${req.usuario?.email}.`);
+    // Pedido que só ficou "Parcial" por causa do item em carteira que acabou
+    // de sumir (nunca ia ser atendido mesmo) passa a valer como totalmente
+    // atendido - só pega pedidos sem NENHUM item em carteira restante, então
+    // um pedido que ainda tem outro item em carteira mais novo continua
+    // "Parcial" corretamente.
+    const atualizados = await client.query(
+      `UPDATE pedidos_oficiais_itens
+       SET situacao_pedido = 'Atendido Total'
+       WHERE situacao_pedido = 'Atendido Parcial'
+         AND nr_pedido NOT IN (SELECT nr_pedido FROM pedidos_oficiais_itens WHERE status = 'carteira')`
+    );
+    await client.query('COMMIT');
+    console.log(`Carteira antiga limpa: ${excluidos.rowCount} item(ns) excluído(s) (>${CARTEIRA_ANTIGA_DIAS} dias em carteira), ${atualizados.rowCount} linha(s) atualizada(s) de Atendido Parcial pra Total, por ${req.usuario?.email}.`);
+    res.json({ excluidos: excluidos.rowCount, atualizados: atualizados.rowCount });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao limpar carteira antiga.' });
+  } finally {
+    client.release();
+  }
+});
+
+// Contagem/exclusão de TODO o banco de faturamento (Carteira + Faturamento) -
+// usado quando o admin vai reimportar tudo do zero pra evitar dado velho
+// misturado com o novo. Ação manual, irreversível, só admin - mesmo padrão
+// da "carteira antiga" acima, mas sem filtro nenhum (apaga tudo mesmo).
+router.get('/tudo/contagem', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver essa contagem.' });
+  try {
+    const result = await pool.query('SELECT COUNT(*) AS total FROM pedidos_oficiais_itens');
+    res.json({ total: Number(result.rows[0].total) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao contar o relatório oficial.' });
+  }
+});
+router.post('/tudo/limpar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode apagar o relatório oficial.' });
+  try {
+    const result = await pool.query('DELETE FROM pedidos_oficiais_itens');
+    console.log(`Relatório oficial de faturamento apagado por completo: ${result.rowCount} linha(s) excluída(s), por ${req.usuario?.email}.`);
     res.json({ excluidos: result.rowCount });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao limpar carteira antiga.' });
+    res.status(500).json({ erro: 'Erro ao apagar o relatório oficial.' });
   }
 });
 
@@ -205,7 +248,7 @@ router.post('/importar', async (req, res) => {
     let clientesClassificados = 0, clientesClassifIgnorados = 0;
     for (const c of (classificacoes || [])) {
       if (!c.nome || !c.tipo) continue;
-      const clienteId = await acharOuCriarCliente(client, { nome: c.nome });
+      const clienteId = await acharOuCriarCliente(client, { nome: c.nome, codigo_oficial: c.codigo_oficial || null });
       const dataRef = c.data_referencia || null;
       const upd = await client.query(
         `UPDATE clientes
