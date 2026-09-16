@@ -199,9 +199,10 @@ async function query(sql, params = []) {
     if (!cliente) return { rows: [] };
     const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
     const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
-    const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12);
-    const cutoffStr = cutoff.toISOString().slice(0, 10);
-    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= cutoffStr);
+    const ano = anoClassificatorioFechado();
+    const inicioStr = `${ano}-01-01`;
+    const fimStr = `${ano + 1}-01-01`;
+    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr);
     const porTrimestre = {};
     for (const it of itens) {
       const d = new Date(it.data_faturamento);
@@ -637,18 +638,26 @@ async function query(sql, params = []) {
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 
+// Ano civil fechado usado pela revisão do classificatório (ver
+// PERIODO_CLASSIFICATORIO_*/comentário em routes/clientesClassificatorio.js):
+// o ano anterior ao atual, inteiro (não uma janela móvel de 12 meses).
+function anoClassificatorioFechado() {
+  return new Date().getFullYear() - 1;
+}
+
 // Reproduz a query SQL_FATURAMENTO_12M_POR_CLIENTE de routes/clientesClassificatorio.js -
-// soma faturado nos últimos 12 meses, agrupado por matriz_grupo (ou o próprio
-// cliente, se não tiver grupo).
+// soma faturado no ano civil fechado mais recente, agrupado por
+// matriz_grupo (ou o próprio cliente, se não tiver grupo).
 function calcularFaturamento12mParaCliente(clienteId) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
   if (!cliente) return { faturamento_12m: 0, ultima_compra: null };
   const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
   const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
   const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado');
-  const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 12);
-  const cutoffStr = cutoff.toISOString().slice(0, 10);
-  const itensJanela = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= cutoffStr);
+  const ano = anoClassificatorioFechado();
+  const inicioStr = `${ano}-01-01`;
+  const fimStr = `${ano + 1}-01-01`;
+  const itensJanela = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr);
   const faturamento_12m = itensJanela.reduce((s, it) => s + (Number(it.valor) || 0), 0);
   const datas = itensFaturados.map(it => it.data_faturamento).filter(Boolean).sort();
   const ultima_compra = datas.length ? datas[datas.length - 1] : null;
