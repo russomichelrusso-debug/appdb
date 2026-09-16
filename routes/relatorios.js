@@ -2,6 +2,37 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { SQL_FATURAMENTO_12M_POR_CLIENTE } = require('./clientesClassificatorio');
+const { mesclarPorCodigoBase } = require('./lib/skuNormalizacao');
+
+// Reconcilia códigos promocionais (P/P1/P2 + código base, ver
+// routes/lib/skuNormalizacao.js) num array já agregado por codigo_sku
+// literal, e corrige num_pedidos pros grupos que mescharam 2+ códigos
+// (soma ingênua de COUNT DISTINCT pode contar duas vezes um nr_pedido
+// que por acaso tem o código base E a variante na mesma linha de
+// pedido - raro, mas a query extra é barata já que só acontece pra
+// grupos que de fato mescIaram).
+async function reconciliarProdutosPorCodigoBase(linhas, { inicio, fim, clienteCodigo } = {}) {
+  const produtosResult = await pool.query('SELECT codigo_sku, nome, categoria FROM produtos');
+  const produtosPorCodigo = {};
+  for (const p of produtosResult.rows) produtosPorCodigo[p.codigo_sku] = p;
+  const mescladas = mesclarPorCodigoBase(linhas, produtosPorCodigo);
+  for (const grupo of mescladas) {
+    if (grupo._codigosOriginais.length < 2) continue;
+    const fixupParams = [grupo._codigosOriginais];
+    let fixupFiltro = '';
+    if (clienteCodigo) { fixupParams.push(clienteCodigo); fixupFiltro += ` AND cliente_codigo_oficial = $${fixupParams.length}`; }
+    if (inicio) { fixupParams.push(inicio); fixupFiltro += ` AND data_faturamento >= $${fixupParams.length}::date`; }
+    if (fim) { fixupParams.push(fim); fixupFiltro += ` AND data_faturamento <= $${fixupParams.length}::date`; }
+    const fixup = await pool.query(
+      `SELECT COUNT(DISTINCT nr_pedido) AS total FROM pedidos_oficiais_itens
+       WHERE status = 'faturado' AND codigo_sku = ANY($1::text[])${fixupFiltro}`,
+      fixupParams
+    );
+    grupo.num_pedidos = Number(fixup.rows[0].total);
+  }
+  for (const grupo of mescladas) delete grupo._codigosOriginais;
+  return mescladas;
+}
 
 // Canal do cliente pro Dashboard (não existe campo de canal de venda no
 // cadastro - deriva do prefixo do classificatorio_tipo, mesma convenção já
@@ -307,7 +338,9 @@ router.get('/produtos-abc-geral', async (req, res) => {
        ORDER BY faturamento_total DESC NULLS LAST`,
       params
     );
-    res.json(result.rows);
+    const reconciliado = await reconciliarProdutosPorCodigoBase(result.rows, { inicio, fim });
+    reconciliado.sort((a, b) => b.faturamento_total - a.faturamento_total);
+    res.json(reconciliado);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular curva ABC geral.' });
@@ -350,7 +383,9 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
        ORDER BY faturamento_total DESC NULLS LAST`,
       params
     );
-    res.json(result.rows);
+    const reconciliado = await reconciliarProdutosPorCodigoBase(result.rows, { inicio, fim, clienteCodigo: codigoOficial });
+    reconciliado.sort((a, b) => b.faturamento_total - a.faturamento_total);
+    res.json(reconciliado);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular curva ABC do cliente.' });

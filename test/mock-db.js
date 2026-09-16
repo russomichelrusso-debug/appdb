@@ -19,6 +19,7 @@ let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
+let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
@@ -36,6 +37,7 @@ function reset() {
   clienteCnpjFicha = {};
   pedidosOficiaisItens = [];
   configuracoes = {};
+  catalogoPrecos = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
@@ -45,6 +47,7 @@ function reset() {
 function seed(partial) {
   if (partial.clientes) clientes.push(...partial.clientes);
   if (partial.pedidosOficiaisItens) pedidosOficiaisItens.push(...partial.pedidosOficiaisItens);
+  if (partial.catalogoPrecos) catalogoPrecos.push(...partial.catalogoPrecos);
 }
 
 async function query(sql, params = []) {
@@ -222,6 +225,75 @@ async function query(sql, params = []) {
     return { rows };
   }
 
+  // produtos-abc-geral / clientes/:id/produtos-abc (routes/relatorios.js) -
+  // agrega pedidos_oficiais_itens por codigo_sku literal, igual a query
+  // real faz antes da reconciliação P/P1/P2 (feita em JS depois, no
+  // próprio relatorios.js - aqui só precisa devolver os dados crus).
+  if (s.includes('COALESCE(P.NOME, POI.CODIGO_SKU) AS PRODUTO')) {
+    const porCliente = s.includes('POI.CLIENTE_CODIGO_OFICIAL = $1');
+    let idx = 0;
+    const clienteCodigo = porCliente ? params[idx++] : null;
+    let inicio = null, fim = null;
+    if (s.includes('DATA_FATURAMENTO >=')) inicio = params[idx++];
+    if (s.includes('DATA_FATURAMENTO <=')) fim = params[idx++];
+    let itens = pedidosOficiaisItens.filter(it => it.status === 'faturado');
+    if (porCliente) itens = itens.filter(it => it.cliente_codigo_oficial === clienteCodigo);
+    if (inicio) itens = itens.filter(it => it.data_faturamento && it.data_faturamento >= inicio);
+    if (fim) itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim);
+    const porCodigo = new Map();
+    for (const it of itens) {
+      const atual = porCodigo.get(it.codigo_sku) || { codigo_sku: it.codigo_sku, pedidosSet: new Set(), quantidade_total: 0, faturamento_total: 0 };
+      atual.pedidosSet.add(it.nr_pedido);
+      atual.quantidade_total += Number(it.quantidade) || 0;
+      atual.faturamento_total += Number(it.valor) || 0;
+      porCodigo.set(it.codigo_sku, atual);
+    }
+    const rows = [...porCodigo.values()].map(g => {
+      const prod = produtos.find(p => p.codigo_sku === g.codigo_sku);
+      return {
+        codigo_sku: g.codigo_sku,
+        produto: prod ? prod.nome : g.codigo_sku,
+        categoria: prod ? prod.categoria : null,
+        num_pedidos: g.pedidosSet.size,
+        quantidade_total: g.quantidade_total,
+        faturamento_total: g.faturamento_total,
+      };
+    }).sort((a, b) => b.faturamento_total - a.faturamento_total);
+    return { rows };
+  }
+  // Fixup de num_pedidos pra grupos reconciliados por código base (evita
+  // contar duas vezes um nr_pedido que tem código base + variante P na
+  // mesma linha de pedido) - routes/relatorios.js, reconciliarProdutosPorCodigoBase.
+  if (s.startsWith('SELECT COUNT(DISTINCT NR_PEDIDO) AS TOTAL FROM PEDIDOS_OFICIAIS_ITENS') && s.includes('CODIGO_SKU = ANY(')) {
+    const codigos = params[0];
+    let idx = 1;
+    let itens = pedidosOficiaisItens.filter(it => it.status === 'faturado' && codigos.includes(it.codigo_sku));
+    if (s.includes('CLIENTE_CODIGO_OFICIAL = $')) { const cc = params[idx++]; itens = itens.filter(it => it.cliente_codigo_oficial === cc); }
+    if (s.includes('DATA_FATURAMENTO >=')) { const ini = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento >= ini); }
+    if (s.includes('DATA_FATURAMENTO <=')) { const fim = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim); }
+    const total = new Set(itens.map(it => it.nr_pedido)).size;
+    return { rows: [{ total }] };
+  }
+
+  // GET /api/pedidos-oficiais/:clienteId (routes/pedidosOficiais.js) - uma
+  // linha por nr_pedido+codigo_sku, com o nome do produto via LEFT JOIN.
+  if (s.includes('POI.NR_PEDIDO, POI.CODIGO_SKU, PR.NOME AS PRODUTO')) {
+    const itens = pedidosOficiaisItens
+      .filter(it => it.cliente_codigo_oficial === params[0])
+      .map(it => {
+        const prod = produtos.find(p => p.codigo_sku === it.codigo_sku);
+        return {
+          nr_pedido: it.nr_pedido, codigo_sku: it.codigo_sku, produto: prod ? prod.nome : null,
+          quantidade: it.quantidade, valor: it.valor, data_implantacao: it.data_implantacao,
+          data_faturamento: it.data_faturamento, nota_fiscal: it.nota_fiscal || null,
+          classificatorio: it.classificatorio || null, transportadora: it.transportadora || null,
+          situacao_pedido: it.situacao_pedido || null, status: it.status,
+        };
+      })
+      .sort((a, b) => (b.data_implantacao || '').localeCompare(a.data_implantacao || ''));
+    return { rows: itens };
+  }
+
   // Dashboard principal (curva-abc.html, GET /api/dashboard/resumo) -
   // agregações mensal/semanal/trimestral pro negócio inteiro (sem JOIN em
   // clientes, diferente do trimestral por cliente do classificatório acima)
@@ -348,6 +420,23 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT ID, CODIGO_SKU, NOME, CATEGORIA FROM PRODUTOS')) {
     return { rows: produtos };
+  }
+  // Reconciliação P/P1/P2 (routes/lib/skuNormalizacao.js) - busca os
+  // produtos conhecidos pra resolver o código base de uma variante.
+  if (s === 'SELECT CODIGO_SKU, NOME, CATEGORIA FROM PRODUTOS') {
+    return { rows: produtos.map(p => ({ codigo_sku: p.codigo_sku, nome: p.nome, categoria: p.categoria })) };
+  }
+  if (s === 'SELECT CODIGO_SKU, NOME FROM PRODUTOS') {
+    return { rows: produtos.map(p => ({ codigo_sku: p.codigo_sku, nome: p.nome })) };
+  }
+
+  // catalogo_precos (routes/catalogoPrecos.js) - usado pela geração em
+  // lote de produtos promocionais (routes/produtosPromocionais.js).
+  if (s === 'SELECT CODIGO_SKU FROM CATALOGO_PRECOS') {
+    return { rows: catalogoPrecos.map(p => ({ codigo_sku: p.codigo_sku })) };
+  }
+  if (s.startsWith('SELECT CODIGO_SKU, NOME, EMB, IPI, FAMILIA, PRECOS_SEM_IMPOSTO FROM CATALOGO_PRECOS WHERE CODIGO_SKU')) {
+    return { rows: catalogoPrecos.filter(p => p.codigo_sku === params[0]) };
   }
 
   // pedidos
@@ -535,7 +624,7 @@ async function query(sql, params = []) {
   // Configurações genéricas chave/valor (routes/configuracoes.js) - usado
   // hoje por produtos_promocionais/promocoes e pela meta mensal/produtos
   // foco do Dashboard.
-  if (s.startsWith('SELECT VALOR, ATUALIZADO_EM FROM CONFIGURACOES WHERE CHAVE')) {
+  if (s.includes('FROM CONFIGURACOES WHERE CHAVE')) {
     const registro = configuracoes[params[0]];
     return { rows: registro ? [{ valor: registro.valor, atualizado_em: registro.atualizado_em }] : [] };
   }

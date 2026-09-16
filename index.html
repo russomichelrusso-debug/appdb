@@ -4390,6 +4390,15 @@
                 mês — a lista já vem do catálogo carregado, sem precisar digitar nada.</p>
               <div id="produtosFocoList"></div>
             </div>
+            <div class="ap-card">
+              <h3>Desconto por classificatório (campanhas)</h3>
+              <p class="ap-hint" style="margin:10px 0;">Pra campanhas cujo desconto varia pelo classificatório do
+                PRÓPRIO cliente (ex: "Essenciais da Obra" — Master 20% / Premium 23% / Exclusive 25%). Quando o
+                cliente selecionado tem esse classificatório e um produto da regra é adicionado ao orçamento, o
+                desconto adicional do item já vem preenchido sozinho.</p>
+              <div id="classiDiscountRulesList"></div>
+              <button class="fileBtn" id="addClassiDiscountRuleBtn" style="margin-top:10px;">+ Nova regra</button>
+            </div>
           </div>
         </details>
 
@@ -4707,6 +4716,54 @@
       </div>
     </div>
 
+    <div class="minimodal hidden" id="classiDiscountModal">
+      <div class="minimodal-card" style="max-width:400px;max-height:85vh;overflow-y:auto;">
+        <h3>Nova regra de desconto por classificatório</h3>
+        <label for="classiDiscountLabel">Nome da regra</label>
+        <input type="text" id="classiDiscountLabel" placeholder="Ex: Essenciais da Obra - setembro/2026">
+
+        <label>O desconto vale pra…</label>
+        <div class="segmented" id="classiTargetTypeSeg" style="margin-bottom:12px;">
+          <button type="button" data-v="category" class="active">Categoria</button>
+          <button type="button" data-v="product">Produto</button>
+          <button type="button" data-v="skuList">Grupo de produtos</button>
+        </div>
+        <div id="classiTargetCatWrap">
+          <select id="classiTargetCat" style="margin-bottom:16px;"></select>
+        </div>
+        <div id="classiTargetProdWrap" class="hidden">
+          <input type="text" id="classiTargetProd" placeholder="Código do produto (ex: 60863)" style="margin-bottom:4px;">
+          <div class="prodResolveMsg" id="classiTargetProdResolve"></div>
+        </div>
+        <div id="classiTargetSkuListWrap" class="hidden">
+          <input type="text" id="classiTargetSkuList" placeholder="Códigos separados por vírgula" style="margin-bottom:4px;">
+          <div class="prodResolveMsg" id="classiTargetSkuListResolve"></div>
+        </div>
+
+        <label>Desconto por classificatório (%)</label>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;">Varejo Master</span>
+            <input class="num-input" type="number" id="classiPctMaster" min="0" max="90" step="0.5" placeholder="0" style="width:80px;margin:0;">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;">Varejo Premium</span>
+            <input class="num-input" type="number" id="classiPctPremium" min="0" max="90" step="0.5" placeholder="0" style="width:80px;margin:0;">
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="flex:1;font-size:13px;">Varejo Exclusive</span>
+            <input class="num-input" type="number" id="classiPctExclusive" min="0" max="90" step="0.5" placeholder="0" style="width:80px;margin:0;">
+          </div>
+        </div>
+
+        <div id="classiDiscountFormMsg"></div>
+        <div class="minimodal-btnrow">
+          <button id="classiDiscountCancelBtn">Cancelar</button>
+          <button id="classiDiscountSaveBtn">Salvar regra</button>
+        </div>
+      </div>
+    </div>
+
     <div id="exportTemplate"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
@@ -4814,6 +4871,7 @@
         priceOverrides: {}, // {cod: preçoLíquidoEditado} - preço base manual (antes de impostos), por sessão
         qtyDiscounts: {}, // {cod: percentual} - desconto extra por quantidade, por produto
         promoRules: [], // regras de campanha sazonal, por categoria
+        classiDiscountRules: [], // desconto extra por classificatório do cliente, por família/produto (ex: Essenciais da Obra)
         priceList: [] // [cod, ...] - lista de preços da aba Preços, cresce a cada código inserido
       };
 
@@ -5497,6 +5555,7 @@
         const existing = state.cart.find(i => i.cod === cod);
         if (existing) existing.qty += amount;
         else state.cart.push({ cod, qty: amount });
+        autoFillClassificatorioDiscount(cod);
         showToast('Adicionado ao orçamento');
         renderCartBar();
       }
@@ -6064,6 +6123,25 @@
         setTimeout(refreshAllPriceViews, 0);
       }
 
+      // Preenche sozinho o desconto adicional de um item quando o cliente
+      // selecionado tem classificatório e o produto bate o escopo de alguma
+      // campanha configurada em state.classiDiscountRules (ex: "Essenciais
+      // da Obra" - Master 20%/Premium 23%/Exclusive 25%). Nunca sobrescreve
+      // um valor que o vendedor já tenha digitado (manual ou de um
+      // preenchimento automático anterior) - troca de cliente no meio do
+      // pedido não reajusta retroativamente um item já preenchido.
+      function autoFillClassificatorioDiscount(cod) {
+        const p = productByCod(cod);
+        const tipo = state.levCliente && state.levCliente.classificatorio_tipo;
+        if (!p || !tipo) return;
+        if (Object.prototype.hasOwnProperty.call(state.qtyDiscounts, cod)) return;
+        for (const regra of (state.classiDiscountRules || [])) {
+          if (!scopeMatchesProduct(regra.targetType, regra.targetValue, p)) continue;
+          const pct = regra.mapa && regra.mapa[tipo];
+          if (pct > 0) { setItemDiscount(cod, pct); return; }
+        }
+      }
+
       function removeLevItem(cod) {
         state.survey = state.survey.filter(i => i.cod !== cod);
         saveLevSurvey();
@@ -6318,6 +6396,11 @@
         if (cliente && cliente.classificatorio_desconto !== undefined && cliente.classificatorio_desconto !== null) {
           setChannelDiscount(Number(cliente.classificatorio_desconto));
           showToast(`Desconto de canal ajustado pra ${cliente.classificatorio_desconto}% (${cliente.classificatorio_tipo})`);
+        }
+        // Cobre "cliente selecionado depois que o produto já estava no
+        // carrinho" - o gancho em addToCart cobre a ordem inversa.
+        if (cliente && cliente.classificatorio_tipo) {
+          for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
         }
         saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
       }
@@ -10036,6 +10119,17 @@
         await apiFetch('/api/configuracoes/promocoes', { method: 'POST', body: JSON.stringify({ valor: rules }) });
         PROMO_SOURCE = 'Servidor · atualizado agora · todos os aparelhos';
       }
+      // Desconto extra por classificatório do cliente, por família/produto
+      // (ex: "Essenciais da Obra" - Master 20%/Premium 23%/Exclusive 25%) -
+      // mesmo mecanismo genérico de configurações usado pra promocoes/
+      // produtos_promocionais.
+      async function loadActiveClassiDiscountRules() {
+        try { return (await apiFetch('/api/configuracoes/descontos_por_classificatorio_categoria')).valor || []; }
+        catch (e) { return []; }
+      }
+      async function salvarClassiDiscountRulesServidor(rules) {
+        await apiFetch('/api/configuracoes/descontos_por_classificatorio_categoria', { method: 'POST', body: JSON.stringify({ valor: rules }) });
+      }
 
       function saveActiveDB(newDb, fileName) {
         try {
@@ -10211,9 +10305,9 @@
         });
       }
 
-      function populateCategorySelects() {
+      function populateCategorySelects(selectId) {
         const opts = DB.familias.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
-        document.getElementById('promoTargetCat').innerHTML = opts;
+        document.getElementById(selectId || 'promoTargetCat').innerHTML = opts;
       }
 
       function resolveProductCodeDisplay(code, msgEl) {
@@ -10645,7 +10739,7 @@
 
           const orig = promoProdutoOriginalSelecionado;
           const novoProduto = {
-            c: codigo, e: '', n: nome, cat: orig.cat, emb: orig.emb, ipi: orig.ipi,
+            c: codigo, e: '', n: nome, cat: orig.cat, familia: productFamilia(orig), emb: orig.emb, ipi: orig.ipi,
             lsp, lss, lnc, st: orig.st, fx: 1, origemCodigo: orig.c,
           };
 
@@ -10706,6 +10800,136 @@
         });
         refreshPromoStatus();
         renderPromoRulesList();
+      }
+
+      // ---------------- Desconto por classificatório (campanhas) ------
+      let classiDiscountEditingId = null;
+      function setClassiTargetType(type) {
+        document.getElementById('classiTargetTypeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === type));
+        document.getElementById('classiTargetCatWrap').classList.toggle('hidden', type !== 'category');
+        document.getElementById('classiTargetProdWrap').classList.toggle('hidden', type !== 'product');
+        document.getElementById('classiTargetSkuListWrap').classList.toggle('hidden', type !== 'skuList');
+      }
+      function classiRuleSummaryText(r) {
+        const targetLabel = scopeLabel(r.targetType, r.targetValue);
+        const partes = Object.entries(r.mapa || {}).map(([tipo, pct]) => `${tipo}: ${pct}%`);
+        return `"${targetLabel}" — ${partes.join(' · ')}`;
+      }
+      function renderClassiDiscountRulesList() {
+        const wrap = document.getElementById('classiDiscountRulesList');
+        const rules = state.classiDiscountRules || [];
+        if (rules.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhuma regra cadastrada ainda.</div>'; return; }
+        wrap.innerHTML = rules.map(r => `
+    <div class="promoRuleItem">
+      <div class="prTop">
+        <div>
+          <div class="prName">${escapeHtml(r.label)}</div>
+          <div class="prDetail">${escapeHtml(classiRuleSummaryText(r))}</div>
+        </div>
+        <div class="prBtns">
+          <button data-edit-classi="${escapeHtml(r.id)}" aria-label="Editar" title="Editar">✎</button>
+          <button data-del-classi="${escapeHtml(r.id)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">🗑</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
+        wrap.querySelectorAll('[data-edit-classi]').forEach(b => b.addEventListener('click', () => openClassiDiscountForm(b.dataset.editClassi)));
+        wrap.querySelectorAll('[data-del-classi]').forEach(b => b.addEventListener('click', async () => {
+          if (!await askConfirm('Excluir essa regra de desconto por classificatório?')) return;
+          state.classiDiscountRules = state.classiDiscountRules.filter(r => r.id !== b.dataset.delClassi);
+          await salvarClassiDiscountRulesServidor(state.classiDiscountRules);
+          renderClassiDiscountRulesList();
+        }));
+      }
+      function openClassiDiscountForm(ruleId) {
+        classiDiscountEditingId = ruleId || null;
+        const rule = ruleId ? state.classiDiscountRules.find(r => r.id === ruleId) : null;
+        populateCategorySelects('classiTargetCat');
+
+        document.getElementById('classiDiscountLabel').value = rule ? rule.label : '';
+        const targetType = rule ? rule.targetType : 'category';
+        setClassiTargetType(targetType);
+        if (targetType === 'category') {
+          document.getElementById('classiTargetCat').value = rule ? rule.targetValue : (DB.familias[0] || '');
+        } else if (targetType === 'skuList') {
+          document.getElementById('classiTargetSkuList').value = rule ? rule.targetValue : '';
+          resolveSkuListDisplay(rule ? rule.targetValue : '', document.getElementById('classiTargetSkuListResolve'));
+        } else {
+          document.getElementById('classiTargetProd').value = rule ? rule.targetValue : '';
+          resolveProductCodeDisplay(rule ? rule.targetValue : '', document.getElementById('classiTargetProdResolve'));
+        }
+        document.getElementById('classiPctMaster').value = rule?.mapa?.['Varejo Master'] ?? '';
+        document.getElementById('classiPctPremium').value = rule?.mapa?.['Varejo Premium'] ?? '';
+        document.getElementById('classiPctExclusive').value = rule?.mapa?.['Varejo Exclusive'] ?? '';
+        document.getElementById('classiDiscountFormMsg').innerHTML = '';
+        document.getElementById('classiDiscountModal').classList.remove('hidden');
+      }
+      function closeClassiDiscountForm() {
+        document.getElementById('classiDiscountModal').classList.add('hidden');
+        classiDiscountEditingId = null;
+      }
+      async function saveClassiDiscountRuleFromForm() {
+        const label = document.getElementById('classiDiscountLabel').value.trim();
+        const targetType = document.getElementById('classiTargetTypeSeg').querySelector('button.active').dataset.v;
+        let targetValue;
+        if (targetType === 'category') targetValue = document.getElementById('classiTargetCat').value;
+        else if (targetType === 'skuList') targetValue = document.getElementById('classiTargetSkuList').value.trim();
+        else targetValue = document.getElementById('classiTargetProd').value.trim();
+        const msg = document.getElementById('classiDiscountFormMsg');
+
+        if (!label) { msg.innerHTML = '<div class="ap-msg error">Dê um nome pra essa regra.</div>'; return; }
+        if (!targetValue) { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, produto ou grupo.</div>'; return; }
+        if (targetType === 'product' && !productByCod(targetValue)) {
+          msg.innerHTML = '<div class="ap-msg error">Código de produto não encontrado — confira o código.</div>';
+          return;
+        }
+        if (targetType === 'skuList') {
+          const codes = targetValue.split(',').map(s => s.trim()).filter(Boolean);
+          const notFound = codes.filter(c => !productByCod(c));
+          if (notFound.length) {
+            msg.innerHTML = `<div class="ap-msg error">Código(s) não encontrado(s): ${escapeHtml(notFound.join(', '))}</div>`;
+            return;
+          }
+          targetValue = codes.join(',');
+        }
+        const mapa = {};
+        const master = parseFloat(document.getElementById('classiPctMaster').value);
+        const premium = parseFloat(document.getElementById('classiPctPremium').value);
+        const exclusive = parseFloat(document.getElementById('classiPctExclusive').value);
+        if (master > 0) mapa['Varejo Master'] = master;
+        if (premium > 0) mapa['Varejo Premium'] = premium;
+        if (exclusive > 0) mapa['Varejo Exclusive'] = exclusive;
+        if (Object.keys(mapa).length === 0) { msg.innerHTML = '<div class="ap-msg error">Informe ao menos um % maior que zero.</div>'; return; }
+
+        const rule = { id: classiDiscountEditingId || ('cd' + Date.now()), label, targetType, targetValue, mapa };
+        if (classiDiscountEditingId) {
+          const idx = state.classiDiscountRules.findIndex(r => r.id === classiDiscountEditingId);
+          if (idx >= 0) state.classiDiscountRules[idx] = rule;
+        } else {
+          state.classiDiscountRules.push(rule);
+        }
+        try {
+          await salvarClassiDiscountRulesServidor(state.classiDiscountRules);
+          closeClassiDiscountForm();
+          renderClassiDiscountRulesList();
+        } catch (e) {
+          msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+        }
+      }
+      function initClassiDiscountAdmin() {
+        document.getElementById('addClassiDiscountRuleBtn').addEventListener('click', () => openClassiDiscountForm(null));
+        document.getElementById('classiDiscountCancelBtn').addEventListener('click', closeClassiDiscountForm);
+        document.getElementById('classiDiscountSaveBtn').addEventListener('click', saveClassiDiscountRuleFromForm);
+        document.getElementById('classiTargetTypeSeg').querySelectorAll('button').forEach(b => {
+          b.addEventListener('click', () => setClassiTargetType(b.dataset.v));
+        });
+        document.getElementById('classiTargetProd').addEventListener('input', (e) => {
+          resolveProductCodeDisplay(e.target.value, document.getElementById('classiTargetProdResolve'));
+        });
+        document.getElementById('classiTargetSkuList').addEventListener('input', (e) => {
+          resolveSkuListDisplay(e.target.value, document.getElementById('classiTargetSkuListResolve'));
+        });
+        renderClassiDiscountRulesList();
       }
 
       function initAdminPanel() {
@@ -11245,6 +11469,7 @@
           console.warn('Não foi possível carregar o catálogo de produtos:', e);
         }
         try { state.promoRules = await loadActivePromoRules(); } catch (e) { }
+        try { state.classiDiscountRules = await loadActiveClassiDiscountRules(); } catch (e) { }
         try { PREVISAO_MAP = await loadActivePrevisao(); } catch (e) { }
         syncClientesLocaisComInsistenciaNoInicio(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
         // corrige a busca/carrinho depois que o catálogo terminar de chegar, caso o
@@ -11280,6 +11505,7 @@
 
           initAdminPanel();
           initPromoRulesAdmin();
+          initClassiDiscountAdmin();
           initPromoProdutosAdmin();
           document.getElementById('importFichasBtn').addEventListener('click', () => document.getElementById('fichasFileInput').click());
           document.getElementById('fichasFileInput').addEventListener('change', (e) => {

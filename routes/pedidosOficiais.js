@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
+const { codigoBase } = require('./lib/skuNormalizacao');
 
 // Status geral da importação oficial - pro painel admin mostrar de cara
 // quando foi o último relatório importado, sem precisar abrir cliente por
@@ -178,6 +179,27 @@ router.get('/:clienteId', async (req, res) => {
        ORDER BY poi.data_implantacao DESC NULLS LAST`,
       [codigoOficial]
     );
+    // Reconcilia códigos promocionais (P/P1/P2 + código base) - quando o
+    // join direto não achou o produto (código literal só existe como
+    // variante de campanha), busca pelo código base e mostra o nome/
+    // categoria do produto original, mantendo o código literal em
+    // codigo_sku_original pra quem precisar rastrear até a fatura.
+    const semProduto = [...new Set(result.rows.filter(it => !it.produto).map(it => it.codigo_sku))];
+    if (semProduto.length > 0) {
+      const produtosResult = await pool.query('SELECT codigo_sku, nome FROM produtos');
+      const codigosConhecidos = new Set(produtosResult.rows.map(p => p.codigo_sku));
+      const nomesPorCodigo = {};
+      for (const p of produtosResult.rows) nomesPorCodigo[p.codigo_sku] = p.nome;
+      for (const item of result.rows) {
+        if (item.produto) continue;
+        const base = codigoBase(item.codigo_sku, codigosConhecidos);
+        if (base !== item.codigo_sku) {
+          item.codigo_sku_original = item.codigo_sku;
+          item.codigo_sku = base;
+          item.produto = nomesPorCodigo[base];
+        }
+      }
+    }
     res.json({ vinculado: true, itens: result.rows });
   } catch (e) {
     console.error(e);
