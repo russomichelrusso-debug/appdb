@@ -1328,19 +1328,24 @@
 
     .priceListItem {
       position: relative;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .priceListItem .card {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .priceListItem .itemNum {
+      margin-top: 14px;
     }
 
     .priceListItem .rm {
       position: absolute;
       top: 10px;
       right: 10px;
-    }
-
-    .priceListItem .itemNum {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      z-index: 1;
     }
 
     .cartitem .bottom {
@@ -3198,10 +3203,18 @@
 
     .itemNum {
       flex-shrink: 0;
-      font-size: 12px;
-      font-weight: 800;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--fill);
       color: var(--gray);
-      margin-right: 6px;
+      font-size: 11px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: middle;
+      margin-right: 4px;
     }
 
     .lev-list {
@@ -5280,7 +5293,7 @@
         if (totalEl) totalEl.textContent = '· ' + totalItensLabel(produtos.length);
         wrap.innerHTML = produtos.map((p, idx) => `
     <div class="priceListItem">
-      <span class="itemNum">${itemNumLabel(idx)}</span>
+      <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
       ${renderCard(p)}
       <button class="rm" data-pricelist-rm="${p.c}" aria-label="Remover">&times;</button>
     </div>
@@ -5831,7 +5844,7 @@
       <div class="cartitem">
         <div class="top">
           <div>
-            <span class="itemNum">${itemNumLabel(idx)}</span>
+            <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
             <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c) > 0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
