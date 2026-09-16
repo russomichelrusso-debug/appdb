@@ -300,3 +300,4 @@ module.exports = router;
 module.exports.calcularStatusClassificatorio = calcularStatusClassificatorio;
 module.exports.calcularRitmoTrimestral = calcularRitmoTrimestral;
 module.exports.FAIXAS = FAIXAS;
+module.exports.SQL_FATURAMENTO_12M_POR_CLIENTE = SQL_FATURAMENTO_12M_POR_CLIENTE;

@@ -334,11 +334,32 @@
       <div class="chartCard">
         <div class="head">
           <div>
-            <h2>Faturamento mensal</h2>
+            <h2>Valor Entrada de Pedidos (Mensal)</h2>
             <p>Últimos 12 meses · relatório oficial de Faturamento</p>
           </div>
         </div>
         <div class="chartScroll" id="chartMensalHost"></div>
+      </div>
+
+      <div class="dashRow">
+        <div class="chartCard" style="margin-bottom:0;">
+          <div class="head">
+            <div>
+              <h2>Qtde. Pedidos Mês</h2>
+              <p>Últimos 12 meses · nº de pedidos distintos faturados</p>
+            </div>
+          </div>
+          <div class="chartScroll" id="chartPedidosMesHost"></div>
+        </div>
+        <div class="chartCard" style="margin-bottom:0;">
+          <div class="head">
+            <div>
+              <h2>Qtde. Clientes Mês</h2>
+              <p>Últimos 12 meses · nº de clientes distintos faturados</p>
+            </div>
+          </div>
+          <div class="chartScroll" id="chartClientesMesHost"></div>
+        </div>
       </div>
 
       <div class="dashRow">
@@ -393,6 +414,27 @@
         <p class="cardHint">Top 3 por faturamento no período — veja a curva completa na aba Curva ABC.</p>
         <div id="rankTopProdutos"></div>
         <button type="button" id="verCurvaAbcBtn" class="fileBtnLike" style="margin-top:10px;border:1px solid var(--hairline);background:var(--white);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;">Ver Curva ABC completa →</button>
+      </div>
+
+      <div class="dashRow">
+        <div class="chartCard" style="margin-bottom:0;">
+          <div class="head">
+            <div>
+              <h2>Valor Família de Produtos x Mês</h2>
+              <p>Mês atual · todas as famílias, por faturamento</p>
+            </div>
+          </div>
+          <div class="chartScroll" id="chartFamiliaHost"></div>
+        </div>
+        <div class="chartCard" style="margin-bottom:0;">
+          <div class="head">
+            <div>
+              <h2>Valor Produtos Foco (Dash)</h2>
+              <p>Mês atual · famílias marcadas como foco no admin</p>
+            </div>
+          </div>
+          <div class="chartScroll" id="chartFocoHost"></div>
+        </div>
       </div>
     </section>
 
@@ -583,11 +625,12 @@
       return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    let usuarioAtual = null;
     async function boot() {
       const token = getStoredToken();
       if (!token) { showLoginScreen(); return; }
       try {
-        await apiMe();
+        usuarioAtual = await apiMe();
         hideLoginScreen();
         document.getElementById('dashboardWrap').classList.remove('hidden');
         hideLoadingScreen();
@@ -835,12 +878,13 @@
     function renderBarrasSerieTemporal(hostId, pontos, opts) {
       const host = document.getElementById(hostId);
       const dados = (pontos || []).map(p => ({ data: p.periodo, valor: Number(p[opts.valorKey]) || 0 }));
+      const formatarValor = opts.formatarValor || brl;
       if (!dados.length || !dados.some(d => d.valor > 0)) {
-        host.innerHTML = '<div class="chartEmpty">Sem faturamento suficiente nesse período ainda.</div>';
+        host.innerHTML = `<div class="chartEmpty">${opts.msgVazio || 'Sem faturamento suficiente nesse período ainda.'}</div>`;
         return;
       }
       const n = dados.length;
-      const slot = 46;
+      const slot = opts.slot || 46;
       const plotLeft = 40, plotRight = plotLeft + n * slot, plotTop = 14, plotBottom = 150;
       const W = plotRight + 12, H = 176;
       const alturaUtil = plotBottom - plotTop;
@@ -851,7 +895,7 @@
         const x = plotLeft + i * slot + (slot - barW) / 2;
         const y = yFor(d.valor);
         const h = plotBottom - y;
-        const titulo = `${opts.rotulo(d.data)} — ${brl(d.valor)}`;
+        const titulo = `${opts.rotulo(d.data)} — ${formatarValor(d.valor)}`;
         return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="3" fill="var(--red)"><title>${escapeHtml(titulo)}</title></rect>`;
       }).join('');
       const rotulos = dados.map((d, i) => {
@@ -902,7 +946,7 @@
       }
     }
 
-    function renderKpisPrincipal(resumo, alertas) {
+    function renderKpisPrincipal(resumo, alertas, metaMensal) {
       const mensal = resumo.mensal || [];
       const atual = mensal[mensal.length - 1];
       const anterior = mensal[mensal.length - 2];
@@ -912,9 +956,23 @@
       const deltaPct = fatAnterior ? ((fatAtual - fatAnterior) / fatAnterior) * 100 : null;
       const ticketMedio = pedidosAtual ? fatAtual / pedidosAtual : 0;
       const deltaHtml = deltaPct == null ? 'vs mês anterior — sem dado' : `<span class="delta ${deltaPct >= 0 ? 'up' : 'down'}">${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1)}%</span> vs mês anterior`;
+
+      const canal = resumo.clientesAtivosPorCanal || { total: 0, porCanal: {} };
+      const contas = resumo.contasSemComprar || { de3a5Meses: 0, de6a8Meses: 0 };
+
+      const metaPct = metaMensal ? Math.round((fatAtual / metaMensal) * 100) : null;
+      const lapisMeta = usuarioAtual?.is_admin
+        ? `<button type="button" onclick="editarMetaMensal()" title="Editar objetivo do mês" style="border:none;background:none;cursor:pointer;font-size:12px;padding:0 0 0 4px;vertical-align:middle;">✏️</button>`
+        : '';
+
       document.getElementById('kpiRowPrincipal').innerHTML = `
         <div class="kpi">
-          <span class="lbl">Faturamento do mês</span>
+          <span class="lbl">Objetivo Mês${lapisMeta}</span>
+          <span class="val">${metaMensal ? formatCompact(metaMensal, true) : '—'}</span>
+          <span class="sub">${metaPct == null ? 'Meta ainda não definida' : `${metaPct}% do objetivo`}</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Valor Entrada de Pedidos Mês</span>
           <span class="val">${formatCompact(fatAtual, true)}</span>
           <span class="sub">${deltaHtml}</span>
         </div>
@@ -922,6 +980,21 @@
           <span class="lbl">Ticket médio</span>
           <span class="val">${formatCompact(ticketMedio, true)}</span>
           <span class="sub">${pedidosAtual} pedido${pedidosAtual === 1 ? '' : 's'} faturado${pedidosAtual === 1 ? '' : 's'} no mês</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Clientes Ativos por Canal</span>
+          <span class="val">${canal.total || 0}</span>
+          <span class="sub">Varejo: ${canal.porCanal.Varejo || 0} · Atacado: ${canal.porCanal.Atacado || 0} · Rede: ${canal.porCanal.Rede || 0}</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Contas - 3 a 5 Meses Sem Compra</span>
+          <span class="val" style="color:#B36B00;">${contas.de3a5Meses || 0}</span>
+          <span class="sub">contas classificadas ou não</span>
+        </div>
+        <div class="kpi">
+          <span class="lbl">Contas - 6 a 8 Meses Sem Compra</span>
+          <span class="val" style="color:#B3261E;">${contas.de6a8Meses || 0}</span>
+          <span class="sub">contas classificadas ou não</span>
         </div>
         <div class="kpi">
           <span class="lbl">Em risco de queda</span>
@@ -935,16 +1008,74 @@
         </div>`;
     }
 
+    async function carregarMetaMensal() {
+      try {
+        const result = await apiFetch('/api/configuracoes/meta_mensal_faturamento');
+        return Number(result.valor) || null;
+      } catch (e) { return null; }
+    }
+
+    async function editarMetaMensal() {
+      const atual = await carregarMetaMensal();
+      const digitado = prompt('Objetivo de faturamento do mês (R$):', atual || '');
+      if (digitado == null) return; // cancelou
+      const valor = Number(String(digitado).replace(/\./g, '').replace(',', '.'));
+      if (!Number.isFinite(valor) || valor <= 0) { alert('Digite um valor numérico maior que zero.'); return; }
+      try {
+        await apiFetch('/api/configuracoes/meta_mensal_faturamento', { method: 'POST', body: JSON.stringify({ valor }) });
+        carregarDashboardPrincipal();
+      } catch (e) { alert('Erro ao salvar o objetivo: ' + e.message); }
+    }
+
+    function datasDoMesAtual() {
+      const hoje = new Date();
+      const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const ultimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      return { inicio: fmt(primeiro), fim: fmt(ultimo) };
+    }
+
+    // Agrupa por família (categoria) e renderiza os dois gráficos que
+    // dependem dessa mesma busca do mês atual: todas as famílias, e só as
+    // marcadas como "foco" no admin - um fetch só, duas visões derivadas.
+    function renderGraficosProdutosMes(produtosMes, categoriasFoco) {
+      const porCategoria = new Map();
+      for (const p of produtosMes) {
+        const atual = porCategoria.get(p.categoria) || 0;
+        porCategoria.set(p.categoria, atual + p.faturamento_total);
+      }
+      // Eixo categórico (nome da família) em vez de datas - precisa de mais
+      // espaço por barra que o padrão de 46px usado nos gráficos de tempo
+      // (rótulos de data são sempre curtos, "out/25"), senão os nomes se
+      // sobrepõem.
+      const truncar = (c) => c.length > 12 ? c.slice(0, 11) + '…' : c;
+      const todasOrdenadas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]);
+      renderBarrasSerieTemporal('chartFamiliaHost', todasOrdenadas.map(([categoria, valor]) => ({ periodo: categoria, valor })), {
+        rotulo: truncar, valorKey: 'valor', msgVazio: 'Sem faturamento no mês ainda.', slot: 90,
+      });
+      const foco = new Set(categoriasFoco || []);
+      const focoOrdenado = todasOrdenadas.filter(([categoria]) => foco.has(categoria));
+      renderBarrasSerieTemporal('chartFocoHost', focoOrdenado.map(([categoria, valor]) => ({ periodo: categoria, valor })), {
+        rotulo: truncar, valorKey: 'valor', msgVazio: 'Nenhuma família marcada como foco (configure no painel admin).', slot: 90,
+      });
+    }
+
     async function carregarDashboardPrincipal() {
       const kpiHost = document.getElementById('kpiRowPrincipal');
       kpiHost.innerHTML = '<div class="chartEmpty" style="grid-column:1/-1;">Carregando…</div>';
       try {
-        const [resumo, alertas] = await Promise.all([
+        const { inicio, fim } = datasDoMesAtual();
+        const [resumo, alertas, metaMensal, produtosMesRaw, focoCfg] = await Promise.all([
           apiFetch('/api/dashboard/resumo'),
           apiFetch('/api/clientes/classificatorio/alertas'),
+          carregarMetaMensal(),
+          apiFetch(`/api/produtos-abc-geral?inicio=${inicio}&fim=${fim}`),
+          apiFetch('/api/configuracoes/produtos_foco_categorias').catch(() => ({ valor: [] })),
         ]);
-        renderKpisPrincipal(resumo, alertas);
+        renderKpisPrincipal(resumo, alertas, metaMensal);
         renderBarrasSerieTemporal('chartMensalHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'faturamento' });
+        renderBarrasSerieTemporal('chartPedidosMesHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'pedidos', formatarValor: v => String(Math.round(v)) });
+        renderBarrasSerieTemporal('chartClientesMesHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'clientes', formatarValor: v => String(Math.round(v)) });
         renderBarrasSerieTemporal('chartSemanalHost', resumo.semanal, { rotulo: rotuloSemana, valorKey: 'faturamento' });
         renderBarrasSerieTemporal('chartTrimestralHost', resumo.trimestral, { rotulo: rotuloTrimestre, valorKey: 'faturamento' });
         renderListaAlerta('listaRiscoQueda', alertas.riscoDeQueda, c => `Faltam ${brl(c.faltaPraManter)}`);
@@ -952,6 +1083,7 @@
         renderListaAlerta('listaSemComprar', alertas.semComprarRecente, c => `${c.diasSemComprar} dias`);
         renderRankTopClientes(resumo.topClientes);
         carregarTopProdutos();
+        renderGraficosProdutosMes((produtosMesRaw || []).map(mapProdutoRow), focoCfg.valor);
       } catch (e) {
         kpiHost.innerHTML = `<div class="ap-msg error inline" style="grid-column:1/-1;">${escapeHtml(e.message)}</div>`;
       }

@@ -1,6 +1,30 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { SQL_FATURAMENTO_12M_POR_CLIENTE } = require('./clientesClassificatorio');
+
+// Canal do cliente pro Dashboard (não existe campo de canal de venda no
+// cadastro - deriva do prefixo do classificatorio_tipo, mesma convenção já
+// usada nas faixas de faturamento: "Varejo Master"/"Varejo Premium"/etc →
+// "Varejo", "Atacado Premium" → "Atacado", "Rede" → "Rede". Sem
+// classificatório (grande maioria da base, clientes "Varejo" comuns) cai em
+// "Varejo" por padrão.
+function canalDoCliente(classificatorioTipo) {
+  const t = String(classificatorioTipo || '').trim();
+  if (/^Atacado/i.test(t)) return 'Atacado';
+  if (/^Rede/i.test(t)) return 'Rede';
+  return 'Varejo';
+}
+
+// Faixas de dias sem comprar usadas nos cartões "Contas - X a Y Meses Sem
+// Compra" do Dashboard - meses tratados como blocos de 30 dias, com o limite
+// superior de cada faixa excluindo o dia em que o próximo bloco começa (ex:
+// "até 5 meses" para antes do dia 180, quando começam os 6 meses). Limiar
+// diferente do DIAS_SEM_COMPRAR_ALERTA=60 já usado no alerta de
+// classificatório (routes/clientesClassificatorio.js) - documentado aqui
+// pra não os dois divergirem em silêncio se um dia precisar mudar.
+const FAIXA_3_A_5_MESES = [90, 179];
+const FAIXA_6_A_8_MESES = [180, 269];
 
 // Todos os produtos que esse cliente já comprou alguma vez, com primeira/última
 // compra e total acumulado - a pergunta original do projeto.
@@ -343,9 +367,9 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
 // padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
 router.get('/dashboard/resumo', async (req, res) => {
   try {
-    const [mensal, semanal, trimestral, topClientes] = await Promise.all([
+    const [mensal, semanal, trimestral, topClientes, porCliente] = await Promise.all([
       pool.query(
-        `SELECT date_trunc('month', data_faturamento) AS periodo, SUM(valor) AS faturamento, COUNT(DISTINCT nr_pedido) AS pedidos
+        `SELECT date_trunc('month', data_faturamento) AS periodo, SUM(valor) AS faturamento, COUNT(DISTINCT nr_pedido) AS pedidos, COUNT(DISTINCT cliente_codigo_oficial) AS clientes
          FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
          GROUP BY 1 ORDER BY 1`
       ),
@@ -365,8 +389,40 @@ router.get('/dashboard/resumo', async (req, res) => {
          WHERE poi.status = 'faturado' AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
          GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
       ),
+      // Canal + inatividade (cartões "Clientes Ativos por Canal" e "Contas
+      // sem comprar") - precisa de TODOS os clientes, não só os já
+      // classificados (sem classificatorio_tipo = canal "Varejo" por
+      // padrão), por isso não reaproveita /clientes/classificatorio/alertas
+      // (que filtra por classificatorio_tipo IS NOT NULL) e usa a mesma
+      // subconsulta de faturamento 12m sem filtro nenhum de cliente.
+      pool.query(
+        `SELECT c.id, c.classificatorio_tipo, base.ultima_compra
+         FROM clientes c
+         JOIN (${SQL_FATURAMENTO_12M_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
+      ),
     ]);
-    res.json({ mensal: mensal.rows, semanal: semanal.rows, trimestral: trimestral.rows, topClientes: topClientes.rows });
+
+    const hoje = new Date();
+    let ativosPorCanal = { Varejo: 0, Atacado: 0, Rede: 0 };
+    let de3a5Meses = 0, de6a8Meses = 0;
+    for (const row of porCliente.rows) {
+      const canal = canalDoCliente(row.classificatorio_tipo);
+      if (!row.ultima_compra) continue;
+      const diasSemComprar = Math.floor((hoje - new Date(row.ultima_compra)) / (1000 * 60 * 60 * 24));
+      if (diasSemComprar <= 365) ativosPorCanal[canal] = (ativosPorCanal[canal] || 0) + 1;
+      if (diasSemComprar >= FAIXA_3_A_5_MESES[0] && diasSemComprar <= FAIXA_3_A_5_MESES[1]) de3a5Meses++;
+      else if (diasSemComprar >= FAIXA_6_A_8_MESES[0] && diasSemComprar <= FAIXA_6_A_8_MESES[1]) de6a8Meses++;
+    }
+    const totalAtivos = ativosPorCanal.Varejo + ativosPorCanal.Atacado + ativosPorCanal.Rede;
+
+    res.json({
+      mensal: mensal.rows,
+      semanal: semanal.rows,
+      trimestral: trimestral.rows,
+      topClientes: topClientes.rows,
+      clientesAtivosPorCanal: { total: totalAtivos, porCanal: ativosPorCanal },
+      contasSemComprar: { de3a5Meses, de6a8Meses },
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao montar o resumo do dashboard.' });
