@@ -1336,6 +1336,13 @@
       right: 10px;
     }
 
+    .priceListItem .itemNum {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 1;
+    }
+
     .cartitem .bottom {
       display: flex;
       align-items: center;
@@ -1429,6 +1436,23 @@
     .drawer-footer {
       background: var(--fill);
       padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    }
+
+    .cartTotalItens {
+      font-size: 12px;
+      color: var(--gray);
+      font-weight: 600;
+      margin-top: 2px;
+    }
+
+    .pedidoMinimoAviso {
+      background: #FFF4E5;
+      color: #8A5400;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 8px 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
     }
 
     .subtotalrow {
@@ -3172,6 +3196,14 @@
       color: #1E8E3E;
     }
 
+    .itemNum {
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--gray);
+      margin-right: 6px;
+    }
+
     .lev-list {
       padding: 0 16px 4px;
       display: flex;
@@ -3768,7 +3800,7 @@
 
       <div class="priceListSection hidden" id="priceListSection">
         <div class="priceListHeader">
-          <h3>Lista de preços</h3>
+          <h3>Lista de preços <span id="priceListTotalItens" style="font-weight:400;color:var(--gray);"></span></h3>
           <div style="display:flex;gap:8px;">
             <button type="button" class="clientClearBtn" id="addAllPriceListBtn">Adicionar todos ao orçamento</button>
             <button type="button" class="clientClearBtn" id="clearPriceListBtn">Limpar lista</button>
@@ -3979,7 +4011,10 @@
     <div class="overlay hidden" id="overlay"></div>
     <div class="drawer hidden" id="drawer">
       <div class="drawer-header">
-        <h2>Orçamento</h2>
+        <div>
+          <h2>Orçamento</h2>
+          <div class="cartTotalItens" id="cartTotalItens"></div>
+        </div>
         <button class="closeBtn" id="closeDrawer" aria-label="Fechar">&times;</button>
       </div>
       <div class="field" style="padding:0 16px 12px;">
@@ -3990,6 +4025,7 @@
       </div>
       <div class="drawer-body" id="cartItems"></div>
       <div class="drawer-footer">
+        <div class="pedidoMinimoAviso hidden" id="pedidoMinimoAviso"></div>
         <div class="subtotalrow">
           <span class="lbl">Total S/ Impostos</span>
           <span class="val" id="cartTotalSemImpostos">R$ 0,00</span>
@@ -4735,6 +4771,32 @@
         '28/42/56/70/84 dias',
       ];
 
+      // Pedido mínimo da empresa (valor sem impostos) - abaixo disso o
+      // orçamento mostra um aviso (não bloqueia, o vendedor decide).
+      const PEDIDO_MINIMO_SEM_IMPOSTOS = 1200;
+
+      // Cada parcela cobre no mínimo R$600 (sem impostos) - uma condição de
+      // pagamento com N parcelas só fica disponível se o orçamento valer ao
+      // menos N x R$600. "A Vista" não é parcelado, sempre disponível.
+      const VALOR_MINIMO_POR_PARCELA = 600;
+      function numeroDeParcelas(termo) {
+        if (termo === 'A Vista') return 0;
+        return termo.split(' ')[0].split('/').length;
+      }
+      function refreshPaymentTermOptions(totalSemImpostos) {
+        const sel = document.getElementById('paymentTermSelect');
+        if (!sel) return;
+        const disponiveis = PAYMENT_TERMS.filter(t => numeroDeParcelas(t) * VALOR_MINIMO_POR_PARCELA <= totalSemImpostos);
+        const valorAtual = sel.value;
+        sel.innerHTML = '<option value="">Selecione...</option>' + disponiveis.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        if (disponiveis.includes(valorAtual)) {
+          sel.value = valorAtual;
+        } else {
+          sel.value = '';
+          if (state.paymentTerm && !disponiveis.includes(state.paymentTerm)) state.paymentTerm = '';
+        }
+      }
+
       // ---------------- App state ----------------
       const state = {
         uf: 'PR',
@@ -4761,6 +4823,15 @@
       }
       function brl(v) {
         return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      }
+      // Numeração "(N)" e contador "Total de itens (N)" - mesmo formato em
+      // todas as listas de item do app (carrinho/orçamento, lista de preços
+      // do Pedido, levantamento) e nos compartilhamentos (texto/imagem/PDF).
+      function itemNumLabel(idx) {
+        return `(${idx + 1})`;
+      }
+      function totalItensLabel(n) {
+        return `Total de itens (${n})`;
       }
       function productByCod(cod) {
         return DB.productIndex[cod];
@@ -4938,7 +5009,7 @@
 
       function initPaymentTermSelect() {
         const sel = document.getElementById('paymentTermSelect');
-        sel.insertAdjacentHTML('beforeend', PAYMENT_TERMS.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join(''));
+        refreshPaymentTermOptions(0); // populado de novo (e filtrado) a cada renderCart(), conforme o total do orçamento muda
         sel.addEventListener('change', () => { state.paymentTerm = sel.value; });
       }
 
@@ -5138,16 +5209,20 @@
       function renderPriceList() {
         const section = document.getElementById('priceListSection');
         const wrap = document.getElementById('priceList');
+        const totalEl = document.getElementById('priceListTotalItens');
         if (!section || !wrap) return;
         const produtos = state.priceList.map(cod => productByCod(cod)).filter(Boolean);
         if (produtos.length === 0) {
           section.classList.add('hidden');
           wrap.innerHTML = '';
+          if (totalEl) totalEl.textContent = '';
           return;
         }
         section.classList.remove('hidden');
-        wrap.innerHTML = produtos.map(p => `
+        if (totalEl) totalEl.textContent = '· ' + totalItensLabel(produtos.length);
+        wrap.innerHTML = produtos.map((p, idx) => `
     <div class="priceListItem">
+      <span class="itemNum">${itemNumLabel(idx)}</span>
       ${renderCard(p)}
       <button class="rm" data-pricelist-rm="${p.c}" aria-label="Remover">&times;</button>
     </div>
@@ -5676,14 +5751,28 @@
       function renderCart() {
         const { rows, total, totalSemImpostos } = cartTotals();
         document.getElementById('cartTotalSemImpostos').textContent = brl(totalSemImpostos);
+        const totalItensEl = document.getElementById('cartTotalItens');
+        if (totalItensEl) totalItensEl.textContent = rows.length > 0 ? totalItensLabel(rows.length) : '';
+        const avisoEl = document.getElementById('pedidoMinimoAviso');
+        if (avisoEl) {
+          if (rows.length > 0 && totalSemImpostos < PEDIDO_MINIMO_SEM_IMPOSTOS) {
+            const falta = PEDIDO_MINIMO_SEM_IMPOSTOS - totalSemImpostos;
+            avisoEl.textContent = `⚠️ Faltam ${brl(falta)} para o pedido mínimo de ${brl(PEDIDO_MINIMO_SEM_IMPOSTOS)} (sem impostos).`;
+            avisoEl.classList.remove('hidden');
+          } else {
+            avisoEl.classList.add('hidden');
+          }
+        }
+        refreshPaymentTermOptions(totalSemImpostos);
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
           body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>`;
         } else {
-          body.innerHTML = rows.map(({ p, it, cp, lineTotal, campaignPct, campaignName }) => `
+          body.innerHTML = rows.map(({ p, it, cp, lineTotal, campaignPct, campaignName }, idx) => `
       <div class="cartitem">
         <div class="top">
           <div>
+            <span class="itemNum">${itemNumLabel(idx)}</span>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
             <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c) > 0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${p.c}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
@@ -6243,11 +6332,12 @@
         const linhas = state.survey.map((it, idx) => {
           const p = productByCod(it.cod);
           const nome = p ? p.n : `Cód. ${it.cod}`;
-          return `${idx + 1}. ${nome} (Cód. ${it.cod}) — estoque: ${it.qty}${it.ped ? `, pedido: ${it.ped}` : ''}`;
+          return `${itemNumLabel(idx)} ${nome} (Cód. ${it.cod}) — estoque: ${it.qty}${it.ped ? `, pedido: ${it.ped}` : ''}`;
         });
         const partes = [
           '*Levantamento de estoque*' + (clienteNome ? ' — ' + clienteNome : ''),
           new Date().toLocaleDateString('pt-BR'),
+          totalItensLabel(state.survey.length),
           '',
           ...linhas,
         ];
@@ -6439,7 +6529,7 @@
           const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
           return a + cp * i.ped;
         }, 0);
-        summaryEl.innerHTML = `<span class="levCountBig">${state.survey.length}</span> SKU${state.survey.length === 1 ? '' : 's'} levantado${state.survey.length === 1 ? '' : 's'} · <b>${totalEstoque}</b> un. em estoque` +
+        summaryEl.innerHTML = `<span class="levCountBig">${state.survey.length}</span> ${escapeHtml(totalItensLabel(state.survey.length))} · <b>${totalEstoque}</b> un. em estoque` +
           (totalPedido > 0 ? ` · <b>${totalPedido}</b> un. no pedido · <b>${brl(totalPedidoValor)}</b>` : '') +
           (totalDone > 0 ? ` · <b>${totalDone}</b> já no orçamento` : '');
 
@@ -6700,14 +6790,16 @@
       ${state.levCliente ? `<div><div class="k">Cliente</div><div class="v">${escapeHtml(state.levCliente.nome)} · ${escapeHtml(clienteDocText(state.levCliente))}</div></div>` : ''}
       ${state.seller.trim() ? `<div><div class="k">Atendimento</div><div class="v">${escapeHtml(state.seller)}</div></div>` : ''}
       ${state.paymentTerm ? `<div><div class="k">Cond. pagamento</div><div class="v">${escapeHtml(state.paymentTerm)}</div></div>` : ''}
+      <div><div class="k">Total de itens</div><div class="v">${rows.length}</div></div>
     </div>
     <table class="ex-table">
       <thead><tr>
-        <th>Produto</th><th class="num">Qtd</th><th class="num">Preço un.</th><th class="num">Total</th>
+        <th class="num">#</th><th>Produto</th><th class="num">Qtd</th><th class="num">Preço un.</th><th class="num">Total</th>
       </tr></thead>
       <tbody>
-        ${rows.map(({ p, it, lp, cp, lineTotal }) => `
+        ${rows.map(({ p, it, lp, cp, lineTotal }, idx) => `
           <tr>
+            <td class="num">${idx + 1}</td>
             <td><div class="exn">${escapeHtml(p.n)}</div><div class="exc">Cód. ${p.c}</div></td>
             <td class="num">${it.qty}</td>
             <td class="num">${brl(cp)}</td>
@@ -6806,13 +6898,14 @@
       function buildCartShareText() {
         const { rows, total } = cartTotals();
         const st = STATE_BY_UF[state.uf];
-        const linhas = rows.map(({ p, it, cp, lineTotal }) =>
-          `• ${p.n} (Cód. ${p.c})\n  ${it.qty} un. x ${brl(cp)} = ${brl(lineTotal)}`
+        const linhas = rows.map(({ p, it, cp, lineTotal }, idx) =>
+          `${itemNumLabel(idx)} ${p.n} (Cód. ${p.c})\n  ${it.qty} un. x ${brl(cp)} = ${brl(lineTotal)}`
         );
         const partes = [
           `*Orçamento Cortag*`,
           `${st.uf} — ${st.name} · ${new Date().toLocaleDateString('pt-BR')}`,
           ...(state.levCliente ? [`Cliente: ${state.levCliente.nome} · CNPJ: ${clienteDocText(state.levCliente)}`] : []),
+          totalItensLabel(rows.length),
           '',
           ...linhas,
           '',
@@ -6924,22 +7017,22 @@
         doc.setTextColor(90, 90, 90);
         doc.text('Orçamento', 14, headerBottomY);
         doc.setFontSize(9);
-        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}` + (state.levCliente ? `  ·  Cliente: ${state.levCliente.nome} (${clienteDocText(state.levCliente)})` : '') + (state.seller ? `  ·  Vendedor: ${state.seller}` : '') + (state.paymentTerm ? `  ·  Cond. pagamento: ${state.paymentTerm}` : '');
+        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}  ·  ${totalItensLabel(rows.length)}` + (state.levCliente ? `  ·  Cliente: ${state.levCliente.nome} (${clienteDocText(state.levCliente)})` : '') + (state.seller ? `  ·  Vendedor: ${state.seller}` : '') + (state.paymentTerm ? `  ·  Cond. pagamento: ${state.paymentTerm}` : '');
         doc.text(infoLinha, 14, headerBottomY + 6);
         doc.setDrawColor(180, 180, 180);
         doc.line(14, headerBottomY + 10, 196, headerBottomY + 10);
 
         doc.autoTable({
           startY: headerBottomY + 16,
-          head: [['Código', 'Produto', 'Qtd', 'Preço un.', 'Total']],
-          body: rows.map(({ p, it, cp, lineTotal }) => [
-            p.c, p.n, String(it.qty), brl(cp), brl(lineTotal)
+          head: [['#', 'Código', 'Produto', 'Qtd', 'Preço un.', 'Total']],
+          body: rows.map(({ p, it, cp, lineTotal }, idx) => [
+            String(idx + 1), p.c, p.n, String(it.qty), brl(cp), brl(lineTotal)
           ]),
           theme: 'grid',
           styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [20, 20, 20], lineColor: [180, 180, 180] },
           headStyles: { fillColor: [255, 255, 255], textColor: [20, 20, 20], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
           alternateRowStyles: { fillColor: [242, 242, 242] },
-          columnStyles: { 0: { cellWidth: 22 }, 2: { cellWidth: 14, halign: 'center' }, 3: { cellWidth: 26, halign: 'right' }, 4: { cellWidth: 28, halign: 'right' } },
+          columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 20 }, 3: { cellWidth: 14, halign: 'center' }, 4: { cellWidth: 24, halign: 'right' }, 5: { cellWidth: 26, halign: 'right' } },
         });
 
         const finalY = doc.lastAutoTable.finalY + 10;
