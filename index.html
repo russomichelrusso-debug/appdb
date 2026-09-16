@@ -4347,6 +4347,13 @@
                   promocional</button>
               </div>
             </div>
+            <div class="ap-card">
+              <h3>Produtos foco (Dashboard)</h3>
+              <p class="ap-hint" style="margin:10px 0;">Famílias destacadas no gráfico "Valor Produtos Foco" do
+                Dashboard (aba Dashboard, dentro de Curva ABC). Marque as famílias que a empresa quer empurrar esse
+                mês — a lista já vem do catálogo carregado, sem precisar digitar nada.</p>
+              <div id="produtosFocoList"></div>
+            </div>
           </div>
         </details>
 
@@ -9880,6 +9887,15 @@
       async function salvarProdutosPromocionaisServidor(lista) {
         await apiFetch('/api/configuracoes/produtos_promocionais', { method: 'POST', body: JSON.stringify({ valor: lista }) });
       }
+      // Famílias marcadas como "foco" pro gráfico "Valor Produtos Foco" do
+      // Dashboard (curva-abc.html) - mesmo mecanismo genérico de configurações.
+      async function apiProdutosFocoConfig() {
+        try { return await apiFetch('/api/configuracoes/produtos_foco_categorias'); }
+        catch (e) { return { valor: [] }; }
+      }
+      async function salvarProdutosFocoServidor(lista) {
+        await apiFetch('/api/configuracoes/produtos_foco_categorias', { method: 'POST', body: JSON.stringify({ valor: lista }) });
+      }
       // Junta os produtos promocionais (código novo, preço próprio, mas herdando
       // categoria/embalagem/IPI/perfil fiscal do produto original) no catálogo já
       // carregado - pra aparecerem na busca normal, como qualquer outro produto.
@@ -10381,6 +10397,25 @@
             renderPromoProdutosList();
             showToast('Produto promocional excluído');
           } catch (e) { alert('Não foi possível excluir: ' + e.message); }
+        }));
+      }
+      // ---------------- Produtos foco (Dashboard) ------
+      async function renderProdutosFocoList() {
+        const wrap = document.getElementById('produtosFocoList');
+        wrap.innerHTML = '<div class="promoEmpty">Carregando…</div>';
+        const categorias = [...new Set(DB.products.map(p => productFamilia(p)).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        if (categorias.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Catálogo ainda não carregado.</div>'; return; }
+        const selecionadas = new Set((await apiProdutosFocoConfig()).valor || []);
+        wrap.innerHTML = categorias.map(c => `
+    <label class="promoRuleItem" style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+      <input type="checkbox" data-foco-categoria="${escapeHtml(c)}" ${selecionadas.has(c) ? 'checked' : ''}>
+      <span class="prName" style="font-weight:400;">${escapeHtml(c)}</span>
+    </label>
+  `).join('');
+        wrap.querySelectorAll('[data-foco-categoria]').forEach(input => input.addEventListener('change', async () => {
+          const marcadas = [...wrap.querySelectorAll('[data-foco-categoria]:checked')].map(i => i.dataset.focoCategoria);
+          try { await salvarProdutosFocoServidor(marcadas); }
+          catch (e) { alert('Não foi possível salvar: ' + e.message); input.checked = !input.checked; }
         }));
       }
       function openPromoProdutoModal() {
@@ -11165,6 +11200,7 @@
           });
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);
           renderPromoProdutosList();
+          renderProdutosFocoList();
           initTabs();
           initClienteFichaPeriodo();
           initLevantamento();

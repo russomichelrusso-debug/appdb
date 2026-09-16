@@ -18,6 +18,7 @@ let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
+let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
@@ -34,6 +35,7 @@ function reset() {
   codigosProduto = {};
   clienteCnpjFicha = {};
   pedidosOficiaisItens = [];
+  configuracoes = {};
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
@@ -208,6 +210,18 @@ async function query(sql, params = []) {
     return { rows };
   }
 
+  // Dashboard principal - canal + inatividade de TODOS os clientes (não só
+  // classificados), usado pelos cartões "Clientes Ativos por Canal" e
+  // "Contas sem comprar" de GET /api/dashboard/resumo.
+  if (s.includes('C.CLASSIFICATORIO_TIPO, BASE.ULTIMA_COMPRA')) {
+    const rows = clientes.map(c => ({
+      id: c.id,
+      classificatorio_tipo: c.classificatorio_tipo || null,
+      ultima_compra: calcularFaturamento12mParaCliente(c.id).ultima_compra,
+    }));
+    return { rows };
+  }
+
   // Dashboard principal (curva-abc.html, GET /api/dashboard/resumo) -
   // agregações mensal/semanal/trimestral pro negócio inteiro (sem JOIN em
   // clientes, diferente do trimestral por cliente do classificatório acima)
@@ -225,13 +239,14 @@ async function query(sql, params = []) {
       if (tipo === 'month') key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
       else if (tipo === 'quarter') { const q = Math.floor(d.getMonth() / 3); key = `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`; }
       else { const dia = new Date(d); dia.setDate(dia.getDate() - ((dia.getDay() + 6) % 7)); key = dia.toISOString().slice(0, 10); } // segunda-feira da semana
-      const atual = grupos.get(key) || { periodo: key, faturamento: 0, pedidosSet: new Set() };
+      const atual = grupos.get(key) || { periodo: key, faturamento: 0, pedidosSet: new Set(), clientesSet: new Set() };
       atual.faturamento += Number(it.valor) || 0;
       atual.pedidosSet.add(it.nr_pedido);
+      if (it.cliente_codigo_oficial) atual.clientesSet.add(it.cliente_codigo_oficial);
       grupos.set(key, atual);
     }
     const rows = [...grupos.values()].sort((a, b) => a.periodo.localeCompare(b.periodo))
-      .map(g => ({ periodo: g.periodo, faturamento: g.faturamento, pedidos: g.pedidosSet.size }));
+      .map(g => ({ periodo: g.periodo, faturamento: g.faturamento, pedidos: g.pedidosSet.size, clientes: g.clientesSet.size }));
     return { rows };
   }
   if (s.includes('GROUP BY C.ID, C.NOME')) {
@@ -514,6 +529,19 @@ async function query(sql, params = []) {
       c.classificatorio_atualizado_em = dataRef || c.classificatorio_atualizado_em || new Date().toISOString().slice(0, 10);
       return { rows: [{ id: c.id }] };
     }
+    return { rows: [] };
+  }
+
+  // Configurações genéricas chave/valor (routes/configuracoes.js) - usado
+  // hoje por produtos_promocionais/promocoes e pela meta mensal/produtos
+  // foco do Dashboard.
+  if (s.startsWith('SELECT VALOR, ATUALIZADO_EM FROM CONFIGURACOES WHERE CHAVE')) {
+    const registro = configuracoes[params[0]];
+    return { rows: registro ? [{ valor: registro.valor, atualizado_em: registro.atualizado_em }] : [] };
+  }
+  if (s.startsWith('INSERT INTO CONFIGURACOES')) {
+    const [chave, valorJson] = params;
+    configuracoes[chave] = { valor: JSON.parse(valorJson), atualizado_em: new Date().toISOString() };
     return { rows: [] };
   }
 
