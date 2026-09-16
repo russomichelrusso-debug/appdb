@@ -32,7 +32,11 @@ app.use((req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-app.use(express.json({ limit: '6mb' }));
+// 6mb era suficiente pros outros imports (que mandam JSON já parseado no
+// cliente), mas a planilha "LISTA PADRÃO" de preços vai inteira em base64
+// (routes/catalogoPrecos.js) - o arquivo .xlsx cresce ~33% ao virar base64 e
+// facilmente passa de 6mb com todos os canais/estados/produtos.
+app.use(express.json({ limit: '25mb' }));
 
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
