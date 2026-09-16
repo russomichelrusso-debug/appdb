@@ -8122,8 +8122,9 @@
         const partes = [];
         partes.push(`<div class="hist-clientLabel">Classificatório</div>
           <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}${status.matrizGrupo ? ` <span style="font-weight:400;color:var(--gray);font-size:12px;">· grupo ${escapeHtml(status.matrizGrupo)}</span>` : ''}</div>
-          <div class="hist-clientLabel" style="margin-top:10px;">Faturamento últimos 12 meses${status.matrizGrupo ? ' (grupo)' : ''}</div>
-          <div style="font-weight:700;font-size:18px;margin-top:2px;">${brl(status.faturamento12m)}</div>`);
+          <div class="hist-clientLabel" style="margin-top:10px;">Faturamento ${status.periodoReferencia ? escapeHtml(String(status.periodoReferencia.anoInicio)) : 'últimos 12 meses'}${status.matrizGrupo ? ' (grupo)' : ''}</div>
+          <div style="font-weight:700;font-size:18px;margin-top:2px;">${brl(status.faturamento12m)}</div>
+          ${status.proximaRevisao ? `<div style="font-size:11.5px;color:var(--gray);margin-top:2px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
 
         if (status.faixaMin != null && status.faixaMax != null) {
           const pct = Math.max(0, Math.min(100, ((status.faturamento12m - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));

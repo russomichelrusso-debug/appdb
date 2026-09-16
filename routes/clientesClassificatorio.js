@@ -75,9 +75,14 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m }) 
 
 // Quebra o faturamento em até 4 trimestres civis (mais recentes primeiro
 // na entrada, devolvido em ordem cronológica) e calcula o ritmo necessário
-// pros trimestres restantes do ano corrente baterem a meta anual/da faixa.
-// `trimestres` = [{ trimestre: 'YYYY-MM-DD' (início do trimestre), faturado }]
-function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres }) {
+// pros trimestres restantes do ano de referência baterem a meta anual/da
+// faixa. `trimestres` = [{ trimestre: 'YYYY-MM-DD' (início do trimestre), faturado }].
+// `anoReferencia`/`trimestreReferenciaIdx` (0-3) dizem qual ano e qual é o
+// "trimestre atual" pra fins de déficit acumulado/trimestres restantes -
+// por padrão usam a data de hoje, mas a rota de status passa um ano
+// FECHADO (ver PERIODO_CLASSIFICATORIO_*) com trimestreReferenciaIdx=4,
+// já que ali os 4 trimestres já terminaram (não sobra "próximo trimestre").
+function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferencia, trimestreReferenciaIdx }) {
   const historico = (trimestres || []).map(t => ({ trimestre: t.trimestre, faturado: Number(t.faturado) || 0 }));
   if (tipo === 'Rede') return { historico, semMeta: true };
 
@@ -95,9 +100,9 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres }) {
 
   const metaPorTrimestre = metaAnual / 4;
   const hoje = new Date();
-  const trimestreAtualIdx = Math.floor(hoje.getMonth() / 3);
-  // Trimestres do ano corrente já decorridos (inclusive o atual), na ordem em que aparecem em `historico`.
-  const anoCorrente = hoje.getFullYear();
+  const trimestreAtualIdx = trimestreReferenciaIdx != null ? trimestreReferenciaIdx : Math.floor(hoje.getMonth() / 3);
+  // Trimestres do ano de referência já decorridos (inclusive o atual), na ordem em que aparecem em `historico`.
+  const anoCorrente = anoReferencia != null ? anoReferencia : hoje.getFullYear();
   let deficitAcumulado = 0;
   let trimestresRestantes = 0;
   for (const t of historico) {
@@ -121,13 +126,28 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres }) {
   return { historico, metaAnual, metaPorTrimestre, pisoPorTrimestre, situacao, ritmoNecessarioProximoTrimestre };
 }
 
-// Monta a subconsulta que soma faturamento (últimos 12 meses, faturado)
-// agrupado por "grupo" (matriz_grupo quando existe, senão o próprio
-// cliente) - reaproveitada pelo status individual e pelos alertas em lote.
+// A revisão do classificatório é feita pela empresa em janeiro, olhando o
+// ano civil fechado anterior (ex: revisão de janeiro/2027 usa o
+// faturamento de jan-dez/2026 inteiro) - não uma janela móvel de "últimos
+// 12 meses até hoje". Por decisão do usuário, simplificamos pra tratar
+// todo cliente nesse único ciclo de janeiro (sem o caso à parte de
+// clientes reativados em julho, que teriam 1º ciclo em julho antes de
+// migrar pra janeiro - não temos hoje nenhuma data de "reativação"
+// salva pra sustentar essa exceção). O número fica travado o ano
+// inteiro e só muda quando o ano civil vira.
+const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', CURRENT_DATE) - INTERVAL '1 year'`;
+const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // exclusivo
+
+// Monta a subconsulta que soma faturamento (do ano civil fechado mais
+// recente, ver comentário acima) agrupado por "grupo" (matriz_grupo
+// quando existe, senão o próprio cliente) - reaproveitada pelo status
+// individual e pelos alertas em lote.
 const SQL_FATURAMENTO_12M_POR_CLIENTE = `
   SELECT c.id AS cliente_id,
          COALESCE(SUM(poi.valor) FILTER (
-           WHERE poi.status = 'faturado' AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+           WHERE poi.status = 'faturado'
+             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
+             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
          ), 0) AS faturamento_12m,
          MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
   FROM clientes c
@@ -163,18 +183,34 @@ router.get('/:id/classificatorio/status', async (req, res) => {
        JOIN clientes c ON c.id = $1
        WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
          AND poi.status = 'faturado'
-         AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+         AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
+         AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
        GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
+    // Ano civil fechado usado no período (ver comentário acima de
+    // SQL_FATURAMENTO_12M_POR_CLIENTE) - passado explicitamente pra
+    // calcularRitmoTrimestral em vez de deixar a função assumir "hoje",
+    // já que o período em análise é sempre o ano anterior ao atual, e
+    // está inteiramente fechado (nenhum trimestre "restante").
+    const anoPeriodo = new Date().getFullYear() - 1;
     const ritmo = calcularRitmoTrimestral({
       tipo: cliente.classificatorio_tipo,
       pic: cliente.classificatorio_pic,
       vlAcordo: cliente.classificatorio_vl_acordo,
       trimestres: trimResult.rows.map(r => ({ trimestre: r.trimestre, faturado: r.faturado })),
+      anoReferencia: anoPeriodo,
+      trimestreReferenciaIdx: 4,
     });
 
-    res.json({ ...status, ultimaCompra, matrizGrupo: cliente.matriz_grupo, trimestral: ritmo });
+    res.json({
+      ...status,
+      ultimaCompra,
+      matrizGrupo: cliente.matriz_grupo,
+      trimestral: ritmo,
+      periodoReferencia: { anoInicio: anoPeriodo, anoFim: anoPeriodo },
+      proximaRevisao: `janeiro/${anoPeriodo + 2}`,
+    });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular status de classificatório.' });
