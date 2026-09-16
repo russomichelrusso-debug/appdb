@@ -64,6 +64,37 @@ async function query(sql, params = []) {
     const found = clientes.filter(c => c.documento === params[0]);
     return { rows: found };
   }
+  // clientMatcher.js (acharOuCriarCliente/acharClientePorNome) - usado pela
+  // importação de faturamento (classificatório) e por outros fluxos que
+  // compartilham essa lógica (pedidos.js, levantamentos.js).
+  if (s === 'SELECT CODIGO_OFICIAL FROM CLIENTES WHERE ID = $1') {
+    const c = clientes.find(x => Number(x.id) === Number(params[0]));
+    return { rows: c ? [{ codigo_oficial: c.codigo_oficial || null }] : [] };
+  }
+  if (s === 'UPDATE CLIENTES SET CODIGO_OFICIAL = $1 WHERE ID = $2') {
+    const c = clientes.find(x => Number(x.id) === Number(params[1]));
+    if (c) c.codigo_oficial = params[0];
+    return { rows: [] };
+  }
+  if (s.includes('SELECT ID FROM CLIENTES WHERE CODIGO_OFICIAL')) {
+    const found = clientes.filter(c => c.codigo_oficial === params[0]);
+    return { rows: found.map(c => ({ id: c.id })) };
+  }
+  if (s.includes('SELECT ID FROM CLIENTES WHERE REGEXP_REPLACE(DOCUMENTO')) {
+    const doc = String(params[0] || '').replace(/\D/g, '');
+    const found = clientes.filter(c => (c.documento || '').replace(/\D/g, '') === doc && doc !== '');
+    return { rows: found.map(c => ({ id: c.id })) };
+  }
+  if (s.includes("REGEXP_REPLACE(UPPER(TRIM(NOME)), '\\S+', ' '")) {
+    const alvo = String(params[0] || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const found = clientes.filter(c => (c.nome || '').trim().toUpperCase().replace(/\s+/g, ' ') === alvo);
+    return { rows: found.map(c => ({ id: c.id })) };
+  }
+  if (s.includes("REGEXP_REPLACE(UPPER(TRIM(NOME)), '[.,\\S]+', ' '")) {
+    const alvo = String(params[0] || '').trim().toUpperCase().replace(/[.,\s]+/g, ' ');
+    const found = clientes.filter(c => (c.nome || '').trim().toUpperCase().replace(/[.,\s]+/g, ' ') === alvo);
+    return { rows: found.map(c => ({ id: c.id })) };
+  }
   if (s.includes('UNNEST') && s.includes('INTO CLIENTES')) {
     const [nomes, documentos] = params;
     let criados = 0, atualizados = 0;
@@ -73,6 +104,12 @@ async function query(sql, params = []) {
       else { clientes.push({ id: nextId.clientes++, nome: nomes[i], documento: documentos[i], contato: null }); criados++; }
     }
     return { rows: [{ criados: String(criados), atualizados: String(atualizados) }] };
+  }
+  if (s.includes('INSERT INTO CLIENTES') && s.includes('CODIGO_OFICIAL')) {
+    // clientMatcher.js: INSERT INTO clientes (nome, documento, codigo_oficial, contato)
+    const c = { id: nextId.clientes++, nome: params[0], documento: params[1], codigo_oficial: params[2], contato: params[3], classificatorio_tipo: null, classificatorio_desconto: null };
+    clientes.push(c);
+    return { rows: [{ id: c.id }] };
   }
   if (s.includes('INSERT INTO CLIENTES')) {
     const c = { id: nextId.clientes++, nome: params[0], documento: params[1], contato: params[2], classificatorio_tipo: null, classificatorio_desconto: null };
@@ -439,6 +476,47 @@ async function query(sql, params = []) {
     }
   }
 
+  // Atendido Parcial -> Atendido Total: pedidos que perderam o último item
+  // em carteira (ex: após a limpeza da carteira antiga acima) deixam de
+  // aparecer como parcialmente atendidos.
+  if (s.startsWith("UPDATE PEDIDOS_OFICIAIS_ITENS SET SITUACAO_PEDIDO = 'ATENDIDO TOTAL'")) {
+    const nrPedidosEmCarteira = new Set(pedidosOficiaisItens.filter(it => it.status === 'carteira').map(it => it.nr_pedido));
+    const nrPedidosAfetados = new Set();
+    for (const it of pedidosOficiaisItens) {
+      if (it.situacao_pedido === 'Atendido Parcial' && !nrPedidosEmCarteira.has(it.nr_pedido)) {
+        it.situacao_pedido = 'Atendido Total';
+        nrPedidosAfetados.add(it.nr_pedido);
+      }
+    }
+    return { rowCount: nrPedidosAfetados.size, rows: [] };
+  }
+
+  // "Apagar tudo" do relatório oficial (botão preparado no admin, ver
+  // routes/pedidosOficiais.js) - contagem/exclusão sem filtro nenhum.
+  if (s === 'SELECT COUNT(*) AS TOTAL FROM PEDIDOS_OFICIAIS_ITENS') {
+    return { rows: [{ total: pedidosOficiaisItens.length }] };
+  }
+  if (s === 'DELETE FROM PEDIDOS_OFICIAIS_ITENS') {
+    const total = pedidosOficiaisItens.length;
+    pedidosOficiaisItens = [];
+    return { rowCount: total, rows: [] };
+  }
+
+  // Classificatório vindo do relatório oficial (Master/Premium/Exclusive/
+  // Rede) - só sobrescreve se este relatório for mais novo que o que já
+  // definiu o classificatório atual (routes/pedidosOficiais.js /importar).
+  if (s.startsWith('UPDATE CLIENTES SET CLASSIFICATORIO_TIPO = $1, CLASSIFICATORIO_DESCONTO = $2')) {
+    const [tipo, desconto, id, dataRef] = params;
+    const c = clientes.find(x => Number(x.id) === Number(id));
+    if (c && (!c.classificatorio_atualizado_em || !dataRef || c.classificatorio_atualizado_em <= dataRef)) {
+      c.classificatorio_tipo = tipo;
+      c.classificatorio_desconto = desconto;
+      c.classificatorio_atualizado_em = dataRef || c.classificatorio_atualizado_em || new Date().toISOString().slice(0, 10);
+      return { rows: [{ id: c.id }] };
+    }
+    return { rows: [] };
+  }
+
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 
@@ -500,4 +578,5 @@ module.exports = {
   __queryLog: queryLog,
   __reset: reset,
   __seed: seed,
+  __getClientes: () => clientes,
 };
