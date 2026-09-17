@@ -186,12 +186,12 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
-    const { faturamento_12m, ultima_compra } = calcularFaturamento12mParaCliente(params[0]);
+    const { faturamento_12m, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
     return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, ultima_compra }] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
-    const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamento12mParaCliente(c.id) }));
+    const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));
     return { rows };
   }
   if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_FATURAMENTO)")) {
@@ -221,7 +221,7 @@ async function query(sql, params = []) {
     const rows = clientes.map(c => ({
       id: c.id,
       classificatorio_tipo: c.classificatorio_tipo || null,
-      ultima_compra: calcularFaturamento12mParaCliente(c.id).ultima_compra,
+      ultima_compra: calcularFaturamentoAnoFechadoParaCliente(c.id).ultima_compra,
     }));
     return { rows };
   }
@@ -645,10 +645,10 @@ function anoClassificatorioFechado() {
   return new Date().getFullYear() - 1;
 }
 
-// Reproduz a query SQL_FATURAMENTO_12M_POR_CLIENTE de routes/clientesClassificatorio.js -
+// Reproduz a query SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE de routes/clientesClassificatorio.js -
 // soma faturado no ano civil fechado mais recente, agrupado por
 // matriz_grupo (ou o próprio cliente, se não tiver grupo).
-function calcularFaturamento12mParaCliente(clienteId) {
+function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
   if (!cliente) return { faturamento_12m: 0, ultima_compra: null };
   const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
