@@ -7107,7 +7107,7 @@
         }
       }
 
-      // ---------------- Geração de PDF (preto e branco) ----------------
+      // ---------------- Geração de PDF ----------------
       const JSPDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
       const JSPDF_AUTOTABLE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
       let jsPdfLoadPromise = null;
@@ -7156,9 +7156,67 @@
           img.src = LOGO_B64;
         });
       }
+      // Só as dimensões do logo (pra manter a proporção ao desenhar no PDF),
+      // sem converter pra cinza - usado no PDF de orçamento, que agora usa o
+      // logo colorido de verdade (mais perto da cotação oficial).
+      let logoDimsPromise = null;
+      function getLogoDimensions() {
+        if (logoDimsPromise) return logoDimsPromise;
+        logoDimsPromise = new Promise((resolve, reject) => {
+          const img = new Image();
+          img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+          img.onerror = reject;
+          img.src = LOGO_B64;
+        });
+        return logoDimsPromise;
+      }
 
+      // Dados fixos da própria Cortag (emitente) - mesmo texto que aparece na
+      // cotação oficial gerada pelo Salesforce, usado de referência pro layout
+      // deste PDF (ver comentário em generateQuotePDF).
+      const CORTAG_EMITENTE = {
+        nome: 'CORTAG INDÚSTRIA E COMÉRCIO LTDA',
+        ie: '456.188.532.115',
+        endereco: 'Rod. Gov. Dr. Adhemar P. de Barros, SP-340, Km 149,5 - Chácaras São Francisco',
+        cidadeUf: 'CEP 13804-830 - Mogi Mirim/SP',
+      };
+      // Busca a ficha de CNPJ já cacheada do cliente (endereço vindo da Receita
+      // Federal, mesma fonte de ficha-cnpj.html) pra preencher "Dados de
+      // entrega" no PDF - best effort, nunca trava a geração do PDF por causa
+      // disso (cliente sem CNPJ válido, sem ficha ainda, ou offline).
+      async function buscarEnderecoClienteParaPdf(cliente) {
+        if (!cliente || !cliente.id) return null;
+        const doc = String(cliente.documento || '').replace(/\D/g, '');
+        if (doc.length !== 14) return null; // só CNPJ tem ficha (CPF não)
+        try {
+          const { ficha } = await apiFetch(`/api/clientes/${cliente.id}/ficha-cnpj`);
+          return ficha && (ficha.logradouro || ficha.municipio) ? ficha : null;
+        } catch (e) {
+          return null;
+        }
+      }
+      // Calcula o valor de IPI e de ICMS-ST embutidos no preço já negociado
+      // (cpSemImposto/cp de cartTotals()), pra separar nas duas colunas do PDF
+      // do jeito que a cotação oficial mostra - reaplica a mesma fórmula de
+      // listPrice() (liq*(1+ipi)*(1+stRate)) só que sobre o preço já com
+      // desconto, já que channelPct/promoPct/qtyPct escalam cp e cpSemImposto
+      // pelo mesmo fator (ver clientPrice()), preservando a proporção.
+      function separarImpostosDaLinha(row) {
+        const ipiUnit = row.cpSemImposto * (row.p.ipi || 0);
+        const baseComIpi = row.cpSemImposto + ipiUnit;
+        const stUnit = Math.max(0, row.cp - baseComIpi);
+        return { ipiTotal: ipiUnit * row.it.qty, stTotal: stUnit * row.it.qty };
+      }
+      const numBr = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      // PDF com a mesma distribuição espacial da cotação oficial que a Cortag
+      // gera pelo Salesforce (cabeçalho com dados do emitente, quadro de
+      // dados do cliente/entrega, tabela de itens com IPI/ST separados,
+      // rodapé com os totais) - só com os campos que o app realmente tem
+      // disponíveis (sem inventar nº de cotação oficial, transportadora ou
+      // IE do cliente, que só existem depois que o pedido é faturado).
       async function generateQuotePDF() {
-        const { rows, total } = cartTotals();
+        const { rows, total, totalSemImpostos } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
         try {
           await loadJsPdfScripts();
@@ -7166,54 +7224,134 @@
           showToast('Não foi possível carregar o gerador de PDF — verifique sua internet.');
           return;
         }
+        const cliente = state.levCliente;
+        const endereco = await buscarEnderecoClienteParaPdf(cliente);
+
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-        const st = STATE_BY_UF[state.uf];
+        const MARGIN_L = 14, MARGIN_R = 196;
 
-        // cabeçalho só em preto/cinza - sem cor nenhuma, de propósito (logo incluso, convertido)
-        let headerBottomY = 18;
+        // ---- Cabeçalho: logo colorido + dados do emitente à esquerda,
+        // "Orçamento" + data de emissão à direita (mesma posição de "Cotação
+        // de Venda Nº" na cotação oficial - sem inventar um número de cotação
+        // que só o ERP/Salesforce atribui de verdade).
+        let logoBottomY = 24;
         try {
-          const logo = await logoToGrayscaleDataURL();
-          const logoWidthMM = 38;
-          const logoHeightMM = logoWidthMM * (logo.height / logo.width);
-          doc.addImage(logo.dataUrl, 'PNG', 14, 10, logoWidthMM, logoHeightMM);
-          headerBottomY = 10 + logoHeightMM + 6;
+          const logoDims = await getLogoDimensions();
+          const logoWidthMM = 30;
+          const logoHeightMM = logoWidthMM * (logoDims.height / logoDims.width);
+          doc.addImage(LOGO_B64, 'PNG', MARGIN_L, 10, logoWidthMM, logoHeightMM);
+          logoBottomY = 10 + logoHeightMM;
         } catch (e) {
-          // se por algum motivo não conseguir converter/desenhar o logo, cai pro texto
           doc.setFont('helvetica', 'bold');
-          doc.setFontSize(18);
+          doc.setFontSize(16);
           doc.setTextColor(20, 20, 20);
-          doc.text('CORTAG', 14, 18);
-          headerBottomY = 24;
+          doc.text('CORTAG', MARGIN_L, 18);
         }
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(8.5);
+        doc.setTextColor(20, 20, 20);
+        doc.text(CORTAG_EMITENTE.nome, MARGIN_L, logoBottomY + 5);
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
+        doc.setFontSize(7.5);
         doc.setTextColor(90, 90, 90);
-        doc.text('Orçamento', 14, headerBottomY);
-        doc.setFontSize(9);
-        const infoLinha = `${st.uf} — ${st.name}  ·  ${new Date().toLocaleDateString('pt-BR')}  ·  ${totalItensLabel(rows.length)}` + (state.levCliente ? `  ·  Cliente: ${state.levCliente.nome} (${clienteDocText(state.levCliente)})` : '') + (state.seller ? `  ·  Vendedor: ${state.seller}` : '') + (state.paymentTerm ? `  ·  Cond. pagamento: ${state.paymentTerm}` : '');
-        doc.text(infoLinha, 14, headerBottomY + 6);
-        doc.setDrawColor(180, 180, 180);
-        doc.line(14, headerBottomY + 10, 196, headerBottomY + 10);
+        doc.text(`CNPJ ${formatarDocumento(CORTAG_CNPJ_DIGITS)}  ·  I.E. ${CORTAG_EMITENTE.ie}`, MARGIN_L, logoBottomY + 9.5);
+        doc.text(CORTAG_EMITENTE.endereco, MARGIN_L, logoBottomY + 13.5);
+        doc.text(CORTAG_EMITENTE.cidadeUf, MARGIN_L, logoBottomY + 17.5);
 
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(13);
+        doc.setTextColor(20, 20, 20);
+        doc.text('Orçamento', MARGIN_R, 16, { align: 'right' });
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8.5);
+        doc.setTextColor(90, 90, 90);
+        doc.text(`Emissão: ${new Date().toLocaleDateString('pt-BR')}`, MARGIN_R, 21, { align: 'right' });
+
+        let y = Math.max(logoBottomY + 22, 34);
+        doc.setDrawColor(150, 150, 150);
+        doc.line(MARGIN_L, y, MARGIN_R, y);
+        y += 5;
+
+        // ---- Quadro de dados do cliente/entrega - só as linhas que o app
+        // realmente tem preenchidas (cliente pode nem estar selecionado ainda).
+        if (cliente) {
+          const linhas = [];
+          linhas.push([{ content: 'Cliente', styles: { fontStyle: 'bold' } }, { content: cliente.nome, colSpan: 3 }]);
+          const doc14 = String(cliente.documento || '').replace(/\D/g, '');
+          if (doc14) {
+            const linha = [{ content: 'CNPJ', styles: { fontStyle: 'bold' } }, { content: formatarDocumento(cliente.documento) }];
+            if (state.paymentTerm) linha.push({ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: state.paymentTerm });
+            else linha.push({ content: '', colSpan: 2 });
+            linhas.push(linha);
+          } else if (state.paymentTerm) {
+            linhas.push([{ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: state.paymentTerm, colSpan: 3 }]);
+          }
+          if (state.seller) {
+            linhas.push([{ content: 'Represent.', styles: { fontStyle: 'bold' } }, { content: state.seller, colSpan: 3 }]);
+          }
+          if (endereco) {
+            linhas.push([{ content: 'Dados de entrega', colSpan: 4, styles: { fontStyle: 'bold', halign: 'center', fillColor: [242, 242, 242] } }]);
+            const enderecoTexto = [endereco.logradouro, endereco.numero, endereco.complemento].filter(Boolean).join(', ') || '—';
+            linhas.push([{ content: 'Endereço', styles: { fontStyle: 'bold' } }, { content: enderecoTexto }, { content: 'Bairro', styles: { fontStyle: 'bold' } }, { content: endereco.bairro || '—' }]);
+            const cepFmt = endereco.cep ? String(endereco.cep).replace(/\D/g, '').replace(/(\d{5})(\d{3})/, '$1-$2') : '—';
+            const cidadeUf = [endereco.municipio, endereco.uf].filter(Boolean).join('/') || '—';
+            linhas.push([{ content: 'CEP', styles: { fontStyle: 'bold' } }, { content: cepFmt }, { content: 'Cidade/UF', styles: { fontStyle: 'bold' } }, { content: cidadeUf }]);
+          }
+          doc.autoTable({
+            startY: y,
+            body: linhas,
+            theme: 'grid',
+            styles: { fontSize: 8, cellPadding: 2, textColor: [20, 20, 20], lineColor: [180, 180, 180] },
+            columnStyles: { 0: { cellWidth: 24 }, 1: { cellWidth: 67 }, 2: { cellWidth: 24 }, 3: { cellWidth: 67 } },
+          });
+          y = doc.lastAutoTable.finalY + 6;
+        }
+
+        // ---- Tabela de itens - mesmas colunas da cotação oficial (venda sem
+        // imposto, total sem imposto, IPI, ST, unitário e total com impostos).
         doc.autoTable({
-          startY: headerBottomY + 16,
-          head: [['#', 'Código', 'Produto', 'Qtd', 'Preço un.', 'Total']],
-          body: rows.map(({ p, it, cp, lineTotal }, idx) => [
-            String(idx + 1), p.c, p.n, String(it.qty), brl(cp), brl(lineTotal)
-          ]),
+          startY: y,
+          head: [['Item', 'Descrição', 'Qtd.', 'Un.', 'R$ Venda', 'R$ Total', 'R$ IPI', 'R$ ST', 'R$ Unit. c/ Imp.', 'R$ Total c/ Imp.']],
+          body: rows.map((r) => {
+            const { ipiTotal, stTotal } = separarImpostosDaLinha(r);
+            return [
+              r.p.c, r.p.n, String(r.it.qty), 'Un',
+              numBr(r.cpSemImposto), numBr(r.lineTotalSemImpostos),
+              numBr(ipiTotal), numBr(stTotal),
+              numBr(r.cp), numBr(r.lineTotal),
+            ];
+          }),
           theme: 'grid',
-          styles: { fontSize: 8.5, cellPadding: 2.5, textColor: [20, 20, 20], lineColor: [180, 180, 180] },
-          headStyles: { fillColor: [255, 255, 255], textColor: [20, 20, 20], fontStyle: 'bold', fontSize: 9, lineWidth: 0.3 },
-          alternateRowStyles: { fillColor: [242, 242, 242] },
-          columnStyles: { 0: { cellWidth: 8, halign: 'center' }, 1: { cellWidth: 20 }, 3: { cellWidth: 14, halign: 'center' }, 4: { cellWidth: 24, halign: 'right' }, 5: { cellWidth: 26, halign: 'right' } },
+          styles: { fontSize: 6.8, cellPadding: 1.4, textColor: [20, 20, 20], lineColor: [180, 180, 180], overflow: 'linebreak' },
+          headStyles: { fillColor: [255, 255, 255], textColor: [20, 20, 20], fontStyle: 'bold', fontSize: 6.8, lineWidth: 0.3 },
+          alternateRowStyles: { fillColor: [248, 248, 248] },
+          columnStyles: {
+            0: { cellWidth: 14 }, 1: { cellWidth: 52 }, 2: { cellWidth: 10, halign: 'center' }, 3: { cellWidth: 8, halign: 'center' },
+            4: { cellWidth: 16, halign: 'right' }, 5: { cellWidth: 16, halign: 'right' }, 6: { cellWidth: 14, halign: 'right' }, 7: { cellWidth: 14, halign: 'right' },
+            8: { cellWidth: 18, halign: 'right' }, 9: { cellWidth: 20, halign: 'right' },
+          },
         });
 
-        const finalY = doc.lastAutoTable.finalY + 10;
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(20, 20, 20);
-        doc.text(`Total: ${brl(total)}`, 196, finalY, { align: 'right' });
+        // ---- Rodapé de totais, no mesmo formato de caixa da cotação oficial.
+        const totalIpi = rows.reduce((s, r) => s + separarImpostosDaLinha(r).ipiTotal, 0);
+        const totalSt = rows.reduce((s, r) => s + separarImpostosDaLinha(r).stTotal, 0);
+        doc.autoTable({
+          startY: doc.lastAutoTable.finalY,
+          body: [
+            ['Número de Produtos', String(rows.length)],
+            ['R$ Total', numBr(totalSemImpostos)],
+            ['R$ Total IPI', numBr(totalIpi)],
+            ['R$ Total ST', numBr(totalSt)],
+            [{ content: 'R$ Total c/ Impostos', styles: { fontStyle: 'bold' } }, { content: numBr(total), styles: { fontStyle: 'bold' } }],
+          ],
+          theme: 'grid',
+          styles: { fontSize: 8.5, cellPadding: 2, textColor: [20, 20, 20], lineColor: [180, 180, 180] },
+          columnStyles: { 0: { cellWidth: 152 }, 1: { cellWidth: 30, halign: 'right' } },
+          margin: { left: MARGIN_R - 182 },
+          tableWidth: 182,
+          bodyStyles: { halign: 'left' },
+        });
 
         const blob = doc.output('blob');
         const fileName = `orcamento-${todayStr()}.pdf`;
