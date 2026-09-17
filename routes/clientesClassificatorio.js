@@ -167,9 +167,18 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     if (!cliente) return res.status(404).json({ erro: 'Cliente não encontrado.' });
     if (!cliente.classificatorio_tipo) return res.json({ classificado: false });
 
-    const fatResult = await pool.query(`${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id`, [req.params.id]);
+    // O ano fechado (usado só pra rotular a resposta e fechar os 4 trimestres
+    // em calcularRitmoTrimestral) vem do PRÓPRIO Postgres, na mesma consulta -
+    // nunca de um "new Date()" separado no Node, que teria que só torcer pra
+    // concordar com o fuso do CURRENT_DATE do banco.
+    const fatResult = await pool.query(
+      `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado
+       FROM (${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
+      [req.params.id]
+    );
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
     const ultimaCompra = fatResult.rows[0] ? fatResult.rows[0].ultima_compra : null;
+    const anoPeriodo = fatResult.rows[0] ? Number(fatResult.rows[0].ano_fechado) : new Date().getUTCFullYear() - 1;
 
     const status = calcularStatusClassificatorio({
       tipo: cliente.classificatorio_tipo,
@@ -190,16 +199,10 @@ router.get('/:id/classificatorio/status', async (req, res) => {
        GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
-    // Ano civil fechado usado no período (ver comentário acima de
-    // SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE) - passado explicitamente pra
-    // calcularRitmoTrimestral em vez de deixar a função assumir "hoje",
-    // já que o período em análise é sempre o ano anterior ao atual, e
-    // está inteiramente fechado (nenhum trimestre "restante"). Usa
-    // getUTCFullYear() (não getFullYear()) pra bater com CURRENT_DATE do
-    // Postgres, que roda em UTC nos provedores gerenciados usados aqui -
-    // evita o rótulo do ano divergir do WHERE real se o processo Node
-    // algum dia rodar num container com outro fuso configurado.
-    const anoPeriodo = new Date().getUTCFullYear() - 1;
+    // anoPeriodo (calculado acima, junto de fatResult) é passado explicitamente
+    // pra calcularRitmoTrimestral em vez de deixar a função assumir "hoje", já
+    // que o período em análise está inteiramente fechado (nenhum trimestre
+    // "restante").
     const ritmo = calcularRitmoTrimestral({
       tipo: cliente.classificatorio_tipo,
       pic: cliente.classificatorio_pic,

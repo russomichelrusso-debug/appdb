@@ -143,7 +143,7 @@ async function main() {
   // janela móvel de 12 meses (ver routes/clientesClassificatorio.js) - semeia
   // um cliente com faturamento no ano fechado (conta) e um pedido no ano
   // corrente ainda não fechado (não deve contar, mesmo sendo mais recente).
-  const anoFechado = new Date().getUTCFullYear() - 1;
+  const anoFechado = mockDb.__anoClassificatorioFechado();
   mockDb.__seed({
     clientes: [{
       id: 9001, nome: 'CLIENTE CLASSIFICATORIO TESTE', documento: '99988877000166', codigo_oficial: 'COD9001',
