@@ -4895,6 +4895,7 @@
         levLoadedName: null,
         priceOverrides: {}, // {cod: preçoLíquidoEditado} - preço base manual (antes de impostos), por sessão
         qtyDiscounts: {}, // {cod: percentual} - desconto extra por quantidade, por produto
+        classiAutoFilledCods: new Set(), // códigos cujo qtyDiscounts[cod] atual veio do auto-preenchimento por classificatório (não foi digitado à mão) - permite trocar de cliente e reajustar/limpar sem mexer num valor manual
         promoRules: [], // regras de campanha sazonal, por categoria
         classiDiscountRules: [], // desconto extra por classificatório do cliente, por família/produto (ex: Essenciais da Obra)
         priceList: [] // [cod, ...] - lista de preços da aba Preços, cresce a cada código inserido
@@ -6134,13 +6135,19 @@
         renderLevList();
       }
 
-      // Desconto extra por quantidade (por produto) - independente do desconto de canal/promocional
-      function setItemDiscount(cod, rawValue) {
+      // Desconto extra por quantidade (por produto) - independente do desconto de canal/promocional.
+      // `origem: 'auto'` é usado só por autoFillClassificatorioDiscount, pra marcar
+      // que esse valor veio de uma regra (e pode ser reajustado/limpo sozinho se o
+      // cliente trocar depois); qualquer edição feita pela pessoa (input da tela)
+      // conta como manual e nunca mais é mexida automaticamente.
+      function setItemDiscount(cod, rawValue, { origem = 'manual' } = {}) {
         const p = productByCod(cod);
         if (p && p.fx) return; // Preço Fixo: não recebe nenhum tipo de desconto
         let v = parseFloat(rawValue);
         if (isNaN(v) || v <= 0) { delete state.qtyDiscounts[cod]; }
         else { state.qtyDiscounts[cod] = Math.min(v, 90); }
+        if (origem === 'auto') state.classiAutoFilledCods.add(cod);
+        else state.classiAutoFilledCods.delete(cod);
         // Adia pro próximo tick - o "change" desse input dispara durante o blur
         // dele mesmo, e o card com esse input pode estar dentro da lista que
         // vai ser recriada (aba Pedido); trocar o innerHTML no meio do próprio
@@ -6152,18 +6159,33 @@
       // selecionado tem classificatório e o produto bate o escopo de alguma
       // campanha configurada em state.classiDiscountRules (ex: "Essenciais
       // da Obra" - Master 20%/Premium 23%/Exclusive 25%). Nunca sobrescreve
-      // um valor que o vendedor já tenha digitado (manual ou de um
-      // preenchimento automático anterior) - troca de cliente no meio do
-      // pedido não reajusta retroativamente um item já preenchido.
+      // um valor que o vendedor tenha digitado à mão - mas um valor que foi
+      // ele mesmo quem preencheu (pro cliente ANTERIOR) é reajustado ou
+      // limpo aqui, senão trocar de cliente deixava o desconto do cliente
+      // antigo "grudado" no item (bug real: selecionar Exclusive, trocar
+      // pra Master, item continuava com o desconto de Exclusive).
       function autoFillClassificatorioDiscount(cod) {
         const p = productByCod(cod);
+        if (!p) return;
+        const jaTemValorManual = Object.prototype.hasOwnProperty.call(state.qtyDiscounts, cod)
+          && !state.classiAutoFilledCods.has(cod);
+        if (jaTemValorManual) return;
+
         const tipo = state.levCliente && state.levCliente.classificatorio_tipo;
-        if (!p || !tipo) return;
-        if (Object.prototype.hasOwnProperty.call(state.qtyDiscounts, cod)) return;
-        for (const regra of (state.classiDiscountRules || [])) {
-          if (!scopeMatchesProduct(regra.targetType, regra.targetValue, p)) continue;
-          const pct = regra.mapa && regra.mapa[tipo];
-          if (pct > 0) { setItemDiscount(cod, pct); return; }
+        let pctEncontrado = 0;
+        if (tipo) {
+          for (const regra of (state.classiDiscountRules || [])) {
+            if (!scopeMatchesProduct(regra.targetType, regra.targetValue, p)) continue;
+            const pct = regra.mapa && regra.mapa[tipo];
+            if (pct > 0) { pctEncontrado = pct; break; }
+          }
+        }
+        if (pctEncontrado > 0) {
+          setItemDiscount(cod, pctEncontrado, { origem: 'auto' });
+        } else if (state.classiAutoFilledCods.has(cod)) {
+          // O cliente novo não tem regra que bata (ou nem tem classificatório) -
+          // limpa o valor que o cliente anterior tinha deixado preenchido.
+          setItemDiscount(cod, 0, { origem: 'auto' });
         }
       }
 
@@ -6423,10 +6445,11 @@
           showToast(`Desconto de canal ajustado pra ${cliente.classificatorio_desconto}% (${cliente.classificatorio_tipo})`);
         }
         // Cobre "cliente selecionado depois que o produto já estava no
-        // carrinho" - o gancho em addToCart cobre a ordem inversa.
-        if (cliente && cliente.classificatorio_tipo) {
-          for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
-        }
+        // carrinho" - o gancho em addToCart cobre a ordem inversa. Roda
+        // sempre (mesmo sem classificatório, ou cliente=null ao limpar),
+        // porque autoFillClassificatorioDiscount também precisa LIMPAR um
+        // valor que o cliente anterior tinha deixado preenchido sozinho.
+        for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
         saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
       }
       async function selectLevClient() {
