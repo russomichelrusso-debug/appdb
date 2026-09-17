@@ -221,6 +221,33 @@ async function main() {
     `lista os dois membros do grupo, o que compra menos primeiro: ${JSON.stringify(res.body.membros)}`
   );
 
+  // 16) GET /api/dashboard/resumo: os cartões "Contas - 3 a 5/6 a 8 Meses Sem
+  // Compra" precisam trazer a LISTA de clientes (não só a contagem), pra dar
+  // pra expandir e ver quem são - senão o card só mostra um número sem
+  // nenhum jeito de agir sobre ele.
+  function diasAtrasISO(n) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
+  mockDb.__seed({
+    clientes: [{
+      id: 9003, nome: 'CLIENTE SUMIDO 150 DIAS', documento: '99988877000344', codigo_oficial: 'COD9003',
+      classificatorio_tipo: null, classificatorio_desconto: null, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'PC4', codigo_sku: '60863', cliente_codigo_oficial: 'COD9003', quantidade: 1, valor: 1000, data_faturamento: diasAtrasISO(150), status: 'faturado' },
+    ],
+  });
+  res = await req('GET', '/api/dashboard/resumo');
+  const listaDe3a5 = res.body.contasSemComprar?.clientesDe3a5Meses || [];
+  const achado = listaDe3a5.find(c => c.id === 9003);
+  assert(
+    res.status === 200 && res.body.contasSemComprar?.de3a5Meses === listaDe3a5.length
+      && achado && achado.nome === 'CLIENTE SUMIDO 150 DIAS' && achado.diasSemComprar === 150,
+    `dashboard/resumo traz a lista de clientes de 3-5 meses sem comprar, com nome e dias: ${JSON.stringify(listaDe3a5)}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);
