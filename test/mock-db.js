@@ -260,6 +260,7 @@ async function query(sql, params = []) {
   if (s.includes('C.CLASSIFICATORIO_TIPO, BASE.ULTIMA_COMPRA')) {
     const rows = clientes.map(c => ({
       id: c.id,
+      nome: c.nome,
       classificatorio_tipo: c.classificatorio_tipo || null,
       ultima_compra: calcularFaturamentoAnoFechadoParaCliente(c.id).ultima_compra,
     }));

@@ -209,6 +209,11 @@
     .kpi .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin-bottom: 5px; display: block; }
     .kpi .val { font-size: 20px; font-weight: 700; letter-spacing: -.01em; display: block; }
     .kpi .sub { font-size: 11px; color: var(--gray); margin-top: 2px; display: block; }
+    .kpi.kpiExpandable { cursor: pointer; }
+    .kpi.kpiExpandable.active { box-shadow: 0 0 0 2px var(--red) inset, var(--shadow-1); }
+    .kpiExpandPanel { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; margin: -4px 0 14px; }
+    .kpiExpandPanel h3 { margin: 0 0 4px; font-size: 14px; }
+    .kpiExpandList { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; margin-top: 8px; }
     .kpi.classA .val { color: var(--red); }
     .kpi.classB .val { color: var(--amber); }
 
@@ -330,6 +335,7 @@
 
     <section id="tabDashboardPrincipal">
       <div class="kpiRow" id="kpiRowPrincipal"></div>
+      <div class="kpiExpandPanel hidden" id="kpiExpandPanel"></div>
 
       <div class="chartCard">
         <div class="head">
@@ -626,6 +632,31 @@
     }
 
     let usuarioAtual = null;
+    // Dados por trás dos 4 cartões expansíveis do Dashboard (populados em
+    // renderKpisPrincipal) e qual deles está aberto agora, se algum.
+    let kpiExpandData = {};
+    let kpiExpandAberto = null;
+    function toggleKpiExpand(tipo) {
+      const panel = document.getElementById('kpiExpandPanel');
+      document.querySelectorAll('.kpi.kpiExpandable').forEach(el => el.classList.remove('active'));
+      if (kpiExpandAberto === tipo) { panel.classList.add('hidden'); kpiExpandAberto = null; return; }
+      kpiExpandAberto = tipo;
+      const cfg = kpiExpandData[tipo];
+      if (!cfg) return;
+      document.querySelector(`[data-kpi-tipo="${tipo}"]`)?.classList.add('active');
+      panel.classList.remove('hidden');
+      panel.innerHTML = `
+        <h3>${escapeHtml(cfg.titulo)}</h3>
+        <p class="cardHint" style="margin:0;">${cfg.lista.length} cliente${cfg.lista.length === 1 ? '' : 's'}</p>
+        <div class="kpiExpandList">${cfg.lista.length === 0
+          ? '<div class="lev-empty">Nenhum cliente nessa situação agora.</div>'
+          : cfg.lista.map(c => `
+        <div class="listaAlertaItem">
+          <span class="nome">${escapeHtml(c.nome)}</span>
+          <span class="valor">${escapeHtml(cfg.detalheFn(c))}</span>
+        </div>`).join('')}</div>`;
+      panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
     async function boot() {
       const token = getStoredToken();
       if (!token) { showLoginScreen(); return; }
@@ -960,6 +991,17 @@
       const canal = resumo.clientesAtivosPorCanal || { total: 0, porCanal: {} };
       const contas = resumo.contasSemComprar || { de3a5Meses: 0, de6a8Meses: 0 };
 
+      // Guarda os dados por trás dos 4 cartões expansíveis, pra
+      // toggleKpiExpand() renderizar sem precisar buscar de novo.
+      kpiExpandData = {
+        de3a5: { titulo: 'Contas - 3 a 5 Meses Sem Compra', lista: contas.clientesDe3a5Meses || [], detalheFn: c => `${c.diasSemComprar} dias sem comprar` },
+        de6a8: { titulo: 'Contas - 6 a 8 Meses Sem Compra', lista: contas.clientesDe6a8Meses || [], detalheFn: c => `${c.diasSemComprar} dias sem comprar` },
+        riscoQueda: { titulo: 'Em risco de queda', lista: alertas.riscoDeQueda || [], detalheFn: c => `Faltam ${formatCompact(c.faltaPraManter, true)}` },
+        pertoSubir: { titulo: 'Perto de subir', lista: alertas.pertoDeSubir || [], detalheFn: c => `Faltam ${formatCompact(c.faltaPraProximaFaixa, true)}` },
+      };
+      document.getElementById('kpiExpandPanel').classList.add('hidden'); // reabre sob demanda no próximo clique
+      kpiExpandAberto = null;
+
       const metaPct = metaMensal ? Math.round((fatAtual / metaMensal) * 100) : null;
       const lapisMeta = usuarioAtual?.is_admin
         ? `<button type="button" onclick="editarMetaMensal()" title="Editar objetivo do mês" style="border:none;background:none;cursor:pointer;font-size:12px;padding:0 0 0 4px;vertical-align:middle;">✏️</button>`
@@ -986,23 +1028,23 @@
           <span class="val">${canal.total || 0}</span>
           <span class="sub">Varejo: ${canal.porCanal.Varejo || 0} · Atacado: ${canal.porCanal.Atacado || 0} · Rede: ${canal.porCanal.Rede || 0}</span>
         </div>
-        <div class="kpi">
-          <span class="lbl">Contas - 3 a 5 Meses Sem Compra</span>
+        <div class="kpi kpiExpandable" data-kpi-tipo="de3a5" onclick="toggleKpiExpand('de3a5')">
+          <span class="lbl">Contas - 3 a 5 Meses Sem Compra ▸</span>
           <span class="val" style="color:#B36B00;">${contas.de3a5Meses || 0}</span>
           <span class="sub">contas classificadas ou não</span>
         </div>
-        <div class="kpi">
-          <span class="lbl">Contas - 6 a 8 Meses Sem Compra</span>
+        <div class="kpi kpiExpandable" data-kpi-tipo="de6a8" onclick="toggleKpiExpand('de6a8')">
+          <span class="lbl">Contas - 6 a 8 Meses Sem Compra ▸</span>
           <span class="val" style="color:#B3261E;">${contas.de6a8Meses || 0}</span>
           <span class="sub">contas classificadas ou não</span>
         </div>
-        <div class="kpi">
-          <span class="lbl">Em risco de queda</span>
+        <div class="kpi kpiExpandable" data-kpi-tipo="riscoQueda" onclick="toggleKpiExpand('riscoQueda')">
+          <span class="lbl">Em risco de queda ▸</span>
           <span class="val" style="color:#B3261E;">${(alertas.riscoDeQueda || []).length}</span>
           <span class="sub">clientes classificados</span>
         </div>
-        <div class="kpi">
-          <span class="lbl">Perto de subir</span>
+        <div class="kpi kpiExpandable" data-kpi-tipo="pertoSubir" onclick="toggleKpiExpand('pertoSubir')">
+          <span class="lbl">Perto de subir ▸</span>
           <span class="val" style="color:#1E8E3E;">${(alertas.pertoDeSubir || []).length}</span>
           <span class="sub">oportunidade de promover</span>
         </div>`;

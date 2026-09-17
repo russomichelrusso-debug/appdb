@@ -431,7 +431,7 @@ router.get('/dashboard/resumo', async (req, res) => {
       // (que filtra por classificatorio_tipo IS NOT NULL) e usa a mesma
       // subconsulta de faturamento 12m sem filtro nenhum de cliente.
       pool.query(
-        `SELECT c.id, c.classificatorio_tipo, base.ultima_compra
+        `SELECT c.id, c.nome, c.classificatorio_tipo, base.ultima_compra
          FROM clientes c
          JOIN (${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
       ),
@@ -439,15 +439,22 @@ router.get('/dashboard/resumo', async (req, res) => {
 
     const hoje = new Date();
     let ativosPorCanal = { Varejo: 0, Atacado: 0, Rede: 0 };
-    let de3a5Meses = 0, de6a8Meses = 0;
+    const clientesDe3a5Meses = [];
+    const clientesDe6a8Meses = [];
     for (const row of porCliente.rows) {
       const canal = canalDoCliente(row.classificatorio_tipo);
       if (!row.ultima_compra) continue;
       const diasSemComprar = Math.floor((hoje - new Date(row.ultima_compra)) / (1000 * 60 * 60 * 24));
       if (diasSemComprar <= 365) ativosPorCanal[canal] = (ativosPorCanal[canal] || 0) + 1;
-      if (diasSemComprar >= FAIXA_3_A_5_MESES[0] && diasSemComprar <= FAIXA_3_A_5_MESES[1]) de3a5Meses++;
-      else if (diasSemComprar >= FAIXA_6_A_8_MESES[0] && diasSemComprar <= FAIXA_6_A_8_MESES[1]) de6a8Meses++;
+      if (diasSemComprar >= FAIXA_3_A_5_MESES[0] && diasSemComprar <= FAIXA_3_A_5_MESES[1]) {
+        clientesDe3a5Meses.push({ id: row.id, nome: row.nome, diasSemComprar });
+      } else if (diasSemComprar >= FAIXA_6_A_8_MESES[0] && diasSemComprar <= FAIXA_6_A_8_MESES[1]) {
+        clientesDe6a8Meses.push({ id: row.id, nome: row.nome, diasSemComprar });
+      }
     }
+    // Mais tempo sem comprar primeiro - é quem mais precisa de atenção.
+    clientesDe3a5Meses.sort((a, b) => b.diasSemComprar - a.diasSemComprar);
+    clientesDe6a8Meses.sort((a, b) => b.diasSemComprar - a.diasSemComprar);
     const totalAtivos = ativosPorCanal.Varejo + ativosPorCanal.Atacado + ativosPorCanal.Rede;
 
     res.json({
@@ -456,7 +463,12 @@ router.get('/dashboard/resumo', async (req, res) => {
       trimestral: trimestral.rows,
       topClientes: topClientes.rows,
       clientesAtivosPorCanal: { total: totalAtivos, porCanal: ativosPorCanal },
-      contasSemComprar: { de3a5Meses, de6a8Meses },
+      contasSemComprar: {
+        de3a5Meses: clientesDe3a5Meses.length,
+        de6a8Meses: clientesDe6a8Meses.length,
+        clientesDe3a5Meses,
+        clientesDe6a8Meses,
+      },
     });
   } catch (e) {
     console.error(e);
