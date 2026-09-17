@@ -214,7 +214,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
        JOIN clientes c ON c.id = $1
        WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
          AND poi.status = 'faturado'
-         AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '3 quarters'
+         AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
        GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
