@@ -468,20 +468,15 @@
 
     /* Estado é a única coluna com uma ação extra (usar GPS) colada no label -
        um pouco mais de largura evita que ela fique espremida contra a coluna
-       vizinha (Canal). Canal cede um pouco desse espaço (só tem um label de
-       uma palavra); Desconto adicional ganha uma folga também, senão o
-       label de duas palavras ("Desconto adicional") quebra em 2 linhas e
-       desalinha a caixa em relação às outras colunas.  */
+       vizinha (Canal, que cede um pouco desse espaço - só tem um label de
+       uma palavra). "Desc. adicional" (abreviado) já cabe numa linha só com
+       o flex:1 padrão, sem precisar de ajuste próprio. */
     .field--wide {
       flex: 1.25;
     }
 
     .field--narrow {
       flex: 0.9;
-    }
-
-    .field--desconto {
-      flex: 1.05;
     }
 
     .field label {
@@ -3815,8 +3810,8 @@
               <option value="INSTITUCIONAL">Institucional</option>
             </select>
           </div>
-          <div class="field field--desconto">
-            <label for="promoInput">Desconto adicional</label>
+          <div class="field">
+            <label for="promoInput" title="Desconto adicional">Desc. adicional</label>
             <div class="pct-wrap">
               <input class="num-input" type="number" id="promoInput" min="0" max="90" step="0.5" value="0"
                 inputmode="decimal">
