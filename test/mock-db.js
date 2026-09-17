@@ -186,10 +186,10 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
-    const { faturamento_12m, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
+    const { faturamento_12m, faturamento_ano_corrente, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
     // A rota real envolve essa subconsulta num SELECT externo que também pede
     // EXTRACT(YEAR FROM ...) AS ano_fechado - inclui aqui pra bater com isso.
-    return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, ultima_compra, ano_fechado: anoClassificatorioFechado() }] };
+    return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, ultima_compra, ano_fechado: anoClassificatorioFechado() }] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
@@ -669,7 +669,7 @@ function anoClassificatorioFechado() {
 // matriz_grupo (ou o próprio cliente, se não tiver grupo).
 function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
-  if (!cliente) return { faturamento_12m: 0, ultima_compra: null };
+  if (!cliente) return { faturamento_12m: 0, faturamento_ano_corrente: 0, ultima_compra: null };
   const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
   const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
   const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado');
@@ -678,9 +678,13 @@ function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
   const fimStr = `${ano + 1}-01-01`;
   const itensJanela = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr);
   const faturamento_12m = itensJanela.reduce((s, it) => s + (Number(it.valor) || 0), 0);
+  // Ano em andamento (ainda não fechado) - mesma ideia de
+  // faturamento_ano_corrente em SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE.
+  const itensAnoCorrente = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= fimStr);
+  const faturamento_ano_corrente = itensAnoCorrente.reduce((s, it) => s + (Number(it.valor) || 0), 0);
   const datas = itensFaturados.map(it => it.data_faturamento).filter(Boolean).sort();
   const ultima_compra = datas.length ? datas[datas.length - 1] : null;
-  return { faturamento_12m, ultima_compra };
+  return { faturamento_12m, faturamento_ano_corrente, ultima_compra };
 }
 
 function computeHistorico(clienteId) {

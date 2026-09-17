@@ -159,6 +159,10 @@ async function main() {
     res.status === 200 && res.body.faturamento12m === 43000 && res.body.periodoReferencia?.anoInicio === anoFechado,
     `classificatório soma só o ano civil fechado (${anoFechado}), ignora pedido do ano corrente ainda não fechado`
   );
+  assert(
+    res.body.anoCorrente === anoFechado + 1 && res.body.faturamentoAnoCorrente === 500000,
+    'classificatório também traz o acumulado do ano em andamento (pra acompanhar ao lado do ano fechado)'
+  );
 
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
