@@ -176,6 +176,37 @@ async function main() {
     `gráfico trimestral mostra a janela móvel recente (tem ${anoFechado + 1}-01, não tem ${anoFechado}-06): ${JSON.stringify(trimestres)}`
   );
 
+  // 14b) regra confirmada com o usuário: subir de faixa usa o ANO CORRENTE
+  // (não o fechado) e pode acontecer a qualquer momento do ano assim que
+  // bater o teto (não precisa esperar dezembro); cair só é sinalizado
+  // quando o ritmo trimestral está "atrasado" - senão mostraria risco
+  // falso o ano inteiro (ex: em fevereiro, todo mundo está "abaixo" de uma
+  // meta pensada pra dezembro). Teste unitário direto na função pura,
+  // sem precisar montar cenário de trimestres reais.
+  const { calcularStatusClassificatorio } = require('../routes/clientesClassificatorio');
+  let s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 25000, faturamentoAnoCorrente: 55000, atrasadoNoRitmo: false });
+  assert(
+    s.jaQualificaProximaFaixa === true && s.faltaPraProximaFaixa == null,
+    'sobe de faixa assim que o ano corrente bate o teto, mesmo com o ano fechado abaixo (promoção não espera dezembro)'
+  );
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 10000, atrasadoNoRitmo: false });
+  assert(s.emRiscoDeQueda === false, 'acumulado baixo no início do ano não é risco de queda se o ritmo trimestral não está atrasado (evita alarme falso)');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 10000, atrasadoNoRitmo: true });
+  assert(
+    s.emRiscoDeQueda === true && s.faltaPraManter === 40000,
+    'sinaliza risco de queda quando o ritmo trimestral está atrasado (faltam R$40.000 pra chegar no mínimo de R$50.000)'
+  );
+
+  // 14c) rota em lote (/classificatorio/alertas) usa a mesma regra acima,
+  // mas calculada em lote (uma janela de trimestres pra todos os clientes
+  // classificados de uma vez, não N+1 consultas) - só confere que a rota
+  // não quebra com a consulta nova e devolve os 3 grupos esperados.
+  res = await req('GET', '/api/clientes/classificatorio/alertas');
+  assert(
+    res.status === 200 && Array.isArray(res.body.pertoDeSubir) && Array.isArray(res.body.riscoDeQueda) && Array.isArray(res.body.semComprarRecente),
+    'rota de alertas em lote responde com os 3 grupos, usando a consulta trimestral em lote nova'
+  );
+
   // 15) grupo (matriz_grupo) do classificatório: um cliente sem grupo não
   // traz nenhum membro; só admin pode incluir um cliente num grupo; depois
   // de incluído, a lista de membros traz cada empresa com seu PRÓPRIO
