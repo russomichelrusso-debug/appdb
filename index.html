@@ -468,9 +468,20 @@
 
     /* Estado é a única coluna com uma ação extra (usar GPS) colada no label -
        um pouco mais de largura evita que ela fique espremida contra a coluna
-       vizinha (Canal), que só tem um label de uma palavra. */
+       vizinha (Canal). Canal cede um pouco desse espaço (só tem um label de
+       uma palavra); Desconto adicional ganha uma folga também, senão o
+       label de duas palavras ("Desconto adicional") quebra em 2 linhas e
+       desalinha a caixa em relação às outras colunas.  */
     .field--wide {
-      flex: 1.6;
+      flex: 1.25;
+    }
+
+    .field--narrow {
+      flex: 0.9;
+    }
+
+    .field--desconto {
+      flex: 1.05;
     }
 
     .field label {
@@ -3793,7 +3804,7 @@
             </label>
             <select id="stateSelect"></select>
           </div>
-          <div class="field">
+          <div class="field field--narrow">
             <label for="canalSelect" style="font-size:11px;color:var(--gray);">Canal</label>
             <select id="canalSelect" style="font-size:13px;padding:6px 8px;">
               <option value="VAREJO" selected>Varejo</option>
@@ -3804,7 +3815,7 @@
               <option value="INSTITUCIONAL">Institucional</option>
             </select>
           </div>
-          <div class="field">
+          <div class="field field--desconto">
             <label for="promoInput">Desconto adicional</label>
             <div class="pct-wrap">
               <input class="num-input" type="number" id="promoInput" min="0" max="90" step="0.5" value="0"
