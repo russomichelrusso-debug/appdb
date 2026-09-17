@@ -6448,7 +6448,10 @@
         if (!status || !status.classificado || status.ehRede) return '';
         const partes = [];
         if (status.faixaMin != null && status.faixaMax != null) {
-          const pct = Math.max(0, Math.min(100, ((status.faturamento12m - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
+          // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
+          // faixas devolvidas pela API já são calculadas sobre o ano em
+          // andamento, então a posição na barra precisa ser do mesmo ano.
+          const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           const cor = status.emRiscoDeQueda ? '#B3261E' : 'var(--red)';
           partes.push(`<div style="background:var(--fill);border-radius:6px;height:6px;overflow:hidden;">
             <div style="background:${cor};height:100%;width:${pct}%;"></div>
@@ -8221,7 +8224,10 @@
           ${status.proximaRevisao ? `<div style="font-size:11.5px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
 
         if (status.faixaMin != null && status.faixaMax != null) {
-          const pct = Math.max(0, Math.min(100, ((status.faturamento12m - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
+          // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
+          // faixas devolvidas pela API já são calculadas sobre o ano em
+          // andamento, então a posição na barra precisa ser do mesmo ano.
+          const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           const cor = status.emRiscoDeQueda ? '#B3261E' : 'var(--red)';
           partes.push(`
             <div style="background:var(--fill);border-radius:6px;height:8px;margin-top:10px;overflow:hidden;">

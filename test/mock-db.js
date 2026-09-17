@@ -205,6 +205,35 @@ async function query(sql, params = []) {
       ano_fechado: anoClassificatorioFechado(), ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora(),
     }] };
   }
+  // Ano/trimestre atual "de verdade" (não o ano fechado da faixa) - usado
+  // pela rota de alertas em lote pra alimentar calcularRitmoTrimestral de
+  // cada cliente com a mesma referência que a rota individual usa.
+  if (s === 'SELECT EXTRACT(YEAR FROM CURRENT_DATE)::INT AS ANO_ATUAL, EXTRACT(QUARTER FROM CURRENT_DATE)::INT - 1 AS TRIMESTRE_ATUAL_IDX') {
+    return { rows: [{ ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora() }] };
+  }
+  // Trimestres recentes de TODOS os clientes classificados de uma vez
+  // (janela móvel de 4 trimestres, mesma lógica da rota individual) -
+  // checado ANTES do "SELECT C.ID AS CLIENTE_ID ... CLASSIFICATORIO_TIPO IS
+  // NOT NULL" abaixo, que também bateria com esse texto sem essa checagem.
+  if (s.includes('C.ID AS CLIENTE_ID') && s.includes("DATE_TRUNC('QUARTER'")) {
+    const classificados = clientes.filter(c => c.classificatorio_tipo);
+    const inicioStr = inicioJanelaTrimestralMovel();
+    const rows = [];
+    for (const cliente of classificados) {
+      const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
+      const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
+      const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= inicioStr);
+      const porTrimestre = {};
+      for (const it of itens) {
+        const d = new Date(it.data_faturamento);
+        const q = Math.floor(d.getUTCMonth() / 3);
+        const key = `${d.getUTCFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`;
+        porTrimestre[key] = (porTrimestre[key] || 0) + (Number(it.valor) || 0);
+      }
+      for (const [trimestre, faturado] of Object.entries(porTrimestre)) rows.push({ cliente_id: cliente.id, trimestre, faturado });
+    }
+    return { rows };
+  }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
     const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));

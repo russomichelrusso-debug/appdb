@@ -26,13 +26,24 @@ function normalizarDoc(v) {
 
 // Calcula o status de classificatório (quanto falta pra subir/cair) de um
 // cliente, dado o tipo, a meta individual (PIC/Vl.Acordo, se houver) e o
-// faturamento já apurado (últimos 12 meses, somado por grupo Matriz).
+// faturamento do ANO EM ANDAMENTO (jan-dez do ano corrente, acumulando
+// conforme o ano avança - não mais o ano já fechado, que não tem mais
+// nada a fazer). Regra confirmada com o usuário: o cliente pode SUBIR de
+// faixa assim que o acumulado do ano corrente bater o teto, não importa em
+// que mês isso aconteça (na prática, permite "promoção antecipada" no meio
+// do ano, ex: em junho, sem esperar dezembro) - por isso a comparação usa
+// `faturamentoAnoCorrente` puro, sem checkpoint de calendário. Já a QUEDA
+// só é sinalizada quando o ritmo trimestral (calcularRitmoTrimestral) está
+// "atrasado" - comparar o acumulado parcial do ano contra o piso ANUAL sem
+// isso sinalizaria risco falso o ano inteiro (em fevereiro qualquer cliente
+// está "abaixo" de uma meta pensada pra dezembro).
 // Função pura - sem acesso a banco - pra ser testável direto.
-function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m }) {
-  const fat = Number(faturamento12m) || 0;
+function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, faturamentoAnoCorrente, atrasadoNoRitmo }) {
+  const fatFechado = Number(faturamento12m) || 0;
+  const fat = Number(faturamentoAnoCorrente) || 0;
   if (!tipo) return { classificado: false };
 
-  const base = { classificado: true, tipo, faturamento12m: fat };
+  const base = { classificado: true, tipo, faturamento12m: fatFechado };
 
   if (tipo === 'Rede') {
     // Acordo bilateral com a rede/cooperativa de compras - não depende de
@@ -43,17 +54,19 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m }) 
   if (pic && vlAcordo) {
     // Meta individual negociada à parte (PIC), substitui a faixa padrão.
     const falta = Math.max(0, Number(vlAcordo) - fat);
-    return { ...base, metaIndividual: Number(vlAcordo), faltaPraMeta: falta, emRiscoDeQueda: false, faixaMin: 0, faixaMax: Number(vlAcordo) };
+    return { ...base, metaIndividual: Number(vlAcordo), faltaPraMeta: falta, emRiscoDeQueda: !!atrasadoNoRitmo, faixaMin: 0, faixaMax: Number(vlAcordo) };
   }
 
   const faixa = FAIXAS[tipo];
   if (!faixa) return { ...base, semFaixaDefinida: true };
 
   if (fat < faixa.min) {
-    // Abaixo do mínimo da própria faixa - risco de cair pra faixa anterior.
+    // Abaixo do mínimo da própria faixa (no acumulado do ano corrente) -
+    // só é risco de cair DE VERDADE se o ritmo trimestral já está atrasado;
+    // senão é só "ainda não chegou lá" (normal em qualquer mês antes de dezembro).
     return {
       ...base,
-      emRiscoDeQueda: true,
+      emRiscoDeQueda: !!atrasadoNoRitmo,
       faixaAnterior: faixa.faixaAnterior || null,
       faltaPraManter: faixa.min - fat,
       faixaMin: 0,
@@ -71,7 +84,8 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m }) 
       faixaMax: faixa.max,
     };
   }
-  // Já bateu o teto da faixa (ou a faixa não tem teto definido) - qualifica.
+  // Já bateu o teto da faixa este ano (ou a faixa não tem teto definido) -
+  // qualifica pra subir agora mesmo, não precisa esperar o fim do ano.
   return { ...base, emRiscoDeQueda: false, jaQualificaProximaFaixa: !!faixa.proximaFaixa, proximaFaixa: faixa.proximaFaixa || null };
 }
 
@@ -109,18 +123,25 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
   const trimestreAtualIdx = trimestreReferenciaIdx != null ? trimestreReferenciaIdx : Math.floor(hoje.getMonth() / 3);
   // Trimestres do ano de referência já decorridos (inclusive o atual), na ordem em que aparecem em `historico`.
   const anoCorrente = anoReferencia != null ? anoReferencia : hoje.getFullYear();
-  let deficitAcumulado = 0;
-  let trimestresRestantes = 0;
+  // Mapa idx-do-trimestre -> faturado, só do ano de referência. Precisa
+  // disso (em vez de só percorrer `historico`) porque um trimestre SEM
+  // nenhuma venda não gera linha nenhuma na consulta SQL (GROUP BY) - se o
+  // déficit só somasse os trimestres presentes em `historico`, um
+  // trimestre inteiro zerado seria silenciosamente ignorado em vez de
+  // contar como falta total da cota.
+  const faturadoPorTrimestre = new Map();
   for (const t of historico) {
     const d = new Date(t.trimestre);
     if (d.getFullYear() !== anoCorrente) continue;
-    const idx = Math.floor(d.getMonth() / 3);
-    if (idx < trimestreAtualIdx) {
-      // Trimestre já fechado - soma o déficit (ou crédito) em relação à cota.
-      deficitAcumulado += metaPorTrimestre - t.faturado;
-    }
+    faturadoPorTrimestre.set(Math.floor(d.getMonth() / 3), t.faturado);
   }
-  trimestresRestantes = 4 - trimestreAtualIdx; // inclui o trimestre atual
+  let deficitAcumulado = 0;
+  for (let idx = 0; idx < trimestreAtualIdx; idx++) {
+    // Trimestre já fechado - soma o déficit (ou crédito) em relação à cota,
+    // tratando ausência de dados como faturado = 0.
+    deficitAcumulado += metaPorTrimestre - (faturadoPorTrimestre.get(idx) || 0);
+  }
+  const trimestresRestantes = 4 - trimestreAtualIdx; // inclui o trimestre atual
   const ritmoNecessarioProximoTrimestre = trimestresRestantes > 0
     ? Math.max(0, (metaPorTrimestre * trimestresRestantes + deficitAcumulado) / trimestresRestantes)
     : null;
@@ -196,17 +217,13 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     const anoAtual = fatResult.rows[0] ? Number(fatResult.rows[0].ano_atual) : new Date().getUTCFullYear();
     const trimestreAtualIdx = fatResult.rows[0] ? Number(fatResult.rows[0].trimestre_atual_idx) : Math.floor(new Date().getUTCMonth() / 3);
 
-    const status = calcularStatusClassificatorio({
-      tipo: cliente.classificatorio_tipo,
-      pic: cliente.classificatorio_pic,
-      vlAcordo: cliente.classificatorio_vl_acordo,
-      faturamento12m,
-    });
-
     // Trilha dos últimos trimestres pra "acompanhar os trimestres recentes"
     // (pedido do usuário) - janela móvel encerrando no trimestre EM
     // ANDAMENTO agora, não presa ao ano civil já fechado da faixa (que só
     // mostraria trimestres cada vez mais velhos conforme o ano avança).
+    // Calculado ANTES de calcularStatusClassificatorio porque o resultado
+    // (situação atrasado/no_ritmo/adiantado) agora também decide se o
+    // cliente está de fato em risco de queda (ver comentário na função).
     const trimResult = await pool.query(
       `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
        FROM pedidos_oficiais_itens poi
@@ -231,6 +248,15 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       trimestres: trimResult.rows.map(r => ({ trimestre: r.trimestre, faturado: r.faturado })),
       anoReferencia: anoAtual,
       trimestreReferenciaIdx: trimestreAtualIdx,
+    });
+
+    const status = calcularStatusClassificatorio({
+      tipo: cliente.classificatorio_tipo,
+      pic: cliente.classificatorio_pic,
+      vlAcordo: cliente.classificatorio_vl_acordo,
+      faturamento12m,
+      faturamentoAnoCorrente,
+      atrasadoNoRitmo: ritmo.situacao === 'atrasado',
     });
 
     res.json({
@@ -303,16 +329,42 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
 // diário, não coisa de admin). Separa clientes classificados em 3 grupos.
 router.get('/classificatorio/alertas', async (req, res) => {
   try {
-    const result = await pool.query(
-      `${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE}
-       WHERE c.classificatorio_tipo IS NOT NULL
-       GROUP BY c.id`
-    );
-    const clientesResult = await pool.query(
-      `SELECT id, nome, documento, classificatorio_tipo, classificatorio_pic, classificatorio_vl_acordo, matriz_grupo
-       FROM clientes WHERE classificatorio_tipo IS NOT NULL`
-    );
+    const [result, clientesResult, anoResult, trimResult] = await Promise.all([
+      pool.query(
+        `${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE}
+         WHERE c.classificatorio_tipo IS NOT NULL
+         GROUP BY c.id`
+      ),
+      pool.query(
+        `SELECT id, nome, documento, classificatorio_tipo, classificatorio_pic, classificatorio_vl_acordo, matriz_grupo
+         FROM clientes WHERE classificatorio_tipo IS NOT NULL`
+      ),
+      pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual, EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx`),
+      // Mesma janela móvel de 4 trimestres do status individual, mas pra
+      // TODOS os clientes classificados de uma vez só (não N+1) - usada pra
+      // saber quem está com o ritmo "atrasado" (ver comentário em
+      // calcularStatusClassificatorio sobre por que isso decide o risco de
+      // queda, em vez do acumulado bruto do ano contra o piso anual).
+      pool.query(
+        `SELECT c.id AS cliente_id, date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
+         FROM clientes c
+         JOIN clientes c2 ON (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
+         JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
+         WHERE c.classificatorio_tipo IS NOT NULL
+           AND poi.status = 'faturado'
+           AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+         GROUP BY c.id, 2 ORDER BY c.id, 2`
+      ),
+    ]);
     const porId = new Map(clientesResult.rows.map(c => [c.id, c]));
+    const anoAtual = Number(anoResult.rows[0].ano_atual);
+    const trimestreAtualIdx = Number(trimResult.rows[0].trimestre_atual_idx);
+    const trimestresPorCliente = new Map();
+    for (const r of trimResult.rows) {
+      const lista = trimestresPorCliente.get(r.cliente_id) || [];
+      lista.push({ trimestre: r.trimestre, faturado: r.faturado });
+      trimestresPorCliente.set(r.cliente_id, lista);
+    }
 
     const pertoDeSubir = [];
     const riscoDeQueda = [];
@@ -322,11 +374,21 @@ router.get('/classificatorio/alertas', async (req, res) => {
     for (const row of result.rows) {
       const cliente = porId.get(row.cliente_id);
       if (!cliente) continue;
+      const ritmo = calcularRitmoTrimestral({
+        tipo: cliente.classificatorio_tipo,
+        pic: cliente.classificatorio_pic,
+        vlAcordo: cliente.classificatorio_vl_acordo,
+        trimestres: trimestresPorCliente.get(cliente.id) || [],
+        anoReferencia: anoAtual,
+        trimestreReferenciaIdx: trimestreAtualIdx,
+      });
       const status = calcularStatusClassificatorio({
         tipo: cliente.classificatorio_tipo,
         pic: cliente.classificatorio_pic,
         vlAcordo: cliente.classificatorio_vl_acordo,
         faturamento12m: Number(row.faturamento_12m),
+        faturamentoAnoCorrente: Number(row.faturamento_ano_corrente),
+        atrasadoNoRitmo: ritmo.situacao === 'atrasado',
       });
       const item = { id: cliente.id, nome: cliente.nome, documento: cliente.documento, ...status };
 
