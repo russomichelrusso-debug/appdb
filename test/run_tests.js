@@ -176,6 +176,51 @@ async function main() {
     `gráfico trimestral mostra a janela móvel recente (tem ${anoFechado + 1}-01, não tem ${anoFechado}-06): ${JSON.stringify(trimestres)}`
   );
 
+  // 15) grupo (matriz_grupo) do classificatório: um cliente sem grupo não
+  // traz nenhum membro; só admin pode incluir um cliente num grupo; depois
+  // de incluído, a lista de membros traz cada empresa com seu PRÓPRIO
+  // faturamento (não a soma do grupo), ordenada do que compra menos pro que
+  // compra mais - é o ponto do pedido (achar quem no grupo está comprando
+  // pouco).
+  res = await req('GET', '/api/clientes/9001/classificatorio/grupo');
+  assert(res.status === 200 && res.body.matrizGrupo === null && res.body.membros.length === 0, 'cliente sem grupo não traz nenhum membro');
+
+  mockDb.__seed({
+    clientes: [{
+      id: 9002, nome: 'CLIENTE CLASSIFICATORIO TESTE 2 (GRUPO)', documento: '99988877000255', codigo_oficial: 'COD9002',
+      classificatorio_tipo: 'Varejo Exclusive', classificatorio_desconto: 15, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'PC3', codigo_sku: '60863', cliente_codigo_oficial: 'COD9002', quantidade: 1, valor: 10000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
+    ],
+  });
+
+  const criadoNaoAdmin = await mockDb.pool.query(
+    'INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, false) RETURNING id, nome, email, is_admin',
+    ['Vendedor Comum', 'vendedor@example.com', 'sub-teste-vendedor']
+  );
+  const tokenNaoAdmin = generateToken();
+  await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [tokenNaoAdmin, criadoNaoAdmin.rows[0].id, '90']);
+  const tokenOriginal = authToken;
+  authToken = tokenNaoAdmin;
+  res = await req('PATCH', '/api/clientes/9001/matriz-grupo', { matriz_grupo: 'GRUPO TESTE' });
+  assert(res.status === 403, 'só admin pode incluir/alterar o grupo (matriz) de um cliente');
+  authToken = tokenOriginal;
+
+  res = await req('PATCH', '/api/clientes/9001/matriz-grupo', { matriz_grupo: 'GRUPO TESTE' });
+  assert(res.status === 200, 'admin cria o grupo a partir do cliente atual');
+  res = await req('PATCH', '/api/clientes/9002/matriz-grupo', { matriz_grupo: 'GRUPO TESTE' });
+  assert(res.status === 200, 'admin inclui outro cliente no mesmo grupo');
+
+  res = await req('GET', '/api/clientes/9001/classificatorio/grupo');
+  const nomes = (res.body.membros || []).map(m => m.nome);
+  assert(
+    res.status === 200 && res.body.matrizGrupo === 'GRUPO TESTE' && res.body.membros.length === 2
+      && nomes[0] === 'CLIENTE CLASSIFICATORIO TESTE 2 (GRUPO)' && res.body.membros[0].faturamentoAnoFechado === 10000
+      && res.body.membros[1].faturamentoAnoFechado === 43000,
+    `lista os dois membros do grupo, o que compra menos primeiro: ${JSON.stringify(res.body.membros)}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

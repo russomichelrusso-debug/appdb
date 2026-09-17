@@ -249,6 +249,56 @@ router.get('/:id/classificatorio/status', async (req, res) => {
   }
 });
 
+// Demais empresas do mesmo grupo (matriz_grupo) - aberto pra qualquer
+// usuário logado, uso diário (não é ação de admin). Devolve o faturamento
+// de CADA empresa individualmente (não a soma do grupo, que já aparece no
+// card principal) pra dar pra comparar quem está comprando menos dentro do
+// mesmo grupo. Cliente sem matriz_grupo (ou não encontrado) devolve lista
+// vazia - o front decide se mostra ou não a seção de grupo.
+router.get('/:id/classificatorio/grupo', async (req, res) => {
+  try {
+    const clienteResult = await pool.query('SELECT matriz_grupo FROM clientes WHERE id = $1', [req.params.id]);
+    const matrizGrupo = clienteResult.rows[0]?.matriz_grupo;
+    if (!matrizGrupo) return res.json({ matrizGrupo: null, membros: [] });
+
+    const membrosResult = await pool.query(
+      `SELECT c.id, c.nome, c.documento, c.classificatorio_tipo,
+              COALESCE(SUM(poi.valor) FILTER (
+                WHERE poi.status = 'faturado'
+                  AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
+                  AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
+              ), 0) AS faturamento_ano_fechado,
+              COALESCE(SUM(poi.valor) FILTER (
+                WHERE poi.status = 'faturado'
+                  AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}
+              ), 0) AS faturamento_ano_corrente,
+              MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
+       FROM clientes c
+       LEFT JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c.codigo_oficial
+       WHERE c.matriz_grupo = $1
+       GROUP BY c.id
+       ORDER BY faturamento_ano_fechado ASC, c.nome ASC`,
+      [matrizGrupo]
+    );
+
+    res.json({
+      matrizGrupo,
+      membros: membrosResult.rows.map(r => ({
+        id: r.id,
+        nome: r.nome,
+        documento: r.documento,
+        classificatorioTipo: r.classificatorio_tipo,
+        faturamentoAnoFechado: Number(r.faturamento_ano_fechado),
+        faturamentoAnoCorrente: Number(r.faturamento_ano_corrente),
+        ultimaCompra: r.ultima_compra,
+      })),
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar empresas do grupo.' });
+  }
+});
+
 // Alertas agregados - também aberto pra qualquer usuário logado (uso
 // diário, não coisa de admin). Separa clientes classificados em 3 grupos.
 router.get('/classificatorio/alertas', async (req, res) => {

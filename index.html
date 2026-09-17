@@ -8256,7 +8256,88 @@
             </div>`);
         }
 
+        // Grupo (matriz_grupo) - "empresas irmãs" que somam faturamento junto
+        // pro classificatório. Rede já é um agrupamento bilateral próprio (a
+        // "matriz" ali é a rede/cooperativa) - não faz sentido oferecer
+        // trocar/incluir empresa aqui também, por pedido do usuário.
+        if (!status.ehRede) {
+          partes.push(`
+            <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+              <button type="button" class="restoreBtn" id="clienteGrupoToggleBtn" style="width:auto;padding:7px 12px;font-size:12px;">▸ Outras empresas do grupo${status.matrizGrupo ? '' : ' (nenhuma ainda)'}</button>
+              <button type="button" class="restoreBtn" id="clienteGrupoIncluirBtn" style="width:auto;padding:7px 12px;font-size:12px;">+ Incluir empresa no grupo</button>
+            </div>
+            <div id="clienteGrupoLista" class="hidden" style="margin-top:8px;"></div>`);
+        }
+
         content.innerHTML = partes.join('');
+        if (!status.ehRede) initClienteGrupoUI(status);
+      }
+
+      // ---- Grupo do classificatório (matriz_grupo): expandir/trocar entre
+      // as empresas do mesmo grupo, e incluir uma empresa nova no grupo ----
+      async function apiClassificatorioGrupo(clienteId) {
+        return apiFetch(`/api/clientes/${clienteId}/classificatorio/grupo`);
+      }
+      async function apiDefinirMatrizGrupo(clienteId, matrizGrupo) {
+        return apiFetch(`/api/clientes/${clienteId}/matriz-grupo`, { method: 'PATCH', body: JSON.stringify({ matriz_grupo: matrizGrupo }) });
+      }
+      function renderClienteGrupoLista(membros, clienteAtualId) {
+        const wrap = document.getElementById('clienteGrupoLista');
+        if (!membros.length) { wrap.innerHTML = '<div class="ap-hint">Nenhuma outra empresa nesse grupo ainda.</div>'; return; }
+        wrap.innerHTML = membros.map(m => {
+          const atual = Number(m.id) === Number(clienteAtualId);
+          return `
+        <button type="button" class="clientPickerItem"${atual ? ' disabled style="opacity:.6;cursor:default;"' : ''} data-grupo-cliente-id="${m.id}">
+          <div class="cpName"><span>${escapeHtml(m.nome)}${atual ? ' · atual' : ''}</span></div>
+          <div class="cpMeta">${brl(m.faturamentoAnoFechado)} no ano fechado · ${brl(m.faturamentoAnoCorrente)} no ano corrente${m.ultimaCompra ? ' · última compra ' + new Date(m.ultimaCompra).toLocaleDateString('pt-BR') : ' · sem compras registradas'}</div>
+        </button>`;
+        }).join('');
+        wrap.querySelectorAll('[data-grupo-cliente-id]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const m = membros.find(x => String(x.id) === btn.dataset.grupoClienteId);
+            if (m) openClienteDetail(m);
+          });
+        });
+      }
+      async function toggleClienteGrupo() {
+        const wrap = document.getElementById('clienteGrupoLista');
+        const abrindo = wrap.classList.contains('hidden');
+        if (!abrindo) { wrap.classList.add('hidden'); return; }
+        wrap.classList.remove('hidden');
+        wrap.innerHTML = '<div class="lev-empty">Carregando…</div>';
+        try {
+          const { membros } = await apiClassificatorioGrupo(clienteTabSelected.id);
+          renderClienteGrupoLista(membros, clienteTabSelected.id);
+        } catch (e) {
+          wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
+        }
+      }
+      async function incluirClienteNoGrupo(status) {
+        let grupo = status.matrizGrupo;
+        if (!grupo) {
+          const digitado = prompt('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', clienteTabSelected.nome);
+          if (!digitado || !digitado.trim()) return;
+          grupo = digitado.trim();
+        }
+        const outro = await openClientPicker();
+        if (!outro) return;
+        if (Number(outro.id) === Number(clienteTabSelected.id)) { showToast('Esse já é o cliente atual.'); return; }
+        try {
+          if (!status.matrizGrupo) await apiDefinirMatrizGrupo(clienteTabSelected.id, grupo);
+          await apiDefinirMatrizGrupo(outro.id, grupo);
+          showToast(`${outro.nome} incluído no grupo.`);
+          loadClienteClassificatorioStatus();
+          const wrap = document.getElementById('clienteGrupoLista');
+          if (wrap && !wrap.classList.contains('hidden')) wrap.classList.add('hidden'); // reabre carregado de novo, sob demanda
+        } catch (e) {
+          showToast(e.message || 'Não foi possível incluir no grupo.');
+        }
+      }
+      function initClienteGrupoUI(status) {
+        const toggleBtn = document.getElementById('clienteGrupoToggleBtn');
+        const incluirBtn = document.getElementById('clienteGrupoIncluirBtn');
+        if (toggleBtn) toggleBtn.addEventListener('click', toggleClienteGrupo);
+        if (incluirBtn) incluirBtn.addEventListener('click', () => incluirClienteNoGrupo(status));
       }
       // Mini gráfico de barras (SVG inline, sem dependência) mostrando o
       // faturamento de cada trimestre com duas linhas de referência: a meta
