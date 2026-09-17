@@ -81,9 +81,13 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m }) 
 // faixa. `trimestres` = [{ trimestre: 'YYYY-MM-DD' (início do trimestre), faturado }].
 // `anoReferencia`/`trimestreReferenciaIdx` (0-3) dizem qual ano e qual é o
 // "trimestre atual" pra fins de déficit acumulado/trimestres restantes -
-// por padrão usam a data de hoje, mas a rota de status passa um ano
-// FECHADO (ver PERIODO_CLASSIFICATORIO_*) com trimestreReferenciaIdx=4,
-// já que ali os 4 trimestres já terminaram (não sobra "próximo trimestre").
+// por padrão usam a data de hoje. A rota de status passa o ANO EM
+// ANDAMENTO (o mesmo que vai ser revisado na próxima janeiro) e o
+// trimestre atual de verdade - é o que o vendedor quer acompanhar "ao
+// vivo"; o ano já fechado não tem mais nada a fazer, então não faz
+// sentido medir ritmo contra ele. `trimestres` pode incluir um trimestre
+// à direita (trilha, pro gráfico) de fora do ano de referência - a função
+// ignora esses pra fins de déficit/ritmo, só desenha no histórico.
 function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferencia, trimestreReferenciaIdx }) {
   const historico = (trimestres || []).map(t => ({ trimestre: t.trimestre, faturado: Number(t.faturado) || 0 }));
   if (tipo === 'Rede') return { historico, semMeta: true };
@@ -179,7 +183,9 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // nunca de um "new Date()" separado no Node, que teria que só torcer pra
     // concordar com o fuso do CURRENT_DATE do banco.
     const fatResult = await pool.query(
-      `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado
+      `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
+              EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual,
+              EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx
        FROM (${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
@@ -187,6 +193,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     const faturamentoAnoCorrente = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_ano_corrente) : 0;
     const ultimaCompra = fatResult.rows[0] ? fatResult.rows[0].ultima_compra : null;
     const anoPeriodo = fatResult.rows[0] ? Number(fatResult.rows[0].ano_fechado) : new Date().getUTCFullYear() - 1;
+    const anoAtual = fatResult.rows[0] ? Number(fatResult.rows[0].ano_atual) : new Date().getUTCFullYear();
+    const trimestreAtualIdx = fatResult.rows[0] ? Number(fatResult.rows[0].trimestre_atual_idx) : Math.floor(new Date().getUTCMonth() / 3);
 
     const status = calcularStatusClassificatorio({
       tipo: cliente.classificatorio_tipo,
@@ -195,6 +203,10 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       faturamento12m,
     });
 
+    // Trilha dos últimos trimestres pra "acompanhar os trimestres recentes"
+    // (pedido do usuário) - janela móvel encerrando no trimestre EM
+    // ANDAMENTO agora, não presa ao ano civil já fechado da faixa (que só
+    // mostraria trimestres cada vez mais velhos conforme o ano avança).
     const trimResult = await pool.query(
       `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
        FROM pedidos_oficiais_itens poi
@@ -202,22 +214,23 @@ router.get('/:id/classificatorio/status', async (req, res) => {
        JOIN clientes c ON c.id = $1
        WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
          AND poi.status = 'faturado'
-         AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
-         AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
+         AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '3 quarters'
        GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
-    // anoPeriodo (calculado acima, junto de fatResult) é passado explicitamente
-    // pra calcularRitmoTrimestral em vez de deixar a função assumir "hoje", já
-    // que o período em análise está inteiramente fechado (nenhum trimestre
-    // "restante").
+    // Ritmo medido contra o ANO EM ANDAMENTO (anoAtual/trimestreAtualIdx, vindos
+    // do Postgres junto de fatResult) - é o ano que ainda vai ser revisado na
+    // próxima janeiro, então é o único que ainda faz sentido "correr atrás".
+    // Um trimestre do ano já fechado pode aparecer no histórico (pra dar
+    // contexto de trilha no gráfico) mas não entra no cálculo de déficit -
+    // calcularRitmoTrimestral já ignora trimestres fora do ano de referência.
     const ritmo = calcularRitmoTrimestral({
       tipo: cliente.classificatorio_tipo,
       pic: cliente.classificatorio_pic,
       vlAcordo: cliente.classificatorio_vl_acordo,
       trimestres: trimResult.rows.map(r => ({ trimestre: r.trimestre, faturado: r.faturado })),
-      anoReferencia: anoPeriodo,
-      trimestreReferenciaIdx: 4,
+      anoReferencia: anoAtual,
+      trimestreReferenciaIdx: trimestreAtualIdx,
     });
 
     res.json({
