@@ -159,6 +159,25 @@ router.patch('/:id/documento', async (req, res) => {
   }
 });
 
+// Define o grupo (matriz_grupo) de um cliente - agrupa "empresas irmãs" pro
+// classificatório somar o faturamento das duas juntas (ver
+// routes/clientesClassificatorio.js). Só admin: afeta a classificação e o
+// faturamento somado de outros clientes também, não só deste.
+router.patch('/:id/matriz-grupo', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode alterar o grupo (matriz) de um cliente.' });
+  const matrizGrupo = String(req.body.matriz_grupo || '').trim();
+  if (!matrizGrupo) return res.status(400).json({ erro: 'Informe o nome do grupo.' });
+  try {
+    const result = await pool.query('UPDATE clientes SET matriz_grupo = $1 WHERE id = $2 RETURNING nome', [matrizGrupo, req.params.id]);
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    console.log(`Grupo (matriz) definido: ${result.rows[0].nome} (id ${req.params.id}) → "${matrizGrupo}", por ${req.usuario?.email}.`);
+    res.json({ ok: true, nome: result.rows[0].nome, matrizGrupo });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao definir o grupo do cliente.' });
+  }
+});
+
 // Mescla dois clientes duplicados: todo o histórico (pedidos e levantamentos)
 // do cliente "remover" passa a pertencer ao "manter", e o duplicado é
 // excluído. Só admin - é uma operação que reescreve histórico de vendas.

@@ -131,6 +131,16 @@ async function query(sql, params = []) {
   if (s.includes('SELECT * FROM CLIENTES WHERE ID')) {
     return { rows: clientes.filter(c => c.id == params[0]) };
   }
+  if (s === 'SELECT MATRIZ_GRUPO FROM CLIENTES WHERE ID = $1') {
+    const c = clientes.find(x => x.id == params[0]);
+    return { rows: c ? [{ matriz_grupo: c.matriz_grupo || null }] : [] };
+  }
+  if (s.startsWith('UPDATE CLIENTES SET MATRIZ_GRUPO')) {
+    const [matrizGrupo, id] = params;
+    const c = clientes.find(x => Number(x.id) === Number(id));
+    if (c) c.matriz_grupo = matrizGrupo;
+    return { rows: c ? [{ nome: c.nome }] : [] };
+  }
   if (s.includes('SELECT ID, NOME, DOCUMENTO FROM CLIENTES')) {
     return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento })) };
   }
@@ -198,6 +208,29 @@ async function query(sql, params = []) {
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
     const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));
+    return { rows };
+  }
+  if (s.includes('WHERE C.MATRIZ_GRUPO = $1')) {
+    // Faturamento de CADA empresa individualmente (só o próprio
+    // codigo_oficial, sem expandir pro grupo inteiro como
+    // calcularFaturamentoAnoFechadoParaCliente faz) - é o ponto desta
+    // consulta, comparar quem no grupo compra menos.
+    const grupo = clientes.filter(c => c.matriz_grupo === params[0]);
+    const ano = anoClassificatorioFechado();
+    const inicioStr = `${ano}-01-01`;
+    const fimStr = `${ano + 1}-01-01`;
+    const rows = grupo.map(c => {
+      const itensDoCliente = pedidosOficiaisItens.filter(it => it.cliente_codigo_oficial === c.codigo_oficial && it.status === 'faturado');
+      const faturamento_ano_fechado = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr)
+        .reduce((s, it) => s + (Number(it.valor) || 0), 0);
+      const faturamento_ano_corrente = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento >= fimStr)
+        .reduce((s, it) => s + (Number(it.valor) || 0), 0);
+      const datas = itensDoCliente.map(it => it.data_faturamento).filter(Boolean).sort();
+      return {
+        id: c.id, nome: c.nome, documento: c.documento, classificatorio_tipo: c.classificatorio_tipo,
+        faturamento_ano_fechado, faturamento_ano_corrente, ultima_compra: datas.length ? datas[datas.length - 1] : null,
+      };
+    }).sort((a, b) => a.faturamento_ano_fechado - b.faturamento_ano_fechado || a.nome.localeCompare(b.nome));
     return { rows };
   }
   if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_FATURAMENTO)")) {
