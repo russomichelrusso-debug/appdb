@@ -164,6 +164,18 @@ async function main() {
     'classificatório também traz o acumulado do ano em andamento (pra acompanhar ao lado do ano fechado)'
   );
 
+  // 14) o mini gráfico trimestral deve trazer os trimestres RECENTES (janela
+  // móvel terminando no trimestre em andamento agora), não presos ao ano
+  // civil fechado - senão o vendedor nunca consegue "acompanhar os
+  // trimestres recentes" (ex: em setembro/2026, precisa ver T4/2025 em
+  // diante, não T2/2025 pra trás). PC1 (junho do ano fechado) fica de fora
+  // dessa janela; PC2 (janeiro do ano em andamento) entra.
+  const trimestres = (res.body.trimestral?.historico || []).map(t => t.trimestre.slice(0, 7));
+  assert(
+    !trimestres.some(t => t === `${anoFechado}-06`) && trimestres.some(t => t === `${anoFechado + 1}-01`),
+    `gráfico trimestral mostra a janela móvel recente (tem ${anoFechado + 1}-01, não tem ${anoFechado}-06): ${JSON.stringify(trimestres)}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

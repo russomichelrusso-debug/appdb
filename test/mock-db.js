@@ -188,8 +188,12 @@ async function query(sql, params = []) {
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
     const { faturamento_12m, faturamento_ano_corrente, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
     // A rota real envolve essa subconsulta num SELECT externo que também pede
-    // EXTRACT(YEAR FROM ...) AS ano_fechado - inclui aqui pra bater com isso.
-    return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, ultima_compra, ano_fechado: anoClassificatorioFechado() }] };
+    // EXTRACT(YEAR FROM ...) AS ano_fechado/ano_atual/trimestre_atual_idx -
+    // inclui aqui pra bater com isso.
+    return { rows: [{
+      cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, ultima_compra,
+      ano_fechado: anoClassificatorioFechado(), ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora(),
+    }] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
@@ -201,10 +205,11 @@ async function query(sql, params = []) {
     if (!cliente) return { rows: [] };
     const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
     const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
-    const ano = anoClassificatorioFechado();
-    const inicioStr = `${ano}-01-01`;
-    const fimStr = `${ano + 1}-01-01`;
-    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr);
+    // Janela móvel dos últimos 4 trimestres terminando no trimestre EM
+    // ANDAMENTO agora (não presa ao ano civil já fechado) - mesma mudança
+    // feita na rota real, pra "acompanhar os trimestres recentes".
+    const inicioStr = inicioJanelaTrimestralMovel();
+    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= inicioStr);
     const porTrimestre = {};
     for (const it of itens) {
       const d = new Date(it.data_faturamento);
@@ -662,6 +667,17 @@ function anoClassificatorioFechado() {
   // getUTCFullYear() (não getFullYear()) - bate com o mesmo raciocínio de
   // routes/clientesClassificatorio.js (CURRENT_DATE do Postgres roda em UTC).
   return new Date().getUTCFullYear() - 1;
+}
+function anoAtual() { return new Date().getUTCFullYear(); }
+function trimestreAtualIdxAgora() { return Math.floor(new Date().getUTCMonth() / 3); } // 0-3
+// Início (YYYY-MM-DD) do trimestre civil de 3 trimestres atrás, contando do
+// trimestre em andamento agora - mesma janela de `date_trunc('quarter',
+// CURRENT_DATE) - INTERVAL '3 quarters'` da rota real.
+function inicioJanelaTrimestralMovel() {
+  const now = new Date();
+  const mesInicioTrimestreAtual = trimestreAtualIdxAgora() * 3;
+  const d = new Date(Date.UTC(now.getUTCFullYear(), mesInicioTrimestreAtual - 9, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
 }
 
 // Reproduz a query SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE de routes/clientesClassificatorio.js -
