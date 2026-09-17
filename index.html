@@ -466,6 +466,13 @@
       min-width: 0;
     }
 
+    /* Estado é a única coluna com uma ação extra (usar GPS) colada no label -
+       um pouco mais de largura evita que ela fique espremida contra a coluna
+       vizinha (Canal), que só tem um label de uma palavra. */
+    .field--wide {
+      flex: 1.6;
+    }
+
     .field label {
       display: flex;
       align-items: center;
@@ -601,6 +608,21 @@
 
     .classiSeg {
       align-items: stretch;
+    }
+
+    /* "0%" (sem classificatório) não tinha nenhuma cor de fundo, ao contrário
+       dos outros 4 botões (cada um com seu tom) - mesmo com o espaçamento
+       real idêntico (2px em todos), ele se misturava com o fundo cinza da
+       trilha e parecia "flutuar" separado do grupo. */
+    #channelSeg button[data-v="0"] {
+      background: var(--fill);
+      color: var(--gray);
+    }
+
+    #channelSeg button[data-v="0"].active {
+      background: var(--white);
+      color: var(--ink);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
     }
 
     .classiBtn {
@@ -1311,7 +1333,18 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      flex-wrap: wrap;
+      row-gap: 4px;
       margin: 10px 0 8px;
+    }
+
+    /* Sem isso, "Adicionar todos ao orçamento"/"Limpar lista" espremiam e
+       quebravam o TEXTO no meio do próprio botão (2 linhas dentro de um
+       botão só) em vez de o cabeçalho inteiro cair pra uma segunda linha -
+       ficava com altura desalinhada em relação ao título. */
+    .priceListHeader > div {
+      flex-shrink: 0;
+      margin-left: auto;
     }
 
     .priceListHeader h3 {
@@ -2097,6 +2130,7 @@
       font-size: 12.5px;
       cursor: pointer;
       padding: 2px 4px;
+      white-space: nowrap;
     }
 
     .clientClearBtn.hidden {
@@ -3745,7 +3779,7 @@
       </div>
       <div class="controls">
         <div class="ctrl-row">
-          <div class="field">
+          <div class="field field--wide">
             <label for="stateSelect">Estado
               <button type="button" class="gpsBtn" id="gpsStateBtn"
                 aria-label="Usar minha localização pra escolher o estado">
