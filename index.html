@@ -8167,6 +8167,28 @@
         return apiFetch(`/api/clientes/${clienteId}/classificatorio/status`);
       }
       const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master', 'Atacado Premium': 'Atacado Premium' };
+      // Acumulado do ano vigente comparado ao total do ano fechado anterior:
+      // vermelho se estiver visivelmente abaixo, verde se acima, âmbar se
+      // estiverem próximos (dentro de 5% um do outro) - sinaliza o ritmo do
+      // ano corrente frente ao ano fechado, mesmo ainda em andamento.
+      function corAcumuladoAnoCorrente(atual, anterior) {
+        if (!anterior) return atual > 0 ? '#1E8E3E' : 'var(--gray)';
+        const razao = atual / anterior;
+        if (razao >= 1.05) return '#1E8E3E';
+        if (razao <= 0.95) return '#B3261E';
+        return '#B36B00';
+      }
+      // Formato compacto (12k, 7,5k) pros rótulos de valor acima das barras
+      // do mini gráfico trimestral - sem casas decimais a partir de 10 mil,
+      // 1 casa abaixo disso, pra caber no espaço apertado da barra.
+      function formatCompactBRL(v) {
+        const n = Number(v) || 0;
+        if (n >= 1000) {
+          const mil = n / 1000;
+          return `${mil.toLocaleString('pt-BR', { maximumFractionDigits: mil >= 10 ? 0 : 1 })}k`;
+        }
+        return brl(n);
+      }
       function renderClienteClassificatorioCard(status) {
         const card = document.getElementById('clienteClassificatorioCard');
         const content = document.getElementById('clienteClassificatorioContent');
@@ -8193,7 +8215,7 @@
             </div>
             ${status.anoCorrente ? `<div>
               <div class="hist-clientLabel">Acumulado ${escapeHtml(String(status.anoCorrente))}${sufixoGrupo}</div>
-              <div style="font-weight:700;font-size:18px;margin-top:2px;color:var(--gray);">${brl(status.faturamentoAnoCorrente)}</div>
+              <div style="font-weight:700;font-size:18px;margin-top:2px;color:${corAcumuladoAnoCorrente(status.faturamentoAnoCorrente, status.faturamento12m)};">${brl(status.faturamentoAnoCorrente)}</div>
             </div>` : ''}
           </div>
           ${status.proximaRevisao ? `<div style="font-size:11.5px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
@@ -8247,7 +8269,7 @@
         if (!historico.length || !historico.some(t => t.faturado > 0)) {
           return '<div class="ap-hint" style="margin-top:6px;">Sem faturamento nos últimos trimestres.</div>';
         }
-        const W = 280, H = 84, padTop = 6, padBottom = 16, chartH = H - padTop - padBottom;
+        const W = 280, H = 92, padTop = 14, padBottom = 16, chartH = H - padTop - padBottom;
         const valores = historico.map(t => t.faturado).concat([metaPorTrimestre || 0, pisoPorTrimestre || 0]);
         const maxValor = Math.max(...valores, 1) * 1.15;
         const escY = v => padTop + chartH - (Math.max(0, v) / maxValor) * chartH;
@@ -8263,7 +8285,8 @@
           else if (metaPorTrimestre != null && t.faturado < metaPorTrimestre) cor = '#B36B00';
           const d = new Date(t.trimestre);
           const rotulo = `T${Math.floor(d.getMonth() / 3) + 1}/${d.getFullYear()}`;
-          return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${alturaBarra.toFixed(1)}" rx="2" fill="${cor}"/>
+          return `<text x="${(x + larguraBarra / 2).toFixed(1)}" y="${Math.max(9, y - 4).toFixed(1)}" font-size="9.5" font-weight="700" fill="var(--ink)" text-anchor="middle">${formatCompactBRL(t.faturado)}</text>
+            <rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${alturaBarra.toFixed(1)}" rx="2" fill="${cor}"/>
             <text x="${(x + larguraBarra / 2).toFixed(1)}" y="${H - 2}" font-size="9" fill="var(--gray)" text-anchor="middle">${rotulo}</text>`;
         }).join('');
 
