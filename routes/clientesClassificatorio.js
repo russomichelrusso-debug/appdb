@@ -2,11 +2,13 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
-// Faixas de faturamento (últimos 12 meses, somado por Matriz/grupo de
-// "empresas irmãs") reverse-engineered da planilha "Classificatório"
-// exportada do ERP em 02/09/2026 - a coluna "Diferença" daquele
-// relatório bateu exatamente com estes limiares em ~280 linhas
-// conferidas manualmente. Fixas por decisão do usuário; se a ERP mudar
+// Faixas de faturamento (ano civil fechado, somado por Matriz/grupo de
+// "empresas irmãs" - ver PERIODO_CLASSIFICATORIO_* mais abaixo)
+// reverse-engineered da planilha "Classificatório" exportada do ERP em
+// 02/09/2026 - a coluna "Diferença" daquele relatório bateu exatamente
+// com estes limiares em ~280 linhas conferidas manualmente (na época, a
+// janela ainda era móvel de 12 meses; a windowing mudou depois, os
+// limiares de valor não). Fixas por decisão do usuário; se a ERP mudar
 // as faixas no futuro, ajustar aqui.
 const FAIXAS = {
   'Varejo Exclusive': { min: 0, max: 30000, proximaFaixa: 'Varejo Premium' },
@@ -142,7 +144,7 @@ const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // e
 // recente, ver comentário acima) agrupado por "grupo" (matriz_grupo
 // quando existe, senão o próprio cliente) - reaproveitada pelo status
 // individual e pelos alertas em lote.
-const SQL_FATURAMENTO_12M_POR_CLIENTE = `
+const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = `
   SELECT c.id AS cliente_id,
          COALESCE(SUM(poi.valor) FILTER (
            WHERE poi.status = 'faturado'
@@ -165,9 +167,18 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     if (!cliente) return res.status(404).json({ erro: 'Cliente não encontrado.' });
     if (!cliente.classificatorio_tipo) return res.json({ classificado: false });
 
-    const fatResult = await pool.query(`${SQL_FATURAMENTO_12M_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id`, [req.params.id]);
+    // O ano fechado (usado só pra rotular a resposta e fechar os 4 trimestres
+    // em calcularRitmoTrimestral) vem do PRÓPRIO Postgres, na mesma consulta -
+    // nunca de um "new Date()" separado no Node, que teria que só torcer pra
+    // concordar com o fuso do CURRENT_DATE do banco.
+    const fatResult = await pool.query(
+      `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado
+       FROM (${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
+      [req.params.id]
+    );
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
     const ultimaCompra = fatResult.rows[0] ? fatResult.rows[0].ultima_compra : null;
+    const anoPeriodo = fatResult.rows[0] ? Number(fatResult.rows[0].ano_fechado) : new Date().getUTCFullYear() - 1;
 
     const status = calcularStatusClassificatorio({
       tipo: cliente.classificatorio_tipo,
@@ -188,12 +199,10 @@ router.get('/:id/classificatorio/status', async (req, res) => {
        GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
-    // Ano civil fechado usado no período (ver comentário acima de
-    // SQL_FATURAMENTO_12M_POR_CLIENTE) - passado explicitamente pra
-    // calcularRitmoTrimestral em vez de deixar a função assumir "hoje",
-    // já que o período em análise é sempre o ano anterior ao atual, e
-    // está inteiramente fechado (nenhum trimestre "restante").
-    const anoPeriodo = new Date().getFullYear() - 1;
+    // anoPeriodo (calculado acima, junto de fatResult) é passado explicitamente
+    // pra calcularRitmoTrimestral em vez de deixar a função assumir "hoje", já
+    // que o período em análise está inteiramente fechado (nenhum trimestre
+    // "restante").
     const ritmo = calcularRitmoTrimestral({
       tipo: cliente.classificatorio_tipo,
       pic: cliente.classificatorio_pic,
@@ -222,7 +231,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
 router.get('/classificatorio/alertas', async (req, res) => {
   try {
     const result = await pool.query(
-      `${SQL_FATURAMENTO_12M_POR_CLIENTE}
+      `${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE}
        WHERE c.classificatorio_tipo IS NOT NULL
        GROUP BY c.id`
     );
@@ -336,4 +345,4 @@ module.exports = router;
 module.exports.calcularStatusClassificatorio = calcularStatusClassificatorio;
 module.exports.calcularRitmoTrimestral = calcularRitmoTrimestral;
 module.exports.FAIXAS = FAIXAS;
-module.exports.SQL_FATURAMENTO_12M_POR_CLIENTE = SQL_FATURAMENTO_12M_POR_CLIENTE;
+module.exports.SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE;

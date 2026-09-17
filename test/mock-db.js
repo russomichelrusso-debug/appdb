@@ -186,12 +186,14 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
-    const { faturamento_12m, ultima_compra } = calcularFaturamento12mParaCliente(params[0]);
-    return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, ultima_compra }] };
+    const { faturamento_12m, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
+    // A rota real envolve essa subconsulta num SELECT externo que também pede
+    // EXTRACT(YEAR FROM ...) AS ano_fechado - inclui aqui pra bater com isso.
+    return { rows: [{ cliente_id: Number(params[0]), faturamento_12m, ultima_compra, ano_fechado: anoClassificatorioFechado() }] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
-    const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamento12mParaCliente(c.id) }));
+    const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));
     return { rows };
   }
   if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_FATURAMENTO)")) {
@@ -221,7 +223,7 @@ async function query(sql, params = []) {
     const rows = clientes.map(c => ({
       id: c.id,
       classificatorio_tipo: c.classificatorio_tipo || null,
-      ultima_compra: calcularFaturamento12mParaCliente(c.id).ultima_compra,
+      ultima_compra: calcularFaturamentoAnoFechadoParaCliente(c.id).ultima_compra,
     }));
     return { rows };
   }
@@ -478,18 +480,30 @@ async function query(sql, params = []) {
     return { rows: [{ count: String(usuarios.length) }] };
   }
   if (s.includes('INSERT INTO USUARIOS')) {
-    if (usuarios.some(u => u.usuario === params[1])) {
+    // Login é só via Google (routes/auth.js) - duas variantes reais de INSERT:
+    // (a) primeiro usuário do sistema, auto-admin: (nome, email, google_sub, is_admin)
+    //     com "true" fixo na própria query (3 params: nome, email, sub);
+    // (b) cadastro por um admin, por e-mail: (nome, email, is_admin), is_admin
+    //     vem como o 3º param (boolean).
+    const email = String(params[1] || '').toLowerCase();
+    if (usuarios.some(u => u.email === email)) {
       const err = new Error('duplicate'); err.code = '23505'; throw err;
     }
-    // /setup grava "VALUES ($1, $2, $3, true)" com o admin fixo na própria query
-    // (só 3 params); /usuarios manda is_admin como $4 de verdade.
-    const isAdmin = s.includes('VALUES ($1, $2, $3, TRUE)') ? true : !!params[3];
-    const u = { id: nextId.usuarios++, nome: params[0], usuario: params[1], senha_hash: params[2], is_admin: isAdmin };
+    const ehVarianteGoogle = s.includes('GOOGLE_SUB');
+    // Na variante (a), is_admin é sempre um literal (true/false) na própria
+    // query, nunca um param - o código real só manda "true" (1º usuário do
+    // sistema), mas scripts de teste também semeiam um 2º usuário não-admin
+    // nesse mesmo formato, com "false".
+    const isAdmin = ehVarianteGoogle ? s.includes('VALUES ($1, $2, $3, TRUE)') : !!params[2];
+    const u = {
+      id: nextId.usuarios++,
+      nome: params[0],
+      email,
+      google_sub: ehVarianteGoogle ? params[2] : null,
+      is_admin: isAdmin,
+    };
     usuarios.push(u);
-    return { rows: [{ id: u.id, nome: u.nome, usuario: u.usuario, is_admin: u.is_admin }] };
-  }
-  if (s.includes('SELECT * FROM USUARIOS WHERE USUARIO')) {
-    return { rows: usuarios.filter(u => u.usuario === params[0]) };
+    return { rows: [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin }] };
   }
   if (s.includes('INSERT INTO SESSOES')) {
     const dias = Number(params[2]);
@@ -497,11 +511,14 @@ async function query(sql, params = []) {
     sessoes.push({ token: params[0], usuario_id: params[1], expira_em: expira });
     return { rows: [] };
   }
+  // Cobre tanto o requireAuth (middleware/auth.js, seleciona id/nome/email/is_admin)
+  // quanto GET /auth/me (seleciona só nome/email/is_admin) - mesmo padrão de texto
+  // SQL nos dois, campos extras não usados por um deles não atrapalham o outro.
   if (s.includes('FROM SESSOES S') && s.includes('JOIN USUARIOS U')) {
     const sessao = sessoes.find(se => se.token === params[0] && new Date(se.expira_em) > new Date());
     if (!sessao) return { rows: [] };
     const u = usuarios.find(us => us.id === sessao.usuario_id);
-    return { rows: u ? [{ id: u.id, nome: u.nome, usuario: u.usuario, is_admin: u.is_admin }] : [] };
+    return { rows: u ? [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin }] : [] };
   }
   if (s.includes('DELETE FROM SESSOES')) {
     sessoes = sessoes.filter(se => se.token !== params[0]);
@@ -642,13 +659,15 @@ async function query(sql, params = []) {
 // PERIODO_CLASSIFICATORIO_*/comentário em routes/clientesClassificatorio.js):
 // o ano anterior ao atual, inteiro (não uma janela móvel de 12 meses).
 function anoClassificatorioFechado() {
-  return new Date().getFullYear() - 1;
+  // getUTCFullYear() (não getFullYear()) - bate com o mesmo raciocínio de
+  // routes/clientesClassificatorio.js (CURRENT_DATE do Postgres roda em UTC).
+  return new Date().getUTCFullYear() - 1;
 }
 
-// Reproduz a query SQL_FATURAMENTO_12M_POR_CLIENTE de routes/clientesClassificatorio.js -
+// Reproduz a query SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE de routes/clientesClassificatorio.js -
 // soma faturado no ano civil fechado mais recente, agrupado por
 // matriz_grupo (ou o próprio cliente, se não tiver grupo).
-function calcularFaturamento12mParaCliente(clienteId) {
+function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
   if (!cliente) return { faturamento_12m: 0, ultima_compra: null };
   const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
@@ -705,4 +724,5 @@ module.exports = {
   __reset: reset,
   __seed: seed,
   __getClientes: () => clientes,
+  __anoClassificatorioFechado: anoClassificatorioFechado,
 };

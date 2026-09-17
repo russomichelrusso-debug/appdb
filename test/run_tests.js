@@ -4,6 +4,7 @@
 const Module = require('module');
 const path = require('path');
 const mockDb = require('./mock-db');
+const { generateToken } = require('../auth-utils');
 const dbPath = path.resolve(__dirname, '../db.js');
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...args) {
@@ -57,13 +58,22 @@ async function main() {
   res = await req('GET', '/api/clientes');
   assert(res.status === 401, 'endpoint protegido rejeita sem token de sessão');
 
-  // 2b) primeiro acesso: cria o usuário admin e faz login pra conseguir um token
-  res = await req('POST', '/api/auth/setup', { nome: 'Michel Russo', usuario: 'michel', senha: 'senha-teste-123' });
-  assert(res.status === 201 && res.body.is_admin === true, 'setup cria o primeiro usuário como admin');
-
-  res = await req('POST', '/api/auth/login', { usuario: 'michel', senha: 'senha-teste-123', lembrar: true });
-  assert(res.status === 200 && res.body.token, 'login devolve token');
-  authToken = res.body.token;
+  // 2b) login real é via "Entrar com Google" (POST /api/auth/google, que exige
+  // um id_token de verdade validado contra o servidor do Google - não dá pra
+  // simular aqui). Em vez disso, semeia a sessão direto no banco (mesmo
+  // atalho usado pelos scripts de verificação manual desta sessão), pulando
+  // só a etapa de confirmar a identidade - o resto do fluxo (token de sessão,
+  // requireAuth, is_admin) é o código real.
+  const criado = await mockDb.pool.query(
+    'INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, true) RETURNING id, nome, email, is_admin',
+    ['Michel Russo', 'michel@example.com', 'sub-teste-michel']
+  );
+  assert(criado.rows[0].is_admin === true, 'primeiro usuário criado vira admin');
+  authToken = generateToken();
+  await mockDb.pool.query(
+    'INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)',
+    [authToken, criado.rows[0].id, '90']
+  );
 
   // 3) criar cliente
   res = await req('POST', '/api/clientes', { nome: 'João Silva Materiais', documento: '12345678000199', contato: '11999998888' });
@@ -128,6 +138,27 @@ async function main() {
   // 12) historico de levantamentos do cliente
   res = await req('GET', `/api/clientes/${clienteId}/levantamentos`);
   assert(res.status === 200 && res.body.length === 1 && res.body[0].num_produtos === 1, 'lista levantamentos do cliente corretamente');
+
+  // 13) classificatório: calcula sobre o ANO CIVIL FECHADO anterior, não uma
+  // janela móvel de 12 meses (ver routes/clientesClassificatorio.js) - semeia
+  // um cliente com faturamento no ano fechado (conta) e um pedido no ano
+  // corrente ainda não fechado (não deve contar, mesmo sendo mais recente).
+  const anoFechado = mockDb.__anoClassificatorioFechado();
+  mockDb.__seed({
+    clientes: [{
+      id: 9001, nome: 'CLIENTE CLASSIFICATORIO TESTE', documento: '99988877000166', codigo_oficial: 'COD9001',
+      classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 17, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'PC1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 43000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC2', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, status: 'faturado' },
+    ],
+  });
+  res = await req('GET', '/api/clientes/9001/classificatorio/status');
+  assert(
+    res.status === 200 && res.body.faturamento12m === 43000 && res.body.periodoReferencia?.anoInicio === anoFechado,
+    `classificatório soma só o ano civil fechado (${anoFechado}), ignora pedido do ano corrente ainda não fechado`
+  );
 
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');

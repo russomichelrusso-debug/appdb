@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { SQL_FATURAMENTO_12M_POR_CLIENTE } = require('./clientesClassificatorio');
+const { SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase } = require('./lib/skuNormalizacao');
 
 // Reconcilia códigos promocionais (P/P1/P2 + código base, ver
@@ -433,7 +433,7 @@ router.get('/dashboard/resumo', async (req, res) => {
       pool.query(
         `SELECT c.id, c.classificatorio_tipo, base.ultima_compra
          FROM clientes c
-         JOIN (${SQL_FATURAMENTO_12M_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
+         JOIN (${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
       ),
     ]);
 
