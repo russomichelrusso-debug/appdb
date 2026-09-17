@@ -143,7 +143,10 @@ const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // e
 // Monta a subconsulta que soma faturamento (do ano civil fechado mais
 // recente, ver comentário acima) agrupado por "grupo" (matriz_grupo
 // quando existe, senão o próprio cliente) - reaproveitada pelo status
-// individual e pelos alertas em lote.
+// individual e pelos alertas em lote. Também traz o acumulado do ano EM
+// ANDAMENTO (ainda não fechado, não usado pra decidir faixa - só pra o
+// vendedor acompanhar o progresso do ano corrente lado a lado com o
+// último ano fechado).
 const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = `
   SELECT c.id AS cliente_id,
          COALESCE(SUM(poi.valor) FILTER (
@@ -151,6 +154,10 @@ const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = `
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
              AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
          ), 0) AS faturamento_12m,
+         COALESCE(SUM(poi.valor) FILTER (
+           WHERE poi.status = 'faturado'
+             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}
+         ), 0) AS faturamento_ano_corrente,
          MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
   FROM clientes c
   LEFT JOIN clientes c2 ON c2.id = c.id
@@ -177,6 +184,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       [req.params.id]
     );
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
+    const faturamentoAnoCorrente = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_ano_corrente) : 0;
     const ultimaCompra = fatResult.rows[0] ? fatResult.rows[0].ultima_compra : null;
     const anoPeriodo = fatResult.rows[0] ? Number(fatResult.rows[0].ano_fechado) : new Date().getUTCFullYear() - 1;
 
@@ -219,6 +227,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       trimestral: ritmo,
       periodoReferencia: { anoInicio: anoPeriodo, anoFim: anoPeriodo },
       proximaRevisao: `janeiro/${anoPeriodo + 2}`,
+      anoCorrente: anoPeriodo + 1,
+      faturamentoAnoCorrente,
     });
   } catch (e) {
     console.error(e);
