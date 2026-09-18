@@ -150,7 +150,15 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
   if (deficitAcumulado > metaPorTrimestre * 0.05) situacao = 'atrasado';
   else if (deficitAcumulado < -metaPorTrimestre * 0.05) situacao = 'adiantado';
 
-  return { historico, metaAnual, metaPorTrimestre, pisoPorTrimestre, situacao, ritmoNecessarioProximoTrimestre };
+  // Quanto falta pra bater a meta DESTE trimestre especificamente (não o
+  // ritmo pros trimestres seguintes, que já considera o déficit acumulado
+  // de trimestres passados) - usado pra destacar na UI "faltam R$X pra
+  // atingir a meta trimestral", pedido do usuário pra ficar visível tanto
+  // na ficha completa do cliente quanto na barra compacta de cliente.
+  const faturadoTrimestreAtual = faturadoPorTrimestre.get(trimestreAtualIdx) || 0;
+  const faltaTrimestreAtual = Math.max(0, metaPorTrimestre - faturadoTrimestreAtual);
+
+  return { historico, metaAnual, metaPorTrimestre, pisoPorTrimestre, situacao, ritmoNecessarioProximoTrimestre, faltaTrimestreAtual };
 }
 
 // A revisão do classificatório é feita pela empresa em janeiro, olhando o
@@ -183,6 +191,16 @@ const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = `
            WHERE poi.status = 'faturado'
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}
          ), 0) AS faturamento_ano_corrente,
+         -- Mesmo período do ano fechado (mesma contagem de dias decorridos
+         -- no ano corrente, mas no ano anterior) - pra comparar "evolução
+         -- justa" (Jan-Set/ano corrente vs Jan-Set/ano anterior), em vez do
+         -- ano fechado INTEIRO, que sempre parece maior só porque o ano
+         -- corrente ainda não terminou. Pedido do usuário na aba Clientes.
+         COALESCE(SUM(poi.valor) FILTER (
+           WHERE poi.status = 'faturado'
+             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
+             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (CURRENT_DATE - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
+         ), 0) AS faturamento_mesmo_periodo_ano_anterior,
          MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
   FROM clientes c
   LEFT JOIN clientes c2 ON c2.id = c.id
@@ -212,6 +230,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     );
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
     const faturamentoAnoCorrente = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_ano_corrente) : 0;
+    const faturamentoMesmoPeriodoAnoAnterior = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_mesmo_periodo_ano_anterior) : 0;
     const ultimaCompra = fatResult.rows[0] ? fatResult.rows[0].ultima_compra : null;
     const anoPeriodo = fatResult.rows[0] ? Number(fatResult.rows[0].ano_fechado) : new Date().getUTCFullYear() - 1;
     const anoAtual = fatResult.rows[0] ? Number(fatResult.rows[0].ano_atual) : new Date().getUTCFullYear();
@@ -268,6 +287,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       proximaRevisao: `janeiro/${anoPeriodo + 2}`,
       anoCorrente: anoPeriodo + 1,
       faturamentoAnoCorrente,
+      faturamentoMesmoPeriodoAnoAnterior,
     });
   } catch (e) {
     console.error(e);

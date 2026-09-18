@@ -196,12 +196,12 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
-    const { faturamento_12m, faturamento_ano_corrente, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
+    const { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
     // A rota real envolve essa subconsulta num SELECT externo que também pede
     // EXTRACT(YEAR FROM ...) AS ano_fechado/ano_atual/trimestre_atual_idx -
     // inclui aqui pra bater com isso.
     return { rows: [{
-      cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, ultima_compra,
+      cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra,
       ano_fechado: anoClassificatorioFechado(), ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora(),
     }] };
   }
@@ -748,7 +748,7 @@ function inicioJanelaTrimestralMovel() {
 // matriz_grupo (ou o próprio cliente, se não tiver grupo).
 function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
-  if (!cliente) return { faturamento_12m: 0, faturamento_ano_corrente: 0, ultima_compra: null };
+  if (!cliente) return { faturamento_12m: 0, faturamento_ano_corrente: 0, faturamento_mesmo_periodo_ano_anterior: 0, ultima_compra: null };
   const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
   const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
   const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado');
@@ -761,9 +761,18 @@ function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
   // faturamento_ano_corrente em SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE.
   const itensAnoCorrente = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= fimStr);
   const faturamento_ano_corrente = itensAnoCorrente.reduce((s, it) => s + (Number(it.valor) || 0), 0);
+  // Mesmo período do ano fechado (mesma contagem de dias decorridos no ano
+  // corrente, mas no ano fechado) - espelha a lógica SQL adicionada em
+  // SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE (PERIODO_CLASSIFICATORIO_INICIO_SQL
+  // + (CURRENT_DATE - PERIODO_CLASSIFICATORIO_FIM_SQL)).
+  const agora = new Date();
+  const diasDecorridos = Math.floor((Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()) - Date.UTC(agora.getUTCFullYear(), 0, 1)) / 86400000);
+  const limiteMesmoPeriodoStr = new Date(Date.UTC(ano, 0, 1) + diasDecorridos * 86400000).toISOString().slice(0, 10);
+  const itensMesmoPeriodo = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < limiteMesmoPeriodoStr);
+  const faturamento_mesmo_periodo_ano_anterior = itensMesmoPeriodo.reduce((s, it) => s + (Number(it.valor) || 0), 0);
   const datas = itensFaturados.map(it => it.data_faturamento).filter(Boolean).sort();
   const ultima_compra = datas.length ? datas[datas.length - 1] : null;
-  return { faturamento_12m, faturamento_ano_corrente, ultima_compra };
+  return { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra };
 }
 
 function computeHistorico(clienteId) {

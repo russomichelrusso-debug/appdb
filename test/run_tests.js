@@ -164,6 +164,33 @@ async function main() {
     'classificatório também traz o acumulado do ano em andamento (pra acompanhar ao lado do ano fechado)'
   );
 
+  // 13b) faturamentoMesmoPeriodoAnoAnterior: comparar o acumulado do ano
+  // corrente contra o MESMO PERÍODO do ano fechado (não o ano fechado
+  // inteiro) - pedido do usuário, pra não parecer sempre "atrás" só porque
+  // o ano corrente ainda não terminou. Semeia uma venda garantidamente
+  // DENTRO da janela (1º de janeiro do ano fechado) e uma garantidamente
+  // FORA (no dia seguinte ao limite "mesmo período", calculado com a mesma
+  // aritmética de dias decorridos que o backend usa).
+  const agoraTeste = new Date();
+  const diasDecorridosTeste = Math.floor((Date.UTC(agoraTeste.getUTCFullYear(), agoraTeste.getUTCMonth(), agoraTeste.getUTCDate()) - Date.UTC(agoraTeste.getUTCFullYear(), 0, 1)) / 86400000);
+  const limiteMesmoPeriodoTeste = new Date(Date.UTC(anoFechado, 0, 1) + diasDecorridosTeste * 86400000);
+  const dataForaJanelaTeste = new Date(limiteMesmoPeriodoTeste.getTime() + 86400000).toISOString().slice(0, 10);
+  mockDb.__seed({
+    clientes: [{
+      id: 9004, nome: 'CLIENTE YOY TESTE', documento: '99988877000433', codigo_oficial: 'COD9004',
+      classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 17, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'PC5', codigo_sku: '60863', cliente_codigo_oficial: 'COD9004', quantidade: 1, valor: 20000, data_faturamento: `${anoFechado}-01-01`, status: 'faturado' },
+      { nr_pedido: 'PC6', codigo_sku: '60863', cliente_codigo_oficial: 'COD9004', quantidade: 1, valor: 99999, data_faturamento: dataForaJanelaTeste, status: 'faturado' },
+    ],
+  });
+  const resYoy = await req('GET', '/api/clientes/9004/classificatorio/status');
+  assert(
+    resYoy.status === 200 && resYoy.body.faturamentoMesmoPeriodoAnoAnterior === 20000,
+    `faturamentoMesmoPeriodoAnoAnterior soma só o mesmo período do ano fechado (20.000), ignora venda fora da janela: ${resYoy.body.faturamentoMesmoPeriodoAnoAnterior}`
+  );
+
   // 14) o mini gráfico trimestral deve trazer os trimestres RECENTES (janela
   // móvel terminando no trimestre em andamento agora), não presos ao ano
   // civil fechado - senão o vendedor nunca consegue "acompanhar os
@@ -195,6 +222,30 @@ async function main() {
   assert(
     s.emRiscoDeQueda === true && s.faltaPraManter === 40000,
     'sinaliza risco de queda quando o ritmo trimestral está atrasado (faltam R$40.000 pra chegar no mínimo de R$50.000)'
+  );
+
+  // 14a) faltaTrimestreAtual: quanto falta pra bater a meta DESTE trimestre
+  // especificamente (não o ritmo ajustado pros trimestres seguintes) -
+  // destacado na UI a pedido do usuário. Master: meta anual = mínimo da
+  // faixa (50.000, sem teto), meta por trimestre = 12.500.
+  const { calcularRitmoTrimestral } = require('../routes/clientesClassificatorio');
+  let ritmoTeste = calcularRitmoTrimestral({
+    tipo: 'Varejo Master',
+    trimestres: [{ trimestre: '2026-01-01', faturado: 5000 }],
+    anoReferencia: 2026, trimestreReferenciaIdx: 0,
+  });
+  assert(
+    ritmoTeste.faltaTrimestreAtual === 7500,
+    `faltaTrimestreAtual calcula quanto falta pra bater a meta do trimestre atual (12.500 - 5.000 = 7.500): ${ritmoTeste.faltaTrimestreAtual}`
+  );
+  ritmoTeste = calcularRitmoTrimestral({
+    tipo: 'Varejo Master',
+    trimestres: [{ trimestre: '2026-01-01', faturado: 15000 }],
+    anoReferencia: 2026, trimestreReferenciaIdx: 0,
+  });
+  assert(
+    ritmoTeste.faltaTrimestreAtual === 0,
+    'faltaTrimestreAtual não fica negativo quando a meta do trimestre já foi batida'
   );
 
   // 14c) rota em lote (/classificatorio/alertas) usa a mesma regra acima,

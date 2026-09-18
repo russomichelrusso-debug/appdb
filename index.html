@@ -6468,6 +6468,20 @@
           linha = `<span style="color:#1E8E3E;">✓ já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}</span>`;
         }
         if (linha) partes.push(`<div style="font-size:11.5px;margin-top:3px;">${linha}</div>`);
+        // Ritmo trimestral - pedido do usuário pra aparecer pra TODOS os
+        // clientes, não só os em risco: quem está atrasado já é coberto
+        // pela mensagem de risco de queda acima (não duplica aqui); quem
+        // está no ritmo/adiantado ganha um destaque com quanto falta pra
+        // bater a meta DESTE trimestre (faltaTrimestreAtual, calculado em
+        // calcularRitmoTrimestral).
+        const trimestral = status.trimestral;
+        if (trimestral && !trimestral.semMeta && trimestral.situacao && trimestral.situacao !== 'atrasado') {
+          const rotulo = trimestral.situacao === 'adiantado' ? '✓ adiantado no trimestre' : '✓ no ritmo trimestral';
+          const detalhe = trimestral.faltaTrimestreAtual > 0
+            ? ` — faltam ${brl(trimestral.faltaTrimestreAtual)} nesse trimestre`
+            : ' — meta do trimestre já batida';
+          partes.push(`<div style="font-size:11px;margin-top:2px;color:#1E8E3E;font-weight:600;">${rotulo}${detalhe}</div>`);
+        }
         return partes.join('');
       }
       // Guarda o cliente escolhido pra essa visita, e reflete nas barras do
@@ -8343,16 +8357,31 @@
         return apiFetch(`/api/clientes/${clienteId}/classificatorio/status`);
       }
       const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master', 'Atacado Premium': 'Atacado Premium' };
-      // Acumulado do ano vigente comparado ao total do ano fechado anterior:
+      // Compara dois valores de faturamento (tipicamente: acumulado do ano
+      // corrente vs. o MESMO PERÍODO do ano anterior, não o ano anterior
+      // inteiro - comparar contra o ano fechado inteiro sempre parece
+      // "atrás" só porque o ano corrente ainda não terminou, mascarando se
+      // o cliente está evoluindo ou não frente ao ano passado):
       // vermelho se estiver visivelmente abaixo, verde se acima, âmbar se
-      // estiverem próximos (dentro de 5% um do outro) - sinaliza o ritmo do
-      // ano corrente frente ao ano fechado, mesmo ainda em andamento.
+      // estiverem próximos (dentro de 5% um do outro).
       function corAcumuladoAnoCorrente(atual, anterior) {
         if (!anterior) return atual > 0 ? '#1E8E3E' : 'var(--gray)';
         const razao = atual / anterior;
         if (razao >= 1.05) return '#1E8E3E';
         if (razao <= 0.95) return '#B3261E';
         return '#B36B00';
+      }
+      // Texto curto do comparativo ano-contra-ano (mesmo período), pra por
+      // baixo do valor acumulado do ano corrente na ficha do cliente -
+      // "sem comparação" quando o ano anterior não teve nada faturado
+      // nesse mesmo período (evita divisão por zero/percentual sem sentido).
+      function textoComparativoAnoAnterior(atual, anterior, anoAnterior) {
+        if (!anterior) {
+          return `sem comparação (R$0 no mesmo período de ${anoAnterior})`;
+        }
+        const pct = ((atual / anterior) - 1) * 100;
+        const sinal = pct >= 0 ? '+' : '';
+        return `${sinal}${pct.toLocaleString('pt-BR', { maximumFractionDigits: 0 })}% vs. mesmo período ${anoAnterior} (${brl(anterior)})`;
       }
       // Formato compacto (12k, 7,5k) pros rótulos de valor acima das barras
       // do mini gráfico trimestral - sem casas decimais a partir de 10 mil,
@@ -8391,7 +8420,8 @@
             </div>
             ${status.anoCorrente ? `<div>
               <div class="hist-clientLabel">Acumulado ${escapeHtml(String(status.anoCorrente))}${sufixoGrupo}</div>
-              <div style="font-weight:700;font-size:18px;margin-top:2px;color:${corAcumuladoAnoCorrente(status.faturamentoAnoCorrente, status.faturamento12m)};">${brl(status.faturamentoAnoCorrente)}</div>
+              <div style="font-weight:700;font-size:18px;margin-top:2px;color:${corAcumuladoAnoCorrente(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior)};">${brl(status.faturamentoAnoCorrente)}</div>
+              ${status.periodoReferencia ? `<div style="font-size:11px;color:var(--gray);margin-top:2px;">${textoComparativoAnoAnterior(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior, status.periodoReferencia.anoInicio)}</div>` : ''}
             </div>` : ''}
           </div>
           ${status.proximaRevisao ? `<div style="font-size:11.5px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
@@ -8427,9 +8457,21 @@
 
         if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
           const situacaoTexto = { no_ritmo: '✓ no ritmo', atrasado: '⚠️ atrasado', adiantado: '✓ adiantado' }[status.trimestral.situacao] || '';
+          // Destaque visual (caixa com fundo/borda coloridos conforme a
+          // situação) pedido pelo usuário pra meta trimestral - a linha de
+          // "faltam R$X pra atingir a meta deste trimestre" (faltaTrimestreAtual,
+          // quanto falta NESTE trimestre especificamente) fica em destaque
+          // acima do gráfico, não escondida como texto cinza pequeno.
+          const corSituacao = { no_ritmo: '#1E8E3E', atrasado: '#B3261E', adiantado: '#1E8E3E' }[status.trimestral.situacao] || 'var(--gray)';
+          const fundoSituacao = { no_ritmo: '#EAF6EE', atrasado: '#FCEBEA', adiantado: '#EAF6EE' }[status.trimestral.situacao] || 'var(--fill)';
+          const faltaTrimestreAtual = status.trimestral.faltaTrimestreAtual;
+          const linhaFalta = faltaTrimestreAtual > 0
+            ? `Faltam <b>${brl(faltaTrimestreAtual)}</b> pra atingir a meta deste trimestre.`
+            : '✓ Meta deste trimestre já batida.';
           partes.push(`
-            <div style="margin-top:10px;">
-              <div style="font-size:12px;color:var(--gray);">Meta trimestral ${situacaoTexto ? `— ${situacaoTexto}` : ''}</div>
+            <div style="margin-top:10px;padding:10px;border-radius:8px;background:${fundoSituacao};border:1px solid ${corSituacao}33;">
+              <div style="font-size:12px;color:${corSituacao};font-weight:600;">Meta trimestral ${situacaoTexto ? `— ${situacaoTexto}` : ''}</div>
+              <div style="font-size:13px;margin-top:4px;color:${corSituacao};">${linhaFalta}</div>
               ${renderMiniGraficoTrimestral(status.trimestral)}
               ${status.trimestral.ritmoNecessarioProximoTrimestre != null ? `<div style="font-size:12px;margin-top:4px;color:var(--gray);">Ritmo necessário no próximo trimestre: ${brl(status.trimestral.ritmoNecessarioProximoTrimestre)}</div>` : ''}
             </div>`);
