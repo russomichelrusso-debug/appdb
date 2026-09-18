@@ -196,7 +196,9 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
-    const { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0]);
+    const clienteDoStatus = clientes.find(c => Number(c.id) === Number(params[0]));
+    const agruparPorMatrizGrupo = !clienteDoStatus || clienteDoStatus.classificatorio_tipo !== 'Rede';
+    const { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0], agruparPorMatrizGrupo);
     // A rota real envolve essa subconsulta num SELECT externo que também pede
     // EXTRACT(YEAR FROM ...) AS ano_fechado/ano_atual/trimestre_atual_idx -
     // inclui aqui pra bater com isso.
@@ -265,7 +267,11 @@ async function query(sql, params = []) {
   if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_FATURAMENTO)")) {
     const cliente = clientes.find(c => Number(c.id) === Number(params[0]));
     if (!cliente) return { rows: [] };
-    const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
+    // Rede: só o próprio cliente (matriz_grupo ali é a rede/cooperativa,
+    // não empresas irmãs) - mesma regra da rota real.
+    const grupo = cliente.classificatorio_tipo !== 'Rede' && cliente.matriz_grupo
+      ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo)
+      : [cliente];
     const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
     // Janela móvel dos últimos 4 trimestres terminando no trimestre EM
     // ANDAMENTO agora (não presa ao ano civil já fechado) - mesma mudança
@@ -743,13 +749,16 @@ function inicioJanelaTrimestralMovel() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
 }
 
-// Reproduz a query SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE de routes/clientesClassificatorio.js -
+// Reproduz sqlFaturamentoAnoFechadoPorCliente de routes/clientesClassificatorio.js -
 // soma faturado no ano civil fechado mais recente, agrupado por
-// matriz_grupo (ou o próprio cliente, se não tiver grupo).
-function calcularFaturamentoAnoFechadoParaCliente(clienteId) {
+// matriz_grupo (ou o próprio cliente, se não tiver grupo) - ou só o
+// próprio cliente quando `agruparPorMatrizGrupo` é false (usado pra Rede,
+// onde matriz_grupo guarda o nome da rede/cooperativa, não empresas
+// irmãs - somar tudo misturaria lojas sem relação societária entre si).
+function calcularFaturamentoAnoFechadoParaCliente(clienteId, agruparPorMatrizGrupo = true) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
   if (!cliente) return { faturamento_12m: 0, faturamento_ano_corrente: 0, faturamento_mesmo_periodo_ano_anterior: 0, ultima_compra: null };
-  const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
+  const grupo = agruparPorMatrizGrupo && cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
   const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
   const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado');
   const ano = anoClassificatorioFechado();
