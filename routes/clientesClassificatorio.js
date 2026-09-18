@@ -174,13 +174,23 @@ const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', CURRENT_DATE) - I
 const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // exclusivo
 
 // Monta a subconsulta que soma faturamento (do ano civil fechado mais
-// recente, ver comentário acima) agrupado por "grupo" (matriz_grupo
-// quando existe, senão o próprio cliente) - reaproveitada pelo status
-// individual e pelos alertas em lote. Também traz o acumulado do ano EM
+// recente, ver comentário acima), com `agruparPorMatrizGrupo` decidindo se
+// soma junto com as "empresas irmãs" do mesmo matriz_grupo (uso normal -
+// classificatório Master/Premium/Exclusive por grupo econômico) ou só o
+// próprio cliente (usado pra Rede - ali matriz_grupo guarda o nome da
+// REDE/COOPERATIVA de compras, não empresas irmãs do mesmo dono; somar
+// tudo misturaria o faturamento de lojas sem nenhuma relação societária
+// entre si, então o cliente Rede sempre vê métrica/gráfico só dele mesmo,
+// pedido explícito do usuário). Também traz o acumulado do ano EM
 // ANDAMENTO (ainda não fechado, não usado pra decidir faixa - só pra o
 // vendedor acompanhar o progresso do ano corrente lado a lado com o
 // último ano fechado).
-const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = `
+function sqlFaturamentoAnoFechadoPorCliente(agruparPorMatrizGrupo) {
+  const joinC2 = agruparPorMatrizGrupo
+    ? `LEFT JOIN clientes c2 ON c2.id = c.id
+    OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)`
+    : `LEFT JOIN clientes c2 ON c2.id = c.id`;
+  return `
   SELECT c.id AS cliente_id,
          COALESCE(SUM(poi.valor) FILTER (
            WHERE poi.status = 'faturado'
@@ -203,10 +213,16 @@ const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = `
          ), 0) AS faturamento_mesmo_periodo_ano_anterior,
          MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
   FROM clientes c
-  LEFT JOIN clientes c2 ON c2.id = c.id
-    OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)
+  ${joinC2}
   LEFT JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
 `;
+}
+// Reaproveitada pelo status individual (clientes não-Rede) e pelos alertas
+// em lote - continua exportada com o mesmo nome pra não quebrar quem já
+// importa (routes/relatorios.js).
+const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = sqlFaturamentoAnoFechadoPorCliente(true);
+// Variante individual (sem somar matriz_grupo) - só pra clientes Rede.
+const SQL_FATURAMENTO_ANO_FECHADO_INDIVIDUAL_POR_CLIENTE = sqlFaturamentoAnoFechadoPorCliente(false);
 
 // Status de classificatório de UM cliente - aberto pra qualquer usuário
 // logado (não é ação de admin, é consulta do dia a dia na ficha do cliente).
@@ -216,16 +232,19 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     const cliente = clienteResult.rows[0];
     if (!cliente) return res.status(404).json({ erro: 'Cliente não encontrado.' });
     if (!cliente.classificatorio_tipo) return res.json({ classificado: false });
+    const ehRede = cliente.classificatorio_tipo === 'Rede';
 
     // O ano fechado (usado só pra rotular a resposta e fechar os 4 trimestres
     // em calcularRitmoTrimestral) vem do PRÓPRIO Postgres, na mesma consulta -
     // nunca de um "new Date()" separado no Node, que teria que só torcer pra
-    // concordar com o fuso do CURRENT_DATE do banco.
+    // concordar com o fuso do CURRENT_DATE do banco. Cliente Rede usa a
+    // variante INDIVIDUAL (sem somar matriz_grupo) - ver comentário na
+    // função sqlFaturamentoAnoFechadoPorCliente.
     const fatResult = await pool.query(
       `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
               EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual,
               EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx
-       FROM (${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
+       FROM (${ehRede ? SQL_FATURAMENTO_ANO_FECHADO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
@@ -243,15 +262,25 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // Calculado ANTES de calcularStatusClassificatorio porque o resultado
     // (situação atrasado/no_ritmo/adiantado) agora também decide se o
     // cliente está de fato em risco de queda (ver comentário na função).
+    // Cliente Rede: só o próprio codigo_oficial (sem OR matriz_grupo) - o
+    // "grupo" dele é a rede/cooperativa inteira, não empresas irmãs.
     const trimResult = await pool.query(
-      `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
-       FROM pedidos_oficiais_itens poi
-       JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
-       JOIN clientes c ON c.id = $1
-       WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
-         AND poi.status = 'faturado'
-         AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
-       GROUP BY 1 ORDER BY 1`,
+      ehRede
+        ? `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
+           FROM pedidos_oficiais_itens poi
+           JOIN clientes c ON c.id = $1
+           WHERE poi.cliente_codigo_oficial = c.codigo_oficial
+             AND poi.status = 'faturado'
+             AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+           GROUP BY 1 ORDER BY 1`
+        : `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
+           FROM pedidos_oficiais_itens poi
+           JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
+           JOIN clientes c ON c.id = $1
+           WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
+             AND poi.status = 'faturado'
+             AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+           GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
     // Ritmo medido contra o ANO EM ANDAMENTO (anoAtual/trimestreAtualIdx, vindos

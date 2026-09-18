@@ -258,6 +258,44 @@ async function main() {
     'rota de alertas em lote responde com os 3 grupos, usando a consulta trimestral em lote nova'
   );
 
+  // 14d) Rede: métrica e gráfico devem ser SÓ do próprio cliente, mesmo
+  // compartilhando matriz_grupo com outra loja da mesma rede/cooperativa
+  // (matriz_grupo pra Rede é o nome da rede, não empresas irmãs - somar
+  // misturaria lojas sem relação societária). Semeia um cliente Rede e
+  // outro cliente (não-Rede) no MESMO matriz_grupo com faturamento bem
+  // maior, pra confirmar que o cliente Rede não "herda" esse valor.
+  mockDb.__seed({
+    clientes: [
+      {
+        id: 9005, nome: 'CLIENTE REDE TESTE', documento: '99988877000522', codigo_oficial: 'COD9005',
+        classificatorio_tipo: 'Rede', classificatorio_desconto: 18, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: 'REDE TESTE',
+      },
+      {
+        id: 9006, nome: 'OUTRA LOJA DA MESMA REDE', documento: '99988877000611', codigo_oficial: 'COD9006',
+        classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: 'REDE TESTE',
+      },
+    ],
+    pedidosOficiaisItens: [
+      // Ano fechado (pra conferir faturamento12m) - dentro da janela trimestral
+      // móvel também entra o par de janeiro do ano corrente (mesmo mês já
+      // confirmado "dentro da janela" no teste 14 acima, com PC2).
+      { nr_pedido: 'PC7', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 8000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC7B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 3000, data_faturamento: `${anoFechado + 1}-01-05`, status: 'faturado' },
+      { nr_pedido: 'PC8', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 900000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC8B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, status: 'faturado' },
+    ],
+  });
+  const resRede = await req('GET', '/api/clientes/9005/classificatorio/status');
+  assert(
+    resRede.status === 200 && resRede.body.ehRede === true && resRede.body.faturamento12m === 8000,
+    `cliente Rede mostra só o próprio faturamento (8.000), não somado com a outra loja da rede (900.000): ${resRede.body.faturamento12m}`
+  );
+  const trimestresRede = (resRede.body.trimestral?.historico || []).reduce((s, t) => s + Number(t.faturado), 0);
+  assert(
+    trimestresRede === 3000,
+    `histórico trimestral do cliente Rede também é só individual (3.000), não soma a outra loja (500.000): ${trimestresRede}`
+  );
+
   // 15) grupo (matriz_grupo) do classificatório: um cliente sem grupo não
   // traz nenhum membro; só admin pode incluir um cliente num grupo; depois
   // de incluído, a lista de membros traz cada empresa com seu PRÓPRIO

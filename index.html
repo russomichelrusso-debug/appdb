@@ -6445,7 +6445,13 @@
       // cliente (renderClienteClassificatorioCard) - só a barrinha + uma
       // linha de texto, sem cabeçalho de faturamento/matriz nem trimestral.
       function renderBarraProgressoCompacta(status) {
-        if (!status || !status.classificado || status.ehRede) return '';
+        if (!status || !status.classificado) return '';
+        if (status.ehRede) {
+          // Rede não tem faixa/meta - mostra só o acumulado do PRÓPRIO
+          // cliente (a API já devolve individual pra Rede, sem somar com o
+          // resto da rede/cooperativa), sem barra de progresso nem ritmo.
+          return `<div style="font-size:11px;margin-top:3px;color:var(--gray);">Acumulado ${status.anoCorrente || ''} (individual): <b>${brl(status.faturamentoAnoCorrente)}</b></div>`;
+        }
         const partes = [];
         if (status.faixaMin != null && status.faixaMax != null) {
           // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
@@ -8400,19 +8406,17 @@
         if (!status || !status.classificado) { card.classList.add('hidden'); return; }
         card.classList.remove('hidden');
 
-        if (status.ehRede) {
-          content.innerHTML = `
-            <div class="hist-clientLabel">Classificatório</div>
-            <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}</div>
-            <p class="ap-hint" style="margin-top:8px;">Acordo bilateral com a rede/cooperativa — o desconto vale
-              independente do faturamento deste cliente, não tem faixa pra subir ou cair.</p>`;
-          return;
-        }
-
-        const sufixoGrupo = status.matrizGrupo ? ' (grupo)' : '';
+        // Rede não soma faturamento com "empresas irmãs" - matriz_grupo ali
+        // guarda o nome da REDE/COOPERATIVA (várias lojas sem relação
+        // societária entre si), então a API já devolve faturamento/histórico
+        // trimestral individuais pra Rede (ver sqlFaturamentoAnoFechadoPorCliente
+        // no backend) - o "(grupo)" ao lado dos rótulos abaixo não se aplica.
+        const sufixoGrupo = !status.ehRede && status.matrizGrupo ? ' (grupo)' : '';
         const partes = [];
         partes.push(`<div class="hist-clientLabel">Classificatório</div>
-          <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}${status.matrizGrupo ? ` <span style="font-weight:400;color:var(--gray);font-size:12px;">· grupo ${escapeHtml(status.matrizGrupo)}</span>` : ''}</div>
+          <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}${status.matrizGrupo ? ` <span style="font-weight:400;color:var(--gray);font-size:12px;">· ${status.ehRede ? 'rede' : 'grupo'} ${escapeHtml(status.matrizGrupo)}</span>` : ''}</div>
+          ${status.ehRede ? `<p class="ap-hint" style="margin-top:4px;">Acordo bilateral com a rede/cooperativa — o desconto vale
+            independente do faturamento deste cliente, não tem faixa pra subir ou cair. Os números abaixo são só deste cliente, não somados com o resto da rede.</p>` : ''}
           <div style="display:flex;gap:16px;margin-top:10px;">
             <div>
               <div class="hist-clientLabel">Faturamento ${status.periodoReferencia ? escapeHtml(String(status.periodoReferencia.anoInicio)) : 'últimos 12 meses'}${sufixoGrupo}</div>
@@ -8424,9 +8428,9 @@
               ${status.periodoReferencia ? `<div style="font-size:11px;color:var(--gray);margin-top:2px;">${textoComparativoAnoAnterior(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior, status.periodoReferencia.anoInicio)}</div>` : ''}
             </div>` : ''}
           </div>
-          ${status.proximaRevisao ? `<div style="font-size:11.5px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
+          ${status.proximaRevisao && !status.ehRede ? `<div style="font-size:11.5px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
 
-        if (status.faixaMin != null && status.faixaMax != null) {
+        if (!status.ehRede && status.faixaMin != null && status.faixaMax != null) {
           // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
           // faixas devolvidas pela API já são calculadas sobre o ano em
           // andamento, então a posição na barra precisa ser do mesmo ano.
@@ -8455,7 +8459,17 @@
           }
         }
 
-        if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
+        if (status.ehRede && status.trimestral && status.trimestral.historico && status.trimestral.historico.some(t => t.faturado > 0)) {
+          // Rede não tem meta/piso (semMeta:true) - só o histórico
+          // trimestral individual do próprio cliente, sem caixa de destaque
+          // nem linhas de referência (renderMiniGraficoTrimestral já lida
+          // bem com metaPorTrimestre/pisoPorTrimestre indefinidos).
+          partes.push(`
+            <div style="margin-top:10px;">
+              <div style="font-size:12px;color:var(--gray);">Histórico trimestral (individual, sem meta)</div>
+              ${renderMiniGraficoTrimestral(status.trimestral)}
+            </div>`);
+        } else if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
           const situacaoTexto = { no_ritmo: '✓ no ritmo', atrasado: '⚠️ atrasado', adiantado: '✓ adiantado' }[status.trimestral.situacao] || '';
           // Destaque visual (caixa com fundo/borda coloridos conforme a
           // situação) pedido pelo usuário pra meta trimestral - a linha de
