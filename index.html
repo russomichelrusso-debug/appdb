@@ -6405,7 +6405,10 @@
             }
             if (levantamentoId) {
               const doServidorItens = await apiLevantamentoItens(levantamentoId);
-              itensSalvos = (doServidorItens || []).map(it => ({ cod: it.codigo_sku, qty: it.quantidade_contada || 0, ped: 0, done: false }));
+              // quantidade_contada vem como NUMERIC do Postgres - o driver
+              // devolve como string, não number; sem o Number(...) aqui, a
+              // soma do resumo (reduce '+') concatena texto em vez de somar.
+              itensSalvos = (doServidorItens || []).map(it => ({ cod: it.codigo_sku, qty: Number(it.quantidade_contada) || 0, ped: 0, done: false }));
             }
           } catch (e) { /* segue com lista vazia se não conseguir recuperar do servidor */ }
         }

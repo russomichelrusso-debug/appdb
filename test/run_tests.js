@@ -144,6 +144,7 @@ async function main() {
   const levantamentoIdSalvo = res.body[0].id;
   res = await req('GET', `/api/levantamentos/${levantamentoIdSalvo}/itens`);
   assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
+  assert(typeof res.body[0].quantidade_contada === 'string', 'quantidade_contada vem como string (NUMERIC do Postgres) - front precisa converter com Number(), nunca somar direto');
 
   // 13) classificatório: calcula sobre o ANO CIVIL FECHADO anterior, não uma
   // janela móvel de 12 meses (ver routes/clientesClassificatorio.js) - semeia
