@@ -7195,15 +7195,31 @@
           return null;
         }
       }
+      // Calcula o valor de IPI e de ICMS-ST embutidos no preço já negociado
+      // (cpSemImposto/cp de cartTotals()), pra separar nas duas colunas do PDF
+      // do jeito que a cotação oficial mostra - reaplica a mesma fórmula de
+      // listPrice() (liq*(1+ipi)*(1+stRate)) só que sobre o preço já com
+      // desconto, já que channelPct/promoPct/qtyPct escalam cp e cpSemImposto
+      // pelo mesmo fator (ver clientPrice()), preservando a proporção.
+      function separarImpostosDaLinha(row) {
+        const ipiUnit = row.cpSemImposto * (row.p.ipi || 0);
+        const baseComIpi = row.cpSemImposto + ipiUnit;
+        const stUnit = Math.max(0, row.cp - baseComIpi);
+        return { ipiTotal: ipiUnit * row.it.qty, stTotal: stUnit * row.it.qty };
+      }
       const numBr = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // Destaque visual (fundo azul claro) pras colunas/linha de preço já COM
+      // impostos - é o valor que o cliente de fato paga, então recebe ênfase
+      // em vez de se misturar com o resto da tabela (pedido do usuário depois
+      // de reverter a remoção do detalhe de IPI/ST).
+      const DESTAQUE_COM_IMPOSTO = [232, 240, 253];
 
       // PDF com a mesma distribuição espacial da cotação oficial que a Cortag
       // gera pelo Salesforce (cabeçalho com dados do emitente, quadro de
-      // dados do cliente/entrega, tabela de itens, rodapé com os totais) -
-      // só com os campos que o app realmente tem disponíveis (sem inventar
-      // nº de cotação oficial, transportadora ou IE do cliente, que só
-      // existem depois que o pedido é faturado; sem detalhar IPI/ST por
-      // item nem no rodapé, a pedido do usuário - só o preço final importa).
+      // dados do cliente/entrega, tabela de itens com IPI/ST separados,
+      // rodapé com os totais) - só com os campos que o app realmente tem
+      // disponíveis (sem inventar nº de cotação oficial, transportadora ou
+      // IE do cliente, que só existem depois que o pedido é faturado).
       async function generateQuotePDF() {
         const { rows, total, totalSemImpostos } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
@@ -7317,37 +7333,52 @@
           y = doc.lastAutoTable.finalY + 6;
         }
 
-        // ---- Tabela de itens - mesmas colunas da cotação oficial, sem o
-        // detalhe de IPI/ST por item (só o preço final com impostos).
+        // ---- Tabela de itens - mesmas colunas da cotação oficial (venda sem
+        // imposto, total sem imposto, IPI, ST, unitário e total com impostos).
+        // As duas últimas colunas (preço já com impostos) recebem destaque
+        // visual, já que são o valor que o cliente de fato paga.
         doc.autoTable({
           startY: y,
-          head: [['Item', 'Descrição', 'Qtd.', 'Un.', 'R$ Venda', 'R$ Total', 'R$ Unit. c/ Imp.', 'R$ Total c/ Imp.']],
-          body: rows.map((r) => [
-            r.p.c, r.p.n, String(r.it.qty), 'Un',
-            numBr(r.cpSemImposto), numBr(r.lineTotalSemImpostos),
-            numBr(r.cp), numBr(r.lineTotal),
-          ]),
+          head: [['Item', 'Descrição', 'Qtd.', 'Un.', 'R$ Venda', 'R$ Total', 'R$ IPI', 'R$ ST', 'R$ Unit. c/ Imp.', 'R$ Total c/ Imp.']],
+          body: rows.map((r) => {
+            const { ipiTotal, stTotal } = separarImpostosDaLinha(r);
+            return [
+              r.p.c, r.p.n, String(r.it.qty), 'Un',
+              numBr(r.cpSemImposto), numBr(r.lineTotalSemImpostos),
+              numBr(ipiTotal), numBr(stTotal),
+              numBr(r.cp), numBr(r.lineTotal),
+            ];
+          }),
           theme: 'grid',
           styles: { fontSize: 6.8, cellPadding: 1.4, textColor: [20, 20, 20], lineColor: [180, 180, 180], overflow: 'linebreak' },
           headStyles: { fillColor: [255, 255, 255], textColor: [20, 20, 20], fontStyle: 'bold', fontSize: 6.8, lineWidth: 0.3 },
           alternateRowStyles: { fillColor: [248, 248, 248] },
           columnStyles: {
-            0: { cellWidth: 14 }, 1: { cellWidth: 64 }, 2: { cellWidth: 10, halign: 'center' }, 3: { cellWidth: 8, halign: 'center' },
-            4: { cellWidth: 18, halign: 'right' }, 5: { cellWidth: 18, halign: 'right' },
-            6: { cellWidth: 20, halign: 'right' }, 7: { cellWidth: 24, halign: 'right' },
+            0: { cellWidth: 12 }, 1: { cellWidth: 48 }, 2: { cellWidth: 10, halign: 'center' }, 3: { cellWidth: 8, halign: 'center' },
+            4: { cellWidth: 16, halign: 'right' }, 5: { cellWidth: 16, halign: 'right' }, 6: { cellWidth: 14, halign: 'right' }, 7: { cellWidth: 14, halign: 'right' },
+            8: { cellWidth: 18, halign: 'right', fontStyle: 'bold', fillColor: DESTAQUE_COM_IMPOSTO },
+            9: { cellWidth: 20, halign: 'right', fontStyle: 'bold', fillColor: DESTAQUE_COM_IMPOSTO },
           },
           margin: TABLE_MARGIN,
           tableWidth: CONTENT_W,
         });
 
-        // ---- Rodapé de totais, no mesmo formato de caixa da cotação oficial,
-        // sem o detalhe de IPI/ST (só total sem imposto e total c/ impostos).
+        // ---- Rodapé de totais, no mesmo formato de caixa da cotação oficial
+        // - a linha do total final (já com impostos) recebe o mesmo destaque
+        // das colunas de preço com imposto acima.
+        const totalIpi = rows.reduce((s, r) => s + separarImpostosDaLinha(r).ipiTotal, 0);
+        const totalSt = rows.reduce((s, r) => s + separarImpostosDaLinha(r).stTotal, 0);
         doc.autoTable({
           startY: doc.lastAutoTable.finalY,
           body: [
             ['Número de Produtos', String(rows.length)],
             ['R$ Total', numBr(totalSemImpostos)],
-            [{ content: 'R$ Total c/ Impostos', styles: { fontStyle: 'bold' } }, { content: numBr(total), styles: { fontStyle: 'bold' } }],
+            ['R$ Total IPI', numBr(totalIpi)],
+            ['R$ Total ST', numBr(totalSt)],
+            [
+              { content: 'R$ Total c/ Impostos', styles: { fontStyle: 'bold', fillColor: DESTAQUE_COM_IMPOSTO } },
+              { content: numBr(total), styles: { fontStyle: 'bold', fillColor: DESTAQUE_COM_IMPOSTO } },
+            ],
           ],
           theme: 'grid',
           styles: { fontSize: 8.5, cellPadding: 2, textColor: [20, 20, 20], lineColor: [180, 180, 180] },
