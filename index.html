@@ -6312,6 +6312,10 @@
             clienteId: cliente.id,
             savedAt: Date.now(),
             items: JSON.parse(JSON.stringify(state.survey)),
+            // guarda o id do registro no servidor - permite recuperar os itens
+            // de lá se a cópia local acima nunca chegar a ser gravada (ex.:
+            // limite de espaço do navegador) ou for perdida depois.
+            serverId: (result && result.levantamento_id) || (idx >= 0 ? list[idx].serverId : undefined),
           };
           if (idx >= 0) list[idx] = entry; else list.push(entry);
           saveSavedSurveysList(list);
@@ -6386,12 +6390,31 @@
         if (state.survey.length > 0 && state.levLoadedId !== id) {
           if (!await askConfirm('Isso vai substituir o levantamento atual (não salvo será perdido). Continuar?')) return;
         }
+        let itensSalvos = entry.items || [];
+        // A cópia local (localStorage, só neste aparelho) pode ter ficado
+        // vazia mesmo com o levantamento gravado certinho no servidor - a
+        // gravação local pode falhar silenciosamente (ex.: limite de espaço
+        // do navegador). Nesse caso, busca os itens de volta do servidor
+        // como último recurso, em vez de abrir um levantamento "vazio".
+        if (itensSalvos.length === 0) {
+          try {
+            let levantamentoId = entry.serverId;
+            if (!levantamentoId && entry.clienteId) {
+              const doServidor = await apiLevantamentosCliente(entry.clienteId);
+              levantamentoId = Array.isArray(doServidor) && doServidor.length > 0 ? doServidor[0].id : null;
+            }
+            if (levantamentoId) {
+              const doServidorItens = await apiLevantamentoItens(levantamentoId);
+              itensSalvos = (doServidorItens || []).map(it => ({ cod: it.codigo_sku, qty: it.quantidade_contada || 0, ped: 0, done: false }));
+            }
+          } catch (e) { /* segue com lista vazia se não conseguir recuperar do servidor */ }
+        }
         // Não filtra por DB.productIndex aqui: o catálogo pode ainda não ter
         // terminado de carregar em segundo plano, e filtrar nesse momento
         // apagaria silenciosamente todos os itens (mesmo bug já corrigido
         // uma vez em loadLevSurvey()). A limpeza segura de itens realmente
         // descontinuados acontece depois, via revalidarLevSurveyContraCatalogo().
-        state.survey = entry.items
+        state.survey = itensSalvos
           .filter(it => it && it.cod !== undefined)
           .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
         state.levLoadedId = entry.id;
@@ -8331,6 +8354,9 @@
       }
       async function apiLevantamentosCliente(clienteId) {
         return apiFetch(`/api/clientes/${clienteId}/levantamentos`);
+      }
+      async function apiLevantamentoItens(levantamentoId) {
+        return apiFetch(`/api/levantamentos/${levantamentoId}/itens`);
       }
       async function apiRecuperarCliente(clienteId) {
         return apiFetch(`/api/clientes/${clienteId}/recuperar`);

@@ -102,4 +102,26 @@ router.delete('/rascunho', async (req, res) => {
   }
 });
 
+// Itens de um levantamento já gravado - usado como fallback quando a cópia
+// local (localStorage, só no aparelho que salvou) não tem os itens na hora
+// de reabrir (ex.: a gravação local falhou silenciosamente por limite de
+// espaço do navegador, mesmo o levantamento tendo sido gravado com sucesso
+// aqui no servidor).
+router.get('/:id/itens', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT p.codigo_sku, li.quantidade_contada
+       FROM levantamento_itens li
+       JOIN produtos p ON p.id = li.produto_id
+       WHERE li.levantamento_id = $1
+       ORDER BY li.id`,
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar itens do levantamento.' });
+  }
+});
+
 module.exports = router;

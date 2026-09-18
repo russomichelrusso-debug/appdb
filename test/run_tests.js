@@ -139,6 +139,12 @@ async function main() {
   res = await req('GET', `/api/clientes/${clienteId}/levantamentos`);
   assert(res.status === 200 && res.body.length === 1 && res.body[0].num_produtos === 1, 'lista levantamentos do cliente corretamente');
 
+  // 12b) itens de um levantamento (fallback pro caso da cópia local no
+  // aparelho ficar vazia - ver doOpenSavedSurvey em index.html)
+  const levantamentoIdSalvo = res.body[0].id;
+  res = await req('GET', `/api/levantamentos/${levantamentoIdSalvo}/itens`);
+  assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
+
   // 13) classificatório: calcula sobre o ANO CIVIL FECHADO anterior, não uma
   // janela móvel de 12 meses (ver routes/clientesClassificatorio.js) - semeia
   // um cliente com faturamento no ano fechado (conta) e um pedido no ano
