@@ -6386,8 +6386,13 @@
         if (state.survey.length > 0 && state.levLoadedId !== id) {
           if (!await askConfirm('Isso vai substituir o levantamento atual (não salvo será perdido). Continuar?')) return;
         }
+        // Não filtra por DB.productIndex aqui: o catálogo pode ainda não ter
+        // terminado de carregar em segundo plano, e filtrar nesse momento
+        // apagaria silenciosamente todos os itens (mesmo bug já corrigido
+        // uma vez em loadLevSurvey()). A limpeza segura de itens realmente
+        // descontinuados acontece depois, via revalidarLevSurveyContraCatalogo().
         state.survey = entry.items
-          .filter(it => it && it.cod !== undefined && DB.productIndex[it.cod])
+          .filter(it => it && it.cod !== undefined)
           .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
         state.levLoadedId = entry.id;
         state.levLoadedName = entry.name;
