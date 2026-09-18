@@ -551,9 +551,12 @@ async function query(sql, params = []) {
   if (s.includes('FROM LEVANTAMENTO_ITENS LI') && s.includes('JOIN PRODUTOS P')) {
     const levantamentoId = params[0];
     const itens = levantamentoItens.filter(li => li.levantamento_id == levantamentoId);
+    // NUMERIC no Postgres real vem como string via node-postgres - simula
+    // isso aqui pra pegar bug de concatenação em vez de soma (ver
+    // doOpenSavedSurvey em index.html, que precisa de Number(...) nisso).
     return { rows: itens.map(li => {
       const prod = produtos.find(p => p.id === li.produto_id);
-      return { codigo_sku: prod ? prod.codigo_sku : null, quantidade_contada: li.quantidade_contada };
+      return { codigo_sku: prod ? prod.codigo_sku : null, quantidade_contada: String(li.quantidade_contada) };
     }) };
   }
 
