@@ -548,6 +548,14 @@ async function query(sql, params = []) {
   if (s.includes('FROM LEVANTAMENTOS L') && s.includes('LEFT JOIN VENDEDORES')) {
     return computeLevantamentosDoCliente(params[0]);
   }
+  if (s.includes('FROM LEVANTAMENTO_ITENS LI') && s.includes('JOIN PRODUTOS P')) {
+    const levantamentoId = params[0];
+    const itens = levantamentoItens.filter(li => li.levantamento_id == levantamentoId);
+    return { rows: itens.map(li => {
+      const prod = produtos.find(p => p.id === li.produto_id);
+      return { codigo_sku: prod ? prod.codigo_sku : null, quantidade_contada: li.quantidade_contada };
+    }) };
+  }
 
   // usuarios / sessoes (login)
   if (s.includes('SELECT COUNT(*) FROM USUARIOS')) {
