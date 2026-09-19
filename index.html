@@ -1000,6 +1000,10 @@
       font-family: Georgia, serif;
     }
 
+    .videoLinkBtn {
+      text-decoration: none;
+    }
+
     .fichaInfoBtn:active {
       background: var(--fill);
     }
@@ -4500,6 +4504,16 @@
               <button class="fileBtn" id="exportCodigosFaltantesBtn" style="margin-top:10px;">Baixar planilha de produtos sem EAN-13/DUN-14</button>
               <div id="exportCodigosFaltantesMsg" style="margin-top:8px;"></div>
             </div>
+            <div class="ap-card">
+              <h3>Vídeos de produto (YouTube/Instagram)</h3>
+              <p class="ap-hint" style="margin:10px 0;">Importa uma planilha (.xlsx) com 3 colunas — <b>Código</b>,
+                <b>YouTube</b> e <b>Instagram</b> — pra aparecer um ícone de vídeo ao lado do produto na busca. As
+                duas colunas de link são opcionais (pode ter só uma). Substitui só os códigos que vierem na planilha
+                — o resto continua como está.</p>
+              <button class="fileBtn" id="importVideosBtn">Selecionar planilha (.xlsx)</button>
+              <input type="file" id="videosFileInput" accept=".xlsx,.xls" style="display:none;">
+              <div id="importVideosMsg" style="margin-top:8px;"></div>
+            </div>
           </div>
         </details>
 
@@ -5183,6 +5197,16 @@
           renderResults(); // reaplica pra mostrar os balões (i) que já podem se aplicar
         } catch (e) { /* sem ficha tecnica disponivel ainda, ou sem rede - sem problema */ }
       }
+      // Links de vídeo (YouTube/Instagram) por código de produto - mesmo
+      // mecanismo de FICHAS_MAP, chave "produtos_videos" em configuracoes.
+      let VIDEOS_MAP = {};
+      async function loadProdutosVideos() {
+        try {
+          const result = await apiFetch('/api/configuracoes/produtos_videos');
+          VIDEOS_MAP = (result && result.valor) || {};
+          renderResults(); // reaplica pra mostrar os ícones de vídeo que já podem se aplicar
+        } catch (e) { /* sem vídeo cadastrado ainda, ou sem rede - sem problema */ }
+      }
       let CATALOGO_TECNICO_MAP = null;
       function ensureCatalogoTecnicoMap() {
         if (CATALOGO_TECNICO_MAP) return Promise.resolve(CATALOGO_TECNICO_MAP);
@@ -5443,7 +5467,7 @@
     ${isPrecoFixoParaCanal(p) ? '<span class="fixedbadge">Preço fixo</span>' : ''}
     ${edited ? '<span class="editedbadge">Preço editado</span>' : ''}
     ${qtyDisc > 0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
-    <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${p.c}" aria-label="Ver informações técnicas">i</button>` : ''}</div>
+    <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${p.c}" aria-label="Ver informações técnicas">i</button>` : ''}${renderVideoLinks(p.c)}</div>
     <div class="psub">Cód. ${p.c} · Emb. ${p.emb}</div>
     ${renderPrevisaoBadge(p.c)}
     <div class="qtyrow" style="margin-top:8px;">
@@ -5487,6 +5511,16 @@
 
       // ---------------- Edição de preço base (antes de impostos) ----------------
       const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+      // Ícones monocromáticos simples (não são cópia da logomarca registrada) pros
+      // links de vídeo do produto no card - ver VIDEOS_MAP.
+      const YOUTUBE_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M23 12s0-3.6-.46-5.3a3 3 0 0 0-2.1-2.1C18.7 4 12 4 12 4s-6.7 0-8.44.6a3 3 0 0 0-2.1 2.1C1 8.4 1 12 1 12s0 3.6.46 5.3a3 3 0 0 0 2.1 2.1C5.3 20 12 20 12 20s6.7 0 8.44-.6a3 3 0 0 0 2.1-2.1C23 15.6 23 12 23 12z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.75 15.5v-7l6 3.5-6 3.5z"/></svg>';
+      const INSTAGRAM_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1"/></svg>';
+      function renderVideoLinks(cod) {
+        const v = VIDEOS_MAP[cod];
+        if (!v) return '';
+        return (v.youtube ? `<a class="fichaInfoBtn videoLinkBtn" href="${escapeHtml(v.youtube)}" target="_blank" rel="noopener" aria-label="Ver vídeo no YouTube" title="Ver vídeo no YouTube">${YOUTUBE_SVG}</a>` : '')
+          + (v.instagram ? `<a class="fichaInfoBtn videoLinkBtn" href="${escapeHtml(v.instagram)}" target="_blank" rel="noopener" aria-label="Ver Reels no Instagram" title="Ver Reels no Instagram">${INSTAGRAM_SVG}</a>` : '');
+      }
       let priceEditingCod = null;
 
       function isPriceEdited(cod) {
@@ -6772,7 +6806,7 @@
           <span class="levNum">${idx + 1}</span>
           <div>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
-            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc > 0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}</div>
+            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc > 0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}${renderVideoLinks(p.c)}</div>
             <div class="pcode">Cód. ${p.c}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
@@ -7731,6 +7765,28 @@
             previsao: previsaoISO,
             saldo: Number(r['Saldo']) || 0,
           };
+        });
+        return mapa;
+      }
+      // Lê a planilha de vídeos de produto (Código/YouTube/Instagram) e monta
+      // um mapa código → {youtube?, instagram?}. Linha sem nenhum dos dois
+      // links é ignorada - não faz sentido guardar uma entrada vazia.
+      async function parseVideosXlsx(arrayBuffer) {
+        const XLSX = await loadSheetJs();
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const linhas = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        const mapa = {};
+        linhas.forEach(r => {
+          const codigo = String(r['Código'] ?? r['Codigo'] ?? '').trim();
+          if (!codigo) return;
+          const youtube = String(r['YouTube'] ?? '').trim();
+          const instagram = String(r['Instagram'] ?? '').trim();
+          if (!youtube && !instagram) return;
+          const entrada = {};
+          if (youtube) entrada.youtube = youtube;
+          if (instagram) entrada.instagram = instagram;
+          mapa[codigo] = entrada;
         });
         return mapa;
       }
@@ -9288,6 +9344,40 @@
               refreshPrevisaoStatus();
               msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produtos enviados — já visível pra todo mundo.</div>`;
               if (document.getElementById('searchInput').value.trim()) renderResults();
+            } catch (e) {
+              msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+            }
+          };
+          reader.readAsArrayBuffer(file);
+          fileInput.value = '';
+        });
+      }
+
+      function initVideosUpload() {
+        const btn = document.getElementById('importVideosBtn');
+        const fileInput = document.getElementById('videosFileInput');
+        btn.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => {
+          const file = fileInput.files && fileInput.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const msg = document.getElementById('importVideosMsg');
+            msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+            try {
+              const novos = await parseVideosXlsx(reader.result);
+              const total = Object.keys(novos).length;
+              if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código", "YouTube" e "Instagram".');
+              msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
+              // manda só o lote deste arquivo - o servidor mescla com o que já existe
+              // (mesmo motivo de importarFichasTecnicasDeArquivo: evita reenviar tudo
+              // que já foi importado antes a cada planilha nova).
+              const atual = (await apiFetch('/api/configuracoes/produtos_videos').catch(() => ({ valor: {} }))).valor || {};
+              const mesclado = { ...atual, ...novos };
+              await apiFetch('/api/configuracoes/produtos_videos', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
+              Object.assign(VIDEOS_MAP, novos);
+              renderResults();
+              msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produto(s) com vídeo importado(s) — total agora: ${Object.keys(mesclado).length}.</div>`;
             } catch (e) {
               msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
             }
@@ -11968,6 +12058,7 @@
           const catalogoPromise = carregarCatalogoEExtras();
           catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
+          loadProdutosVideos(); // idem
           tentarReconectarGoogleDriveEmSegundoPlano(); // idem - deixa o token do Drive pronto antes de precisar dele
           loadPriceListFromLS();
           loadCartFromLS();
@@ -12036,6 +12127,7 @@
           initMergeReviewModal();
           initBackendAdmin();
           initPrevisaoUpload();
+          initVideosUpload();
           initGoogleDriveButton();
           refreshSyncQueueBadge();
           refreshDriveCsvQueueBadge();
