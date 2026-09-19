@@ -5153,36 +5153,141 @@
 
 
       // ---------------- Search ----------------
+      // Código/EAN/DUN - exato (0) ou prefixo (1). Autoritativo: nunca entra
+      // em RRF, sempre fica na frente de qualquer match por nome.
+      function strategyCode(p, termo, termoUpper) {
+        if ((p.e && p.e === termo) || p.c.toUpperCase() === termoUpper || (p.dun && p.dun === termo)) return 0;
+        if ((p.e && p.e.startsWith(termo)) || p.c.toUpperCase().startsWith(termoUpper) || (p.dun && p.dun.startsWith(termo))) return 1;
+        return -1;
+      }
+      // Nome igual (1) ou começa com a busca (2) - preciso o bastante pra
+      // também nunca entrar em RRF, fica logo depois do código.
+      function strategyNamePrecise(p, q) {
+        if (p._n === q) return 1;
+        if (p._n.startsWith(q)) return 2;
+        return -1;
+      }
+      // Contém a frase inteira (3), ou todas as palavras digitadas aparecem em
+      // qualquer ordem (4) - comportamento de "nome" que já existia antes desta
+      // mudança, só que agora alimenta a fusão RRF em vez de decidir sozinho.
+      function strategyNameSoft(p, q, words) {
+        if (p._n.includes(q)) return 3;
+        if (words.length > 1 && words.every(w => p._n.includes(w))) return 4;
+        return -1;
+      }
+      // Distância de Levenshtein com corte antecipado: nunca calcula além de
+      // maxDist (early exit assim que uma linha inteira da DP já estourou o
+      // limite) - mantém o custo baixo mesmo rodando em milhares de pares.
+      function levenshteinBounded(a, b, maxDist) {
+        if (Math.abs(a.length - b.length) > maxDist) return maxDist + 1;
+        let prev = new Array(b.length + 1);
+        for (let j = 0; j <= b.length; j++) prev[j] = j;
+        for (let i = 1; i <= a.length; i++) {
+          const cur = new Array(b.length + 1);
+          cur[0] = i;
+          let rowMin = cur[0];
+          const lo = Math.max(1, i - maxDist), hi = Math.min(b.length, i + maxDist);
+          for (let j = 1; j <= b.length; j++) {
+            if (j < lo || j > hi) { cur[j] = maxDist + 1; continue; }
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+            cur[j] = Math.min(
+              (prev[j] ?? maxDist + 1) + 1,
+              (cur[j - 1] ?? maxDist + 1) + 1,
+              (prev[j - 1] ?? maxDist + 1) + cost
+            );
+            if (cur[j] < rowMin) rowMin = cur[j];
+          }
+          if (rowMin > maxDist) return maxDist + 1;
+          prev = cur;
+        }
+        return prev[b.length];
+      }
+      // Tolerância proporcional ao tamanho da palavra - protege siglas curtas
+      // (ex: "MM", "P1") de virarem match falso com 1-2 caracteres de diferença.
+      function wordMaxDist(word) { return word.length <= 4 ? 1 : 2; }
+      function fuzzyWordBestDist(word, tokens) {
+        const md = wordMaxDist(word);
+        let best = md + 1;
+        for (const tok of tokens) {
+          if (Math.abs(tok.length - word.length) > md) continue; // descarta o par sem nem calcular a DP
+          const d = levenshteinBounded(word, tok, md);
+          if (d < best) best = d;
+          if (best === 0) break;
+        }
+        return best <= md ? best : Infinity;
+      }
+      // Score fuzzy por cobertura: cada palavra digitada busca o token mais
+      // parecido no nome do produto (por Levenshtein, não por posição - cobre
+      // erro de digitação E ordem trocada ao mesmo tempo). Não exige achar
+      // TODAS as palavras (só metade+), o que cobre "faltou uma palavra" sem
+      // precisar de mais uma estratégia separada pra isso.
+      function fuzzyNameScore(queryWords, tokens) {
+        let matched = 0, totalDist = 0;
+        for (const w of queryWords) {
+          const d = fuzzyWordBestDist(w, tokens);
+          if (Number.isFinite(d)) { matched++; totalDist += d; }
+        }
+        if (matched === 0) return null;
+        const coverage = matched / queryWords.length;
+        if (coverage < 0.5) return null;
+        return coverage * 1000 - totalDist; // maior é melhor, só usado pra ordenar dentro desta lista
+      }
+      // Reciprocal Rank Fusion: combina N listas já ordenadas (melhor primeiro)
+      // somando 1/(k+posição) por lista em que o produto aparece - ausência
+      // numa lista simplesmente não soma nada, sem penalidade.
+      function combineRRF(lists, k = 60) {
+        const scores = new Map();
+        for (const list of lists) {
+          list.forEach((p, idx) => {
+            const rank = idx + 1;
+            scores.set(p.c, (scores.get(p.c) || 0) + 1 / (k + rank));
+          });
+        }
+        return scores;
+      }
       function searchProducts(qRaw) {
         const termo = qRaw.trim();
         const termoUpper = termo.toUpperCase();
         const q = normalize(termo);
         if (q.length < 2) return [];
         const words = q.split(/\s+/).filter(Boolean);
-        const results = [];
+
+        const tier0 = [], tier1 = [], softList = [], fuzzyCandidates = [];
+        const seen = new Set(); // códigos já classificados nas camadas 0/1 - não entram na fusão da camada 2
+
         for (const p of DB.products) {
-          // código/EAN - checa sempre, funciona tanto pra código numérico puro
-          // quanto alfanumérico (ex: "P60863", produto promocional)
-          let scoreCodigo = -1;
-          if (p.e && p.e === termo) scoreCodigo = 0;
-          else if (p.c.toUpperCase() === termoUpper) scoreCodigo = 0;
-          else if (p.dun && p.dun === termo) scoreCodigo = 0;
-          else if (p.e && p.e.startsWith(termo)) scoreCodigo = 1;
-          else if (p.c.toUpperCase().startsWith(termoUpper)) scoreCodigo = 1;
-          else if (p.dun && p.dun.startsWith(termo)) scoreCodigo = 1;
+          const codeScore = strategyCode(p, termo, termoUpper);
+          const preciseScore = strategyNamePrecise(p, q);
+          if (codeScore === 0 || preciseScore === 1) { tier0.push(p); seen.add(p.c); continue; }
+          if (codeScore === 1 || preciseScore === 2) { tier1.push([Math.min(codeScore < 0 ? 9 : codeScore, preciseScore < 0 ? 9 : preciseScore), p]); seen.add(p.c); continue; }
 
-          let scoreNome = -1;
-          if (p._n === q) scoreNome = 1;
-          else if (p._n.startsWith(q)) scoreNome = 2;
-          else if (p._n.includes(q)) scoreNome = 3;
-          else if (words.length > 1 && words.every(w => p._n.includes(w))) scoreNome = 4;
+          const soft = strategyNameSoft(p, q, words);
+          if (soft >= 0) softList.push([soft, p]);
 
-          const score = (scoreCodigo >= 0 && scoreNome >= 0) ? Math.min(scoreCodigo, scoreNome)
-            : (scoreCodigo >= 0 ? scoreCodigo : scoreNome);
-          if (score >= 0) results.push([score, p]);
+          // busca fuzzy só entra em ação com 3+ caracteres - evita ruído em
+          // buscas curtas tipo "60"/"P1", onde qualquer coisa "bateria" fuzzy.
+          if (q.length >= 3) {
+            const fz = fuzzyNameScore(words, p._tok || []);
+            if (fz !== null) fuzzyCandidates.push([fz, p]);
+          }
         }
-        results.sort((a, b) => a[0] - b[0] || a[1].n.localeCompare(b[1].n));
-        return results.slice(0, 50).map(r => r[1]);
+
+        tier0.sort((a, b) => a.n.localeCompare(b.n));
+        tier1.sort((a, b) => a[0] - b[0] || a[1].n.localeCompare(b[1].n));
+        softList.sort((a, b) => a[0] - b[0] || a[1].n.localeCompare(b[1].n));
+        fuzzyCandidates.sort((a, b) => b[0] - a[0] || a[1].n.localeCompare(b[1].n));
+
+        const strictSorted = softList.map(r => r[1]);
+        const fuzzySorted = fuzzyCandidates.map(r => r[1]);
+        const rrf = combineRRF([strictSorted, fuzzySorted]);
+        const tier2Pool = new Map();
+        for (const p of strictSorted) if (!seen.has(p.c)) tier2Pool.set(p.c, p);
+        for (const p of fuzzySorted) if (!seen.has(p.c)) tier2Pool.set(p.c, p);
+        const tier2 = [...tier2Pool.values()].sort((a, b) =>
+          (rrf.get(b.c) || 0) - (rrf.get(a.c) || 0) || a.n.localeCompare(b.n));
+
+        const all = [...tier0, ...tier1.map(r => r[1]), ...tier2];
+        return all.slice(0, 50);
       }
 
       // ---------------- Fichas técnicas (balão de informação) ----------------
@@ -10644,6 +10749,7 @@
         for (const p of lista) {
           if (DB.productIndex[p.c]) continue; // já existe (evita duplicar ao recarregar)
           p._n = normalize(p.n);
+          p._tok = p._n.split(/\s+/).filter(Boolean);
           DB.products.push(p);
           DB.productIndex[p.c] = p;
           if (p.e) DB.eanIndex[p.e] = p;
@@ -10715,6 +10821,7 @@
         DB.eanIndex = {};
         for (const p of DB.products) {
           p._n = normalize(p.n);
+          p._tok = p._n.split(/\s+/).filter(Boolean);
           DB.productIndex[p.c] = p;
           if (p.e) DB.eanIndex[p.e] = p;
           if (p.dun) DUN_INDEX[p.dun] = p.c;
