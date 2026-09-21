@@ -6661,6 +6661,21 @@
           return `<div style="font-size:11px;margin-top:3px;color:var(--gray);">Acumulado ${status.anoCorrente || ''} (individual): <b>${brl(status.faturamentoAnoCorrente)}</b></div>`;
         }
         const partes = [];
+        // Objetivo do trimestre (oficial, importado do ERP) - vem primeiro,
+        // é a métrica que o vendedor deve confiar (pedido do usuário: essa
+        // informação precisa aparecer aqui, na aba de Pedido/Levantamento,
+        // sem precisar trocar pra ficha completa do cliente). Quando existe
+        // objetivo, o ritmo automático da faixa (bloco mais abaixo) fica
+        // fora pra não contradizer visualmente (ex: mostrar "✓ adiantado"
+        // junto de "ainda falta pro objetivo" confundia o vendedor).
+        const temObjetivo = status.faltaPObjetivo != null;
+        if (temObjetivo) {
+          const bateuObjetivo = status.faltaPObjetivo <= 0;
+          const linhaObjetivo = bateuObjetivo
+            ? `<span style="color:#1E8E3E;font-weight:600;">✓ Objetivo do trimestre batido!</span>`
+            : `<span style="color:#B36B00;font-weight:600;">⚠️ Faltam ${brl(status.faltaPObjetivo)} pro objetivo do trimestre</span>`;
+          partes.push(`<div style="font-size:11.5px;margin-top:3px;">${linhaObjetivo}</div>`);
+        }
         if (status.faixaMin != null && status.faixaMax != null) {
           // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
           // faixas devolvidas pela API já são calculadas sobre o ano em
@@ -6689,7 +6704,7 @@
         // bater a meta DESTE trimestre (faltaTrimestreAtual, calculado em
         // calcularRitmoTrimestral).
         const trimestral = status.trimestral;
-        if (trimestral && !trimestral.semMeta && trimestral.situacao && trimestral.situacao !== 'atrasado') {
+        if (!temObjetivo && trimestral && !trimestral.semMeta && trimestral.situacao && trimestral.situacao !== 'atrasado') {
           const rotulo = trimestral.situacao === 'adiantado' ? '✓ adiantado no trimestre' : '✓ no ritmo trimestral';
           const detalhe = trimestral.faltaTrimestreAtual > 0
             ? ` — faltam ${brl(trimestral.faltaTrimestreAtual)} nesse trimestre`
@@ -8774,6 +8789,27 @@
           }
         }
 
+        // Objetivo Trimestral oficial (importado do ERP, ver "Objetivo
+        // trimestral (ERP)" no painel admin) - meta explícita por
+        // cliente/grupo, diferente da meta automática por faixa abaixo.
+        // Destaque forte a pedido do usuário ("muito importante pro
+        // vendedor"): só aparece quando existe objetivo importado pra esse
+        // cliente/grupo. Vem ANTES da caixa "Meta trimestral" (ritmo
+        // automático) de propósito - é a métrica oficial, o vendedor deve
+        // ver ela primeiro.
+        const temObjetivo = status.faltaPObjetivo != null;
+        if (temObjetivo) {
+          const bateuObjetivo = status.faltaPObjetivo <= 0;
+          partes.push(`
+            <div style="margin-top:10px;padding:12px;border-radius:8px;background:${bateuObjetivo ? '#EAF6EE' : '#FFF4E5'};border:2px solid ${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
+              <div style="font-size:12px;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo do trimestre${sufixoGrupo}</div>
+              <div style="font-size:15px;margin-top:4px;font-weight:700;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
+                ${bateuObjetivo ? `✓ Objetivo batido! (${brl(status.objetivoTrimestral)})` : `Faltam ${brl(status.faltaPObjetivo)} pra bater o objetivo do trimestre`}
+              </div>
+              <div style="font-size:12px;margin-top:4px;color:var(--gray);">Entrada no trimestre: ${brl(status.entradaTrimestral)} de ${brl(status.objetivoTrimestral)}</div>
+            </div>`);
+        }
+
         if (status.ehRede && status.trimestral && status.trimestral.historico && status.trimestral.historico.some(t => t.faturado > 0)) {
           // Rede não tem meta/piso (semMeta:true) - só o histórico
           // trimestral individual do próprio cliente, sem caixa de destaque
@@ -8785,14 +8821,23 @@
               ${renderMiniGraficoTrimestral(status.trimestral)}
             </div>`);
         } else if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
-          const situacaoTexto = { no_ritmo: '✓ no ritmo', atrasado: '⚠️ atrasado', adiantado: '✓ adiantado' }[status.trimestral.situacao] || '';
+          // Quando existe objetivo oficial acima e ele ainda não foi
+          // batido, não usar o selo verde "✓ adiantado" aqui - contradiz
+          // visualmente a caixa do objetivo (reportado pelo usuário: dava
+          // a entender que "tá tudo bem" quando ainda faltava dinheiro pro
+          // objetivo que importa). Gráfico e números continuam aparecendo,
+          // só troca o rótulo/cor de "tudo certo" por um neutro.
+          const ritmoContradizObjetivo = temObjetivo && status.faltaPObjetivo > 0 && status.trimestral.situacao === 'adiantado';
+          const situacaoTexto = ritmoContradizObjetivo
+            ? 'ritmo da faixa'
+            : ({ no_ritmo: '✓ no ritmo', atrasado: '⚠️ atrasado', adiantado: '✓ adiantado' }[status.trimestral.situacao] || '');
           // Destaque visual (caixa com fundo/borda coloridos conforme a
           // situação) pedido pelo usuário pra meta trimestral - a linha de
           // "faltam R$X pra atingir a meta deste trimestre" (faltaTrimestreAtual,
           // quanto falta NESTE trimestre especificamente) fica em destaque
           // acima do gráfico, não escondida como texto cinza pequeno.
-          const corSituacao = { no_ritmo: '#1E8E3E', atrasado: '#B3261E', adiantado: '#1E8E3E' }[status.trimestral.situacao] || 'var(--gray)';
-          const fundoSituacao = { no_ritmo: '#EAF6EE', atrasado: '#FCEBEA', adiantado: '#EAF6EE' }[status.trimestral.situacao] || 'var(--fill)';
+          const corSituacao = ritmoContradizObjetivo ? 'var(--gray)' : ({ no_ritmo: '#1E8E3E', atrasado: '#B3261E', adiantado: '#1E8E3E' }[status.trimestral.situacao] || 'var(--gray)');
+          const fundoSituacao = ritmoContradizObjetivo ? 'var(--fill)' : ({ no_ritmo: '#EAF6EE', atrasado: '#FCEBEA', adiantado: '#EAF6EE' }[status.trimestral.situacao] || 'var(--fill)');
           const faltaTrimestreAtual = status.trimestral.faltaTrimestreAtual;
           const linhaFalta = faltaTrimestreAtual > 0
             ? `Faltam <b>${brl(faltaTrimestreAtual)}</b> pra atingir a meta deste trimestre.`
@@ -8803,24 +8848,6 @@
               <div style="font-size:13px;margin-top:4px;color:${corSituacao};">${linhaFalta}</div>
               ${renderMiniGraficoTrimestral(status.trimestral)}
               ${status.trimestral.ritmoNecessarioProximoTrimestre != null ? `<div style="font-size:12px;margin-top:4px;color:var(--gray);">Ritmo necessário no próximo trimestre: ${brl(status.trimestral.ritmoNecessarioProximoTrimestre)}</div>` : ''}
-            </div>`);
-        }
-
-        // Objetivo Trimestral oficial (importado do ERP, ver "Objetivo
-        // trimestral (ERP)" no painel admin) - meta explícita por
-        // cliente/grupo, diferente da meta automática por faixa acima.
-        // Destaque forte a pedido do usuário ("muito importante pro
-        // vendedor"): só aparece quando existe objetivo importado pra esse
-        // cliente/grupo.
-        if (status.faltaPObjetivo != null) {
-          const bateuObjetivo = status.faltaPObjetivo <= 0;
-          partes.push(`
-            <div style="margin-top:10px;padding:12px;border-radius:8px;background:${bateuObjetivo ? '#EAF6EE' : '#FFF4E5'};border:2px solid ${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
-              <div style="font-size:12px;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo do trimestre${sufixoGrupo}</div>
-              <div style="font-size:15px;margin-top:4px;font-weight:700;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
-                ${bateuObjetivo ? `✓ Objetivo batido! (${brl(status.objetivoTrimestral)})` : `Faltam ${brl(status.faltaPObjetivo)} pra bater o objetivo do trimestre`}
-              </div>
-              <div style="font-size:12px;margin-top:4px;color:var(--gray);">Entrada no trimestre: ${brl(status.entradaTrimestral)} de ${brl(status.objetivoTrimestral)}</div>
             </div>`);
         }
 
