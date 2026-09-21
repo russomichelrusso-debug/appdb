@@ -224,10 +224,10 @@ async function query(sql, params = []) {
     for (const cliente of classificados) {
       const grupo = cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
       const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
-      const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= inicioStr);
+      const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.data_implantacao && it.data_implantacao >= inicioStr);
       const porTrimestre = {};
       for (const it of itens) {
-        const d = new Date(it.data_faturamento);
+        const d = new Date(it.data_implantacao);
         const q = Math.floor(d.getUTCMonth() / 3);
         const key = `${d.getUTCFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`;
         porTrimestre[key] = (porTrimestre[key] || 0) + (Number(it.valor) || 0);
@@ -264,7 +264,7 @@ async function query(sql, params = []) {
     }).sort((a, b) => a.faturamento_ano_fechado - b.faturamento_ano_fechado || a.nome.localeCompare(b.nome));
     return { rows };
   }
-  if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_FATURAMENTO)")) {
+  if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_IMPLANTACAO)")) {
     const cliente = clientes.find(c => Number(c.id) === Number(params[0]));
     if (!cliente) return { rows: [] };
     // Rede: só o próprio cliente (matriz_grupo ali é a rede/cooperativa,
@@ -277,10 +277,10 @@ async function query(sql, params = []) {
     // ANDAMENTO agora (não presa ao ano civil já fechado) - mesma mudança
     // feita na rota real, pra "acompanhar os trimestres recentes".
     const inicioStr = inicioJanelaTrimestralMovel();
-    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= inicioStr);
+    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.data_implantacao && it.data_implantacao >= inicioStr);
     const porTrimestre = {};
     for (const it of itens) {
-      const d = new Date(it.data_faturamento);
+      const d = new Date(it.data_implantacao);
       const q = Math.floor(d.getMonth() / 3);
       const key = `${d.getFullYear()}-${String(q * 3 + 1).padStart(2, '0')}-01`;
       porTrimestre[key] = (porTrimestre[key] || 0) + (Number(it.valor) || 0);
