@@ -348,6 +348,49 @@ async function main() {
     `lista os dois membros do grupo, o que compra menos primeiro: ${JSON.stringify(res.body.membros)}`
   );
 
+  // 15b) Objetivo trimestral (ERP) - "Falta p/ Objetivo": importa uma
+  // planilha com um cliente normal (objetivo importado e calculado), um
+  // cliente Rede (pulado - RDA/Rede fora de escopo por enquanto) e uma
+  // linha com nome não reconhecido (aparece no resumo de erro).
+  const periodoObjInicio = `${anoFechado + 1}-01-01`;
+  const periodoObjFim = `${anoFechado + 1}-03-31`;
+  mockDb.__seed({
+    clientes: [{
+      id: 9008, nome: 'CLIENTE OBJETIVO TESTE', documento: '99988877000788', codigo_oficial: 'COD9008',
+      classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 17, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'PC11', codigo_sku: '60863', cliente_codigo_oficial: 'COD9008', quantidade: 1, valor: 5000, data_faturamento: null, data_implantacao: `${anoFechado + 1}-02-15`, status: 'carteira' },
+    ],
+  });
+  res = await req('POST', '/api/clientes/classificatorio/objetivos-trimestrais/importar', {
+    periodoInicio: periodoObjInicio,
+    periodoFim: periodoObjFim,
+    itens: [
+      { matriz: 'CLIENTE OBJETIVO TESTE', objetivo: 8000 },
+      { matriz: 'REDE TESTE', objetivo: 999999 }, // matriz_grupo do cliente Rede (9005) - deve ser pulado
+      { matriz: 'CLIENTE FANTASMA SA', objetivo: 1234 }, // nome que não bate com nenhum cliente
+    ],
+  });
+  assert(
+    res.status === 200 && res.body.importados === 1 && res.body.pulosRede === 1 && res.body.naoReconhecidos?.length === 1 && res.body.naoReconhecidos[0] === 'CLIENTE FANTASMA SA',
+    `import de objetivos trimestrais: 1 importado, 1 Rede pulado, 1 não reconhecido: ${JSON.stringify(res.body)}`
+  );
+
+  res = await req('GET', '/api/clientes/9008/classificatorio/status');
+  assert(
+    res.status === 200 && res.body.objetivoTrimestral === 8000 && res.body.entradaTrimestral === 5000 && res.body.faltaPObjetivo === 3000,
+    `faltaPObjetivo calcula objetivo (8.000) menos entrada no período (5.000) = 3.000: ${JSON.stringify({ objetivoTrimestral: res.body.objetivoTrimestral, entradaTrimestral: res.body.entradaTrimestral, faltaPObjetivo: res.body.faltaPObjetivo })}`
+  );
+
+  // cliente Rede (9005) não recebeu objetivo (foi pulado no import) -
+  // faltaPObjetivo deve ficar ausente/null, convivendo sem quebrar a rota.
+  res = await req('GET', '/api/clientes/9005/classificatorio/status');
+  assert(
+    res.status === 200 && res.body.faltaPObjetivo == null,
+    'cliente Rede pulado no import não recebe objetivo trimestral (faltaPObjetivo ausente)'
+  );
+
   // 16) GET /api/dashboard/resumo: os cartões "Contas - 3 a 5/6 a 8 Meses Sem
   // Compra" precisam trazer a LISTA de clientes (não só a contagem), pra dar
   // pra expandir e ver quem são - senão o card só mostra um número sem
