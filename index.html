@@ -4581,6 +4581,22 @@
               <div id="importClassificatorioMsg" style="margin-top:8px;"></div>
             </div>
             <div class="ap-card">
+              <h3>Objetivo trimestral (ERP) — "Falta p/ Objetivo"</h3>
+              <p class="ap-hint" style="margin:10px 0;">Planilha oficial de "Entrada Realizada" do ERP (aba "Export"),
+                com a meta trimestral (Objetivo) de cada cliente/grupo. Só usa as colunas <b>Matriz</b> e
+                <b>OBJETIVO MÊS</b> — o "Falta p/ Objetivo" que o vendedor vê é calculado ao vivo a partir dos
+                pedidos já importados, não vem pronto da planilha. Clientes Rede são pulados (fora de escopo por
+                enquanto). Cada import <b>substitui</b> o objetivo do período inteiro — reimporte sempre que sair
+                uma planilha nova do trimestre.</p>
+              <label for="objetivosTrimestraisInicio">Início do trimestre</label>
+              <input type="date" id="objetivosTrimestraisInicio">
+              <label for="objetivosTrimestraisFim">Fim do trimestre</label>
+              <input type="date" id="objetivosTrimestraisFim">
+              <button class="fileBtn" id="importObjetivosTrimestraisBtn" style="margin-top:10px;">Selecionar planilha (.xlsx)</button>
+              <input type="file" id="objetivosTrimestraisFileInput" accept=".xlsx,.xls" style="display:none;">
+              <div id="importObjetivosTrimestraisMsg" style="margin-top:8px;"></div>
+            </div>
+            <div class="ap-card">
               <h3>Importar clientes (JSON)</h3>
               <p class="ap-hint" style="margin-bottom:10px;">Cadastro em lote de clientes (nome + CNPJ), a partir de um
                 arquivo JSON.</p>
@@ -7935,6 +7951,32 @@
         return mapa;
       }
 
+      // Lê o relatório oficial de "Entrada Realizada" do ERP (aba "Export",
+      // mesmo formato do arquivo Russo_Q3_*.xlsx) - só aproveita Matriz e
+      // Objetivo Mês; as outras colunas (Entrada Realizada/Falta/%) o app já
+      // calcula ao vivo (ver GET /:id/classificatorio/status), nunca fica
+      // desatualizado esperando a planilha seguinte. Ignora linha sem
+      // objetivo (clientes Varejo comum, sem meta trimestral).
+      async function parseObjetivosTrimestraisXlsx(arrayBuffer) {
+        const XLSX = await loadSheetJs();
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const nomeAba = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
+        const sheet = wb.Sheets[nomeAba];
+        const linhas = XLSX.utils.sheet_to_json(sheet, { defval: null });
+        const itens = [];
+        linhas.forEach(r => {
+          const matriz = String(r['Matriz'] ?? '').trim();
+          if (!matriz) return;
+          const objetivoRaw = r['OBJETIVO MÊS'] ?? r['OBJETIVO MES'] ?? r['Objetivo Mês'] ?? r['Objetivo'];
+          if (objetivoRaw == null || objetivoRaw === '') return;
+          const objetivo = Number(objetivoRaw);
+          if (!Number.isFinite(objetivo)) return;
+          itens.push({ matriz, objetivo });
+        });
+        if (itens.length === 0) throw new Error('Nenhuma linha com Matriz e Objetivo Mês válidos encontrada — confira as colunas da aba "Export".');
+        return itens;
+      }
+
       // Traduz o texto do classificatório ("Varejo Master (20)", "Rede", "Locação")
       // pro par {tipo, desconto}. "Locação" fica sem classificação de propósito -
       // não é uma categoria de cliente de verdade, é aluguel de ferramenta.
@@ -8020,6 +8062,45 @@
             msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} linha(s)…</div>`;
             const result = await apiImportarClassificatorio(itens);
             msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.atualizados} cliente(s) atualizado(s)${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ correspondente)` : ''}</div>`;
+          } catch (e) {
+            msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+          }
+        });
+      }
+
+      async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {
+        return apiFetch('/api/clientes/classificatorio/objetivos-trimestrais/importar', {
+          method: 'POST',
+          body: JSON.stringify({ periodoInicio, periodoFim, itens }),
+        });
+      }
+      function initObjetivosTrimestraisUpload() {
+        const btn = document.getElementById('importObjetivosTrimestraisBtn');
+        const fileInput = document.getElementById('objetivosTrimestraisFileInput');
+        const msg = document.getElementById('importObjetivosTrimestraisMsg');
+        const inicioInput = document.getElementById('objetivosTrimestraisInicio');
+        const fimInput = document.getElementById('objetivosTrimestraisFim');
+        btn.addEventListener('click', () => {
+          if (!inicioInput.value || !fimInput.value) {
+            msg.innerHTML = '<div class="ap-msg error">Preencha o início e o fim do trimestre antes de selecionar a planilha.</div>';
+            return;
+          }
+          fileInput.click();
+        });
+        fileInput.addEventListener('change', async () => {
+          const file = fileInput.files && fileInput.files[0];
+          fileInput.value = '';
+          if (!file) return;
+          msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+          try {
+            const buffer = await file.arrayBuffer();
+            const itens = await parseObjetivosTrimestraisXlsx(buffer);
+            msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} linha(s)…</div>`;
+            const result = await apiImportarObjetivosTrimestrais(inicioInput.value, fimInput.value, itens);
+            const detalhes = [];
+            if (result.pulosRede) detalhes.push(`${result.pulosRede} Rede pulado(s)`);
+            if (result.naoReconhecidos && result.naoReconhecidos.length) detalhes.push(`${result.naoReconhecidos.length} não reconhecido(s): ${result.naoReconhecidos.slice(0, 10).join(', ')}${result.naoReconhecidos.length > 10 ? '…' : ''}`);
+            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.importados} objetivo(s) importado(s)${detalhes.length ? ` · ${detalhes.join(' · ')}` : ''}</div>`;
           } catch (e) {
             msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
           }
@@ -8722,6 +8803,24 @@
               <div style="font-size:13px;margin-top:4px;color:${corSituacao};">${linhaFalta}</div>
               ${renderMiniGraficoTrimestral(status.trimestral)}
               ${status.trimestral.ritmoNecessarioProximoTrimestre != null ? `<div style="font-size:12px;margin-top:4px;color:var(--gray);">Ritmo necessário no próximo trimestre: ${brl(status.trimestral.ritmoNecessarioProximoTrimestre)}</div>` : ''}
+            </div>`);
+        }
+
+        // Objetivo Trimestral oficial (importado do ERP, ver "Objetivo
+        // trimestral (ERP)" no painel admin) - meta explícita por
+        // cliente/grupo, diferente da meta automática por faixa acima.
+        // Destaque forte a pedido do usuário ("muito importante pro
+        // vendedor"): só aparece quando existe objetivo importado pra esse
+        // cliente/grupo.
+        if (status.faltaPObjetivo != null) {
+          const bateuObjetivo = status.faltaPObjetivo <= 0;
+          partes.push(`
+            <div style="margin-top:10px;padding:12px;border-radius:8px;background:${bateuObjetivo ? '#EAF6EE' : '#FFF4E5'};border:2px solid ${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
+              <div style="font-size:12px;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo do trimestre${sufixoGrupo}</div>
+              <div style="font-size:15px;margin-top:4px;font-weight:700;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
+                ${bateuObjetivo ? `✓ Objetivo batido! (${brl(status.objetivoTrimestral)})` : `Faltam ${brl(status.faltaPObjetivo)} pra bater o objetivo do trimestre`}
+              </div>
+              <div style="font-size:12px;margin-top:4px;color:var(--gray);">Entrada no trimestre: ${brl(status.entradaTrimestral)} de ${brl(status.objetivoTrimestral)}</div>
             </div>`);
         }
 
@@ -12329,6 +12428,7 @@
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();
           initImportClassificatorio();
+          initObjetivosTrimestraisUpload();
 
           renderResults();
           renderCartBar();

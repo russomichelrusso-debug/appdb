@@ -24,6 +24,30 @@ function normalizarDoc(v) {
   return String(v || '').replace(/\D/g, '');
 }
 
+// Soma pedidos_oficiais_itens.valor por data_implantacao dentro de
+// [periodoInicio, periodoFim] (mesma fórmula corrigida do histórico
+// trimestral - sem filtro de status, carteira+faturado juntos) pro grupo
+// (matriz_grupo) do cliente - usada pra comparar contra o "Objetivo
+// Trimestral" customizado importado do ERP (ver
+// router.post('/classificatorio/objetivos-trimestrais/importar') abaixo).
+async function calcularEntradaTrimestralPeriodo(pool, cliente, periodoInicio, periodoFim) {
+  const ehRede = cliente.classificatorio_tipo === 'Rede';
+  const result = await pool.query(
+    ehRede
+      ? `SELECT COALESCE(SUM(poi.valor), 0) AS entrada
+         FROM pedidos_oficiais_itens poi
+         WHERE poi.cliente_codigo_oficial = $1
+           AND poi.data_implantacao >= $2 AND poi.data_implantacao <= $3`
+      : `SELECT COALESCE(SUM(poi.valor), 0) AS entrada
+         FROM pedidos_oficiais_itens poi
+         JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
+         WHERE (c2.id = $1 OR (c2.matriz_grupo IS NOT NULL AND c2.matriz_grupo = $4))
+           AND poi.data_implantacao >= $2 AND poi.data_implantacao <= $3`,
+    ehRede ? [cliente.codigo_oficial, periodoInicio, periodoFim] : [cliente.id, periodoInicio, periodoFim, cliente.matriz_grupo]
+  );
+  return Number(result.rows[0]?.entrada || 0);
+}
+
 // Calcula o status de classificatório (quanto falta pra subir/cair) de um
 // cliente, dado o tipo, a meta individual (PIC/Vl.Acordo, se houver) e o
 // faturamento do ANO EM ANDAMENTO (jan-dez do ano corrente, acumulando
@@ -310,6 +334,26 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       atrasadoNoRitmo: ritmo.situacao === 'atrasado',
     });
 
+    // Objetivo trimestral customizado (vindo do relatório oficial do ERP,
+    // importado em router.post('/classificatorio/objetivos-trimestrais/importar'))
+    // - meta explícita por cliente/grupo, diferente da meta automática por
+    // FAIXA calculada acima. Só aparece quando existe um objetivo importado
+    // pra esse cliente/grupo; convive com (não substitui) a meta por faixa.
+    let objetivoTrimestral = null;
+    let entradaTrimestral = null;
+    let faltaPObjetivo = null;
+    const objetivosConfigResult = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', ['objetivos_trimestrais']);
+    const objetivosConfig = objetivosConfigResult.rows[0]?.valor;
+    if (objetivosConfig && objetivosConfig.periodoInicio && objetivosConfig.periodoFim) {
+      const chaveGrupo = cliente.matriz_grupo || cliente.nome;
+      const objetivo = objetivosConfig.objetivos?.[chaveGrupo];
+      if (objetivo != null) {
+        objetivoTrimestral = Number(objetivo);
+        entradaTrimestral = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
+        faltaPObjetivo = Math.max(0, objetivoTrimestral - entradaTrimestral);
+      }
+    }
+
     res.json({
       ...status,
       ultimaCompra,
@@ -320,6 +364,9 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       anoCorrente: anoPeriodo + 1,
       faturamentoAnoCorrente,
       faturamentoMesmoPeriodoAnoAnterior,
+      objetivoTrimestral,
+      entradaTrimestral,
+      faltaPObjetivo,
     });
   } catch (e) {
     console.error(e);
@@ -524,6 +571,58 @@ router.post('/classificatorio/importar', async (req, res) => {
     res.status(500).json({ erro: 'Erro ao importar classificatório.' });
   } finally {
     client.release();
+  }
+});
+
+// Import do "Objetivo Trimestral" oficial do ERP (ver plano "Meta
+// trimestral oficial") - só admin. Recebe { periodoInicio, periodoFim,
+// itens: [{ matriz, objetivo }] } (Matriz = mesmo texto de
+// COALESCE(matriz_grupo, nome) usado em todo o resto do classificatório;
+// objetivo = valor em R$ da meta do trimestre). Cada import SUBSTITUI o
+// objetivo salvo por inteiro (não faz merge) - a planilha oficial já vem
+// completa a cada trimestre, então mesclar só acumularia lixo de
+// trimestres antigos. Clientes Rede são pulados (RDA/Rede fora de escopo
+// por enquanto, ver contexto do plano) - genérico pra qualquer Rede, não
+// só RDA.
+router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar objetivos trimestrais.' });
+  const { periodoInicio, periodoFim, itens } = req.body;
+  if (!periodoInicio || !periodoFim) return res.status(400).json({ erro: 'Envie periodoInicio e periodoFim (YYYY-MM-DD).' });
+  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+
+  try {
+    const objetivos = {};
+    let importados = 0;
+    let pulosRede = 0;
+    const naoReconhecidos = [];
+
+    for (const it of itens) {
+      const matriz = String(it.matriz || '').trim();
+      const objetivo = Number(it.objetivo);
+      if (!matriz || !Number.isFinite(objetivo)) continue;
+
+      const r = await pool.query(
+        `SELECT DISTINCT classificatorio_tipo FROM clientes WHERE COALESCE(matriz_grupo, nome) = $1`,
+        [matriz]
+      );
+      if (r.rows.length === 0) { naoReconhecidos.push(matriz); continue; }
+      if (r.rows.some(row => row.classificatorio_tipo === 'Rede')) { pulosRede++; continue; }
+
+      objetivos[matriz] = objetivo;
+      importados++;
+    }
+
+    await pool.query(
+      `INSERT INTO configuracoes (chave, valor, atualizado_em) VALUES ($1, $2, now())
+       ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
+      ['objetivos_trimestrais', JSON.stringify({ periodoInicio, periodoFim, objetivos })]
+    );
+
+    console.log(`Objetivos trimestrais (${periodoInicio} a ${periodoFim}) importados por ${req.usuario?.email}: ${importados} objetivo(s), ${pulosRede} Rede pulado(s), ${naoReconhecidos.length} não reconhecido(s).`);
+    res.json({ importados, pulosRede, naoReconhecidos, total: itens.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao importar objetivos trimestrais.' });
   }
 });
 
