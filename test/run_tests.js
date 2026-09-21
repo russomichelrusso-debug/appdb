@@ -157,8 +157,8 @@ async function main() {
       classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 17, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
     }],
     pedidosOficiaisItens: [
-      { nr_pedido: 'PC1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 43000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
-      { nr_pedido: 'PC2', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, status: 'faturado' },
+      { nr_pedido: 'PC1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 43000, data_faturamento: `${anoFechado}-06-15`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC2', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, data_implantacao: `${anoFechado + 1}-01-05`, status: 'faturado' },
     ],
   });
   res = await req('GET', '/api/clientes/9001/classificatorio/status');
@@ -265,6 +265,30 @@ async function main() {
     'rota de alertas em lote responde com os 3 grupos, usando a consulta trimestral em lote nova'
   );
 
+  // 14c-bis) o histórico trimestral soma por DATA_IMPLANTACAO (entrada do
+  // pedido no ERP), não por data de faturamento, e conta tanto 'carteira'
+  // quanto 'faturado' - bate com a metodologia do relatório oficial de
+  // "Entrada Realizada" (ver plano "Meta trimestral oficial"). PC9 é
+  // 'carteira' (ainda não faturado) mas implantado dentro da janela: deve
+  // contar. PC10 é 'faturado' dentro da janela de faturamento mas
+  // implantado FORA da janela (trimestre antigo): não deve contar.
+  mockDb.__seed({
+    clientes: [{
+      id: 9007, nome: 'CLIENTE IMPLANTACAO TESTE', documento: '99988877000700', codigo_oficial: 'COD9007',
+      classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 17, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'PC9', codigo_sku: '60863', cliente_codigo_oficial: 'COD9007', quantidade: 1, valor: 7000, data_faturamento: null, data_implantacao: `${anoFechado + 1}-01-10`, status: 'carteira' },
+      { nr_pedido: 'PC10', codigo_sku: '60863', cliente_codigo_oficial: 'COD9007', quantidade: 1, valor: 88888, data_faturamento: `${anoFechado + 1}-01-10`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
+    ],
+  });
+  const resImplantacao = await req('GET', '/api/clientes/9007/classificatorio/status');
+  const trimestresImplantacao = (resImplantacao.body.trimestral?.historico || []).reduce((s, t) => s + Number(t.faturado), 0);
+  assert(
+    resImplantacao.status === 200 && trimestresImplantacao === 7000,
+    `histórico trimestral soma pedido em carteira dentro da janela de implantação (7.000) e ignora pedido faturado cuja implantação está fora da janela (88.888 não conta): ${trimestresImplantacao}`
+  );
+
   // 14d) Rede: métrica e gráfico devem ser SÓ do próprio cliente, mesmo
   // compartilhando matriz_grupo com outra loja da mesma rede/cooperativa
   // (matriz_grupo pra Rede é o nome da rede, não empresas irmãs - somar
@@ -286,10 +310,10 @@ async function main() {
       // Ano fechado (pra conferir faturamento12m) - dentro da janela trimestral
       // móvel também entra o par de janeiro do ano corrente (mesmo mês já
       // confirmado "dentro da janela" no teste 14 acima, com PC2).
-      { nr_pedido: 'PC7', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 8000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
-      { nr_pedido: 'PC7B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 3000, data_faturamento: `${anoFechado + 1}-01-05`, status: 'faturado' },
-      { nr_pedido: 'PC8', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 900000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
-      { nr_pedido: 'PC8B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, status: 'faturado' },
+      { nr_pedido: 'PC7', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 8000, data_faturamento: `${anoFechado}-06-15`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC7B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 3000, data_faturamento: `${anoFechado + 1}-01-05`, data_implantacao: `${anoFechado + 1}-01-05`, status: 'faturado' },
+      { nr_pedido: 'PC8', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 900000, data_faturamento: `${anoFechado}-06-15`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC8B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, data_implantacao: `${anoFechado + 1}-01-05`, status: 'faturado' },
     ],
   });
   const resRede = await req('GET', '/api/clientes/9005/classificatorio/status');
