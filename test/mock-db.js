@@ -624,6 +624,41 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
 
+  // Objetivo trimestral (ERP) - resolve o classificatorio_tipo de quem bate
+  // com a chave COALESCE(matriz_grupo, nome) da planilha ("Matriz"), pra
+  // decidir se pula (Rede) ou não encontrou ninguém (routes/clientesClassificatorio.js
+  // POST /classificatorio/objetivos-trimestrais/importar). Checado ANTES do
+  // catch-all de "FROM PEDIDOS_OFICIAIS_ITENS POI" da curva ABC logo abaixo,
+  // que bateria com esse texto também (mesma tabela na consulta).
+  if (s === 'SELECT DISTINCT CLASSIFICATORIO_TIPO FROM CLIENTES WHERE COALESCE(MATRIZ_GRUPO, NOME) = $1') {
+    const chave = params[0];
+    const tipos = [...new Set(clientes.filter(c => (c.matriz_grupo || c.nome) === chave).map(c => c.classificatorio_tipo))];
+    return { rows: tipos.map(t => ({ classificatorio_tipo: t })) };
+  }
+  // Entrada trimestral do período do objetivo importado (mesma fórmula
+  // corrigida do histórico trimestral - carteira+faturado por
+  // data_implantacao, sem filtro de status) pro grupo (matriz_grupo) do
+  // cliente, dentro de [periodoInicio, periodoFim] - alimenta
+  // faltaPObjetivo em GET /:id/classificatorio/status.
+  if (s.includes('AS ENTRADA') && s.includes('POI.DATA_IMPLANTACAO >=') && s.includes('POI.DATA_IMPLANTACAO <=')) {
+    let itens, periodoInicio, periodoFim;
+    if (s.includes('POI.CLIENTE_CODIGO_OFICIAL = $1')) {
+      const [codigoOficial, ini, fim] = params;
+      periodoInicio = ini; periodoFim = fim;
+      itens = pedidosOficiaisItens.filter(it => it.cliente_codigo_oficial === codigoOficial);
+    } else {
+      const [clienteId, ini, fim, matrizGrupo] = params;
+      periodoInicio = ini; periodoFim = fim;
+      const grupo = matrizGrupo ? clientes.filter(c => c.matriz_grupo === matrizGrupo) : clientes.filter(c => Number(c.id) === Number(clienteId));
+      const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
+      itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial));
+    }
+    const entrada = itens
+      .filter(it => it.data_implantacao && it.data_implantacao >= periodoInicio && it.data_implantacao <= periodoFim)
+      .reduce((sum, it) => sum + (Number(it.valor) || 0), 0);
+    return { rows: [{ entrada }] };
+  }
+
   // curva ABC (produtos e clientes) - lê pedidos_oficiais_itens faturados,
   // com filtro opcional de período. Na curva "por cliente" o $1 é sempre o
   // codigo_oficial (pesquisado antes, à parte); na curva geral os params são
