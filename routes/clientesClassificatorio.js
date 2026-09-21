@@ -264,22 +264,25 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // cliente está de fato em risco de queda (ver comentário na função).
     // Cliente Rede: só o próprio codigo_oficial (sem OR matriz_grupo) - o
     // "grupo" dele é a rede/cooperativa inteira, não empresas irmãs.
+    // Soma por data_implantacao (entrada do pedido no ERP), sem filtrar por
+    // status - bate com a metodologia do relatório oficial de "Entrada
+    // Realizada" (conta carteira + faturado, reconhecimento por pedido
+    // lançado, não por nota fiscal emitida). Ver plano "Meta trimestral
+    // oficial" pra validação cliente a cliente contra a planilha oficial.
     const trimResult = await pool.query(
       ehRede
-        ? `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
+        ? `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
            FROM pedidos_oficiais_itens poi
            JOIN clientes c ON c.id = $1
            WHERE poi.cliente_codigo_oficial = c.codigo_oficial
-             AND poi.status = 'faturado'
-             AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+             AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
            GROUP BY 1 ORDER BY 1`
-        : `SELECT date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
+        : `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
            FROM pedidos_oficiais_itens poi
            JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
            JOIN clientes c ON c.id = $1
            WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
-             AND poi.status = 'faturado'
-             AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+             AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
            GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
@@ -395,13 +398,12 @@ router.get('/classificatorio/alertas', async (req, res) => {
       // calcularStatusClassificatorio sobre por que isso decide o risco de
       // queda, em vez do acumulado bruto do ano contra o piso anual).
       pool.query(
-        `SELECT c.id AS cliente_id, date_trunc('quarter', poi.data_faturamento) AS trimestre, SUM(poi.valor) AS faturado
+        `SELECT c.id AS cliente_id, date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
          FROM clientes c
          JOIN clientes c2 ON (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
          JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
          WHERE c.classificatorio_tipo IS NOT NULL
-           AND poi.status = 'faturado'
-           AND poi.data_faturamento >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+           AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
          GROUP BY c.id, 2 ORDER BY c.id, 2`
       ),
     ]);
