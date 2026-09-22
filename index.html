@@ -6594,17 +6594,30 @@
         // apagaria silenciosamente todos os itens (mesmo bug já corrigido
         // uma vez em loadLevSurvey()). A limpeza segura de itens realmente
         // descontinuados acontece depois, via revalidarLevSurveyContraCatalogo().
-        state.survey = itensSalvos
-          .filter(it => it && it.cod !== undefined)
-          .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
-        state.levLoadedId = entry.id;
-        state.levLoadedName = entry.name;
-        setLevCliente(entry.clienteId ? { id: entry.clienteId, nome: entry.name } : null);
-        saveLevSurvey();
-        renderLevList();
-        refreshLevSaveInfo();
-        closeLevOpenModal();
-        showToast('Levantamento aberto: ' + entry.name);
+        //
+        // try/finally daqui pra baixo: um levantamento antigo pode ter item
+        // com formato inesperado e derrubar renderLevList() no meio - sem
+        // isso, closeLevOpenModal() nunca era chamado e a tela ficava
+        // travada atrás do overlay escuro (bug reportado pelo usuário: tela
+        // travada na aba Levantamento depois de abrir um levantamento
+        // antigo, sem conseguir fazer nova operação).
+        try {
+          state.survey = itensSalvos
+            .filter(it => it && it.cod !== undefined)
+            .map(it => ({ cod: it.cod, qty: it.qty || 0, ped: it.ped || 0, done: !!it.done }));
+          state.levLoadedId = entry.id;
+          state.levLoadedName = entry.name;
+          setLevCliente(entry.clienteId ? { id: entry.clienteId, nome: entry.name } : null);
+          saveLevSurvey();
+          renderLevList();
+          refreshLevSaveInfo();
+          showToast('Levantamento aberto: ' + entry.name);
+        } catch (e) {
+          console.error(e);
+          showToast('Não consegui abrir esse levantamento (erro inesperado).');
+        } finally {
+          closeLevOpenModal();
+        }
       }
 
       // Atualiza uma barra "cliente selecionado" - existem duas hoje
