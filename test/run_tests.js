@@ -88,6 +88,27 @@ async function main() {
   res = await req('GET', '/api/clientes?busca=Jo%C3%A3o');
   assert(res.status === 200 && res.body.length === 1, 'busca de cliente por nome funciona');
 
+  // 5b) busca (e a lista offline /sync) devolvem codigo_oficial - pedido do
+  // usuário pra mostrar o código do cliente entre parênteses ao selecionar
+  // (seletor de cliente e barra "cliente selecionado" no front).
+  mockDb.__seed({
+    clientes: [{
+      id: 9010, nome: 'CLIENTE COM CODIGO OFICIAL', documento: '99988877000922', codigo_oficial: 'COD9010',
+      classificatorio_tipo: null, classificatorio_desconto: null, matriz_grupo: null,
+    }],
+  });
+  res = await req('GET', '/api/clientes?busca=CLIENTE%20COM%20CODIGO');
+  assert(
+    res.status === 200 && res.body.length === 1 && res.body[0].codigo_oficial === 'COD9010',
+    `busca de cliente devolve codigo_oficial pro seletor mostrar entre parênteses: ${JSON.stringify(res.body[0])}`
+  );
+  res = await req('GET', '/api/clientes/sync');
+  const sincronizado = res.body.clientes.find(c => c.id === 9010);
+  assert(
+    res.status === 200 && sincronizado && sincronizado.codigo_oficial === 'COD9010',
+    'lista offline (/sync) também traz codigo_oficial, pra funcionar sem internet'
+  );
+
   // 6) sincronizar produtos (simulando o precos.json)
   res = await req('POST', '/api/produtos/sync', { produtos: [
     { codigo_sku: '60863', nome: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm', categoria: '09 - CORTE DIAMANTADO' },
