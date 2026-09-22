@@ -21,12 +21,12 @@ router.get('/', async (req, res) => {
   try {
     const result = busca
       ? await pool.query(
-          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto FROM clientes
+          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial FROM clientes
            WHERE nome ILIKE $1 OR documento ILIKE $1
            ORDER BY nome LIMIT 20`,
           [`%${busca}%`]
         )
-      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto FROM clientes ORDER BY nome LIMIT 50');
+      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial FROM clientes ORDER BY nome LIMIT 50');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -41,7 +41,7 @@ router.get('/', async (req, res) => {
 // front); por isso só os campos que a busca offline precisa, nada mais.
 router.get('/sync', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, nome, documento FROM clientes ORDER BY nome');
+    const result = await pool.query('SELECT id, nome, documento, codigo_oficial FROM clientes ORDER BY nome');
     res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });
   } catch (e) {
     console.error(e);
