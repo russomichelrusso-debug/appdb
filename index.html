@@ -12307,10 +12307,27 @@
         }
       }
 
+      // Rede de segurança contra overlay/modal travado sobrevivendo entre
+      // sessões: no PWA instalado (tela inicial do Android), "fechar" o app
+      // muitas vezes só manda a aba pra segundo plano em vez de recarregar
+      // de verdade - se algum overlay tivesse ficado aberto por um bug (ex:
+      // o que existia em doOpenSavedSurvey antes desta correção), reabrir o
+      // app reaproveita o mesmo estado travado, sem nenhum jeito de fechar
+      // manualmente (bug reportado: "tela travada só de abrir o app"). Roda
+      // no boot (toda carga de página) e também quando a página volta de um
+      // bfcache (event.persisted) - cobre o resume sem reload completo.
+      function fecharOverlaysOrfaos() {
+        document.querySelectorAll('.overlay:not(.hidden), .minimodal:not(.hidden)').forEach(el => el.classList.add('hidden'));
+        const drawer = document.getElementById('drawer');
+        if (drawer) drawer.classList.add('hidden');
+      }
+      window.addEventListener('pageshow', (e) => { if (e.persisted) fecharOverlaysOrfaos(); });
+
       // Checa se já existe uma sessão válida guardada (localStorage se marcou
       // "lembrar-me", sessionStorage se não) - se sim, pula direto pro app; senão,
       // mostra a tela de login.
       async function boot() {
+        fecharOverlaysOrfaos();
         initLoginScreen();
         const token = getStoredToken();
         if (token) {
