@@ -6966,9 +6966,20 @@
           const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
           return a + cp * i.ped;
         }, 0);
-        summaryEl.innerHTML = `<span class="levCountBig">${state.survey.length}</span> ${escapeHtml(totalItensLabel(state.survey.length))} · <b>${totalEstoque}</b> un. em estoque` +
+        const resumoTexto = `<span class="levCountBig">${state.survey.length}</span> ${escapeHtml(totalItensLabel(state.survey.length))} · <b>${totalEstoque}</b> un. em estoque` +
           (totalPedido > 0 ? ` · <b>${totalPedido}</b> un. no pedido · <b>${brl(totalPedidoValor)}</b>` : '') +
           (totalDone > 0 ? ` · <b>${totalDone}</b> já no orçamento` : '');
+        // Botão "Limpar" duplicado aqui em cima (a barra de resumo é sticky,
+        // sempre visível) - pedido do usuário pra não precisar rolar a lista
+        // inteira até o rodapé só pra limpar o levantamento. O botão de baixo
+        // (#levClearBtn, no rodapé) continua existindo, os dois chamam a
+        // mesma função.
+        summaryEl.innerHTML = `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="min-width:0;">${resumoTexto}</div>
+            <button type="button" id="levClearBtnTop" style="flex-shrink:0;background:var(--white);border:1px solid var(--hairline);color:var(--ink);font-size:12px;font-weight:600;padding:6px 12px;border-radius:999px;cursor:pointer;white-space:nowrap;">Limpar</button>
+          </div>`;
+        document.getElementById('levClearBtnTop').addEventListener('click', clearLevSurvey);
 
         // itens já adicionados ao orçamento vão pro final da lista, como um "feito"
         const ordered = [...state.survey].sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
