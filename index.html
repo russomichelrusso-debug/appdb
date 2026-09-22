@@ -5577,6 +5577,13 @@
         const rotulo = cliente.classificatorio_tipo.replace(/^Varejo /, '');
         return `<span class="classiBadge classiBadge--${chave}">${escapeHtml(rotulo)}${desconto}</span>`;
       }
+      // Código do cliente no ERP (codigo_oficial), entre parênteses com fonte
+      // menor - pedido do usuário pra aparecer junto do nome ao selecionar o
+      // cliente (seletor e barra "cliente selecionado"), sem pesar a UI.
+      function renderCodigoOficialCliente(cliente) {
+        if (!cliente || !cliente.codigo_oficial) return '';
+        return ` <span style="font-weight:400;color:var(--gray);font-size:0.78em;">(${escapeHtml(String(cliente.codigo_oficial))})</span>`;
+      }
       function renderPrevisaoBadge(codigo) {
         const prev = PREVISAO_MAP[codigo];
         if (!prev) return '';
@@ -6627,7 +6634,7 @@
         const nameEl = document.getElementById(prefixo + 'ClientName');
         if (!nameEl) return; // barra pode não existir em todo contexto (ex: testes isolados)
         nameEl.innerHTML = cliente
-          ? `${escapeHtml(cliente.nome)} ${renderClassificatorioBadge(cliente)}`
+          ? `${escapeHtml(cliente.nome)}${renderCodigoOficialCliente(cliente)} ${renderClassificatorioBadge(cliente)}`
           : 'Nenhum selecionado';
         document.getElementById(prefixo + 'ClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
         document.getElementById(prefixo + 'ClearClientBtn').classList.toggle('hidden', !cliente);
@@ -9067,7 +9074,7 @@
           results.innerHTML = clientes.map(c => `
       <button type="button" class="clientPickerItem" data-client-id="${c.id}">
         <div class="cpName" style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
-          <span>${escapeHtml(c.nome)}</span>
+          <span>${escapeHtml(c.nome)}${renderCodigoOficialCliente(c)}</span>
           ${renderClassificatorioBadge(c)}
         </div>
         <div class="cpMeta">${c.documento ? escapeHtml(formatarDocumento(c.documento)) : 'sem documento cadastrado'}${c.contato ? ' · ' + escapeHtml(c.contato) : ''}</div>

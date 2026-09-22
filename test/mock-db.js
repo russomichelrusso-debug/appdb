@@ -121,7 +121,7 @@ async function query(sql, params = []) {
     clientes.push(c);
     return { rows: [s.includes('RETURNING *') ? c : { id: c.id }] };
   }
-  if (s.includes('SELECT ID, NOME, DOCUMENTO, CONTATO, CLASSIFICATORIO_TIPO, CLASSIFICATORIO_DESCONTO FROM CLIENTES')) {
+  if (s.includes('SELECT ID, NOME, DOCUMENTO, CONTATO, CLASSIFICATORIO_TIPO, CLASSIFICATORIO_DESCONTO')) {
     const busca = params[0] ? params[0].replace(/%/g, '').toUpperCase() : null;
     const found = busca
       ? clientes.filter(c => c.nome.toUpperCase().includes(busca) || (c.documento || '').toUpperCase().includes(busca))
@@ -141,8 +141,8 @@ async function query(sql, params = []) {
     if (c) c.matriz_grupo = matrizGrupo;
     return { rows: c ? [{ nome: c.nome }] : [] };
   }
-  if (s.includes('SELECT ID, NOME, DOCUMENTO FROM CLIENTES')) {
-    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento })) };
+  if (s.includes('SELECT ID, NOME, DOCUMENTO, CODIGO_OFICIAL FROM CLIENTES')) {
+    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null })) };
   }
   if (s.includes('FROM CLIENTES WHERE ID = ANY')) {
     const ids = params[0].map(Number);
