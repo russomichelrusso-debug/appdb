@@ -2152,6 +2152,22 @@
       display: none;
     }
 
+    .addAllBtn {
+      background: var(--red);
+      color: #fff;
+      border: none;
+      border-radius: var(--r-sm);
+      padding: 8px 14px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .addAllBtn:active {
+      background: var(--red-deep);
+    }
+
     .hist-clientLabel {
       font-size: 11.5px;
       color: var(--gray);
@@ -3901,8 +3917,8 @@
         <div class="priceList" id="priceList"></div>
       </div>
 
-      <div class="resultsAddAllBar hidden" id="resultsAddAllBar" style="display:flex;justify-content:flex-end;margin-bottom:8px;">
-        <button type="button" class="clientClearBtn" id="addAllResultsBtn">Adicionar todos ao orçamento</button>
+      <div class="resultsAddAllBar hidden" id="resultsAddAllBar" style="display:flex;justify-content:flex-end;padding:0 16px;margin-bottom:8px;">
+        <button type="button" class="addAllBtn" id="addAllResultsBtn">Adicionar todos ao orçamento</button>
       </div>
       <div class="results" id="resultsList"></div>
     </div>
