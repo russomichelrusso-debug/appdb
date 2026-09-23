@@ -12438,6 +12438,15 @@
         renderResults();
         renderCartBar();
         renderCart();
+        // initPromoRulesAdmin() (chamado em init(), antes desta função terminar)
+        // já desenha a lista de campanhas do Painel Admin uma vez, cedo demais -
+        // com state.promoRules ainda vazio, porque essa busca acima é assíncrona
+        // e pode demorar (servidor "dormindo" no Render). Sem re-render aqui, a
+        // lista ficava vazia pra sempre mesmo com campanhas ativas cadastradas -
+        // só uma ação do usuário (editar/excluir) atualizava ela por acidente.
+        refreshPromoStatus();
+        renderPromoRulesList();
+        renderClassiDiscountRulesList(); // mesmo problema, mesma causa (ver comentário acima)
       }
 
       async function init() {
