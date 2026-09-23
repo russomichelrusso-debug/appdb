@@ -29,8 +29,9 @@ router.post('/', async (req, res) => {
   if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     const clienteId = await acharOuCriarCliente(client, cliente);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
@@ -53,11 +54,13 @@ router.post('/', async (req, res) => {
     console.log(`Levantamento #${levantamentoId} gravado (cliente ${clienteId}, ${itens.length} item(ns)).`);
     res.status(201).json({ levantamento_id: levantamentoId, cliente_id: clienteId, data_visita: levResult.rows[0].data_visita });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(400).json({ erro: e.message || 'Erro ao gravar levantamento.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 

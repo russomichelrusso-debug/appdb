@@ -4,6 +4,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- CSP de defesa em profundidade: como o app é um script inline único, script-src
+       ainda precisa de 'unsafe-inline' (a correção real do XSS é o escapeHtml() nos
+       dados renderizados). Mesmo assim isso restringe de onde scripts/estilos/objetos
+       podem carregar e bloqueia clickjacking (frame-ancestors) e <object>/<embed>. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#CC0935">
@@ -5515,7 +5520,7 @@
     <div class="priceListItem">
       <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
       ${renderCard(p)}
-      <button class="rm" data-pricelist-rm="${p.c}" aria-label="Remover">&times;</button>
+      <button class="rm" data-pricelist-rm="${escapeHtml(p.c)}" aria-label="Remover">&times;</button>
     </div>
   `).join('');
         wireProductCardButtons(wrap);
@@ -5617,25 +5622,25 @@
     ${isPrecoFixoParaCanal(p) ? '<span class="fixedbadge">Preço fixo</span>' : ''}
     ${edited ? '<span class="editedbadge">Preço editado</span>' : ''}
     ${qtyDisc > 0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
-    <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${p.c}" aria-label="Ver informações técnicas">i</button>` : ''}${renderVideoLinks(p.c)}</div>
-    <div class="psub">Cód. ${p.c} · Emb. ${p.emb}</div>
+    <div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${escapeHtml(p.c)}" aria-label="Ver informações técnicas">i</button>` : ''}${renderVideoLinks(p.c)}</div>
+    <div class="psub">Cód. ${escapeHtml(p.c)} · Emb. ${p.emb}</div>
     ${renderPrevisaoBadge(p.c)}
     <div class="qtyrow" style="margin-top:8px;">
       <div class="qtybox">
-        <button data-pending-dec="${p.c}" aria-label="Diminuir quantidade">−</button>
+        <button data-pending-dec="${escapeHtml(p.c)}" aria-label="Diminuir quantidade">−</button>
         <span>${getPendingQty(p)}</span>
-        <button data-pending-inc="${p.c}" aria-label="Aumentar quantidade">+</button>
+        <button data-pending-inc="${escapeHtml(p.c)}" aria-label="Aumentar quantidade">+</button>
       </div>
       <div class="pct-wrap mini">
-        <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${p.c}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
+        <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
       </div>
     </div>
     <div class="prow">
       <div class="prices">
         ${hasDiscount ? `<div class="list">de <s>${brl(lp)}</s></div>` : ''}
-        <div class="final">${brl(cp)} <small>${state.uf}</small> <button class="pencilBtn${edited ? ' isEdited' : ''}" data-edit-price="${p.c}" aria-label="Editar preço base">${PENCIL_SVG}</button></div>
+        <div class="final">${brl(cp)} <small>${state.uf}</small> <button class="pencilBtn${edited ? ' isEdited' : ''}" data-edit-price="${escapeHtml(p.c)}" aria-label="Editar preço base">${PENCIL_SVG}</button></div>
       </div>
-      <button class="addbtn" data-add="${p.c}" aria-label="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      <button class="addbtn" data-add="${escapeHtml(p.c)}" aria-label="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
   </div>`;
       }
@@ -6084,25 +6089,25 @@
             <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
             <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c) > 0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
-            <div class="pcode">Cód. ${p.c}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
+            <div class="pcode">Cód. ${escapeHtml(p.c)}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
-          <button class="rm" data-rm="${p.c}" aria-label="Remover">&times;</button>
+          <button class="rm" data-rm="${escapeHtml(p.c)}" aria-label="Remover">&times;</button>
         </div>
         <div class="bottom">
           <div class="qtyrow">
             <div class="qtybox">
-              <button data-dec="${p.c}">−</button>
+              <button data-dec="${escapeHtml(p.c)}">−</button>
               <span>${it.qty}</span>
-              <button data-inc="${p.c}">+</button>
+              <button data-inc="${escapeHtml(p.c)}">+</button>
             </div>
             <div class="pct-wrap mini">
-              <input class="num-input${qtyDiscountFor(p.c) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDiscountFor(p.c) > 0 ? qtyDiscountFor(p.c) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${p.c}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
+              <input class="num-input${qtyDiscountFor(p.c) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDiscountFor(p.c) > 0 ? qtyDiscountFor(p.c) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
             </div>
           </div>
           <div>
             <div class="linetotal">${brl(lineTotal)}</div>
-            <div class="unitprice">${brl(cp)} un. <button class="pencilBtn${isPriceEdited(p.c) ? ' isEdited' : ''}" data-edit-price="${p.c}" aria-label="Editar preço base">${PENCIL_SVG}</button></div>
+            <div class="unitprice">${brl(cp)} un. <button class="pencilBtn${isPriceEdited(p.c) ? ' isEdited' : ''}" data-edit-price="${escapeHtml(p.c)}" aria-label="Editar preço base">${PENCIL_SVG}</button></div>
           </div>
         </div>
       </div>
@@ -6315,9 +6320,9 @@
           return;
         }
         wrap.innerHTML = results.slice(0, 8).map(p => `
-    <button type="button" class="levsr-item" data-lev-pick="${p.c}">
+    <button type="button" class="levsr-item" data-lev-pick="${escapeHtml(p.c)}">
       <span class="levsr-name">${escapeHtml(p.n)}</span>
-      <span class="levsr-code">Cód. ${p.c}</span>
+      <span class="levsr-code">Cód. ${escapeHtml(p.c)}</span>
     </button>
   `).join('');
         wrap.classList.remove('hidden');
@@ -6996,35 +7001,35 @@
           <div>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
             <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge">Preço fixo</span>' : ''}${edited ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDisc > 0 ? ` <span class="editedbadge">-${qtyDisc}%</span>` : ''}${it.done ? ' <span class="donebadge">✓ no orçamento</span>' : ''}${renderVideoLinks(p.c)}</div>
-            <div class="pcode">Cód. ${p.c}</div>
+            <div class="pcode">Cód. ${escapeHtml(p.c)}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
         </div>
-        <button class="rm" data-lev-rm="${p.c}" aria-label="Remover">&times;</button>
+        <button class="rm" data-lev-rm="${escapeHtml(p.c)}" aria-label="Remover">&times;</button>
       </div>
       <div class="levprice">
         <span class="unit">${brl(cp)}</span><span class="uf">/un. ${state.uf}</span>
-        <button class="pencilBtn${edited ? ' isEdited' : ''}" data-edit-price="${p.c}" aria-label="Editar preço base">${PENCIL_SVG}</button>
+        <button class="pencilBtn${edited ? ' isEdited' : ''}" data-edit-price="${escapeHtml(p.c)}" aria-label="Editar preço base">${PENCIL_SVG}</button>
       </div>
       <div class="levqtygroups">
         <div class="levqtygroup">
           <label>Estoque no cliente</label>
           <div class="levqtybox">
-            <button data-lev-dec="${p.c}">−</button>
-            <input type="number" inputmode="numeric" min="0" value="${it.qty}" data-lev-qty="${p.c}">
-            <button data-lev-inc="${p.c}">+</button>
+            <button data-lev-dec="${escapeHtml(p.c)}">−</button>
+            <input type="number" inputmode="numeric" min="0" value="${it.qty}" data-lev-qty="${escapeHtml(p.c)}">
+            <button data-lev-inc="${escapeHtml(p.c)}">+</button>
           </div>
         </div>
         <div class="levqtygroup pedido">
           <label>Pedido</label>
           <div class="qtyrow">
             <div class="levqtybox">
-              <button data-lev-peddec="${p.c}">−</button>
+              <button data-lev-peddec="${escapeHtml(p.c)}">−</button>
               <span class="qtyval">${it.ped || 0}</span>
-              <button data-lev-pedinc="${p.c}">+</button>
+              <button data-lev-pedinc="${escapeHtml(p.c)}">+</button>
             </div>
             <div class="pct-wrap mini">
-              <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${p.c}" aria-label="Desconto extra por quantidade" title="Desconto extra por quantidade" ${p.fx ? 'disabled' : ''}>
+              <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto extra por quantidade" title="Desconto extra por quantidade" ${p.fx ? 'disabled' : ''}>
             </div>
           </div>
         </div>
@@ -7032,7 +7037,7 @@
       ${it.qty === 0 ? '<span class="zerotag">Sem estoque</span>' : ''}
       ${it.ped > 0 ? `<div class="levsubtotal">Subtotal do pedido: <b>${brl(cp * it.ped)}</b></div>` : ''}
       <div class="addrow">
-        <button class="levaddbtn" data-lev-addcart="${p.c}">+ Orçamento</button>
+        <button class="levaddbtn" data-lev-addcart="${escapeHtml(p.c)}">+ Orçamento</button>
       </div>
     </div>`;
         }).join('');
@@ -7248,7 +7253,7 @@
         ${rows.map(({ p, it, lp, cp, lineTotal }, idx) => `
           <tr>
             <td class="num">${idx + 1}</td>
-            <td><div class="exn">${escapeHtml(p.n)}</div><div class="exc">Cód. ${p.c}</div></td>
+            <td><div class="exn">${escapeHtml(p.n)}</div><div class="exc">Cód. ${escapeHtml(p.c)}</div></td>
             <td class="num">${it.qty}</td>
             <td class="num">${brl(cp)}</td>
             <td class="num">${brl(lineTotal)}</td>

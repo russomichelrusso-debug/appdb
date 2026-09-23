@@ -193,8 +193,9 @@ router.post('/mesclar', async (req, res) => {
   if (!manter_id || !remover_id) return res.status(400).json({ erro: 'Informe manter_id e remover_id.' });
   if (manter_id === remover_id) return res.status(400).json({ erro: 'Escolha dois clientes diferentes.' });
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     const ambos = await client.query(
       `SELECT id, nome, documento, contato, codigo_oficial, classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em
@@ -247,11 +248,13 @@ router.post('/mesclar', async (req, res) => {
     console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario?.email}. Campos completados: ${camposCompletados.join(', ') || 'nenhum'}.`);
     res.json({ ok: true, manteve: manterInfo.nome, removeu: removerInfo.nome, camposCompletados });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao mesclar clientes.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -281,8 +284,9 @@ router.delete('/:id', async (req, res) => {
 
   // exclusão forçada (só admin chega aqui) - apaga o histórico ligado a esse
   // cliente antes, numa transação só, pra não deixar registro órfão.
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     await client.query(
       `DELETE FROM pedido_itens WHERE pedido_id IN (SELECT id FROM pedidos WHERE cliente_id = $1)`, [id]
@@ -301,11 +305,13 @@ router.delete('/:id', async (req, res) => {
     console.log(`Cliente EXCLUÍDO COM HISTÓRICO: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.email || '?'} (admin)`);
     res.json({ ok: true, historico_apagado: true });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao excluir cliente e histórico.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 

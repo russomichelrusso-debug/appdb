@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 
+const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
+
 // Só a contagem, sem trazer produto nenhum - usado na checagem automática ao
 // abrir o app, pra decidir rapidinho se vale a pena sincronizar de novo.
 router.get('/contagem', async (req, res) => {
@@ -39,6 +41,12 @@ router.post('/sync', async (req, res) => {
   const { produtos } = req.body;
   if (!Array.isArray(produtos) || produtos.length === 0) {
     return res.status(400).json({ erro: 'Envie { produtos: [...] }' });
+  }
+  const codigosInvalidos = produtos.filter(p => !CODIGO_SKU_REGEX.test(String(p.codigo_sku))).map(p => p.codigo_sku);
+  if (codigosInvalidos.length > 0) {
+    return res.status(400).json({
+      erro: 'Códigos de produto em formato inválido: ' + codigosInvalidos.slice(0, 10).join(', '),
+    });
   }
   try {
     const codigos = produtos.map(p => String(p.codigo_sku));
