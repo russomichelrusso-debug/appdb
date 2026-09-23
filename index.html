@@ -3796,6 +3796,8 @@
         <div class="hist-clientBtns">
           <button type="button" class="restoreBtn" id="precosSelectClientBtn"
             style="width:auto;padding:10px 16px;">Selecionar</button>
+          <button type="button" class="clientClearBtn hidden" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
+            title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="precosClearClientBtn" aria-label="Limpar cliente"
             title="Limpar cliente">Limpar</button>
         </div>
@@ -3908,6 +3910,8 @@
         <div class="hist-clientBtns">
           <button type="button" class="restoreBtn" id="levSelectClientBtn"
             style="width:auto;padding:10px 16px;">Selecionar</button>
+          <button type="button" class="clientClearBtn hidden" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
+            title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
             title="Limpar cliente">Limpar</button>
         </div>
@@ -6643,6 +6647,7 @@
           : 'Nenhum selecionado';
         document.getElementById(prefixo + 'ClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
         document.getElementById(prefixo + 'ClearClientBtn').classList.toggle('hidden', !cliente);
+        document.getElementById(prefixo + 'ProdutosClienteBtn')?.classList.toggle('hidden', !cliente);
         const badge = nameEl.querySelector('.classiBadge');
         if (badge) {
           badge.style.cursor = 'pointer';
@@ -6659,6 +6664,17 @@
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
       }
+      // Abre a Curva ABC desse cliente numa aba nova, já com ele selecionado -
+      // sem isso, o vendedor precisava abrir o painel, trocar pro modo "Por
+      // cliente" e buscar o cliente de novo manualmente (curva-abc.html lê
+      // esses parâmetros no carregamento, ver boot() lá). Aba nova, não troca
+      // de página: não perde o pedido/levantamento em andamento aqui.
+      function abrirProdutosComprados(cliente) {
+        if (!cliente) return;
+        const params = new URLSearchParams({ cliente: cliente.id, nome: cliente.nome });
+        window.open(`curva-abc.html?${params}`, '_blank');
+      }
+
       // Busca o status de classificatório (ao vivo, mesma rota da ficha
       // completa) só pra preencher a barrinha compacta de progresso nas
       // barras de cliente das abas Preços/Levantamento. Guarda contra corrida
@@ -6912,6 +6928,7 @@
           setLevCliente(null); // já persiste o rascunho (cliente + loadedId juntos) no fim
           refreshLevSaveInfo();
         });
+        document.getElementById('levProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
         refreshLevSaveInfo();
       }
@@ -6923,6 +6940,7 @@
       function initPrecosCliente() {
         document.getElementById('precosSelectClientBtn').addEventListener('click', selectLevClient);
         document.getElementById('precosClearClientBtn').addEventListener('click', () => setLevCliente(null));
+        document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
       }
 
       function addLevPedidoToCart(cod) {
