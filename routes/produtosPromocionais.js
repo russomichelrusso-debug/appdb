@@ -19,12 +19,23 @@ router.post('/gerar-por-desconto', async (req, res) => {
   const { itens } = req.body;
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [{ baseCode, novoCodigo, descontoPct }] }' });
 
+  let client;
   try {
-    const configResult = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', ['produtos_promocionais']);
+    client = await pool.connect();
+    await client.query('BEGIN');
+    // Garante que a linha exista antes do FOR UPDATE (senão não há o que
+    // travar na primeira vez) e trava ela até o fim da transação - sem isso,
+    // duas chamadas concorrentes liam a mesma lista, cada uma adicionava seus
+    // itens por cima e a última a gravar apagava os itens da outra (lost update).
+    await client.query(
+      `INSERT INTO configuracoes (chave, valor) VALUES ($1, '[]'::jsonb) ON CONFLICT (chave) DO NOTHING`,
+      ['produtos_promocionais']
+    );
+    const configResult = await client.query('SELECT valor FROM configuracoes WHERE chave = $1 FOR UPDATE', ['produtos_promocionais']);
     const listaAtual = configResult.rows[0]?.valor || [];
     const codigosExistentesPromo = new Set(listaAtual.map((p) => p.c));
 
-    const catalogoResult = await pool.query('SELECT codigo_sku FROM catalogo_precos');
+    const catalogoResult = await client.query('SELECT codigo_sku FROM catalogo_precos');
     const codigosCatalogo = new Set(catalogoResult.rows.map((p) => p.codigo_sku));
 
     const criados = [];
@@ -33,8 +44,8 @@ router.post('/gerar-por-desconto', async (req, res) => {
 
     for (const item of itens) {
       const { baseCode, novoCodigo, descontoPct, nome } = item;
-      if (!baseCode || !novoCodigo || !(descontoPct >= 0)) {
-        erros.push({ baseCode, novoCodigo, motivo: 'Envie baseCode, novoCodigo e descontoPct (>= 0).' });
+      if (!baseCode || !novoCodigo || !(Number(descontoPct) >= 0 && Number(descontoPct) < 100)) {
+        erros.push({ baseCode, novoCodigo, motivo: 'Envie baseCode, novoCodigo e descontoPct (entre 0 e 100, exclusive).' });
         continue;
       }
       if (codigosExistentesPromo.has(novoCodigo) || codigosCatalogo.has(novoCodigo) || novosCodigosNesteLote.has(novoCodigo)) {
@@ -42,7 +53,7 @@ router.post('/gerar-por-desconto', async (req, res) => {
         continue;
       }
 
-      const baseResult = await pool.query(
+      const baseResult = await client.query(
         'SELECT codigo_sku, nome, emb, ipi, familia, precos_sem_imposto FROM catalogo_precos WHERE codigo_sku = $1',
         [baseCode]
       );
@@ -79,17 +90,22 @@ router.post('/gerar-por-desconto', async (req, res) => {
 
     if (criados.length > 0) {
       const novaLista = [...listaAtual, ...criados];
-      await pool.query(
-        `INSERT INTO configuracoes (chave, valor, atualizado_em) VALUES ($1, $2, now())
-         ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
+      await client.query(
+        `UPDATE configuracoes SET valor = $2, atualizado_em = now() WHERE chave = $1`,
         ['produtos_promocionais', JSON.stringify(novaLista)]
       );
     }
 
+    await client.query('COMMIT');
     res.json({ ok: true, criados: criados.map((c) => c.c), erros });
   } catch (e) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao gerar produtos promocionais.' });
+  } finally {
+    if (client) client.release();
   }
 });
 

@@ -556,13 +556,13 @@ router.post('/classificatorio/importar', async (req, res) => {
       await client.query(
         `UPDATE clientes SET
            codigo_oficial = COALESCE(codigo_oficial, $1),
-           matriz_grupo = $2,
+           matriz_grupo = COALESCE($2, matriz_grupo),
            classificatorio_pic = $3,
-           classificatorio_vl_acordo = $4,
+           classificatorio_vl_acordo = COALESCE($4, classificatorio_vl_acordo),
            classificatorio_tipo = COALESCE(classificatorio_tipo, $5),
            classificatorio_desconto = COALESCE(classificatorio_desconto, $6)
          WHERE id = $7`,
-        [codigoOficial, it.matrizGrupo || null, !!it.pic, it.vlAcordo || null, it.classificatorioTipo || null, it.classificatorioDesconto || null, cliente.id]
+        [codigoOficial, it.matrizGrupo || null, !!it.pic, it.vlAcordo ?? null, it.classificatorioTipo || null, it.classificatorioDesconto || null, cliente.id]
       );
       atualizados++;
     }
