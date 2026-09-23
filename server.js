@@ -29,18 +29,40 @@ app.set('trust proxy', 1);
 
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
+// ALLOWED_ORIGINS (lista separada por vírgula, ex: "https://usuario.github.io")
+// restringe quem pode chamar a API com um token roubado - sem essa variável
+// definida no Render, mantém o comportamento de sempre (qualquer origem),
+// pra não quebrar nada em produção sem alguém definir a lista primeiro.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.header('Origin');
+  if (ALLOWED_ORIGINS.length === 0) {
+    res.header('Access-Control-Allow-Origin', '*');
+  } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
-// 6mb era suficiente pros outros imports (que mandam JSON já parseado no
-// cliente), mas a planilha "LISTA PADRÃO" de preços vai inteira em base64
-// (routes/catalogoPrecos.js) - o arquivo .xlsx cresce ~33% ao virar base64 e
-// facilmente passa de 6mb com todos os canais/estados/produtos.
-app.use(express.json({ limit: '25mb' }));
+// A maioria das rotas manda JSON pequeno (já processado no cliente) - 1mb é
+// mais que suficiente e limita o corpo aceito por rotas públicas (login) antes
+// mesmo de autenticar. Só duas rotas mandam payload grande de verdade: a
+// planilha "LISTA PADRÃO" de preços em base64 (routes/catalogoPrecos.js - o
+// .xlsx cresce ~33% ao virar base64) e fotos de fichas técnicas em base64
+// (routes/fichasTecnicas.js) - essas duas usam um parser à parte, com limite
+// maior, escolhido dinamicamente pelo caminho da rota (um único parser roda
+// por requisição - não dá pra encadear dois express.json, o segundo não teria
+// mais nada pra ler do corpo já consumido pelo primeiro).
+const jsonPadrao = express.json({ limit: '1mb' });
+const jsonGrande = express.json({ limit: '25mb' });
+const ROTAS_PAYLOAD_GRANDE = ['/api/catalogo-precos', '/api/fichas-tecnicas'];
+app.use((req, res, next) => {
+  const parser = ROTAS_PAYLOAD_GRANDE.some(p => req.path.startsWith(p)) ? jsonGrande : jsonPadrao;
+  parser(req, res, next);
+});
 
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));

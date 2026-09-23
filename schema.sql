@@ -49,6 +49,10 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS numero_cotacao TEXT;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT 'app';
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pdf_modificado_em TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_numero_cotacao ON pedidos(numero_cotacao) WHERE numero_cotacao IS NOT NULL;
+-- Quem gravou o pedido - usado pra só deixar o autor (ou um admin) sobrescrever
+-- uma cotação já existente reenviando o mesmo numero_cotacao. NULL em pedidos
+-- antigos e nos importados do relatório oficial (não têm um usuário "dono").
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id);
 
 CREATE TABLE IF NOT EXISTS pedido_itens (
   id SERIAL PRIMARY KEY,
@@ -97,6 +101,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_google_sub ON usuarios(google_sub
 ALTER TABLE usuarios ALTER COLUMN usuario DROP NOT NULL;
 ALTER TABLE usuarios ALTER COLUMN senha_hash DROP NOT NULL;
 
+-- Registro de quem fez cada importação em massa (catálogo, produtos, clientes,
+-- previsão de estoque, pedidos oficiais) - essas rotas continuam liberadas pra
+-- qualquer usuário logado (não só admin), mas toda importação fica registrada
+-- aqui pra dar pra rastrear quem mandou o quê depois.
+CREATE TABLE IF NOT EXISTS import_log (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER REFERENCES usuarios(id),
+  rota TEXT NOT NULL,
+  itens_processados INTEGER NOT NULL DEFAULT 0,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_import_log_usuario ON import_log(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_import_log_criado ON import_log(criado_em);
+
+-- "token" guarda sha256(token) (ver hashToken em auth-utils.js), não o token
+-- em texto puro - quem vazar o banco não consegue reusar direto uma sessão
+-- ativa. Essa mudança invalida sessões já gravadas com o token cru (o hash
+-- delas não bate com nada) - efeito colateral aceito: todo mundo precisa
+-- fazer login de novo uma vez, o resto do sistema não é afetado.
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,

@@ -1,6 +1,22 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { pool } = require('../db');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
+
+// Por usuário - protege a origem (radar-cnpj.com) contra um uso repetido
+// demais vindo de dentro do app (ela mesma já cacheia 6h, mas isso é do
+// lado deles; aqui é sobre não sobrecarregar quem está do outro lado).
+const radarCnpjLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.usuario?.id || req.ip),
+  message: { erro: 'Muitas consultas de CNPJ em pouco tempo — espera um pouco e tenta de novo.' },
+});
 
 // Consulta pública da Receita Federal via radar-cnpj.com - sem chave, sem
 // conta, cacheada 6h na origem. Aqui guardamos nosso próprio cache (tabela
@@ -14,7 +30,7 @@ function normalizarCnpj(v) {
 }
 
 async function buscarFichaNaOrigem(cnpj) {
-  const resp = await fetch(`${RADAR_CNPJ_BASE}/api/cnpj/${cnpj}`);
+  const resp = await fetch(`${RADAR_CNPJ_BASE}/api/cnpj/${cnpj}`, { signal: AbortSignal.timeout(8000) });
   if (resp.status === 404) {
     const erro = new Error('CNPJ não encontrado na base da Receita Federal.');
     erro.naoEncontrado = true;
@@ -167,23 +183,31 @@ async function obterFicha(clienteId, forcarAtualizacao) {
   }
 }
 
-router.get('/clientes/:id/ficha-cnpj', async (req, res) => {
+// e.status só vem setado quando o erro foi lançado deliberadamente por
+// obterFicha/buscarFichaNaOrigem com uma mensagem pensada pro usuário ler
+// (ex: "CNPJ precisa ter 14 dígitos") - um erro sem .status é algo
+// inesperado (ex: banco fora do ar), e nesse caso não expõe e.message cru.
+function respostaDeErro(res, e) {
+  console.error(e);
+  if (e.status) return res.status(e.status).json({ erro: e.message });
+  res.status(500).json({ erro: 'Erro ao consultar ficha de CNPJ.' });
+}
+
+router.get('/clientes/:id/ficha-cnpj', radarCnpjLimiter, async (req, res) => {
   try {
     const { ficha, fonte, aviso } = await obterFicha(req.params.id, false);
     res.json({ ficha, fonte, aviso });
   } catch (e) {
-    console.error(e);
-    res.status(e.status || 500).json({ erro: e.message });
+    respostaDeErro(res, e);
   }
 });
 
-router.post('/clientes/:id/ficha-cnpj/atualizar', async (req, res) => {
+router.post('/clientes/:id/ficha-cnpj/atualizar', radarCnpjLimiter, async (req, res) => {
   try {
     const { ficha, fonte, aviso } = await obterFicha(req.params.id, true);
     res.json({ ficha, fonte, aviso });
   } catch (e) {
-    console.error(e);
-    res.status(e.status || 500).json({ erro: e.message });
+    respostaDeErro(res, e);
   }
 });
 
@@ -191,7 +215,7 @@ router.post('/clientes/:id/ficha-cnpj/atualizar', async (req, res) => {
 // no banco, então não há onde cachear; consulta direto e devolve só o
 // essencial. Best effort: qualquer falha aqui não deve travar o cadastro
 // manual, então o front-end trata erro como "não preencheu nada".
-router.get('/radar-cnpj/:cnpj', async (req, res) => {
+router.get('/radar-cnpj/:cnpj', radarCnpjLimiter, async (req, res) => {
   const cnpj = normalizarCnpj(req.params.cnpj);
   if (cnpj.length !== 14) return res.status(400).json({ erro: 'CNPJ precisa ter 14 dígitos.' });
   try {
@@ -205,7 +229,7 @@ router.get('/radar-cnpj/:cnpj', async (req, res) => {
   } catch (e) {
     if (e.naoEncontrado) return res.status(404).json({ erro: e.message });
     console.error(e);
-    res.status(502).json({ erro: e.message });
+    res.status(502).json({ erro: 'Não foi possível consultar o CNPJ agora.' });
   }
 });
 

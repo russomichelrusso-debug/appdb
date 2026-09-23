@@ -4,7 +4,7 @@
 const Module = require('module');
 const path = require('path');
 const mockDb = require('./mock-db');
-const { generateToken } = require('../auth-utils');
+const { generateToken, hashToken } = require('../auth-utils');
 const dbPath = path.resolve(__dirname, '../db.js');
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...args) {
@@ -70,9 +70,11 @@ async function main() {
   );
   assert(criado.rows[0].is_admin === true, 'primeiro usuário criado vira admin');
   authToken = generateToken();
+  // sessoes.token guarda o hash do token (ver auth-utils.js hashToken) - o
+  // que fica no header Authorization das requisições é sempre o token cru.
   await mockDb.pool.query(
     'INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)',
-    [authToken, criado.rows[0].id, '90']
+    [hashToken(authToken), criado.rows[0].id, '90']
   );
 
   // 3) criar cliente
@@ -372,7 +374,7 @@ async function main() {
     ['Vendedor Comum', 'vendedor@example.com', 'sub-teste-vendedor']
   );
   const tokenNaoAdmin = generateToken();
-  await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [tokenNaoAdmin, criadoNaoAdmin.rows[0].id, '90']);
+  await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tokenNaoAdmin), criadoNaoAdmin.rows[0].id, '90']);
   const tokenOriginal = authToken;
   authToken = tokenNaoAdmin;
   res = await req('PATCH', '/api/clientes/9001/matriz-grupo', { matriz_grupo: 'GRUPO TESTE' });

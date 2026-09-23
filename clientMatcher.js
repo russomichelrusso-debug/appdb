@@ -62,11 +62,30 @@ async function acharOuCriarCliente(client, { cliente_id, nome, documento, codigo
       }
     }
   }
+  // ON CONFLICT DO NOTHING sem alvo específico cobre tanto o índice único de
+  // documento quanto o de codigo_oficial - evita que uma corrida (duas
+  // requisições checando "não existe" ao mesmo tempo e tentando criar o
+  // mesmo cliente) suba como erro 23505 genérico pra quem chamou.
   const result = await client.query(
-    'INSERT INTO clientes (nome, documento, codigo_oficial, contato) VALUES ($1, $2, $3, $4) RETURNING id',
+    'INSERT INTO clientes (nome, documento, codigo_oficial, contato) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id',
     [nome, documento || null, codigo_oficial || null, contato || null]
   );
-  return result.rows[0].id;
+  if (result.rows.length > 0) return result.rows[0].id;
+
+  // o insert não voltou nada: outra requisição criou o cliente entre a
+  // checagem lá em cima e este insert - busca de novo pra achar o id dela.
+  if (codigo_oficial) {
+    const porCodigo = await client.query('SELECT id FROM clientes WHERE codigo_oficial = $1 LIMIT 1', [codigo_oficial]);
+    if (porCodigo.rows.length > 0) return porCodigo.rows[0].id;
+  }
+  if (documento) {
+    const porDoc = await client.query(
+      `SELECT id FROM clientes WHERE regexp_replace(documento, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g') LIMIT 1`,
+      [documento]
+    );
+    if (porDoc.rows.length > 0) return porDoc.rows[0].id;
+  }
+  throw new Error(`Corrida ao criar cliente "${nome}" - não encontrei o registro depois do conflito.`);
 }
 
 module.exports = { acharOuCriarCliente, acharClientePorNome };

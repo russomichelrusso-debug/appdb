@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const XLSX = require('@e965/xlsx');
-const { pool } = require('../db');
+const { pool, registrarImportacao } = require('../db');
 
 // ---------------------------------------------------------------------
 // Conversor da planilha "LISTA PADRÃO" (6 canais x 3 regiões, com
@@ -202,8 +202,11 @@ router.post('/importar', async (req, res) => {
     });
   }
 
+  let client;
   try {
-    await pool.query(
+    client = await pool.connect();
+    await client.query('BEGIN');
+    await client.query(
       `INSERT INTO catalogo_precos (codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto, atualizado_em)
        SELECT * FROM UNNEST(
          $1::text[], $2::text[], $3::int[], $4::text[], $5::numeric[], $6::text[], $7::boolean[], $8::jsonb[], $9::jsonb[], $10::jsonb[], $11::timestamptz[]
@@ -215,7 +218,10 @@ router.post('/importar', async (req, res) => {
       [
         produtos.map(p => p.codigo_sku),
         produtos.map(p => p.nome),
-        produtos.map(p => p.emb),
+        // Math.round(Number(...)) || 1: a planilha às vezes traz "emb" como
+        // decimal ou texto - um valor assim quebrava o cast ::int[] inteiro
+        // e derrubava a importação inteira por causa de UM produto.
+        produtos.map(p => Math.round(Number(p.emb)) || 1),
         produtos.map(p => p.ncm),
         produtos.map(p => p.ipi),
         produtos.map(p => p.familia),
@@ -226,10 +232,28 @@ router.post('/importar', async (req, res) => {
         produtos.map(() => new Date()),
       ]
     );
-    res.json({ ok: true, produtosImportados: produtos.length });
+    // A planilha é a fonte completa do catálogo (não um lote parcial) - um
+    // produto que saiu dela deve sair do catálogo também, senão fica com
+    // preço desatualizado pra sempre (o comentário da rota já dizia
+    // "substitui o catálogo completo", mas só fazia upsert até aqui).
+    const removidos = await client.query(
+      'DELETE FROM catalogo_precos WHERE codigo_sku <> ALL($1::text[]) RETURNING codigo_sku',
+      [produtos.map(p => p.codigo_sku)]
+    );
+    await client.query('COMMIT');
+    if (removidos.rowCount > 0) {
+      console.log(`Catálogo de preços: ${removidos.rowCount} produto(s) removido(s) por não estarem mais na planilha.`);
+    }
+    await registrarImportacao(req.usuario?.id, 'catalogo-precos/importar', produtos.length);
+    res.json({ ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount });
   } catch (e) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao salvar catálogo no banco: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao salvar catálogo no banco.' });
+  } finally {
+    if (client) client.release();
   }
 });
 

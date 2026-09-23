@@ -44,4 +44,19 @@ async function runMigrations() {
   }
 }
 
-module.exports = { pool, runMigrations };
+// Registra quem fez uma importação em massa (catálogo, produtos, clientes,
+// previsão de estoque, pedidos oficiais) - essas rotas continuam abertas pra
+// qualquer usuário logado, isso aqui só deixa rastreável quem mandou o quê.
+// Falha de log nunca deve derrubar a importação em si, por isso engole erro.
+async function registrarImportacao(usuarioId, rota, itensProcessados) {
+  try {
+    await pool.query(
+      'INSERT INTO import_log (usuario_id, rota, itens_processados) VALUES ($1, $2, $3)',
+      [usuarioId || null, rota, itensProcessados || 0]
+    );
+  } catch (e) {
+    console.error('Erro ao registrar importação em import_log:', e);
+  }
+}
+
+module.exports = { pool, runMigrations, registrarImportacao };

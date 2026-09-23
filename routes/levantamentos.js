@@ -2,12 +2,21 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
   if (existing.rows.length > 0) return existing.rows[0].id;
-  const result = await client.query('INSERT INTO vendedores (nome) VALUES ($1) RETURNING id', [nomeVendedor]);
-  return result.rows[0].id;
+  const result = await client.query(
+    'INSERT INTO vendedores (nome) VALUES ($1) ON CONFLICT (nome) DO NOTHING RETURNING id',
+    [nomeVendedor]
+  );
+  if (result.rows.length > 0) return result.rows[0].id;
+  // corrida: outro levantamento criou o mesmo vendedor entre o SELECT e o INSERT.
+  const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
+  return depois.rows[0].id;
 }
 async function acharProdutoPorSku(client, codigo_sku) {
   const result = await client.query('SELECT id FROM produtos WHERE codigo_sku = $1', [codigo_sku]);
@@ -58,7 +67,7 @@ router.post('/', async (req, res) => {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     console.error(e);
-    res.status(400).json({ erro: e.message || 'Erro ao gravar levantamento.' });
+    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar levantamento.' });
   } finally {
     if (client) client.release();
   }

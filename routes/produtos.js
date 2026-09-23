@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db');
+const { pool, registrarImportacao } = require('../db');
 
 const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 
@@ -49,27 +49,45 @@ router.post('/sync', async (req, res) => {
     });
   }
   try {
-    const codigos = produtos.map(p => String(p.codigo_sku));
-    const nomes = produtos.map(p => p.nome || '');
-    const categorias = produtos.map(p => p.categoria || null);
+    // Dedup em memória por codigo_sku (mantendo a última ocorrência) - o
+    // UNNEST + ON CONFLICT DO UPDATE abaixo falha com "cannot affect row a
+    // second time" se a mesma chave aparecer duas vezes no mesmo lote.
+    const porCodigo = new Map();
+    for (const p of produtos) porCodigo.set(String(p.codigo_sku), p);
+    const unicos = Array.from(porCodigo.values());
 
-    const antes = await pool.query('SELECT COUNT(*) FROM produtos');
-    const totalAntes = Number(antes.rows[0].count);
+    const codigos = unicos.map(p => String(p.codigo_sku));
+    const nomes = unicos.map(p => p.nome || '');
+    const categorias = unicos.map(p => p.categoria || null);
 
-    await pool.query(
-      `INSERT INTO produtos (codigo_sku, nome, categoria)
-       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
-       ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria`,
+    // RETURNING (xmax = 0) diz se a linha foi INSERIDA (xmax = 0) ou
+    // ATUALIZADA (xmax setado pelo UPDATE do conflito) - diferente de
+    // comparar COUNT(*) antes/depois, isso não é afetado por uma
+    // importação simultânea mexendo na tabela ao mesmo tempo.
+    const upsert = await pool.query(
+      `WITH entrada AS (
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[]) AS t(codigo_sku, nome, categoria)
+       ),
+       resultado AS (
+         INSERT INTO produtos (codigo_sku, nome, categoria)
+         SELECT codigo_sku, nome, categoria FROM entrada
+         ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria
+         RETURNING (xmax = 0) AS inserted
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE inserted) AS criados,
+         COUNT(*) FILTER (WHERE NOT inserted) AS atualizados
+       FROM resultado`,
       [codigos, nomes, categorias]
     );
+    const { criados, atualizados } = upsert.rows[0];
+    const totalResult = await pool.query('SELECT COUNT(*) FROM produtos');
 
-    const depois = await pool.query('SELECT COUNT(*) FROM produtos');
-    const totalDepois = Number(depois.rows[0].count);
-
-    res.json({ criados: totalDepois - totalAntes, atualizados: produtos.length - (totalDepois - totalAntes), total: totalDepois });
+    await registrarImportacao(req.usuario?.id, 'produtos/sync', unicos.length);
+    res.json({ criados: Number(criados), atualizados: Number(atualizados), total: Number(totalResult.rows[0].count) });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao sincronizar catálogo: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao sincronizar catálogo.' });
   }
 });
 

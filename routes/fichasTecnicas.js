@@ -50,7 +50,7 @@ router.post('/importar', async (req, res) => {
     res.json({ ok: true, importadas: codigos.length, total: Number(totalResult.rows[0].count) });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar fichas técnicas: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao importar fichas técnicas.' });
   }
 });
 

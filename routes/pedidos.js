@@ -2,13 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
 
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
   if (existing.rows.length > 0) return existing.rows[0].id;
-  const result = await client.query('INSERT INTO vendedores (nome) VALUES ($1) RETURNING id', [nomeVendedor]);
-  return result.rows[0].id;
+  const result = await client.query(
+    'INSERT INTO vendedores (nome) VALUES ($1) ON CONFLICT (nome) DO NOTHING RETURNING id',
+    [nomeVendedor]
+  );
+  if (result.rows.length > 0) return result.rows[0].id;
+  // corrida: outro pedido criou o mesmo vendedor entre o SELECT e o INSERT.
+  const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
+  return depois.rows[0].id;
 }
 // Acha o produto pelo código. Se não existir e vier uma descrição (caso do
 // PDF oficial, que já traz o nome do item), cria na hora em vez de recusar -
@@ -21,10 +30,13 @@ async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
     throw new Error(`Produto com código ${codigo_sku} não encontrado - rode /api/produtos/sync primeiro.`);
   }
   const criado = await client.query(
-    'INSERT INTO produtos (codigo_sku, nome) VALUES ($1, $2) RETURNING id',
+    'INSERT INTO produtos (codigo_sku, nome) VALUES ($1, $2) ON CONFLICT (codigo_sku) DO NOTHING RETURNING id',
     [codigo_sku, descricaoSeNovo]
   );
-  return criado.rows[0].id;
+  if (criado.rows.length > 0) return criado.rows[0].id;
+  // corrida: outro pedido criou o mesmo produto entre o SELECT e o INSERT.
+  const depois = await client.query('SELECT id FROM produtos WHERE codigo_sku = $1', [codigo_sku]);
+  return depois.rows[0].id;
 }
 
 // Finaliza/grava um pedido. Corpo esperado:
@@ -42,6 +54,9 @@ router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, pdf_modificado_em, origem } = req.body;
   if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
+  if (pdf_modificado_em && new Date(pdf_modificado_em) > new Date()) {
+    return res.status(400).json({ erro: 'pdf_modificado_em não pode ser uma data futura.' });
+  }
 
   // checa duplicidade ANTES de abrir a transação. Se a mesma cotação já foi
   // consolidada antes, só substitui os itens se o PDF novo for mais recente
@@ -52,7 +67,7 @@ router.post('/', async (req, res) => {
   let pedidoParaAtualizar = null;
   if (numero_cotacao) {
     const existente = await pool.query(
-      'SELECT id, cliente_id, data_pedido, pdf_modificado_em FROM pedidos WHERE numero_cotacao = $1',
+      'SELECT id, cliente_id, data_pedido, pdf_modificado_em, usuario_id FROM pedidos WHERE numero_cotacao = $1',
       [numero_cotacao]
     );
     if (existente.rows.length > 0) {
@@ -60,6 +75,13 @@ router.post('/', async (req, res) => {
       const novoEhMaisRecente = pdf_modificado_em && (!atual.pdf_modificado_em || new Date(pdf_modificado_em) > new Date(atual.pdf_modificado_em));
       if (!novoEhMaisRecente) {
         return res.status(200).json({ ja_existia: true, pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido });
+      }
+      // só o autor original (ou um admin) pode sobrescrever um pedido já
+      // gravado - pedidos sem dono (importados antes dessa coluna existir,
+      // ou vindos do relatório oficial) continuam sobrescrevíveis por
+      // qualquer um, como sempre foi.
+      if (atual.usuario_id && atual.usuario_id !== req.usuario.id && !req.usuario.is_admin) {
+        return res.status(403).json({ erro: 'Esse pedido já foi gravado por outro usuário — só ele ou um administrador pode atualizá-lo.' });
       }
       pedidoParaAtualizar = atual.id;
     }
@@ -91,10 +113,10 @@ router.post('/', async (req, res) => {
       atualizado = true;
     } else {
       const pedidoResult = await client.query(
-        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7)
+        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8)
          RETURNING id, data_pedido`,
-        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null, pdf_modificado_em || null]
+        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null, pdf_modificado_em || null, req.usuario.id]
       );
       pedidoId = pedidoResult.rows[0].id;
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
@@ -115,12 +137,16 @@ router.post('/', async (req, res) => {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
-    if (e.code === '23505') {
+    if (e.code === '23505' && e.constraint === 'idx_pedidos_numero_cotacao') {
       // corrida rara: dois envios da mesma cotação quase ao mesmo tempo
       return res.status(200).json({ ja_existia: true, erro_corrida: true });
     }
     console.error(e);
-    res.status(400).json({ erro: e.message || 'Erro ao gravar pedido.' });
+    // e.code só existe em erro vindo direto do driver do Postgres (ex: violação
+    // de constraint) - esse detalhe não vai pro cliente. Erro lançado por nós
+    // mesmos (ex: "Produto com código X não encontrado") não tem .code e é uma
+    // mensagem pensada pra quem está usando o app ler.
+    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar pedido.' });
   } finally {
     if (client) client.release();
   }
