@@ -65,8 +65,9 @@ router.post('/', async (req, res) => {
     }
   }
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     const clienteId = await acharOuCriarCliente(client, cliente);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
@@ -111,7 +112,9 @@ router.post('/', async (req, res) => {
     console.log(`Pedido #${pedidoId} ${atualizado ? 'ATUALIZADO (versão mais nova do PDF)' : 'gravado'} (cliente ${clienteId}, ${itens.length} item(ns))${numero_cotacao ? ` [cotação ${numero_cotacao}]` : ''}.`);
     res.status(201).json({ pedido_id: pedidoId, cliente_id: clienteId, data_pedido: dataPedidoFinal, atualizado });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     if (e.code === '23505') {
       // corrida rara: dois envios da mesma cotação quase ao mesmo tempo
       return res.status(200).json({ ja_existia: true, erro_corrida: true });
@@ -119,7 +122,7 @@ router.post('/', async (req, res) => {
     console.error(e);
     res.status(400).json({ erro: e.message || 'Erro ao gravar pedido.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -176,8 +179,9 @@ router.get('/duplicados', async (req, res) => {
 // depois de revisar manualmente. Só admin - é destrutivo de histórico real.
 router.delete('/:id', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode excluir pedido.' });
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [req.params.id]);
     const result = await client.query('DELETE FROM pedidos WHERE id = $1 RETURNING id', [req.params.id]);
@@ -189,11 +193,13 @@ router.delete('/:id', async (req, res) => {
     console.log(`Pedido #${req.params.id} excluído por ${req.usuario?.email}.`);
     res.json({ ok: true });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao excluir pedido.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 

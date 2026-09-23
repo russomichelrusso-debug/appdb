@@ -524,8 +524,9 @@ router.post('/classificatorio/importar', async (req, res) => {
   const itens = req.body.itens;
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     let atualizados = 0;
     let naoEncontrados = 0;
@@ -566,11 +567,13 @@ router.post('/classificatorio/importar', async (req, res) => {
     await client.query('COMMIT');
     res.json({ atualizados, naoEncontrados, total: itens.length });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao importar classificatório.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 

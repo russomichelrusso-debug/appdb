@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const XLSX = require('xlsx');
+const XLSX = require('@e965/xlsx');
 const { pool } = require('../db');
 
 // ---------------------------------------------------------------------
@@ -29,6 +29,7 @@ const CANAIS = ['VAREJO', 'ATACADO', 'E-COMMERCE', 'MODERNO', 'CONSTRUTORA', 'IN
 const TODOS_ESTADOS = ['AC','AL','AM','AP','BA','CE','DF','ES','GO','MA','MG','MS','MT','PA','PB',
                        'PE','PI','PR','RJ','RN','RO','RR','RS','SC','SE','SP','TO'];
 const ESTADOS_EXATOS = new Set(['MG', 'RJ', 'PR', 'SC', 'RS']);
+const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 
 function regiaoIndice(uf) {
   if (uf === 'SP') return 0;
@@ -172,9 +173,14 @@ function converterPlanilha(buffer) {
 
 // Importa a planilha inteira (base64) e substitui o catálogo completo no
 // banco. Liberado pra qualquer usuário logado (não só admin).
+const TAMANHO_MAX_PLANILHA_BYTES = 10 * 1024 * 1024; // 10MB
+
 router.post('/importar', async (req, res) => {
   const { arquivoBase64 } = req.body;
   if (!arquivoBase64) return res.status(400).json({ erro: 'Envie { arquivoBase64: "..." } com o arquivo .xlsx em base64.' });
+  if (arquivoBase64.length > TAMANHO_MAX_PLANILHA_BYTES * 4 / 3) {
+    return res.status(413).json({ erro: 'Arquivo muito grande. O limite é 10MB.' });
+  }
 
   let produtos;
   try {
@@ -187,6 +193,13 @@ router.post('/importar', async (req, res) => {
 
   if (produtos.length === 0) {
     return res.status(400).json({ erro: 'Nenhum produto encontrado na planilha - confira se é o arquivo certo.' });
+  }
+
+  const codigosInvalidos = produtos.filter(p => !CODIGO_SKU_REGEX.test(p.codigo_sku)).map(p => p.codigo_sku);
+  if (codigosInvalidos.length > 0) {
+    return res.status(400).json({
+      erro: 'Códigos de produto em formato inválido na planilha: ' + codigosInvalidos.slice(0, 10).join(', '),
+    });
   }
 
   try {

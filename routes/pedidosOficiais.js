@@ -61,8 +61,9 @@ router.get('/carteira-antiga/contagem', async (req, res) => {
 // o filtro é sempre status = 'carteira'.
 router.post('/carteira-antiga/limpar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode limpar a carteira antiga.' });
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     const excluidos = await client.query(
       `DELETE FROM pedidos_oficiais_itens
@@ -83,11 +84,13 @@ router.post('/carteira-antiga/limpar', async (req, res) => {
     console.log(`Carteira antiga limpa: ${excluidos.rowCount} item(ns) excluído(s) (>${CARTEIRA_ANTIGA_DIAS} dias em carteira), ${atualizados.rowCount} linha(s) atualizada(s) de Atendido Parcial pra Total, por ${req.usuario?.email}.`);
     res.json({ excluidos: excluidos.rowCount, atualizados: atualizados.rowCount });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao limpar carteira antiga.' });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
@@ -258,8 +261,9 @@ router.post('/importar', async (req, res) => {
   if (!Array.isArray(itensBrutos) || itensBrutos.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
   const itens = deduplicarItensOficiais(itensBrutos);
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
 
     // Classificatório do cliente (Varejo Master/Premium/Exclusive/Rede),
@@ -348,11 +352,13 @@ router.post('/importar', async (req, res) => {
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
     res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao importar pedidos oficiais: ' + e.message });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
