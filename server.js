@@ -1,4 +1,8 @@
 const express = require('express');
+// Faz o Express 4 encaminhar rejeições de promise de handlers async pro
+// middleware de erro abaixo, em vez de virar unhandledRejection e derrubar
+// o processo Node inteiro (precisa ser importado antes das rotas).
+require('express-async-errors');
 const rateLimit = require('express-rate-limit');
 const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
@@ -73,6 +77,15 @@ app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 app.use('/api', requireAuth, radarCnpjRoutes); // /api/clientes/:id/ficha-cnpj, /api/radar-cnpj/:cnpj
+
+// Rede de segurança final: qualquer erro que escape dos try/catch das rotas
+// (síncrono ou de promise, via express-async-errors) cai aqui em vez de
+// derrubar o servidor - resposta genérica pro cliente, detalhe só no log.
+app.use((err, req, res, next) => {
+  console.error('Erro não tratado:', err);
+  if (res.headersSent) return next(err);
+  res.status(500).json({ erro: 'Erro interno do servidor.' });
+});
 
 const PORT = process.env.PORT || 10000;
 

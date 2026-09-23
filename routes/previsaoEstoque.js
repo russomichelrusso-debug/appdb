@@ -22,8 +22,9 @@ router.post('/importar', async (req, res) => {
   const { itens } = req.body;
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
 
-  const client = await pool.connect();
+  let client;
   try {
+    client = await pool.connect();
     await client.query('BEGIN');
     await client.query('DELETE FROM previsao_estoque');
     await client.query(
@@ -42,11 +43,13 @@ router.post('/importar', async (req, res) => {
     console.log(`Previsão de estoque importada: ${itens.length} produto(s), por ${req.usuario?.email}.`);
     res.json({ ok: true, total: itens.length });
   } catch (e) {
-    await client.query('ROLLBACK');
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao importar previsão de estoque: ' + e.message });
   } finally {
-    client.release();
+    if (client) client.release();
   }
 });
 
