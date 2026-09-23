@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db');
+const { pool, registrarImportacao } = require('../db');
 
 // Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão -
 // mesma regra usada no formulário de cliente novo (index.html). Aplicada
@@ -129,6 +129,7 @@ router.post('/import', async (req, res) => {
     );
     const { criados, atualizados } = result.rows[0];
     console.log(`Import de clientes: ${criados} criado(s), ${atualizados} atualizado(s) de ${clientes.length}.`);
+    await registrarImportacao(req.usuario?.id, 'clientes/import', validos.length);
     res.json({ criados: Number(criados), atualizados: Number(atualizados), total: clientes.length });
   } catch (e) {
     console.error(e);

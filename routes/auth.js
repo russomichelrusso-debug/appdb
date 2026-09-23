@@ -104,13 +104,15 @@ router.post('/logout', async (req, res) => {
   }
 });
 
-// Cadastra um novo usuário pelo e-mail da conta Google dele - exige já estar
-// logado. A pessoa só consegue de fato entrar depois, fazendo "Entrar com
-// Google" com esse mesmo e-mail. Só um admin consegue criar outro admin.
+// Cadastra um novo usuário pelo e-mail da conta Google dele - só admin (é
+// isso que decide quem pode entrar no sistema, diferente das importações em
+// massa de dados). A pessoa só consegue de fato entrar depois, fazendo
+// "Entrar com Google" com esse mesmo e-mail.
 router.post('/usuarios', requireAuth, async (req, res) => {
+  if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode cadastrar usuário.' });
   const { nome, email, is_admin } = req.body;
   if (!nome || !email) return res.status(400).json({ erro: 'Informe nome e e-mail.' });
-  const tornarAdmin = !!is_admin && !!req.usuario.is_admin;
+  const tornarAdmin = !!is_admin;
   try {
     const result = await pool.query(
       'INSERT INTO usuarios (nome, email, is_admin) VALUES ($1, $2, $3) RETURNING id, nome, email, is_admin',
