@@ -60,21 +60,31 @@ router.post('/sync', async (req, res) => {
     const nomes = unicos.map(p => p.nome || '');
     const categorias = unicos.map(p => p.categoria || null);
 
-    const antes = await pool.query('SELECT COUNT(*) FROM produtos');
-    const totalAntes = Number(antes.rows[0].count);
-
-    await pool.query(
-      `INSERT INTO produtos (codigo_sku, nome, categoria)
-       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[])
-       ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria`,
+    // RETURNING (xmax = 0) diz se a linha foi INSERIDA (xmax = 0) ou
+    // ATUALIZADA (xmax setado pelo UPDATE do conflito) - diferente de
+    // comparar COUNT(*) antes/depois, isso não é afetado por uma
+    // importação simultânea mexendo na tabela ao mesmo tempo.
+    const upsert = await pool.query(
+      `WITH entrada AS (
+         SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[]) AS t(codigo_sku, nome, categoria)
+       ),
+       resultado AS (
+         INSERT INTO produtos (codigo_sku, nome, categoria)
+         SELECT codigo_sku, nome, categoria FROM entrada
+         ON CONFLICT (codigo_sku) DO UPDATE SET nome = EXCLUDED.nome, categoria = EXCLUDED.categoria
+         RETURNING (xmax = 0) AS inserted
+       )
+       SELECT
+         COUNT(*) FILTER (WHERE inserted) AS criados,
+         COUNT(*) FILTER (WHERE NOT inserted) AS atualizados
+       FROM resultado`,
       [codigos, nomes, categorias]
     );
-
-    const depois = await pool.query('SELECT COUNT(*) FROM produtos');
-    const totalDepois = Number(depois.rows[0].count);
+    const { criados, atualizados } = upsert.rows[0];
+    const totalResult = await pool.query('SELECT COUNT(*) FROM produtos');
 
     await registrarImportacao(req.usuario?.id, 'produtos/sync', unicos.length);
-    res.json({ criados: totalDepois - totalAntes, atualizados: unicos.length - (totalDepois - totalAntes), total: totalDepois });
+    res.json({ criados: Number(criados), atualizados: Number(atualizados), total: Number(totalResult.rows[0].count) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao sincronizar catálogo.' });

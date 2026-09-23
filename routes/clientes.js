@@ -83,17 +83,29 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   const { nome, documento, contato } = req.body;
   if (!nome) return res.status(400).json({ erro: 'Nome é obrigatório.' });
+  const documentoFormatado = documento ? formatarDocumento(documento) : null;
   try {
-    if (documento) {
-      const existing = await pool.query('SELECT * FROM clientes WHERE documento = $1', [documento]);
+    if (documentoFormatado) {
+      // compara só os dígitos - sem isso, "12345678000199" e
+      // "12.345.678/0001-99" eram tratados como clientes diferentes.
+      const existing = await pool.query(
+        `SELECT * FROM clientes WHERE regexp_replace(documento, '\\D', '', 'g') = regexp_replace($1, '\\D', '', 'g')`,
+        [documentoFormatado]
+      );
       if (existing.rows.length > 0) return res.json(existing.rows[0]);
     }
     const result = await pool.query(
       'INSERT INTO clientes (nome, documento, contato) VALUES ($1, $2, $3) RETURNING *',
-      [nome, documento || null, contato || null]
+      [nome, documentoFormatado, contato || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (e) {
+    // corrida: dois cadastros do mesmo documento quase ao mesmo tempo -
+    // devolve o cliente que já ficou gravado, em vez de 500.
+    if (e.code === '23505' && documentoFormatado) {
+      const existing = await pool.query('SELECT * FROM clientes WHERE documento = $1', [documentoFormatado]);
+      if (existing.rows.length > 0) return res.json(existing.rows[0]);
+    }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao criar cliente.' });
   }
@@ -200,16 +212,17 @@ router.patch('/:id/matriz-grupo', async (req, res) => {
 // pra não misturar o tipo de um cliente com o desconto do outro.
 router.post('/mesclar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode mesclar clientes.' });
-  const { manter_id, remover_id } = req.body;
+  const { manter_id, remover_id, confirmar_codigo_oficial_diferente } = req.body;
   if (!manter_id || !remover_id) return res.status(400).json({ erro: 'Informe manter_id e remover_id.' });
-  if (manter_id === remover_id) return res.status(400).json({ erro: 'Escolha dois clientes diferentes.' });
+  if (Number(manter_id) === Number(remover_id)) return res.status(400).json({ erro: 'Escolha dois clientes diferentes.' });
 
   let client;
   try {
     client = await pool.connect();
     await client.query('BEGIN');
     const ambos = await client.query(
-      `SELECT id, nome, documento, contato, codigo_oficial, classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em
+      `SELECT id, nome, documento, contato, codigo_oficial, matriz_grupo, classificatorio_pic, classificatorio_vl_acordo,
+              classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em
        FROM clientes WHERE id = ANY($1::int[])`,
       [[manter_id, remover_id]]
     );
@@ -219,6 +232,23 @@ router.post('/mesclar', async (req, res) => {
     }
     const manterInfo = ambos.rows.find(r => r.id === Number(manter_id));
     const removerInfo = ambos.rows.find(r => r.id === Number(remover_id));
+
+    // Os dois têm código oficial (ERP) próprio e diferente - não dá pra saber
+    // qual dos dois é o certo sem confirmação de quem está mesclando (o do
+    // removido seria descartado silenciosamente, perdendo o vínculo com o
+    // histórico de pedidos_oficiais_itens dele).
+    if (
+      manterInfo.codigo_oficial && removerInfo.codigo_oficial &&
+      manterInfo.codigo_oficial !== removerInfo.codigo_oficial &&
+      !confirmar_codigo_oficial_diferente
+    ) {
+      await client.query('ROLLBACK');
+      return res.status(409).json({
+        erro: `Os dois clientes têm código oficial diferente (mantido: ${manterInfo.codigo_oficial}, removido: ${removerInfo.codigo_oficial}) - confirme qual manter antes de mesclar.`,
+        codigoOficialManter: manterInfo.codigo_oficial,
+        codigoOficialRemover: removerInfo.codigo_oficial,
+      });
+    }
 
     await client.query('UPDATE pedidos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
     await client.query('UPDATE levantamentos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
@@ -232,23 +262,33 @@ router.post('/mesclar', async (req, res) => {
     const novoDocumento = manterInfo.documento || removerInfo.documento || null;
     const novoContato = manterInfo.contato || removerInfo.contato || null;
     const novoCodigoOficial = manterInfo.codigo_oficial || removerInfo.codigo_oficial || null;
+    const novoMatrizGrupo = manterInfo.matriz_grupo || removerInfo.matriz_grupo || null;
+    const novoPic = manterInfo.classificatorio_pic || removerInfo.classificatorio_pic || false;
+    const novoVlAcordo = manterInfo.classificatorio_vl_acordo ?? removerInfo.classificatorio_vl_acordo ?? null;
 
     const camposCompletados = [];
     if (!manterInfo.documento && novoDocumento) camposCompletados.push('CNPJ/CPF');
     if (!manterInfo.contato && novoContato) camposCompletados.push('contato');
     if (!manterInfo.codigo_oficial && novoCodigoOficial) camposCompletados.push('código oficial');
+    if (!manterInfo.matriz_grupo && novoMatrizGrupo) camposCompletados.push('grupo (matriz)');
+    if (!manterInfo.classificatorio_pic && novoPic) camposCompletados.push('PIC');
+    if (manterInfo.classificatorio_vl_acordo == null && novoVlAcordo != null) camposCompletados.push('valor de acordo');
     if (usaClassificatorioDoRemovido) camposCompletados.push('classificatório');
 
     await client.query(
       `UPDATE clientes SET
          documento = $2, contato = $3, codigo_oficial = $4,
-         classificatorio_tipo = $5, classificatorio_desconto = $6, classificatorio_atualizado_em = $7
+         matriz_grupo = $5, classificatorio_pic = $6, classificatorio_vl_acordo = $7,
+         classificatorio_tipo = $8, classificatorio_desconto = $9, classificatorio_atualizado_em = $10
        WHERE id = $1`,
       [
         manter_id,
         novoDocumento,
         novoContato,
         novoCodigoOficial,
+        novoMatrizGrupo,
+        novoPic,
+        novoVlAcordo,
         usaClassificatorioDoRemovido ? removerInfo.classificatorio_tipo : manterInfo.classificatorio_tipo,
         usaClassificatorioDoRemovido ? removerInfo.classificatorio_desconto : manterInfo.classificatorio_desconto,
         usaClassificatorioDoRemovido ? removerInfo.classificatorio_atualizado_em : manterInfo.classificatorio_atualizado_em,
@@ -269,12 +309,14 @@ router.post('/mesclar', async (req, res) => {
   }
 });
 
-// Exclui um cliente. Por padrão, se ele já tiver pedidos ou levantamentos
-// registrados, o banco recusa (chave estrangeira) de propósito - evita
-// apagar histórico de venda sem querer. Um administrador pode forçar a
-// exclusão total (cliente + histórico junto) mandando ?forcar=1 - usuários
-// comuns não conseguem, mesmo mandando o mesmo parâmetro.
+// Exclui um cliente - só administrador (S13 da revisão de segurança: excluir
+// cliente sem confirmar antes era liberado pra qualquer usuário logado).
+// Por padrão, se ele já tiver pedidos ou levantamentos registrados, o banco
+// recusa (chave estrangeira) de propósito - evita apagar histórico de venda
+// sem querer. Mandando ?forcar=1, força a exclusão total (cliente +
+// histórico junto).
 router.delete('/:id', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode excluir cliente.' });
   const { id } = req.params;
   const forcar = req.query.forcar === '1' && !!req.usuario?.is_admin;
 

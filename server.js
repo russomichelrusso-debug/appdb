@@ -29,8 +29,19 @@ app.set('trust proxy', 1);
 
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
+// ALLOWED_ORIGINS (lista separada por vírgula, ex: "https://usuario.github.io")
+// restringe quem pode chamar a API com um token roubado - sem essa variável
+// definida no Render, mantém o comportamento de sempre (qualquer origem),
+// pra não quebrar nada em produção sem alguém definir a lista primeiro.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean);
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
+  const origin = req.header('Origin');
+  if (ALLOWED_ORIGINS.length === 0) {
+    res.header('Access-Control-Allow-Origin', '*');
+  } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Vary', 'Origin');
+  }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
