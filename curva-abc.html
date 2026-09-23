@@ -657,6 +657,22 @@
         </div>`).join('')}</div>`;
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
+    // Atalho vindo do app principal (index.html, botão "Produtos comprados"
+    // na barra de cliente selecionado): ?cliente=<id>&nome=<nome> já abre
+    // direto na Curva ABC por cliente, sem precisar buscar o cliente de novo
+    // aqui. Devolve true se agiu (pra boot() pular a aba Dashboard inicial).
+    function abrirClienteViaUrl() {
+      const params = new URLSearchParams(location.search);
+      const clienteId = Number(params.get('cliente'));
+      if (!Number.isInteger(clienteId) || clienteId <= 0) return false;
+      document.querySelectorAll('#verSeg button').forEach(b => b.classList.toggle('active', b.dataset.modo === 'porCliente'));
+      state.modo = 'porCliente';
+      curvaAbcCarregada = true; // evita a carga automática de ativarTabPrincipal() com o cliente ainda não selecionado
+      ativarTabPrincipal('curvaAbc');
+      selecionarCliente(clienteId, params.get('nome') || '');
+      return true;
+    }
+
     async function boot() {
       const token = getStoredToken();
       if (!token) { showLoginScreen(); return; }
@@ -666,7 +682,9 @@
         document.getElementById('dashboardWrap').classList.remove('hidden');
         hideLoadingScreen();
         startDashboard();
-        ativarTabPrincipal('dashboard'); // Dashboard é a aba inicial - dispara a carga dela
+        if (!abrirClienteViaUrl()) {
+          ativarTabPrincipal('dashboard'); // Dashboard é a aba inicial - dispara a carga dela
+        }
       } catch (e) {
         if (!document.getElementById('loginScreen').classList.contains('hidden')) return; // apiFetch já mostrou a tela de login (401)
         hideLoadingScreen();
