@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { generateToken, verificarGoogleIdToken } = require('../auth-utils');
+const { generateToken, hashToken, verificarGoogleIdToken } = require('../auth-utils');
 const { requireAuth } = require('../middleware/auth');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
 
 // Mesmo Client ID usado no botão "Entrar com Google" do frontend (index.html)
 // - dá pra sobrescrever por variável de ambiente se o client ID for trocado
@@ -61,7 +64,7 @@ router.post('/google', async (req, res) => {
     const token = generateToken();
     await pool.query(
       `INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, now() + ($3 || ' days')::interval)`,
-      [token, usuario.id, DURACAO_SESSAO_DIAS]
+      [hashToken(token), usuario.id, DURACAO_SESSAO_DIAS]
     );
     console.log(`Login via Google: ${usuario.email}`);
     res.json({ token, nome: usuario.nome, email: usuario.email, is_admin: usuario.is_admin });
@@ -83,7 +86,7 @@ router.get('/me', async (req, res) => {
       `SELECT u.nome, u.email, u.is_admin FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token = $1 AND s.expira_em > now()`,
-      [token]
+      [hashToken(token)]
     );
     if (result.rows.length === 0) return res.status(401).json({ erro: 'Sessão expirada ou inválida.' });
     res.json(result.rows[0]);
@@ -96,7 +99,7 @@ router.get('/me', async (req, res) => {
 router.post('/logout', async (req, res) => {
   const token = (req.header('Authorization') || '').replace('Bearer ', '');
   try {
-    if (token) await pool.query('DELETE FROM sessoes WHERE token = $1', [token]);
+    if (token) await pool.query('DELETE FROM sessoes WHERE token = $1', [hashToken(token)]);
     res.json({ ok: true });
   } catch (e) {
     console.error(e);

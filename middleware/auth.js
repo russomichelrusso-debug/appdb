@@ -4,6 +4,7 @@
 // resto da rota usar (ex: req.usuario.is_admin, req.usuario.id).
 
 const { pool } = require('../db');
+const { hashToken } = require('../auth-utils');
 
 async function requireAuth(req, res, next) {
   const token = (req.header('Authorization') || '').replace('Bearer ', '').trim();
@@ -13,7 +14,7 @@ async function requireAuth(req, res, next) {
       `SELECT u.id, u.nome, u.email, u.is_admin FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token = $1 AND s.expira_em > now()`,
-      [token]
+      [hashToken(token)]
     );
     if (result.rows.length === 0) return res.status(401).json({ erro: 'Sessão expirada ou inválida — faça login novamente.' });
     req.usuario = result.rows[0];

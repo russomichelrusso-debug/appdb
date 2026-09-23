@@ -115,6 +115,11 @@ CREATE TABLE IF NOT EXISTS import_log (
 CREATE INDEX IF NOT EXISTS idx_import_log_usuario ON import_log(usuario_id);
 CREATE INDEX IF NOT EXISTS idx_import_log_criado ON import_log(criado_em);
 
+-- "token" guarda sha256(token) (ver hashToken em auth-utils.js), não o token
+-- em texto puro - quem vazar o banco não consegue reusar direto uma sessão
+-- ativa. Essa mudança invalida sessões já gravadas com o token cru (o hash
+-- delas não bate com nada) - efeito colateral aceito: todo mundo precisa
+-- fazer login de novo uma vez, o resto do sistema não é afetado.
 CREATE TABLE IF NOT EXISTS sessoes (
   token TEXT PRIMARY KEY,
   usuario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
