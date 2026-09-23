@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db');
+const { pool, registrarImportacao } = require('../db');
 
 const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 
@@ -66,6 +66,7 @@ router.post('/sync', async (req, res) => {
     const depois = await pool.query('SELECT COUNT(*) FROM produtos');
     const totalDepois = Number(depois.rows[0].count);
 
+    await registrarImportacao(req.usuario?.id, 'produtos/sync', produtos.length);
     res.json({ criados: totalDepois - totalAntes, atualizados: produtos.length - (totalDepois - totalAntes), total: totalDepois });
   } catch (e) {
     console.error(e);

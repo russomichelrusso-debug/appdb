@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../db');
+const { pool, registrarImportacao } = require('../db');
 const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
 const { codigoBase } = require('./lib/skuNormalizacao');
 
@@ -350,6 +350,7 @@ router.post('/importar', async (req, res) => {
 
     await client.query('COMMIT');
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
+    await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
     res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
   } catch (e) {
     if (client) {
