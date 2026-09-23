@@ -298,11 +298,29 @@
     .rankItem .nome { flex: 1; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rankItem .valor { font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
     .hidden { display: none !important; }
+
+    .addCartBtn {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 8px; border: none;
+      background: var(--red); color: #fff; cursor: pointer; flex-shrink: 0; padding: 0;
+    }
+    .addCartBtn:active { opacity: .8; }
+    .addCartBtn svg { width: 15px; height: 15px; }
+
+    .toast {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(10px);
+      background: rgba(29, 29, 31, .92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+      color: #fff; padding: 11px 20px; border-radius: 24px; font-size: 13.5px; font-weight: 600;
+      opacity: 0; transition: opacity .2s ease, transform .2s ease; z-index: 60; pointer-events: none; white-space: nowrap;
+    }
+    .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
 </head>
 
 <body>
   <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
+
+  <div class="toast" id="toast"></div>
 
   <div id="loadingScreen" class="loadingScreen">
     <div class="brand">Cortag</div>
@@ -631,6 +649,38 @@
       return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     }
 
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(showToast._t);
+      showToast._t = setTimeout(() => t.classList.remove('show'), 1600);
+    }
+
+    // Mesma chave de localStorage do orçamento no app principal (index.html,
+    // CART_LS_KEY) - grava direto nela, sem duplicar o carrinho inteiro aqui.
+    // Lê e escreve na hora de cada clique (não guarda cópia em memória nesta
+    // página) pra não arriscar sobrescrever um item que o index.html tenha
+    // adicionado entre um clique e outro, se as duas abas estiverem abertas
+    // ao mesmo tempo.
+    const CART_LS_KEY = 'cortagCart_v1';
+    function adicionarAoOrcamento(cod, nome) {
+      let cart = [];
+      try {
+        const raw = localStorage.getItem(CART_LS_KEY);
+        cart = raw ? (JSON.parse(raw) || []) : [];
+      } catch (e) { cart = []; }
+      const existente = cart.find(i => i.cod === cod);
+      if (existente) existente.qty += 1;
+      else cart.push({ cod, qty: 1 });
+      try {
+        localStorage.setItem(CART_LS_KEY, JSON.stringify(cart));
+        showToast(`${nome} adicionado ao orçamento`);
+      } catch (e) {
+        showToast('Não consegui adicionar ao orçamento agora.');
+      }
+    }
+
     let usuarioAtual = null;
     // Dados por trás dos 4 cartões expansíveis do Dashboard (populados em
     // renderKpisPrincipal) e qual deles está aberto agora, se algum.
@@ -804,6 +854,14 @@
     }
 
     function startDashboard() {
+      // Delegado no container (não em cada botão) - a tabela é recriada
+      // inteira (innerHTML) a cada filtro/ordenação, então um listener por
+      // botão vazaria e duplicaria a cada renderProdutos().
+      document.getElementById('topTableHost').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-add-cod]');
+        if (!btn) return;
+        adicionarAoOrcamento(btn.dataset.addCod, btn.dataset.addNome);
+      });
       document.querySelectorAll('#verSeg button').forEach(btn => {
         btn.addEventListener('click', () => {
           if (btn.classList.contains('active')) return;
@@ -1396,10 +1454,11 @@
           <td><span class="badge ${p.classe.toLowerCase()}">${p.classe}</span></td>
           <td class="num">${formatValor(p[state.campo])}</td>
           <td class="num">${p.cumulativoPct.toFixed(0)}%</td>
+          <td class="num"><button type="button" class="addCartBtn" data-add-cod="${escapeHtml(p.codigo_sku)}" data-add-nome="${escapeHtml(p.produto)}" aria-label="Adicionar ao orçamento" title="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></td>
         </tr>`).join('');
       document.getElementById('topTableHost').innerHTML = `
         <table>
-          <thead><tr><th>${itemLabelCap}</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th></tr></thead>
+          <thead><tr><th>${itemLabelCap}</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th><th class="num"></th></tr></thead>
           <tbody>${linhas}</tbody>
         </table>`;
     }

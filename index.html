@@ -5799,15 +5799,37 @@
       // o app inteiro e some com os itens já colocados. Mesmo padrão já usado pra
       // lista de preços (PRICE_LIST_LS_KEY) e rascunho de levantamento (LEV_LS_KEY).
       const CART_LS_KEY = 'cortagCart_v1';
+      // Guarda o último JSON lido/gravado por ESTA aba, pra comparar com
+      // e.newValue no listener de 'storage' abaixo - sem isso, o
+      // re-gravar (idêntico) que renderCartBar()/saveCartLocal() faz ao
+      // reagir a um evento de outra aba disparava um novo evento de volta
+      // pra ela, virando um eco infinito entre duas abas do próprio app.
+      let lastCartJson = null;
       function saveCartLocal() {
-        try { localStorage.setItem(CART_LS_KEY, JSON.stringify(state.cart)); } catch (e) { /* sem localStorage - segue sem persistir */ }
+        try {
+          lastCartJson = JSON.stringify(state.cart);
+          localStorage.setItem(CART_LS_KEY, lastCartJson);
+        } catch (e) { /* sem localStorage - segue sem persistir */ }
       }
       function loadCartFromLS() {
         try {
           const raw = localStorage.getItem(CART_LS_KEY);
+          lastCartJson = raw;
           state.cart = raw ? (JSON.parse(raw) || []) : [];
         } catch (e) { state.cart = []; }
       }
+      // O evento 'storage' só dispara em OUTRAS abas, nunca na que escreveu -
+      // cobre o caso de curva-abc.html (botão de carrinho na Curva ABC) aberto
+      // numa aba separada enquanto esta continua com o Pedido em andamento.
+      // Sem isso, um item adicionado por lá só apareceria aqui recarregando a
+      // página, e pior: a próxima mudança no carrinho NESTA aba sobrescreveria
+      // silenciosamente o que foi adicionado na outra.
+      window.addEventListener('storage', (e) => {
+        if (e.key !== CART_LS_KEY || e.newValue === lastCartJson) return;
+        loadCartFromLS();
+        renderCartBar();
+        renderCart();
+      });
       function addToCart(cod, explicitQty) {
         const p = productByCod(cod);
         const amount = (explicitQty !== undefined && explicitQty > 0) ? explicitQty : packStep(p);
