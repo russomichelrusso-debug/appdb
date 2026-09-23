@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
 
 // Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão -
 // mesma regra usada no formulário de cliente novo (index.html). Aplicada
@@ -107,8 +110,15 @@ router.post('/import', async (req, res) => {
   const validos = clientes.filter(c => c.nome && c.cnpj);
   if (validos.length === 0) return res.json({ criados: 0, atualizados: 0, total: clientes.length });
 
-  const nomes = validos.map(c => c.nome);
-  const documentos = validos.map(c => formatarDocumento(c.cnpj));
+  // Dedup em memória por documento formatado (mantendo a última ocorrência) -
+  // o UNNEST + ON CONFLICT DO UPDATE abaixo falha com "cannot affect row a
+  // second time" se o mesmo CNPJ/CPF aparecer duas vezes no mesmo lote.
+  const porDocumento = new Map();
+  for (const c of validos) porDocumento.set(formatarDocumento(c.cnpj), c);
+  const unicos = Array.from(porDocumento.entries()).map(([documento, c]) => ({ nome: c.nome, documento }));
+
+  const nomes = unicos.map(c => c.nome);
+  const documentos = unicos.map(c => c.documento);
 
   try {
     const result = await pool.query(
@@ -129,7 +139,7 @@ router.post('/import', async (req, res) => {
     );
     const { criados, atualizados } = result.rows[0];
     console.log(`Import de clientes: ${criados} criado(s), ${atualizados} atualizado(s) de ${clientes.length}.`);
-    await registrarImportacao(req.usuario?.id, 'clientes/import', validos.length);
+    await registrarImportacao(req.usuario?.id, 'clientes/import', unicos.length);
     res.json({ criados: Number(criados), atualizados: Number(atualizados), total: clientes.length });
   } catch (e) {
     console.error(e);

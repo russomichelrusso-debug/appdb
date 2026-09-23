@@ -51,7 +51,7 @@ router.post('/importar', async (req, res) => {
     res.json({ ok: true, importados: skus.length, total: Number(totalResult.rows[0].count) });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar códigos: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao importar códigos.' });
   }
 });
 

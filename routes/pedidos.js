@@ -2,6 +2,9 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
 
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
@@ -139,7 +142,11 @@ router.post('/', async (req, res) => {
       return res.status(200).json({ ja_existia: true, erro_corrida: true });
     }
     console.error(e);
-    res.status(400).json({ erro: e.message || 'Erro ao gravar pedido.' });
+    // e.code só existe em erro vindo direto do driver do Postgres (ex: violação
+    // de constraint) - esse detalhe não vai pro cliente. Erro lançado por nós
+    // mesmos (ex: "Produto com código X não encontrado") não tem .code e é uma
+    // mensagem pensada pra quem está usando o app ler.
+    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar pedido.' });
   } finally {
     if (client) client.release();
   }

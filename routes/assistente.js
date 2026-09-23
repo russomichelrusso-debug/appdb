@@ -1,5 +1,18 @@
 const express = require('express');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
+
+// Por usuário (não por IP - vários vendedores podem estar atrás do mesmo IP
+// de rede móvel/wifi da loja) - protege a cota paga do Gemini contra um
+// usuário logado que aperte o botão em loop.
+const interpretarLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.usuario?.id || req.ip),
+  message: { erro: 'Muitas perguntas em pouco tempo — espera um pouco e tenta de novo.' },
+});
 
 // Interpreta uma pergunta falada (já transcrita pelo navegador) e devolve a
 // intenção (preço / ficha técnica / cliente) + o termo de busca. O Gemini
@@ -22,6 +35,7 @@ async function chamarGemini(prompt, apiKey, modelo, tentativasRestantes = 2) {
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
       }),
+      signal: AbortSignal.timeout(8000),
     }
   );
   if (resp.status === 503 && tentativasRestantes > 0) {
@@ -31,9 +45,10 @@ async function chamarGemini(prompt, apiKey, modelo, tentativasRestantes = 2) {
   return resp;
 }
 
-router.post('/interpretar', async (req, res) => {
+router.post('/interpretar', interpretarLimiter, async (req, res) => {
   const { texto } = req.body;
   if (!texto || typeof texto !== 'string') return res.status(400).json({ erro: 'Envie { texto: "..." }' });
+  if (texto.length > 500) return res.status(400).json({ erro: 'Pergunta muito longa (máximo 500 caracteres).' });
 
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(500).json({ erro: 'Assistente de voz não configurado — falta GEMINI_API_KEY no servidor.' });
@@ -90,7 +105,7 @@ Responda SOMENTE com um JSON válido, sem texto antes ou depois, exatamente nest
     res.json({ intencao: resultado.intencao, termo: resultado.termo || '' });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao interpretar pergunta: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao interpretar pergunta.' });
   }
 });
 

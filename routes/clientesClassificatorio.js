@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
 
 // Faixas de faturamento (ano civil fechado, somado por Matriz/grupo de
 // "empresas irmãs" - ver PERIODO_CLASSIFICATORIO_* mais abaixo)
