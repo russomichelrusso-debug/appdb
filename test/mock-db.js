@@ -69,6 +69,13 @@ async function query(sql, params = []) {
     const found = clientes.filter(c => c.documento === params[0]);
     return { rows: found };
   }
+  // routes/clientes.js POST / (B5) - compara documento normalizado (só
+  // dígitos), pra "12345678000199" e "12.345.678/0001-99" baterem no mesmo cliente.
+  if (s.includes("SELECT * FROM CLIENTES WHERE REGEXP_REPLACE(DOCUMENTO")) {
+    const alvo = String(params[0] || '').replace(/\D/g, '');
+    const found = clientes.filter(c => (c.documento || '').replace(/\D/g, '') === alvo && alvo !== '');
+    return { rows: found };
+  }
   // clientMatcher.js (acharOuCriarCliente/acharClientePorNome) - usado pela
   // importação de faturamento (classificatório) e por outros fluxos que
   // compartilham essa lógica (pedidos.js, levantamentos.js).
