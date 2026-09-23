@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const XLSX = require('@e965/xlsx');
-const { pool } = require('../db');
+const { pool, registrarImportacao } = require('../db');
 
 // ---------------------------------------------------------------------
 // Conversor da planilha "LISTA PADRÃO" (6 canais x 3 regiões, com
@@ -226,6 +226,7 @@ router.post('/importar', async (req, res) => {
         produtos.map(() => new Date()),
       ]
     );
+    await registrarImportacao(req.usuario?.id, 'catalogo-precos/importar', produtos.length);
     res.json({ ok: true, produtosImportados: produtos.length });
   } catch (e) {
     console.error(e);

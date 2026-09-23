@@ -772,6 +772,12 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
 
+  // Rastro de quem fez cada importação em massa (registrarImportacao, db.js) -
+  // o teste não confere o conteúdo, só que a chamada não derruba a rota.
+  if (s.startsWith('INSERT INTO IMPORT_LOG')) {
+    return { rows: [] };
+  }
+
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 
@@ -867,6 +873,9 @@ function computeLevantamentosDoCliente(clienteId) {
 module.exports = {
   pool: { query, connect: async () => ({ query, release: () => {} }) },
   runMigrations: async () => {},
+  registrarImportacao: async (usuarioId, rota, itensProcessados) => {
+    await query('INSERT INTO import_log (usuario_id, rota, itens_processados) VALUES ($1, $2, $3)', [usuarioId || null, rota, itensProcessados || 0]);
+  },
   __queryLog: queryLog,
   __reset: reset,
   __seed: seed,
