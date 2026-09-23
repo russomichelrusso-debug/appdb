@@ -49,9 +49,16 @@ router.post('/sync', async (req, res) => {
     });
   }
   try {
-    const codigos = produtos.map(p => String(p.codigo_sku));
-    const nomes = produtos.map(p => p.nome || '');
-    const categorias = produtos.map(p => p.categoria || null);
+    // Dedup em memória por codigo_sku (mantendo a última ocorrência) - o
+    // UNNEST + ON CONFLICT DO UPDATE abaixo falha com "cannot affect row a
+    // second time" se a mesma chave aparecer duas vezes no mesmo lote.
+    const porCodigo = new Map();
+    for (const p of produtos) porCodigo.set(String(p.codigo_sku), p);
+    const unicos = Array.from(porCodigo.values());
+
+    const codigos = unicos.map(p => String(p.codigo_sku));
+    const nomes = unicos.map(p => p.nome || '');
+    const categorias = unicos.map(p => p.categoria || null);
 
     const antes = await pool.query('SELECT COUNT(*) FROM produtos');
     const totalAntes = Number(antes.rows[0].count);
@@ -66,11 +73,11 @@ router.post('/sync', async (req, res) => {
     const depois = await pool.query('SELECT COUNT(*) FROM produtos');
     const totalDepois = Number(depois.rows[0].count);
 
-    await registrarImportacao(req.usuario?.id, 'produtos/sync', produtos.length);
-    res.json({ criados: totalDepois - totalAntes, atualizados: produtos.length - (totalDepois - totalAntes), total: totalDepois });
+    await registrarImportacao(req.usuario?.id, 'produtos/sync', unicos.length);
+    res.json({ criados: totalDepois - totalAntes, atualizados: unicos.length - (totalDepois - totalAntes), total: totalDepois });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao sincronizar catálogo: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao sincronizar catálogo.' });
   }
 });
 

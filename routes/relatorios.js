@@ -3,6 +3,10 @@ const router = express.Router();
 const { pool } = require('../db');
 const { SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase } = require('./lib/skuNormalizacao');
+const { validarIdInteiro } = require('../middleware/validarId');
+
+router.param('id', validarIdInteiro);
+router.param('produtoId', validarIdInteiro);
 
 // Reconcilia códigos promocionais (P/P1/P2 + código base, ver
 // routes/lib/skuNormalizacao.js) num array já agregado por codigo_sku

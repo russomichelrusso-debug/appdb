@@ -259,7 +259,17 @@ router.post('/importar', async (req, res) => {
   // de cliente, que antes exigia admin no fluxo separado que foi removido).
   const { itens: itensBrutos, classificacoes } = req.body;
   if (!Array.isArray(itensBrutos) || itensBrutos.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
-  const itens = deduplicarItensOficiais(itensBrutos);
+
+  // Linha sem um desses três campos não tem como ser gravada de forma útil
+  // (nr_pedido+codigo_sku é a chave primária, cliente_codigo_oficial é quem
+  // liga ao cliente) - sem esse filtro, String(undefined) virava o texto
+  // literal "undefined" gravado no banco, passando pelo NOT NULL.
+  const itensValidos = itensBrutos.filter(it => it.nr_pedido != null && it.codigo_sku != null && it.cliente_codigo_oficial != null);
+  const descartados = itensBrutos.length - itensValidos.length;
+  if (descartados > 0) {
+    console.warn(`Importação de pedidos oficiais: ${descartados} linha(s) descartada(s) por faltar nr_pedido/codigo_sku/cliente_codigo_oficial.`);
+  }
+  const itens = deduplicarItensOficiais(itensValidos);
 
   let client;
   try {
@@ -351,13 +361,13 @@ router.post('/importar', async (req, res) => {
     await client.query('COMMIT');
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
     await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
-    res.json({ ok: true, itens: itens.length, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
+    res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar pedidos oficiais: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao importar pedidos oficiais.' });
   } finally {
     if (client) client.release();
   }

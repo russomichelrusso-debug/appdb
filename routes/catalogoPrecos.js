@@ -230,7 +230,7 @@ router.post('/importar', async (req, res) => {
     res.json({ ok: true, produtosImportados: produtos.length });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao salvar catálogo no banco: ' + e.message });
+    res.status(500).json({ erro: 'Erro ao salvar catálogo no banco.' });
   }
 });
 
