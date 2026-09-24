@@ -743,8 +743,17 @@
     }
 
     /* ---------- Search ---------- */
+    /* Barra de pesquisa da aba Pedido presa abaixo das abas ao rolar. */
     .searchWrap {
       padding: 12px 16px 6px;
+      position: sticky;
+      top: 103px;
+      z-index: 18;
+      background: var(--fill);
+    }
+
+    #resultsList {
+      scroll-margin-top: 190px;
     }
 
     .searchBox {
@@ -3612,10 +3621,40 @@
       text-align: center;
     }
 
-    .lev-summary {
+    /* Barra de pesquisa + resumo do Levantamento presos logo abaixo das abas
+       (topo 58px + abas 45px = 103px, mesmo valor que o resumo já usava). */
+    .lev-stickyTopo {
       position: sticky;
       top: 103px;
       z-index: 18;
+      background: var(--fill);
+    }
+
+    .lev-stickyTopo .lev-inputWrap {
+      padding-bottom: 8px;
+    }
+
+    .lev-stickyTopo .lev-searchresults {
+      max-height: 50vh;
+      overflow-y: auto;
+    }
+
+    .lev-hint {
+      padding: 8px 16px 4px;
+    }
+
+    .levsr-feito {
+      display: inline-block;
+      margin-top: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .lev-summary {
       padding: 10px 16px;
       font-size: 14px;
       color: var(--gray);
@@ -4352,6 +4391,10 @@
           </button>
         </div>
       </div>
+      <!-- Pesquisa + resumo fixos logo abaixo das abas: com 100+ itens
+           levantados, o vendedor confere/escaneia de qualquer ponto da lista
+           sem precisar voltar ao topo. -->
+      <div class="lev-stickyTopo">
       <div class="lev-inputWrap">
         <div class="searchBox searchBox--actions2">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -4379,11 +4422,12 @@
             </button>
           </div>
         </div>
-        <div class="hint">Cada leitura de código soma 1 unidade. Por nome, toque no produto certo na lista. O estoque
-          também pode ser digitado direto.</div>
       </div>
       <div class="lev-searchresults hidden" id="levSearchResults"></div>
       <div class="lev-summary" id="levSummary"></div>
+      </div>
+      <div class="hint lev-hint">Cada leitura de código soma 1 unidade. Por nome, toque no produto certo na lista. O
+        estoque também pode ser digitado direto.</div>
       <div class="lev-list" id="levList"></div>
       <div class="lev-empty" id="levEmpty">
         Nenhum item levantado ainda.<br>Escaneie ou digite um código/nome para começar.
@@ -6681,10 +6725,14 @@
           wrap.classList.remove('hidden');
           return;
         }
+        // mostra na própria busca se o item já foi levantado - responde "já
+        // contei esse?" sem rolar a lista e sem somar +1 por engano
+        const levantados = new Map(state.survey.map(it => [it.cod, it.qty]));
         wrap.innerHTML = results.slice(0, 8).map(p => `
     <button type="button" class="levsr-item" data-lev-pick="${escapeHtml(p.c)}">
       <span class="levsr-name">${escapeHtml(p.n)}</span>
       <span class="levsr-code">Cód. ${escapeHtml(p.c)}</span>
+      ${levantados.has(p.c) ? `<span class="levsr-feito">✓ já levantado · ${levantados.get(p.c)} un.</span>` : ''}
     </button>
   `).join('');
         wrap.classList.remove('hidden');
@@ -13029,7 +13077,13 @@
           let debounceTimer;
           searchInput.addEventListener('input', () => {
             clearTimeout(debounceTimer);
-            debounceTimer = setTimeout(renderResults, 90);
+            debounceTimer = setTimeout(() => {
+              renderResults();
+              // a barra fica presa no topo; se o vendedor estava rolado lá embaixo,
+              // leva a tela pro começo dos resultados novos (senão ficaria no meio deles)
+              const lista = document.getElementById('resultsList');
+              if (lista && searchInput.value.trim().length >= 2 && lista.getBoundingClientRect().top < 190) lista.scrollIntoView({ block: 'start' });
+            }, 90);
           });
           // código digitado + Enter entra na lista de preços, igual escanear/falar -
           // a busca ao vivo por nome (renderResults) continua funcionando normalmente
