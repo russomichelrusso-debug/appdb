@@ -1840,6 +1840,46 @@
       gap: 12px;
     }
 
+    /* Subseção recolhível dentro de um card (ex: Produtos foco em Promoções) -
+       mesmo chevron dos grupos do painel. */
+    .ap-subsecao {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .ap-subsecao summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .ap-subsecao summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .ap-subsecao summary::after {
+      content: '▾';
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--gray);
+      transition: transform .15s;
+    }
+
+    .ap-subsecao[open] summary::after {
+      transform: rotate(180deg);
+    }
+
+    .ap-subsecaoInfo {
+      font-weight: 400;
+      color: var(--gray);
+      margin-left: 4px;
+    }
+
     .ap-card h3 {
       font-size: 12px;
       text-transform: none;
@@ -4652,13 +4692,15 @@
             <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Restaurar backup</button>
           </div>
           <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
-        </div>
 
-        <div class="ap-card">
-          <h3>Produtos foco (Dashboard)</h3>
-          <p class="ap-hint" style="margin:0 0 10px;">Famílias destacadas no gráfico "Valor Produtos Foco" do
-            Dashboard (Curva ABC). Marque as que a empresa quer empurrar esse mês.</p>
-          <div id="produtosFocoList"></div>
+          <!-- Produtos foco: recolhido por padrão, a lista só é montada ao abrir
+               (aí o catálogo já carregou - ver initProdutosFocoSecao). -->
+          <details class="ap-subsecao" id="produtosFocoSecao">
+            <summary>Produtos foco (Dashboard)<span class="ap-subsecaoInfo" id="produtosFocoResumo"></span></summary>
+            <p class="ap-hint" style="margin:10px 0;">Famílias destacadas no gráfico "Valor Produtos Foco" do
+              Dashboard (Curva ABC). Marque as que a empresa quer empurrar esse mês.</p>
+            <div id="produtosFocoList"></div>
+          </details>
         </div>
 
         <details class="ap-group hidden" id="manageUsersGroup">
@@ -11603,9 +11645,20 @@
   `).join('');
         wrap.querySelectorAll('[data-foco-categoria]').forEach(input => input.addEventListener('change', async () => {
           const marcadas = [...wrap.querySelectorAll('[data-foco-categoria]:checked')].map(i => i.dataset.focoCategoria);
-          try { await salvarProdutosFocoServidor(marcadas); }
+          try { await salvarProdutosFocoServidor(marcadas); atualizarResumoProdutosFoco(marcadas.length); }
           catch (e) { alert('Não foi possível salvar: ' + e.message); input.checked = !input.checked; }
         }));
+      }
+      function atualizarResumoProdutosFoco(qtd) {
+        const el = document.getElementById('produtosFocoResumo');
+        if (el) el.textContent = qtd > 0 ? ` · ${qtd} marcada${qtd === 1 ? '' : 's'}` : ' · nenhuma marcada';
+      }
+      function initProdutosFocoSecao() {
+        const secao = document.getElementById('produtosFocoSecao');
+        secao.addEventListener('toggle', () => { if (secao.open) renderProdutosFocoList(); });
+      }
+      async function carregarResumoProdutosFoco() {
+        try { atualizarResumoProdutosFoco(((await apiProdutosFocoConfig()).valor || []).length); } catch (e) { }
       }
       function openPromoProdutoModal() {
         promoProdutoOriginalSelecionado = null;
@@ -11945,7 +11998,7 @@
         const overlay = document.getElementById('adminOverlay');
         const closeBtn = document.getElementById('closeAdmin');
 
-        function openPanel() { refreshAdminCatalogStatus(); overlay.classList.remove('hidden'); panel.classList.remove('hidden'); }
+        function openPanel() { refreshAdminCatalogStatus(); carregarResumoProdutosFoco(); overlay.classList.remove('hidden'); panel.classList.remove('hidden'); }
         function closePanel() { overlay.classList.add('hidden'); panel.classList.add('hidden'); }
 
         btn.addEventListener('click', openPanel);
@@ -12519,7 +12572,7 @@
           initImportacaoUnificada();
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);
           renderPromoProdutosList();
-          renderProdutosFocoList();
+          initProdutosFocoSecao();
           initTabs();
           initClienteFichaPeriodo();
           initLevantamento();
