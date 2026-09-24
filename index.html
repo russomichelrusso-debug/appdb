@@ -12461,7 +12461,8 @@
       ];
 
       function handleVoiceResult(transcript, targetInputId) {
-        const clean = transcript.trim();
+        // o reconhecimento às vezes devolve pontuação no fim ("disco diamantado.")
+        const clean = transcript.trim().replace(/[.,!?;:]+$/, '').trim();
         const normalized = normalize(clean);
         for (const cmd of VOICE_COMMANDS) {
           if (cmd.patterns.some(p => normalized.includes(p))) {
@@ -12474,7 +12475,21 @@
         // do código escaneado/digitado) - não bateu com comando conhecido, então
         // trata o que foi dito como um código/nome de produto.
         if (targetInputId === 'searchInput') {
-          processPrecoCodigo(clean);
+          // Código falado ("60 663", "60-663") vira só dígitos e entra direto na
+          // lista, igual ao escaneado. Nome de produto costuma bater em vários
+          // itens - antes isso caía em "Código não encontrado" e a busca era
+          // descartada; agora a busca fica na tela pro vendedor tocar no certo
+          // (e se só um produto bater, já entra na lista direto).
+          const soDigitos = clean.replace(/[\s.\-]/g, '');
+          if (/^\d+$/.test(soDigitos)) { processPrecoCodigo(soDigitos); return; }
+          const resultados = findByExactCode(clean) ? null : searchProducts(clean);
+          if (!resultados || resultados.length === 1) { processPrecoCodigo(clean); return; }
+          const input = document.getElementById('searchInput');
+          input.value = clean;
+          renderResults();
+          showToast(resultados.length
+            ? `Buscando "${clean}" — toque no produto certo`
+            : `Nenhum produto encontrado para "${clean}"`);
           return;
         }
         // outros campos (ex: levInput): só preenche e dispara a busca normal
