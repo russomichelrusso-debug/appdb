@@ -84,6 +84,11 @@ Supabase, sem PR — não é mudança de código.
   filtrada no cliente), botão de adicionar direto ao orçamento a partir da Curva ABC, correção da
   lista de campanhas que sumia no Painel Administrativo (race condition de render antes do dado
   assíncrono carregar), acesso rápido ao Salesforce da empresa.
+- **Painel Administrativo simplificado** (área única de importação que reconhece o arquivo,
+  promoções numa lista só, Produtos foco recolhido dentro de Promoções) e **padronização visual**:
+  tokens de cor de status, correção do tema escuro (textos que sumiam, fundos claros fixos, telas
+  de login das páginas separadas), botões de modal com um padrão só, `alert()`/`prompt()` nativos
+  trocados por toast de erro/`askText`. O padrão está documentado em "Padrão visual" no README.
 
 ## O que já tentamos e não deu certo
 
@@ -99,6 +104,12 @@ Supabase, sem PR — não é mudança de código.
   Admin) em vez de arquivo solto.
 
 ## Caminho a seguir
+
+- Padronização visual que ficou pra depois (levantada na análise de UI): **acessibilidade e área
+  de toque** (botões de 17–32px como `.fichaInfoBtn`, `.rm`, `.pencilBtn`, `.gearBtn`; campos só
+  com placeholder, sem `<label>`; steppers −/+ sem `aria-label`) e **unificar o visual das páginas
+  separadas** com o `index.html` (cabeçalho, cards e botões próprios em cada uma — hoje só os
+  tokens e o tema escuro foram alinhados).
 
 - Ideia em aberto, ainda não implementada: um painel de "oportunidades do dia" na tela inicial
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
