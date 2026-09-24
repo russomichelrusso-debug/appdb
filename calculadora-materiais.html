@@ -23,6 +23,16 @@
       --r-lg: 22px;
       --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 1px 1px rgba(0, 0, 0, .04);
       --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
+      /* mesmos tokens de status do index.html */
+      --on-accent: #FFFFFF;
+      --success: #1E8E3E;
+      --warning: #B36B00;
+      --danger: #B3261E;
+      --success-bg: #E7F3EC;
+      --warning-bg: #FFF4E5;
+      --danger-bg: #FDECEC;
+      --accent-bg: #FCE9EC;
+      color-scheme: light;
     }
 
     html[data-theme="dark"] {
@@ -33,6 +43,14 @@
       --white: #2C2C2E;
       --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .2);
       --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .3);
+      --success: #5BC27A;
+      --warning: #F0A54A;
+      --danger: #FF6B61;
+      --success-bg: rgba(52, 199, 89, .16);
+      --warning-bg: rgba(255, 159, 10, .16);
+      --danger-bg: rgba(255, 69, 58, .16);
+      --accent-bg: rgba(204, 9, 53, .22);
+      color-scheme: dark;
     }
 
     * {
@@ -119,6 +137,9 @@
       background-position: right 13px center;
       padding-right: 30px;
     }
+    html[data-theme="dark"] .field select {
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='7'><path d='M0 0l5.5 6.5L11 0' fill='none' stroke='%2398989D' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    }
 
     .fieldset-label {
       font-size: 11px;
@@ -189,8 +210,8 @@
       left: 50%;
       bottom: 24px;
       transform: translate(-50%, 12px);
-      background: var(--ink);
-      color: var(--white);
+      background: rgba(29, 29, 31, .92);
+      color: var(--on-accent);
       padding: 12px 18px;
       border-radius: 12px;
       font-size: 13.5px;

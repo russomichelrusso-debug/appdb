@@ -26,6 +26,16 @@
       --r-lg: 22px;
       --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 1px 1px rgba(0, 0, 0, .04);
       --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
+      /* mesmos tokens de status do index.html */
+      --on-accent: #FFFFFF;
+      --success: #1E8E3E;
+      --warning: #B36B00;
+      --danger: #B3261E;
+      --success-bg: #E7F3EC;
+      --warning-bg: #FFF4E5;
+      --danger-bg: #FDECEC;
+      --accent-bg: #FCE9EC;
+      color-scheme: light;
     }
 
     html[data-theme="dark"] {
@@ -36,6 +46,23 @@
       --white: #2C2C2E;
       --shadow-1: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 1px rgba(0, 0, 0, .2);
       --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .3);
+      --success: #5BC27A;
+      --warning: #F0A54A;
+      --danger: #FF6B61;
+      --success-bg: rgba(52, 199, 89, .16);
+      --warning-bg: rgba(255, 159, 10, .16);
+      --danger-bg: rgba(255, 69, 58, .16);
+      --accent-bg: rgba(204, 9, 53, .22);
+      color-scheme: dark;
+      --amber: #F0A54A;
+      --green: #5BC27A;
+    }
+
+    /* loading/login são identidade visual fixa (sempre escuros), igual ao
+       index.html - com var(--ink) ficavam claros no modo escuro. */
+    html[data-theme="dark"] .loadingScreen,
+    html[data-theme="dark"] .loginScreen {
+      background: #1D1D1F;
     }
 
     * {
@@ -149,7 +176,7 @@
 
     .loginCard h2 { font-size: 18px; margin: 0 0 4px; }
     .loginCard .ap-hint { font-size: 12.5px; color: var(--gray); line-height: 1.5; margin: 0 0 18px; }
-    .ap-msg.error { background: #FDECEC; color: var(--red-deep); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; text-align: left; }
+    .ap-msg.error { background: var(--danger-bg); color: var(--danger); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; text-align: left; }
     .ap-msg.error.inline { text-align: center; }
 
     /* ---------- topbar ---------- */
@@ -220,7 +247,7 @@
     .quadroSocietario .val { font-size: 13px; }
 
     .fonteNota { font-size: 10.5px; color: var(--gray); margin-top: 14px; line-height: 1.5; }
-    .avisoCache { background: #FFF6E5; color: var(--amber); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
+    .avisoCache { background: var(--warning-bg); color: var(--amber); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
     .hidden { display: none !important; }
   </style>
 </head>
