@@ -120,6 +120,17 @@ Cada produto carrega preço por 6 canais (Varejo/Atacado/E-commerce/Moderno/Cons
 - **Importar arquivo**: uma área única recebe qualquer arquivo (vários de uma vez) e reconhece o tipo pelo conteúdo — `detectarTipoArquivo()` em `index.html` (abas `PRECIFICAÇÃO`/`TRIBUTAÇÃO` → planilha de preços; `Carteira`/`Faturamento` → relatório oficial; colunas `Matriz` + `OBJETIVO MÊS` → objetivo trimestral; `Classificatorio` → classificatório do ERP; `Item` + `Qt. Disp.` → previsão de estoque; `Código` + `YouTube`/`Instagram` → vídeos; `Código` + `Link` → link do site; JSON de fichas técnicas, EAN/DUN-14 ou clientes; `.pdf` → cotação). Mostra "Detectado: X" e só envia depois de confirmar. Para aceitar um formato novo, adicione o tipo em `TIPOS_IMPORTACAO` e a regra de reconhecimento em `detectarTipoArquivo()`.
 - **Status**: uma linha de resumo que abre os detalhes; "Sincronizar agora" confere o servidor, reenvia o catálogo de produtos e recarrega a fonte automática.
 - **Avançado** (fechado por padrão): exportar pedidos, produtos sem EAN, integridade de clientes, pedidos duplicados, carteira antiga, apagar relatório oficial e endereço do servidor.
+- **Produtos foco** fica dentro do card Promoções, recolhido; a lista só é montada ao abrir.
+
+## Padrão visual (frontend)
+
+- **Cores de status**: use os tokens do `:root`, nunca o hex solto — `--success`, `--warning`, `--danger` (texto/borda, mudam no tema escuro), `--success-bg`/`--warning-bg`/`--danger-bg`/`--accent-bg`/`--info-bg` (tintas de fundo) e `--success-strong`/`--warning-strong`/`--danger-strong` (fundo sólido com texto branco, iguais nos dois temas).
+- **Texto sobre fundo de destaque** (vermelho, verde, vidro escuro): `var(--on-accent)`. `--white` é cor de *superfície* — no tema escuro vira cinza-escuro.
+- **Botões**: `.fileBtn`/`.restoreBtn` = secundário; `.btnPrimary` = ação principal; `.btnDanger` = modificador destrutivo; `.restoreBtn.compacto` = versão estreita. Em modais, `.minimodal-btnrow`: o primeiro botão é o Cancelar e o último (se houver dois) vira a ação principal sozinho.
+- **Mensagens**: `<div class="ap-msg success">` / `<div class="ap-msg error">`; toast com `showToast(msg)` ou `showToast(msg, 'erro')` (vermelho, fica 5s). Nada de `alert()`/`prompt()`/`confirm()` nativos — use `askConfirm(msg, rotulo, { perigo })` e `askText(msg, valorInicial, rotulo)`.
+- **Ícones de lista**: `ICON_TRASH`, `ICON_EDIT`, `ICON_ATIVO`/`ICON_INATIVO` (SVG em `currentColor`), não emoji.
+- **Fonte**: tamanhos inteiros (11, 12, 13, 14, 15…); títulos `h2` 18px, `h3` de modal 17px.
+- As páginas separadas (`curva-abc.html`, `ficha-cnpj.html`, `calculadora-materiais.html`) repetem os mesmos tokens de status no próprio `:root`.
 
 ## Frontend — carregamento do catálogo de preços
 

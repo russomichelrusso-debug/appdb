@@ -11,7 +11,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#CC0935">
+  <meta name="theme-color" content="var(--red)">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <style>
@@ -46,6 +46,12 @@
       --accent-bg: #FCE9EC;
       --info-bg: #E8F0FE;
       --neutral-2: #E8E8ED;
+      /* versões sólidas das cores de status, pra FUNDO com texto branco
+         (botão Finalizar, badges, pontos de status) - iguais nos dois temas. */
+      --success-strong: #1E8E3E;
+      --success-deep: #166B2E;
+      --warning-strong: #B36B00;
+      --danger-strong: #B3261E;
       color-scheme: light;
     }
 
@@ -294,14 +300,14 @@
 
     .loginCard h2 {
       color: #fff;
-      font-size: 19px;
+      font-size: 18px;
       margin-bottom: 16px;
       text-align: center;
     }
 
     .loginCard label {
       display: block;
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 600;
       color: rgba(255, 255, 255, .6);
       margin-bottom: 6px;
@@ -327,7 +333,7 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      font-size: 13.5px;
+      font-size: 14px;
       color: rgba(255, 255, 255, .8);
       font-weight: 500;
       margin-bottom: 18px;
@@ -362,7 +368,7 @@
       background: none;
       border: none;
       color: rgba(255, 255, 255, .5);
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 600;
       cursor: pointer;
       padding: 8px;
@@ -639,7 +645,7 @@
       background: transparent;
       color: var(--ink);
       padding: 8px 4px;
-      font-size: 13.5px;
+      font-size: 14px;
       font-weight: 600;
       border-radius: 8px;
       cursor: pointer;
@@ -677,7 +683,7 @@
       align-items: center;
       justify-content: center;
       gap: 1px;
-      font-size: 10.5px;
+      font-size: 11px;
       line-height: 1.15;
       padding: 6px 2px;
     }
@@ -844,7 +850,7 @@
 
     .hint {
       padding: 8px 4px 2px;
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
     }
 
@@ -953,7 +959,7 @@
       border-radius: 14px;
       background: rgba(29, 29, 31, .88);
       color: #fff;
-      font-size: 13.5px;
+      font-size: 14px;
       text-align: center;
     }
 
@@ -1001,7 +1007,7 @@
     .levitem .fixedbadge,
     .cartitem .fixedbadge {
       display: inline-block;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0;
       text-transform: none;
@@ -1086,7 +1092,7 @@
 
     .previsaoBadge--alerta {
       background: #FDECEC;
-      color: #B3261E;
+      color: var(--danger);
     }
 
     .classiBadge {
@@ -1132,7 +1138,7 @@
     }
 
     .card .prices .final {
-      font-size: 19px;
+      font-size: 18px;
       font-weight: 600;
       letter-spacing: -.01em;
       color: var(--ink);
@@ -1140,7 +1146,7 @@
     }
 
     .card .prices .final small {
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 500;
       color: var(--gray);
     }
@@ -1189,7 +1195,7 @@
 
     .empty-state p {
       margin: 0;
-      font-size: 14.5px;
+      font-size: 15px;
     }
 
     /* ---------- Cart bar ---------- */
@@ -1209,7 +1215,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      font-size: 14.5px;
+      font-size: 15px;
       font-weight: 600;
       cursor: pointer;
     }
@@ -1225,7 +1231,7 @@
       color: var(--on-accent);
       border-radius: 20px;
       padding: 2px 9px;
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 700;
     }
 
@@ -1313,11 +1319,13 @@
     }
 
     .drawer-header h2 {
-      font-size: 19px;
+      font-size: 18px;
       padding-top: 10px;
     }
 
-    .drawer-header .closeBtn {
+    /* Botão × redondo - no drawer (fundo claro) e no cabeçalho escuro do
+       Painel Administrativo (mesmo estilo translúcido dos ícones do topo). */
+    .closeBtn {
       background: var(--neutral-2);
       border: none;
       font-size: 16px;
@@ -1331,7 +1339,18 @@
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    .drawer-header .closeBtn {
       margin-top: 6px;
+    }
+
+    .ap-header .closeBtn {
+      background: rgba(255, 255, 255, .14);
+      color: var(--on-accent);
+      width: 32px;
+      height: 32px;
+      font-size: 18px;
     }
 
     .drawer-body {
@@ -1358,7 +1377,7 @@
 
     .cartitem .pname {
       font-weight: 600;
-      font-size: 14.5px;
+      font-size: 15px;
       line-height: 1.3;
       letter-spacing: -.01em;
     }
@@ -1505,7 +1524,7 @@
     }
 
     .cartitem .unitprice {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       text-align: right;
       display: flex;
@@ -1561,7 +1580,7 @@
     .pedidoMinimoAviso {
       background: var(--warning-bg);
       color: var(--warning);
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 600;
       padding: 8px 12px;
       border-radius: 8px;
@@ -1579,12 +1598,12 @@
     }
 
     .subtotalrow .lbl {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
     }
 
     .subtotalrow .val {
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
       font-variant-numeric: tabular-nums;
     }
@@ -1633,7 +1652,7 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: #1E8E3E;
+      background: var(--success-strong);
       color: #fff;
       border: none;
       padding: 15px;
@@ -1651,7 +1670,7 @@
     }
 
     .finalizeBtn:active {
-      background: #166B2E;
+      background: var(--success-deep);
     }
 
     .shareOptBtn {
@@ -1665,7 +1684,7 @@
       border: none;
       padding: 15px;
       font-weight: 600;
-      font-size: 14.5px;
+      font-size: 15px;
       border-radius: var(--r-sm);
       cursor: pointer;
     }
@@ -1688,7 +1707,7 @@
       box-shadow: var(--shadow-1);
       padding: 12px 10px;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       border-radius: var(--r-sm);
       cursor: pointer;
     }
@@ -1697,7 +1716,7 @@
       text-align: center;
       padding: 44px 16px;
       color: var(--gray);
-      font-size: 14.5px;
+      font-size: 15px;
     }
 
     .exportBtn {
@@ -1744,7 +1763,7 @@
     }
 
     .shareSheet h3 {
-      font-size: 15px;
+      font-size: 17px;
       margin: 0 0 14px;
       text-align: center;
       color: var(--ink);
@@ -1781,12 +1800,12 @@
 
     .shareSheetGrid span {
       font-weight: 700;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
     }
 
     .shareSheetGrid small {
-      font-size: 10.5px;
+      font-size: 11px;
       color: var(--gray);
     }
 
@@ -1941,7 +1960,7 @@
     }
 
     .ap-sectionLbl {
-      font-size: 11.5px;
+      font-size: 12px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .04em;
@@ -1959,7 +1978,7 @@
       gap: 10px;
       align-items: baseline;
       padding: 5px 0;
-      font-size: 14.5px;
+      font-size: 15px;
     }
 
     .ap-status-row .k {
@@ -1987,9 +2006,9 @@
       align-items: center;
       justify-content: space-between;
       gap: 10px;
-      font-size: 14.5px;
+      font-size: 15px;
       font-weight: 600;
-      color: #1E8E3E;
+      color: var(--success);
     }
 
     .ap-statusCard summary::-webkit-details-marker {
@@ -1997,7 +2016,7 @@
     }
 
     .ap-statusCard summary .ap-statusAlerta {
-      color: #B36B00;
+      color: var(--warning);
     }
 
     .ap-statusChevron {
@@ -2018,7 +2037,7 @@
 
     .ap-tiposAceitos {
       margin-top: 10px;
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
     }
 
@@ -2055,7 +2074,7 @@
 
     .ap-importAcoes label {
       flex: 1 1 130px;
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       margin: 0;
     }
@@ -2077,12 +2096,12 @@
 
     .ap-importAcoes .ap-importEnviar {
       background: var(--red);
-      color: #fff;
+      color: var(--on-accent);
     }
 
     .promoTipoTag {
       display: inline-block;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: .03em;
@@ -2098,12 +2117,12 @@
 
     .promoTipoTag--classificatorio {
       background: rgba(30, 142, 62, .14);
-      color: #1E8E3E;
+      color: var(--success);
     }
 
     .promoTipoTag--produto {
       background: rgba(179, 107, 0, .14);
-      color: #B36B00;
+      color: var(--warning);
     }
 
     .novaPromoOpcao {
@@ -2141,18 +2160,50 @@
       border-radius: var(--r-sm);
       padding: 13px;
       font-weight: 600;
-      font-size: 14.5px;
+      font-size: 14px;
       cursor: pointer;
     }
 
-    .fileBtn:active {
+    .fileBtn:active,
+    .restoreBtn:active {
       background: var(--hairline);
+    }
+
+    /* Padrão de botões: .fileBtn/.restoreBtn = secundário (fundo cinza, texto
+       vermelho), .btnPrimary = ação principal (fundo vermelho), .btnDanger =
+       modificador pra ação destrutiva (texto vermelho-erro). */
+    .btnPrimary {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: var(--red);
+      color: var(--on-accent);
+      border: none;
+      border-radius: var(--r-sm);
+      padding: 13px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .btnPrimary:active {
+      background: var(--red-deep);
+    }
+
+    .fileBtn.btnDanger,
+    .restoreBtn.btnDanger {
+      color: var(--danger);
+    }
+
+    .restoreBtn.compacto {
+      width: auto;
+      padding: 10px 16px;
     }
 
     .ap-msg {
       padding: 11px 13px;
       border-radius: 12px;
-      font-size: 13.5px;
+      font-size: 14px;
       font-weight: 600;
       margin-top: 10px;
     }
@@ -2170,7 +2221,7 @@
     .ap-preview-row {
       display: flex;
       justify-content: space-between;
-      font-size: 13.5px;
+      font-size: 14px;
       padding: 4px 0;
     }
 
@@ -2191,12 +2242,12 @@
     .ap-confirm {
       flex: 1;
       background: var(--red);
-      color: #fff;
+      color: var(--on-accent);
       border: none;
       border-radius: var(--r-sm);
       padding: 12px;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       cursor: pointer;
     }
 
@@ -2207,7 +2258,7 @@
       border-radius: var(--r-sm);
       padding: 12px 16px;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       cursor: pointer;
     }
 
@@ -2216,9 +2267,9 @@
       border: none;
       color: var(--red);
       border-radius: var(--r-sm);
-      padding: 12px;
+      padding: 13px;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       cursor: pointer;
       width: 100%;
     }
@@ -2244,7 +2295,7 @@
 
     .promoRuleItem .prName {
       font-weight: 700;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
     }
 
@@ -2281,11 +2332,18 @@
     }
 
     .promoRuleItem .prBtns button.prToggleOn {
-      color: #1E8E3E;
+      color: var(--success);
     }
 
     .promoRuleItem .prBtns button.prDeleteBtn {
-      color: #B3261E;
+      color: var(--danger);
+    }
+
+    .promoRuleItem .prBtns button svg,
+    .savedSurveyItem .ssDel svg {
+      width: 15px;
+      height: 15px;
+      display: block;
     }
 
     .promoTierRow {
@@ -2345,7 +2403,7 @@
 
     .clientPickerItem .cpName {
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
       letter-spacing: -.005em;
     }
@@ -2386,7 +2444,7 @@
       border: none;
       color: var(--gray);
       font-weight: 600;
-      font-size: 12.5px;
+      font-size: 13px;
       cursor: pointer;
       padding: 2px 4px;
       white-space: nowrap;
@@ -2413,7 +2471,7 @@
     }
 
     .hist-clientLabel {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       font-weight: 600;
     }
@@ -2460,13 +2518,13 @@
 
     .histCard .hcName {
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
       letter-spacing: -.005em;
     }
 
     .histCard .hcCode {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       margin-top: 1px;
     }
@@ -2479,7 +2537,7 @@
     }
 
     .histCard .hcStat {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
     }
 
@@ -2518,7 +2576,7 @@
     .histCard .hcRotBadge {
       display: inline-block;
       background: none;
-      color: #B36B00;
+      color: var(--warning);
       font-weight: 600;
       font-size: 11px;
       padding: 0;
@@ -2541,11 +2599,11 @@
     }
 
     .abcPill--a {
-      border-left-color: #CC0935;
+      border-left-color: var(--red);
     }
 
     .abcPill--b {
-      border-left-color: #B36B00;
+      border-left-color: var(--warning);
     }
 
     .abcPill--c {
@@ -2596,11 +2654,11 @@
     }
 
     .badge-classe--a {
-      background: #CC0935;
+      background: var(--red);
     }
 
     .badge-classe--b {
-      background: #B36B00;
+      background: var(--warning-strong);
     }
 
     .badge-classe--c {
@@ -2632,7 +2690,7 @@
 
     .pdfDropzoneTitle {
       font-weight: 700;
-      font-size: 14.5px;
+      font-size: 15px;
       color: var(--ink);
       margin-bottom: 3px;
     }
@@ -2658,7 +2716,7 @@
       padding: 9px 11px;
       border-radius: 10px;
       background: var(--fill);
-      font-size: 12.5px;
+      font-size: 13px;
     }
 
     .pdfQueueDot {
@@ -2675,15 +2733,15 @@
     }
 
     .pdfQueueItem--sucesso .pdfQueueDot {
-      background: #1E8E3E;
+      background: var(--success-strong);
     }
 
     .pdfQueueItem--jaexistia .pdfQueueDot {
-      background: #B36B00;
+      background: var(--warning-strong);
     }
 
     .pdfQueueItem--erro .pdfQueueDot {
-      background: #B3261E;
+      background: var(--danger-strong);
     }
 
     @keyframes pdfPulse {
@@ -2750,7 +2808,7 @@
 
     .dirListItem .dlName {
       font-weight: 700;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
     }
 
@@ -2784,7 +2842,7 @@
     }
 
     .abcPill.b {
-      border-left-color: #B36B00;
+      border-left-color: var(--warning);
     }
 
     .abcPill.c {
@@ -2807,7 +2865,7 @@
     }
 
     .abcPill .apSub {
-      font-size: 10.5px;
+      font-size: 11px;
       color: var(--gray);
       margin-top: 1px;
     }
@@ -2848,7 +2906,7 @@
     }
 
     .abcRow .abcBadge.b {
-      background: #B36B00;
+      background: var(--warning-strong);
     }
 
     .abcRow .abcBadge.c {
@@ -2881,11 +2939,11 @@
     }
 
     .prodResolveMsg.ok {
-      color: #1E8E3E;
+      color: var(--success);
     }
 
     .prodResolveMsg.err {
-      color: #B3261E;
+      color: var(--danger);
     }
 
     .basketItemRow {
@@ -2948,7 +3006,7 @@
     }
 
     .basketItemRow .biBottom .biQtyLbl {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       white-space: nowrap;
     }
@@ -2959,11 +3017,11 @@
     }
 
     .basketItemRow .biResolve.ok {
-      color: #1E8E3E;
+      color: var(--success);
     }
 
     .basketItemRow .biResolve.err {
-      color: #B3261E;
+      color: var(--danger);
     }
 
     /* ---------- Mini modal ---------- */
@@ -3065,6 +3123,14 @@
       white-space: pre-line;
     }
 
+    #appConfirmInput {
+      margin: 0 0 14px;
+    }
+
+    .minimodal-btnrow button.btnPerigo {
+      background: var(--danger-strong);
+    }
+
     /* ---------- Comparação de clientes ao mesclar ---------- */
     .mergeCards {
       display: flex;
@@ -3097,7 +3163,7 @@
     }
 
     .mergeCard .mcDetail {
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
       margin-top: 3px;
       line-height: 1.5;
@@ -3105,7 +3171,7 @@
 
     .mergeCard .mcTag {
       display: inline-block;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       color: #fff;
       background: var(--red);
@@ -3115,7 +3181,7 @@
     }
 
     .mergeAutoFill {
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
       background: var(--fill);
       border-radius: 10px;
@@ -3131,7 +3197,7 @@
     /* ---------- Edição de preço base ---------- */
     .editedbadge {
       display: inline-block;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0;
       color: #fff;
@@ -3144,11 +3210,11 @@
 
     .campaignbadge {
       display: inline-block;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0;
       color: #fff;
-      background: #1E8E3E;
+      background: var(--success-strong);
       padding: 3px 8px;
       border-radius: 20px;
       margin-bottom: 6px;
@@ -3222,13 +3288,21 @@
       color: var(--on-accent);
       padding: 11px 20px;
       border-radius: 24px;
-      font-size: 13.5px;
+      font-size: 14px;
       font-weight: 600;
       opacity: 0;
       transition: opacity .2s ease, transform .2s ease;
       z-index: 60;
       pointer-events: none;
-      white-space: nowrap;
+      white-space: pre-line;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      text-align: center;
+    }
+
+    .toast.toast--erro {
+      background: var(--danger-strong);
+      border-radius: 14px;
     }
 
     .toast.show {
@@ -3301,6 +3375,7 @@
     #targetSkuListWrap.hidden,
     #manageUsersGroup.hidden,
     #apImportTodosWrap.hidden,
+    #appConfirmInput.hidden,
     #promocoesVazia.hidden,
     #exportPedidosCard.hidden {
       display: none;
@@ -3316,7 +3391,7 @@
     }
 
     .lev-saveinfo {
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -3344,7 +3419,7 @@
       box-shadow: none;
       border-radius: 20px;
       padding: 7px 10px;
-      font-size: 11.5px;
+      font-size: 12px;
       font-weight: 600;
       color: var(--ink);
       cursor: pointer;
@@ -3370,12 +3445,12 @@
 
     .savedSurveyItem .ssName {
       font-weight: 700;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
     }
 
     .savedSurveyItem .ssMeta {
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       margin-top: 2px;
     }
@@ -3433,13 +3508,13 @@
     .levsr-name {
       display: block;
       font-weight: 600;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--ink);
     }
 
     .levsr-code {
       display: block;
-      font-size: 11.5px;
+      font-size: 12px;
       color: var(--gray);
       margin-top: 2px;
     }
@@ -3456,7 +3531,7 @@
       top: 103px;
       z-index: 18;
       padding: 10px 16px;
-      font-size: 13.5px;
+      font-size: 14px;
       color: var(--gray);
       font-weight: 500;
       background: var(--fill);
@@ -3546,11 +3621,11 @@
 
     .donebadge {
       display: inline-block;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0;
       color: #fff;
-      background: #1E8E3E;
+      background: var(--success-strong);
       padding: 3px 8px;
       border-radius: 20px;
       margin-bottom: 6px;
@@ -3571,7 +3646,7 @@
     }
 
     .levitem .pcode {
-      font-size: 12.5px;
+      font-size: 13px;
       color: var(--gray);
       margin-top: 2px;
     }
@@ -3609,7 +3684,7 @@
 
     .levprice .uf {
       color: var(--gray);
-      font-size: 11.5px;
+      font-size: 12px;
     }
 
     .levsubtotal {
@@ -3621,7 +3696,7 @@
     .levsubtotal b {
       color: var(--red);
       font-weight: 700;
-      font-size: 14.5px;
+      font-size: 15px;
       font-variant-numeric: tabular-nums;
     }
 
@@ -3709,10 +3784,10 @@
     .zerotag {
       display: inline-block;
       margin-top: 9px;
-      font-size: 10.5px;
+      font-size: 11px;
       font-weight: 700;
       letter-spacing: 0;
-      color: #B3261E;
+      color: var(--danger);
     }
 
     .levitem .addrow {
@@ -3734,14 +3809,14 @@
     }
 
     .levaddbtn.added {
-      background: #1E8E3E;
+      background: var(--success-strong);
     }
 
     .lev-empty {
       text-align: center;
       padding: 48px 24px;
       color: var(--gray);
-      font-size: 14.5px;
+      font-size: 15px;
       display: none;
     }
 
@@ -3797,7 +3872,7 @@
 
     .ex-header .ex-title div:last-child {
       color: var(--yellow);
-      font-size: 12.5px;
+      font-size: 13px;
       font-weight: 600;
       margin-top: 3px;
     }
@@ -3819,7 +3894,7 @@
     }
 
     .ex-meta div .v {
-      font-size: 14.5px;
+      font-size: 15px;
       font-weight: 700;
       margin-top: 3px;
       letter-spacing: -.01em;
@@ -3848,7 +3923,7 @@
     .ex-table tbody td {
       padding: 14px 36px;
       border-bottom: 1px solid var(--fill);
-      font-size: 13.5px;
+      font-size: 14px;
       vertical-align: top;
     }
 
@@ -3867,7 +3942,7 @@
 
     .ex-table tbody td .exc {
       color: var(--gray);
-      font-size: 11.5px;
+      font-size: 12px;
       margin-top: 3px;
     }
 
@@ -4040,8 +4115,7 @@
           <div class="hist-clientProgress" id="precosClientProgress"></div>
         </div>
         <div class="hist-clientBtns">
-          <button type="button" class="restoreBtn" id="precosSelectClientBtn"
-            style="width:auto;padding:10px 16px;">Selecionar</button>
+          <button type="button" class="restoreBtn compacto" id="precosSelectClientBtn">Selecionar</button>
           <button type="button" class="clientClearBtn hidden" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
             title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="precosClearClientBtn" aria-label="Limpar cliente"
@@ -4154,8 +4228,7 @@
           <div class="hist-clientProgress" id="levClientProgress"></div>
         </div>
         <div class="hist-clientBtns">
-          <button type="button" class="restoreBtn" id="levSelectClientBtn"
-            style="width:auto;padding:10px 16px;">Selecionar</button>
+          <button type="button" class="restoreBtn compacto" id="levSelectClientBtn">Selecionar</button>
           <button type="button" class="clientClearBtn hidden" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
             title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
@@ -4256,8 +4329,7 @@
             <div class="hist-clientLabel">Produto</div>
             <div class="hist-clientName" id="prodDetailName">—</div>
           </div>
-          <button type="button" class="restoreBtn" id="prodDetailBackBtn"
-            style="width:auto;padding:10px 16px;">Voltar</button>
+          <button type="button" class="restoreBtn compacto" id="prodDetailBackBtn">Voltar</button>
         </div>
         <div class="segmented" id="prodDetailSeg" style="margin:0 16px 12px;">
           <button type="button" data-v="compradores" class="active">Já compraram</button>
@@ -4277,7 +4349,7 @@
           <input type="text" id="clienteTabSearch" placeholder="Buscar cliente por nome ou CNPJ" autocomplete="off">
         </div>
         <button type="button" class="restoreBtn" id="classificatorioAlertasBtn"
-          style="width:auto;margin:10px 16px 0;padding:8px 14px;font-size:12.5px;">Ver alertas de
+          style="width:auto;margin:10px 16px 0;padding:8px 14px;font-size:13px;">Ver alertas de
           classificatório</button>
       </div>
       <div id="clienteTabListWrap">
@@ -4295,8 +4367,7 @@
             <div class="hist-clientName" id="clienteDetailName">—</div>
             <div class="hist-clientDoc" id="clienteDetailDoc"></div>
           </div>
-          <button type="button" class="restoreBtn" id="clienteDetailBackBtn"
-            style="width:auto;padding:10px 16px;">Voltar</button>
+          <button type="button" class="restoreBtn compacto" id="clienteDetailBackBtn">Voltar</button>
         </div>
         <div class="ap-card" id="clienteFichaResumo" style="margin:0 16px 12px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
@@ -4306,7 +4377,7 @@
             </div>
             <div style="text-align:right;">
               <div class="hist-clientLabel">Acumulado faturado</div>
-              <div id="clienteFichaAcumulado" style="font-weight:700;font-size:19px;margin-top:2px;">—</div>
+              <div id="clienteFichaAcumulado" style="font-weight:700;font-size:18px;margin-top:2px;">—</div>
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-top:12px;">
@@ -4408,8 +4479,8 @@
           <div id="clientPickerNewDocHint" style="font-size:11px;color:var(--gray);margin:2px 0 10px;"></div>
           <label for="clientPickerNewContato">Contato (opcional)</label>
           <input type="text" id="clientPickerNewContato" placeholder="Telefone/e-mail">
-          <button type="button" id="clientPickerNewConfirm"
-            style="width:100%;background:var(--red);color:#fff;border:none;border-radius:var(--r-sm);padding:12px;font-weight:700;margin-bottom:14px;">Criar
+          <button type="button" id="clientPickerNewConfirm" class="btnPrimary"
+            style="margin-bottom:14px;">Criar
             e selecionar</button>
         </div>
         <div id="clientPickerMsg"></div>
@@ -4488,6 +4559,7 @@
       <div class="minimodal-card" style="max-width:360px;">
         <h3 id="appConfirmTitle">Confirmar</h3>
         <p id="appConfirmMsg"></p>
+        <input type="text" id="appConfirmInput" class="hidden" autocomplete="off" aria-labelledby="appConfirmMsg">
         <div class="minimodal-btnrow">
           <button id="appConfirmCancelBtn">Cancelar</button>
           <button id="appConfirmOkBtn">Confirmar</button>
@@ -4517,7 +4589,7 @@
           style="border-top:1px solid var(--hairline);padding-top:10px;display:flex;flex-direction:column;gap:6px;">
         </div>
         <a href="#" id="fichaTecnicaCatalogBtn" target="_blank" rel="noopener"
-          style="display:none;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;background:var(--red);color:#fff;border-radius:var(--r-sm);padding:12px;font-weight:700;font-size:13.5px;margin-top:16px;">Ver
+          style="display:none;box-sizing:border-box;text-align:center;text-decoration:none;width:100%;background:var(--red);color:#fff;border-radius:var(--r-sm);padding:12px;font-weight:700;font-size:14px;margin-top:16px;">Ver
           no site oficial &#8594;</a>
         <button type="button" id="fichaTecnicaCloseBtn" class="restoreBtn" style="margin-top:8px;">Fechar</button>
       </div>
@@ -4620,7 +4692,7 @@
     <div class="adminPanel hidden" id="adminPanel">
       <div class="ap-header">
         <h2>Painel Administrativo</h2>
-        <button class="closeBtn" id="closeAdmin" aria-label="Fechar" style="color:#fff;">&times;</button>
+        <button class="closeBtn" id="closeAdmin" aria-label="Fechar">&times;</button>
       </div>
       <div class="ap-body">
         <!-- Status compacto: uma linha de resumo; os detalhes (mesmos ids de
@@ -4659,7 +4731,7 @@
             <p class="ap-hint" style="margin:6px 0 0;">Conecta a SUA conta Google — os CSVs de Orçamento e
               Levantamento vão direto pro seu Google Drive.</p>
             <button class="restoreBtn" id="themeToggleBtn" style="margin-top:8px;">Alternar tema</button>
-            <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
+            <button class="restoreBtn btnDanger" id="logoutBtn" style="margin-top:8px;">Sair (logout)</button>
           </div>
         </details>
           <button class="fileBtn" id="apSyncAgoraBtn" style="margin-top:12px;">Sincronizar agora</button>
@@ -4805,16 +4877,16 @@
                 ser mais faturados (faltou mercadoria) - dá pra excluir do sistema. Um item já faturado nunca é
                 afetado.</p>
               <div id="carteiraAntigaStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
-              <button class="fileBtn" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
+              <button class="fileBtn btnDanger" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
               <div id="carteiraAntigaMsg" style="margin-top:8px;"></div>
             </div>
             <div class="ap-card">
               <h3>Apagar relatório oficial</h3>
-              <p class="ap-hint" style="margin:0 0 8px;color:#B3261E;">⚠️ Apaga TODAS as linhas do relatório
+              <p class="ap-hint" style="margin:0 0 8px;color:var(--danger);">⚠️ Apaga TODAS as linhas do relatório
                 oficial (Carteira + Faturamento) - use só antes de reimportar tudo do zero. Classificatório e
                 histórico de pedidos ligados a essa tabela somem até a reimportação.</p>
               <div id="apagarTudoFaturamentoStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
-              <button class="fileBtn" id="apagarTudoFaturamentoBtn" style="border-color:#B3261E;color:#B3261E;">Apagar todo o relatório oficial</button>
+              <button class="fileBtn btnDanger" id="apagarTudoFaturamentoBtn">Apagar todo o relatório oficial</button>
               <div id="apagarTudoFaturamentoMsg" style="margin-top:8px;"></div>
             </div>
             <div class="ap-card">
@@ -4860,7 +4932,7 @@
         <input type="text" id="promoProdutoOriginal" placeholder="Código ou nome do produto" autocomplete="off">
         <div id="promoProdutoOriginalResults"></div>
         <div id="promoProdutoOriginalSelecionado" class="hidden"
-          style="margin:8px 0;padding:10px;background:var(--fill);border-radius:10px;font-size:12.5px;">
+          style="margin:8px 0;padding:10px;background:var(--fill);border-radius:10px;font-size:13px;">
           <b id="promoProdutoOriginalNome"></b><br>
           <span style="color:var(--gray);">Categoria/embalagem/IPI herdados desse produto</span>
         </div>
@@ -4955,7 +5027,7 @@
           </div>
         </div>
 
-        <label style="display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);margin-bottom:16px;">
+        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);margin-bottom:16px;">
           <input type="checkbox" id="promoStacks" checked style="width:auto;margin:0;">
           Soma com o desconto individual do item (se desligado, usa o maior dos dois)
         </label>
@@ -5210,12 +5282,16 @@
         if (isFixed) return list; // Preço Fixo: só imposto, sem desconto comercial
         return list * (1 - channelPct / 100) * (1 - (promoPct || 0) / 100) * (1 - (qtyPct || 0) / 100);
       }
-      function showToast(msg) {
+      // tipo 'erro': fundo vermelho e fica mais tempo na tela (dá tempo de
+      // ler a mensagem) - substitui os alert() nativos, que não funcionam
+      // direito no app instalado no iPhone (ver comentário em askConfirm).
+      function showToast(msg, tipo) {
         const t = document.getElementById('toast');
         t.textContent = msg;
+        t.classList.toggle('toast--erro', tipo === 'erro');
         t.classList.add('show');
         clearTimeout(showToast._t);
-        showToast._t = setTimeout(() => t.classList.remove('show'), 1600);
+        showToast._t = setTimeout(() => t.classList.remove('show'), tipo === 'erro' ? 5000 : 1600);
       }
 
       // ---------------- Init controls ----------------
@@ -5799,6 +5875,12 @@
       }
 
       // ---------------- Edição de preço base (antes de impostos) ----------------
+      // Ícones dos botões de lista (excluir/editar/ativar) - SVG em currentColor
+      // no lugar de emoji, que muda de cara em cada sistema e ignora a cor do botão.
+      const ICON_TRASH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+      const ICON_EDIT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+      const ICON_ATIVO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>';
+      const ICON_INATIVO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
       const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
       // Ícones monocromáticos simples (não são cópia da logomarca registrada) pros
       // links de vídeo do produto no card - ver VIDEOS_MAP.
@@ -6672,7 +6754,7 @@
             ? `Sem conexão agora — "${cliente.nome}" fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
             : `Levantamento salvo no histórico de ${cliente.nome}`);
         } catch (e) {
-          alert('Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.');
+          showToast('Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalHtml;
@@ -6708,7 +6790,7 @@
         <div class="ssName">${escapeHtml(s.name)}</div>
         <div class="ssMeta">${data} · ${totalItens} produto${totalItens === 1 ? '' : 's'} · ${totalUn} un.</div>
       </div>
-      <button type="button" class="ssDel" data-del-survey="${s.id}" aria-label="Excluir">🗑</button>
+      <button type="button" class="ssDel" data-del-survey="${s.id}" aria-label="Excluir">${ICON_TRASH}</button>
     </div>`;
         }).join('');
         wrap.querySelectorAll('[data-open-survey]').forEach(el => {
@@ -6720,7 +6802,7 @@
         wrap.querySelectorAll('[data-del-survey]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!await askConfirm('Excluir esse levantamento salvo? Essa ação não pode ser desfeita.')) return;
+            if (!await askConfirm('Excluir esse levantamento salvo? Essa ação não pode ser desfeita.', 'Excluir', { perigo: true })) return;
             const list = loadSavedSurveysList().filter(s => s.id !== btn.dataset.delSurvey);
             saveSavedSurveysList(list);
             if (state.levLoadedId === btn.dataset.delSurvey) { state.levLoadedId = null; state.levLoadedName = null; saveLevSurvey(); refreshLevSaveInfo(); }
@@ -6865,31 +6947,31 @@
         if (temObjetivo) {
           const bateuObjetivo = status.faltaPObjetivo <= 0;
           const linhaObjetivo = bateuObjetivo
-            ? `<span style="color:#1E8E3E;font-weight:600;">✓ Objetivo do trimestre batido!</span>`
-            : `<span style="color:#B36B00;font-weight:600;">⚠️ Faltam ${brl(status.faltaPObjetivo)} pro objetivo do trimestre</span>`;
-          partes.push(`<div style="font-size:11.5px;margin-top:3px;">${linhaObjetivo}</div>`);
+            ? `<span style="color:var(--success);font-weight:600;">✓ Objetivo do trimestre batido!</span>`
+            : `<span style="color:var(--warning);font-weight:600;">⚠️ Faltam ${brl(status.faltaPObjetivo)} pro objetivo do trimestre</span>`;
+          partes.push(`<div style="font-size:12px;margin-top:3px;">${linhaObjetivo}</div>`);
         }
         if (status.faixaMin != null && status.faixaMax != null) {
           // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
           // faixas devolvidas pela API já são calculadas sobre o ano em
           // andamento, então a posição na barra precisa ser do mesmo ano.
           const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
-          const cor = status.emRiscoDeQueda ? '#B3261E' : 'var(--red)';
+          const cor = status.emRiscoDeQueda ? 'var(--danger)' : 'var(--red)';
           partes.push(`<div style="background:var(--fill);border-radius:6px;height:6px;overflow:hidden;">
             <div style="background:${cor};height:100%;width:${pct}%;"></div>
           </div>`);
         }
         let linha = '';
         if (status.emRiscoDeQueda) {
-          linha = `<span style="color:#B3261E;font-weight:600;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}</span>`;
+          linha = `<span style="color:var(--danger);font-weight:600;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}</span>`;
         } else if (status.faltaPraMeta != null) {
           linha = `Faltam ${brl(status.faltaPraMeta)} (meta individual)`;
         } else if (status.faltaPraProximaFaixa != null) {
           linha = `Faltam ${brl(status.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}`;
         } else if (status.jaQualificaProximaFaixa) {
-          linha = `<span style="color:#1E8E3E;">✓ já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}</span>`;
+          linha = `<span style="color:var(--success);">✓ já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}</span>`;
         }
-        if (linha) partes.push(`<div style="font-size:11.5px;margin-top:3px;">${linha}</div>`);
+        if (linha) partes.push(`<div style="font-size:12px;margin-top:3px;">${linha}</div>`);
         // Ritmo trimestral - pedido do usuário pra aparecer pra TODOS os
         // clientes, não só os em risco: quem está atrasado já é coberto
         // pela mensagem de risco de queda acima (não duplica aqui); quem
@@ -6902,7 +6984,7 @@
           const detalhe = trimestral.faltaTrimestreAtual > 0
             ? ` — faltam ${brl(trimestral.faltaTrimestreAtual)} nesse trimestre`
             : ' — meta do trimestre já batida';
-          partes.push(`<div style="font-size:11px;margin-top:2px;color:#1E8E3E;font-weight:600;">${rotulo}${detalhe}</div>`);
+          partes.push(`<div style="font-size:11px;margin-top:2px;color:var(--success);font-weight:600;">${rotulo}${detalhe}</div>`);
         }
         return partes.join('');
       }
@@ -7358,14 +7440,33 @@
       // depende disso parece só não fazer nada. Esse modal usa o mesmo
       // overlay/minimodal do resto do app, então funciona igual em qualquer modo.
       let appConfirmResolve = null;
-      function askConfirm(message, okLabel) {
+      // opcoes.perigo: botão de confirmar no vermelho de "ação destrutiva"
+      // (excluir/apagar), em vez do vermelho da marca.
+      function askConfirm(message, okLabel, opcoes) {
         return new Promise((resolve) => {
           appConfirmResolve = resolve;
-          document.getElementById('appConfirmMsg').textContent = message;
-          document.getElementById('appConfirmOkBtn').textContent = okLabel || 'Confirmar';
-          document.getElementById('appConfirmOverlay').classList.remove('hidden');
-          document.getElementById('appConfirmModal').classList.remove('hidden');
+          abrirAppConfirm(message, okLabel || 'Confirmar', !!(opcoes && opcoes.perigo), false);
         });
+      }
+      // Pergunta um texto curto (substitui o prompt() nativo). Resolve com o
+      // texto digitado, ou null se cancelar.
+      function askText(message, valorInicial, okLabel) {
+        return new Promise((resolve) => {
+          const input = document.getElementById('appConfirmInput');
+          input.value = valorInicial || '';
+          appConfirmResolve = (ok) => resolve(ok ? input.value : null);
+          abrirAppConfirm(message, okLabel || 'OK', false, true);
+          setTimeout(() => { input.focus(); input.select(); }, 50);
+        });
+      }
+      function abrirAppConfirm(message, okLabel, perigo, comTexto) {
+        document.getElementById('appConfirmMsg').textContent = message;
+        const okBtn = document.getElementById('appConfirmOkBtn');
+        okBtn.textContent = okLabel;
+        okBtn.classList.toggle('btnPerigo', perigo);
+        document.getElementById('appConfirmInput').classList.toggle('hidden', !comTexto);
+        document.getElementById('appConfirmOverlay').classList.remove('hidden');
+        document.getElementById('appConfirmModal').classList.remove('hidden');
       }
       function closeAppConfirm(result) {
         document.getElementById('appConfirmOverlay').classList.add('hidden');
@@ -7378,6 +7479,7 @@
         document.getElementById('appConfirmCancelBtn').addEventListener('click', () => closeAppConfirm(false));
         document.getElementById('appConfirmOverlay').addEventListener('click', () => closeAppConfirm(false));
         document.getElementById('appConfirmOkBtn').addEventListener('click', () => closeAppConfirm(true));
+        document.getElementById('appConfirmInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') closeAppConfirm(true); });
       }
       async function clearCartWithConfirm() {
         if (state.cart.length === 0) { showToast('O orçamento já está vazio'); return; }
@@ -8872,11 +8974,11 @@
       // vermelho se estiver visivelmente abaixo, verde se acima, âmbar se
       // estiverem próximos (dentro de 5% um do outro).
       function corAcumuladoAnoCorrente(atual, anterior) {
-        if (!anterior) return atual > 0 ? '#1E8E3E' : 'var(--gray)';
+        if (!anterior) return atual > 0 ? 'var(--success)' : 'var(--gray)';
         const razao = atual / anterior;
-        if (razao >= 1.05) return '#1E8E3E';
-        if (razao <= 0.95) return '#B3261E';
-        return '#B36B00';
+        if (razao >= 1.05) return 'var(--success)';
+        if (razao <= 0.95) return 'var(--danger)';
+        return 'var(--warning)';
       }
       // Texto curto do comparativo ano-contra-ano (mesmo período), pra por
       // baixo do valor acumulado do ano corrente na ficha do cliente -
@@ -8929,14 +9031,14 @@
               ${status.periodoReferencia ? `<div style="font-size:11px;color:var(--gray);margin-top:2px;">${textoComparativoAnoAnterior(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior, status.periodoReferencia.anoInicio)}</div>` : ''}
             </div>` : ''}
           </div>
-          ${status.proximaRevisao && !status.ehRede ? `<div style="font-size:11.5px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
+          ${status.proximaRevisao && !status.ehRede ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
 
         if (!status.ehRede && status.faixaMin != null && status.faixaMax != null) {
           // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
           // faixas devolvidas pela API já são calculadas sobre o ano em
           // andamento, então a posição na barra precisa ser do mesmo ano.
           const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
-          const cor = status.emRiscoDeQueda ? '#B3261E' : 'var(--red)';
+          const cor = status.emRiscoDeQueda ? 'var(--danger)' : 'var(--red)';
           partes.push(`
             <div style="background:var(--fill);border-radius:6px;height:8px;margin-top:10px;overflow:hidden;">
               <div style="background:${cor};height:100%;width:${pct}%;"></div>
@@ -8944,19 +9046,19 @@
         }
 
         if (status.emRiscoDeQueda) {
-          partes.push(`<div style="margin-top:8px;color:#B3261E;font-weight:600;font-size:13px;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}.</div>`);
+          partes.push(`<div style="margin-top:8px;color:var(--danger);font-weight:600;font-size:13px;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}.</div>`);
         } else if (status.faltaPraMeta != null) {
           partes.push(`<div style="margin-top:8px;font-size:13px;">Meta individual negociada: <b>${brl(status.metaIndividual)}</b> — faltam <b>${brl(status.faltaPraMeta)}</b>.</div>`);
         } else if (status.faltaPraProximaFaixa != null) {
           partes.push(`<div style="margin-top:8px;font-size:13px;">Faltam <b>${brl(status.faltaPraProximaFaixa)}</b> pra subir pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}.</div>`);
         } else if (status.jaQualificaProximaFaixa) {
-          partes.push(`<div style="margin-top:8px;color:#1E8E3E;font-size:13px;">✓ Já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}.</div>`);
+          partes.push(`<div style="margin-top:8px;color:var(--success);font-size:13px;">✓ Já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}.</div>`);
         }
 
         if (status.ultimaCompra) {
           const dias = Math.floor((Date.now() - new Date(status.ultimaCompra).getTime()) / 86400000);
           if (dias >= 60) {
-            partes.push(`<div style="margin-top:6px;color:#B36B00;font-size:12px;">Sem comprar há ${dias} dias (última compra: ${new Date(status.ultimaCompra).toLocaleDateString('pt-BR')}).</div>`);
+            partes.push(`<div style="margin-top:6px;color:var(--warning);font-size:12px;">Sem comprar há ${dias} dias (última compra: ${new Date(status.ultimaCompra).toLocaleDateString('pt-BR')}).</div>`);
           }
         }
 
@@ -8973,8 +9075,8 @@
           const bateuObjetivo = status.faltaPObjetivo <= 0;
           partes.push(`
             <div style="margin-top:10px;padding:12px;border-radius:8px;background:${bateuObjetivo ? 'var(--success-bg)' : 'var(--warning-bg)'};border:2px solid ${bateuObjetivo ? 'var(--success)' : 'var(--warning)'};">
-              <div style="font-size:12px;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo do trimestre${sufixoGrupo}</div>
-              <div style="font-size:15px;margin-top:4px;font-weight:700;color:${bateuObjetivo ? '#1E8E3E' : '#B36B00'};">
+              <div style="font-size:12px;color:${bateuObjetivo ? 'var(--success)' : 'var(--warning)'};font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo do trimestre${sufixoGrupo}</div>
+              <div style="font-size:15px;margin-top:4px;font-weight:700;color:${bateuObjetivo ? 'var(--success)' : 'var(--warning)'};">
                 ${bateuObjetivo ? `✓ Objetivo batido! (${brl(status.objetivoTrimestral)})` : `Faltam ${brl(status.faltaPObjetivo)} pra bater o objetivo do trimestre`}
               </div>
               <div style="font-size:12px;margin-top:4px;color:var(--gray);">Entrada no trimestre: ${brl(status.entradaTrimestral)} de ${brl(status.objetivoTrimestral)}</div>
@@ -9007,7 +9109,7 @@
           // "faltam R$X pra atingir a meta deste trimestre" (faltaTrimestreAtual,
           // quanto falta NESTE trimestre especificamente) fica em destaque
           // acima do gráfico, não escondida como texto cinza pequeno.
-          const corSituacao = ritmoContradizObjetivo ? 'var(--gray)' : ({ no_ritmo: '#1E8E3E', atrasado: '#B3261E', adiantado: '#1E8E3E' }[status.trimestral.situacao] || 'var(--gray)');
+          const corSituacao = ritmoContradizObjetivo ? 'var(--gray)' : ({ no_ritmo: 'var(--success)', atrasado: 'var(--danger)', adiantado: 'var(--success)' }[status.trimestral.situacao] || 'var(--gray)');
           const fundoSituacao = ritmoContradizObjetivo ? 'var(--fill)' : ({ no_ritmo: 'var(--success-bg)', atrasado: 'var(--danger-bg)', adiantado: 'var(--success-bg)' }[status.trimestral.situacao] || 'var(--fill)');
           const faltaTrimestreAtual = status.trimestral.faltaTrimestreAtual;
           const linhaFalta = faltaTrimestreAtual > 0
@@ -9081,7 +9183,7 @@
       async function incluirClienteNoGrupo(status) {
         let grupo = status.matrizGrupo;
         if (!grupo) {
-          const digitado = prompt('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', clienteTabSelected.nome);
+          const digitado = await askText('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', clienteTabSelected.nome, 'Criar grupo');
           if (!digitado || !digitado.trim()) return;
           grupo = digitado.trim();
         }
@@ -9127,9 +9229,9 @@
           const x = 10 + i * passo + (passo - larguraBarra) / 2;
           const y = escY(t.faturado);
           const alturaBarra = Math.max(0, (padTop + chartH) - y);
-          let cor = '#1E8E3E';
-          if (pisoPorTrimestre != null && t.faturado < pisoPorTrimestre) cor = '#B3261E';
-          else if (metaPorTrimestre != null && t.faturado < metaPorTrimestre) cor = '#B36B00';
+          let cor = 'var(--success)';
+          if (pisoPorTrimestre != null && t.faturado < pisoPorTrimestre) cor = 'var(--danger)';
+          else if (metaPorTrimestre != null && t.faturado < metaPorTrimestre) cor = 'var(--warning)';
           // getUTCMonth()/getUTCFullYear() (não getMonth()/getFullYear()) - o
           // backend gera esse limite de trimestre em UTC; num fuso negativo
           // (ex: Brasil, UTC-3) a leitura em hora local rolava a meia-noite
@@ -9151,12 +9253,12 @@
           ? `<line x1="10" y1="${escY(metaPorTrimestre).toFixed(1)}" x2="${W - 10}" y2="${escY(metaPorTrimestre).toFixed(1)}" stroke="var(--red)" stroke-width="1" stroke-dasharray="4,3"/>`
           : '';
         const linhaPiso = pisoDistinto != null
-          ? `<line x1="10" y1="${escY(pisoDistinto).toFixed(1)}" x2="${W - 10}" y2="${escY(pisoDistinto).toFixed(1)}" stroke="#B36B00" stroke-width="1" stroke-dasharray="2,3"/>`
+          ? `<line x1="10" y1="${escY(pisoDistinto).toFixed(1)}" x2="${W - 10}" y2="${escY(pisoDistinto).toFixed(1)}" stroke="var(--warning)" stroke-width="1" stroke-dasharray="2,3"/>`
           : '';
 
         const legenda = `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:10px;color:var(--gray);margin-top:2px;">
             ${metaPorTrimestre != null ? `<span><span style="color:var(--red);">┄</span> ${pisoDistinto != null ? 'meta' : 'mínimo'} ${brl(metaPorTrimestre)}/trim.</span>` : ''}
-            ${pisoDistinto != null ? `<span><span style="color:#B36B00;">┄</span> não cair ${brl(pisoDistinto)}/trim.</span>` : ''}
+            ${pisoDistinto != null ? `<span><span style="color:var(--warning);">┄</span> não cair ${brl(pisoDistinto)}/trim.</span>` : ''}
           </div>`;
 
         return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;margin-top:4px;" role="img" aria-label="Gráfico de faturamento trimestral">
@@ -9385,7 +9487,7 @@
             closeMergeReviewModal();
             searchManageClients(document.getElementById('manageClientSearch').value);
           } catch (e) {
-            alert('Não foi possível mesclar: ' + e.message);
+            showToast('Não foi possível mesclar: ' + e.message, 'erro');
           } finally {
             btn.disabled = false; btn.textContent = 'Confirmar mesclagem';
           }
@@ -9412,24 +9514,24 @@
         try {
           const { total } = await apiContagemProdutos();
           elServidor.textContent = '✓ Conectado';
-          elServidor.style.color = '#1E8E3E';
+          elServidor.style.color = 'var(--success)';
           if (total === DB.products.length) {
             elCatalogo.textContent = `✓ Atualizado (${total} produtos)`;
-            elCatalogo.style.color = '#1E8E3E';
+            elCatalogo.style.color = 'var(--success)';
           } else if (state.currentUser?.is_admin) {
             elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — sincronizando…`;
-            elCatalogo.style.color = '#B36B00';
+            elCatalogo.style.color = 'var(--warning)';
             await syncProductCatalog();
             const depois = await apiContagemProdutos();
             elCatalogo.textContent = `✓ Sincronizado agora (${depois.total} produtos)`;
-            elCatalogo.style.color = '#1E8E3E';
+            elCatalogo.style.color = 'var(--success)';
           } else {
             elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — avise o admin`;
-            elCatalogo.style.color = '#B36B00';
+            elCatalogo.style.color = 'var(--warning)';
           }
         } catch (e) {
           elServidor.textContent = '✗ ' + e.message;
-          elServidor.style.color = '#B3261E';
+          elServidor.style.color = 'var(--danger)';
           elCatalogo.textContent = '—';
           if (!silencioso) throw e;
         } finally {
@@ -9446,7 +9548,7 @@
             categoria: productFamilia(p) || null,
           }));
           const result = await apiSyncProdutos(produtos);
-          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.criados} novo(s), ${result.atualizados} atualizado(s) de ${result.total} produtos.</div>`;
+          msg.innerHTML = `<div class="ap-msg success">✓ ${result.criados} novo(s), ${result.atualizados} atualizado(s) de ${result.total} produtos.</div>`;
         } catch (e) {
           msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
         }
@@ -9494,7 +9596,7 @@
 
       function renderIntegrityResults(problemas) {
         const wrap = document.getElementById('integrityResults');
-        if (problemas.length === 0) { wrap.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Nenhum problema encontrado.</div>'; return; }
+        if (problemas.length === 0) { wrap.innerHTML = '<div class="ap-msg success">✓ Nenhum problema encontrado.</div>'; return; }
 
         wrap.innerHTML = problemas.map((p, idx) => {
           if (p.tipo === 'cnpj_cortag') {
@@ -9543,7 +9645,7 @@
               btn.textContent = '✓ Corrigido';
             } catch (e) {
               btn.disabled = false; btn.textContent = 'Corrigir agora';
-              alert('Não foi possível corrigir: ' + e.message);
+              showToast('Não foi possível corrigir: ' + e.message, 'erro');
             }
           });
         });
@@ -9555,7 +9657,7 @@
         wrap.innerHTML = '<div class="promoEmpty">Analisando…</div>';
         try {
           const pedidos = await apiFetch('/api/pedidos/duplicados');
-          if (pedidos.length === 0) { wrap.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Nenhum pedido duplicado encontrado.</div>'; return; }
+          if (pedidos.length === 0) { wrap.innerHTML = '<div class="ap-msg success">✓ Nenhum pedido duplicado encontrado.</div>'; return; }
 
           // agrupa por cliente+dia, pra mostrar como "grupos" em vez de lista solta
           const grupos = new Map();
@@ -9573,10 +9675,10 @@
         ${g.pedidos.map(p => `
           <div style="margin-top:10px;padding-top:10px;border-top:0.75px solid var(--hairline);">
             <div style="font-size:12px;font-weight:600;">Pedido #${p.pedido_id} · origem: ${escapeHtml(p.origem)}${p.numero_cotacao ? ' · nº ' + escapeHtml(p.numero_cotacao) : ''}</div>
-            <div style="font-size:11.5px;color:var(--gray);margin-top:3px;">
+            <div style="font-size:12px;color:var(--gray);margin-top:3px;">
               ${p.itens.map(it => `${it.quantidade}x ${escapeHtml(it.produto)} (${escapeHtml(it.codigo_sku)})`).join('<br>')}
             </div>
-            <button type="button" class="restoreBtn" data-del-pedido="${p.pedido_id}" style="margin-top:8px;color:#B3261E;">Excluir este pedido</button>
+            <button type="button" class="restoreBtn btnDanger" data-del-pedido="${p.pedido_id}" style="margin-top:8px;">Excluir este pedido</button>
           </div>
         `).join('')}
       </div>
@@ -9584,7 +9686,7 @@
 
           wrap.querySelectorAll('[data-del-pedido]').forEach(btn => {
             btn.addEventListener('click', async () => {
-              if (!await askConfirm(`Excluir o pedido #${btn.dataset.delPedido}? Essa ação não pode ser desfeita.`)) return;
+              if (!await askConfirm(`Excluir o pedido #${btn.dataset.delPedido}? Essa ação não pode ser desfeita.`, 'Excluir', { perigo: true })) return;
               btn.disabled = true; btn.textContent = 'Excluindo…';
               try {
                 await apiFetch(`/api/pedidos/${btn.dataset.delPedido}`, { method: 'DELETE' });
@@ -9592,7 +9694,7 @@
                 checkDuplicatePedidos();
               } catch (e) {
                 btn.disabled = false; btn.textContent = 'Excluir este pedido';
-                alert('Não foi possível excluir: ' + e.message);
+                showToast('Não foi possível excluir: ' + e.message, 'erro');
               }
             });
           });
@@ -9645,7 +9747,7 @@
           </div>
           <div class="prBtns">
             <button data-merge-client="${c.id}" data-nome-client="${escapeHtml(c.nome)}" aria-label="Mesclar com outro cadastro" title="Mesclar com outro cadastro">🔀</button>
-            <button data-del-client="${c.id}" data-nome-client="${escapeHtml(c.nome)}" aria-label="Excluir" title="Excluir">🗑</button>
+            <button data-del-client="${c.id}" data-nome-client="${escapeHtml(c.nome)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
           </div>
         </div>
       </div>
@@ -9665,7 +9767,7 @@
             btn.addEventListener('click', async () => {
               const nome = btn.dataset.nomeClient;
               const id = btn.dataset.delClient;
-              if (!await askConfirm(`Excluir "${nome}"? Só funciona se ele não tiver pedido ou levantamento registrado.`)) return;
+              if (!await askConfirm(`Excluir "${nome}"? Só funciona se ele não tiver pedido ou levantamento registrado.`, 'Excluir', { perigo: true })) return;
               try {
                 await apiFetch(`/api/clientes/${id}`, { method: 'DELETE' });
                 showToast('Cliente excluído: ' + nome);
@@ -9674,17 +9776,17 @@
                 // se bloqueado por ter histórico E quem está logado for admin, oferece
                 // a exclusão forçada (apaga o histórico junto) como segunda opção
                 if (state.currentUser?.is_admin && /administrador/i.test(e.message)) {
-                  if (await askConfirm(`${e.message}\n\nVocê é administrador — quer excluir "${nome}" MESMO ASSIM, apagando o histórico de pedidos/levantamentos dele junto? Essa ação não pode ser desfeita.`)) {
+                  if (await askConfirm(`${e.message}\n\nVocê é administrador — quer excluir "${nome}" MESMO ASSIM, apagando o histórico de pedidos/levantamentos dele junto? Essa ação não pode ser desfeita.`, 'Excluir tudo', { perigo: true })) {
                     try {
                       await apiFetch(`/api/clientes/${id}?forcar=1`, { method: 'DELETE' });
                       showToast('Cliente e histórico excluídos: ' + nome);
                       searchManageClients(document.getElementById('manageClientSearch').value);
                     } catch (e2) {
-                      alert(e2.message);
+                      showToast(e2.message, 'erro');
                     }
                   }
                 } else {
-                  alert(e.message);
+                  showToast(e.message, 'erro');
                 }
               }
             });
@@ -9752,7 +9854,7 @@
             await conectarGoogleDrive();
             showToast('Conectado ao Google Drive');
           } catch (e) {
-            alert(e.message);
+            showToast(e.message, 'erro');
           } finally {
             btn.disabled = false;
             refreshGoogleDriveStatus();
@@ -10012,17 +10114,17 @@
           const soNoLocal = DB.products.filter(p => !codigosServidor.has(String(p.c)));
 
           if (soNoServidor.length === 0 && soNoLocal.length === 0) {
-            wrap.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Servidor e aparelho têm exatamente os mesmos códigos.</div>';
+            wrap.innerHTML = '<div class="ap-msg success">✓ Servidor e aparelho têm exatamente os mesmos códigos.</div>';
             return;
           }
 
           let html = '';
           if (soNoServidor.length > 0) {
-            html += `<p style="font-size:12.5px;font-weight:600;margin:8px 0 4px;">No servidor mas não no catálogo deste aparelho (${soNoServidor.length}):</p>`;
+            html += `<p style="font-size:13px;font-weight:600;margin:8px 0 4px;">No servidor mas não no catálogo deste aparelho (${soNoServidor.length}):</p>`;
             html += soNoServidor.map(p => `<div class="hcCode">${escapeHtml(p.codigo_sku)} — ${escapeHtml(p.nome)}</div>`).join('');
           }
           if (soNoLocal.length > 0) {
-            html += `<p style="font-size:12.5px;font-weight:600;margin:8px 0 4px;">No catálogo deste aparelho mas não no servidor (${soNoLocal.length}):</p>`;
+            html += `<p style="font-size:13px;font-weight:600;margin:8px 0 4px;">No catálogo deste aparelho mas não no servidor (${soNoLocal.length}):</p>`;
             html += soNoLocal.map(p => `<div class="hcCode">${escapeHtml(p.c)} — ${escapeHtml(p.n)}</div>`).join('');
           }
           wrap.innerHTML = html;
@@ -10117,7 +10219,7 @@
           const blob = new Blob(['\uFEFF' + [header, ...linhas].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
           const fileName = `pedidos-${inicio}-a-${fim}.csv`;
           shareOrDownloadBlob(blob, fileName, 'Pedidos do período', 'Baixado — verifique a pasta Downloads do celular');
-          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${rows.length} linha(s) exportada(s).</div>`;
+          msg.innerHTML = `<div class="ap-msg success">✓ ${rows.length} linha(s) exportada(s).</div>`;
         } catch (e) {
           msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
         } finally {
@@ -10138,7 +10240,7 @@
             <div class="prDetail">${escapeHtml(u.email || '')}</div>
           </div>
           <div class="prBtns">
-            <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" aria-label="Excluir" title="Excluir">🗑</button>
+            <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
           </div>
         </div>
       </div>
@@ -10146,13 +10248,13 @@
           wrap.querySelectorAll('[data-del-user]').forEach(btn => {
             btn.addEventListener('click', async () => {
               const usuario = btn.dataset.nomeUser;
-              if (!await askConfirm(`Excluir o usuário "${usuario}"? Essa ação não pode ser desfeita.`)) return;
+              if (!await askConfirm(`Excluir o usuário "${usuario}"? Essa ação não pode ser desfeita.`, 'Excluir', { perigo: true })) return;
               try {
                 await apiFetch(`/api/auth/usuarios/${btn.dataset.delUser}`, { method: 'DELETE' });
                 showToast('Usuário excluído: ' + usuario);
                 renderUsersList();
               } catch (e) {
-                alert(e.message);
+                showToast(e.message, 'erro');
               }
             });
           });
@@ -10195,7 +10297,7 @@
           else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
           showToast(msg);
         } catch (e) {
-          alert('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.');
+          showToast('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalHtml;
@@ -10255,7 +10357,7 @@
     <div class="hcCode">${itens.length} produto${itens.length === 1 ? '' : 's'}</div>
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
-      <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:#B8860B;' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(itemFaturado.data_faturamento)}</b></div>
+      <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:var(--warning);' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(itemFaturado.data_faturamento)}</b></div>
       ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}
     </div>
     ${listaProdutos}
@@ -10271,7 +10373,7 @@
       <div class="hcStat">Total já comprado<b>${item.total_comprado}</b></div>
       <div class="hcStat">Estoque atual<b>0</b></div>
     </div>
-    ${dias !== null ? `<div class="hcRotBadge" style="color:#B3261E;">sem repor há ${dias} dias</div>` : ''}
+    ${dias !== null ? `<div class="hcRotBadge" style="color:var(--danger);">sem repor há ${dias} dias</div>` : ''}
     ${!item.ultimo_levantamento ? `<div class="hcRotBadge">nunca foi contado no levantamento</div>` : ''}
     <button type="button" class="restoreBtn" data-recuperar-add="${escapeHtml(String(item.codigo_sku))}" style="margin-top:10px;">+ Orçamento</button>
   </div>`;
@@ -10331,11 +10433,11 @@
         try {
           const { pertoDeSubir, riscoDeQueda, semComprarRecente } = await apiClassificatorioAlertas();
           const secoes = [];
-          if (riscoDeQueda.length) secoes.push(`<h3 style="font-size:13px;color:#B3261E;margin:12px 0 6px;">⚠️ Em risco de cair de faixa (${riscoDeQueda.length})</h3>` +
+          if (riscoDeQueda.length) secoes.push(`<h3 style="font-size:13px;color:var(--danger);margin:12px 0 6px;">⚠️ Em risco de cair de faixa (${riscoDeQueda.length})</h3>` +
             riscoDeQueda.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}`)).join(''));
-          if (pertoDeSubir.length) secoes.push(`<h3 style="font-size:13px;color:#1E8E3E;margin:12px 0 6px;">📈 Perto de subir de faixa (${pertoDeSubir.length})</h3>` +
+          if (pertoDeSubir.length) secoes.push(`<h3 style="font-size:13px;color:var(--success);margin:12px 0 6px;">📈 Perto de subir de faixa (${pertoDeSubir.length})</h3>` +
             pertoDeSubir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}`)).join(''));
-          if (semComprarRecente.length) secoes.push(`<h3 style="font-size:13px;color:#B36B00;margin:12px 0 6px;">🕒 Sem comprar há mais de 60 dias (${semComprarRecente.length})</h3>` +
+          if (semComprarRecente.length) secoes.push(`<h3 style="font-size:13px;color:var(--warning);margin:12px 0 6px;">🕒 Sem comprar há mais de 60 dias (${semComprarRecente.length})</h3>` +
             semComprarRecente.map(c => renderClassificatorioAlertaItem(c, `${c.diasSemComprar} dias sem comprar`)).join(''));
           content.innerHTML = secoes.length ? secoes.join('') : '<div class="lev-empty">Nenhum alerta no momento — todos os clientes classificados estão em dia.</div>';
           content.querySelectorAll('[data-alerta-cliente-id]').forEach(btn => {
@@ -10820,14 +10922,14 @@
           const msg = document.getElementById('carteiraAntigaMsg');
           const ok = await askConfirm(
             'Excluir do sistema todos os pedidos que estão em carteira (nunca faturados) há mais de 60 dias? Essa ação não pode ser desfeita.',
-            'Excluir'
+            'Excluir', { perigo: true }
           );
           if (!ok) return;
           msg.innerHTML = '<div class="promoEmpty">Excluindo…</div>';
           try {
             const result = await apiFetch('/api/pedidos-oficiais/carteira-antiga/limpar', { method: 'POST' });
             const extraTxt = result.atualizados > 0 ? ` · ${result.atualizados} pedido(s) passou(aram) de "Atendido Parcial" pra "Atendido Total".` : '';
-            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.excluidos} item(ns) excluído(s).${extraTxt}</div>`;
+            msg.innerHTML = `<div class="ap-msg success">✓ ${result.excluidos} item(ns) excluído(s).${extraTxt}</div>`;
             carregarStatusCarteiraAntiga();
             carregarStatusRelatorioOficial();
           } catch (e) {
@@ -10855,13 +10957,13 @@
           const msg = document.getElementById('apagarTudoFaturamentoMsg');
           const ok = await askConfirm(
             'Apagar TODAS as linhas do relatório oficial (Carteira + Faturamento)? Isso inclui o histórico de pedidos oficiais e some com o classificatório aprendido por esse relatório até você reimportar tudo de novo. Essa ação não pode ser desfeita.',
-            'Apagar tudo'
+            'Apagar tudo', { perigo: true }
           );
           if (!ok) return;
           msg.innerHTML = '<div class="promoEmpty">Apagando…</div>';
           try {
             const result = await apiFetch('/api/pedidos-oficiais/tudo/limpar', { method: 'POST' });
-            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.excluidos} linha(s) apagada(s). Pode reimportar as planilhas agora.</div>`;
+            msg.innerHTML = `<div class="ap-msg success">✓ ${result.excluidos} linha(s) apagada(s). Pode reimportar as planilhas agora.</div>`;
             carregarStatusApagarTudoFaturamento();
             carregarStatusCarteiraAntiga();
             carregarStatusRelatorioOficial();
@@ -11296,9 +11398,9 @@
           <div class="prDetail">${r.stacks !== false ? 'Soma com desconto individual do item' : 'Usa o maior entre esse bônus e o desconto individual'}</div>
         </div>
         <div class="prBtns">
-          <button data-toggle-rule="${r.id}" class="${r.active ? 'prToggleOn' : ''}" aria-label="Ativar/desativar" title="Ativar/desativar">${r.active ? '●' : '○'}</button>
-          <button data-edit-rule="${r.id}" aria-label="Editar" title="Editar">✎</button>
-          <button data-del-rule="${r.id}" aria-label="Excluir" title="Excluir">🗑</button>
+          <button data-toggle-rule="${r.id}" class="${r.active ? 'prToggleOn' : ''}" aria-label="Ativar/desativar" title="Ativar/desativar">${r.active ? ICON_ATIVO : ICON_INATIVO}</button>
+          <button data-edit-rule="${r.id}" aria-label="Editar" title="Editar">${ICON_EDIT}</button>
+          <button data-del-rule="${r.id}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
         </div>
       </div>
     </div>
@@ -11310,16 +11412,16 @@
           r.active = !r.active;
           renderPromoRulesList(); renderCart();
           try { await salvarPromoRulesServidor(state.promoRules); refreshPromoStatus(); }
-          catch (e) { alert('Não foi possível salvar no servidor: ' + e.message); r.active = !r.active; renderPromoRulesList(); renderCart(); }
+          catch (e) { showToast('Não foi possível salvar no servidor: ' + e.message, 'erro'); r.active = !r.active; renderPromoRulesList(); renderCart(); }
         }));
         wrap.querySelectorAll('[data-edit-rule]').forEach(b => b.addEventListener('click', () => openPromoRuleForm(b.dataset.editRule)));
         wrap.querySelectorAll('[data-del-rule]').forEach(b => b.addEventListener('click', async () => {
-          if (!await askConfirm('Excluir essa regra de campanha?')) return;
+          if (!await askConfirm('Excluir essa regra de campanha?', 'Excluir', { perigo: true })) return;
           const anterior = state.promoRules;
           state.promoRules = state.promoRules.filter(x => x.id !== b.dataset.delRule);
           renderPromoRulesList(); renderCart();
           try { await salvarPromoRulesServidor(state.promoRules); refreshPromoStatus(); }
-          catch (e) { alert('Não foi possível salvar no servidor: ' + e.message); state.promoRules = anterior; renderPromoRulesList(); renderCart(); }
+          catch (e) { showToast('Não foi possível salvar no servidor: ' + e.message, 'erro'); state.promoRules = anterior; renderPromoRulesList(); renderCart(); }
         }));
       }
 
@@ -11648,14 +11750,14 @@
           <div class="prDetail">SP ${brl(p.lsp)} · Sul-Sudeste ${brl(p.lss)} · Norte-Nordeste-CO ${brl(p.lnc)}</div>
         </div>
         <div class="prBtns">
-          <button data-del-promo-produto="${escapeHtml(p.c)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">🗑</button>
+          <button data-del-promo-produto="${escapeHtml(p.c)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
         </div>
       </div>
     </div>
   `).join('');
         atualizarPromocoesVazia();
         wrap.querySelectorAll('[data-del-promo-produto]').forEach(b => b.addEventListener('click', async () => {
-          if (!await askConfirm('Excluir esse produto promocional? Ele some da busca pra todo mundo.')) return;
+          if (!await askConfirm('Excluir esse produto promocional? Ele some da busca pra todo mundo.', 'Excluir', { perigo: true })) return;
           const atual = (await apiProdutosPromocionaisConfig()).valor || [];
           const nova = atual.filter(p => p.c !== b.dataset.delPromoProduto);
           try {
@@ -11665,7 +11767,7 @@
             renderResults();
             renderPromoProdutosList();
             showToast('Produto promocional excluído');
-          } catch (e) { alert('Não foi possível excluir: ' + e.message); }
+          } catch (e) { showToast('Não foi possível excluir: ' + e.message, 'erro'); }
         }));
       }
       // ---------------- Produtos foco (Dashboard) ------
@@ -11684,7 +11786,7 @@
         wrap.querySelectorAll('[data-foco-categoria]').forEach(input => input.addEventListener('change', async () => {
           const marcadas = [...wrap.querySelectorAll('[data-foco-categoria]:checked')].map(i => i.dataset.focoCategoria);
           try { await salvarProdutosFocoServidor(marcadas); atualizarResumoProdutosFoco(marcadas.length); }
-          catch (e) { alert('Não foi possível salvar: ' + e.message); input.checked = !input.checked; }
+          catch (e) { showToast('Não foi possível salvar: ' + e.message, 'erro'); input.checked = !input.checked; }
         }));
       }
       function atualizarResumoProdutosFoco(qtd) {
@@ -11752,7 +11854,7 @@
         try {
           const produtos = (DB.products || []).filter(p => !p.e || !p.dun);
           if (produtos.length === 0) {
-            msg.innerHTML = '<div class="ap-msg" style="color:#1E8E3E;">✓ Todos os produtos do catálogo já têm EAN-13 e DUN-14.</div>';
+            msg.innerHTML = '<div class="ap-msg success">✓ Todos os produtos do catálogo já têm EAN-13 e DUN-14.</div>';
             return;
           }
           msg.innerHTML = '<div class="promoEmpty">Gerando planilha…</div>';
@@ -11771,7 +11873,7 @@
           const arrayBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
           const blob = new Blob([arrayBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
           await shareOrDownloadBlob(blob, `produtos-sem-ean-dun-${Date.now()}.xlsx`, 'Produtos sem EAN-13/DUN-14', `Planilha gerada com ${produtos.length} produto(s).`);
-          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${produtos.length} produto(s) sem EAN-13 e/ou DUN-14 — planilha baixada.</div>`;
+          msg.innerHTML = `<div class="ap-msg success">✓ ${produtos.length} produto(s) sem EAN-13 e/ou DUN-14 — planilha baixada.</div>`;
         } catch (e) {
           msg.innerHTML = `<div class="ap-msg error">Não foi possível gerar a planilha: ${escapeHtml(e.message)}</div>`;
         }
@@ -11903,8 +12005,8 @@
           <div class="prDetail">${escapeHtml(classiRuleSummaryText(r))}</div>
         </div>
         <div class="prBtns">
-          <button data-edit-classi="${escapeHtml(r.id)}" aria-label="Editar" title="Editar">✎</button>
-          <button data-del-classi="${escapeHtml(r.id)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">🗑</button>
+          <button data-edit-classi="${escapeHtml(r.id)}" aria-label="Editar" title="Editar">${ICON_EDIT}</button>
+          <button data-del-classi="${escapeHtml(r.id)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
         </div>
       </div>
     </div>
@@ -11912,7 +12014,7 @@
         atualizarPromocoesVazia();
         wrap.querySelectorAll('[data-edit-classi]').forEach(b => b.addEventListener('click', () => openClassiDiscountForm(b.dataset.editClassi)));
         wrap.querySelectorAll('[data-del-classi]').forEach(b => b.addEventListener('click', async () => {
-          if (!await askConfirm('Excluir essa regra de desconto por classificatório?')) return;
+          if (!await askConfirm('Excluir essa regra de desconto por classificatório?', 'Excluir', { perigo: true })) return;
           state.classiDiscountRules = state.classiDiscountRules.filter(r => r.id !== b.dataset.delClassi);
           await salvarClassiDiscountRulesServidor(state.classiDiscountRules);
           renderClassiDiscountRulesList();
@@ -12055,7 +12157,7 @@
             const recarregou = await recarregarFonteCatalogo();
             showToast(recarregou ? 'Sincronização concluída — usando: ' + ACTIVE_SOURCE : 'Sincronização concluída');
           } catch (e) {
-            alert('Não foi possível sincronizar: ' + e.message);
+            showToast('Não foi possível sincronizar: ' + e.message, 'erro');
           } finally {
             syncBtn.disabled = false; syncBtn.textContent = 'Sincronizar agora';
             atualizarResumoStatus();
