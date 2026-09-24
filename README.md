@@ -113,7 +113,13 @@ Cada produto carrega preço por 6 canais (Varejo/Atacado/E-commerce/Moderno/Cons
 - Regra de "Preço Fixo" (sem desconto, só imposto) só vale para Varejo/Atacado/E-commerce.
 - A conversão da planilha "LISTA PADRÃO" para o banco acontece no servidor (`routes/catalogoPrecos.js`, via lib `xlsx`), não no navegador.
 - O orçamento mostra uma linha "Total S/ Impostos" acima do Total, calculada a partir do preço sem imposto de cada produto (`precos_sem_imposto`, calculado e armazenado já na importação da planilha).
-- No Admin, "Produtos promocionais" fica aninhado dentro do card de "Campanhas promocionais" (a lista de produtos com desconto pertence a uma campanha).
+- No Admin, todas as promoções (campanhas por quantidade/valor, desconto por classificatório e produtos com preço promocional) ficam numa lista única no card "Promoções", cada item com etiqueta do tipo; "+ Nova promoção" pergunta qual dos três criar.
+
+## Painel Administrativo
+
+- **Importar arquivo**: uma área única recebe qualquer arquivo (vários de uma vez) e reconhece o tipo pelo conteúdo — `detectarTipoArquivo()` em `index.html` (abas `PRECIFICAÇÃO`/`TRIBUTAÇÃO` → planilha de preços; `Carteira`/`Faturamento` → relatório oficial; colunas `Matriz` + `OBJETIVO MÊS` → objetivo trimestral; `Classificatorio` → classificatório do ERP; `Item` + `Qt. Disp.` → previsão de estoque; `Código` + `YouTube`/`Instagram` → vídeos; `Código` + `Link` → link do site; JSON de fichas técnicas, EAN/DUN-14 ou clientes; `.pdf` → cotação). Mostra "Detectado: X" e só envia depois de confirmar. Para aceitar um formato novo, adicione o tipo em `TIPOS_IMPORTACAO` e a regra de reconhecimento em `detectarTipoArquivo()`.
+- **Status**: uma linha de resumo que abre os detalhes; "Sincronizar agora" confere o servidor, reenvia o catálogo de produtos e recarrega a fonte automática.
+- **Avançado** (fechado por padrão): exportar pedidos, produtos sem EAN, integridade de clientes, pedidos duplicados, carteira antiga, apagar relatório oficial e endereço do servidor.
 
 ## Frontend — carregamento do catálogo de preços
 
