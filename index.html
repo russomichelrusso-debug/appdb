@@ -9609,6 +9609,11 @@
           if (total === DB.products.length) {
             elCatalogo.textContent = `✓ Atualizado (${total} produtos)`;
             elCatalogo.style.color = 'var(--success)';
+          } else if (DB.products.length === 0) {
+            // catálogo deste aparelho ainda não terminou de carregar - não é
+            // "desatualizado", e sincronizar agora mandaria uma lista vazia
+            elCatalogo.textContent = 'Carregando catálogo…';
+            elCatalogo.style.color = 'var(--gray)';
           } else if (state.currentUser?.is_admin) {
             elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — sincronizando…`;
             elCatalogo.style.color = 'var(--warning)';
@@ -9631,6 +9636,9 @@
       }
       async function syncProductCatalog() {
         const msg = document.getElementById('syncProdutosMsg');
+        // Sem catálogo carregado no aparelho não há o que enviar - o servidor
+        // recusaria com "Envie { produtos: [...] }".
+        if (DB.products.length === 0) { msg.innerHTML = ''; return; }
         msg.innerHTML = '<div class="promoEmpty">Sincronizando ' + DB.products.length + ' produtos…</div>';
         try {
           const produtos = DB.products.map(p => ({
@@ -10274,7 +10282,6 @@
             renderUsersList();
           }
         }
-        verificarESincronizarTudo(true).catch(() => { }); // silencioso - já mostra o erro nos próprios campos de status
       }
 
       async function exportPedidosPorPeriodo() {
@@ -12927,6 +12934,10 @@
           // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
           const catalogoPromise = carregarCatalogoEExtras();
           catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
+          // checagem de sincronização do Painel só depois do catálogo carregar - antes
+          // disso o aparelho tem 0 produtos e parecia "desatualizado" (e o admin
+          // disparava um sync vazio, que o servidor recusa).
+          catalogoPromise.then(() => verificarESincronizarTudo(true)).catch(() => { }); // silencioso - já mostra o erro nos próprios campos de status
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
           loadProdutosVideos(); // idem
           loadProdutosLinkSite(); // idem
