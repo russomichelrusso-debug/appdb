@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE } = require('./clientesClassificatorio');
-const { mesclarPorCodigoBase } = require('./lib/skuNormalizacao');
+const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
+const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { validarIdInteiro } = require('../middleware/validarId');
 
 router.param('id', validarIdInteiro);
@@ -276,6 +277,80 @@ router.get('/pedidos/exportar', async (req, res) => {
 // que o levantamento mais recente mostra em zero (ou nem foi contado) - é a
 // lista de "oportunidade de recuperar venda": já foi cliente desse produto,
 // não tem mais em estoque, provavelmente precisa repor.
+// Sugestões de recompra: TIPOS de produto (variações agrupadas pelo nome, ver
+// routes/lib/agrupamentoProduto.js) que o cliente já comprou mas não compra
+// há mais de 1 ano - lembrete pro vendedor oferecer de novo, pensado pro
+// produto que acabou na loja e por isso nem aparece mais no levantamento.
+// Histórico = faturado oficial (pelo codigo_oficial) + pedidos feitos pelo
+// app. Se QUALQUER variação do grupo foi comprada no último ano, o grupo não
+// entra. Ordem: o que ele mais comprava primeiro.
+const SUGESTOES_DIAS_SEM_COMPRAR = 365;
+const SUGESTOES_LIMITE = 15;
+router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
+  try {
+    const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]);
+    if (cliente.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const codigoOficial = cliente.rows[0].codigo_oficial;
+
+    const [oficial, app, produtos] = await Promise.all([
+      codigoOficial
+        ? pool.query(
+          `/* sugestoes-recompra:oficial */
+           SELECT codigo_sku, MAX(data_faturamento) AS ultima_compra, COUNT(DISTINCT nr_pedido) AS num_pedidos
+           FROM pedidos_oficiais_itens
+           WHERE status = 'faturado' AND cliente_codigo_oficial = $1 AND data_faturamento IS NOT NULL
+           GROUP BY codigo_sku`,
+          [codigoOficial])
+        : Promise.resolve({ rows: [] }),
+      pool.query(
+        `/* sugestoes-recompra:app */
+         SELECT p.codigo_sku, MAX(ped.data_pedido) AS ultima_compra, COUNT(DISTINCT ped.id) AS num_pedidos
+         FROM pedidos ped
+         JOIN pedido_itens pi ON pi.pedido_id = ped.id
+         JOIN produtos p ON p.id = pi.produto_id
+         WHERE ped.cliente_id = $1
+         GROUP BY p.codigo_sku`,
+        [req.params.id]),
+      pool.query('SELECT codigo_sku, nome FROM produtos'),
+    ]);
+
+    const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
+    const codigosConhecidos = new Set(nomePorCodigo.keys());
+    const grupos = new Map();
+    for (const linha of [...oficial.rows, ...app.rows]) {
+      const sku = codigoBase(String(linha.codigo_sku), codigosConhecidos);
+      const nome = nomePorCodigo.get(sku);
+      if (!nome || !linha.ultima_compra) continue; // produto fora do catálogo: sem nome pra agrupar
+      const { chave, rotulo } = grupoDoProduto(nome);
+      const g = grupos.get(chave) || { grupo: rotulo, ultima_compra: null, num_pedidos: 0, variacoes: new Set() };
+      // prefere o rótulo com acento quando o catálogo grafa o mesmo nome dos dois jeitos
+      if (rotulo !== g.grupo && /[^\x00-\x7F]/.test(rotulo) && !/[^\x00-\x7F]/.test(g.grupo)) g.grupo = rotulo;
+      const data = new Date(linha.ultima_compra);
+      if (!g.ultima_compra || data > g.ultima_compra) g.ultima_compra = data;
+      g.num_pedidos += Number(linha.num_pedidos) || 0;
+      g.variacoes.add(sku);
+      grupos.set(chave, g);
+    }
+
+    const limite = Date.now() - SUGESTOES_DIAS_SEM_COMPRAR * 86400000;
+    const sugestoes = [...grupos.values()]
+      .filter(g => g.ultima_compra.getTime() < limite)
+      .sort((a, b) => b.num_pedidos - a.num_pedidos || b.ultima_compra - a.ultima_compra)
+      .slice(0, SUGESTOES_LIMITE)
+      .map(g => ({
+        grupo: g.grupo,
+        ultima_compra: g.ultima_compra.toISOString().slice(0, 10),
+        meses_sem_comprar: Math.floor((Date.now() - g.ultima_compra.getTime()) / (30.44 * 86400000)),
+        num_pedidos: g.num_pedidos,
+        variacoes: g.variacoes.size,
+      }));
+    res.json(sugestoes);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar sugestões de recompra.' });
+  }
+});
+
 router.get('/clientes/:id/recuperar', async (req, res) => {
   try {
     const result = await pool.query(

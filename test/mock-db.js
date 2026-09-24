@@ -48,6 +48,9 @@ function seed(partial) {
   if (partial.clientes) clientes.push(...partial.clientes);
   if (partial.pedidosOficiaisItens) pedidosOficiaisItens.push(...partial.pedidosOficiaisItens);
   if (partial.catalogoPrecos) catalogoPrecos.push(...partial.catalogoPrecos);
+  if (partial.produtos) produtos.push(...partial.produtos);
+  if (partial.pedidos) pedidos.push(...partial.pedidos);
+  if (partial.pedidoItens) pedidoItens.push(...partial.pedidoItens);
 }
 
 async function query(sql, params = []) {
@@ -59,6 +62,35 @@ async function query(sql, params = []) {
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };
+
+  // Sugestões de recompra (routes/relatorios.js) - última compra por SKU no
+  // faturado oficial e nos pedidos do app.
+  if (s.includes('/* SUGESTOES-RECOMPRA:OFICIAL */')) {
+    const porSku = new Map();
+    for (const it of pedidosOficiaisItens) {
+      if (it.status !== 'faturado' || it.cliente_codigo_oficial !== params[0] || !it.data_faturamento) continue;
+      const g = porSku.get(it.codigo_sku) || { codigo_sku: it.codigo_sku, ultima_compra: null, pedidos: new Set() };
+      if (!g.ultima_compra || it.data_faturamento > g.ultima_compra) g.ultima_compra = it.data_faturamento;
+      g.pedidos.add(it.nr_pedido);
+      porSku.set(it.codigo_sku, g);
+    }
+    return { rows: [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size })) };
+  }
+  if (s.includes('/* SUGESTOES-RECOMPRA:APP */')) {
+    const porSku = new Map();
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]))) {
+      for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
+        const prod = produtos.find(p => p.id === it.produto_id);
+        if (!prod) continue;
+        const g = porSku.get(prod.codigo_sku) || { codigo_sku: prod.codigo_sku, ultima_compra: null, pedidos: new Set() };
+        const data = new Date(ped.data_pedido);
+        if (!g.ultima_compra || data > g.ultima_compra) g.ultima_compra = data;
+        g.pedidos.add(ped.id);
+        porSku.set(prod.codigo_sku, g);
+      }
+    }
+    return { rows: [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size })) };
+  }
 
   // clientes
   if (s.includes('SELECT ID FROM CLIENTES WHERE DOCUMENTO')) {
