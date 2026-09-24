@@ -2536,17 +2536,213 @@
       margin-top: 1px;
     }
 
-    .hist-clientProgress:empty {
+    .hist-content {
+      padding: 0 16px 16px;
+    }
+
+    /* Card do cliente selecionado (Pedido e Levantamento - mesmo cliente nas
+       duas abas): nome + classificatório + CNPJ no topo, ⇄ pra trocar (o
+       "Limpar" fica dentro do seletor), objetivo do trimestre com barrinha e
+       as ações em botões de toque numa linha só. Sem cliente, vira um botão
+       tracejado "+ Selecionar cliente". */
+    .clienteCard {
+      padding: 14px 16px 4px;
+    }
+
+    .clienteVazioBtn {
+      width: 100%;
+      min-height: 52px;
+      border: 1.5px dashed var(--hairline);
+      border-radius: 14px;
+      background: transparent;
+      color: var(--red);
+      font-weight: 700;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .clienteVazioBtn.hidden,
+    .clienteSel.hidden,
+    .clienteAcao.hidden {
       display: none;
     }
 
-    .hist-clientProgress {
-      margin-top: 6px;
-      max-width: 260px;
+    .clienteSel {
+      background: var(--white);
+      border-radius: var(--r-md);
+      border: 0.75px solid var(--hairline);
+      padding: 12px 12px 12px 14px;
     }
 
-    .hist-content {
-      padding: 0 16px 16px;
+    .clienteTopo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .clienteInfo {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .clienteNome {
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.25;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .clienteMeta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 3px;
+      font-size: 13px;
+      color: var(--gray);
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .clienteMeta .classiBadge {
+      cursor: pointer;
+    }
+
+    .clienteTrocarBtn {
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--fill);
+      color: var(--gray);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .clienteTrocarBtn svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .clienteProgresso:empty {
+      display: none;
+    }
+
+    .clienteProgresso {
+      margin-top: 12px;
+    }
+
+    .clienteObjetivo {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .clienteObjetivo b {
+      color: var(--warning);
+      white-space: nowrap;
+    }
+
+    .clienteObjetivo b.ok {
+      color: var(--success);
+    }
+
+    .clienteObjetivo b.risco {
+      color: var(--danger);
+    }
+
+    .clienteBarra {
+      height: 6px;
+      border-radius: 99px;
+      background: var(--fill);
+      margin-top: 5px;
+      overflow: hidden;
+    }
+
+    .clienteBarra i {
+      display: block;
+      height: 100%;
+      border-radius: 99px;
+      background: var(--warning);
+    }
+
+    .clienteBarra i.ok {
+      background: var(--success);
+    }
+
+    .clienteBarra i.risco {
+      background: var(--danger);
+    }
+
+    .clienteAcoes {
+      display: flex;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .clienteAcao {
+      flex: 1 1 auto;
+      min-width: 0;
+      height: 40px;
+      padding: 0 8px;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .clienteAcao--destaque {
+      background: var(--warning-bg);
+      border-color: transparent;
+      color: var(--warning);
+      font-weight: 700;
+    }
+
+    .clientPickerAtual {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      padding: 8px 10px;
+      margin-bottom: 10px;
+      font-size: 13px;
+    }
+
+    .clientPickerAtual.hidden {
+      display: none;
+    }
+
+    .clientPickerAtual span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--gray);
+    }
+
+    .clientPickerAtual button {
+      flex: none;
+      border: none;
+      background: none;
+      color: var(--danger);
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 6px 4px;
     }
 
     .histCard {
@@ -3182,11 +3378,6 @@
 
     #appConfirmMsg {
       white-space: pre-line;
-    }
-
-    .sugestoesBtn {
-      color: var(--warning);
-      font-weight: 700;
     }
 
     .sugestaoItem {
@@ -4257,24 +4448,32 @@
     </div>
 
     <div id="tabPrecos">
-      <div class="hist-clientBar">
-        <div>
-          <div class="hist-clientLabel">Cliente (opcional)</div>
-          <div class="hist-clientName" id="precosClientName">Nenhum selecionado</div>
-          <div class="hist-clientDoc" id="precosClientDoc"></div>
-          <div class="hist-clientProgress" id="precosClientProgress"></div>
-        </div>
-        <div class="hist-clientBtns">
-          <button type="button" class="restoreBtn compacto" id="precosSelectClientBtn">Selecionar</button>
-          <button type="button" class="clientClearBtn sugestoesBtn hidden" id="precosSugestoesBtn"
-            aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
-            title="Produtos que o cliente não compra há mais de 1 ano"></button>
-          <button type="button" class="clientClearBtn hidden" id="precosFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
-            title="Abrir a ficha cadastral (CNPJ) desse cliente">Ficha cadastral</button>
-          <button type="button" class="clientClearBtn hidden" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
-            title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
-          <button type="button" class="clientClearBtn hidden" id="precosClearClientBtn" aria-label="Limpar cliente"
-            title="Limpar cliente">Limpar</button>
+      <div class="clienteCard" id="precosClienteCard">
+        <button type="button" class="clienteVazioBtn" id="precosSelectClientBtn">＋ Selecionar cliente</button>
+        <div class="clienteSel hidden" id="precosClienteSel">
+          <div class="clienteTopo">
+            <div class="clienteInfo">
+              <div class="clienteNome" id="precosClientName"></div>
+              <div class="clienteMeta"><span id="precosClientBadge"></span><span id="precosClientDoc"></span></div>
+            </div>
+            <button type="button" class="clienteTrocarBtn" id="precosTrocarClientBtn" aria-label="Trocar ou limpar cliente"
+              title="Trocar ou limpar cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
+                <path d="M7 4L3 8l4 4" /><path d="M3 8h13" /><path d="M17 20l4-4-4-4" /><path d="M21 16H8" />
+              </svg>
+            </button>
+          </div>
+          <div class="clienteProgresso" id="precosClientProgress"></div>
+          <div class="clienteAcoes">
+            <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="precosSugestoesBtn"
+              aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
+              title="Produtos que o cliente não compra há mais de 1 ano"></button>
+            <button type="button" class="clienteAcao hidden" id="precosFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
+              title="Abrir a ficha cadastral (CNPJ) desse cliente">📄 Ficha</button>
+            <button type="button" class="clienteAcao" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
+              title="Ver produtos que esse cliente já comprou">🛒 Comprados</button>
+          </div>
         </div>
       </div>
       <div class="controls">
@@ -4375,24 +4574,32 @@
     </div>
 
     <div id="tabLevantamento" class="hidden">
-      <div class="hist-clientBar">
-        <div>
-          <div class="hist-clientLabel">Cliente deste levantamento</div>
-          <div class="hist-clientName" id="levClientName">Nenhum selecionado</div>
-          <div class="hist-clientDoc" id="levClientDoc"></div>
-          <div class="hist-clientProgress" id="levClientProgress"></div>
-        </div>
-        <div class="hist-clientBtns">
-          <button type="button" class="restoreBtn compacto" id="levSelectClientBtn">Selecionar</button>
-          <button type="button" class="clientClearBtn sugestoesBtn hidden" id="levSugestoesBtn"
-            aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
-            title="Produtos que o cliente não compra há mais de 1 ano"></button>
-          <button type="button" class="clientClearBtn hidden" id="levFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
-            title="Abrir a ficha cadastral (CNPJ) desse cliente">Ficha cadastral</button>
-          <button type="button" class="clientClearBtn hidden" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
-            title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
-          <button type="button" class="clientClearBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
-            title="Limpar cliente">Limpar</button>
+      <div class="clienteCard" id="levClienteCard">
+        <button type="button" class="clienteVazioBtn" id="levSelectClientBtn">＋ Selecionar cliente do levantamento</button>
+        <div class="clienteSel hidden" id="levClienteSel">
+          <div class="clienteTopo">
+            <div class="clienteInfo">
+              <div class="clienteNome" id="levClientName"></div>
+              <div class="clienteMeta"><span id="levClientBadge"></span><span id="levClientDoc"></span></div>
+            </div>
+            <button type="button" class="clienteTrocarBtn" id="levTrocarClientBtn" aria-label="Trocar ou limpar cliente"
+              title="Trocar ou limpar cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true">
+                <path d="M7 4L3 8l4 4" /><path d="M3 8h13" /><path d="M17 20l4-4-4-4" /><path d="M21 16H8" />
+              </svg>
+            </button>
+          </div>
+          <div class="clienteProgresso" id="levClientProgress"></div>
+          <div class="clienteAcoes">
+            <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="levSugestoesBtn"
+              aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
+              title="Produtos que o cliente não compra há mais de 1 ano"></button>
+            <button type="button" class="clienteAcao hidden" id="levFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
+              title="Abrir a ficha cadastral (CNPJ) desse cliente">📄 Ficha</button>
+            <button type="button" class="clienteAcao" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
+              title="Ver produtos que esse cliente já comprou">🛒 Comprados</button>
+          </div>
         </div>
       </div>
       <div class="lev-savebar">
@@ -4631,6 +4838,10 @@
     <div class="minimodal hidden" id="clientPickerModal">
       <div class="minimodal-card" style="max-height:82vh;overflow-y:auto;">
         <h3>Selecionar cliente</h3>
+        <div class="clientPickerAtual hidden" id="clientPickerAtual">
+          <span id="clientPickerAtualNome"></span>
+          <button type="button" id="clientPickerLimpar">Limpar seleção</button>
+        </div>
         <input type="text" id="clientPickerSearch" placeholder="Buscar por nome ou CNPJ/CPF..." autocomplete="off">
         <div id="clientPickerResults"></div>
         <button type="button" class="priceEditResetLink" id="clientPickerNewToggle"
@@ -7119,13 +7330,17 @@
       function atualizarClienteBar(prefixo, cliente) {
         const nameEl = document.getElementById(prefixo + 'ClientName');
         if (!nameEl) return; // barra pode não existir em todo contexto (ex: testes isolados)
-        nameEl.innerHTML = cliente
-          ? `${escapeHtml(cliente.nome)}${renderCodigoOficialCliente(cliente)} ${renderClassificatorioBadge(cliente)}`
-          : 'Nenhum selecionado';
+        // sem cliente: só o botão tracejado "+ Selecionar cliente"; com
+        // cliente: o card. O código do cliente no ERP não aparece aqui depois
+        // de selecionado (pedido do usuário) - continua no seletor.
+        document.getElementById(prefixo + 'SelectClientBtn').classList.toggle('hidden', !!cliente);
+        document.getElementById(prefixo + 'ClienteSel').classList.toggle('hidden', !cliente);
+        nameEl.textContent = cliente ? cliente.nome : '';
+        nameEl.title = cliente ? cliente.nome : '';
+        const badgeEl = document.getElementById(prefixo + 'ClientBadge');
+        badgeEl.innerHTML = cliente ? renderClassificatorioBadge(cliente) : '';
         document.getElementById(prefixo + 'ClientDoc').textContent = cliente ? clienteDocText(cliente) : '';
-        document.getElementById(prefixo + 'ClearClientBtn').classList.toggle('hidden', !cliente);
-        document.getElementById(prefixo + 'ProdutosClienteBtn')?.classList.toggle('hidden', !cliente);
-        const badge = nameEl.querySelector('.classiBadge');
+        const badge = badgeEl.querySelector('.classiBadge');
         if (badge) {
           badge.style.cursor = 'pointer';
           badge.title = 'Ver histórico deste cliente';
@@ -7170,6 +7385,12 @@
       // Versão compacta da barra de progresso já usada na ficha completa do
       // cliente (renderClienteClassificatorioCard) - só a barrinha + uma
       // linha de texto, sem cabeçalho de faturamento/matriz nem trimestral.
+      // "R$ 47,5 mil" - valor curto pro card do cliente (o valor exato fica no title)
+      function brlCurto(v) {
+        const n = Number(v) || 0;
+        if (Math.abs(n) < 1000) return brl(n);
+        return `R$ ${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
+      }
       function renderBarraProgressoCompacta(status) {
         if (!status || !status.classificado) return '';
         if (status.ehRede) {
@@ -7189,32 +7410,56 @@
         const temObjetivo = status.faltaPObjetivo != null;
         if (temObjetivo) {
           const bateuObjetivo = status.faltaPObjetivo <= 0;
-          const linhaObjetivo = bateuObjetivo
-            ? `<span style="color:var(--success);font-weight:600;">✓ Objetivo do trimestre batido!</span>`
-            : `<span style="color:var(--warning);font-weight:600;">⚠️ Faltam ${brl(status.faltaPObjetivo)} pro objetivo do trimestre</span>`;
-          partes.push(`<div style="font-size:12px;margin-top:3px;">${linhaObjetivo}</div>`);
+          // barrinha: quanto do objetivo já entrou (entrada/objetivo); sem o
+          // valor do objetivo, mostra só o texto
+          const pct = status.objetivoTrimestral > 0
+            ? Math.max(0, Math.min(100, (Number(status.entradaTrimestral || 0) / status.objetivoTrimestral) * 100))
+            : null;
+          partes.push(`<div class="clienteObjetivo" title="${bateuObjetivo ? 'Objetivo do trimestre batido' : `Faltam ${brl(status.faltaPObjetivo)} pro objetivo do trimestre`}">
+            <span>Objetivo do trimestre</span>
+            ${bateuObjetivo ? '<b class="ok">✓ atingido</b>' : `<b>faltam ${brlCurto(status.faltaPObjetivo)}</b>`}
+          </div>`);
+          if (bateuObjetivo || pct != null) {
+            partes.push(`<div class="clienteBarra"><i class="${bateuObjetivo ? 'ok' : ''}" style="width:${bateuObjetivo ? 100 : pct}%"></i></div>`);
+          }
+          // risco de cair de faixa continua aparecendo junto do objetivo
+          if (status.emRiscoDeQueda) {
+            partes.push(`<div style="font-size:12px;margin-top:6px;color:var(--danger);font-weight:600;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}</div>`);
+          }
+          return partes.join('');
+        }
+        // Sem objetivo trimestral: mesma linha do card (rótulo à esquerda,
+        // "faltam R$ X" à direita, barrinha embaixo), com a meta da faixa.
+        const nomeFaixa = (f) => escapeHtml(NOME_CURTO_FAIXA[f] || f || 'a próxima faixa');
+        let rotulo = '', valor = '', classeValor = '', titulo = '';
+        if (status.emRiscoDeQueda) {
+          rotulo = `⚠️ Pra não cair${status.faixaAnterior ? ` pra ${nomeFaixa(status.faixaAnterior)}` : ' de faixa'}`;
+          valor = `faltam ${brlCurto(status.faltaPraManter)}`;
+          classeValor = 'risco';
+          titulo = `Faltam ${brl(status.faltaPraManter)} pra não cair de faixa`;
+        } else if (status.faltaPraMeta != null) {
+          rotulo = 'Meta individual';
+          valor = `faltam ${brlCurto(status.faltaPraMeta)}`;
+          titulo = `Faltam ${brl(status.faltaPraMeta)} pra meta individual`;
+        } else if (status.faltaPraProximaFaixa != null) {
+          rotulo = `Próxima faixa: ${nomeFaixa(status.proximaFaixa)}`;
+          valor = `faltam ${brlCurto(status.faltaPraProximaFaixa)}`;
+          titulo = `Faltam ${brl(status.faltaPraProximaFaixa)} pra ${nomeFaixa(status.proximaFaixa)}`;
+        } else if (status.jaQualificaProximaFaixa) {
+          rotulo = `Faixa ${nomeFaixa(status.proximaFaixa)}`;
+          valor = '✓ já qualifica';
+          classeValor = 'ok';
+        }
+        if (rotulo) {
+          partes.push(`<div class="clienteObjetivo" title="${titulo}"><span>${rotulo}</span><b class="${classeValor}">${valor}</b></div>`);
         }
         if (status.faixaMin != null && status.faixaMax != null) {
           // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
           // faixas devolvidas pela API já são calculadas sobre o ano em
           // andamento, então a posição na barra precisa ser do mesmo ano.
           const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
-          const cor = status.emRiscoDeQueda ? 'var(--danger)' : 'var(--red)';
-          partes.push(`<div style="background:var(--fill);border-radius:6px;height:6px;overflow:hidden;">
-            <div style="background:${cor};height:100%;width:${pct}%;"></div>
-          </div>`);
+          partes.push(`<div class="clienteBarra"><i class="${status.emRiscoDeQueda ? 'risco' : (classeValor === 'ok' ? 'ok' : '')}" style="width:${pct}%"></i></div>`);
         }
-        let linha = '';
-        if (status.emRiscoDeQueda) {
-          linha = `<span style="color:var(--danger);font-weight:600;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}</span>`;
-        } else if (status.faltaPraMeta != null) {
-          linha = `Faltam ${brl(status.faltaPraMeta)} (meta individual)`;
-        } else if (status.faltaPraProximaFaixa != null) {
-          linha = `Faltam ${brl(status.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}`;
-        } else if (status.jaQualificaProximaFaixa) {
-          linha = `<span style="color:var(--success);">✓ já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}</span>`;
-        }
-        if (linha) partes.push(`<div style="font-size:12px;margin-top:3px;">${linha}</div>`);
         // Ritmo trimestral - pedido do usuário pra aparecer pra TODOS os
         // clientes, não só os em risco: quem está atrasado já é coberto
         // pela mensagem de risco de queda acima (não duplica aqui); quem
@@ -7227,7 +7472,7 @@
           const detalhe = trimestral.faltaTrimestreAtual > 0
             ? ` — faltam ${brl(trimestral.faltaTrimestreAtual)} nesse trimestre`
             : ' — meta do trimestre já batida';
-          partes.push(`<div style="font-size:11px;margin-top:2px;color:var(--success);font-weight:600;">${rotulo}${detalhe}</div>`);
+          partes.push(`<div style="font-size:11px;margin-top:6px;color:var(--success);font-weight:600;">${rotulo}${detalhe}</div>`);
         }
         return partes.join('');
       }
@@ -7343,8 +7588,21 @@
         ['precos', 'lev'].forEach(p => document.getElementById(p + 'SugestoesBtn')?.addEventListener('click', abrirSugestoesRecompra));
         document.getElementById('sugestoesFecharBtn').addEventListener('click', () => document.getElementById('sugestoesModal').classList.add('hidden'));
       }
-      async function selectLevClient() {
-        const cliente = await openClientPicker();
+      // "+ Selecionar cliente" e ⇄ (trocar) abrem o seletor; com cliente já
+      // escolhido, o seletor mostra "Limpar seleção" (o botão Limpar saiu do
+      // card). No Levantamento, limpar também desliga o levantamento aberto
+      // desse cliente (como o antigo botão Limpar de lá fazia).
+      async function selectLevClient(prefixo) {
+        const cliente = await openClientPicker({ permitirLimpar: !!state.levCliente });
+        if (cliente === LIMPAR_CLIENTE) {
+          if (prefixo === 'lev') {
+            state.levLoadedId = null;
+            state.levLoadedName = null;
+          }
+          setLevCliente(null); // já persiste o rascunho (cliente + loadedId juntos) no fim
+          if (prefixo === 'lev') refreshLevSaveInfo();
+          return;
+        }
         if (!cliente) return;
         setLevCliente(cliente);
       }
@@ -7485,13 +7743,8 @@
         document.getElementById('levOpenBtn').addEventListener('click', openLevOpenModal);
         document.getElementById('levOpenCancel').addEventListener('click', closeLevOpenModal);
         document.getElementById('levOpenOverlay').addEventListener('click', closeLevOpenModal);
-        document.getElementById('levSelectClientBtn').addEventListener('click', selectLevClient);
-        document.getElementById('levClearClientBtn').addEventListener('click', () => {
-          state.levLoadedId = null;
-          state.levLoadedName = null;
-          setLevCliente(null); // já persiste o rascunho (cliente + loadedId juntos) no fim
-          refreshLevSaveInfo();
-        });
+        document.getElementById('levSelectClientBtn').addEventListener('click', () => selectLevClient('lev'));
+        document.getElementById('levTrocarClientBtn').addEventListener('click', () => selectLevClient('lev'));
         document.getElementById('levProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('levFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
@@ -7503,8 +7756,8 @@
       // Levantamento: não mexe em levLoadedId/levLoadedName, que são só do
       // fluxo de levantamento salvo e não fazem sentido vindos da aba Preços.
       function initPrecosCliente() {
-        document.getElementById('precosSelectClientBtn').addEventListener('click', selectLevClient);
-        document.getElementById('precosClearClientBtn').addEventListener('click', () => setLevCliente(null));
+        document.getElementById('precosSelectClientBtn').addEventListener('click', () => selectLevClient('precos'));
+        document.getElementById('precosTrocarClientBtn').addEventListener('click', () => selectLevClient('precos'));
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
       }
@@ -9625,9 +9878,16 @@
       let clientPickerResolve = null;
       let clientPickerDebounce = null;
 
-      function openClientPicker() {
+      // Devolvido pelo seletor quando o vendedor toca "Limpar seleção" (só
+      // aparece com { permitirLimpar: true } e um cliente já escolhido).
+      const LIMPAR_CLIENTE = Symbol('limpar-cliente');
+      function openClientPicker(opcoes = {}) {
         return new Promise((resolve) => {
           clientPickerResolve = resolve;
+          const atual = document.getElementById('clientPickerAtual');
+          const mostrarLimpar = !!(opcoes.permitirLimpar && state.levCliente);
+          atual.classList.toggle('hidden', !mostrarLimpar);
+          document.getElementById('clientPickerAtualNome').textContent = mostrarLimpar ? `Selecionado: ${state.levCliente.nome}` : '';
           document.getElementById('clientPickerSearch').value = '';
           document.getElementById('clientPickerResults').innerHTML = '';
           document.getElementById('clientPickerNewForm').classList.add('hidden');
@@ -9733,6 +9993,7 @@
         });
         document.getElementById('clientPickerNewConfirm').addEventListener('click', confirmNewClient);
         document.getElementById('clientPickerCancel').addEventListener('click', () => closeClientPicker(null));
+        document.getElementById('clientPickerLimpar').addEventListener('click', () => closeClientPicker(LIMPAR_CLIENTE));
         document.getElementById('clientPickerOverlay').addEventListener('click', () => closeClientPicker(null));
       }
 
