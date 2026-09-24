@@ -133,6 +133,17 @@ Supabase, sem PR — não é mudança de código.
   na barra do cliente (e o ícone de ficha do topo) abre `ficha-cnpj.html?cliente=…` direto nele,
   em aba nova, sem buscar de novo — a checagem `/ficha-cnpj/existe` só lê o banco.
 
+- **Card do cliente selecionado redesenhado** (Pedido e Levantamento, mesmo componente
+  `.clienteCard` em `index.html`) — escolhido pelo usuário a partir de mockups: nome numa linha
+  (corta com "…"), selo de classificatório + CNPJ embaixo, botão ⇄ pra trocar; objetivo do
+  trimestre como "faltam R$ 47,5 mil" + barrinha (sem objetivo, a mesma linha mostra a próxima
+  faixa/meta/risco de queda); ações 💡 sugestões · 📄 Ficha · 🛒 Comprados em botões de toque
+  numa linha só. Decisões: **sem avatar de iniciais** (ocupava espaço), **código do cliente no
+  ERP não aparece depois de selecionado** (continua no seletor), **"Limpar" saiu do card e foi
+  pra dentro do seletor** ("Limpar seleção", só aparece com cliente escolhido; no Levantamento
+  também desliga o levantamento aberto, como o antigo botão fazia). Sem cliente, o card vira um
+  botão tracejado "+ Selecionar cliente" (sai o rótulo "Cliente (opcional)").
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
