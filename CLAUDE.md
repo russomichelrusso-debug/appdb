@@ -19,6 +19,8 @@ separada por um único app que resolve, na mesma visita:
   objetivo trimestral) pra saber o que oferecer, sem depender do time interno.
 - **Calcular quantidade de Espaçadores Niveladores** (linha própria de produto) e já jogar isso
   pro orçamento.
+- **Lembrar o que o cliente parou de comprar** (produtos sem compra há mais de 1 ano, variações
+  agrupadas) — o item que acabou na prateleira não aparece no levantamento e sairia do radar.
 
 Cada funcionalidade nova pensada pro app costuma vir de uma dor concreta do vendedor em campo
 ("hoje eu tenho que abrir Curva ABC, selecionar cliente, clicar em produtos... dava pra ser um
@@ -89,6 +91,18 @@ Supabase, sem PR — não é mudança de código.
   tokens de cor de status, correção do tema escuro (textos que sumiam, fundos claros fixos, telas
   de login das páginas separadas), botões de modal com um padrão só, `alert()`/`prompt()` nativos
   trocados por toast de erro/`askText`. O padrão está documentado em "Padrão visual" no README.
+- **Sugestões de recompra** (PR #118): botão "💡 N sugestões" na barra do cliente (Pedido e
+  Levantamento), que só aparece quando há sugestão e abre um `.minimodal` com a lista.
+  Decisões do usuário: **nunca abre sozinho** (só pelo botão), é **só lembrete** (tocar no item
+  não faz nada) e o histórico é **faturado oficial + pedidos do app**. Backend em
+  `GET /api/clientes/:id/sugestoes-recompra` (`routes/relatorios.js`): grupo entra só se
+  nenhuma variação foi comprada nos últimos 365 dias, ordena por nº de pedidos, limite de 15,
+  SKUs promocionais reconciliados com `codigoBase`. O agrupamento por nome fica em
+  `routes/lib/agrupamentoProduto.js` (`grupoDoProduto`: corta em " - " e na primeira palavra
+  com número/"Ø"; ~1.700 produtos → ~500 grupos; tipos diferentes de broca continuam separados)
+  — reaproveitar sempre que precisar tratar "o produto" em vez de cada SKU. Não confundir com a
+  rota antiga `/clientes/:id/recuperar` (só pedidos do app, cruza com levantamento, sem
+  agrupar), que continua existindo.
 
 ## O que já tentamos e não deu certo
 
@@ -114,7 +128,8 @@ Supabase, sem PR — não é mudança de código.
 - Ideia em aberto, ainda não implementada: um painel de "oportunidades do dia" na tela inicial
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como
-  próximo passo de produto, não só bug fix.
+  próximo passo de produto, não só bug fix. A rota de sugestões de recompra e o `grupoDoProduto`
+  já dão a base pro sinal de "produtos parados" por cliente.
 - Continuar tratando pedido de UI ("botão colado na margem", "ícone fora de centro") como sinal
   de um padrão visual quebrado, não só o pixel específico apontado — vale checar se o mesmo
   padrão (`.clientClearBtn`, `.gearBtn`, paddings de 16px) se repete em outro lugar da mesma tela
