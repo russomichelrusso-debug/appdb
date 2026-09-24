@@ -3184,6 +3184,31 @@
       white-space: pre-line;
     }
 
+    .sugestoesBtn {
+      color: var(--warning);
+      font-weight: 700;
+    }
+
+    .sugestaoItem {
+      padding: 10px 12px;
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      margin-bottom: 6px;
+    }
+
+    .sugestaoItem b {
+      display: block;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .sugestaoItem span {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
     .rastreioCampo {
       display: flex;
       align-items: center;
@@ -4241,6 +4266,9 @@
         </div>
         <div class="hist-clientBtns">
           <button type="button" class="restoreBtn compacto" id="precosSelectClientBtn">Selecionar</button>
+          <button type="button" class="clientClearBtn sugestoesBtn hidden" id="precosSugestoesBtn"
+            aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
+            title="Produtos que o cliente não compra há mais de 1 ano"></button>
           <button type="button" class="clientClearBtn hidden" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
             title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="precosClearClientBtn" aria-label="Limpar cliente"
@@ -4354,6 +4382,9 @@
         </div>
         <div class="hist-clientBtns">
           <button type="button" class="restoreBtn compacto" id="levSelectClientBtn">Selecionar</button>
+          <button type="button" class="clientClearBtn sugestoesBtn hidden" id="levSugestoesBtn"
+            aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
+            title="Produtos que o cliente não compra há mais de 1 ano"></button>
           <button type="button" class="clientClearBtn hidden" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
             title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
@@ -4685,6 +4716,17 @@
 
     <div class="overlay hidden" id="csvNameOverlay"></div>
     <div class="overlay hidden" id="appConfirmOverlay"></div>
+    <div class="minimodal hidden" id="sugestoesModal">
+      <div class="minimodal-card" style="max-width:380px;max-height:85vh;overflow-y:auto;">
+        <h3>Sugestões para oferecer</h3>
+        <p class="ap-hint" id="sugestoesSubtitulo" style="margin:0 0 12px;"></p>
+        <div id="sugestoesLista"></div>
+        <div class="minimodal-btnrow" style="margin-top:14px;">
+          <button type="button" id="sugestoesFecharBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="minimodal hidden" id="rastreioModal">
       <div class="minimodal-card" style="max-width:360px;">
         <h3>Rastrear entrega</h3>
@@ -7184,6 +7226,53 @@
         // valor que o cliente anterior tinha deixado preenchido sozinho.
         for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
         saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
+        carregarSugestoesRecompra(cliente);
+      }
+
+      // ---------------- Sugestões de recompra ----------------
+      // Tipos de produto (variações agrupadas) que o cliente não compra há mais
+      // de 1 ano - lembrete pro vendedor oferecer de novo. Só abre pelo botão
+      // "💡 N sugestões" na barra do cliente (Pedido e Levantamento); o botão
+      // só aparece quando há sugestão. Calculado no servidor
+      // (GET /api/clientes/:id/sugestoes-recompra), guardado por cliente na sessão.
+      const SUGESTOES_CACHE = new Map();
+      async function carregarSugestoesRecompra(cliente) {
+        const mostrar = (lista) => ['precos', 'lev'].forEach(p => {
+          const btn = document.getElementById(p + 'SugestoesBtn');
+          if (!btn) return;
+          btn.textContent = lista && lista.length ? `💡 ${lista.length} sugest${lista.length === 1 ? 'ão' : 'ões'}` : '';
+          btn.classList.toggle('hidden', !(lista && lista.length));
+        });
+        mostrar(null);
+        if (!cliente || !cliente.id) return;
+        let lista = SUGESTOES_CACHE.get(cliente.id);
+        if (!lista) {
+          try { lista = await apiFetch(`/api/clientes/${cliente.id}/sugestoes-recompra`); }
+          catch (e) { return; } // sem internet/servidor: só não mostra o botão
+          if (!Array.isArray(lista)) return;
+          SUGESTOES_CACHE.set(cliente.id, lista);
+        }
+        if (state.levCliente && state.levCliente.id === cliente.id) mostrar(lista);
+      }
+      function abrirSugestoesRecompra() {
+        const cliente = state.levCliente;
+        const lista = cliente ? SUGESTOES_CACHE.get(cliente.id) || [] : [];
+        const mesAno = (iso) => {
+          const d = new Date(iso + 'T12:00:00');
+          return d.toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' }).replace('.', '').replace(' de ', '/');
+        };
+        document.getElementById('sugestoesSubtitulo').textContent =
+          `${cliente ? cliente.nome : 'Este cliente'} não compra estes produtos há mais de 1 ano.`;
+        document.getElementById('sugestoesLista').innerHTML = lista.map(s => `
+          <div class="sugestaoItem">
+            <b>${escapeHtml(s.grupo)}</b>
+            <span>última compra: ${escapeHtml(mesAno(s.ultima_compra))} · ${s.meses_sem_comprar} meses</span>
+          </div>`).join('');
+        document.getElementById('sugestoesModal').classList.remove('hidden');
+      }
+      function initSugestoesRecompra() {
+        ['precos', 'lev'].forEach(p => document.getElementById(p + 'SugestoesBtn')?.addEventListener('click', abrirSugestoesRecompra));
+        document.getElementById('sugestoesFecharBtn').addEventListener('click', () => document.getElementById('sugestoesModal').classList.add('hidden'));
       }
       async function selectLevClient() {
         const cliente = await openClientPicker();
@@ -13056,6 +13145,7 @@
           initPromoProdutosAdmin();
           initNovaPromocao();
           initFecharMinimodalAoClicarFora();
+          initSugestoesRecompra();
           initRastreio();
           initImportacaoUnificada();
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);

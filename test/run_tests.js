@@ -465,6 +465,54 @@ async function main() {
     `dashboard/resumo traz a lista de clientes de 3-5 meses sem comprar, com nome e dias: ${JSON.stringify(listaDe3a5)}`
   );
 
+  // 17) Sugestões de recompra: agrupamento de variações pelo nome
+  // (routes/lib/agrupamentoProduto.js) - tamanhos diferentes viram um item só,
+  // tipos diferentes do mesmo produto continuam separados.
+  const { grupoDoProduto } = require('../routes/lib/agrupamentoProduto');
+  const gEsp = ['ESPAÇADOR NIVELADOR 0,5 mm', 'ESPAÇADOR NIVELADOR 2,0 mm', 'ESPACADOR NIVELADOR 1,0 mm SMART - PACOTE C/ 50 UN']
+    .map(n => grupoDoProduto(n).chave);
+  assert(new Set(gEsp).size === 1 && grupoDoProduto('ESPAÇADOR NIVELADOR 0,5 mm').rotulo === 'Espaçador Nivelador',
+    `variações de Espaçador Nivelador viram um grupo só: ${JSON.stringify(gEsp)}`);
+  const gBrocas = ['BROCA DE AÇO RAPIDO 3,0 mm', 'BROCA C/ PONTA DE METAL DURO P/ CONCRETO 6 mm', 'BROCA C/ ENCAIXE SDS PLUS P/ CONCRETO 6 x 110 mm']
+    .map(n => grupoDoProduto(n).chave);
+  assert(new Set(gBrocas).size === 3, `tipos diferentes de broca ficam em grupos separados: ${JSON.stringify(gBrocas)}`);
+
+  // 18) GET /api/clientes/:id/sugestoes-recompra: grupo sem compra há mais de
+  // 1 ano aparece; grupo com QUALQUER variação comprada no último ano não;
+  // código promocional (P + base) conta como o produto base.
+  mockDb.__seed({
+    produtos: [
+      { id: 801, codigo_sku: '62648', nome: 'ESPAÇADOR NIVELADOR 0,5 mm', categoria: '05' },
+      { id: 802, codigo_sku: '61296', nome: 'ESPAÇADOR NIVELADOR 2,0 mm', categoria: '05' },
+      { id: 803, codigo_sku: '62429', nome: 'BROCA DE AÇO RAPIDO 1,0 mm', categoria: '13' },
+      { id: 804, codigo_sku: '62430', nome: 'BROCA DE AÇO RAPIDO 1,5 mm', categoria: '13' },
+      { id: 805, codigo_sku: '62932', nome: 'DESEMPENADEIRA INOX CABO REMOVÍVEL DENTE 10 mm - COM CABO', categoria: '16' },
+    ],
+    clientes: [{ id: 9101, nome: 'LOJA SUGESTOES', documento: '11122233000144', codigo_oficial: 'COD9101' }],
+    pedidosOficiaisItens: [
+      // Espaçador: duas variações, última compra há ~2 anos -> sugere
+      { nr_pedido: 'S1', codigo_sku: '62648', cliente_codigo_oficial: 'COD9101', quantidade: 5, valor: 100, data_faturamento: diasAtrasISO(800), status: 'faturado' },
+      { nr_pedido: 'S2', codigo_sku: 'P61296', cliente_codigo_oficial: 'COD9101', quantidade: 5, valor: 100, data_faturamento: diasAtrasISO(700), status: 'faturado' },
+      // Broca: uma variação antiga, outra comprada há 60 dias -> NÃO sugere
+      { nr_pedido: 'S3', codigo_sku: '62429', cliente_codigo_oficial: 'COD9101', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(900), status: 'faturado' },
+      { nr_pedido: 'S4', codigo_sku: '62430', cliente_codigo_oficial: 'COD9101', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(60), status: 'faturado' },
+    ],
+    // Desempenadeira só em pedido do app, há ~400 dias -> sugere
+    pedidos: [{ id: 9901, cliente_id: 9101, data_pedido: new Date(Date.now() - 400 * 86400000).toISOString() }],
+    pedidoItens: [{ id: 9902, pedido_id: 9901, produto_id: 805, quantidade: 1, preco_unitario: 50 }],
+  });
+  res = await req('GET', '/api/clientes/9101/sugestoes-recompra');
+  const grupos = (res.body || []).map(g => g.grupo);
+  const esp = (res.body || []).find(g => g.grupo === 'Espaçador Nivelador');
+  assert(
+    res.status === 200 && esp && esp.variacoes === 2 && esp.num_pedidos === 2 && esp.meses_sem_comprar >= 22
+      && grupos.includes('Desempenadeira Inox Cabo Removível Dente')
+      && !grupos.some(g => g.startsWith('Broca')),
+    `sugestoes-recompra agrupa variações, junta faturado + app e ignora grupo comprado no último ano: ${JSON.stringify(res.body)}`
+  );
+  res = await req('GET', '/api/clientes/999999/sugestoes-recompra');
+  assert(res.status === 404, 'sugestoes-recompra de cliente inexistente responde 404');
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);
