@@ -1944,6 +1944,39 @@
       transform: rotate(180deg);
     }
 
+    /* Card inteiro recolhível (ex: Promoções) - o título vira o <summary>
+       e o chevron fica no canto direito, como nos grupos do painel. */
+    .ap-cardRecolhivel > summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    .ap-cardRecolhivel > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .ap-cardRecolhivel > summary h3 {
+      margin-bottom: 0;
+    }
+
+    .ap-cardRecolhivel > summary::after {
+      content: '▾';
+      margin-left: auto;
+      font-size: 11px;
+      color: var(--gray);
+      transition: transform .15s;
+    }
+
+    .ap-cardRecolhivel[open] > summary::after {
+      transform: rotate(180deg);
+    }
+
+    .ap-cardRecolhivel[open] > summary {
+      margin-bottom: 12px;
+    }
+
     .ap-subsecaoInfo {
       font-weight: 400;
       color: var(--gray);
@@ -4853,8 +4886,8 @@
 
         <!-- Promoções: campanhas, desconto por classificatório e produtos
              promocionais numa lista só, com etiqueta de tipo em cada item. -->
-        <div class="ap-card">
-          <h3>Promoções</h3>
+        <details class="ap-card ap-cardRecolhivel" id="promocoesCard">
+          <summary><h3>Promoções<span class="ap-subsecaoInfo" id="promocoesResumo"></span></h3></summary>
           <div id="promocoesLista">
             <div id="promoRulesList"></div>
             <div id="classiDiscountRulesList"></div>
@@ -4876,7 +4909,7 @@
               Dashboard (Curva ABC). Marque as que a empresa quer empurrar esse mês.</p>
             <div id="produtosFocoList"></div>
           </details>
-        </div>
+        </details>
 
         <details class="ap-group hidden" id="manageUsersGroup">
           <summary>Usuários e clientes</summary>
@@ -11949,8 +11982,10 @@
       function atualizarPromocoesVazia() {
         const vazia = document.getElementById('promocoesVazia');
         if (!vazia) return;
-        const temAlguma = !!document.querySelector('#promocoesLista .promoRuleItem');
-        vazia.classList.toggle('hidden', temAlguma);
+        const qtd = document.querySelectorAll('#promocoesLista .promoRuleItem').length;
+        vazia.classList.toggle('hidden', qtd > 0);
+        const resumo = document.getElementById('promocoesResumo');
+        if (resumo) resumo.textContent = qtd > 0 ? ` · ${qtd}` : '';
       }
       // Clicar no fundo escurecido de qualquer .minimodal equivale a
       // Cancelar/Fechar - aciona o primeiro botão da linha de botões (sempre o
