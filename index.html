@@ -4955,8 +4955,8 @@
               <div id="transportadorasLista"></div>
               <label for="transpNome">Nome</label>
               <input type="text" id="transpNome" placeholder="Ex: Expresso São Miguel">
-              <label for="transpPadrao">Reconhecer por (texto no nome da transportadora do relatório)</label>
-              <input type="text" id="transpPadrao" placeholder="Ex: SAO MIGUEL">
+              <label for="transpPadrao">Reconhecer por (texto no nome da transportadora do relatório; vários separados por ;)</label>
+              <input type="text" id="transpPadrao" placeholder="Ex: SAO MIGUEL; EXPRESSO S M">
               <label for="transpUrl">Link de rastreio</label>
               <input type="text" inputmode="url" autocomplete="off" id="transpUrl" placeholder="https://...">
               <button class="fileBtn" id="transpAddBtn" style="margin-top:10px;">+ Adicionar transportadora</button>
@@ -10413,7 +10413,7 @@
       // Lista editável no Painel (config "transportadoras_rastreio"); estas são
       // as que valem enquanto ninguém salvou uma lista.
       const TRANSPORTADORAS_PADRAO = [
-        { nome: 'Expresso São Miguel', padrao: 'SAO MIGUEL', url: 'https://portaldocliente.expressosaomiguel.com.br/rastrear-mercadoria' },
+        { nome: 'Expresso São Miguel', padrao: 'SAO MIGUEL; EXPRESSO S M', url: 'https://portaldocliente.expressosaomiguel.com.br/rastrear-mercadoria' },
         { nome: 'TRD Transportes (Senior)', padrao: 'TRD', url: 'https://platform.senior.com.br/logistica-tck/tms/tck-frontend/#/login/signup?tenant=ZEhKa2RISmhibk53YjNKMFpYTT0%3D' },
       ];
       let TRANSPORTADORAS = TRANSPORTADORAS_PADRAO;
@@ -10423,13 +10423,21 @@
           if (result && Array.isArray(result.valor)) TRANSPORTADORAS = result.valor;
         } catch (e) { /* sem lista salva ainda (usa a padrão), ou sem rede */ }
       }
+      // Sem acento, maiúsculas, e pontuação vira espaço - assim "EXPRESSO S.M."
+      // e "EXPRESSO S M" são o mesmo texto.
       function normalizarTextoBusca(v) {
-        return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+        return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase()
+          .replace(/[^A-Z0-9]+/g, ' ').trim();
       }
+      // "padrao" aceita vários textos separados por ";" (o mesmo nome aparece
+      // abreviado de jeitos diferentes no relatório). Compara por palavra
+      // inteira, pra "TRD" não bater dentro de outra palavra.
       function acharTransportadora(nomeNoRelatorio) {
         const alvo = normalizarTextoBusca(nomeNoRelatorio);
         if (!alvo) return null;
-        return TRANSPORTADORAS.find(t => t.padrao && alvo.includes(normalizarTextoBusca(t.padrao))) || null;
+        return TRANSPORTADORAS.find(t => String(t.padrao || '').split(';')
+          .map(normalizarTextoBusca).filter(Boolean)
+          .some(p => ` ${alvo} `.includes(` ${p} `))) || null;
       }
       function abrirRastreio(cliente, nf, nomeTransportadora) {
         const cnpjDigitos = String((cliente && cliente.documento) || '').replace(/\D/g, '');
@@ -10468,16 +10476,27 @@
           const el = document.getElementById(btn.dataset.copiar);
           copiarTexto(el.dataset.valor, btn.dataset.copiar === 'rastreioCnpj' ? 'CNPJ' : 'Nota fiscal');
         }));
-        // Admin: lista de transportadoras
+        // Admin: lista de transportadoras. O mesmo formulário adiciona ou,
+        // depois de tocar no lápis de um item, salva a alteração daquele item.
         document.getElementById('transpAddBtn').addEventListener('click', async () => {
           const nome = document.getElementById('transpNome').value.trim();
           const padrao = document.getElementById('transpPadrao').value.trim();
           const url = document.getElementById('transpUrl').value.trim();
           if (!nome || !padrao || !/^https:\/\//i.test(url)) { showToast('Preencha nome, texto pra reconhecer e um link começando com https://', 'erro'); return; }
-          await salvarTransportadoras([...TRANSPORTADORAS, { nome, padrao, url }]);
-          ['transpNome', 'transpPadrao', 'transpUrl'].forEach(id => { document.getElementById(id).value = ''; });
+          const nova = { nome, padrao, url };
+          const lista = transpEditandoIdx != null
+            ? TRANSPORTADORAS.map((t, i) => i === transpEditandoIdx ? nova : t)
+            : [...TRANSPORTADORAS, nova];
+          await salvarTransportadoras(lista);
+          limparFormTransportadora();
         });
         renderTransportadorasLista();
+      }
+      let transpEditandoIdx = null;
+      function limparFormTransportadora() {
+        transpEditandoIdx = null;
+        ['transpNome', 'transpPadrao', 'transpUrl'].forEach(id => { document.getElementById(id).value = ''; });
+        document.getElementById('transpAddBtn').textContent = '+ Adicionar transportadora';
       }
       async function salvarTransportadoras(lista) {
         try {
@@ -10500,14 +10519,25 @@
           <div class="prDetail" style="word-break:break-all;">${escapeHtml(t.url)}</div>
         </div>
         <div class="prBtns">
+          <button data-edit-transp="${i}" aria-label="Editar" title="Editar">${ICON_EDIT}</button>
           <button data-del-transp="${i}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
         </div>
       </div>
     </div>`).join('');
+        wrap.querySelectorAll('[data-edit-transp]').forEach(b => b.addEventListener('click', () => {
+          transpEditandoIdx = Number(b.dataset.editTransp);
+          const t = TRANSPORTADORAS[transpEditandoIdx];
+          document.getElementById('transpNome').value = t.nome;
+          document.getElementById('transpPadrao').value = t.padrao;
+          document.getElementById('transpUrl').value = t.url;
+          document.getElementById('transpAddBtn').textContent = 'Salvar alteração';
+          document.getElementById('transpPadrao').focus();
+        }));
         wrap.querySelectorAll('[data-del-transp]').forEach(b => b.addEventListener('click', async () => {
           const t = TRANSPORTADORAS[Number(b.dataset.delTransp)];
           if (!await askConfirm(`Excluir a transportadora "${t.nome}" do rastreio?`, 'Excluir', { perigo: true })) return;
           await salvarTransportadoras(TRANSPORTADORAS.filter((_, i) => i !== Number(b.dataset.delTransp)));
+          limparFormTransportadora();
         }));
       }
 

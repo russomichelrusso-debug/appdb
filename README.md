@@ -121,7 +121,7 @@ Cada produto carrega preço por 6 canais (Varejo/Atacado/E-commerce/Moderno/Cons
 - **Status**: uma linha de resumo que abre os detalhes; "Sincronizar agora" confere o servidor, reenvia o catálogo de produtos e recarrega a fonte automática.
 - **Avançado** (fechado por padrão): exportar pedidos, produtos sem EAN, integridade de clientes, pedidos duplicados, carteira antiga, apagar relatório oficial e endereço do servidor.
 - **Produtos foco** fica dentro do card Promoções, recolhido; a lista só é montada ao abrir.
-- **Transportadoras (rastreio de entrega)**, em Avançado: nome, texto pra reconhecer no nome da transportadora do relatório oficial e link de rastreio (aceita `{cnpj}` e `{nf}`). Salvo na configuração `transportadoras_rastreio`; enquanto ninguém salvar, valem Expresso São Miguel e TRD Transportes (Senior).
+- **Transportadoras (rastreio de entrega)**, em Avançado: nome, texto(s) pra reconhecer no nome da transportadora do relatório oficial (vários separados por `;`, sem diferença de acento/pontuação, por palavra inteira — ex: `SAO MIGUEL; EXPRESSO S M`) e link de rastreio (aceita `{cnpj}` e `{nf}`); cada item pode ser editado. Salvo na configuração `transportadoras_rastreio`; enquanto ninguém salvar, valem Expresso São Miguel e TRD Transportes (Senior).
 
 ## Rastreio de entrega
 
