@@ -122,6 +122,17 @@ Supabase, sem PR — não é mudança de código.
   radar-cnpj não é documentado de forma clara (não deu pra abrir o site daqui); a reserva existe
   justamente pra não depender disso.
 
+- **Fichas de CNPJ completadas sozinhas + atalho direto**: o servidor completa de madrugada as
+  fichas que faltam (`routes/lib/preenchimentoCnpj.js`, ligado em `server.js`) — decisão do
+  usuário: **automático, sem botão**, com folga pras consultas manuais: só 01h–06h de Brasília,
+  máx. 40/noite, 1 a cada 15 s, só quem não tem ficha nenhuma (ficha vencida continua sendo
+  atualizada só ao abrir); 404 tenta até 3 noites e desiste; origem fora do ar/no limite pausa a
+  noite. Em 24/09 eram 291 clientes com CNPJ, 122 com ficha. Progresso na linha "Fichas de CNPJ"
+  do card de status do Painel Administrativo; `PREENCHIMENTO_CNPJ_DESLIGADO=1` no Render desliga.
+  Pedido junto do usuário: com cliente selecionado que já tem ficha, o botão **"Ficha cadastral"**
+  na barra do cliente (e o ícone de ficha do topo) abre `ficha-cnpj.html?cliente=…` direto nele,
+  em aba nova, sem buscar de novo — a checagem `/ficha-cnpj/existe` só lê o banco.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

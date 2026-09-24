@@ -4,6 +4,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { buscarNaBrasilApi } = require('./lib/cnpjBrasilApi');
+const { statusPreenchimento } = require('./lib/preenchimentoCnpj');
 
 router.param('id', validarIdInteiro);
 
@@ -225,6 +226,28 @@ router.get('/clientes/:id/ficha-cnpj', radarCnpjLimiter, async (req, res) => {
   }
 });
 
+// Só diz se o cliente já tem ficha guardada - lê o banco, NUNCA consulta a
+// Receita (sem limitador de origem). Usado pra mostrar o atalho "Ficha
+// cadastral" na barra do cliente sem gastar consulta.
+router.get('/clientes/:id/ficha-cnpj/existe', async (req, res) => {
+  try {
+    const r = await pool.query('SELECT atualizado_em FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.id]);
+    res.json({ existe: r.rows.length > 0, atualizado_em: r.rows[0] ? r.rows[0].atualizado_em : null });
+  } catch (e) {
+    respostaDeErro(res, e);
+  }
+});
+
+// Progresso do preenchimento automático (routes/lib/preenchimentoCnpj.js),
+// mostrado no Painel Administrativo.
+router.get('/cnpj-preenchimento/status', async (req, res) => {
+  try {
+    res.json(await statusPreenchimento(pool));
+  } catch (e) {
+    respostaDeErro(res, e);
+  }
+});
+
 router.post('/clientes/:id/ficha-cnpj/atualizar', radarCnpjLimiter, async (req, res) => {
   try {
     const { ficha, fonte, aviso } = await obterFicha(req.params.id, true);
@@ -257,3 +280,5 @@ router.get('/radar-cnpj/:cnpj', radarCnpjLimiter, async (req, res) => {
 });
 
 module.exports = router;
+// reaproveitado pelo preenchimento automático (server.js)
+module.exports.obterFicha = obterFicha;

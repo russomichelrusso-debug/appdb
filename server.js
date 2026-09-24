@@ -23,6 +23,7 @@ const catalogoPrecosRoutes = require('./routes/catalogoPrecos');
 const radarCnpjRoutes = require('./routes/radarCnpj');
 const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio');
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
+const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
 
 const app = express();
 app.set('trust proxy', 1);  
@@ -113,7 +114,11 @@ const PORT = process.env.PORT || 10000;
 
 runMigrations()
   .then(() => {
-    app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
+    app.listen(PORT, () => {
+      console.log(`Servidor rodando na porta ${PORT}`);
+      // completa sozinho, de madrugada, as fichas de CNPJ que faltam
+      iniciarPreenchimentoAutomatico(pool, radarCnpjRoutes.obterFicha);
+    });
   })
   .catch(err => {
     console.error('Erro ao rodar migrações do banco:', err);

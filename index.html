@@ -4269,6 +4269,8 @@
           <button type="button" class="clientClearBtn sugestoesBtn hidden" id="precosSugestoesBtn"
             aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
             title="Produtos que o cliente não compra há mais de 1 ano"></button>
+          <button type="button" class="clientClearBtn hidden" id="precosFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
+            title="Abrir a ficha cadastral (CNPJ) desse cliente">Ficha cadastral</button>
           <button type="button" class="clientClearBtn hidden" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
             title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="precosClearClientBtn" aria-label="Limpar cliente"
@@ -4385,6 +4387,8 @@
           <button type="button" class="clientClearBtn sugestoesBtn hidden" id="levSugestoesBtn"
             aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
             title="Produtos que o cliente não compra há mais de 1 ano"></button>
+          <button type="button" class="clientClearBtn hidden" id="levFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
+            title="Abrir a ficha cadastral (CNPJ) desse cliente">Ficha cadastral</button>
           <button type="button" class="clientClearBtn hidden" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
             title="Ver produtos que esse cliente já comprou">Produtos comprados</button>
           <button type="button" class="clientClearBtn hidden" id="levClearClientBtn" aria-label="Limpar cliente"
@@ -4909,6 +4913,7 @@
             <div class="ap-status-row"><span class="k">Previsão de estoque</span><span class="v"
                 id="apSyncPrevisao">—</span></div>
             <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
+            <div class="ap-status-row"><span class="k">Fichas de CNPJ</span><span class="v" id="apFichasCnpj">—</span></div>
             <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
             <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v"
                 id="apSyncQueueCount">Nada pendente</span></div>
@@ -7251,6 +7256,46 @@
         for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
         saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
         carregarSugestoesRecompra(cliente);
+        carregarAtalhoFichaCnpj(cliente);
+      }
+
+      // ---------------- Atalho pra ficha cadastral (CNPJ) ----------------
+      // Com cliente selecionado, o botão "Ficha cadastral" na barra do cliente
+      // (e o ícone de ficha no topo) abrem ficha-cnpj.html já nesse cliente,
+      // sem buscar de novo lá dentro. O botão só aparece se a ficha já estiver
+      // guardada no servidor - a checagem (/ficha-cnpj/existe) lê só o banco,
+      // nunca consulta a Receita. Resposta "tem ficha" fica guardada na sessão;
+      // "não tem" é conferida de novo na próxima seleção (o preenchimento
+      // automático da madrugada pode ter completado nesse meio tempo).
+      const FICHA_CNPJ_EXISTE = new Set();
+      function urlFichaCnpj(cliente) {
+        if (!cliente || !cliente.id) return 'ficha-cnpj.html';
+        const params = new URLSearchParams({ cliente: cliente.id, nome: cliente.nome || '', doc: cliente.documento || '' });
+        return `ficha-cnpj.html?${params}`;
+      }
+      async function carregarAtalhoFichaCnpj(cliente) {
+        const mostrar = (visivel) => ['precos', 'lev'].forEach(p => {
+          document.getElementById(p + 'FichaClienteBtn')?.classList.toggle('hidden', !visivel);
+        });
+        const topo = document.getElementById('fichaCnpjLink');
+        if (topo) topo.href = urlFichaCnpj(cliente);
+        mostrar(false);
+        if (!cliente || !cliente.id) return;
+        if (String(cliente.documento || '').replace(/\D/g, '').length !== 14) return; // só CNPJ tem ficha
+        if (!FICHA_CNPJ_EXISTE.has(cliente.id)) {
+          try {
+            const r = await apiFetch(`/api/clientes/${cliente.id}/ficha-cnpj/existe`);
+            if (!r || !r.existe) return;
+          } catch (e) { return; } // sem internet/servidor: só não mostra o botão
+          FICHA_CNPJ_EXISTE.add(cliente.id);
+        }
+        if (state.levCliente && state.levCliente.id === cliente.id) mostrar(true);
+      }
+      // Aba nova (mesmo padrão de "Produtos comprados") - não perde o
+      // pedido/levantamento em andamento aqui.
+      function abrirFichaCnpjCliente(cliente) {
+        if (!cliente) return;
+        window.open(urlFichaCnpj(cliente), '_blank');
       }
 
       // ---------------- Sugestões de recompra ----------------
@@ -7448,6 +7493,7 @@
           refreshLevSaveInfo();
         });
         document.getElementById('levProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
+        document.getElementById('levFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
         refreshLevSaveInfo();
       }
@@ -7460,6 +7506,7 @@
         document.getElementById('precosSelectClientBtn').addEventListener('click', selectLevClient);
         document.getElementById('precosClearClientBtn').addEventListener('click', () => setLevCliente(null));
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
+        document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
       }
 
       function addLevPedidoToCart(cod) {
@@ -9793,6 +9840,7 @@
 
         if (elPrevisao) elPrevisao.textContent = (PREVISAO_SOURCE === 'Nenhuma previsão carregada') ? 'Não carregada' : PREVISAO_SOURCE;
         if (elPromo) elPromo.textContent = PROMO_SOURCE;
+        carregarStatusFichasCnpj();
 
         elServidor.textContent = 'Verificando…';
         elCatalogo.textContent = 'Verificando…';
@@ -10096,6 +10144,22 @@
         });
       }
 
+      // Progresso do preenchimento automático das fichas de CNPJ (servidor
+      // completa sozinho de madrugada, ver routes/lib/preenchimentoCnpj.js) -
+      // só informativo, não entra no resumo de alertas do card.
+      async function carregarStatusFichasCnpj() {
+        const el = document.getElementById('apFichasCnpj');
+        if (!el) return;
+        try {
+          const st = await apiFetch('/api/cnpj-preenchimento/status');
+          const fmt = (n) => Number(n).toLocaleString('pt-BR');
+          el.textContent = st.faltam > st.desistidos
+            ? `${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)} · completando de madrugada (${st.hoje.limite}/noite)`
+            : `${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)} ✓${st.desistidos ? ` · ${fmt(st.desistidos)} CNPJ não encontrado(s)` : ''}`;
+        } catch (e) {
+          el.textContent = '—';
+        }
+      }
       function refreshPrevisaoStatus() {
         const el = document.getElementById('apSyncPrevisao');
         if (el) el.textContent = PREVISAO_SOURCE;

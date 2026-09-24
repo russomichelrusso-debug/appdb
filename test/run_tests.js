@@ -14,6 +14,8 @@ Module._resolveFilename = function (request, ...args) {
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: mockDb };
 
 process.env.PORT = '4123';
+// não liga o preenchimento automático de fichas de CNPJ (timer) durante o teste
+process.env.NODE_ENV = 'test';
 
 const http = require('http');
 
@@ -630,6 +632,87 @@ async function main() {
     global.fetch = fetchOriginal;
     console.warn = erroSilencioso;
   }
+
+  // 21) preenchimento automático de fichas de CNPJ (routes/lib/preenchimentoCnpj.js)
+  const preench = require('../routes/lib/preenchimentoCnpj');
+  // 03:30 UTC = 00:30 em Brasília (fora da janela 01h-06h); 05:00 UTC = 02:00 (dentro)
+  assert(
+    preench.agoraBrasilia(new Date('2026-09-25T03:30:00Z')).dia === '2026-09-25' && preench.agoraBrasilia(new Date('2026-09-25T03:30:00Z')).hora === 0
+      && !preench.dentroDaJanela(new Date('2026-09-25T03:30:00Z')) && preench.dentroDaJanela(new Date('2026-09-25T05:00:00Z'))
+      && !preench.dentroDaJanela(new Date('2026-09-25T09:00:00Z')),
+    'janela do preenchimento é 01h-06h no horário de Brasília (servidor em UTC)'
+  );
+  const fakeDeps = ({ estado = null, pendentes = [], erros = {}, agora = '2026-09-25T05:00:00Z' } = {}) => {
+    const d = {
+      estadoSalvo: estado, consultados: [], falhas: [], esperas: 0,
+      agora: () => new Date(agora),
+      esperar: async () => { d.esperas++; },
+      lerEstado: async () => d.estadoSalvo,
+      salvarEstado: async (e) => { d.estadoSalvo = { ...e }; },
+      listarPendentes: async (limite) => pendentes.slice(0, limite),
+      obterFicha: async (id) => {
+        d.consultados.push(id);
+        if (erros[id]) { const e = new Error(erros[id].msg); e.status = erros[id].status; throw e; }
+      },
+      registrarFalha: async (id) => { d.falhas.push(id); },
+    };
+    return d;
+  };
+  const muitos = Array.from({ length: 60 }, (_, i) => i + 1);
+
+  let fd = fakeDeps({ pendentes: muitos });
+  let r = await preench.rodarRodada(fd);
+  assert(r.consultas === 40 && fd.consultados.length === 40 && fd.estadoSalvo.consultas === 40 && fd.estadoSalvo.dia === '2026-09-25'
+    && fd.esperas === 39, 'preenchimento para em 40 consultas no dia, com espera entre uma e outra');
+
+  fd = fakeDeps({ pendentes: muitos, estado: { dia: '2026-09-25', consultas: 35 } });
+  r = await preench.rodarRodada(fd);
+  assert(r.consultas === 5 && fd.estadoSalvo.consultas === 40, 'conta o que já foi gasto no mesmo dia (35 + 5 = 40)');
+
+  fd = fakeDeps({ pendentes: muitos, estado: { dia: '2026-09-24', consultas: 40, pausado_no_dia: '2026-09-24' } });
+  r = await preench.rodarRodada(fd);
+  assert(r.consultas === 40 && fd.estadoSalvo.dia === '2026-09-25', 'dia novo zera o contador e a pausa do dia anterior');
+
+  fd = fakeDeps({ pendentes: [1, 2, 3], erros: { 2: { status: 404, msg: 'CNPJ não encontrado' } } });
+  r = await preench.rodarRodada(fd);
+  assert(fd.consultados.join() === '1,2,3' && fd.falhas.join() === '2' && r.motivo !== 'origem_indisponivel',
+    'CNPJ não encontrado registra falha do cliente e segue pro próximo');
+
+  fd = fakeDeps({ pendentes: [1, 2, 3], erros: { 2: { status: 502, msg: 'radar-cnpj respondeu 429; reserva: BrasilAPI respondeu 503' } } });
+  r = await preench.rodarRodada(fd);
+  assert(fd.consultados.join() === '1,2' && r.motivo === 'origem_indisponivel' && fd.estadoSalvo.pausado_no_dia === '2026-09-25'
+    && fd.falhas.length === 0, 'origens fora do ar/no limite encerram a noite sem culpar o cliente');
+  r = await preench.rodarRodada(fd);
+  assert(r.consultas === 0 && r.motivo === 'pausado_hoje', 'depois de pausar, não tenta de novo na mesma noite');
+
+  fd = fakeDeps({ pendentes: muitos, agora: '2026-09-25T15:00:00Z' });
+  r = await preench.rodarRodada(fd);
+  assert(r.consultas === 0 && r.motivo === 'fora_da_janela' && fd.consultados.length === 0, 'fora da madrugada não consulta nada');
+
+  // rota de status + atalho "existe" (não consulta a Receita)
+  mockDb.__seed({
+    clientes: [
+      { id: 9301, nome: 'COM FICHA', documento: '11.222.333/0001-81' },
+      { id: 9302, nome: 'SEM FICHA', documento: '11222333000262' },
+    ],
+    fichasCnpj: { 9301: { cliente_id: 9301, razao_social: 'COM FICHA LTDA', atualizado_em: new Date().toISOString() } },
+  });
+  const fetchAntes = global.fetch;
+  let chamouOrigem = false;
+  global.fetch = async () => { chamouOrigem = true; throw new Error('não devia consultar'); };
+  try {
+    res = await req('GET', '/api/clientes/9301/ficha-cnpj/existe');
+    const comFicha = res.status === 200 && res.body.existe === true && !!res.body.atualizado_em;
+    res = await req('GET', '/api/clientes/9302/ficha-cnpj/existe');
+    assert(comFicha && res.status === 200 && res.body.existe === false && !chamouOrigem,
+      'ficha-cnpj/existe responde pelo banco, sem consultar a Receita');
+  } finally {
+    global.fetch = fetchAntes;
+  }
+  res = await req('GET', '/api/cnpj-preenchimento/status');
+  assert(res.status === 200 && res.body.com_cnpj >= 2 && res.body.faltam === res.body.com_cnpj - res.body.com_ficha
+    && res.body.hoje.limite === 40 && res.body.janela === '01h–06h',
+    'status do preenchimento devolve progresso, limite e janela');
 
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
