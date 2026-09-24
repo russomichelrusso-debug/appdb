@@ -1887,6 +1887,159 @@
       margin: 0 0 12px;
     }
 
+    /* Status compacto do Painel Administrativo: uma linha de resumo que
+       abre os detalhes ao tocar. */
+    .ap-statusCard summary {
+      list-style: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 14.5px;
+      font-weight: 600;
+      color: #1E8E3E;
+    }
+
+    .ap-statusCard summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .ap-statusCard summary .ap-statusAlerta {
+      color: #B36B00;
+    }
+
+    .ap-statusChevron {
+      color: var(--gray);
+      font-size: 11px;
+      transition: transform .15s;
+    }
+
+    .ap-statusCard details[open] .ap-statusChevron {
+      transform: rotate(180deg);
+    }
+
+    .ap-statusDetalhes {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .ap-tiposAceitos {
+      margin-top: 10px;
+      font-size: 12.5px;
+      color: var(--gray);
+    }
+
+    .ap-tiposAceitos summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .ap-tiposAceitos ul {
+      margin: 8px 0 0;
+      padding-left: 18px;
+      line-height: 1.6;
+    }
+
+    .ap-importItem {
+      flex-wrap: wrap;
+    }
+
+    .ap-importItem .pdfQueueDetalhe {
+      flex: 1 1 60%;
+    }
+
+    .ap-importAcoes {
+      flex-basis: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .ap-importAcoes:empty {
+      display: none;
+    }
+
+    .ap-importAcoes label {
+      flex: 1 1 130px;
+      font-size: 11.5px;
+      color: var(--gray);
+      margin: 0;
+    }
+
+    .ap-importAcoes label input {
+      margin-top: 3px;
+    }
+
+    .ap-importAcoes button {
+      border: none;
+      border-radius: var(--r-sm);
+      padding: 9px 14px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      background: var(--white);
+      color: var(--gray);
+    }
+
+    .ap-importAcoes .ap-importEnviar {
+      background: var(--red);
+      color: #fff;
+    }
+
+    .promoTipoTag {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      padding: 2px 7px;
+      border-radius: 999px;
+      margin-bottom: 4px;
+    }
+
+    .promoTipoTag--campanha {
+      background: rgba(204, 9, 53, .12);
+      color: var(--red);
+    }
+
+    .promoTipoTag--classificatorio {
+      background: rgba(30, 142, 62, .14);
+      color: #1E8E3E;
+    }
+
+    .promoTipoTag--produto {
+      background: rgba(179, 107, 0, .14);
+      color: #B36B00;
+    }
+
+    .novaPromoOpcao {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: var(--fill);
+      border: none;
+      border-radius: var(--r-sm);
+      padding: 12px 14px;
+      margin-top: 8px;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .novaPromoOpcao b {
+      display: block;
+      font-size: 14px;
+    }
+
+    .novaPromoOpcao span {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
     .fileBtn {
       display: block;
       width: 100%;
@@ -3080,6 +3233,8 @@
     #targetProdWrap.hidden,
     #targetSkuListWrap.hidden,
     #manageUsersGroup.hidden,
+    #apImportTodosWrap.hidden,
+    #promocoesVazia.hidden,
     #exportPedidosCard.hidden {
       display: none;
     }
@@ -4401,317 +4556,113 @@
         <button class="closeBtn" id="closeAdmin" aria-label="Fechar" style="color:#fff;">&times;</button>
       </div>
       <div class="ap-body">
-        <div class="ap-card">
-          <h3>Status de sincronização</h3>
-          <div class="ap-status-row"><span class="k">Servidor</span><span class="v" id="apSyncServidor">—</span></div>
-          <div class="ap-status-row"><span class="k">Catálogo (servidor)</span><span class="v"
-              id="apSyncCatalogo">—</span></div>
-          <div class="ap-status-row"><span class="k">Catálogo (este aparelho)</span><span class="v"
-              id="apCurCount">—</span></div>
-          <div class="ap-status-row"><span class="k">Origem do catálogo</span><span class="v" id="apCurSource">—</span>
+        <!-- Status compacto: uma linha de resumo; os detalhes (mesmos ids de
+             sempre, atualizados pelas funções de sincronização) ficam dentro. -->
+        <div class="ap-card ap-statusCard">
+        <details id="apStatusCard">
+          <summary class="ap-statusSummary">
+            <span id="apStatusResumo">Verificando…</span>
+            <span class="ap-statusChevron" aria-hidden="true">▾</span>
+          </summary>
+          <div class="ap-statusDetalhes">
+            <div class="ap-status-row"><span class="k">Servidor</span><span class="v" id="apSyncServidor">—</span></div>
+            <div class="ap-status-row"><span class="k">Catálogo (servidor)</span><span class="v"
+                id="apSyncCatalogo">—</span></div>
+            <div class="ap-status-row"><span class="k">Catálogo (este aparelho)</span><span class="v"
+                id="apCurCount">—</span></div>
+            <div class="ap-status-row"><span class="k">Origem do catálogo</span><span class="v" id="apCurSource">—</span>
+            </div>
+            <div class="ap-status-row"><span class="k">Previsão de estoque</span><span class="v"
+                id="apSyncPrevisao">—</span></div>
+            <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
+            <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
+            <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v"
+                id="apSyncQueueCount">Nada pendente</span></div>
+            <div class="ap-status-row"><span class="k">CSVs de pedido pendentes no Drive</span><span class="v"
+                id="apDriveCsvQueueCount">Nada pendente</span></div>
+            <div class="ap-status-row"><span class="k">Google Drive</span><span class="v" id="apGoogleDriveStatus">Não
+                conectado</span></div>
+            <div class="ap-status-row"><span class="k">Tema</span><span class="v" id="apThemeStatus">Claro</span></div>
+            <button class="restoreBtn" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar pendências
+              agora</button>
+            <button class="restoreBtn" id="apCompareCatalogBtn" style="margin-top:8px;">Ver diferenças entre servidor e
+              aparelho</button>
+            <div id="apCompareCatalogResult" style="margin-top:10px;"></div>
+            <button class="restoreBtn" id="googleDriveConnectBtn" style="margin-top:8px;">Conectar ao Google Drive</button>
+            <p class="ap-hint" style="margin:6px 0 0;">Conecta a SUA conta Google — os CSVs de Orçamento e
+              Levantamento vão direto pro seu Google Drive.</p>
+            <button class="restoreBtn" id="themeToggleBtn" style="margin-top:8px;">Alternar tema</button>
+            <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
           </div>
-          <div class="ap-status-row"><span class="k">Previsão de estoque</span><span class="v"
-              id="apSyncPrevisao">—</span></div>
-          <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
-          <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
-          <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v"
-              id="apSyncQueueCount">Nada pendente</span></div>
-          <div class="ap-status-row"><span class="k">CSVs de pedido pendentes no Drive</span><span class="v"
-              id="apDriveCsvQueueCount">Nada pendente</span></div>
-          <button class="restoreBtn" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar pendências
-            agora</button>
-          <button class="restoreBtn" id="apSyncAllBtn" style="margin-top:10px;">Sincronizar tudo agora</button>
-          <button class="restoreBtn" id="apCompareCatalogBtn" style="margin-top:8px;">Ver diferenças entre servidor e
-            aparelho</button>
-          <div id="apCompareCatalogResult" style="margin-top:10px;"></div>
-          <button class="restoreBtn" id="logoutBtn" style="margin-top:8px;color:#B3261E;">Sair (logout)</button>
+        </details>
+          <button class="fileBtn" id="apSyncAgoraBtn" style="margin-top:12px;">Sincronizar agora</button>
+          <div id="syncProdutosMsg" style="margin-top:8px;"></div>
+          <div id="apPlanilhaMsg"></div>
+        </div>
+
+        <!-- Porta de entrada única de arquivos: reconhece sozinha o tipo pelas
+             abas/colunas (ver detectarTipoArquivo) e pede confirmação antes de enviar. -->
+        <div class="ap-card">
+          <h3>Importar arquivo</h3>
+          <div class="pdfDropzone" id="apImportDropzone" tabindex="0" role="button"
+            aria-label="Arraste arquivos aqui ou toque pra selecionar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+              <path d="M12 3v12m0-12 4 4m-4-4-4 4" stroke-linecap="round" stroke-linejoin="round" />
+              <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+            <div class="pdfDropzoneTitle">Arraste ou toque pra escolher arquivos</div>
+            <div class="pdfDropzoneSub">O app reconhece sozinho o que é cada arquivo — vários de uma vez</div>
+            <input type="file" id="apImportFileInput" accept=".xlsx,.xls,.json,application/json,application/pdf,.pdf" multiple style="display:none;">
+          </div>
+          <div id="relatorioOficialStatus" class="ap-hint" style="margin:10px 0 0;">Carregando status do relatório oficial…</div>
+          <details class="ap-tiposAceitos">
+            <summary>O que dá pra importar aqui</summary>
+            <ul>
+              <li><b>Planilha de preços</b> (LISTA PADRÃO, abas PRECIFICAÇÃO/TRIBUTAÇÃO)</li>
+              <li><b>Relatório oficial</b> (abas Carteira e/ou Faturamento)</li>
+              <li><b>Objetivo trimestral</b> (aba Export, colunas Matriz e OBJETIVO MÊS) — pede as datas do trimestre</li>
+              <li><b>Classificatório do ERP</b> (coluna Classificatorio)</li>
+              <li><b>Previsão de estoque</b> (colunas Item e Qt. Disp.)</li>
+              <li><b>Vídeos de produto</b> (colunas Código, YouTube e/ou Instagram)</li>
+              <li><b>Link do site oficial</b> (colunas Código e Link)</li>
+              <li><b>Fichas técnicas</b> e <b>códigos EAN-13/DUN-14</b> (arquivos .json)</li>
+              <li><b>Clientes</b> (.json com nome e CNPJ)</li>
+              <li><b>Cotações em PDF</b></li>
+            </ul>
+          </details>
+          <div id="apImportTodosWrap" class="hidden" style="margin-top:10px;">
+            <button class="fileBtn" id="apImportTodosBtn">Enviar todos</button>
+          </div>
+          <ul id="apImportFila" class="pdfQueue ap-importFila"></ul>
+        </div>
+
+        <!-- Promoções: campanhas, desconto por classificatório e produtos
+             promocionais numa lista só, com etiqueta de tipo em cada item. -->
+        <div class="ap-card">
+          <h3>Promoções</h3>
+          <div id="promocoesLista">
+            <div id="promoRulesList"></div>
+            <div id="classiDiscountRulesList"></div>
+            <div id="promoProdutosList"></div>
+            <div id="promocoesVazia" class="promoEmpty hidden">Nenhuma promoção cadastrada ainda.</div>
+          </div>
+          <button class="fileBtn" id="novaPromocaoBtn" style="margin-top:10px;">+ Nova promoção</button>
+          <div class="ap-btnrow" style="margin-top:10px;">
+            <button class="ap-cancel" id="exportPromoBtn" style="flex:1;">Backup das campanhas (.json)</button>
+            <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Restaurar backup</button>
+          </div>
+          <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
         </div>
 
         <div class="ap-card">
-          <h3>Aparência</h3>
-          <div class="ap-status-row"><span class="k">Tema</span><span class="v" id="apThemeStatus">Claro</span></div>
-          <button class="restoreBtn" id="themeToggleBtn" style="margin-top:10px;">Alternar tema</button>
+          <h3>Produtos foco (Dashboard)</h3>
+          <p class="ap-hint" style="margin:0 0 10px;">Famílias destacadas no gráfico "Valor Produtos Foco" do
+            Dashboard (Curva ABC). Marque as que a empresa quer empurrar esse mês.</p>
+          <div id="produtosFocoList"></div>
         </div>
-
-        <div class="ap-card">
-          <h3>Google Drive</h3>
-          <div class="ap-status-row"><span class="k">Status</span><span class="v" id="apGoogleDriveStatus">Não
-              conectado</span></div>
-          <p class="ap-hint" style="margin:10px 0;">Conecta a SUA conta Google (cada vendedor com a própria) — depois de
-            conectado, os CSVs de Orçamento e Levantamento vão direto pro seu Google Drive, sem passar pelo menu de
-            compartilhar do celular.</p>
-          <button class="restoreBtn" id="googleDriveConnectBtn">Conectar ao Google Drive</button>
-        </div>
-
-        <details class="ap-group">
-          <summary>Catálogo e preços</summary>
-          <div class="ap-groupBody">
-            <div class="ap-card">
-              <h3>Enviar planilha de preços</h3>
-              <p class="ap-hint">Selecione o arquivo .xlsx da LISTA PADRÃO (com as abas PRECIFICAÇÃO, TRIBUTAÇÃO e
-                Referência Estados). Os preços de todos os 6 canais e 27 estados são recalculados a partir dela e
-                enviados direto pro servidor — todo mundo recebe a atualização assim que abrir o app de novo.</p>
-              <input type="file" id="apPlanilhaInput" accept=".xlsx" style="display:none;">
-              <button class="fileBtn" id="apPlanilhaBtn">Selecionar planilha</button>
-              <div id="apPlanilhaMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Fonte automática</h3>
-              <p class="ap-hint" style="margin-bottom:8px;">O app busca sozinho o catálogo mais atual do servidor ao
-                abrir — não precisa reenviar em cada aparelho. Use o botão abaixo pra forçar essa busca na hora (ex:
-                logo depois de enviar uma planilha nova).</p>
-              <button class="restoreBtn" id="apRestoreBtn">Verificar / restaurar</button>
-            </div>
-            <div class="ap-card">
-              <h3>Sincronizar catálogo de produtos</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Normalmente acontece sozinho (veja "Status de
-                sincronização" no topo) — use aqui só se quiser forçar de novo na hora.</p>
-              <button class="fileBtn" id="syncProdutosBtn">Sincronizar catálogo de produtos</button>
-              <div id="syncProdutosMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Campanhas promocionais</h3>
-              <p class="ap-hint" style="margin:10px 0;">Descontos extras por categoria, ativados por quantidade, valor
-                comprado, ou combinação com outra categoria (ex: 40 discos = 5%, 80 discos = 10%; R$ 2.000 em
-                niveladores = mais 4%). Qualquer alteração aqui já vai direto pro servidor — todo mundo vê na hora, sem
-                precisar exportar nem subir arquivo.</p>
-              <div id="promoRulesList"></div>
-              <button class="fileBtn" id="addPromoRuleBtn" style="margin-top:10px;">+ Nova regra</button>
-              <div class="ap-btnrow" style="margin-top:10px;">
-                <button class="ap-cancel" id="exportPromoBtn" style="flex:1;">Baixar backup (.json)</button>
-                <button class="ap-cancel" id="importPromoBtn" style="flex:1;">Restaurar backup</button>
-              </div>
-              <input type="file" id="promoFileInput" accept=".json,application/json" style="display:none;">
-
-              <div style="margin-top:18px;padding-top:14px;border-top:1px solid var(--hairline);">
-                <h3>Produtos promocionais</h3>
-                <p class="ap-hint" style="margin:10px 0;">Cria um código novo pra um produto já existente, com preço
-                  promocional próprio (varia por região igual os outros, soma IPI por cima). Não recebe desconto de
-                  canal/quantidade — é preço fechado.</p>
-                <div id="promoProdutosList"></div>
-                <button class="fileBtn" id="addPromoProdutoBtn" style="margin-top:10px;">+ Novo produto
-                  promocional</button>
-              </div>
-            </div>
-            <div class="ap-card">
-              <h3>Produtos foco (Dashboard)</h3>
-              <p class="ap-hint" style="margin:10px 0;">Famílias destacadas no gráfico "Valor Produtos Foco" do
-                Dashboard (aba Dashboard, dentro de Curva ABC). Marque as famílias que a empresa quer empurrar esse
-                mês — a lista já vem do catálogo carregado, sem precisar digitar nada.</p>
-              <div id="produtosFocoList"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Desconto por classificatório (campanhas)</h3>
-              <p class="ap-hint" style="margin:10px 0;">Pra campanhas cujo desconto varia pelo classificatório do
-                PRÓPRIO cliente (ex: "Essenciais da Obra" — Master 20% / Premium 23% / Exclusive 25%). Quando o
-                cliente selecionado tem esse classificatório e um produto da regra é adicionado ao orçamento, o
-                desconto adicional do item já vem preenchido sozinho.</p>
-              <div id="classiDiscountRulesList"></div>
-              <button class="fileBtn" id="addClassiDiscountRuleBtn" style="margin-top:10px;">+ Nova regra</button>
-            </div>
-          </div>
-        </details>
-
-        <details class="ap-group">
-          <summary>Informações de produto</summary>
-          <div class="ap-groupBody">
-            <div class="ap-card">
-              <h3>Previsão de estoque</h3>
-              <p class="ap-hint" style="margin:10px 0;">Selecione a planilha de previsão (relatório tipo ESCE007, com as
-                colunas Item/Qt. Disp./Qt. Compra/Previsão/Saldo). Vai direto pro servidor — todo mundo já vê na hora,
-                sem precisar exportar nem subir arquivo nenhum. Produtos com chegada prevista ou sem estoque projetado
-                passam a mostrar um aviso na busca de preços.</p>
-              <input type="file" id="previsaoFileInput" accept=".xlsx,.xls" style="display:none;">
-              <button class="fileBtn" id="previsaoFileBtn">Selecionar planilha (.xlsx)</button>
-              <div id="previsaoMsgArea" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Fichas técnicas (balão de informação)</h3>
-              <p class="ap-hint" style="margin:10px 0;">Importa um arquivo com nome, descrição e especificações
-                extraídas de catálogo, pra aparecer no balão (i) ao lado do produto. Sem foto — só ficha técnica em
-                texto. Substitui só os códigos que vierem no arquivo — o resto continua como está.</p>
-              <button class="fileBtn" id="importFichasBtn">Importar arquivo de fichas técnicas</button>
-              <input type="file" id="fichasFileInput" accept=".json,application/json" style="display:none;">
-              <div id="importFichasMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Códigos EAN-13 / DUN-14</h3>
-              <p class="ap-hint" style="margin:10px 0;">Importa um arquivo com o EAN-13 (unidade) e DUN-14 (caixa
-                fechada) corretos por código. Escanear o DUN-14 no Levantamento soma a embalagem padrão de uma vez, sem
-                abrir a caixa.</p>
-              <button class="fileBtn" id="importCodigosBtn">Importar arquivo de códigos</button>
-              <input type="file" id="codigosFileInput" accept=".json,application/json" style="display:none;">
-              <div id="importCodigosMsg" style="margin-top:8px;"></div>
-              <button class="fileBtn" id="exportCodigosFaltantesBtn" style="margin-top:10px;">Baixar planilha de produtos sem EAN-13/DUN-14</button>
-              <div id="exportCodigosFaltantesMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Vídeos de produto (YouTube/Instagram)</h3>
-              <p class="ap-hint" style="margin:10px 0;">Importa uma planilha (.xlsx) com 3 colunas — <b>Código</b>,
-                <b>YouTube</b> e <b>Instagram</b> — pra aparecer um ícone de vídeo ao lado do produto na busca. As
-                duas colunas de link são opcionais (pode ter só uma). Substitui só os códigos que vierem na planilha
-                — o resto continua como está.</p>
-              <button class="fileBtn" id="importVideosBtn">Selecionar planilha (.xlsx)</button>
-              <input type="file" id="videosFileInput" accept=".xlsx,.xls" style="display:none;">
-              <div id="importVideosMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Link do site oficial (Ver mais no balão de informação)</h3>
-              <p class="ap-hint" style="margin:10px 0;">Importa uma planilha (.xlsx) com 2 colunas — <b>Código</b> e
-                <b>Link</b> — com o endereço da página do produto no site oficial (cortag.com). Aparece como botão
-                "Ver no site oficial" dentro do balão (i) de informações técnicas. Substitui só os códigos que
-                vierem na planilha — o resto continua como está.</p>
-              <button class="fileBtn" id="importLinkSiteBtn">Selecionar planilha (.xlsx)</button>
-              <input type="file" id="linkSiteFileInput" accept=".xlsx,.xls" style="display:none;">
-              <div id="importLinkSiteMsg" style="margin-top:8px;"></div>
-            </div>
-          </div>
-        </details>
-
-        <details class="ap-group">
-          <summary>Relatórios e clientes</summary>
-          <div class="ap-groupBody">
-            <div class="ap-card">
-              <h3>Relatório oficial (Carteira / Faturamento)</h3>
-              <p class="ap-hint" style="margin:10px 0;">Selecione a planilha .xlsx oficial, com as abas "Carteira" e/ou
-                "Faturamento". É a única forma de entrada desses dados — sem preparar arquivo à parte, sem JSON manual.
-                Lê Nr.Pedido, NF, transportadora, situação, valor e classificatório direto da planilha, e grava tudo
-                de uma vez: pedido oficial (aba "Pedidos" de cada cliente, com classificatório e acumulado faturado) e
-                classificação de canal do cliente. Não duplica: o mesmo Nr.Pedido é atualizado (de "Em Carteira" pra
-                "Faturado") em vez de criar de novo. Pode subir de novo sempre que sair um relatório atualizado.</p>
-              <div id="relatorioOficialStatus" class="ap-hint" style="margin-bottom:10px;">Carregando status…</div>
-              <input type="file" id="relatorioOficialFileInput" accept=".xlsx,.xls" multiple style="display:none;">
-              <button class="fileBtn" id="relatorioOficialFileBtn">Selecionar planilha(s) (.xlsx)</button>
-              <div id="relatorioOficialMsgArea" style="margin-top:8px;"></div>
-              <ul id="relatorioOficialQueue" class="pdfQueue" style="max-height:320px;overflow-y:auto;"></ul>
-              <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline);">
-                <p class="ap-hint" style="margin:0 0 8px;">Pedidos em carteira há mais de 60 dias normalmente não vão
-                  ser mais faturados (faltou mercadoria) - dá pra excluir do sistema. Um item já faturado nunca é
-                  afetado.</p>
-                <div id="carteiraAntigaStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
-                <button class="fileBtn" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
-                <div id="carteiraAntigaMsg" style="margin-top:8px;"></div>
-              </div>
-              <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--hairline);">
-                <p class="ap-hint" style="margin:0 0 8px;color:#B3261E;">⚠️ Apaga TODAS as linhas do relatório
-                  oficial (Carteira + Faturamento) - use só antes de reimportar tudo do zero, pra não misturar dado
-                  velho com o novo. Classificatório e histórico de pedidos ligados a essa tabela somem até a
-                  reimportação.</p>
-                <div id="apagarTudoFaturamentoStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
-                <button class="fileBtn" id="apagarTudoFaturamentoBtn" style="border-color:#B3261E;color:#B3261E;">Apagar todo o relatório oficial</button>
-                <div id="apagarTudoFaturamentoMsg" style="margin-top:8px;"></div>
-              </div>
-            </div>
-            <div class="ap-card">
-              <h3>Importar Classificatório (planilha ERP)</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Planilha "Classificatorio" exportada do ERP (aba
-                "Cliente"). Traz o agrupamento por Matriz/empresas-irmãs (usado pra somar faturamento de lojas do
-                mesmo grupo ou rede) e metas individuais negociadas à parte (PIC/Vl.Acordo). Casa pelo código do
-                cliente no ERP (mais confiável) ou pelo CNPJ. Não mexe no classificatório/desconto se o cliente já
-                tiver um vindo do relatório de Carteira/Faturamento - só preenche se ainda estiver vazio.</p>
-              <button class="fileBtn" id="importClassificatorioBtn">Importar Classificatório (.xlsx)</button>
-              <input type="file" id="importClassificatorioFile" accept=".xlsx,.xls" style="display:none;">
-              <div id="importClassificatorioMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Objetivo trimestral (ERP) — "Falta p/ Objetivo"</h3>
-              <p class="ap-hint" style="margin:10px 0;">Planilha oficial de "Entrada Realizada" do ERP (aba "Export"),
-                com a meta trimestral (Objetivo) de cada cliente/grupo. Só usa as colunas <b>Matriz</b> e
-                <b>OBJETIVO MÊS</b> — o "Falta p/ Objetivo" que o vendedor vê é calculado ao vivo a partir dos
-                pedidos já importados, não vem pronto da planilha. Clientes Rede são pulados (fora de escopo por
-                enquanto). Cada import <b>substitui</b> o objetivo do período inteiro — reimporte sempre que sair
-                uma planilha nova do trimestre.</p>
-              <label for="objetivosTrimestraisInicio">Início do trimestre</label>
-              <input type="date" id="objetivosTrimestraisInicio">
-              <label for="objetivosTrimestraisFim">Fim do trimestre</label>
-              <input type="date" id="objetivosTrimestraisFim">
-              <button class="fileBtn" id="importObjetivosTrimestraisBtn" style="margin-top:10px;">Selecionar planilha (.xlsx)</button>
-              <input type="file" id="objetivosTrimestraisFileInput" accept=".xlsx,.xls" style="display:none;">
-              <div id="importObjetivosTrimestraisMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Importar clientes (JSON)</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Cadastro em lote de clientes (nome + CNPJ), a partir de um
-                arquivo JSON.</p>
-              <button class="fileBtn" id="importClientesBtn">Importar clientes (JSON)</button>
-              <input type="file" id="importClientesFile" accept=".json,application/json" style="display:none;">
-              <div id="importClientesMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Consolidar cotações em PDF</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Arraste os PDFs de cotação/pedido oficiais aqui — cliente,
-                data e itens são extraídos automaticamente e gravados direto no histórico do servidor (não fica só no
-                aparelho). Reprocessar o mesmo PDF não duplica, é identificado pelo número da cotação.</p>
-              <div class="pdfDropzone" id="pdfDropzone" tabindex="0" role="button"
-                aria-label="Arraste PDFs aqui ou toque pra selecionar">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-                  <path d="M12 3v12m0-12 4 4m-4-4-4 4" stroke-linecap="round" stroke-linejoin="round" />
-                  <path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-                <div class="pdfDropzoneTitle">Arraste as cotações em PDF aqui</div>
-                <div class="pdfDropzoneSub">ou toque pra selecionar — vários arquivos de uma vez</div>
-                <input type="file" id="pdfFileInput" accept="application/pdf,.pdf" multiple style="display:none;">
-              </div>
-              <ul id="pdfProcessQueue" class="pdfQueue"></ul>
-            </div>
-            <div class="ap-card" id="exportPedidosCard">
-              <h3>Baixar pedidos por período</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor —
-                funciona de qualquer aparelho, sem depender de arquivo salvo em algum celular específico.</p>
-              <label for="exportPedidosInicio">De</label>
-              <input type="date" id="exportPedidosInicio">
-              <label for="exportPedidosFim">Até</label>
-              <input type="date" id="exportPedidosFim">
-              <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
-              <div id="exportPedidosMsg" style="margin-top:8px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Curva ABC de produtos</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Virou um painel completo, com filtro de período,
-                faturamento por categoria e a Curva de Pareto — acessível a qualquer pessoa logada pelo ícone de
-                gráfico no topo do app, não só por aqui.</p>
-              <a class="restoreBtn" href="curva-abc.html" style="display:inline-block;text-decoration:none;text-align:center;">Abrir painel de Curva ABC</a>
-            </div>
-          </div>
-        </details>
-
-        <details class="ap-group">
-          <summary>Manutenção</summary>
-          <div class="ap-groupBody">
-            <div class="ap-card">
-              <h3>Verificar integridade de clientes</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Confere todos os clientes cadastrados contra uma planilha
-                de referência (nome+CNPJ), e encontra: clientes com o CNPJ da própria Cortag (bug antigo da extração de
-                PDF, já corrigido) e clientes duplicados pelo mesmo nome. Selecione o mesmo JSON usado pra importar
-                clientes.</p>
-              <button class="fileBtn" id="checkIntegrityBtn">Selecionar planilha de referência e analisar</button>
-              <input type="file" id="checkIntegrityFile" accept=".json,application/json" style="display:none;">
-              <div id="integrityResults" style="margin-top:12px;"></div>
-            </div>
-            <div class="ap-card">
-              <h3>Verificar pedidos duplicados</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Acontece quando a mesma venda entra por dois caminhos (ex:
-                finalizado no app na hora, e depois o mesmo pedido aparece de novo ao importar o relatório de
-                faturamento). Mostra pedidos do mesmo cliente, no mesmo dia, com produto em comum — revise e exclua o
-                repetido manualmente.</p>
-              <button class="restoreBtn" id="checkDuplicatePedidosBtn">Analisar pedidos</button>
-              <div id="duplicatePedidosResults" style="margin-top:12px;"></div>
-            </div>
-            <div class="ap-card">
-              <button type="button" class="priceEditResetLink" id="toggleApiConfigBtn"
-                style="text-decoration:none;color:var(--gray);font-weight:600;font-size:12px;">Configuração avançada
-                (endereço do servidor)</button>
-              <div id="apiConfigWrap" class="hidden" style="margin-top:10px;">
-                <label for="apiBaseUrlInput">Endereço do servidor</label>
-                <input type="text" id="apiBaseUrlInput" placeholder="https://appdb-z6uh.onrender.com">
-                <button class="restoreBtn" id="saveApiConfigBtn">Salvar configuração</button>
-              </div>
-            </div>
-          </div>
-        </details>
 
         <details class="ap-group hidden" id="manageUsersGroup">
-          <summary>Segurança e usuários</summary>
+          <summary>Usuários e clientes</summary>
           <div class="ap-groupBody">
             <div class="ap-card" id="manageUsersCard">
               <h3>Gerenciar usuários</h3>
@@ -4744,6 +4695,92 @@
             </div>
           </div>
         </details>
+
+        <details class="ap-group">
+          <summary>Avançado</summary>
+          <div class="ap-groupBody">
+            <div class="ap-card" id="exportPedidosCard">
+              <h3>Baixar pedidos por período</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">Só administrador. Puxa o histórico direto do servidor.</p>
+              <label for="exportPedidosInicio">De</label>
+              <input type="date" id="exportPedidosInicio">
+              <label for="exportPedidosFim">Até</label>
+              <input type="date" id="exportPedidosFim">
+              <button class="fileBtn" id="exportPedidosBtn" style="margin-top:10px;">Baixar CSV do período</button>
+              <div id="exportPedidosMsg" style="margin-top:8px;"></div>
+            </div>
+            <div class="ap-card">
+              <h3>Produtos sem EAN-13 / DUN-14</h3>
+              <button class="fileBtn" id="exportCodigosFaltantesBtn">Baixar planilha de produtos sem EAN-13/DUN-14</button>
+              <div id="exportCodigosFaltantesMsg" style="margin-top:8px;"></div>
+            </div>
+            <div class="ap-card">
+              <h3>Verificar integridade de clientes</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">Confere todos os clientes cadastrados contra uma planilha
+                de referência (JSON nome+CNPJ, o mesmo usado pra importar clientes) e encontra clientes com o CNPJ da
+                própria Cortag e clientes duplicados pelo mesmo nome.</p>
+              <button class="fileBtn" id="checkIntegrityBtn">Selecionar planilha de referência e analisar</button>
+              <input type="file" id="checkIntegrityFile" accept=".json,application/json" style="display:none;">
+              <div id="integrityResults" style="margin-top:12px;"></div>
+            </div>
+            <div class="ap-card">
+              <h3>Verificar pedidos duplicados</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">Pedidos do mesmo cliente, no mesmo dia, com produto em
+                comum (a mesma venda entrou por dois caminhos) — revise e exclua o repetido manualmente.</p>
+              <button class="restoreBtn" id="checkDuplicatePedidosBtn">Analisar pedidos</button>
+              <div id="duplicatePedidosResults" style="margin-top:12px;"></div>
+            </div>
+            <div class="ap-card">
+              <h3>Carteira antiga</h3>
+              <p class="ap-hint" style="margin:0 0 8px;">Pedidos em carteira há mais de 60 dias normalmente não vão
+                ser mais faturados (faltou mercadoria) - dá pra excluir do sistema. Um item já faturado nunca é
+                afetado.</p>
+              <div id="carteiraAntigaStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
+              <button class="fileBtn" id="carteiraAntigaLimparBtn">Excluir carteira com mais de 60 dias</button>
+              <div id="carteiraAntigaMsg" style="margin-top:8px;"></div>
+            </div>
+            <div class="ap-card">
+              <h3>Apagar relatório oficial</h3>
+              <p class="ap-hint" style="margin:0 0 8px;color:#B3261E;">⚠️ Apaga TODAS as linhas do relatório
+                oficial (Carteira + Faturamento) - use só antes de reimportar tudo do zero. Classificatório e
+                histórico de pedidos ligados a essa tabela somem até a reimportação.</p>
+              <div id="apagarTudoFaturamentoStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
+              <button class="fileBtn" id="apagarTudoFaturamentoBtn" style="border-color:#B3261E;color:#B3261E;">Apagar todo o relatório oficial</button>
+              <div id="apagarTudoFaturamentoMsg" style="margin-top:8px;"></div>
+            </div>
+            <div class="ap-card">
+              <button type="button" class="priceEditResetLink" id="toggleApiConfigBtn"
+                style="text-decoration:none;color:var(--gray);font-weight:600;font-size:12px;">Configuração avançada
+                (endereço do servidor)</button>
+              <div id="apiConfigWrap" class="hidden" style="margin-top:10px;">
+                <label for="apiBaseUrlInput">Endereço do servidor</label>
+                <input type="text" id="apiBaseUrlInput" placeholder="https://appdb-z6uh.onrender.com">
+                <button class="restoreBtn" id="saveApiConfigBtn">Salvar configuração</button>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="minimodal hidden" id="novaPromocaoModal">
+      <div class="minimodal-card" style="max-width:360px;">
+        <h3>Que tipo de promoção?</h3>
+        <button class="novaPromoOpcao" data-nova-promo="campanha">
+          <b>Desconto por quantidade ou valor</b>
+          <span>Ex: 40 discos = 5%, R$ 2.000 em niveladores = +4%</span>
+        </button>
+        <button class="novaPromoOpcao" data-nova-promo="classificatorio">
+          <b>Desconto por classificatório</b>
+          <span>Ex: Master 20% / Premium 23% / Exclusive 25%</span>
+        </button>
+        <button class="novaPromoOpcao" data-nova-promo="produto">
+          <b>Produto com preço promocional</b>
+          <span>Código novo com preço fechado, sem desconto de canal</span>
+        </button>
+        <div class="minimodal-btnrow" style="margin-top:8px;">
+          <button id="novaPromocaoCancelBtn">Cancelar</button>
+        </div>
       </div>
     </div>
 
@@ -8161,26 +8198,10 @@
       async function apiImportarClassificatorio(itens) {
         return apiFetch('/api/clientes/classificatorio/importar', { method: 'POST', body: JSON.stringify({ itens }) });
       }
-      function initImportClassificatorio() {
-        const btn = document.getElementById('importClassificatorioBtn');
-        const fileInput = document.getElementById('importClassificatorioFile');
-        const msg = document.getElementById('importClassificatorioMsg');
-        btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', async () => {
-          const file = fileInput.files && fileInput.files[0];
-          fileInput.value = '';
-          if (!file) return;
-          msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-          try {
-            const buffer = await file.arrayBuffer();
-            const itens = await parseClassificatorioXlsx(buffer);
-            msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} linha(s)…</div>`;
-            const result = await apiImportarClassificatorio(itens);
-            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.atualizados} cliente(s) atualizado(s)${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ correspondente)` : ''}</div>`;
-          } catch (e) {
-            msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-          }
-        });
+      async function importarClassificatorioErp(file) {
+        const itens = await parseClassificatorioXlsx(await lerArquivoComoArrayBuffer(file));
+        const result = await apiImportarClassificatorio(itens);
+        return `${result.atualizados} cliente(s) atualizado(s)${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ que bata com um cliente cadastrado)` : ''}.`;
       }
 
       async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {
@@ -8189,37 +8210,16 @@
           body: JSON.stringify({ periodoInicio, periodoFim, itens }),
         });
       }
-      function initObjetivosTrimestraisUpload() {
-        const btn = document.getElementById('importObjetivosTrimestraisBtn');
-        const fileInput = document.getElementById('objetivosTrimestraisFileInput');
-        const msg = document.getElementById('importObjetivosTrimestraisMsg');
-        const inicioInput = document.getElementById('objetivosTrimestraisInicio');
-        const fimInput = document.getElementById('objetivosTrimestraisFim');
-        btn.addEventListener('click', () => {
-          if (!inicioInput.value || !fimInput.value) {
-            msg.innerHTML = '<div class="ap-msg error">Preencha o início e o fim do trimestre antes de selecionar a planilha.</div>';
-            return;
-          }
-          fileInput.click();
-        });
-        fileInput.addEventListener('change', async () => {
-          const file = fileInput.files && fileInput.files[0];
-          fileInput.value = '';
-          if (!file) return;
-          msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-          try {
-            const buffer = await file.arrayBuffer();
-            const itens = await parseObjetivosTrimestraisXlsx(buffer);
-            msg.innerHTML = `<div class="promoEmpty">Enviando ${itens.length} linha(s)…</div>`;
-            const result = await apiImportarObjetivosTrimestrais(inicioInput.value, fimInput.value, itens);
-            const detalhes = [];
-            if (result.pulosRede) detalhes.push(`${result.pulosRede} Rede pulado(s)`);
-            if (result.naoReconhecidos && result.naoReconhecidos.length) detalhes.push(`${result.naoReconhecidos.length} não reconhecido(s): ${result.naoReconhecidos.slice(0, 10).join(', ')}${result.naoReconhecidos.length > 10 ? '…' : ''}`);
-            msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.importados} objetivo(s) importado(s)${detalhes.length ? ` · ${detalhes.join(' · ')}` : ''}</div>`;
-          } catch (e) {
-            msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-          }
-        });
+      // periodo = { inicio, fim } (AAAA-MM-DD), pedido na própria fila de
+      // importação antes de enviar - cada import substitui o objetivo do período.
+      async function importarObjetivosTrimestrais(file, periodo) {
+        if (!periodo || !periodo.inicio || !periodo.fim) throw new Error('Preencha o início e o fim do trimestre antes de enviar.');
+        const itens = await parseObjetivosTrimestraisXlsx(await lerArquivoComoArrayBuffer(file));
+        const result = await apiImportarObjetivosTrimestrais(periodo.inicio, periodo.fim, itens);
+        const detalhes = [];
+        if (result.pulosRede) detalhes.push(`${result.pulosRede} Rede pulado(s)`);
+        if (result.naoReconhecidos && result.naoReconhecidos.length) detalhes.push(`${result.naoReconhecidos.length} não reconhecido(s): ${result.naoReconhecidos.slice(0, 10).join(', ')}${result.naoReconhecidos.length > 10 ? '…' : ''}`);
+        return `${result.importados} objetivo(s) importado(s)${detalhes.length ? ` · ${detalhes.join(' · ')}` : ''}.`;
       }
 
       // ================================================================
@@ -8467,6 +8467,7 @@
         if (badge) { badge.textContent = n; badge.classList.toggle('hidden', n === 0); }
         const adminBtn = document.getElementById('apSyncQueueCount');
         if (adminBtn) adminBtn.textContent = n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente';
+        atualizarResumoStatus();
       }
       let syncQueueDraining = false;
       async function drenarFilaSync(silencioso) {
@@ -8510,6 +8511,7 @@
         if (!el) return;
         const n = loadDriveCsvQueue().length;
         el.textContent = n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente';
+        atualizarResumoStatus();
       }
       // Mesmo formato/nome já usado no "Baixar CSV" manual do orçamento, só
       // com hora:min:seg no carimbo (não só a data) - evita sobrescrever no
@@ -9361,6 +9363,8 @@
           elServidor.style.color = '#B3261E';
           elCatalogo.textContent = '—';
           if (!silencioso) throw e;
+        } finally {
+          atualizarResumoStatus();
         }
       }
       async function syncProductCatalog() {
@@ -9687,104 +9691,244 @@
         });
       }
 
-      function initPrevisaoUpload() {
-        const btn = document.getElementById('previsaoFileBtn');
-        const fileInput = document.getElementById('previsaoFileInput');
+      // ---------------- Importadores (chamados pela área única "Importar arquivo") ----------------
+      // Cada um recebe o File, faz a importação inteira e devolve o texto de
+      // resultado (ou lança o erro) - quem mostra a mensagem é a fila da área
+      // de importação (ver initImportacaoUnificada).
+      async function importarPrevisaoEstoque(file) {
+        const mapa = await parsePrevisaoXlsx(await lerArquivoComoArrayBuffer(file));
+        const total = Object.keys(mapa).length;
+        if (total === 0) throw new Error('Nenhuma linha reconhecida — confira se a coluna "Item" existe na planilha.');
+        const itens = Object.entries(mapa).map(([codigo_sku, p]) => ({
+          codigo_sku, qt_disponivel: p.qtDisponivel, qt_carteira: p.qtCarteira,
+          qt_compra: p.qtCompra, previsao: p.previsao, saldo: p.saldo,
+        }));
+        await apiImportarPrevisaoEstoque(itens);
+        PREVISAO_MAP = mapa;
+        PREVISAO_SOURCE = `Servidor · atualizado ${new Date().toLocaleString('pt-BR')} · todos os aparelhos`;
         refreshPrevisaoStatus();
-        btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files && fileInput.files[0];
-          if (!file) return;
-          const msg = document.getElementById('previsaoMsgArea');
-          msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
+        if (document.getElementById('searchInput').value.trim()) renderResults();
+        return `${total} produtos enviados — já visível pra todo mundo.`;
+      }
+
+      // Vídeos e link do site: manda o lote mesclado com o que já existe no
+      // servidor (evita reenviar tudo que já foi importado antes a cada planilha nova).
+      async function importarVideosProduto(file) {
+        const novos = await parseVideosXlsx(await lerArquivoComoArrayBuffer(file));
+        const total = Object.keys(novos).length;
+        if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código", "YouTube" e "Instagram".');
+        const atual = (await apiFetch('/api/configuracoes/produtos_videos').catch(() => ({ valor: {} }))).valor || {};
+        const mesclado = { ...atual, ...novos };
+        await apiFetch('/api/configuracoes/produtos_videos', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
+        Object.assign(VIDEOS_MAP, novos);
+        renderResults();
+        return `${total} produto(s) com vídeo importado(s) — total agora: ${Object.keys(mesclado).length}.`;
+      }
+
+      async function importarLinksSite(file) {
+        const novos = await parseLinksSiteXlsx(await lerArquivoComoArrayBuffer(file));
+        const total = Object.keys(novos).length;
+        if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código" e "Link".');
+        const atual = (await apiFetch('/api/configuracoes/produtos_link_site').catch(() => ({ valor: {} }))).valor || {};
+        const mesclado = { ...atual, ...novos };
+        await apiFetch('/api/configuracoes/produtos_link_site', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
+        Object.assign(SITE_LINK_MAP, novos);
+        return `${total} produto(s) com link importado(s) — total agora: ${Object.keys(mesclado).length}.`;
+      }
+
+      async function importarPlanilhaPrecos(file) {
+        const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = async () => {
+          reader.onload = () => resolve(String(reader.result).split(',')[1]);
+          reader.onerror = () => reject(new Error('Não foi possível ler o arquivo selecionado.'));
+          reader.readAsDataURL(file);
+        });
+        const resultado = await apiCatalogoPrecosImportar(base64);
+        // já passa a usar o catálogo novo neste aparelho (antes pedia pra tocar em "Verificar / restaurar")
+        try { await recarregarFonteCatalogo(); } catch (e) { }
+        return `Planilha processada — ${resultado.produtosImportados.toLocaleString('pt-BR')} produtos atualizados no servidor.`;
+      }
+
+      async function importarClientesJson(file) {
+        const clientes = JSON.parse(await file.text());
+        if (!Array.isArray(clientes)) throw new Error('O arquivo precisa ser uma lista de {nome, cnpj}.');
+        const result = await apiImportarClientes(clientes);
+        return `${result.criados} novo(s), ${result.atualizados} atualizado(s) de ${result.total} clientes.`;
+      }
+
+      // ---------------- Área única de importação ----------------
+      // Reconhece o tipo do arquivo pelo conteúdo (abas e colunas da planilha,
+      // formato do JSON, extensão .pdf) - as mesmas marcas que cada parser já
+      // exige - pra o admin não precisar achar o card certo pra cada arquivo.
+      // Ordem: do mais específico (abas com nome fixo) pro mais genérico.
+      const TIPOS_IMPORTACAO = {
+        precos: { rotulo: 'Planilha de preços', importar: (f) => importarPlanilhaPrecos(f) },
+        relatorio: { rotulo: 'Relatório oficial (Carteira/Faturamento)', importar: (f) => importarRelatorioOficial(f) },
+        objetivos: { rotulo: 'Objetivo trimestral', importar: (f, extra) => importarObjetivosTrimestrais(f, extra), pedePeriodo: true },
+        classificatorio: { rotulo: 'Classificatório do ERP', importar: (f) => importarClassificatorioErp(f) },
+        previsao: { rotulo: 'Previsão de estoque', importar: (f) => importarPrevisaoEstoque(f) },
+        videos: { rotulo: 'Vídeos de produto', importar: (f) => importarVideosProduto(f) },
+        linkSite: { rotulo: 'Link do site oficial', importar: (f) => importarLinksSite(f) },
+        fichas: { rotulo: 'Fichas técnicas', importar: (f) => importarFichasTecnicasDeArquivo(f) },
+        codigos: { rotulo: 'Códigos EAN-13/DUN-14', importar: (f) => importarCodigosDeArquivo(f) },
+        clientes: { rotulo: 'Clientes (nome + CNPJ)', importar: (f) => importarClientesJson(f) },
+        pdf: { rotulo: 'Cotação em PDF', importar: (f) => importarCotacaoPdf(f) },
+      };
+
+      function normalizarRotuloImport(v) {
+        return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
+      }
+
+      async function detectarTipoArquivo(file) {
+        const nome = file.name || '';
+        if (file.type === 'application/pdf' || /\.pdf$/i.test(nome)) return 'pdf';
+
+        if (/\.json$/i.test(nome) || file.type === 'application/json') {
+          let dados;
+          try { dados = JSON.parse(await file.text()); } catch (e) { return null; }
+          if (Array.isArray(dados)) {
+            return dados.some(c => c && typeof c === 'object' && c.nome && c.cnpj) ? 'clientes' : null;
+          }
+          if (!dados || typeof dados !== 'object') return null;
+          const amostra = Object.values(dados).slice(0, 30).filter(v => v && typeof v === 'object');
+          if (amostra.some(v => 'ean' in v || 'dun14' in v)) return 'codigos';
+          if (amostra.some(v => 'specs' in v || 'desc' in v || 'nome' in v)) return 'fichas';
+          return null;
+        }
+
+        if (!/\.xlsx?$/i.test(nome)) return null;
+        const XLSX = await loadSheetJs();
+        // sheetRows: só as primeiras linhas de cada aba - basta pra achar o
+        // cabeçalho, e não pesa com a planilha de preços (milhares de linhas).
+        const wb = XLSX.read(await lerArquivoComoArrayBuffer(file), { type: 'array', sheetRows: 12 });
+        const abas = wb.SheetNames.map(normalizarRotuloImport);
+        if (abas.includes('PRECIFICACAO') && abas.includes('TRIBUTACAO')) return 'precos';
+        if (abas.includes('CARTEIRA') || abas.includes('FATURAMENTO')) return 'relatorio';
+
+        const nomeAba = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
+        const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header: 1, defval: null });
+        const celulas = new Set(linhas.slice(0, 10).flat().filter(c => c != null).map(normalizarRotuloImport));
+        const tem = (rotulo) => celulas.has(rotulo);
+
+        if (tem('MATRIZ') && [...celulas].some(c => c.startsWith('OBJETIVO'))) return 'objetivos';
+        if (tem('CLASSIFICATORIO')) return 'classificatorio';
+        if (tem('ITEM') && tem('QT. DISP.')) return 'previsao';
+        if (tem('CODIGO') && (tem('YOUTUBE') || tem('INSTAGRAM'))) return 'videos';
+        if (tem('CODIGO') && tem('LINK')) return 'linkSite';
+        return null;
+      }
+
+      function initImportacaoUnificada() {
+        const dropzone = document.getElementById('apImportDropzone');
+        const fileInput = document.getElementById('apImportFileInput');
+        const fila = document.getElementById('apImportFila');
+        const todosWrap = document.getElementById('apImportTodosWrap');
+        const todosBtn = document.getElementById('apImportTodosBtn');
+        const pendentes = new Map(); // li -> { file, tipo }
+        let enviando = Promise.resolve(); // envios em sequência, nunca em paralelo (não sobrecarrega o servidor)
+
+        function atualizarBotaoTodos() {
+          const n = pendentes.size;
+          todosWrap.classList.toggle('hidden', n < 2);
+          todosBtn.textContent = `Enviar todos (${n})`;
+        }
+
+        function setItem(li, status, detalhe) {
+          li.className = `pdfQueueItem ap-importItem pdfQueueItem--${status}`;
+          li.querySelector('.pdfQueueDetalhe').textContent = detalhe;
+          const acoes = li.querySelector('.ap-importAcoes');
+          if (status !== 'pronto') acoes.innerHTML = '';
+        }
+
+        function enviar(li) {
+          const item = pendentes.get(li);
+          if (!item) return;
+          const tipo = TIPOS_IMPORTACAO[item.tipo];
+          let extra = null;
+          if (tipo.pedePeriodo) {
+            extra = { inicio: li.querySelector('[data-periodo="inicio"]').value, fim: li.querySelector('[data-periodo="fim"]').value };
+            if (!extra.inicio || !extra.fim) { showToast('Preencha o início e o fim do trimestre.'); return; }
+          }
+          pendentes.delete(li);
+          atualizarBotaoTodos();
+          setItem(li, 'processando', `${tipo.rotulo} · aguardando…`);
+          enviando = enviando.then(async () => {
+            setItem(li, 'processando', `${tipo.rotulo} · enviando…`);
             try {
-              const mapa = await parsePrevisaoXlsx(reader.result);
-              const total = Object.keys(mapa).length;
-              if (total === 0) throw new Error('Nenhuma linha reconhecida — confira se a coluna "Item" existe na planilha.');
-              msg.innerHTML = `<div class="promoEmpty">Enviando ${total} produtos pro servidor…</div>`;
-              const itens = Object.entries(mapa).map(([codigo_sku, p]) => ({
-                codigo_sku, qt_disponivel: p.qtDisponivel, qt_carteira: p.qtCarteira,
-                qt_compra: p.qtCompra, previsao: p.previsao, saldo: p.saldo,
-              }));
-              await apiImportarPrevisaoEstoque(itens);
-              PREVISAO_MAP = mapa;
-              PREVISAO_SOURCE = `Servidor · atualizado ${new Date().toLocaleString('pt-BR')} · todos os aparelhos`;
-              refreshPrevisaoStatus();
-              msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produtos enviados — já visível pra todo mundo.</div>`;
-              if (document.getElementById('searchInput').value.trim()) renderResults();
+              const resultado = await tipo.importar(item.file, extra);
+              if (resultado && typeof resultado === 'object') setItem(li, resultado.status, resultado.detalhe);
+              else setItem(li, 'sucesso', `✓ ${tipo.rotulo} · ${resultado}`);
             } catch (e) {
-              msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+              console.error('Erro ao importar', item.file.name, e);
+              setItem(li, 'erro', `${tipo.rotulo} · ${e.message || 'falha ao importar este arquivo.'}`);
             }
-          };
-          reader.readAsArrayBuffer(file);
+          });
+        }
+
+        async function adicionarArquivos(fileList) {
+          for (const file of Array.from(fileList)) {
+            const li = document.createElement('li');
+            li.innerHTML = `<span class="pdfQueueDot"></span><span class="pdfQueueNome">${escapeHtml(file.name)}</span><span class="pdfQueueDetalhe"></span><div class="ap-importAcoes"></div>`;
+            fila.prepend(li);
+            setItem(li, 'processando', 'Reconhecendo…');
+            let tipoId = null;
+            try { tipoId = await detectarTipoArquivo(file); } catch (e) { console.error('Erro ao reconhecer', file.name, e); }
+            if (!tipoId) {
+              setItem(li, 'erro', 'Não reconheci este arquivo — veja abaixo da área o que dá pra importar.');
+              continue;
+            }
+            const tipo = TIPOS_IMPORTACAO[tipoId];
+            pendentes.set(li, { file, tipo: tipoId });
+            setItem(li, 'pronto', `Detectado: ${tipo.rotulo}`);
+            const acoes = li.querySelector('.ap-importAcoes');
+            acoes.innerHTML = `
+              ${tipo.pedePeriodo ? `<label>Início do trimestre<input type="date" data-periodo="inicio"></label><label>Fim do trimestre<input type="date" data-periodo="fim"></label>` : ''}
+              <button type="button" class="ap-importEnviar">Enviar</button>
+              <button type="button" class="ap-importDescartar">Descartar</button>`;
+            acoes.querySelector('.ap-importEnviar').addEventListener('click', () => enviar(li));
+            acoes.querySelector('.ap-importDescartar').addEventListener('click', () => { pendentes.delete(li); li.remove(); atualizarBotaoTodos(); });
+            atualizarBotaoTodos();
+          }
+        }
+
+        todosBtn.addEventListener('click', () => { [...pendentes.keys()].forEach(enviar); });
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+        fileInput.addEventListener('change', () => {
+          if (fileInput.files.length) adicionarArquivos(fileInput.files);
           fileInput.value = '';
+        });
+        ['dragenter', 'dragover'].forEach(evt => {
+          dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragging'); });
+        });
+        ['dragleave', 'drop'].forEach(evt => {
+          dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragging'); });
+        });
+        dropzone.addEventListener('drop', (e) => {
+          if (e.dataTransfer.files.length) adicionarArquivos(e.dataTransfer.files);
         });
       }
 
-      function initVideosUpload() {
-        const btn = document.getElementById('importVideosBtn');
-        const fileInput = document.getElementById('videosFileInput');
-        btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files && fileInput.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const msg = document.getElementById('importVideosMsg');
-            msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-            try {
-              const novos = await parseVideosXlsx(reader.result);
-              const total = Object.keys(novos).length;
-              if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código", "YouTube" e "Instagram".');
-              msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
-              // manda só o lote deste arquivo - o servidor mescla com o que já existe
-              // (mesmo motivo de importarFichasTecnicasDeArquivo: evita reenviar tudo
-              // que já foi importado antes a cada planilha nova).
-              const atual = (await apiFetch('/api/configuracoes/produtos_videos').catch(() => ({ valor: {} }))).valor || {};
-              const mesclado = { ...atual, ...novos };
-              await apiFetch('/api/configuracoes/produtos_videos', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
-              Object.assign(VIDEOS_MAP, novos);
-              renderResults();
-              msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produto(s) com vídeo importado(s) — total agora: ${Object.keys(mesclado).length}.</div>`;
-            } catch (e) {
-              msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-            }
-          };
-          reader.readAsArrayBuffer(file);
-          fileInput.value = '';
-        });
-      }
-
-      function initLinkSiteUpload() {
-        const btn = document.getElementById('importLinkSiteBtn');
-        const fileInput = document.getElementById('linkSiteFileInput');
-        btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', () => {
-          const file = fileInput.files && fileInput.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = async () => {
-            const msg = document.getElementById('importLinkSiteMsg');
-            msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-            try {
-              const novos = await parseLinksSiteXlsx(reader.result);
-              const total = Object.keys(novos).length;
-              if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código" e "Link".');
-              msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
-              const atual = (await apiFetch('/api/configuracoes/produtos_link_site').catch(() => ({ valor: {} }))).valor || {};
-              const mesclado = { ...atual, ...novos };
-              await apiFetch('/api/configuracoes/produtos_link_site', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
-              Object.assign(SITE_LINK_MAP, novos);
-              msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${total} produto(s) com link importado(s) — total agora: ${Object.keys(mesclado).length}.</div>`;
-            } catch (e) {
-              msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-            }
-          };
-          reader.readAsArrayBuffer(file);
-          fileInput.value = '';
-        });
+      // Linha de resumo do card de status (o detalhe continua nas linhas de
+      // sempre, dentro do <details>) - lê o que as funções de sincronização já
+      // escreveram nesses campos, sem duplicar a lógica de cada uma.
+      function atualizarResumoStatus() {
+        const el = document.getElementById('apStatusResumo');
+        if (!el) return;
+        const texto = (id) => (document.getElementById(id)?.textContent || '').trim();
+        const servidor = texto('apSyncServidor');
+        const catalogo = texto('apSyncCatalogo');
+        const pendencias = [texto('apSyncQueueCount'), texto('apDriveCsvQueueCount')]
+          .map(t => parseInt(t, 10)).filter(n => n > 0).reduce((a, b) => a + b, 0);
+        const produtos = DB.products.length.toLocaleString('pt-BR');
+        let resumo;
+        if (servidor.startsWith('✗')) resumo = '⚠️ Sem conexão com o servidor';
+        else if (servidor === 'Verificando…' || servidor === '—' || !servidor) resumo = 'Verificando…';
+        else if (catalogo.startsWith('Desatualizado')) resumo = '⚠️ Catálogo desatualizado';
+        else if (pendencias > 0) resumo = `⚠️ ${pendencias} pendência${pendencias === 1 ? '' : 's'} pra enviar`;
+        else resumo = `✓ Tudo sincronizado · ${produtos} produtos`;
+        el.textContent = resumo;
+        el.classList.toggle('ap-statusAlerta', resumo.startsWith('⚠️'));
       }
 
       async function compararCatalogoServidorLocal() {
@@ -9818,15 +9962,7 @@
         }
       }
       function initBackendAdmin() {
-        document.getElementById('apSyncAllBtn').addEventListener('click', async () => {
-          const btn = document.getElementById('apSyncAllBtn');
-          btn.disabled = true; btn.textContent = 'Sincronizando…';
-          try { await verificarESincronizarTudo(false); showToast('Sincronização concluída'); }
-          catch (e) { alert('Não foi possível sincronizar: ' + e.message); }
-          finally { btn.disabled = false; btn.textContent = 'Sincronizar tudo agora'; }
-        });
         document.getElementById('apCompareCatalogBtn').addEventListener('click', compararCatalogoServidorLocal);
-        document.getElementById('syncProdutosBtn').addEventListener('click', syncProductCatalog);
         document.getElementById('toggleApiConfigBtn').addEventListener('click', () => {
           const wrap = document.getElementById('apiConfigWrap');
           const willShow = wrap.classList.contains('hidden');
@@ -9867,29 +10003,6 @@
           } catch (e) {
             msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
           }
-        });
-
-        const importBtn = document.getElementById('importClientesBtn');
-        const importFile = document.getElementById('importClientesFile');
-        const importMsg = document.getElementById('importClientesMsg');
-        importBtn.addEventListener('click', () => importFile.click());
-        importFile.addEventListener('change', () => {
-          const file = importFile.files && importFile.files[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = async () => {
-            try {
-              const clientes = JSON.parse(reader.result);
-              if (!Array.isArray(clientes)) throw new Error('O arquivo precisa ser uma lista de {nome, cnpj}.');
-              importMsg.innerHTML = `<div class="promoEmpty">Importando ${clientes.length} cliente(s)…</div>`;
-              const result = await apiImportarClientes(clientes);
-              importMsg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${result.criados} novo(s), ${result.atualizados} atualizado(s) de ${result.total} clientes.</div>`;
-            } catch (e) {
-              importMsg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-            }
-          };
-          reader.readAsText(file);
-          importFile.value = '';
         });
 
         if (state.currentUser) {
@@ -10536,88 +10649,33 @@
         return { numeroCotacao: numero, cliente, cnpj, dataEmissao: data, dataEmissaoISO: dataISO, arquivoNome: nomeArquivo, produtos, valorTotalCotacao, metadataModificadoEm };
       }
 
-      function criarItemFilaPdf(nomeArquivo, filaId) {
-        const fila = document.getElementById(filaId || 'pdfProcessQueue');
-        const li = document.createElement('li');
-        li.className = 'pdfQueueItem pdfQueueItem--processando';
-        li.innerHTML = `<span class="pdfQueueDot"></span><span class="pdfQueueNome">${escapeHtml(nomeArquivo)}</span><span class="pdfQueueDetalhe">Processando…</span>`;
-        fila.prepend(li);
-        return li;
+      // Importa UMA cotação em PDF (a área de importação chama uma vez por
+      // arquivo, em sequência). Devolve { status, detalhe } - status 'jaexistia'
+      // quando a cotação já estava no servidor ou entrou na fila offline.
+      async function importarCotacaoPdf(arquivo) {
+        const buffer = await arquivo.arrayBuffer();
+        const { texto, metadataModificadoEm } = await extrairTextoPdf(buffer);
+        if (!texto.trim()) throw new Error('Nenhum texto encontrado — pode ser um PDF escaneado (imagem).');
+        const cotacao = interpretarCotacaoPdf(texto, arquivo.name, metadataModificadoEm);
+        if (!cotacao.cliente) throw new Error('Não consegui identificar o cliente neste PDF.');
+        if (cotacao.produtos.length === 0) throw new Error('Nenhum item de produto identificado neste PDF.');
+
+        const payload = {
+          cliente: { nome: cotacao.cliente, documento: cotacao.cnpj || undefined },
+          numero_cotacao: cotacao.numeroCotacao || undefined,
+          data_pedido: cotacao.dataEmissaoISO || undefined,
+          pdf_modificado_em: cotacao.metadataModificadoEm || undefined,
+          origem: 'pdf',
+          itens: cotacao.produtos.map(p => ({
+            codigo_sku: p.codigo, quantidade: p.quantidade, preco_unitario: p.valorUnitario, descricao: p.descricao,
+          })),
+        };
+        const result = await apiCriarPedido(payload);
+        if (result.__filaOffline) return { status: 'jaexistia', detalhe: `${cotacao.cliente} · sem conexão agora, entrou na fila (será enviado sozinho depois)` };
+        if (result.ja_existia) return { status: 'jaexistia', detalhe: `${cotacao.cliente} · já tinha sido importado (cotação ${cotacao.numeroCotacao})` };
+        if (result.atualizado) return { status: 'sucesso', detalhe: `${cotacao.cliente} · atualizado com versão mais nova · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}` };
+        return { status: 'sucesso', detalhe: `${cotacao.cliente} · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}` };
       }
-      function atualizarItemFilaPdf(li, status, detalhe) {
-        li.className = `pdfQueueItem pdfQueueItem--${status}`;
-        li.querySelector('.pdfQueueDetalhe').textContent = detalhe;
-      }
-
-      async function processarArquivosPdf(fileList) {
-        const todos = Array.from(fileList);
-        const arquivosPdf = todos.filter(f => f.type === 'application/pdf' || /\.pdf$/i.test(f.name));
-        if (arquivosPdf.length === 0) { showToast('Nenhum PDF selecionado.'); return; }
-
-        let sucesso = 0, atualizados = 0, jaExistiam = 0, falha = 0;
-        for (const arquivo of arquivosPdf) {
-          const li = criarItemFilaPdf(arquivo.name);
-          try {
-            const buffer = await arquivo.arrayBuffer();
-            const { texto, metadataModificadoEm } = await extrairTextoPdf(buffer);
-            if (!texto.trim()) throw new Error('Nenhum texto encontrado — pode ser um PDF escaneado (imagem).');
-            const cotacao = interpretarCotacaoPdf(texto, arquivo.name, metadataModificadoEm);
-            if (!cotacao.cliente) throw new Error('Não consegui identificar o cliente neste PDF.');
-            if (cotacao.produtos.length === 0) throw new Error('Nenhum item de produto identificado neste PDF.');
-
-            const payload = {
-              cliente: { nome: cotacao.cliente, documento: cotacao.cnpj || undefined },
-              numero_cotacao: cotacao.numeroCotacao || undefined,
-              data_pedido: cotacao.dataEmissaoISO || undefined,
-              pdf_modificado_em: cotacao.metadataModificadoEm || undefined,
-              origem: 'pdf',
-              itens: cotacao.produtos.map(p => ({
-                codigo_sku: p.codigo, quantidade: p.quantidade, preco_unitario: p.valorUnitario, descricao: p.descricao,
-              })),
-            };
-            const result = await apiCriarPedido(payload);
-            if (result.__filaOffline) {
-              atualizarItemFilaPdf(li, 'jaexistia', `${cotacao.cliente} · sem conexão agora, entrou na fila (será enviado sozinho depois)`);
-              jaExistiam++;
-            } else if (result.ja_existia) {
-              atualizarItemFilaPdf(li, 'jaexistia', `${cotacao.cliente} · já tinha sido importado (cotação ${cotacao.numeroCotacao})`);
-              jaExistiam++;
-            } else if (result.atualizado) {
-              atualizarItemFilaPdf(li, 'sucesso', `${cotacao.cliente} · atualizado com versão mais nova · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}`);
-              atualizados++;
-            } else {
-              atualizarItemFilaPdf(li, 'sucesso', `${cotacao.cliente} · ${cotacao.produtos.length} itens · ${brl(cotacao.valorTotalCotacao)}`);
-              sucesso++;
-            }
-          } catch (e) {
-            console.error('Erro ao processar', arquivo.name, e);
-            atualizarItemFilaPdf(li, 'erro', e.message || 'Falha ao processar este arquivo.');
-            falha++;
-          }
-        }
-        showToast(`${sucesso} nova(s), ${atualizados} atualizada(s), ${jaExistiam} já existente(s)${falha ? `, ${falha} com erro` : ''}.`);
-      }
-
-      function initPdfConsolidacao() {
-        const dropzone = document.getElementById('pdfDropzone');
-        const fileInput = document.getElementById('pdfFileInput');
-        dropzone.addEventListener('click', () => fileInput.click());
-        dropzone.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
-        fileInput.addEventListener('change', () => {
-          if (fileInput.files.length) processarArquivosPdf(fileInput.files);
-          fileInput.value = '';
-        });
-        ['dragenter', 'dragover'].forEach(evt => {
-          dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add('dragging'); });
-        });
-        ['dragleave', 'drop'].forEach(evt => {
-          dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.remove('dragging'); });
-        });
-        dropzone.addEventListener('drop', (e) => {
-          if (e.dataTransfer.files.length) processarArquivosPdf(e.dataTransfer.files);
-        });
-      }
-
 
       // Mostra quando foi o último relatório oficial importado, direto no
       // card - já aconteceu de passar dias sem ninguém notar que esse import
@@ -10660,6 +10718,15 @@
         const { itens, classificacoes } = await parseRelatorioOficialXlsx(arrayBuffer);
         if (itens.length === 0) throw new Error('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
         return apiImportarPedidosOficiais({ itens, classificacoes });
+      }
+
+      async function importarRelatorioOficial(file) {
+        const result = await processarUmaPlanilhaOficial(file);
+        carregarStatusRelatorioOficial();
+        const partes = [`${result.itens} linha(s) importada(s)`, `${result.clientesVinculados} cliente(s) vinculado(s) agora`, `${result.clientesClassificados} classificado(s)`];
+        if (result.clientesClassifIgnorados) partes.push(`${result.clientesClassifIgnorados} classificação(ões) ignorada(s) (relatório mais antigo que o já registrado)`);
+        if (result.clientesNaoEncontrados && result.clientesNaoEncontrados.length) partes.push(`${result.clientesNaoEncontrados.length} cliente(s) não encontrado(s) pelo nome`);
+        return partes.join(' · ') + '.';
       }
 
       // Pedidos em carteira há mais de 60 dias, que na prática nunca mais
@@ -10732,65 +10799,6 @@
           } catch (e) {
             msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
           }
-        });
-      }
-
-      function initRelatorioOficialImport() {
-        const btn = document.getElementById('relatorioOficialFileBtn');
-        const fileInput = document.getElementById('relatorioOficialFileInput');
-        carregarStatusRelatorioOficial();
-        btn.addEventListener('click', () => fileInput.click());
-        fileInput.addEventListener('change', async () => {
-          const arquivos = Array.from(fileInput.files || []);
-          fileInput.value = '';
-          if (arquivos.length === 0) return;
-          const msg = document.getElementById('relatorioOficialMsgArea');
-
-          // Um arquivo só: mantém a mensagem simples de sempre, sem lista.
-          if (arquivos.length === 1) {
-            msg.innerHTML = '<div class="promoEmpty">Lendo planilha…</div>';
-            try {
-              const result = await processarUmaPlanilhaOficial(arquivos[0]);
-              msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">
-          ✓ ${result.itens} linha(s) importada(s) ·
-          ${result.clientesVinculados} cliente(s) vinculado(s) agora ·
-          ${result.clientesClassificados} classificado(s)
-          ${result.clientesClassifIgnorados ? ` · ${result.clientesClassifIgnorados} classificação(ões) ignorada(s) (relatório mais antigo que o já registrado)` : ''}
-          ${result.clientesNaoEncontrados && result.clientesNaoEncontrados.length > 0 ? ` · ${result.clientesNaoEncontrados.length} cliente(s) não encontrados pelo nome (ficam sem vínculo até serem cadastrados ou o nome bater)` : ''}
-        </div>`;
-              carregarStatusRelatorioOficial();
-            } catch (e) {
-              msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
-            }
-            return;
-          }
-
-          // Várias planilhas: processa uma de cada vez (sequencial, não em
-          // paralelo - evita sobrecarregar o servidor com centenas de envios
-          // simultâneos) e mostra uma fila com o resultado de cada arquivo,
-          // sem parar no primeiro erro.
-          msg.innerHTML = `<div class="promoEmpty">Processando 0/${arquivos.length}…</div>`;
-          let sucesso = 0, falha = 0, totalLinhas = 0;
-          for (let i = 0; i < arquivos.length; i++) {
-            const arquivo = arquivos[i];
-            const li = criarItemFilaPdf(arquivo.name, 'relatorioOficialQueue');
-            msg.innerHTML = `<div class="promoEmpty">Processando ${i + 1}/${arquivos.length}…</div>`;
-            try {
-              const result = await processarUmaPlanilhaOficial(arquivo);
-              totalLinhas += result.itens;
-              atualizarItemFilaPdf(li, 'sucesso', `✓ ${result.itens} linha(s) · ${result.clientesVinculados} vinculado(s) · ${result.clientesClassificados} classificado(s)`);
-              sucesso++;
-            } catch (e) {
-              console.error('Erro ao importar', arquivo.name, e);
-              atualizarItemFilaPdf(li, 'erro', e.message || 'Falha ao processar esta planilha.');
-              falha++;
-            }
-          }
-          msg.innerHTML = `<div class="ap-msg" style="color:${falha ? '#B36B00' : '#1E8E3E'};">
-        ${sucesso}/${arquivos.length} planilha(s) importada(s) com sucesso · ${totalLinhas} linha(s) no total
-        ${falha ? ` · ${falha} com erro (veja a lista acima)` : ''}
-      </div>`;
-          carregarStatusRelatorioOficial();
         });
       }
 
@@ -11205,13 +11213,15 @@
         const wrap = document.getElementById('promoRulesList');
         const rules = state.promoRules || [];
         if (rules.length === 0) {
-          wrap.innerHTML = '<div class="promoEmpty">Nenhuma campanha cadastrada ainda.</div>';
+          wrap.innerHTML = '';
+          atualizarPromocoesVazia();
           return;
         }
         wrap.innerHTML = rules.map(r => `
     <div class="promoRuleItem">
       <div class="prTop">
         <div>
+          <span class="promoTipoTag promoTipoTag--campanha">Quantidade/valor</span>
           <div class="prName${r.active ? '' : ' inactive'}">${escapeHtml(r.name)}</div>
           <div class="prDetail">${escapeHtml(ruleSummaryText(r))}</div>
           <div class="prDetail">${r.stacks !== false ? 'Soma com desconto individual do item' : 'Usa o maior entre esse bônus e o desconto individual'}</div>
@@ -11224,6 +11234,7 @@
       </div>
     </div>
   `).join('');
+        atualizarPromocoesVazia();
         wrap.querySelectorAll('[data-toggle-rule]').forEach(b => b.addEventListener('click', async () => {
           const r = state.promoRules.find(x => x.id === b.dataset.toggleRule);
           if (!r) return;
@@ -11517,17 +11528,41 @@
         reader.readAsText(file);
       }
 
+      // ---------------- Promoções: lista única + "+ Nova promoção" ------
+      // As três listas (campanhas, desconto por classificatório, produtos
+      // promocionais) ficam uma embaixo da outra no mesmo card, cada item com
+      // etiqueta do tipo - aqui só decide se mostra o aviso de lista vazia.
+      function atualizarPromocoesVazia() {
+        const vazia = document.getElementById('promocoesVazia');
+        if (!vazia) return;
+        const temAlguma = !!document.querySelector('#promocoesLista .promoRuleItem');
+        vazia.classList.toggle('hidden', temAlguma);
+      }
+      function initNovaPromocao() {
+        const modal = document.getElementById('novaPromocaoModal');
+        const fechar = () => modal.classList.add('hidden');
+        document.getElementById('novaPromocaoBtn').addEventListener('click', () => modal.classList.remove('hidden'));
+        document.getElementById('novaPromocaoCancelBtn').addEventListener('click', fechar);
+        modal.addEventListener('click', (e) => { if (e.target === modal) fechar(); });
+        const abrir = {
+          campanha: () => openPromoRuleForm(null),
+          classificatorio: () => openClassiDiscountForm(null),
+          produto: () => openPromoProdutoModal(),
+        };
+        modal.querySelectorAll('[data-nova-promo]').forEach(b => b.addEventListener('click', () => { fechar(); abrir[b.dataset.novaPromo](); }));
+      }
+
       // ---------------- Produtos promocionais (código novo, preço próprio) ------
       let promoProdutoOriginalSelecionado = null;
       async function renderPromoProdutosList() {
         const wrap = document.getElementById('promoProdutosList');
-        wrap.innerHTML = '<div class="promoEmpty">Carregando…</div>';
         const lista = (await apiProdutosPromocionaisConfig()).valor || [];
-        if (lista.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhum produto promocional criado ainda.</div>'; return; }
+        if (lista.length === 0) { wrap.innerHTML = ''; atualizarPromocoesVazia(); return; }
         wrap.innerHTML = lista.map(p => `
     <div class="promoRuleItem">
       <div class="prTop">
         <div class="prInfo">
+          <span class="promoTipoTag promoTipoTag--produto">Preço promocional</span>
           <div class="prName">${escapeHtml(p.n)}</div>
           <div class="prDetail">Cód. ${escapeHtml(p.c)} · originado de ${escapeHtml(p.origemCodigo || '—')}</div>
           <div class="prDetail">SP ${brl(p.lsp)} · Sul-Sudeste ${brl(p.lss)} · Norte-Nordeste-CO ${brl(p.lnc)}</div>
@@ -11538,6 +11573,7 @@
       </div>
     </div>
   `).join('');
+        atualizarPromocoesVazia();
         wrap.querySelectorAll('[data-del-promo-produto]').forEach(b => b.addEventListener('click', async () => {
           if (!await askConfirm('Excluir esse produto promocional? Ele some da busca pra todo mundo.')) return;
           const atual = (await apiProdutosPromocionaisConfig()).valor || [];
@@ -11588,49 +11624,33 @@
         document.getElementById('promoProdutoModal').classList.add('hidden');
       }
       async function importarFichasTecnicasDeArquivo(file) {
-        const msg = document.getElementById('importFichasMsg');
-        msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
-        try {
-          const texto = await file.text();
-          const novasFichas = JSON.parse(texto);
-          if (typeof novasFichas !== 'object' || Array.isArray(novasFichas)) throw new Error('Formato inválido — esperado um objeto {codigo: {...}}.');
-          const qtdNovas = Object.keys(novasFichas).length;
-          msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
-          // manda só o lote deste arquivo - o servidor mescla com o que já existe
-          // (evita reenviar tudo que já foi importado antes, que só cresceria a
-          // cada catálogo novo até estourar o limite de tamanho do envio).
-          const result = await apiFetch('/api/fichas-tecnicas/importar', { method: 'POST', body: JSON.stringify({ fichas: novasFichas }) });
-          Object.assign(FICHAS_MAP, novasFichas);
-          renderResults();
-          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${qtdNovas} ficha(s) importada(s) — total agora: ${result.total}.</div>`;
-        } catch (e) {
-          msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
-        }
+        const novasFichas = JSON.parse(await file.text());
+        if (typeof novasFichas !== 'object' || Array.isArray(novasFichas)) throw new Error('Formato inválido — esperado um objeto {codigo: {...}}.');
+        const qtdNovas = Object.keys(novasFichas).length;
+        // manda só o lote deste arquivo - o servidor mescla com o que já existe
+        // (evita reenviar tudo que já foi importado antes, que só cresceria a
+        // cada catálogo novo até estourar o limite de tamanho do envio).
+        const result = await apiFetch('/api/fichas-tecnicas/importar', { method: 'POST', body: JSON.stringify({ fichas: novasFichas }) });
+        Object.assign(FICHAS_MAP, novasFichas);
+        renderResults();
+        return `${qtdNovas} ficha(s) importada(s) — total agora: ${result.total}.`;
       }
 
       async function importarCodigosDeArquivo(file) {
-        const msg = document.getElementById('importCodigosMsg');
-        msg.innerHTML = '<div class="promoEmpty">Lendo arquivo…</div>';
-        try {
-          const texto = await file.text();
-          const novosCodigos = JSON.parse(texto);
-          if (typeof novosCodigos !== 'object' || Array.isArray(novosCodigos)) throw new Error('Formato inválido — esperado um objeto {codigo: {ean, dun14}}.');
-          const qtdNovos = Object.keys(novosCodigos).length;
-          msg.innerHTML = '<div class="promoEmpty">Enviando pro servidor…</div>';
-          const result = await apiFetch('/api/codigos-produto/importar', { method: 'POST', body: JSON.stringify({ codigos: novosCodigos }) });
-          // reaplica na hora, sem esperar reload: corrige EAN e liga o DUN-14 no catálogo já carregado
-          for (const codigo in novosCodigos) {
-            const p = DB.productIndex[codigo];
-            if (!p) continue;
-            const info = novosCodigos[codigo];
-            if (info.ean) { p.e = info.ean; DB.eanIndex[info.ean] = p; }
-            if (info.dun14) { p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
-          }
-          renderResults();
-          msg.innerHTML = `<div class="ap-msg" style="color:#1E8E3E;">✓ ${qtdNovos} código(s) importado(s) — total agora: ${result.total}.</div>`;
-        } catch (e) {
-          msg.innerHTML = `<div class="ap-msg error">Não foi possível importar: ${escapeHtml(e.message)}</div>`;
+        const novosCodigos = JSON.parse(await file.text());
+        if (typeof novosCodigos !== 'object' || Array.isArray(novosCodigos)) throw new Error('Formato inválido — esperado um objeto {codigo: {ean, dun14}}.');
+        const qtdNovos = Object.keys(novosCodigos).length;
+        const result = await apiFetch('/api/codigos-produto/importar', { method: 'POST', body: JSON.stringify({ codigos: novosCodigos }) });
+        // reaplica na hora, sem esperar reload: corrige EAN e liga o DUN-14 no catálogo já carregado
+        for (const codigo in novosCodigos) {
+          const p = DB.productIndex[codigo];
+          if (!p) continue;
+          const info = novosCodigos[codigo];
+          if (info.ean) { p.e = info.ean; DB.eanIndex[info.ean] = p; }
+          if (info.dun14) { p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
         }
+        renderResults();
+        return `${qtdNovos} código(s) importado(s) — total agora: ${result.total}.`;
       }
       // Lista, num arquivo .xlsx pra conferência manual, todo produto do
       // catálogo carregado que está sem EAN-13 e/ou sem DUN-14 (já considerando
@@ -11666,7 +11686,6 @@
         }
       }
       function initPromoProdutosAdmin() {
-        document.getElementById('addPromoProdutoBtn').addEventListener('click', openPromoProdutoModal);
         document.getElementById('promoProdutoCancelBtn').addEventListener('click', closePromoProdutoModal);
 
         document.getElementById('promoProdutoOriginal').addEventListener('input', (e) => {
@@ -11728,7 +11747,6 @@
       }
 
       function initPromoRulesAdmin() {
-        document.getElementById('addPromoRuleBtn').addEventListener('click', () => openPromoRuleForm(null));
         document.getElementById('promoCancelBtn').addEventListener('click', closePromoRuleForm);
         document.getElementById('promoSaveBtn').addEventListener('click', savePromoRuleFromForm);
         document.getElementById('addTierBtn').addEventListener('click', () => {
@@ -11784,11 +11802,12 @@
       function renderClassiDiscountRulesList() {
         const wrap = document.getElementById('classiDiscountRulesList');
         const rules = state.classiDiscountRules || [];
-        if (rules.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhuma regra cadastrada ainda.</div>'; return; }
+        if (rules.length === 0) { wrap.innerHTML = ''; atualizarPromocoesVazia(); return; }
         wrap.innerHTML = rules.map(r => `
     <div class="promoRuleItem">
       <div class="prTop">
         <div>
+          <span class="promoTipoTag promoTipoTag--classificatorio">Classificatório</span>
           <div class="prName">${escapeHtml(r.label)}</div>
           <div class="prDetail">${escapeHtml(classiRuleSummaryText(r))}</div>
         </div>
@@ -11799,6 +11818,7 @@
       </div>
     </div>
   `).join('');
+        atualizarPromocoesVazia();
         wrap.querySelectorAll('[data-edit-classi]').forEach(b => b.addEventListener('click', () => openClassiDiscountForm(b.dataset.editClassi)));
         wrap.querySelectorAll('[data-del-classi]').forEach(b => b.addEventListener('click', async () => {
           if (!await askConfirm('Excluir essa regra de desconto por classificatório?')) return;
@@ -11883,7 +11903,6 @@
         }
       }
       function initClassiDiscountAdmin() {
-        document.getElementById('addClassiDiscountRuleBtn').addEventListener('click', () => openClassiDiscountForm(null));
         document.getElementById('classiDiscountCancelBtn').addEventListener('click', closeClassiDiscountForm);
         document.getElementById('classiDiscountSaveBtn').addEventListener('click', saveClassiDiscountRuleFromForm);
         document.getElementById('classiTargetTypeSeg').querySelectorAll('button').forEach(b => {
@@ -11898,63 +11917,58 @@
         renderClassiDiscountRulesList();
       }
 
+      function refreshAdminCatalogStatus() {
+        document.getElementById('apCurCount').textContent = DB.products.length.toLocaleString('pt-BR');
+        document.getElementById('apCurSource').textContent = ACTIVE_SOURCE;
+        atualizarResumoStatus();
+      }
+
+      // Recarrega o catálogo da fonte automática (servidor/remota/original),
+      // descartando uma atualização feita só neste aparelho - antigo botão
+      // "Verificar / restaurar". Só pergunta antes quando existe mesmo algo
+      // local pra descartar; sem override, é só uma busca da versão mais nova.
+      async function recarregarFonteCatalogo() {
+        let hasLocalOverride = false;
+        try { hasLocalOverride = !!localStorage.getItem(LS_KEY); } catch (e) { }
+        if (hasLocalOverride && !await askConfirm('Remover a atualização feita neste aparelho e voltar a usar a fonte automática (remota, se disponível, ou a original do app)?')) return false;
+        try { localStorage.removeItem(LS_KEY); } catch (e) { }
+        applyDB(await loadActiveDB());
+        try { mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); } catch (e) { }
+        await loadCodigosProduto(); // catálogo foi recarregado do zero - reaplica o EAN/DUN-14, senão o scanner para de achar produto
+        refreshAdminCatalogStatus();
+        return true;
+      }
+
       function initAdminPanel() {
         const btn = document.getElementById('adminBtn');
         const panel = document.getElementById('adminPanel');
         const overlay = document.getElementById('adminOverlay');
         const closeBtn = document.getElementById('closeAdmin');
-        const planilhaBtn = document.getElementById('apPlanilhaBtn');
-        const planilhaInput = document.getElementById('apPlanilhaInput');
-        const planilhaMsg = document.getElementById('apPlanilhaMsg');
-        const restoreBtn = document.getElementById('apRestoreBtn');
 
-        function refreshStatus() {
-          document.getElementById('apCurCount').textContent = DB.products.length.toLocaleString('pt-BR');
-          document.getElementById('apCurSource').textContent = ACTIVE_SOURCE;
-        }
-        function openPanel() { refreshStatus(); planilhaMsg.innerHTML = ''; planilhaInput.value = ''; overlay.classList.remove('hidden'); panel.classList.remove('hidden'); }
+        function openPanel() { refreshAdminCatalogStatus(); overlay.classList.remove('hidden'); panel.classList.remove('hidden'); }
         function closePanel() { overlay.classList.add('hidden'); panel.classList.add('hidden'); }
 
         btn.addEventListener('click', openPanel);
         closeBtn.addEventListener('click', closePanel);
         overlay.addEventListener('click', closePanel);
-        planilhaBtn.addEventListener('click', () => planilhaInput.click());
 
-        planilhaInput.addEventListener('change', (e) => {
-          const file = e.target.files[0];
-          if (!file) return;
-          planilhaMsg.innerHTML = '<div class="ap-msg">Enviando e processando — isso pode levar um minuto...</div>';
-          const reader = new FileReader();
-          reader.onload = async () => {
-            try {
-              const base64 = reader.result.split(',')[1];
-              const resultado = await apiCatalogoPrecosImportar(base64);
-              planilhaMsg.innerHTML = `<div class="ap-msg success">Planilha processada — ${resultado.produtosImportados.toLocaleString('pt-BR')} produtos atualizados no servidor. Toque em "Verificar / restaurar" abaixo pra já usar aqui.</div>`;
-              planilhaInput.value = '';
-            } catch (err) {
-              planilhaMsg.innerHTML = `<div class="ap-msg error">${escapeHtml(err.message)}</div>`;
-            }
-          };
-          reader.onerror = () => { planilhaMsg.innerHTML = '<div class="ap-msg error">Não foi possível ler o arquivo selecionado.</div>'; };
-          reader.readAsDataURL(file);
-        });
-
-        restoreBtn.addEventListener('click', async () => {
-          let hasLocalOverride = false;
-          try { hasLocalOverride = !!localStorage.getItem(LS_KEY); } catch (e) { }
-          const question = hasLocalOverride
-            ? 'Remover a atualização feita neste aparelho e voltar a usar a fonte automática (remota, se disponível, ou a original do app)?'
-            : 'Buscar agora se há uma versão mais recente disponível?';
-          if (!await askConfirm(question)) return;
-          try { localStorage.removeItem(LS_KEY); } catch (e) { }
-          restoreBtn.disabled = true;
-          applyDB(await loadActiveDB());
-          try { mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); } catch (e) { }
-          await loadCodigosProduto(); // catálogo foi recarregado do zero - reaplica o EAN/DUN-14, senão o scanner para de achar produto
-          restoreBtn.disabled = false;
-          refreshStatus();
-          planilhaMsg.innerHTML = '<div class="ap-msg success">Pronto — usando: ' + escapeHtml(ACTIVE_SOURCE) + '</div>';
-          showToast('Base de preços atualizada');
+        // "Sincronizar agora" - junta os três botões antigos (Sincronizar tudo,
+        // Sincronizar catálogo de produtos, Verificar / restaurar): confere o
+        // servidor, reenvia o catálogo de produtos e recarrega a fonte automática.
+        const syncBtn = document.getElementById('apSyncAgoraBtn');
+        syncBtn.addEventListener('click', async () => {
+          syncBtn.disabled = true; syncBtn.textContent = 'Sincronizando…';
+          try {
+            await verificarESincronizarTudo(false);
+            if (state.currentUser?.is_admin) await syncProductCatalog();
+            const recarregou = await recarregarFonteCatalogo();
+            showToast(recarregou ? 'Sincronização concluída — usando: ' + ACTIVE_SOURCE : 'Sincronização concluída');
+          } catch (e) {
+            alert('Não foi possível sincronizar: ' + e.message);
+          } finally {
+            syncBtn.disabled = false; syncBtn.textContent = 'Sincronizar agora';
+            atualizarResumoStatus();
+          }
         });
       }
 
@@ -12501,16 +12515,8 @@
           initPromoRulesAdmin();
           initClassiDiscountAdmin();
           initPromoProdutosAdmin();
-          document.getElementById('importFichasBtn').addEventListener('click', () => document.getElementById('fichasFileInput').click());
-          document.getElementById('fichasFileInput').addEventListener('change', (e) => {
-            if (e.target.files[0]) importarFichasTecnicasDeArquivo(e.target.files[0]);
-            e.target.value = '';
-          });
-          document.getElementById('importCodigosBtn').addEventListener('click', () => document.getElementById('codigosFileInput').click());
-          document.getElementById('codigosFileInput').addEventListener('change', (e) => {
-            if (e.target.files[0]) importarCodigosDeArquivo(e.target.files[0]);
-            e.target.value = '';
-          });
+          initNovaPromocao();
+          initImportacaoUnificada();
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);
           renderPromoProdutosList();
           renderProdutosFocoList();
@@ -12554,9 +12560,7 @@
           initClientPicker();
           initMergeReviewModal();
           initBackendAdmin();
-          initPrevisaoUpload();
-          initVideosUpload();
-          initLinkSiteUpload();
+          refreshPrevisaoStatus();
           initGoogleDriveButton();
           refreshSyncQueueBadge();
           refreshDriveCsvQueueBadge();
@@ -12576,12 +12580,9 @@
           initProdutosTab();
           initClientesTab();
           initClassificatorioAlertas();
-          initPdfConsolidacao();
-          initRelatorioOficialImport();
+          carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();
-          initImportClassificatorio();
-          initObjetivosTrimestraisUpload();
 
           renderResults();
           renderCartBar();
