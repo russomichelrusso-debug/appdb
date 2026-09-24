@@ -604,6 +604,14 @@
       });
       document.getElementById('clientPickerTrocar').addEventListener('click', esqueceCliente);
       document.getElementById('fichaHost').innerHTML = '<div class="lev-empty">Selecione um cliente acima pra ver a ficha cadastral dele.</div>';
+      // Atalho vindo do app principal (botão "Ficha cadastral" na barra do
+      // cliente, ou o ícone do topo com cliente selecionado): abre direto na
+      // ficha desse cliente, sem buscar de novo. "Trocar" continua funcionando.
+      const params = new URLSearchParams(location.search);
+      const idUrl = Number(params.get('cliente'));
+      if (Number.isInteger(idUrl) && idUrl > 0) {
+        selecionarCliente(idUrl, params.get('nome') || 'Cliente', params.get('doc') || '');
+      }
     }
   </script>
 </body>

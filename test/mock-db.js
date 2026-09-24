@@ -51,6 +51,7 @@ function seed(partial) {
   if (partial.produtos) produtos.push(...partial.produtos);
   if (partial.pedidos) pedidos.push(...partial.pedidos);
   if (partial.pedidoItens) pedidoItens.push(...partial.pedidoItens);
+  if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
 }
 
 async function query(sql, params = []) {
@@ -477,6 +478,20 @@ async function query(sql, params = []) {
   }
 
   // cliente_cnpj_ficha (ficha de CNPJ, radar-cnpj.com)
+  if (s.includes('SELECT ATUALIZADO_EM FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
+    const row = clienteCnpjFicha[params[0]];
+    return { rows: row ? [{ atualizado_em: row.atualizado_em }] : [] };
+  }
+  // progresso do preenchimento automático (routes/lib/preenchimentoCnpj.js) -
+  // o mock não guarda falhas, então desistidos é sempre 0
+  if (s.includes('AS DESISTIDOS')) {
+    const comCnpj = clientes.filter(c => String(c.documento || '').replace(/\D/g, '').length === 14);
+    return { rows: [{
+      com_cnpj: String(comCnpj.length),
+      com_ficha: String(comCnpj.filter(c => clienteCnpjFicha[c.id]).length),
+      desistidos: '0',
+    }] };
+  }
   if (s.includes('SELECT * FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
     const row = clienteCnpjFicha[params[0]];
     return { rows: row ? [row] : [] };

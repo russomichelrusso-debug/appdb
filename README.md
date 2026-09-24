@@ -56,6 +56,7 @@ Variáveis de ambiente:
 | `DATABASE_URL` | Sim (produção) | String de conexão do PostgreSQL (Supabase, connection pooler). Sem ela, a conexão roda sem SSL (uso local). |
 | `DB_SSL_INSECURE` | Não | `true` desativa a validação do certificado SSL do banco (`rejectUnauthorized: false`). Use só como contorno temporário. |
 | `PORT` | Não | Porta HTTP do servidor. Padrão `10000`. |
+| `PREENCHIMENTO_CNPJ_DESLIGADO` | Não | `1` desliga o preenchimento automático das fichas de CNPJ que faltam (ver rota `/api/cnpj-preenchimento/status`). |
 | `GOOGLE_CLIENT_ID` | Não | Client ID do Google usado no login (há um valor fixo no código como padrão). |
 | `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini usada pelo assistente com IA. |
 | `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.0-flash`. |
@@ -101,6 +102,8 @@ Não é usuário/senha. O fluxo:
 - `/api/codigos-produto` — EAN-13/DUN-14 por SKU (leitura livre, importar restrito a admin)
 - `/api/assistente` — assistente de IA (Gemini)
 - `/api/clientes/:id/ficha-cnpj` (+ `POST .../atualizar`) e `/api/radar-cnpj/:cnpj` — ficha cadastral da Receita Federal. Consulta o radar-cnpj.com e, se ele recusar, atingir limite, cair ou não achar o CNPJ, usa a BrasilAPI de reserva, convertida pro mesmo formato (`routes/lib/cnpjBrasilApi.js`); a ficha fica em cache por 30 dias em `cliente_cnpj_ficha`
+- `/api/clientes/:id/ficha-cnpj/existe` — só diz se o cliente já tem ficha guardada (lê o banco, nunca consulta a Receita); usado pelo botão "Ficha cadastral" da barra do cliente, que abre `ficha-cnpj.html?cliente=ID&nome=…&doc=…` direto na ficha
+- `/api/cnpj-preenchimento/status` — progresso do preenchimento automático das fichas que faltam (`routes/lib/preenchimentoCnpj.js`): o servidor completa sozinho, das 01h às 06h de Brasília, no máximo 40 consultas por noite, uma a cada 15 s, só clientes com CNPJ e sem ficha nenhuma; CNPJ não encontrado é tentado até 3 vezes (tabela `cnpj_preenchimento_falhas`); se as duas origens estiverem fora do ar ou no limite, para a noite e retoma na seguinte. Estado do dia em `configuracoes` (`cnpj_preenchimento_auto`)
 - `/api/clientes/:id/historico`, `/rotatividade`, `/levantamentos`, `/consumo-estimado/:produtoId`, `/api/produtos/:codigo/clientes`, `/api/pedidos/exportar`, `/api/produtos-abc-geral` — relatórios
 
 `GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade (usado pelo keep-alive).

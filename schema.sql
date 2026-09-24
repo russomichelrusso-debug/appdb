@@ -324,3 +324,14 @@ ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS cnae_secundario TEXT;
 -- RLS ligado (mesmo motivo de levantamento_rascunhos acima) - guarda dados
 -- de CNPJ/sócios que não podem ficar públicos via PostgREST.
 ALTER TABLE cliente_cnpj_ficha ENABLE ROW LEVEL SECURITY;
+
+-- Preenchimento automático das fichas que faltam (routes/lib/preenchimentoCnpj.js):
+-- guarda os clientes cujo CNPJ a Receita não achou, pra tentar no máximo 3
+-- vezes (uma por noite) e depois desistir, em vez de gastar consulta toda noite.
+CREATE TABLE IF NOT EXISTS cnpj_preenchimento_falhas (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  tentativas INTEGER NOT NULL DEFAULT 1,
+  ultima_tentativa TIMESTAMPTZ NOT NULL DEFAULT now(),
+  erro TEXT
+);
+ALTER TABLE cnpj_preenchimento_falhas ENABLE ROW LEVEL SECURITY;
