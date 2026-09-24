@@ -560,6 +560,77 @@ async function main() {
     'leitura mais precisa substitui a posição do cliente'
   );
 
+  // 20) BrasilAPI como reserva do radar-cnpj (routes/radarCnpj.js) - fetch
+  // simulado; o servidor de teste roda no mesmo processo.
+  const { brasilApiParaFormatoRadar } = require('../routes/lib/cnpjBrasilApi');
+  const respostaBrasilApi = {
+    cnpj: '19131243000197', razao_social: 'MATERIAIS SILVA LTDA', nome_fantasia: 'SILVA MATERIAIS',
+    situacao_cadastral: 2, descricao_situacao_cadastral: 'ATIVA', data_situacao_cadastral: '2013-10-03',
+    descricao_motivo_situacao_cadastral: 'SEM MOTIVO', codigo_natureza_juridica: 2062, natureza_juridica: 'Sociedade Empresária Limitada',
+    cnae_fiscal: 4744099, cnae_fiscal_descricao: 'Comércio varejista de materiais de construção em geral',
+    porte: 'MICRO EMPRESA', codigo_porte: 1, data_inicio_atividade: '2013-10-03', capital_social: 50000,
+    descricao_tipo_de_logradouro: 'RUA', logradouro: 'DAS FLORES', numero: '100', complemento: '', bairro: 'CENTRO',
+    municipio: 'MOGI MIRIM', uf: 'SP', cep: '13800000', ddd_telefone_1: '1938621234', ddd_telefone_2: '', email: null,
+    identificador_matriz_filial: 1, descricao_identificador_matriz_filial: 'MATRIZ',
+    cnaes_secundarios: [{ codigo: 4742300, descricao: 'x' }, { codigo: 4741500, descricao: 'y' }],
+    qsa: [{ nome_socio: 'FULANO DE TAL', qualificacao_socio: 'Sócio-Administrador', codigo_qualificacao_socio: 49 }],
+  };
+  const conv = brasilApiParaFormatoRadar(respostaBrasilApi);
+  assert(
+    conv.razaoSocial === 'MATERIAIS SILVA LTDA' && conv.situacao.label === 'Ativa' && conv.porte.label === 'Microempresa'
+      && conv.endereco.logradouro === 'DAS FLORES' && conv.endereco.municipio === 'MOGI MIRIM' && conv.endereco.complemento === null
+      && conv.contato.telefone1 === '(19) 38621234' && conv.contato.telefone2 === null && conv.matrizFilial.label === 'Matriz'
+      && conv.cnaeSecundario === '4742300,4741500' && conv.naturezaJuridica.descricao === 'Sociedade Empresária Limitada'
+      && conv.socios[0].nome === 'FULANO DE TAL' && conv.socios[0].qualificacao.descricao === 'Sócio-Administrador',
+    'BrasilAPI é convertida pro formato do radar-cnpj (situação/porte/matriz, endereço, telefone, CNAEs, sócios)'
+  );
+
+  const fetchOriginal = global.fetch;
+  const chamadas = [];
+  const simularFetch = (radar, brasil) => {
+    chamadas.length = 0;
+    global.fetch = async (url) => {
+      chamadas.push(String(url).includes('brasilapi') ? 'brasilapi' : 'radar');
+      const r = String(url).includes('brasilapi') ? brasil : radar;
+      if (r instanceof Error) throw r;
+      return { status: r.status, ok: r.status >= 200 && r.status < 300, json: async () => r.body };
+    };
+  };
+  const bodyRadar = { ok: true, data: { razaoSocial: 'VIA RADAR LTDA', nomeFantasia: 'RADAR', situacao: { label: 'Ativa' } } };
+  const erroSilencioso = console.warn;
+  console.warn = () => {};
+  try {
+    simularFetch({ status: 200, body: bodyRadar }, { status: 200, body: respostaBrasilApi });
+    res = await req('GET', '/api/radar-cnpj/19131243000197');
+    assert(res.status === 200 && res.body.razao_social === 'VIA RADAR LTDA' && chamadas.join() === 'radar',
+      'com o radar-cnpj respondendo, a BrasilAPI nem é chamada');
+
+    simularFetch({ status: 429, body: { ok: false, error: 'limite' } }, { status: 200, body: respostaBrasilApi });
+    res = await req('GET', '/api/radar-cnpj/19131243000197');
+    assert(res.status === 200 && res.body.razao_social === 'MATERIAIS SILVA LTDA' && res.body.situacao_cadastral === 'Ativa'
+      && chamadas.join() === 'radar,brasilapi',
+      'radar-cnpj no limite (429) -> ficha vem da BrasilAPI, mesmo formato de resposta');
+
+    simularFetch(new Error('fetch failed'), { status: 200, body: respostaBrasilApi });
+    res = await req('GET', '/api/radar-cnpj/19131243000197');
+    assert(res.status === 200 && res.body.nome_fantasia === 'SILVA MATERIAIS', 'radar-cnpj fora do ar -> BrasilAPI responde');
+
+    simularFetch({ status: 404, body: {} }, { status: 200, body: respostaBrasilApi });
+    res = await req('GET', '/api/radar-cnpj/19131243000197');
+    assert(res.status === 200 && res.body.razao_social === 'MATERIAIS SILVA LTDA', 'CNPJ que o radar-cnpj não conhece ainda é achado na BrasilAPI');
+
+    simularFetch({ status: 404, body: {} }, { status: 404, body: {} });
+    res = await req('GET', '/api/radar-cnpj/19131243000197');
+    assert(res.status === 404, 'CNPJ que nenhuma das duas acha responde 404');
+
+    simularFetch({ status: 500, body: {} }, { status: 503, body: {} });
+    res = await req('GET', '/api/radar-cnpj/19131243000197');
+    assert(res.status === 502, 'as duas fora do ar responde 502 (o cadastro manual segue normal)');
+  } finally {
+    global.fetch = fetchOriginal;
+    console.warn = erroSilencioso;
+  }
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);
