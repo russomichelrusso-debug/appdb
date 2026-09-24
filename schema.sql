@@ -185,6 +185,19 @@ CREATE INDEX IF NOT EXISTS idx_codigos_produto_dun14 ON codigos_produto(dun14) W
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS codigo_oficial TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_clientes_codigo_oficial ON clientes(codigo_oficial) WHERE codigo_oficial IS NOT NULL;
 
+-- Localização da loja, gravada pelo GPS do celular no momento em que o
+-- vendedor SALVA um levantamento (é quando há certeza de que ele está dentro
+-- da loja - ver routes/levantamentos.js). Em levantamentos fica a leitura
+-- crua de cada visita; em clientes, a posição "oficial" da loja, só
+-- substituída por leitura igual ou mais precisa (ou se a atual for velha).
+ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS latitude NUMERIC;
+ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS longitude NUMERIC;
+ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS localizacao_precisao_m NUMERIC;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS latitude NUMERIC;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS longitude NUMERIC;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_precisao_m NUMERIC;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_atualizada_em TIMESTAMPTZ;
+
 -- Situação de pedidos no sistema OFICIAL da empresa (relatório de Carteira +
 -- Faturamento), guardada separada da tabela "pedidos" (que é só o que o
 -- vendedor bate no próprio app). As duas fontes não têm número em comum,

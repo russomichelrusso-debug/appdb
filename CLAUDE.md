@@ -103,6 +103,16 @@ Supabase, sem PR — não é mudança de código.
   — reaproveitar sempre que precisar tratar "o produto" em vez de cada SKU. Não confundir com a
   rota antiga `/clientes/:id/recuperar` (só pedidos do app, cruza com levantamento, sem
   agrupar), que continua existindo.
+- **Localização do cliente gravada ao salvar o Levantamento**: ao tocar em salvar, o app pega o
+  GPS do celular (até ~6 s, sem aviso se negar ou falhar) e manda junto no `POST
+  /api/levantamentos` — inclusive pela fila offline, com a leitura feita dentro da loja. Escolhido
+  esse momento porque é quando há certeza de que o vendedor está na loja. A leitura crua fica em
+  `levantamentos` (`latitude`/`longitude`/`localizacao_precisao_m`) e, se a precisão for de até
+  100 m, vira a posição do cliente (`clientes.latitude`/`longitude`/`localizacao_precisao_m`/
+  `localizacao_atualizada_em`), que só é trocada por leitura igual ou mais precisa, ou quando a
+  atual tem mais de 180 dias (regra no `WHERE` do `UPDATE`, em `routes/levantamentos.js`). O
+  toast de sucesso mostra "📍 localização da loja registrada". Por enquanto só grava — nada no
+  app ainda usa essa posição (ver "Localização do cliente" em "Caminho a seguir").
 
 ## O que já tentamos e não deu certo
 
@@ -130,6 +140,25 @@ Supabase, sem PR — não é mudança de código.
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como
   próximo passo de produto, não só bug fix. A rota de sugestões de recompra e o `grupoDoProduto`
   já dão a base pro sinal de "produtos parados" por cliente.
+- **Localização do cliente — próximos passos** (plano combinado com o usuário; a base é a
+  posição gravada ao salvar o levantamento, que precisa de algumas semanas de uso pra cobrir a
+  carteira). Em ordem de prioridade:
+  1. **Cliente sugerido pela proximidade**: ao abrir Levantamento/Pedido dentro da loja, "Você
+     está na LOJA X? Selecionar" — tira o passo de buscar o cliente toda visita.
+  2. **"Clientes perto de mim"**: lista por distância (500 m / 2 km / 10 km) com dias sem visita,
+     dias sem compra, 💡 sugestões de recompra e objetivo trimestral em risco — pra encaixar uma
+     visita no tempo vago. Casa com o painel de "oportunidades do dia" acima.
+  3. **Registro de visita** a partir de `levantamentos` (lat/lng + `data_visita`): "última visita
+     há N dias" e cruzamento visita × compra (visitado que não compra / compra e não é visitado).
+  4. **Rota da semana por cidade** usando o município da ficha de CNPJ (`cliente_cnpj_ficha`,
+     sem GPS), com link pra abrir no Google Maps/Waze.
+  5. **Estado do preço pela UF do cliente** (ficha de CNPJ) em vez do GPS do vendedor — o botão
+     "usar GPS" pega a UF de onde o vendedor está, que erra quando ele atende cliente de outro
+     estado.
+  - Complemento: posição aproximada pelo CEP da ficha pra cliente nunca visitado (serviço
+    gratuito de geocodificação), marcada como aproximada.
+  - Descartado por agora: prospecção de lojas que ainda não são clientes — depende de base
+    externa de empresas por região, normalmente paga ou limitada.
 - Continuar tratando pedido de UI ("botão colado na margem", "ícone fora de centro") como sinal
   de um padrão visual quebrado, não só o pixel específico apontado — vale checar se o mesmo
   padrão (`.clientClearBtn`, `.gearBtn`, paddings de 16px) se repete em outro lugar da mesma tela

@@ -26,15 +26,38 @@ async function acharProdutoPorSku(client, codigo_sku) {
   return result.rows[0].id;
 }
 
+// Localização da loja - só leitura de GPS boa o bastante (até 100 m) vira a
+// posição do cliente; a atual só é trocada por uma igual ou mais precisa, ou
+// se tiver mais de 180 dias (loja pode ter mudado de endereço).
+const LOCALIZACAO_PRECISAO_MAX_M = 100;
+const LOCALIZACAO_VALIDADE_DIAS = 180;
+
+// Aceita { latitude, longitude, precisao_m } vindo do celular. Qualquer coisa
+// fora disso vira null - localização é bônus, nunca motivo pra recusar o
+// levantamento.
+function lerLocalizacao(loc) {
+  if (!loc || typeof loc !== 'object') return null;
+  const { latitude, longitude, precisao_m: precisao } = loc;
+  // typeof em vez de Number(): Number(null) e Number('') viram 0, que é uma
+  // coordenada válida (no meio do Atlântico) e passaria pela checagem.
+  if (typeof latitude !== 'number' || typeof longitude !== 'number' || typeof precisao !== 'number') return null;
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) return null;
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) return null;
+  if (!Number.isFinite(precisao) || precisao < 0) return null;
+  return { latitude, longitude, precisao_m: precisao };
+}
+
 // Grava um levantamento de estoque feito na visita ao cliente. Corpo esperado:
 // {
 //   cliente: { cliente_id?, nome, documento?, contato? },
 //   vendedor_nome?: "...",
 //   nome_levantamento?: "...",
-//   itens: [{ codigo_sku, quantidade_contada }, ...]
+//   itens: [{ codigo_sku, quantidade_contada }, ...],
+//   localizacao?: { latitude, longitude, precisao_m }  // GPS no momento de salvar
 // }
 router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, nome_levantamento, itens } = req.body;
+  const localizacao = lerLocalizacao(req.body.localizacao);
   if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
 
@@ -46,8 +69,10 @@ router.post('/', async (req, res) => {
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
 
     const levResult = await client.query(
-      'INSERT INTO levantamentos (cliente_id, vendedor_id, nome) VALUES ($1, $2, $3) RETURNING id, data_visita',
-      [clienteId, vendedorId, nome_levantamento || null]
+      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, data_visita`,
+      [clienteId, vendedorId, nome_levantamento || null,
+        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null]
     );
     const levantamentoId = levResult.rows[0].id;
 
@@ -59,9 +84,30 @@ router.post('/', async (req, res) => {
       );
     }
 
+    let localizacaoRegistrada = false;
+    if (localizacao && localizacao.precisao_m <= LOCALIZACAO_PRECISAO_MAX_M) {
+      // a regra de substituição fica no WHERE - sem SELECT antes, sem corrida
+      // entre dois levantamentos do mesmo cliente salvos ao mesmo tempo.
+      const upd = await client.query(
+        `UPDATE clientes SET latitude = $2, longitude = $3, localizacao_precisao_m = $4, localizacao_atualizada_em = now()
+         WHERE id = $1
+           AND (latitude IS NULL
+             OR localizacao_precisao_m IS NULL
+             OR $4 <= localizacao_precisao_m
+             OR localizacao_atualizada_em < now() - make_interval(days => $5))`,
+        [clienteId, localizacao.latitude, localizacao.longitude, localizacao.precisao_m, LOCALIZACAO_VALIDADE_DIAS]
+      );
+      localizacaoRegistrada = upd.rowCount > 0;
+    }
+
     await client.query('COMMIT');
     console.log(`Levantamento #${levantamentoId} gravado (cliente ${clienteId}, ${itens.length} item(ns)).`);
-    res.status(201).json({ levantamento_id: levantamentoId, cliente_id: clienteId, data_visita: levResult.rows[0].data_visita });
+    res.status(201).json({
+      levantamento_id: levantamentoId,
+      cliente_id: clienteId,
+      data_visita: levResult.rows[0].data_visita,
+      localizacao_registrada: localizacaoRegistrada,
+    });
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }

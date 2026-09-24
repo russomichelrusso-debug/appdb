@@ -93,7 +93,7 @@ Não é usuário/senha. O fluxo:
 - `/api/catalogo-precos` — catálogo completo de preços por canal x estado (fonte automática, alimentada pelo upload de planilha no Admin)
 - `/api/pedidos` — pedidos manuais/do app (POST `/`) e export por período (GET `/exportar`)
 - `/api/pedidos-oficiais` — pedidos oficiais por cliente e importação da planilha oficial Carteira/Faturamento
-- `/api/levantamentos` — levantamentos de estoque em campo, incluindo rascunho automático (`POST`/`GET`/`DELETE /api/levantamentos/rascunho`, um por usuário) pra não perder levantamento não salvo em caso de queda de conexão ou fechamento acidental do app
+- `/api/levantamentos` — levantamentos de estoque em campo, incluindo rascunho automático (`POST`/`GET`/`DELETE /api/levantamentos/rascunho`, um por usuário) pra não perder levantamento não salvo em caso de queda de conexão ou fechamento acidental do app. O `POST` aceita `localizacao: { latitude, longitude, precisao_m }` (GPS do celular no momento de salvar): fica gravada no levantamento e, se a precisão for de até 100 m, vira a localização do cliente (só substitui uma leitura igual ou mais precisa, ou com mais de 180 dias)
 - `/api/clientes/sync` — lista enxuta (`id`, `nome`, `documento`) de todos os clientes, usada pra manter uma cópia local no aparelho (`localStorage`) e o app continuar funcionando na aba de Levantamento mesmo se a busca de cliente no servidor falhar
 - `/api/previsao-estoque` — previsão de estoque (relatório ESCE007)
 - `/api/configuracoes` — configurações chave/valor
