@@ -114,6 +114,14 @@ Supabase, sem PR — não é mudança de código.
   toast de sucesso mostra "📍 localização da loja registrada". Por enquanto só grava — nada no
   app ainda usa essa posição (ver "Localização do cliente" em "Caminho a seguir").
 
+- **BrasilAPI como reserva da ficha de CNPJ**: `buscarFichaNaOrigem` (`routes/radarCnpj.js`) tenta o
+  radar-cnpj.com e, se ele recusar/atingir limite/cair/não achar o CNPJ, consulta a BrasilAPI
+  (grátis, sem chave). A resposta dela é convertida pro formato exato do radar-cnpj
+  (`routes/lib/cnpjBrasilApi.js`, conferido contra o `dados_brutos` real do banco), então cache,
+  `mapearFicha` e telas não mudaram — o vendedor não percebe qual respondeu. O limite gratuito do
+  radar-cnpj não é documentado de forma clara (não deu pra abrir o site daqui); a reserva existe
+  justamente pra não depender disso.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

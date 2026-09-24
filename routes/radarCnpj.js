@@ -3,6 +3,7 @@ const rateLimit = require('express-rate-limit');
 const router = express.Router();
 const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { buscarNaBrasilApi } = require('./lib/cnpjBrasilApi');
 
 router.param('id', validarIdInteiro);
 
@@ -19,7 +20,8 @@ const radarCnpjLimiter = rateLimit({
 });
 
 // Consulta pública da Receita Federal via radar-cnpj.com - sem chave, sem
-// conta, cacheada 6h na origem. Aqui guardamos nosso próprio cache (tabela
+// conta, cacheada 6h na origem - com a BrasilAPI de reserva (ver
+// buscarFichaNaOrigem). Aqui guardamos nosso próprio cache (tabela
 // cliente_cnpj_ficha) por mais tempo (30 dias) porque dado cadastral de
 // empresa muda pouco, e assim evitamos bater na API a cada abertura da tela.
 const RADAR_CNPJ_BASE = 'https://radar-cnpj.com';
@@ -29,7 +31,7 @@ function normalizarCnpj(v) {
   return String(v || '').replace(/\D/g, '');
 }
 
-async function buscarFichaNaOrigem(cnpj) {
+async function buscarNoRadar(cnpj) {
   const resp = await fetch(`${RADAR_CNPJ_BASE}/api/cnpj/${cnpj}`, { signal: AbortSignal.timeout(8000) });
   if (resp.status === 404) {
     const erro = new Error('CNPJ não encontrado na base da Receita Federal.');
@@ -40,6 +42,27 @@ async function buscarFichaNaOrigem(cnpj) {
   const body = await resp.json();
   if (!body || body.ok === false) throw new Error((body && body.error) || 'radar-cnpj recusou a consulta.');
   return body.data || body;
+}
+
+// radar-cnpj primeiro; se ele recusar, atingir limite, cair ou não achar o
+// CNPJ (base dele pode atrasar pra empresa recém-aberta), tenta a BrasilAPI,
+// já convertida pro mesmo formato (ver routes/lib/cnpjBrasilApi.js) - quem
+// chama não sabe qual das duas respondeu. "Não encontrado" só sai se
+// nenhuma das duas achou e pelo menos uma disse isso explicitamente.
+async function buscarFichaNaOrigem(cnpj) {
+  try {
+    return await buscarNoRadar(cnpj);
+  } catch (erroRadar) {
+    try {
+      const dados = await buscarNaBrasilApi(cnpj);
+      console.warn(`radar-cnpj falhou (${erroRadar.message}) - ficha consultada na BrasilAPI.`);
+      return dados;
+    } catch (erroBrasilApi) {
+      if (erroRadar.naoEncontrado) throw erroRadar;
+      if (erroBrasilApi.naoEncontrado) throw erroBrasilApi;
+      throw new Error(`${erroRadar.message}; reserva: ${erroBrasilApi.message}`);
+    }
+  }
 }
 
 // Vários campos da origem vêm como objeto aninhado {codigo, label/descricao}

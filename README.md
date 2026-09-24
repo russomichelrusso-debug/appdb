@@ -100,6 +100,7 @@ Não é usuário/senha. O fluxo:
 - `/api/fichas-tecnicas` — fichas técnicas de produtos
 - `/api/codigos-produto` — EAN-13/DUN-14 por SKU (leitura livre, importar restrito a admin)
 - `/api/assistente` — assistente de IA (Gemini)
+- `/api/clientes/:id/ficha-cnpj` (+ `POST .../atualizar`) e `/api/radar-cnpj/:cnpj` — ficha cadastral da Receita Federal. Consulta o radar-cnpj.com e, se ele recusar, atingir limite, cair ou não achar o CNPJ, usa a BrasilAPI de reserva, convertida pro mesmo formato (`routes/lib/cnpjBrasilApi.js`); a ficha fica em cache por 30 dias em `cliente_cnpj_ficha`
 - `/api/clientes/:id/historico`, `/rotatividade`, `/levantamentos`, `/consumo-estimado/:produtoId`, `/api/produtos/:codigo/clientes`, `/api/pedidos/exportar`, `/api/produtos-abc-geral` — relatórios
 
 `GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade (usado pelo keep-alive).
