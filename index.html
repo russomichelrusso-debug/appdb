@@ -3123,6 +3123,40 @@
       white-space: pre-line;
     }
 
+    .rastreioCampo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      margin-bottom: 8px;
+    }
+
+    .rastreioCampo b {
+      display: block;
+      font-size: 15px;
+      color: var(--ink);
+      word-break: break-all;
+    }
+
+    .rastreioRotulo {
+      display: block;
+      font-size: 11px;
+      color: var(--gray);
+    }
+
+    .rastreioCampo .restoreBtn.compacto {
+      background: var(--white);
+      flex-shrink: 0;
+    }
+
+    #rastreioAbrirBtn.hidden,
+    #rastreioSemLink.hidden {
+      display: none;
+    }
+
     #appConfirmInput {
       margin: 0 0 14px;
     }
@@ -4555,6 +4589,29 @@
 
     <div class="overlay hidden" id="csvNameOverlay"></div>
     <div class="overlay hidden" id="appConfirmOverlay"></div>
+    <div class="minimodal hidden" id="rastreioModal">
+      <div class="minimodal-card" style="max-width:360px;">
+        <h3>Rastrear entrega</h3>
+        <p class="ap-hint" id="rastreioTransportadora" style="margin:0 0 12px;"></p>
+        <div class="rastreioCampo">
+          <div><span class="rastreioRotulo">CNPJ do cliente</span><b id="rastreioCnpj"></b></div>
+          <button type="button" class="restoreBtn compacto" data-copiar="rastreioCnpj">Copiar</button>
+        </div>
+        <div class="rastreioCampo">
+          <div><span class="rastreioRotulo">Nota fiscal</span><b id="rastreioNf"></b></div>
+          <button type="button" class="restoreBtn compacto" data-copiar="rastreioNf">Copiar</button>
+        </div>
+        <a class="btnPrimary hidden" id="rastreioAbrirBtn" href="#" target="_blank" rel="noopener"
+          style="text-decoration:none;margin-top:6px;">Abrir site da transportadora</a>
+        <p class="ap-hint hidden" id="rastreioSemLink" style="margin:6px 0 0;">Essa transportadora ainda não tem
+          link de rastreio cadastrado — um administrador cadastra em Painel Administrativo → Avançado →
+          Transportadoras.</p>
+        <div class="minimodal-btnrow" style="margin-top:14px;">
+          <button type="button" id="rastreioFecharBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="minimodal hidden" id="appConfirmModal">
       <div class="minimodal-card" style="max-width:360px;">
         <h3 id="appConfirmTitle">Confirmar</h3>
@@ -4888,6 +4945,21 @@
               <div id="apagarTudoFaturamentoStatus" class="ap-hint" style="margin-bottom:8px;">Carregando…</div>
               <button class="fileBtn btnDanger" id="apagarTudoFaturamentoBtn">Apagar todo o relatório oficial</button>
               <div id="apagarTudoFaturamentoMsg" style="margin-top:8px;"></div>
+            </div>
+            <div class="ap-card">
+              <h3>Transportadoras (rastreio de entrega)</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">Link de rastreio de cada transportadora, usado pelo botão
+                "Rastrear entrega" dos pedidos faturados. O app reconhece a transportadora quando o nome que vem no
+                relatório oficial contém o texto de "Reconhecer por". Se o site aceitar os dados no endereço, use
+                <b>{cnpj}</b> e <b>{nf}</b> no link que o app preenche sozinho.</p>
+              <div id="transportadorasLista"></div>
+              <label for="transpNome">Nome</label>
+              <input type="text" id="transpNome" placeholder="Ex: Expresso São Miguel">
+              <label for="transpPadrao">Reconhecer por (texto no nome da transportadora do relatório)</label>
+              <input type="text" id="transpPadrao" placeholder="Ex: SAO MIGUEL">
+              <label for="transpUrl">Link de rastreio</label>
+              <input type="text" inputmode="url" autocomplete="off" id="transpUrl" placeholder="https://...">
+              <button class="fileBtn" id="transpAddBtn" style="margin-top:10px;">+ Adicionar transportadora</button>
             </div>
             <div class="ap-card">
               <button type="button" class="priceEditResetLink" id="toggleApiConfigBtn"
@@ -10333,6 +10405,112 @@
     </div>
   </div>`;
       }
+      // ---------------- Rastreio de entrega (pedidos faturados) ----------------
+      // A maioria dos portais de transportadora não aceita os dados pelo link,
+      // então o caminho que sempre funciona é: mostrar CNPJ do cliente e NF com
+      // botão de copiar + abrir o site certo. Qual site: pelo nome da
+      // transportadora que vem no relatório oficial, casando com "padrao".
+      // Lista editável no Painel (config "transportadoras_rastreio"); estas são
+      // as que valem enquanto ninguém salvou uma lista.
+      const TRANSPORTADORAS_PADRAO = [
+        { nome: 'Expresso São Miguel', padrao: 'SAO MIGUEL', url: 'https://portaldocliente.expressosaomiguel.com.br/rastrear-mercadoria' },
+        { nome: 'TRD Transportes (Senior)', padrao: 'TRD', url: 'https://platform.senior.com.br/logistica-tck/tms/tck-frontend/#/login/signup?tenant=ZEhKa2RISmhibk53YjNKMFpYTT0%3D' },
+      ];
+      let TRANSPORTADORAS = TRANSPORTADORAS_PADRAO;
+      async function loadTransportadorasRastreio() {
+        try {
+          const result = await apiFetch('/api/configuracoes/transportadoras_rastreio');
+          if (result && Array.isArray(result.valor)) TRANSPORTADORAS = result.valor;
+        } catch (e) { /* sem lista salva ainda (usa a padrão), ou sem rede */ }
+      }
+      function normalizarTextoBusca(v) {
+        return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+      }
+      function acharTransportadora(nomeNoRelatorio) {
+        const alvo = normalizarTextoBusca(nomeNoRelatorio);
+        if (!alvo) return null;
+        return TRANSPORTADORAS.find(t => t.padrao && alvo.includes(normalizarTextoBusca(t.padrao))) || null;
+      }
+      function abrirRastreio(cliente, nf, nomeTransportadora) {
+        const cnpjDigitos = String((cliente && cliente.documento) || '').replace(/\D/g, '');
+        const transp = acharTransportadora(nomeTransportadora);
+        document.getElementById('rastreioTransportadora').textContent = nomeTransportadora
+          ? `Transportadora: ${nomeTransportadora}` : 'Transportadora não informada no relatório.';
+        document.getElementById('rastreioCnpj').textContent = cnpjDigitos ? formatarDocumento(cnpjDigitos) : 'não cadastrado';
+        document.getElementById('rastreioCnpj').dataset.valor = cnpjDigitos;
+        document.getElementById('rastreioNf').textContent = nf;
+        document.getElementById('rastreioNf').dataset.valor = nf;
+        const abrirBtn = document.getElementById('rastreioAbrirBtn');
+        if (transp && transp.url) {
+          abrirBtn.href = transp.url.replace(/\{cnpj\}/g, encodeURIComponent(cnpjDigitos)).replace(/\{nf\}/g, encodeURIComponent(nf));
+          abrirBtn.textContent = `Abrir site da ${transp.nome}`;
+        }
+        abrirBtn.classList.toggle('hidden', !(transp && transp.url));
+        document.getElementById('rastreioSemLink').classList.toggle('hidden', !!(transp && transp.url));
+        document.getElementById('rastreioModal').classList.remove('hidden');
+      }
+      async function copiarTexto(texto, rotulo) {
+        if (!texto) { showToast(`${rotulo} não disponível`, 'erro'); return; }
+        try {
+          await navigator.clipboard.writeText(texto);
+        } catch (e) {
+          // navegadores sem Clipboard API (ou sem permissão): cópia pelo jeito antigo
+          const tmp = document.createElement('textarea');
+          tmp.value = texto; document.body.appendChild(tmp); tmp.select();
+          try { document.execCommand('copy'); } finally { tmp.remove(); }
+        }
+        showToast(`${rotulo} copiado`);
+      }
+      function initRastreio() {
+        const modal = document.getElementById('rastreioModal');
+        document.getElementById('rastreioFecharBtn').addEventListener('click', () => modal.classList.add('hidden'));
+        modal.querySelectorAll('[data-copiar]').forEach(btn => btn.addEventListener('click', () => {
+          const el = document.getElementById(btn.dataset.copiar);
+          copiarTexto(el.dataset.valor, btn.dataset.copiar === 'rastreioCnpj' ? 'CNPJ' : 'Nota fiscal');
+        }));
+        // Admin: lista de transportadoras
+        document.getElementById('transpAddBtn').addEventListener('click', async () => {
+          const nome = document.getElementById('transpNome').value.trim();
+          const padrao = document.getElementById('transpPadrao').value.trim();
+          const url = document.getElementById('transpUrl').value.trim();
+          if (!nome || !padrao || !/^https:\/\//i.test(url)) { showToast('Preencha nome, texto pra reconhecer e um link começando com https://', 'erro'); return; }
+          await salvarTransportadoras([...TRANSPORTADORAS, { nome, padrao, url }]);
+          ['transpNome', 'transpPadrao', 'transpUrl'].forEach(id => { document.getElementById(id).value = ''; });
+        });
+        renderTransportadorasLista();
+      }
+      async function salvarTransportadoras(lista) {
+        try {
+          await apiFetch('/api/configuracoes/transportadoras_rastreio', { method: 'POST', body: JSON.stringify({ valor: lista }) });
+          TRANSPORTADORAS = lista;
+          renderTransportadorasLista();
+          showToast('Transportadoras salvas');
+        } catch (e) { showToast('Não foi possível salvar: ' + e.message, 'erro'); }
+      }
+      function renderTransportadorasLista() {
+        const wrap = document.getElementById('transportadorasLista');
+        if (!wrap) return;
+        if (TRANSPORTADORAS.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhuma transportadora cadastrada.</div>'; return; }
+        wrap.innerHTML = TRANSPORTADORAS.map((t, i) => `
+    <div class="promoRuleItem">
+      <div class="prTop">
+        <div class="prInfo">
+          <div class="prName">${escapeHtml(t.nome)}</div>
+          <div class="prDetail">Reconhece por "${escapeHtml(t.padrao)}"</div>
+          <div class="prDetail" style="word-break:break-all;">${escapeHtml(t.url)}</div>
+        </div>
+        <div class="prBtns">
+          <button data-del-transp="${i}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
+        </div>
+      </div>
+    </div>`).join('');
+        wrap.querySelectorAll('[data-del-transp]').forEach(b => b.addEventListener('click', async () => {
+          const t = TRANSPORTADORAS[Number(b.dataset.delTransp)];
+          if (!await askConfirm(`Excluir a transportadora "${t.nome}" do rastreio?`, 'Excluir', { perigo: true })) return;
+          await salvarTransportadoras(TRANSPORTADORAS.filter((_, i) => i !== Number(b.dataset.delTransp)));
+        }));
+      }
+
       // Um card por PEDIDO (não por item) - antes cada produto do mesmo
       // pedido virava um card repetindo o mesmo Nr.Pedido, parecendo pedido
       // duplicado. Agrupa por nr_pedido e lista os produtos dentro do card.
@@ -10361,6 +10539,8 @@
       ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}
     </div>
     ${listaProdutos}
+    ${itemFaturado && itemFaturado.nota_fiscal ? `<button type="button" class="restoreBtn compacto" style="margin-top:10px;"
+      data-rastrear-nf="${escapeHtml(String(itemFaturado.nota_fiscal))}" data-rastrear-transp="${escapeHtml(itemFaturado.transportadora || '')}">Rastrear entrega</button>` : ''}
   </div>`;
       }
       function renderRecuperarCard(item) {
@@ -10511,6 +10691,8 @@
               content.innerHTML = Array.from(porPedido.entries())
                 .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens))
                 .join('');
+              content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
+                abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
             }
             content.querySelectorAll('[data-recuperar-add]').forEach(btn => {
               btn.addEventListener('click', () => {
@@ -12694,6 +12876,7 @@
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
           loadProdutosVideos(); // idem
           loadProdutosLinkSite(); // idem
+          loadTransportadorasRastreio().then(renderTransportadorasLista); // idem
           tentarReconectarGoogleDriveEmSegundoPlano(); // idem - deixa o token do Drive pronto antes de precisar dele
           loadPriceListFromLS();
           loadCartFromLS();
@@ -12710,6 +12893,7 @@
           initPromoProdutosAdmin();
           initNovaPromocao();
           initFecharMinimodalAoClicarFora();
+          initRastreio();
           initImportacaoUnificada();
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);
           renderPromoProdutosList();

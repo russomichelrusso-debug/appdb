@@ -121,6 +121,11 @@ Cada produto carrega preço por 6 canais (Varejo/Atacado/E-commerce/Moderno/Cons
 - **Status**: uma linha de resumo que abre os detalhes; "Sincronizar agora" confere o servidor, reenvia o catálogo de produtos e recarrega a fonte automática.
 - **Avançado** (fechado por padrão): exportar pedidos, produtos sem EAN, integridade de clientes, pedidos duplicados, carteira antiga, apagar relatório oficial e endereço do servidor.
 - **Produtos foco** fica dentro do card Promoções, recolhido; a lista só é montada ao abrir.
+- **Transportadoras (rastreio de entrega)**, em Avançado: nome, texto pra reconhecer no nome da transportadora do relatório oficial e link de rastreio (aceita `{cnpj}` e `{nf}`). Salvo na configuração `transportadoras_rastreio`; enquanto ninguém salvar, valem Expresso São Miguel e TRD Transportes (Senior).
+
+## Rastreio de entrega
+
+Cada pedido faturado (aba Pedidos do cliente) com nota fiscal tem o botão **Rastrear entrega**: mostra o CNPJ do cliente e a NF com botão de copiar e abre o site da transportadora, escolhida pelo nome que veio no relatório oficial (`acharTransportadora()` em `index.html`). Os portais das transportadoras em geral não aceitam os dados pelo link, por isso o fluxo é copiar e colar; quando aceitam, o link cadastrado com `{cnpj}`/`{nf}` já abre preenchido.
 
 ## Padrão visual (frontend)
 
