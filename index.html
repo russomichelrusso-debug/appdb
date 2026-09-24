@@ -6915,6 +6915,28 @@
         }
       }
 
+      // Posição do celular no momento de salvar o levantamento - é quando há
+      // certeza de que o vendedor está dentro da loja, então vira a localização
+      // do cliente no servidor (ver routes/levantamentos.js). Best effort: sem
+      // GPS, permissão negada ou demora devolve null e o levantamento é salvo
+      // normalmente, sem aviso nenhum.
+      function obterLocalizacaoRapida() {
+        if (!('geolocation' in navigator)) return Promise.resolve(null);
+        return new Promise((resolve) => {
+          // teto próprio além do timeout do navegador - o timeout dele não
+          // conta o tempo parado no pedido de permissão da primeira vez.
+          const desiste = setTimeout(() => resolve(null), 8000);
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              clearTimeout(desiste);
+              resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, precisao_m: Math.round(pos.coords.accuracy) });
+            },
+            () => { clearTimeout(desiste); resolve(null); },
+            { enableHighAccuracy: true, timeout: 6000, maximumAge: 60000 }
+          );
+        });
+      }
+
       // Salva o levantamento atual - sempre ligado a um cliente cadastrado de
       // verdade (não mais um nome livre) e sempre gravado no banco, com a data
       // preenchida automaticamente pelo servidor. Também atualiza uma cópia local
@@ -6935,10 +6957,12 @@
         btn.disabled = true;
         btn.textContent = 'Salvando…';
         try {
+          const localizacao = await obterLocalizacaoRapida();
           const payload = {
             cliente: { cliente_id: cliente.id, nome: cliente.nome },
             vendedor_nome: state.seller || undefined,
             itens: state.survey.map(it => ({ codigo_sku: it.cod, quantidade_contada: it.qty })),
+            localizacao: localizacao || undefined,
           };
           const result = await apiCriarLevantamento(payload);
 
@@ -6966,7 +6990,7 @@
           refreshLevSaveInfo();
           showToast(result && result.__filaOffline
             ? `Sem conexão agora — "${cliente.nome}" fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
-            : `Levantamento salvo no histórico de ${cliente.nome}`);
+            : `Levantamento salvo no histórico de ${cliente.nome}${result && result.localizacao_registrada ? ' · 📍 localização da loja registrada' : ''}`);
         } catch (e) {
           showToast('Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
         } finally {

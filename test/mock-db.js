@@ -568,9 +568,25 @@ async function query(sql, params = []) {
 
   // levantamentos
   if (s.includes('INSERT INTO LEVANTAMENTOS')) {
-    const l = { id: nextId.levantamentos++, cliente_id: params[0], vendedor_id: params[1], nome: params[2], data_visita: new Date().toISOString() };
+    const l = {
+      id: nextId.levantamentos++, cliente_id: params[0], vendedor_id: params[1], nome: params[2], data_visita: new Date().toISOString(),
+      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null,
+    };
     levantamentos.push(l);
     return { rows: [{ id: l.id, data_visita: l.data_visita }] };
+  }
+  // localização da loja (routes/levantamentos.js) - mesma regra do WHERE real:
+  // sem posição, leitura igual ou mais precisa, ou posição atual velha.
+  if (s.includes('UPDATE CLIENTES SET LATITUDE')) {
+    const [id, latitude, longitude, precisao, validadeDias] = params;
+    const c = clientes.find(x => x.id === id);
+    if (!c) return { rowCount: 0, rows: [] };
+    const velha = c.localizacao_atualizada_em && (Date.now() - new Date(c.localizacao_atualizada_em).getTime()) > validadeDias * 86400000;
+    if (c.latitude == null || c.localizacao_precisao_m == null || precisao <= c.localizacao_precisao_m || velha) {
+      Object.assign(c, { latitude, longitude, localizacao_precisao_m: precisao, localizacao_atualizada_em: new Date().toISOString() });
+      return { rowCount: 1, rows: [] };
+    }
+    return { rowCount: 0, rows: [] };
   }
   if (s.includes('INSERT INTO LEVANTAMENTO_ITENS')) {
     levantamentoItens.push({ id: nextId.levantamento_itens++, levantamento_id: params[0], produto_id: params[1], quantidade_contada: params[2] });
@@ -919,5 +935,6 @@ module.exports = {
   __reset: reset,
   __seed: seed,
   __getClientes: () => clientes,
+  __getLevantamentos: () => levantamentos,
   __anoClassificatorioFechado: anoClassificatorioFechado,
 };

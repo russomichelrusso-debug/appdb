@@ -513,6 +513,53 @@ async function main() {
   res = await req('GET', '/api/clientes/999999/sugestoes-recompra');
   assert(res.status === 404, 'sugestoes-recompra de cliente inexistente responde 404');
 
+  // 19) localização da loja gravada ao salvar o levantamento
+  // (routes/levantamentos.js) - só leitura precisa (<= 100 m) vira a posição
+  // do cliente, e uma pior não substitui uma melhor.
+  res = await req('POST', '/api/clientes', { nome: 'Loja do GPS', documento: '98765432000110' });
+  const clienteGpsId = res.body.id;
+  const salvarLevComGps = (localizacao) => req('POST', '/api/levantamentos', {
+    cliente: { cliente_id: clienteGpsId, nome: 'Loja do GPS' },
+    itens: [{ codigo_sku: '60863', quantidade_contada: 1 }],
+    localizacao,
+  });
+  const clienteGps = () => mockDb.__getClientes().find(c => c.id === clienteGpsId);
+  const levGps = (id) => mockDb.__getLevantamentos().find(l => l.id === id);
+
+  res = await salvarLevComGps({ latitude: -22.4321, longitude: -46.9571, precisao_m: 30 });
+  assert(
+    res.status === 201 && res.body.localizacao_registrada === true
+      && clienteGps().latitude === -22.4321 && clienteGps().localizacao_precisao_m === 30
+      && levGps(res.body.levantamento_id).latitude === -22.4321,
+    'levantamento com GPS preciso grava a posição na visita e no cliente'
+  );
+  res = await salvarLevComGps({ latitude: -22.5, longitude: -46.9, precisao_m: 80 });
+  assert(
+    res.status === 201 && res.body.localizacao_registrada === false
+      && clienteGps().latitude === -22.4321 && levGps(res.body.levantamento_id).localizacao_precisao_m === 80,
+    'leitura menos precisa fica só na visita, não substitui a posição do cliente'
+  );
+  res = await salvarLevComGps({ latitude: -23, longitude: -47, precisao_m: 500 });
+  assert(
+    res.status === 201 && res.body.localizacao_registrada === false && clienteGps().latitude === -22.4321,
+    'leitura imprecisa (500 m) não vira posição do cliente'
+  );
+  res = await salvarLevComGps({ latitude: 999, longitude: -46.9, precisao_m: 10 });
+  assert(
+    res.status === 201 && res.body.localizacao_registrada === false && levGps(res.body.levantamento_id).latitude === null,
+    'localização inválida é ignorada e o levantamento é salvo mesmo assim'
+  );
+  res = await salvarLevComGps({ latitude: null, longitude: null, precisao_m: 5 });
+  assert(
+    res.status === 201 && res.body.localizacao_registrada === false && clienteGps().latitude === -22.4321,
+    'latitude/longitude nulas não viram coordenada 0,0'
+  );
+  res = await salvarLevComGps({ latitude: -22.4322, longitude: -46.9572, precisao_m: 12 });
+  assert(
+    res.status === 201 && res.body.localizacao_registrada === true && clienteGps().localizacao_precisao_m === 12,
+    'leitura mais precisa substitui a posição do cliente'
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);
