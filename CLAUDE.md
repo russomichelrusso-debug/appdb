@@ -55,6 +55,14 @@ Não há lint nem build configurados — as páginas `.html` (`index.html`, `cur
 `ficha-cnpj.html`, `calculadora-materiais.html`) são validadas manualmente (checagem de sintaxe
 dos blocos `<script>` inline antes de commitar) por não terem bundler.
 
+Pegadinhas de ambiente:
+- `index.html` tem fim de linha **CRLF** — editar preservando (ex.: Python com `newline=''`).
+- Pra testar SQL num Postgres local: `db.js` liga SSL sempre que `DATABASE_URL` existe, então usar
+  `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE` sem `DATABASE_URL`.
+- Num banco **novo**, a 1ª execução do `schema.sql` falha (um `ALTER TABLE pedidos … REFERENCES
+  usuarios` vem antes do `CREATE TABLE usuarios`); rodar de novo resolve. O Supabase não é
+  afetado (as tabelas já existem).
+
 ## Fluxo de trabalho
 
 Cada mudança vira um PR próprio contra `main`, numa branch criada de `origin/main` atualizado (se a
@@ -140,21 +148,25 @@ Supabase, sem PR — não é mudança de código.
   também desliga o levantamento aberto, como o antigo botão fazia). Sem cliente, o card vira um
   botão tracejado "+ Selecionar cliente" (sai o rótulo "Cliente (opcional)").
 
-- **Política Comercial rev. 06 no pedido**: classificatório por canal, canal
-  automático pelo cliente, desconto por prazo somado, prazos por canal e pedido mínimo por região
-  (detalhes em "Motor de preço" no README). Decisões do usuário: desconto de prazo **automático e
-  somado** ao classificatório (não multiplicado como o "Desc. adicional"); Marmoraria/Consumidor
-  final = **+30% sobre a tabela Institucional**; Rede 18% continua no Varejo; o percentual vale
-  **pela política, pelo nome** (o ERP ainda manda "Varejo Exclusive (12)"/"Premium (15)" da
-  política antiga — os 131 clientes com esses valores foram corrigidos direto no banco em 09/2026).
-  A tabela existe em dois lugares que precisam andar juntos: `CLASSI_POR_CANAL` (`index.html`) e
-  `routes/lib/politicaComercial.js`.
-  Segunda parte: faixas de **todos os canais** no card/ficha do cliente (`FAIXAS` em
-  `routes/clientesClassificatorio.js`, chave sem acento/maiúscula via `faixaDoTipo`) e faixa medida
-  pelos **últimos 12 meses móveis** (decisão do usuário, régua da política) no lugar do ano fechado —
-  risco de queda = 12 meses abaixo do mínimo da faixa. O PIC continua pelo acumulado do ano.
-  Institucional, Construtora, Atacarejo e Home Center Master não têm faixa (fixo/"a consultar").
-  A ficha diz "Apuração mensal · ajuste pra baixo em 01/01 e 01/07" (item 6 da política).
+- **Política Comercial rev. 06** (PVEN, 04/2026), em 2 PRs:
+  - **No pedido** (PR #125): classificatório por canal, canal automático pelo classificatório do
+    cliente, desconto por prazo, prazos por canal e pedido mínimo CIF por região (detalhes em
+    "Motor de preço" no README). Decisões do usuário: desconto de prazo **automático e somado** ao
+    classificatório (não multiplicado como o "Desc. adicional"); Marmoraria/Consumidor final =
+    **+30% sobre a tabela Institucional** (percentual negativo = acréscimo); Rede 18% continua no
+    Varejo; o percentual vale **pela política, pelo nome** — o ERP ainda manda "Varejo Exclusive
+    (12)"/"Premium (15)" da política antiga, então a importação grava pelo nome
+    (`descontoPelaPolitica`), e os 131 clientes antigos foram corrigidos direto no banco em 09/2026.
+  - **No card/ficha do cliente** (PR #126): faixas de **todos os canais** e faixa medida pelos
+    **últimos 12 meses móveis** (régua da política) no lugar do ano fechado — risco de queda = 12
+    meses abaixo do mínimo da faixa; PIC continua pelo acumulado do ano. A API de status devolve
+    `faturamento12m`, `faturamentoFaixa` (o valor comparado com a faixa — a barra do card usa ele)
+    e `revisao` ("Apuração mensal · ajuste pra baixo em 01/01 e 01/07"); `proximaRevisao` saiu.
+  - Tabelas que precisam andar juntas: `CLASSI_POR_CANAL` (`index.html`) ↔
+    `routes/lib/politicaComercial.js` (percentuais) e `FAIXAS` em `routes/clientesClassificatorio.js`
+    (valores das faixas; buscar sempre via `faixaDoTipo`, que ignora acento/maiúscula).
+  - Fora de propósito: Home Center Master e Trading ("a consultar"/lista específica — o vendedor
+    usa o "Desc. adicional"); Institucional, Construtora e Atacarejo não têm faixa.
 
 ## O que já tentamos e não deu certo
 
@@ -208,3 +220,5 @@ Supabase, sem PR — não é mudança de código.
 - `produtos_sem_ean13.csv` indica um backfill de EAN pendente; se o usuário pedir mais correções
   de código de barras, vale perguntar se essa lista ainda reflete o estado atual do catálogo antes
   de usá-la como referência.
+- Correção pequena pendente: mover o `CREATE TABLE usuarios` do `schema.sql` pra antes da
+  primeira referência a ele, pra um banco novo subir na primeira execução.
