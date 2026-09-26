@@ -3996,6 +3996,80 @@
       box-shadow: var(--shadow-1);
     }
 
+    /* "Comprados e não contados": o que o cliente comprou no último ano e não
+       apareceu na contagem - produto que acabou na loja não tem o que escanear. */
+    .levComprados {
+      margin: 6px 16px 4px;
+      padding: 12px 14px;
+      background: var(--white);
+      border: 1px dashed var(--hairline);
+      border-radius: var(--r-md);
+    }
+
+    .levComprados.hidden {
+      display: none;
+    }
+
+    .levCompHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .levCompToggle {
+      background: none;
+      border: none;
+      padding: 6px 0;
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--ink);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .levCompAll,
+    .levCompAdd {
+      flex-shrink: 0;
+      background: var(--fill);
+      border: none;
+      color: var(--red);
+      border-radius: var(--r-sm);
+      padding: 9px 12px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .levCompHint {
+      margin: 2px 0 8px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .levCompItem {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 0;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .levCompItem b {
+      display: block;
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .levCompItem span {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
     .levitem.zero {
       box-shadow: 0 0 0 1.5px rgba(204, 9, 53, .25), var(--shadow-1);
       background: rgba(204, 9, 53, .03);
@@ -4715,6 +4789,7 @@
       <div class="hint lev-hint">Cada leitura de código soma 1 unidade. Por nome, toque no produto certo na lista. O
         estoque também pode ser digitado direto.</div>
       <div class="lev-list" id="levList"></div>
+      <div class="levComprados hidden" id="levComprados"></div>
       <div class="lev-empty" id="levEmpty">
         Nenhum item levantado ainda.<br>Escaneie ou digite um código/nome para começar.
       </div>
@@ -7373,6 +7448,13 @@
           setLevCliente(cliente);
         }
         const cliente = state.levCliente;
+        const naoContados = compradosNaoContados();
+        if (naoContados.length) {
+          const incluir = await askConfirm(
+            `Faltou contar ${naoContados.length} produto(s) que ${cliente.nome} comprou no último ano. Incluir com estoque 0?`,
+            'Incluir e salvar', { cancelarLabel: 'Salvar assim' });
+          if (incluir) incluirCompradosNoLevantamento(naoContados);
+        }
 
         const btn = document.getElementById('levSaveBtn');
         const originalHtml = btn.innerHTML;
@@ -7715,6 +7797,7 @@
         for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
         saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
         carregarSugestoesRecompra(cliente);
+        carregarCompradosRecentes(cliente);
         carregarAtalhoFichaCnpj(cliente);
       }
 
@@ -7758,6 +7841,87 @@
       function abrirFichaCnpjCliente(cliente) {
         if (!cliente) return;
         window.open(urlFichaCnpj(cliente), '_blank');
+      }
+
+      // ---------------- Comprados e não contados (Levantamento) ----------------
+      // O que o cliente comprou nos últimos 12 meses (GET
+      // /api/clientes/:id/comprados-recentes, faturado + app) e ainda não está
+      // no levantamento: produto que acabou na loja não tem o que escanear e
+      // sairia do pedido. Decisões do usuário: lista no Levantamento + aviso ao
+      // salvar; incluir = estoque 0 e pedido com a quantidade da última compra.
+      // Guardado por cliente também no localStorage, pra funcionar na loja sem
+      // internet quando já foi carregado antes.
+      const COMPRADOS_LS_KEY = 'cortagCompradosRecentes_v1';
+      const COMPRADOS_CACHE = new Map();
+      let compradosRecolhido = false;
+      function lerCompradosLS() {
+        try { return JSON.parse(localStorage.getItem(COMPRADOS_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      async function carregarCompradosRecentes(cliente) {
+        renderCompradosNaoContados();
+        if (!cliente || !cliente.id || COMPRADOS_CACHE.has(cliente.id)) return;
+        const salvo = lerCompradosLS()[cliente.id];
+        if (Array.isArray(salvo)) { COMPRADOS_CACHE.set(cliente.id, salvo); renderCompradosNaoContados(); }
+        let lista;
+        try { lista = await apiFetch(`/api/clientes/${cliente.id}/comprados-recentes`); }
+        catch (e) { return; } // sem internet: fica com a cópia salva (se houver)
+        if (!Array.isArray(lista)) return;
+        COMPRADOS_CACHE.set(cliente.id, lista);
+        try {
+          const todos = lerCompradosLS();
+          todos[cliente.id] = lista;
+          localStorage.setItem(COMPRADOS_LS_KEY, JSON.stringify(todos));
+        } catch (e) { /* sem espaço/localStorage - segue só com a memória */ }
+        renderCompradosNaoContados();
+      }
+      function compradosNaoContados() {
+        const cliente = state.levCliente;
+        const lista = cliente ? COMPRADOS_CACHE.get(cliente.id) || [] : [];
+        const contados = new Set(state.survey.map(i => i.cod));
+        return lista.filter(c => !contados.has(c.codigo_sku) && productByCod(c.codigo_sku));
+      }
+      function incluirCompradosNoLevantamento(itens) {
+        for (const c of itens) {
+          if (state.survey.some(i => i.cod === c.codigo_sku)) continue;
+          state.survey.push({ cod: c.codigo_sku, qty: 0, ped: Number(c.qtd_ultima_compra) || 0 });
+        }
+        saveLevSurvey();
+        renderLevList();
+      }
+      function renderCompradosNaoContados() {
+        const el = document.getElementById('levComprados');
+        if (!el) return;
+        const pendentes = compradosNaoContados();
+        el.classList.toggle('hidden', pendentes.length === 0);
+        if (pendentes.length === 0) { el.innerHTML = ''; return; }
+        const anoAtual = String(new Date().getFullYear());
+        const dataCurta = (iso) => {
+          const [a, m, d] = String(iso).split('-');
+          return a === anoAtual ? `${d}/${m}` : `${d}/${m}/${a.slice(2)}`;
+        };
+        el.innerHTML = `
+          <div class="levCompHead">
+            <button type="button" class="levCompToggle" id="levCompToggle" aria-expanded="${!compradosRecolhido}">${compradosRecolhido ? '▸' : '▾'} Comprados e não contados (${pendentes.length})</button>
+            ${compradosRecolhido ? '' : '<button type="button" class="levCompAll" id="levCompAll">Incluir todos</button>'}
+          </div>
+          ${compradosRecolhido ? '' : `
+          <p class="levCompHint">O cliente comprou no último ano e ainda não foi contado. Acabou na loja? Inclua com estoque 0 — o pedido já vem com a quantidade da última compra.</p>
+          ${pendentes.map(c => {
+            const p = productByCod(c.codigo_sku);
+            return `<div class="levCompItem">
+              <div><b>${escapeHtml(p.n)}</b><span>Cód. ${escapeHtml(p.c)} · última compra ${escapeHtml(dataCurta(c.ultima_compra))} · ${Number(c.qtd_ultima_compra) || 0} un.</span></div>
+              <button type="button" class="levCompAdd" data-comp-add="${escapeHtml(p.c)}">+ Não tem na loja</button>
+            </div>`;
+          }).join('')}`}`;
+        document.getElementById('levCompToggle').addEventListener('click', () => { compradosRecolhido = !compradosRecolhido; renderCompradosNaoContados(); });
+        document.getElementById('levCompAll')?.addEventListener('click', () => {
+          incluirCompradosNoLevantamento(pendentes);
+          showToast(`${pendentes.length} produto(s) incluídos com estoque 0`);
+        });
+        el.querySelectorAll('[data-comp-add]').forEach(btn => btn.addEventListener('click', () => {
+          const c = pendentes.find(x => x.codigo_sku === btn.dataset.compAdd);
+          if (c) incluirCompradosNoLevantamento([c]);
+        }));
       }
 
       // ---------------- Sugestões de recompra ----------------
@@ -8005,6 +8169,7 @@
         const footerEl = document.getElementById('levFooter');
         const summaryEl = document.getElementById('levSummary');
         if (!listEl) return; // ainda não inicializado
+        renderCompradosNaoContados();
 
         if (state.survey.length === 0) {
           listEl.innerHTML = '';
@@ -8247,7 +8412,7 @@
       function askConfirm(message, okLabel, opcoes) {
         return new Promise((resolve) => {
           appConfirmResolve = resolve;
-          abrirAppConfirm(message, okLabel || 'Confirmar', !!(opcoes && opcoes.perigo), false);
+          abrirAppConfirm(message, okLabel || 'Confirmar', !!(opcoes && opcoes.perigo), false, opcoes && opcoes.cancelarLabel);
         });
       }
       // Pergunta um texto curto (substitui o prompt() nativo). Resolve com o
@@ -8261,8 +8426,9 @@
           setTimeout(() => { input.focus(); input.select(); }, 50);
         });
       }
-      function abrirAppConfirm(message, okLabel, perigo, comTexto) {
+      function abrirAppConfirm(message, okLabel, perigo, comTexto, cancelarLabel) {
         document.getElementById('appConfirmMsg').textContent = message;
+        document.getElementById('appConfirmCancelBtn').textContent = cancelarLabel || 'Cancelar';
         const okBtn = document.getElementById('appConfirmOkBtn');
         okBtn.textContent = okLabel;
         okBtn.classList.toggle('btnPerigo', perigo);
