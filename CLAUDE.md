@@ -37,9 +37,10 @@ Frontend estático (PWA: `index.html` + páginas soltas `curva-abc.html`/`calcul
 `ficha-cnpj.html`) no GitHub Pages, backend Node/Express (`server.js` + `routes/`) no Render,
 Postgres no Supabase, autenticação só via Google Sign-In (sem usuário/senha). `curva-abc.html` e
 `calculadora-materiais.html` são páginas separadas de propósito — usadas esporadicamente, não
-valia deixar o `index.html` mais pesado por causa delas — e se comunicam com o app principal via
-parâmetro de URL e/ou `localStorage` compartilhado (chave `cortagCart_v1` do carrinho,
-`cortagAuthToken_v1` da sessão).
+valia deixar o `index.html` mais pesado por causa delas — e se comunicam com o app principal por
+parâmetro de URL (`curva-abc.html?cliente=…`, `ficha-cnpj.html?cliente=…&nome=…&doc=…`) e/ou
+`localStorage` compartilhado: `cortagAuthToken_v1` (sessão), `cortagCart_v1` (carrinho, lido pela
+Curva ABC) e `cortagCalcHandoff_v1` (itens que a calculadora manda pro orçamento).
 
 ## Comandos
 
@@ -50,23 +51,19 @@ npm start                    # sobe o servidor (roda schema.sql automaticamente)
 node test/run_tests.js       # suite de testes (mocka o banco em test/mock-db.js) — rodar antes de qualquer mudança em routes/
 ```
 
-Não há lint nem build configurados — `index.html`/`curva-abc.html` são validados manualmente
-(checagem de sintaxe dos blocos `<script>` antes de commitar) por não terem bundler.
+Não há lint nem build configurados — as páginas `.html` (`index.html`, `curva-abc.html`,
+`ficha-cnpj.html`, `calculadora-materiais.html`) são validadas manualmente (checagem de sintaxe
+dos blocos `<script>` inline antes de commitar) por não terem bundler.
 
-## Fluxo de trabalho estabelecido nesta sessão
+## Fluxo de trabalho
 
-Todo trabalho de código entra pela branch `claude/app-fixes-modifications-t5ewu5` (dev), depois
-segue este caminho pra virar PR:
+Cada mudança vira um PR próprio contra `main`, numa branch criada de `origin/main` atualizado (se a
+branch de trabalho já teve um PR mergeado, recriá-la de `origin/main` antes da próxima mudança):
 
-1. Commit na branch de dev, `git push`.
-2. `git fetch origin main` e criar uma branch nova a partir de `origin/main` (não da dev — a dev
-   pode ter commits de sessões anteriores que ainda não viraram PR).
-3. `git cherry-pick` do(s) commit(s) relevante(s) pra essa branch nova.
-4. `node test/run_tests.js` — só segue se passar.
-5. Push da branch nova, abrir PR **draft** contra `main`, `subscribe_pr_activity` pra acompanhar
-   CI/comentários automaticamente.
-6. Ao mergear: `git fetch origin main`, merge de volta na branch de dev, testes de novo, push da
-   dev, apagar a branch de PR local.
+1. `node test/run_tests.js` e a checagem de sintaxe dos `<script>` — só segue se passar.
+2. Commit, push, abrir PR **draft** contra `main` e `subscribe_pr_activity` pra acompanhar
+   CI/comentários.
+3. Depois do merge, trazer a branch de trabalho de volta pra `origin/main`.
 
 Correções pontuais de **dado** (ex.: EAN trocado entre dois SKUs) são feitas direto via SQL no
 Supabase, sem PR — não é mudança de código.
@@ -119,8 +116,7 @@ Supabase, sem PR — não é mudança de código.
   (grátis, sem chave). A resposta dela é convertida pro formato exato do radar-cnpj
   (`routes/lib/cnpjBrasilApi.js`, conferido contra o `dados_brutos` real do banco), então cache,
   `mapearFicha` e telas não mudaram — o vendedor não percebe qual respondeu. O limite gratuito do
-  radar-cnpj não é documentado de forma clara (não deu pra abrir o site daqui); a reserva existe
-  justamente pra não depender disso.
+  radar-cnpj não está confirmado; a reserva existe justamente pra não depender dele.
 
 - **Fichas de CNPJ completadas sozinhas + atalho direto**: o servidor completa de madrugada as
   fichas que faltam (`routes/lib/preenchimentoCnpj.js`, ligado em `server.js`) — decisão do
