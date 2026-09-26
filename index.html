@@ -7403,11 +7403,14 @@
 
       function refreshLevSaveInfo() {
         const el = document.getElementById('levSaveInfo');
+        if (!el) return;
+        // Mostra sempre o cliente do levantamento (pedido do usuário): salvo =
+        // nome em destaque; ainda não salvo = "LOJA X · não salvo".
         if (state.levLoadedName) {
           el.textContent = state.levLoadedName;
           el.classList.add('hasname');
         } else {
-          el.textContent = 'Levantamento não salvo';
+          el.textContent = state.levCliente ? `${state.levCliente.nome} · não salvo` : 'Levantamento não salvo';
           el.classList.remove('hasname');
         }
       }
@@ -7773,6 +7776,7 @@
         state.levCliente = cliente;
         atualizarClienteBar('lev', cliente);
         atualizarClienteBar('precos', cliente);
+        refreshLevSaveInfo();
         // pré-preenche o desconto de canal (classificatório) do cliente - continua
         // editável manualmente depois, isso só evita ter que selecionar de novo
         // toda vez que já se sabe qual é o cliente.
@@ -8030,6 +8034,17 @@
         }
         await shareOrDownloadBlob(blob, fileName, shareTitle, successMsgLocal);
       }
+      // Nome do arquivo do levantamento com o cliente inteiro (pedido do
+      // usuário): "Levantamento-comercial-de-ferragens-cofebral-260926.pdf".
+      // Não usa csvFileNameFor (só a 1ª palavra) - esse é o formato do CSV do
+      // orçamento, que continua igual.
+      function levFileNameFor(extensao) {
+        const cliente = sanitizeFileNamePart(state.levCliente ? state.levCliente.nome : '').slice(0, 50).replace(/-+$/, '');
+        const d = new Date();
+        const pad = n => String(n).padStart(2, '0');
+        const ddmmaa = pad(d.getDate()) + pad(d.getMonth() + 1) + String(d.getFullYear()).slice(-2);
+        return `Levantamento-${cliente ? cliente + '-' : ''}${ddmmaa}.${extensao}`;
+      }
       function exportLevCSV() {
         if (state.survey.length === 0) { showToast('Adicione algum item antes de exportar'); return; }
         const header = 'Código;Produto;Estoque;Pedido';
@@ -8038,8 +8053,7 @@
           return `${it.cod};${p ? p.n.replace(/;/g, ',') : ''};${it.qty};${it.ped || 0}`;
         });
         const blob = new Blob(['\uFEFF' + [header, ...linhas].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-        const nome = state.levCliente ? state.levCliente.nome : 'levantamento';
-        enviarCsvComGoogleDrive(blob, csvFileNameFor(nome), 'Levantamento de estoque (CSV)', 'Baixado — verifique a pasta Downloads do celular');
+        enviarCsvComGoogleDrive(blob, levFileNameFor('csv'), 'Levantamento de estoque (CSV)', 'Baixado — verifique a pasta Downloads do celular');
       }
       async function exportLevPDF() {
         if (state.survey.length === 0) { showToast('Adicione algum item antes de exportar'); return; }
@@ -8092,7 +8106,7 @@
         });
 
         const blob = doc.output('blob');
-        const nomeArquivo = `levantamento-${todayStr()}.pdf`;
+        const nomeArquivo = levFileNameFor('pdf');
         shareOrDownloadBlob(blob, nomeArquivo, 'Levantamento de estoque (PDF)', 'PDF baixado — verifique a pasta Downloads do celular');
       }
 
