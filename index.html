@@ -2532,6 +2532,20 @@
       display: none;
     }
 
+    /* O display fica aqui (e não inline no HTML) pro .hidden conseguir esconder
+       a barra - com style="display:flex" no elemento, o botão aparecia sempre,
+       mesmo sem busca, e não fazia nada ao tocar (não havia resultado pra somar). */
+    .resultsAddAllBar {
+      display: flex;
+      justify-content: flex-end;
+      padding: 0 16px;
+      margin: 12px 0 8px;
+    }
+
+    .resultsAddAllBar.hidden {
+      display: none;
+    }
+
     .addAllBtn {
       background: var(--red);
       color: #fff;
@@ -4597,7 +4611,7 @@
         <div class="priceList" id="priceList"></div>
       </div>
 
-      <div class="resultsAddAllBar hidden" id="resultsAddAllBar" style="display:flex;justify-content:flex-end;padding:0 16px;margin:12px 0 8px;">
+      <div class="resultsAddAllBar hidden" id="resultsAddAllBar">
         <button type="button" class="addAllBtn" id="addAllResultsBtn">Adicionar todos ao orçamento</button>
       </div>
       <div class="results" id="resultsList"></div>
