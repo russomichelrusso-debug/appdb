@@ -140,7 +140,7 @@ Supabase, sem PR — não é mudança de código.
   também desliga o levantamento aberto, como o antigo botão fazia). Sem cliente, o card vira um
   botão tracejado "+ Selecionar cliente" (sai o rótulo "Cliente (opcional)").
 
-- **Política Comercial rev. 06 no pedido** (etapa 1 de 2): classificatório por canal, canal
+- **Política Comercial rev. 06 no pedido**: classificatório por canal, canal
   automático pelo cliente, desconto por prazo somado, prazos por canal e pedido mínimo por região
   (detalhes em "Motor de preço" no README). Decisões do usuário: desconto de prazo **automático e
   somado** ao classificatório (não multiplicado como o "Desc. adicional"); Marmoraria/Consumidor
@@ -148,8 +148,13 @@ Supabase, sem PR — não é mudança de código.
   **pela política, pelo nome** (o ERP ainda manda "Varejo Exclusive (12)"/"Premium (15)" da
   política antiga — os 131 clientes com esses valores foram corrigidos direto no banco em 09/2026).
   A tabela existe em dois lugares que precisam andar juntos: `CLASSI_POR_CANAL` (`index.html`) e
-  `routes/lib/politicaComercial.js`. Etapa 2 pendente: faixas de todos os canais no card do cliente
-  e classificatório pelos **últimos 12 meses** (régua móvel da política) no lugar do ano fechado.
+  `routes/lib/politicaComercial.js`.
+  Segunda parte: faixas de **todos os canais** no card/ficha do cliente (`FAIXAS` em
+  `routes/clientesClassificatorio.js`, chave sem acento/maiúscula via `faixaDoTipo`) e faixa medida
+  pelos **últimos 12 meses móveis** (decisão do usuário, régua da política) no lugar do ano fechado —
+  risco de queda = 12 meses abaixo do mínimo da faixa. O PIC continua pelo acumulado do ano.
+  Institucional, Construtora, Atacarejo e Home Center Master não têm faixa (fixo/"a consultar").
+  A ficha diz "Apuração mensal · ajuste pra baixo em 01/01 e 01/07" (item 6 da política).
 
 ## O que já tentamos e não deu certo
 

@@ -2,24 +2,32 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
-const { descontoPelaPolitica } = require('./lib/politicaComercial');
+const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 
 router.param('id', validarIdInteiro);
 
-// Faixas de faturamento (ano civil fechado, somado por Matriz/grupo de
-// "empresas irmãs" - ver PERIODO_CLASSIFICATORIO_* mais abaixo)
-// reverse-engineered da planilha "Classificatório" exportada do ERP em
-// 02/09/2026 - a coluna "Diferença" daquele relatório bateu exatamente
-// com estes limiares em ~280 linhas conferidas manualmente (na época, a
-// janela ainda era móvel de 12 meses; a windowing mudou depois, os
-// limiares de valor não). Fixas por decisão do usuário; se a ERP mudar
-// as faixas no futuro, ajustar aqui.
+// Faixas de faturamento líquido dos ÚLTIMOS 12 MESES (régua móvel), somado
+// por Matriz/grupo de "empresas irmãs" - Política Comercial rev. 06, item
+// 4. Institucional, Construtora, Atacarejo e Home Center Master não têm
+// faixa (fixos ou por lista da Cortag). Se a política mudar, ajustar aqui.
 const FAIXAS = {
   'Varejo Exclusive': { min: 0, max: 30000, proximaFaixa: 'Varejo Premium' },
   'Varejo Premium': { min: 30000, max: 50000, proximaFaixa: 'Varejo Master', faixaAnterior: 'Varejo Exclusive' },
   'Varejo Master': { min: 50000, max: null, faixaAnterior: 'Varejo Premium' },
-  'Atacado Premium': { min: 300000, max: null },
+  'Atacado Exclusive': { min: 0, max: 300000, proximaFaixa: 'Atacado Premium' },
+  'Atacado Premium': { min: 300000, max: 1000000, proximaFaixa: 'Atacado Master', faixaAnterior: 'Atacado Exclusive' },
+  'Atacado Master': { min: 1000000, max: null, faixaAnterior: 'Atacado Premium' },
+  'E-commerce Exclusive': { min: 0, max: 200000, proximaFaixa: 'E-commerce Premium' },
+  'E-commerce Premium': { min: 200000, max: 1000000, proximaFaixa: 'E-commerce Master', faixaAnterior: 'E-commerce Exclusive' },
+  'E-commerce Master': { min: 1000000, max: null, faixaAnterior: 'E-commerce Premium' },
+  // abaixo de 120 mil a política manda o cliente pras faixas do Varejo (nota 4)
+  'Home Center Premium': { min: 120000, max: null, faixaAnterior: 'Varejo Master' },
 };
+// "E-Commerce Máster" e "E-commerce Master" são a mesma faixa.
+const FAIXAS_POR_CHAVE = new Map(Object.entries(FAIXAS).map(([tipo, f]) => [chaveTipo(tipo), f]));
+function faixaDoTipo(tipo) {
+  return FAIXAS_POR_CHAVE.get(chaveTipo(tipo)) || null;
+}
 
 const LIMIAR_PERTO_DE_SUBIR = 0.15; // falta <= 15% do tamanho da faixa conta como "perto"
 const DIAS_SEM_COMPRAR_ALERTA = 60; // mesmo limiar já usado na "carteira antiga"
@@ -53,25 +61,21 @@ async function calcularEntradaTrimestralPeriodo(pool, cliente, periodoInicio, pe
 }
 
 // Calcula o status de classificatório (quanto falta pra subir/cair) de um
-// cliente, dado o tipo, a meta individual (PIC/Vl.Acordo, se houver) e o
-// faturamento do ANO EM ANDAMENTO (jan-dez do ano corrente, acumulando
-// conforme o ano avança - não mais o ano já fechado, que não tem mais
-// nada a fazer). Regra confirmada com o usuário: o cliente pode SUBIR de
-// faixa assim que o acumulado do ano corrente bater o teto, não importa em
-// que mês isso aconteça (na prática, permite "promoção antecipada" no meio
-// do ano, ex: em junho, sem esperar dezembro) - por isso a comparação usa
-// `faturamentoAnoCorrente` puro, sem checkpoint de calendário. Já a QUEDA
-// só é sinalizada quando o ritmo trimestral (calcularRitmoTrimestral) está
-// "atrasado" - comparar o acumulado parcial do ano contra o piso ANUAL sem
-// isso sinalizaria risco falso o ano inteiro (em fevereiro qualquer cliente
-// está "abaixo" de uma meta pensada pra dezembro).
+// cliente. Política Comercial rev. 06 (item 4): a faixa é decidida pelo
+// faturamento líquido dos ÚLTIMOS 12 MESES (régua móvel) - apuração mensal,
+// pode subir em qualquer mês que bater o teto; ficar abaixo do mínimo da
+// própria faixa é risco real de queda (a Cortag ajusta pra baixo em 01/01 e
+// 01/07). Meta individual (PIC/Vl.Acordo) continua contra o acumulado do
+// ano corrente, com o risco decidido pelo ritmo trimestral.
+// `faturamentoFaixa` na resposta = o valor que foi comparado com a faixa
+// (a barra de progresso do app usa esse).
 // Função pura - sem acesso a banco - pra ser testável direto.
 function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, faturamentoAnoCorrente, atrasadoNoRitmo }) {
-  const fatFechado = Number(faturamento12m) || 0;
-  const fat = Number(faturamentoAnoCorrente) || 0;
+  const fat12m = Number(faturamento12m) || 0;
+  const fatAnoCorrente = Number(faturamentoAnoCorrente) || 0;
   if (!tipo) return { classificado: false };
 
-  const base = { classificado: true, tipo, faturamento12m: fatFechado };
+  const base = { classificado: true, tipo, faturamento12m: fat12m };
 
   if (tipo === 'Rede') {
     // Acordo bilateral com a rede/cooperativa de compras - não depende de
@@ -81,20 +85,21 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, fa
 
   if (pic && vlAcordo) {
     // Meta individual negociada à parte (PIC), substitui a faixa padrão.
-    const falta = Math.max(0, Number(vlAcordo) - fat);
-    return { ...base, metaIndividual: Number(vlAcordo), faltaPraMeta: falta, emRiscoDeQueda: !!atrasadoNoRitmo, faixaMin: 0, faixaMax: Number(vlAcordo) };
+    const falta = Math.max(0, Number(vlAcordo) - fatAnoCorrente);
+    return { ...base, faturamentoFaixa: fatAnoCorrente, metaIndividual: Number(vlAcordo), faltaPraMeta: falta, emRiscoDeQueda: !!atrasadoNoRitmo, faixaMin: 0, faixaMax: Number(vlAcordo) };
   }
 
-  const faixa = FAIXAS[tipo];
+  const faixa = faixaDoTipo(tipo);
   if (!faixa) return { ...base, semFaixaDefinida: true };
 
+  const fat = fat12m;
+  base.faturamentoFaixa = fat;
   if (fat < faixa.min) {
-    // Abaixo do mínimo da própria faixa (no acumulado do ano corrente) -
-    // só é risco de cair DE VERDADE se o ritmo trimestral já está atrasado;
-    // senão é só "ainda não chegou lá" (normal em qualquer mês antes de dezembro).
+    // Abaixo do mínimo da própria faixa nos últimos 12 meses - risco real
+    // de cair no próximo ajuste (01/01 ou 01/07).
     return {
       ...base,
-      emRiscoDeQueda: !!atrasadoNoRitmo,
+      emRiscoDeQueda: true,
       faixaAnterior: faixa.faixaAnterior || null,
       faltaPraManter: faixa.min - fat,
       faixaMin: 0,
@@ -136,14 +141,14 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
 
   let metaAnual = null;
   if (pic && vlAcordo) metaAnual = Number(vlAcordo);
-  else if (FAIXAS[tipo]) metaAnual = FAIXAS[tipo].max != null ? FAIXAS[tipo].max : FAIXAS[tipo].min;
+  else if (faixaDoTipo(tipo)) metaAnual = faixaDoTipo(tipo).max != null ? faixaDoTipo(tipo).max : faixaDoTipo(tipo).min;
   if (metaAnual == null) return { historico, semMeta: true };
 
   // Piso por trimestre = quanto precisa faturar por trimestre pra não cair
   // da faixa atual (mínimo da própria faixa, dividido em 4). Não se aplica
   // quando não há risco de queda possível (Exclusive, min=0) nem quando a
   // meta é individual (PIC/Vl.Acordo não tem "piso" separado, só a meta).
-  const faixaAtual = !pic || !vlAcordo ? FAIXAS[tipo] : null;
+  const faixaAtual = !pic || !vlAcordo ? faixaDoTipo(tipo) : null;
   const pisoPorTrimestre = faixaAtual && faixaAtual.min > 0 ? faixaAtual.min / 4 : null;
 
   const metaPorTrimestre = metaAnual / 4;
@@ -189,15 +194,12 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
   return { historico, metaAnual, metaPorTrimestre, pisoPorTrimestre, situacao, ritmoNecessarioProximoTrimestre, faltaTrimestreAtual };
 }
 
-// A revisão do classificatório é feita pela empresa em janeiro, olhando o
-// ano civil fechado anterior (ex: revisão de janeiro/2027 usa o
-// faturamento de jan-dez/2026 inteiro) - não uma janela móvel de "últimos
-// 12 meses até hoje". Por decisão do usuário, simplificamos pra tratar
-// todo cliente nesse único ciclo de janeiro (sem o caso à parte de
-// clientes reativados em julho, que teriam 1º ciclo em julho antes de
-// migrar pra janeiro - não temos hoje nenhuma data de "reativação"
-// salva pra sustentar essa exceção). O número fica travado o ano
-// inteiro e só muda quando o ano civil vira.
+// O classificatório usa os ÚLTIMOS 12 MESES (régua móvel) - Política
+// Comercial rev. 06, item 4 (decisão do usuário, trocando o ano civil
+// fechado que valia antes). Os limites do ano civil abaixo continuam só pro
+// comparativo "acumulado do ano corrente x mesmo período do ano anterior"
+// da ficha do cliente.
+const JANELA_12M_SQL = `CURRENT_DATE - INTERVAL '12 months'`;
 const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', CURRENT_DATE) - INTERVAL '1 year'`;
 const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // exclusivo
 
@@ -213,7 +215,7 @@ const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // e
 // ANDAMENTO (ainda não fechado, não usado pra decidir faixa - só pra o
 // vendedor acompanhar o progresso do ano corrente lado a lado com o
 // último ano fechado).
-function sqlFaturamentoAnoFechadoPorCliente(agruparPorMatrizGrupo) {
+function sqlFaturamentoClassificatorioPorCliente(agruparPorMatrizGrupo) {
   const joinC2 = agruparPorMatrizGrupo
     ? `LEFT JOIN clientes c2 ON c2.id = c.id
     OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)`
@@ -222,8 +224,7 @@ function sqlFaturamentoAnoFechadoPorCliente(agruparPorMatrizGrupo) {
   SELECT c.id AS cliente_id,
          COALESCE(SUM(poi.valor) FILTER (
            WHERE poi.status = 'faturado'
-             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
-             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
+             AND poi.data_faturamento > ${JANELA_12M_SQL}
          ), 0) AS faturamento_12m,
          COALESCE(SUM(poi.valor) FILTER (
            WHERE poi.status = 'faturado'
@@ -248,9 +249,9 @@ function sqlFaturamentoAnoFechadoPorCliente(agruparPorMatrizGrupo) {
 // Reaproveitada pelo status individual (clientes não-Rede) e pelos alertas
 // em lote - continua exportada com o mesmo nome pra não quebrar quem já
 // importa (routes/relatorios.js).
-const SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = sqlFaturamentoAnoFechadoPorCliente(true);
+const SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE = sqlFaturamentoClassificatorioPorCliente(true);
 // Variante individual (sem somar matriz_grupo) - só pra clientes Rede.
-const SQL_FATURAMENTO_ANO_FECHADO_INDIVIDUAL_POR_CLIENTE = sqlFaturamentoAnoFechadoPorCliente(false);
+const SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE = sqlFaturamentoClassificatorioPorCliente(false);
 
 // Status de classificatório de UM cliente - aberto pra qualquer usuário
 // logado (não é ação de admin, é consulta do dia a dia na ficha do cliente).
@@ -267,12 +268,12 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // nunca de um "new Date()" separado no Node, que teria que só torcer pra
     // concordar com o fuso do CURRENT_DATE do banco. Cliente Rede usa a
     // variante INDIVIDUAL (sem somar matriz_grupo) - ver comentário na
-    // função sqlFaturamentoAnoFechadoPorCliente.
+    // função sqlFaturamentoClassificatorioPorCliente.
     const fatResult = await pool.query(
       `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
               EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual,
               EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx
-       FROM (${ehRede ? SQL_FATURAMENTO_ANO_FECHADO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
+       FROM (${ehRede ? SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
@@ -363,8 +364,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       ultimaCompra,
       matrizGrupo: cliente.matriz_grupo,
       trimestral: ritmo,
-      periodoReferencia: { anoInicio: anoPeriodo, anoFim: anoPeriodo },
-      proximaRevisao: `janeiro/${anoPeriodo + 2}`,
+      periodoReferencia: { janela: 'ultimos_12_meses', anoAnterior: anoPeriodo },
+      revisao: 'Apuração mensal · ajuste pra baixo em 01/01 e 01/07',
       anoCorrente: anoPeriodo + 1,
       faturamentoAnoCorrente,
       faturamentoMesmoPeriodoAnoAnterior,
@@ -394,9 +395,8 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
       `SELECT c.id, c.nome, c.documento, c.classificatorio_tipo,
               COALESCE(SUM(poi.valor) FILTER (
                 WHERE poi.status = 'faturado'
-                  AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
-                  AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_FIM_SQL}
-              ), 0) AS faturamento_ano_fechado,
+                  AND poi.data_faturamento > ${JANELA_12M_SQL}
+              ), 0) AS faturamento_12m,
               COALESCE(SUM(poi.valor) FILTER (
                 WHERE poi.status = 'faturado'
                   AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}
@@ -406,7 +406,7 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
        LEFT JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c.codigo_oficial
        WHERE c.matriz_grupo = $1
        GROUP BY c.id
-       ORDER BY faturamento_ano_fechado ASC, c.nome ASC`,
+       ORDER BY faturamento_12m ASC, c.nome ASC`,
       [matrizGrupo]
     );
 
@@ -417,7 +417,7 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
         nome: r.nome,
         documento: r.documento,
         classificatorioTipo: r.classificatorio_tipo,
-        faturamentoAnoFechado: Number(r.faturamento_ano_fechado),
+        faturamento12m: Number(r.faturamento_12m),
         faturamentoAnoCorrente: Number(r.faturamento_ano_corrente),
         ultimaCompra: r.ultima_compra,
       })),
@@ -434,7 +434,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
   try {
     const [result, clientesResult, anoResult, trimResult] = await Promise.all([
       pool.query(
-        `${SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE}
+        `${SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE}
          WHERE c.classificatorio_tipo IS NOT NULL
          GROUP BY c.id`
       ),
@@ -497,7 +497,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
       if (status.emRiscoDeQueda) {
         riscoDeQueda.push(item);
       } else if (status.faltaPraProximaFaixa != null) {
-        const faixa = FAIXAS[cliente.classificatorio_tipo];
+        const faixa = faixaDoTipo(cliente.classificatorio_tipo);
         const tamanhoFaixa = faixa && faixa.max != null ? faixa.max - faixa.min : null;
         if (tamanhoFaixa && status.faltaPraProximaFaixa <= tamanhoFaixa * LIMIAR_PERTO_DE_SUBIR) {
           pertoDeSubir.push(item);
@@ -637,4 +637,5 @@ module.exports = router;
 module.exports.calcularStatusClassificatorio = calcularStatusClassificatorio;
 module.exports.calcularRitmoTrimestral = calcularRitmoTrimestral;
 module.exports.FAIXAS = FAIXAS;
-module.exports.SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE = SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE;
+module.exports.faixaDoTipo = faixaDoTipo;
+module.exports.SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE = SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE;

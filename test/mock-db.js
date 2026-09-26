@@ -288,20 +288,20 @@ async function query(sql, params = []) {
     // consulta, comparar quem no grupo compra menos.
     const grupo = clientes.filter(c => c.matriz_grupo === params[0]);
     const ano = anoClassificatorioFechado();
-    const inicioStr = `${ano}-01-01`;
     const fimStr = `${ano + 1}-01-01`;
+    const inicio12m = inicioJanela12m();
     const rows = grupo.map(c => {
       const itensDoCliente = pedidosOficiaisItens.filter(it => it.cliente_codigo_oficial === c.codigo_oficial && it.status === 'faturado');
-      const faturamento_ano_fechado = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr)
+      const faturamento_12m = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento > inicio12m)
         .reduce((s, it) => s + (Number(it.valor) || 0), 0);
       const faturamento_ano_corrente = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento >= fimStr)
         .reduce((s, it) => s + (Number(it.valor) || 0), 0);
       const datas = itensDoCliente.map(it => it.data_faturamento).filter(Boolean).sort();
       return {
         id: c.id, nome: c.nome, documento: c.documento, classificatorio_tipo: c.classificatorio_tipo,
-        faturamento_ano_fechado, faturamento_ano_corrente, ultima_compra: datas.length ? datas[datas.length - 1] : null,
+        faturamento_12m, faturamento_ano_corrente, ultima_compra: datas.length ? datas[datas.length - 1] : null,
       };
-    }).sort((a, b) => a.faturamento_ano_fechado - b.faturamento_ano_fechado || a.nome.localeCompare(b.nome));
+    }).sort((a, b) => a.faturamento_12m - b.faturamento_12m || a.nome.localeCompare(b.nome));
     return { rows };
   }
   if (s.includes("DATE_TRUNC('QUARTER', POI.DATA_IMPLANTACAO)")) {
@@ -860,6 +860,11 @@ function anoClassificatorioFechado() {
   return new Date().getUTCFullYear() - 1;
 }
 function anoAtual() { return new Date().getUTCFullYear(); }
+// CURRENT_DATE - INTERVAL '12 months' (YYYY-MM-DD)
+function inicioJanela12m() {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), d.getUTCDate())).toISOString().slice(0, 10);
+}
 function trimestreAtualIdxAgora() { return Math.floor(new Date().getUTCMonth() / 3); } // 0-3
 // Início (YYYY-MM-DD) do trimestre civil de 3 trimestres atrás, contando do
 // trimestre em andamento agora - mesma janela de `date_trunc('quarter',
@@ -871,7 +876,7 @@ function inicioJanelaTrimestralMovel() {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`;
 }
 
-// Reproduz sqlFaturamentoAnoFechadoPorCliente de routes/clientesClassificatorio.js -
+// Reproduz sqlFaturamentoClassificatorioPorCliente de routes/clientesClassificatorio.js -
 // soma faturado no ano civil fechado mais recente, agrupado por
 // matriz_grupo (ou o próprio cliente, se não tiver grupo) - ou só o
 // próprio cliente quando `agruparPorMatrizGrupo` é false (usado pra Rede,
@@ -886,15 +891,18 @@ function calcularFaturamentoAnoFechadoParaCliente(clienteId, agruparPorMatrizGru
   const ano = anoClassificatorioFechado();
   const inicioStr = `${ano}-01-01`;
   const fimStr = `${ano + 1}-01-01`;
-  const itensJanela = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= inicioStr && it.data_faturamento < fimStr);
+  // Últimos 12 meses (régua móvel) - `data_faturamento > CURRENT_DATE -
+  // INTERVAL '12 months'` da rota real (Política Comercial rev. 06).
+  const inicio12m = inicioJanela12m();
+  const itensJanela = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento > inicio12m);
   const faturamento_12m = itensJanela.reduce((s, it) => s + (Number(it.valor) || 0), 0);
   // Ano em andamento (ainda não fechado) - mesma ideia de
-  // faturamento_ano_corrente em SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE.
+  // faturamento_ano_corrente em SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE.
   const itensAnoCorrente = itensFaturados.filter(it => it.data_faturamento && it.data_faturamento >= fimStr);
   const faturamento_ano_corrente = itensAnoCorrente.reduce((s, it) => s + (Number(it.valor) || 0), 0);
   // Mesmo período do ano fechado (mesma contagem de dias decorridos no ano
   // corrente, mas no ano fechado) - espelha a lógica SQL adicionada em
-  // SQL_FATURAMENTO_ANO_FECHADO_POR_CLIENTE (PERIODO_CLASSIFICATORIO_INICIO_SQL
+  // SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE (PERIODO_CLASSIFICATORIO_INICIO_SQL
   // + (CURRENT_DATE - PERIODO_CLASSIFICATORIO_FIM_SQL)).
   const agora = new Date();
   const diasDecorridos = Math.floor((Date.UTC(agora.getUTCFullYear(), agora.getUTCMonth(), agora.getUTCDate()) - Date.UTC(agora.getUTCFullYear(), 0, 1)) / 86400000);
@@ -952,4 +960,5 @@ module.exports = {
   __getClientes: () => clientes,
   __getLevantamentos: () => levantamentos,
   __anoClassificatorioFechado: anoClassificatorioFechado,
+  __inicioJanela12m: inicioJanela12m,
 };

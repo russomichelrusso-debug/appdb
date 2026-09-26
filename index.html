@@ -7646,10 +7646,9 @@
           partes.push(`<div class="clienteObjetivo" title="${titulo}"><span>${rotulo}</span><b class="${classeValor}">${valor}</b></div>`);
         }
         if (status.faixaMin != null && status.faixaMax != null) {
-          // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
-          // faixas devolvidas pela API já são calculadas sobre o ano em
-          // andamento, então a posição na barra precisa ser do mesmo ano.
-          const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
+          // faturamentoFaixa: o valor que a API comparou com a faixa (12
+          // meses móveis; no PIC, o acumulado do ano) - a barra usa o mesmo.
+          const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           partes.push(`<div class="clienteBarra"><i class="${status.emRiscoDeQueda ? 'risco' : (classeValor === 'ok' ? 'ok' : '')}" style="width:${pct}%"></i></div>`);
         }
         // Ritmo trimestral - pedido do usuário pra aparecer pra TODOS os
@@ -9755,7 +9754,7 @@
       async function apiClassificatorioStatus(clienteId) {
         return apiFetch(`/api/clientes/${clienteId}/classificatorio/status`);
       }
-      const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master', 'Atacado Premium': 'Atacado Premium' };
+      const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master' };
       // Compara dois valores de faturamento (tipicamente: acumulado do ano
       // corrente vs. o MESMO PERÍODO do ano anterior, não o ano anterior
       // inteiro - comparar contra o ano fechado inteiro sempre parece
@@ -9802,7 +9801,7 @@
         // Rede não soma faturamento com "empresas irmãs" - matriz_grupo ali
         // guarda o nome da REDE/COOPERATIVA (várias lojas sem relação
         // societária entre si), então a API já devolve faturamento/histórico
-        // trimestral individuais pra Rede (ver sqlFaturamentoAnoFechadoPorCliente
+        // trimestral individuais pra Rede (ver sqlFaturamentoClassificatorioPorCliente
         // no backend) - o "(grupo)" ao lado dos rótulos abaixo não se aplica.
         const sufixoGrupo = !status.ehRede && status.matrizGrupo ? ' (grupo)' : '';
         const partes = [];
@@ -9812,22 +9811,21 @@
             independente do faturamento deste cliente, não tem faixa pra subir ou cair. Os números abaixo são só deste cliente, não somados com o resto da rede.</p>` : ''}
           <div style="display:flex;gap:16px;margin-top:10px;">
             <div>
-              <div class="hist-clientLabel">Faturamento ${status.periodoReferencia ? escapeHtml(String(status.periodoReferencia.anoInicio)) : 'últimos 12 meses'}${sufixoGrupo}</div>
+              <div class="hist-clientLabel">Faturamento últimos 12 meses${sufixoGrupo}</div>
               <div style="font-weight:700;font-size:18px;margin-top:2px;">${brl(status.faturamento12m)}</div>
             </div>
             ${status.anoCorrente ? `<div>
               <div class="hist-clientLabel">Acumulado ${escapeHtml(String(status.anoCorrente))}${sufixoGrupo}</div>
               <div style="font-weight:700;font-size:18px;margin-top:2px;color:${corAcumuladoAnoCorrente(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior)};">${brl(status.faturamentoAnoCorrente)}</div>
-              ${status.periodoReferencia ? `<div style="font-size:11px;color:var(--gray);margin-top:2px;">${textoComparativoAnoAnterior(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior, status.periodoReferencia.anoInicio)}</div>` : ''}
+              ${status.periodoReferencia ? `<div style="font-size:11px;color:var(--gray);margin-top:2px;">${textoComparativoAnoAnterior(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior, status.periodoReferencia.anoAnterior)}</div>` : ''}
             </div>` : ''}
           </div>
-          ${status.proximaRevisao && !status.ehRede ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;">Próxima revisão oficial: ${escapeHtml(status.proximaRevisao)}</div>` : ''}`);
+          ${status.revisao && !status.ehRede ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;">${escapeHtml(status.revisao)}</div>` : ''}`);
 
         if (!status.ehRede && status.faixaMin != null && status.faixaMax != null) {
-          // faturamentoAnoCorrente (não faturamento12m/ano fechado) - as
-          // faixas devolvidas pela API já são calculadas sobre o ano em
-          // andamento, então a posição na barra precisa ser do mesmo ano.
-          const pct = Math.max(0, Math.min(100, ((status.faturamentoAnoCorrente - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
+          // faturamentoFaixa: o valor que a API comparou com a faixa (12
+          // meses móveis; no PIC, o acumulado do ano) - a barra usa o mesmo.
+          const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           const cor = status.emRiscoDeQueda ? 'var(--danger)' : 'var(--red)';
           partes.push(`
             <div style="background:var(--fill);border-radius:6px;height:8px;margin-top:10px;overflow:hidden;">
@@ -9947,7 +9945,7 @@
           return `
         <button type="button" class="clientPickerItem"${atual ? ' disabled style="opacity:.6;cursor:default;"' : ''} data-grupo-cliente-id="${m.id}">
           <div class="cpName"><span>${escapeHtml(m.nome)}${atual ? ' · atual' : ''}</span></div>
-          <div class="cpMeta">${brl(m.faturamentoAnoFechado)} no ano fechado · ${brl(m.faturamentoAnoCorrente)} no ano corrente${m.ultimaCompra ? ' · última compra ' + new Date(m.ultimaCompra).toLocaleDateString('pt-BR') : ' · sem compras registradas'}</div>
+          <div class="cpMeta">${brl(m.faturamento12m)} nos últimos 12 meses · ${brl(m.faturamentoAnoCorrente)} no ano corrente${m.ultimaCompra ? ' · última compra ' + new Date(m.ultimaCompra).toLocaleDateString('pt-BR') : ' · sem compras registradas'}</div>
         </button>`;
         }).join('');
         wrap.querySelectorAll('[data-grupo-cliente-id]').forEach(btn => {
