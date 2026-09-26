@@ -171,29 +171,34 @@ async function main() {
   assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
   assert(typeof res.body[0].quantidade_contada === 'string', 'quantidade_contada vem como string (NUMERIC do Postgres) - front precisa converter com Number(), nunca somar direto');
 
-  // 13) classificatório: calcula sobre o ANO CIVIL FECHADO anterior, não uma
-  // janela móvel de 12 meses (ver routes/clientesClassificatorio.js) - semeia
-  // um cliente com faturamento no ano fechado (conta) e um pedido no ano
-  // corrente ainda não fechado (não deve contar, mesmo sendo mais recente).
+  // 13) classificatório: calcula sobre os ÚLTIMOS 12 MESES (régua móvel da
+  // Política Comercial rev. 06 - ver routes/clientesClassificatorio.js) -
+  // venda de 400 dias atrás não conta, de 200 dias atrás conta. Datas
+  // relativas a hoje, pra o teste não depender do mês em que roda.
   const anoFechado = mockDb.__anoClassificatorioFechado();
+  const diasAtras = (n) => { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+  const dataPC1 = diasAtras(400);
+  const dataPC2 = diasAtras(200);
   mockDb.__seed({
     clientes: [{
       id: 9001, nome: 'CLIENTE CLASSIFICATORIO TESTE', documento: '99988877000166', codigo_oficial: 'COD9001',
       classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 17, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
     }],
     pedidosOficiaisItens: [
-      { nr_pedido: 'PC1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 43000, data_faturamento: `${anoFechado}-06-15`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
-      { nr_pedido: 'PC2', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, data_implantacao: `${anoFechado + 1}-01-05`, status: 'faturado' },
+      { nr_pedido: 'PC1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 43000, data_faturamento: dataPC1, data_implantacao: dataPC1, status: 'faturado' },
+      { nr_pedido: 'PC2', codigo_sku: '60863', cliente_codigo_oficial: 'COD9001', quantidade: 1, valor: 500000, data_faturamento: dataPC2, data_implantacao: dataPC2, status: 'faturado' },
     ],
   });
   res = await req('GET', '/api/clientes/9001/classificatorio/status');
   assert(
-    res.status === 200 && res.body.faturamento12m === 43000 && res.body.periodoReferencia?.anoInicio === anoFechado,
-    `classificatório soma só o ano civil fechado (${anoFechado}), ignora pedido do ano corrente ainda não fechado`
+    res.status === 200 && res.body.faturamento12m === 500000 && res.body.faturamentoFaixa === 500000
+      && res.body.periodoReferencia?.janela === 'ultimos_12_meses' && !res.body.proximaRevisao,
+    'classificatório soma os últimos 12 meses (conta a venda de 200 dias, ignora a de 400 dias)'
   );
+  const esperadoAnoCorrente = dataPC2 >= `${anoFechado + 1}-01-01` ? 500000 : 0;
   assert(
-    res.body.anoCorrente === anoFechado + 1 && res.body.faturamentoAnoCorrente === 500000,
-    'classificatório também traz o acumulado do ano em andamento (pra acompanhar ao lado do ano fechado)'
+    res.body.anoCorrente === anoFechado + 1 && res.body.faturamentoAnoCorrente === esperadoAnoCorrente,
+    'classificatório também traz o acumulado do ano em andamento (comparativo da ficha do cliente)'
   );
 
   // 13b) faturamentoMesmoPeriodoAnoAnterior: comparar o acumulado do ano
@@ -229,32 +234,39 @@ async function main() {
   // trimestres recentes" (ex: em setembro/2026, precisa ver T4/2025 em
   // diante, não T2/2025 pra trás). PC1 (junho do ano fechado) fica de fora
   // dessa janela; PC2 (janeiro do ano em andamento) entra.
-  const trimestres = (res.body.trimestral?.historico || []).map(t => t.trimestre.slice(0, 7));
+  const somaTrimestres = (res.body.trimestral?.historico || []).reduce((acc, t) => acc + Number(t.faturado), 0);
   assert(
-    !trimestres.some(t => t === `${anoFechado}-06`) && trimestres.some(t => t === `${anoFechado + 1}-01`),
-    `gráfico trimestral mostra a janela móvel recente (tem ${anoFechado + 1}-01, não tem ${anoFechado}-06): ${JSON.stringify(trimestres)}`
+    somaTrimestres === 500000,
+    `gráfico trimestral mostra a janela móvel recente (tem a venda de 200 dias, não a de 400 dias): ${somaTrimestres}`
   );
 
-  // 14b) regra confirmada com o usuário: subir de faixa usa o ANO CORRENTE
-  // (não o fechado) e pode acontecer a qualquer momento do ano assim que
-  // bater o teto (não precisa esperar dezembro); cair só é sinalizado
-  // quando o ritmo trimestral está "atrasado" - senão mostraria risco
-  // falso o ano inteiro (ex: em fevereiro, todo mundo está "abaixo" de uma
-  // meta pensada pra dezembro). Teste unitário direto na função pura,
-  // sem precisar montar cenário de trimestres reais.
+  // 14b) Política Comercial rev. 06: a faixa é decidida pelos últimos 12
+  // meses - sobe assim que bater o teto (apuração mensal) e ficar abaixo do
+  // mínimo da própria faixa é risco de queda, sem depender do ritmo
+  // trimestral. Faixas de todos os canais. Teste direto na função pura.
   const { calcularStatusClassificatorio } = require('../routes/clientesClassificatorio');
-  let s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 25000, faturamentoAnoCorrente: 55000, atrasadoNoRitmo: false });
+  let s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 55000, faturamentoAnoCorrente: 1000, atrasadoNoRitmo: false });
   assert(
-    s.jaQualificaProximaFaixa === true && s.faltaPraProximaFaixa == null,
-    'sobe de faixa assim que o ano corrente bate o teto, mesmo com o ano fechado abaixo (promoção não espera dezembro)'
+    s.jaQualificaProximaFaixa === true && s.faltaPraProximaFaixa == null && s.faturamentoFaixa === 55000,
+    'sobe de faixa quando os últimos 12 meses batem o teto (independe do acumulado do ano)'
   );
-  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 10000, atrasadoNoRitmo: false });
-  assert(s.emRiscoDeQueda === false, 'acumulado baixo no início do ano não é risco de queda se o ritmo trimestral não está atrasado (evita alarme falso)');
   s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 10000, atrasadoNoRitmo: true });
+  assert(s.emRiscoDeQueda === false, 'últimos 12 meses acima do mínimo da faixa não é risco de queda');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 40000, faturamentoAnoCorrente: 90000, atrasadoNoRitmo: false });
   assert(
-    s.emRiscoDeQueda === true && s.faltaPraManter === 40000,
-    'sinaliza risco de queda quando o ritmo trimestral está atrasado (faltam R$40.000 pra chegar no mínimo de R$50.000)'
+    s.emRiscoDeQueda === true && s.faltaPraManter === 10000 && s.faixaAnterior === 'Varejo Premium',
+    'últimos 12 meses abaixo do mínimo (40 mil < 50 mil) é risco de queda: faltam R$10.000'
   );
+  s = calcularStatusClassificatorio({ tipo: 'Atacado Premium', faturamento12m: 800000 });
+  assert(s.faltaPraProximaFaixa === 200000 && s.proximaFaixa === 'Atacado Master', 'Atacado Premium com 800 mil: faltam 200 mil pra Master (1 milhão)');
+  s = calcularStatusClassificatorio({ tipo: 'E-Commerce Exclusive', faturamento12m: 150000 });
+  assert(s.faltaPraProximaFaixa === 50000 && s.proximaFaixa === 'E-commerce Premium', 'E-commerce Exclusive com 150 mil: faltam 50 mil pra Premium (nome do ERP com outra grafia resolve a faixa)');
+  s = calcularStatusClassificatorio({ tipo: 'Home Center Premium', faturamento12m: 100000 });
+  assert(s.emRiscoDeQueda === true && s.faltaPraManter === 20000, 'Home Center Premium abaixo de 120 mil é risco de queda');
+  s = calcularStatusClassificatorio({ tipo: 'Locação', faturamento12m: 5000 });
+  assert(s.classificado === true && s.semFaixaDefinida === true, 'Locação (Institucional) é fixo, sem faixa');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', pic: true, vlAcordo: 80000, faturamento12m: 90000, faturamentoAnoCorrente: 30000, atrasadoNoRitmo: true });
+  assert(s.faltaPraMeta === 50000 && s.emRiscoDeQueda === true && s.faturamentoFaixa === 30000, 'meta individual (PIC) continua contra o acumulado do ano, com risco pelo ritmo');
 
   // 14a) faltaTrimestreAtual: quanto falta pra bater a meta DESTE trimestre
   // especificamente (não o ritmo ajustado pros trimestres seguintes) -
@@ -332,24 +344,22 @@ async function main() {
       },
     ],
     pedidosOficiaisItens: [
-      // Ano fechado (pra conferir faturamento12m) - dentro da janela trimestral
-      // móvel também entra o par de janeiro do ano corrente (mesmo mês já
-      // confirmado "dentro da janela" no teste 14 acima, com PC2).
-      { nr_pedido: 'PC7', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 8000, data_faturamento: `${anoFechado}-06-15`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
-      { nr_pedido: 'PC7B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 3000, data_faturamento: `${anoFechado + 1}-01-05`, data_implantacao: `${anoFechado + 1}-01-05`, status: 'faturado' },
-      { nr_pedido: 'PC8', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 900000, data_faturamento: `${anoFechado}-06-15`, data_implantacao: `${anoFechado}-06-15`, status: 'faturado' },
-      { nr_pedido: 'PC8B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 500000, data_faturamento: `${anoFechado + 1}-01-05`, data_implantacao: `${anoFechado + 1}-01-05`, status: 'faturado' },
+      // Tudo dentro dos últimos 12 meses e da janela trimestral móvel.
+      { nr_pedido: 'PC7', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 8000, data_faturamento: diasAtras(200), data_implantacao: diasAtras(200), status: 'faturado' },
+      { nr_pedido: 'PC7B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9005', quantidade: 1, valor: 3000, data_faturamento: diasAtras(100), data_implantacao: diasAtras(100), status: 'faturado' },
+      { nr_pedido: 'PC8', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 900000, data_faturamento: diasAtras(200), data_implantacao: diasAtras(200), status: 'faturado' },
+      { nr_pedido: 'PC8B', codigo_sku: '60863', cliente_codigo_oficial: 'COD9006', quantidade: 1, valor: 500000, data_faturamento: diasAtras(100), data_implantacao: diasAtras(100), status: 'faturado' },
     ],
   });
   const resRede = await req('GET', '/api/clientes/9005/classificatorio/status');
   assert(
-    resRede.status === 200 && resRede.body.ehRede === true && resRede.body.faturamento12m === 8000,
-    `cliente Rede mostra só o próprio faturamento (8.000), não somado com a outra loja da rede (900.000): ${resRede.body.faturamento12m}`
+    resRede.status === 200 && resRede.body.ehRede === true && resRede.body.faturamento12m === 11000,
+    `cliente Rede mostra só o próprio faturamento (11.000), não somado com a outra loja da rede (1,4 milhão): ${resRede.body.faturamento12m}`
   );
   const trimestresRede = (resRede.body.trimestral?.historico || []).reduce((s, t) => s + Number(t.faturado), 0);
   assert(
-    trimestresRede === 3000,
-    `histórico trimestral do cliente Rede também é só individual (3.000), não soma a outra loja (500.000): ${trimestresRede}`
+    trimestresRede === 11000,
+    `histórico trimestral do cliente Rede também é só individual (11.000), não soma a outra loja: ${trimestresRede}`
   );
 
   // 15) grupo (matriz_grupo) do classificatório: um cliente sem grupo não
@@ -367,7 +377,7 @@ async function main() {
       classificatorio_tipo: 'Varejo Exclusive', classificatorio_desconto: 15, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
     }],
     pedidosOficiaisItens: [
-      { nr_pedido: 'PC3', codigo_sku: '60863', cliente_codigo_oficial: 'COD9002', quantidade: 1, valor: 10000, data_faturamento: `${anoFechado}-06-15`, status: 'faturado' },
+      { nr_pedido: 'PC3', codigo_sku: '60863', cliente_codigo_oficial: 'COD9002', quantidade: 1, valor: 10000, data_faturamento: diasAtras(150), status: 'faturado' },
     ],
   });
 
@@ -392,8 +402,8 @@ async function main() {
   const nomes = (res.body.membros || []).map(m => m.nome);
   assert(
     res.status === 200 && res.body.matrizGrupo === 'GRUPO TESTE' && res.body.membros.length === 2
-      && nomes[0] === 'CLIENTE CLASSIFICATORIO TESTE 2 (GRUPO)' && res.body.membros[0].faturamentoAnoFechado === 10000
-      && res.body.membros[1].faturamentoAnoFechado === 43000,
+      && nomes[0] === 'CLIENTE CLASSIFICATORIO TESTE 2 (GRUPO)' && res.body.membros[0].faturamento12m === 10000
+      && res.body.membros[1].faturamento12m === 500000,
     `lista os dois membros do grupo, o que compra menos primeiro: ${JSON.stringify(res.body.membros)}`
   );
 
