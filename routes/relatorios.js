@@ -351,6 +351,80 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
   }
 });
 
+// Comprados no último ano (por SKU) - o Levantamento mostra os que não foram
+// contados na prateleira: produto que acabou na loja não tem o que escanear e
+// sairia do pedido (ex.: 3 rebolos na última compra, nenhum na prateleira).
+// Complementa as sugestões de recompra acima, que cobrem o que ele NÃO compra
+// há mais de 1 ano. Histórico = faturado oficial + pedidos do app; código
+// promocional conta como o base. qtd_ultima_compra = soma do SKU no dia da
+// compra mais recente - vira a quantidade sugerida pro pedido.
+const COMPRADOS_RECENTES_DIAS = 365;
+const COMPRADOS_RECENTES_LIMITE = 60;
+router.get('/clientes/:id/comprados-recentes', async (req, res) => {
+  try {
+    const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]);
+    if (cliente.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const codigoOficial = cliente.rows[0].codigo_oficial;
+
+    const [oficial, app, produtos] = await Promise.all([
+      codigoOficial
+        ? pool.query(
+          `/* comprados-recentes:oficial */
+           SELECT codigo_sku, data_faturamento AS data, quantidade, nr_pedido AS pedido
+           FROM pedidos_oficiais_itens
+           WHERE status = 'faturado' AND cliente_codigo_oficial = $1
+             AND data_faturamento > CURRENT_DATE - $2::int`,
+          [codigoOficial, COMPRADOS_RECENTES_DIAS])
+        : Promise.resolve({ rows: [] }),
+      pool.query(
+        `/* comprados-recentes:app */
+         SELECT p.codigo_sku, ped.data_pedido::date AS data, pi.quantidade, 'app' || ped.id AS pedido
+         FROM pedidos ped
+         JOIN pedido_itens pi ON pi.pedido_id = ped.id
+         JOIN produtos p ON p.id = pi.produto_id
+         WHERE ped.cliente_id = $1 AND ped.data_pedido::date > CURRENT_DATE - $2::int`,
+        [req.params.id, COMPRADOS_RECENTES_DIAS]),
+      pool.query('SELECT codigo_sku, nome FROM produtos'),
+    ]);
+
+    const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
+    const codigosConhecidos = new Set(nomePorCodigo.keys());
+    const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+    const porSku = new Map();
+    // Pedido feito pelo app e faturado no mesmo dia é a mesma compra: nesse
+    // dia vale só a quantidade do faturado (senão somaria em dobro).
+    const linhas = [
+      ...oficial.rows.map(l => ({ ...l, origem: 'oficial' })),
+      ...app.rows.map(l => ({ ...l, origem: 'app' })),
+    ];
+    for (const linha of linhas) {
+      if (!linha.data) continue;
+      const sku = codigoBase(String(linha.codigo_sku), codigosConhecidos);
+      if (!nomePorCodigo.has(sku)) continue; // fora do catálogo: o app não tem como incluir
+      const d = dia(linha.data);
+      const g = porSku.get(sku) || { codigo_sku: sku, nome: nomePorCodigo.get(sku), ultima_compra: d, qtd: { oficial: 0, app: 0 }, pedidos: new Set() };
+      if (d > g.ultima_compra) { g.ultima_compra = d; g.qtd = { oficial: 0, app: 0 }; }
+      if (d === g.ultima_compra) g.qtd[linha.origem] += Number(linha.quantidade) || 0;
+      g.pedidos.add(String(linha.pedido));
+      porSku.set(sku, g);
+    }
+    const lista = [...porSku.values()]
+      .sort((a, b) => b.ultima_compra.localeCompare(a.ultima_compra) || b.pedidos.size - a.pedidos.size)
+      .slice(0, COMPRADOS_RECENTES_LIMITE)
+      .map(g => ({
+        codigo_sku: g.codigo_sku,
+        nome: g.nome,
+        ultima_compra: g.ultima_compra,
+        qtd_ultima_compra: g.qtd.oficial || g.qtd.app,
+        num_pedidos: g.pedidos.size,
+      }));
+    res.json(lista);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar produtos comprados.' });
+  }
+});
+
 router.get('/clientes/:id/recuperar', async (req, res) => {
   try {
     const result = await pool.query(

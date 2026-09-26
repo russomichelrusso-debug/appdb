@@ -168,6 +168,17 @@ Supabase, sem PR — não é mudança de código.
   - Fora de propósito: Home Center Master e Trading ("a consultar"/lista específica — o vendedor
     usa o "Desc. adicional"); Institucional, Construtora e Atacarejo não têm faixa.
 
+- **Comprados e não contados no Levantamento**: produto que acabou na loja não tem o que escanear
+  e saía do pedido (caso real: 3 rebolos na última compra, prateleira vazia). Com cliente
+  selecionado, o Levantamento mostra o que ele comprou nos **últimos 12 meses** e não está na
+  contagem (`GET /api/clientes/:id/comprados-recentes`, `routes/relatorios.js`: faturado + app, por
+  SKU, promocional unido ao base; pedido do app e faturado no mesmo dia contam uma vez só).
+  Decisões do usuário: **lista no Levantamento + aviso ao salvar** ("Incluir e salvar" / "Salvar
+  assim"); incluir = **estoque 0 e pedido com a quantidade da última compra**, e o item segue o
+  fluxo normal ("Adicionar todos ao orçamento"). Cópia por cliente em `localStorage`
+  (`cortagCompradosRecentes_v1`) pra funcionar na loja sem internet. Complementa as 💡 sugestões,
+  que cobrem o que ele não compra há mais de 1 ano. `askConfirm` ganhou `opcoes.cancelarLabel`.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

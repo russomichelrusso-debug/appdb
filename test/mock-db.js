@@ -93,6 +93,24 @@ async function query(sql, params = []) {
     return { rows: [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size })) };
   }
 
+  if (s.includes('/* COMPRADOS-RECENTES:OFICIAL */')) {
+    const limite = Date.now() - Number(params[1]) * 86400000;
+    return { rows: pedidosOficiaisItens
+      .filter(it => it.status === 'faturado' && it.cliente_codigo_oficial === params[0] && it.data_faturamento && new Date(it.data_faturamento).getTime() > limite)
+      .map(it => ({ codigo_sku: it.codigo_sku, data: it.data_faturamento, quantidade: it.quantidade, pedido: it.nr_pedido })) };
+  }
+  if (s.includes('/* COMPRADOS-RECENTES:APP */')) {
+    const limite = Date.now() - Number(params[1]) * 86400000;
+    const rows = [];
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && new Date(p.data_pedido).getTime() > limite)) {
+      for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
+        const prod = produtos.find(p => p.id === it.produto_id);
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido), quantidade: it.quantidade, pedido: 'app' + ped.id });
+      }
+    }
+    return { rows };
+  }
+
   // clientes
   if (s.includes('SELECT ID FROM CLIENTES WHERE DOCUMENTO')) {
     const found = clientes.filter(c => c.documento === params[0]);

@@ -525,6 +525,47 @@ async function main() {
   res = await req('GET', '/api/clientes/999999/sugestoes-recompra');
   assert(res.status === 404, 'sugestoes-recompra de cliente inexistente responde 404');
 
+  // 18b) GET /api/clientes/:id/comprados-recentes: SKUs comprados no último
+  // ano (faturado + app), com a quantidade somada no dia da compra mais
+  // recente; código promocional vira o base; compra de mais de 1 ano fica fora.
+  mockDb.__seed({
+    produtos: [
+      { id: 811, codigo_sku: '70001', nome: 'REBOLO RETO 6"', categoria: '20' },
+      { id: 812, codigo_sku: '70002', nome: 'DISCO DE CORTE 4.1/2"', categoria: '20' },
+      { id: 813, codigo_sku: '70003', nome: 'LIXA FERRO GRÃO 80', categoria: '20' },
+      { id: 814, codigo_sku: '70004', nome: 'TRENA 5 m', categoria: '21' },
+    ],
+    clientes: [{ id: 9111, nome: 'LOJA REBOLO', documento: '11122233000225', codigo_oficial: 'COD9111' }],
+    pedidosOficiaisItens: [
+      // rebolo: 2 un. há 200 dias; na última compra (30 dias) veio em 2 linhas (P + base) = 3 un.
+      { nr_pedido: 'R1', codigo_sku: '70001', cliente_codigo_oficial: 'COD9111', quantidade: 2, valor: 10, data_faturamento: diasAtrasISO(200), status: 'faturado' },
+      { nr_pedido: 'R2', codigo_sku: '70001', cliente_codigo_oficial: 'COD9111', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(30), status: 'faturado' },
+      { nr_pedido: 'R2', codigo_sku: 'P70001', cliente_codigo_oficial: 'COD9111', quantidade: 2, valor: 10, data_faturamento: diasAtrasISO(30), status: 'faturado' },
+      // disco: há 400 dias -> fora; lixa: em carteira -> fora
+      { nr_pedido: 'R0', codigo_sku: '70002', cliente_codigo_oficial: 'COD9111', quantidade: 9, valor: 10, data_faturamento: diasAtrasISO(400), status: 'faturado' },
+      { nr_pedido: 'R3', codigo_sku: '70003', cliente_codigo_oficial: 'COD9111', quantidade: 9, valor: 10, data_faturamento: null, status: 'carteira' },
+    ],
+    // trena só em pedido do app, há 10 dias
+    // + o mesmo rebolo pedido pelo app no dia do faturamento (mesma compra - não soma)
+    pedidos: [
+      { id: 9911, cliente_id: 9111, data_pedido: new Date(Date.now() - 10 * 86400000).toISOString() },
+      { id: 9913, cliente_id: 9111, data_pedido: diasAtrasISO(30) + 'T12:00:00Z' },
+    ],
+    pedidoItens: [
+      { id: 9912, pedido_id: 9911, produto_id: 814, quantidade: 4, preco_unitario: 50 },
+      { id: 9914, pedido_id: 9913, produto_id: 811, quantidade: 3, preco_unitario: 10 },
+    ],
+  });
+  res = await req('GET', '/api/clientes/9111/comprados-recentes');
+  const rebolo = (res.body || []).find(r => r.codigo_sku === '70001');
+  assert(
+    res.status === 200 && res.body.length === 2 && res.body[0].codigo_sku === '70004' && res.body[0].qtd_ultima_compra === 4
+      && rebolo && rebolo.qtd_ultima_compra === 3 && rebolo.num_pedidos === 3 && rebolo.nome === 'REBOLO RETO 6"',
+    `comprados-recentes: último ano, faturado + app, P+base somados no dia mais recente: ${JSON.stringify(res.body)}`
+  );
+  res = await req('GET', '/api/clientes/999999/comprados-recentes');
+  assert(res.status === 404, 'comprados-recentes de cliente inexistente responde 404');
+
   // 19) localização da loja gravada ao salvar o levantamento
   // (routes/levantamentos.js) - só leitura precisa (<= 100 m) vira a posição
   // do cliente, e uma pior não substitui uma melhor.
