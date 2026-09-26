@@ -62,6 +62,11 @@ Pegadinhas de ambiente:
 - Num banco **novo**, a 1ª execução do `schema.sql` falha (um `ALTER TABLE pedidos … REFERENCES
   usuarios` vem antes do `CREATE TABLE usuarios`); rodar de novo resolve. O Supabase não é
   afetado (as tabelas já existem).
+- `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
+  cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
+  `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
+  causa do "Adicionar todos ao orçamento" da busca que aparecia sem resultado e não fazia nada,
+  PR #128).
 
 ## Fluxo de trabalho
 
@@ -168,7 +173,7 @@ Supabase, sem PR — não é mudança de código.
   - Fora de propósito: Home Center Master e Trading ("a consultar"/lista específica — o vendedor
     usa o "Desc. adicional"); Institucional, Construtora e Atacarejo não têm faixa.
 
-- **Comprados e não contados no Levantamento**: produto que acabou na loja não tem o que escanear
+- **Comprados e não contados no Levantamento** (PR #129): produto que acabou na loja não tem o que escanear
   e saía do pedido (caso real: 3 rebolos na última compra, prateleira vazia). Com cliente
   selecionado, o Levantamento mostra o que ele comprou nos **últimos 12 meses** e não está na
   contagem (`GET /api/clientes/:id/comprados-recentes`, `routes/relatorios.js`: faturado + app, por
@@ -204,7 +209,8 @@ Supabase, sem PR — não é mudança de código.
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como
   próximo passo de produto, não só bug fix. A rota de sugestões de recompra e o `grupoDoProduto`
-  já dão a base pro sinal de "produtos parados" por cliente.
+  já dão a base pro sinal de "produtos parados" por cliente; `comprados-recentes` (PR #129) dá o
+  que ele compra com frequência, pra cruzar com o último levantamento.
 - **Localização do cliente — próximos passos** (plano combinado com o usuário; a base é a
   posição gravada ao salvar o levantamento, que precisa de algumas semanas de uso pra cobrir a
   carteira). Em ordem de prioridade:
