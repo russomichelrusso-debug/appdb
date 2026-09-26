@@ -714,6 +714,11 @@
       color: #3B6D11;
     }
 
+    #channelSeg .classiBtn--fixo {
+      background: var(--info-bg);
+      color: var(--ink);
+    }
+
     #channelSeg .classiBtn.active {
       box-shadow: 0 0 0 2px rgba(0, 0, 0, .25) inset;
     }
@@ -1132,6 +1137,11 @@
     .classiBadge--rede {
       background: #EAF3DE;
       color: #3B6D11;
+    }
+
+    .classiBadge--fixo {
+      background: var(--info-bg);
+      color: var(--ink);
     }
 
     .card .prow {
@@ -1584,6 +1594,32 @@
       color: var(--gray);
       font-weight: 600;
       margin-top: 2px;
+    }
+
+    .prazoDescontoInfo {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--success);
+      font-weight: 600;
+    }
+
+    .prazoDescontoInfo.hidden {
+      display: none;
+    }
+
+    .prazoDescontoInfo.desligado {
+      color: var(--gray);
+      font-weight: 500;
+    }
+
+    .prazoDescontoInfo button {
+      background: none;
+      border: none;
+      padding: 4px 2px;
+      font: inherit;
+      font-weight: 700;
+      color: var(--red);
+      cursor: pointer;
     }
 
     .pedidoMinimoAviso {
@@ -4514,14 +4550,8 @@
         <div class="ctrl-row">
           <div class="field">
             <label>Classificatório</label>
-            <div class="segmented classiSeg" id="channelSeg">
-              <button type="button" data-v="0">0%</button>
-              <button type="button" data-v="15"
-                class="classiBtn classiBtn--exclusive">Exclusive<small>15%</small></button>
-              <button type="button" data-v="17" class="classiBtn classiBtn--premium">Premium<small>17%</small></button>
-              <button type="button" data-v="20" class="classiBtn classiBtn--master">Master<small>20%</small></button>
-              <button type="button" data-v="18" class="classiBtn classiBtn--rede">Rede<small>18%</small></button>
-            </div>
+            <!-- botões montados por renderChannelSeg() conforme o Canal (CLASSI_POR_CANAL) -->
+            <div class="segmented classiSeg" id="channelSeg"></div>
           </div>
         </div>
       </div>
@@ -4797,6 +4827,7 @@
         <select id="paymentTermSelect">
           <option value="">Selecione...</option>
         </select>
+        <div class="prazoDescontoInfo hidden" id="prazoDescontoInfo"></div>
       </div>
       <div class="drawer-body" id="cartItems"></div>
       <div class="drawer-footer">
@@ -5560,27 +5591,133 @@
       const STATE_BY_UF = Object.fromEntries(STATES.map(s => [s.uf, s]));
       let TAXKEY_IDX = Object.fromEntries(DB.taxKeys.map((k, i) => [k, i]));
 
-      // Condições de pagamento disponíveis pro orçamento - lista fixa combinada com
-      // o financeiro, mesma ordem sempre (curta pra longa).
-      const PAYMENT_TERMS = [
-        'A Vista',
-        '14 dias',
-        '28 dias',
-        '42 dias',
-        '56 dias',
-        '28/56 dias',
-        '28/56/84 dias',
-        '28/42/56 dias',
-        '28/56/84/112 dias',
-        '42/56/70/84 dias',
-        '28/42/56/70/84/98/112 dias',
-        '42/56/70/84/112 dias',
-        '28/42/56/70/84 dias',
+      // Condições de pagamento por canal - Política Comercial rev. 06, itens
+      // 11.1 (Atacado/Moderno) e 11.2 (Varejo/Institucional e E-commerce).
+      // Construtora é Institucional na política. Ordem: curta pra longa.
+      const PRAZOS_VAREJO_INSTITUCIONAL = [
+        'A Vista', '14 dias', '28 dias', '42 dias', '56 dias', '28/56 dias', '28/56/84 dias', '28/42/56 dias',
+        '28/56/84/112 dias', '42/56/70/84 dias', '42/56/70/84/112 dias',
       ];
+      const PRAZOS_POR_CANAL = {
+        'VAREJO': PRAZOS_VAREJO_INSTITUCIONAL,
+        'INSTITUCIONAL': PRAZOS_VAREJO_INSTITUCIONAL,
+        'CONSTRUTORA': PRAZOS_VAREJO_INSTITUCIONAL,
+        'ATACADO': [
+          'A Vista', '14 dias', '28 dias', '42 dias', '56 dias', '28/56 dias', '28/56/84 dias', '28/42/56 dias',
+          '28/56/84/112 dias', '42/56/70/84 dias', '28/56/84/112/140 dias', '42/56/70/84/112 dias',
+        ],
+        'E-COMMERCE': [
+          'A Vista', '14 dias', '28 dias', '28/56 dias', '28/56/84 dias', '28/42/56 dias',
+          '28/42/56/70/84 dias', '28/42/56/70/84/98/112 dias',
+        ],
+      };
+      PRAZOS_POR_CANAL.MODERNO = PRAZOS_POR_CANAL.ATACADO;
+      function prazosDoCanal(canal) {
+        return PRAZOS_POR_CANAL[canal] || PRAZOS_VAREJO_INSTITUCIONAL;
+      }
 
-      // Pedido mínimo da empresa (valor sem impostos) - abaixo disso o
-      // orçamento mostra um aviso (não bloqueia, o vendedor decide).
-      const PEDIDO_MINIMO_SEM_IMPOSTOS = 1200;
+      // Desconto financeiro por prazo (política item 11): somado ao
+      // classificatório (Master 20% + à vista 2% = 22%), aplicado sozinho ao
+      // escolher o prazo; o vendedor pode remover pelo link embaixo do seletor.
+      const DESCONTO_POR_PRAZO = { 'A Vista': 2, '14 dias': 1.5 };
+      function descontoPrazoAtual() {
+        if (state.descontoPrazoDesligado) return 0;
+        return DESCONTO_POR_PRAZO[state.paymentTerm] || 0;
+      }
+      // Percentual que entra no preço: classificatório + desconto do prazo.
+      function classificatorioEfetivo() {
+        return state.channelDiscount + descontoPrazoAtual();
+      }
+      function fmtPct(v) {
+        return String(v).replace('.', ',') + '%';
+      }
+      // "A Vista (+2% desc. financeiro)" - pro orçamento/PDF/texto.
+      function rotuloPrazoComDesconto() {
+        const d = descontoPrazoAtual();
+        return state.paymentTerm + (d ? ` (+${fmtPct(d)} desc. financeiro)` : '');
+      }
+
+      // Pedido mínimo pra frete CIF por região (política item 14.1), sobre o
+      // total sem impostos. Abaixo dele o frete é FOB/Redespacho, com mínimo
+      // próprio (14.2). Só avisa, não bloqueia - o vendedor decide.
+      const PEDIDO_MINIMO_FOB = 1000;
+      const UFS_SUL_SUDESTE = new Set(['PR', 'SC', 'RS', 'MG', 'RJ', 'ES']);
+      const UFS_CENTRO_OESTE = new Set(['GO', 'MT', 'MS', 'DF']);
+      // municipio: da ficha de CNPJ do cliente (quando já guardada) - só
+      // decide entre SP Capital e o resto de SP.
+      function pedidoMinimoCif(uf, municipio) {
+        if (uf === 'SP') {
+          if (municipio && normalize(municipio).trim() === 'sao paulo') return { valor: 800, regiao: 'SP Capital' };
+          return { valor: 1200, regiao: municipio ? 'SP interior' : 'SP', obs: municipio ? '' : ' Se for SP Capital, o mínimo é R$ 800.' };
+        }
+        if (UFS_SUL_SUDESTE.has(uf)) return { valor: 1200, regiao: 'Sul/Sudeste' };
+        if (UFS_CENTRO_OESTE.has(uf)) return { valor: 1800, regiao: 'Centro-Oeste' };
+        return { valor: 2000, regiao: 'Norte/Nordeste' };
+      }
+
+      // Classificatórios por canal - Política Comercial rev. 06, item 4.
+      // Mesma tabela do servidor em routes/lib/politicaComercial.js (manter
+      // as duas iguais). v negativo = acréscimo (Marmoraria / Consumidor
+      // final: +30% sobre a tabela Institucional). "tipos" = nomes que
+      // chegam do ERP pra esse classificatório. Home Center Master e Trading
+      // são "a consultar" na política - sem botão, usa o Desc. adicional.
+      const CLASSI_POR_CANAL = {
+        'VAREJO': [
+          { v: 0, rotulo: '0%' },
+          { v: 15, rotulo: 'Exclusive', nivel: 'exclusive', tipos: ['Varejo Exclusive'] },
+          { v: 17, rotulo: 'Premium', nivel: 'premium', tipos: ['Varejo Premium'] },
+          { v: 20, rotulo: 'Master', nivel: 'master', tipos: ['Varejo Master'] },
+          { v: 18, rotulo: 'Rede', nivel: 'rede', tipos: ['Rede'] },
+        ],
+        'ATACADO': [
+          { v: 0, rotulo: '0%' },
+          { v: 20, rotulo: 'Exclusive', nivel: 'exclusive', tipos: ['Atacado Exclusive'] },
+          { v: 22, rotulo: 'Premium', nivel: 'premium', tipos: ['Atacado Premium'] },
+          { v: 25, rotulo: 'Master', nivel: 'master', tipos: ['Atacado Master'] },
+        ],
+        'E-COMMERCE': [
+          { v: 0, rotulo: '0%' },
+          { v: 10, rotulo: 'Exclusive', nivel: 'exclusive', tipos: ['E-commerce Exclusive'] },
+          { v: 15, rotulo: 'Premium', nivel: 'premium', tipos: ['E-commerce Premium'] },
+          { v: 20, rotulo: 'Master', nivel: 'master', tipos: ['E-commerce Master'] },
+        ],
+        'MODERNO': [
+          { v: 0, rotulo: '0%' },
+          { v: 22, rotulo: 'HC Premium', nivel: 'premium', tipos: ['Home Center Premium'] },
+          { v: 25, rotulo: 'Atacarejo', nivel: 'master', tipos: ['Atacarejo'] },
+        ],
+        'INSTITUCIONAL': [
+          { v: 12, rotulo: 'Locação/Assist.', nivel: 'fixo', tipos: ['Locação', 'Assistência Técnica'] },
+          { v: -30, rotulo: 'Marmoraria/Cons. final', nivel: 'fixo', tipos: ['Marmoraria', 'Consumidor Final'] },
+        ],
+        'CONSTRUTORA': [
+          { v: 0, rotulo: 'Construtora', nivel: 'fixo', tipos: ['Construtora'] },
+        ],
+      };
+      const NOME_CANAL = {
+        'VAREJO': 'Varejo', 'ATACADO': 'Atacado', 'E-COMMERCE': 'E-commerce', 'MODERNO': 'Moderno',
+        'CONSTRUTORA': 'Construtora', 'INSTITUCIONAL': 'Institucional',
+      };
+      // "E-Commerce Máster" e "E-commerce Master" são o mesmo classificatório.
+      function chaveClassificatorio(tipo) {
+        return String(tipo || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[\s-]+/g, '');
+      }
+      const CLASSI_POR_TIPO = new Map();
+      for (const [canal, opcoes] of Object.entries(CLASSI_POR_CANAL)) {
+        for (const o of opcoes) for (const t of (o.tipos || [])) CLASSI_POR_TIPO.set(chaveClassificatorio(t), { canal, ...o });
+      }
+      function classificatorioDaPolitica(tipo) {
+        return CLASSI_POR_TIPO.get(chaveClassificatorio(tipo)) || null;
+      }
+      // "20%" ou, pra acréscimo, "+30%"
+      function rotuloPctClassi(v) {
+        return v < 0 ? `+${fmtPct(-v)}` : fmtPct(v);
+      }
+      // Padrão ao entrar num canal: o Exclusive dele (ou o 1º botão com %).
+      function classiPadraoDoCanal(canal) {
+        const opcoes = CLASSI_POR_CANAL[canal] || CLASSI_POR_CANAL.VAREJO;
+        return (opcoes.find(o => o.nivel === 'exclusive') || opcoes.find(o => o.v !== 0) || opcoes[0]).v;
+      }
 
       // Cada parcela cobre no mínimo R$600 (sem impostos) - uma condição de
       // pagamento com N parcelas só fica disponível se o orçamento valer ao
@@ -5593,7 +5730,7 @@
       function refreshPaymentTermOptions(totalSemImpostos) {
         const sel = document.getElementById('paymentTermSelect');
         if (!sel) return;
-        const disponiveis = PAYMENT_TERMS.filter(t => numeroDeParcelas(t) * VALOR_MINIMO_POR_PARCELA <= totalSemImpostos);
+        const disponiveis = prazosDoCanal(state.canal).filter(t => numeroDeParcelas(t) * VALOR_MINIMO_POR_PARCELA <= totalSemImpostos);
         const valorAtual = sel.value;
         sel.innerHTML = '<option value="">Selecione...</option>' + disponiveis.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
         if (disponiveis.includes(valorAtual)) {
@@ -5602,6 +5739,19 @@
           sel.value = '';
           if (state.paymentTerm && !disponiveis.includes(state.paymentTerm)) state.paymentTerm = '';
         }
+        atualizarInfoDescontoPrazo();
+      }
+      function atualizarInfoDescontoPrazo() {
+        const el = document.getElementById('prazoDescontoInfo');
+        if (!el) return;
+        const d = DESCONTO_POR_PRAZO[state.paymentTerm] || 0;
+        if (!d) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+        const prazo = state.paymentTerm === 'A Vista' ? 'à vista' : state.paymentTerm;
+        el.classList.remove('hidden');
+        el.classList.toggle('desligado', !!state.descontoPrazoDesligado);
+        el.innerHTML = state.descontoPrazoDesligado
+          ? `Desconto financeiro de ${fmtPct(d)} (${escapeHtml(prazo)}) não aplicado · <button type="button" data-prazo-desc="on">aplicar</button>`
+          : `+${fmtPct(d)} de desconto financeiro (${escapeHtml(prazo)}) · <button type="button" data-prazo-desc="off">remover</button>`;
       }
 
       // ---------------- App state ----------------
@@ -5612,6 +5762,7 @@
         promoDiscount: 0,
         seller: '',
         paymentTerm: '', // condição de pagamento escolhida pro orçamento atual (texto, ex: "28/56 dias")
+        descontoPrazoDesligado: false, // vendedor tocou "remover" no desconto financeiro do prazo (volta a valer ao trocar de prazo)
         cart: [], // {cod, qty}
         pendingQty: {}, // {cod: qty} - quantidade escolhida no card antes de "Adicionar" (aba Pedido), não persiste
         survey: [], // {cod, qty, ped} - levantamento de estoque no cliente
@@ -5730,11 +5881,7 @@
           renderCart();
         });
         const canalSel = document.getElementById('canalSelect');
-        canalSel.addEventListener('change', () => {
-          state.canal = canalSel.value;
-          renderResults();
-          renderCart();
-        });
+        canalSel.addEventListener('change', () => mudarCanal(canalSel.value));
       }
 
       // Coordenadas das capitais de cada estado - usadas só pra achar o estado mais
@@ -5795,17 +5942,46 @@
       }
 
       let setChannelDiscount = () => { }; // preenchida de verdade dentro de initChannelSeg, exposta pra ser chamada ao selecionar cliente
+      // Botões do classificatório do canal atual (CLASSI_POR_CANAL).
+      function renderChannelSeg() {
+        const seg = document.getElementById('channelSeg');
+        if (!seg) return;
+        const opcoes = CLASSI_POR_CANAL[state.canal] || CLASSI_POR_CANAL.VAREJO;
+        seg.innerHTML = opcoes.map(o => o.nivel
+          ? `<button type="button" data-v="${o.v}" class="classiBtn classiBtn--${o.nivel}">${escapeHtml(o.rotulo)}<small>${rotuloPctClassi(o.v)}</small></button>`
+          : `<button type="button" data-v="${o.v}">${escapeHtml(o.rotulo)}</button>`).join('');
+        marcarClassiAtivo();
+      }
+      function marcarClassiAtivo() {
+        document.querySelectorAll('#channelSeg button').forEach(b => b.classList.toggle('active', Number(b.dataset.v) === state.channelDiscount));
+      }
+      // Troca o canal de venda (select ou cliente selecionado): refaz os
+      // botões e marca o padrão do canal novo (o mesmo % pode ser outro nível
+      // em outro canal - 20% é Exclusive no Atacado e Master no E-commerce).
+      // Ao selecionar cliente, setLevCliente marca o % dele logo em seguida.
+      function mudarCanal(canal) {
+        state.canal = canal;
+        const sel = document.getElementById('canalSelect');
+        if (sel && sel.value !== canal) sel.value = canal;
+        state.channelDiscount = classiPadraoDoCanal(canal);
+        renderChannelSeg();
+        renderResults();
+        renderCart();
+      }
       function initChannelSeg() {
         const seg = document.getElementById('channelSeg');
-        const btns = [...seg.querySelectorAll('button')];
         function setActive(v) {
           state.channelDiscount = v;
-          btns.forEach(b => b.classList.toggle('active', Number(b.dataset.v) === v));
+          marcarClassiAtivo();
           renderResults();
           renderCart();
         }
-        btns.forEach(b => b.addEventListener('click', () => setActive(Number(b.dataset.v))));
-        setActive(15);
+        seg.addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-v]');
+          if (b) setActive(Number(b.dataset.v));
+        });
+        state.channelDiscount = classiPadraoDoCanal(state.canal);
+        renderChannelSeg();
         setChannelDiscount = setActive;
       }
       function initPromoInput() {
@@ -5823,7 +5999,21 @@
       function initPaymentTermSelect() {
         const sel = document.getElementById('paymentTermSelect');
         refreshPaymentTermOptions(0); // populado de novo (e filtrado) a cada renderCart(), conforme o total do orçamento muda
-        sel.addEventListener('change', () => { state.paymentTerm = sel.value; });
+        sel.addEventListener('change', () => {
+          state.paymentTerm = sel.value;
+          state.descontoPrazoDesligado = false;
+          const d = DESCONTO_POR_PRAZO[state.paymentTerm];
+          if (d) showToast(`${state.paymentTerm === 'A Vista' ? 'À vista' : state.paymentTerm}: +${fmtPct(d)} de desconto financeiro aplicado`);
+          renderResults();
+          renderCart();
+        });
+        document.getElementById('prazoDescontoInfo').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-prazo-desc]');
+          if (!b) return;
+          state.descontoPrazoDesligado = b.dataset.prazoDesc === 'off';
+          renderResults();
+          renderCart();
+        });
       }
 
 
@@ -6207,14 +6397,12 @@
       // Badge pequeno e colorido por categoria de classificatório - usado em
       // qualquer lugar que mostre um cliente (seletor, busca, barra do levantamento).
       // Cor muda por categoria pra identificar rápido, sem precisar ler o texto.
-      const CLASSI_COR = {
-        'Varejo Master': 'master', 'Varejo Premium': 'premium',
-        'Varejo Exclusive': 'exclusive', 'Rede': 'rede',
-      };
       function renderClassificatorioBadge(cliente) {
         if (!cliente || !cliente.classificatorio_tipo) return '';
-        const chave = CLASSI_COR[cliente.classificatorio_tipo] || 'exclusive';
-        const desconto = cliente.classificatorio_desconto != null ? ` · ${cliente.classificatorio_desconto}%` : '';
+        const politica = classificatorioDaPolitica(cliente.classificatorio_tipo);
+        const chave = politica ? politica.nivel : 'exclusive';
+        const pct = politica ? politica.v : (cliente.classificatorio_desconto != null ? Number(cliente.classificatorio_desconto) : null);
+        const desconto = pct != null && !isNaN(pct) ? ` · ${rotuloPctClassi(pct)}` : '';
         const rotulo = cliente.classificatorio_tipo.replace(/^Varejo /, '');
         return `<span class="classiBadge classiBadge--${chave}">${escapeHtml(rotulo)}${desconto}</span>`;
       }
@@ -6248,7 +6436,7 @@
       }
       function renderCard(p) {
         const lp = listPrice(p, state.uf);
-        const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
+        const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
         const hasDiscount = cp < lp - 0.005;
         const edited = isPriceEdited(p.c);
         const qtyDisc = qtyDiscountFor(p.c);
@@ -6353,7 +6541,7 @@
         const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
         const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
         const lp = val * (1 + p.ipi) * (1 + stRate);
-        const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
+        const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
         preview.innerHTML = `Com impostos (${state.uf}): <b>${brl(lp)}</b><br>Preço ao cliente agora: <b>${brl(cp)}</b>`;
       }
       function refreshAllPriceViews() {
@@ -6682,8 +6870,8 @@
           const lpSemImposto = listPriceSemImposto(p, state.uf);
           const fixo = isPrecoFixoParaCanal(p);
           const qtyPct = qtyDiscountFor(p.c);
-          const cp = clientPrice(lp, state.channelDiscount, state.promoDiscount, fixo, qtyPct);
-          const cpSemImposto = clientPrice(lpSemImposto, state.channelDiscount, state.promoDiscount, fixo, qtyPct);
+          const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, fixo, qtyPct);
+          const cpSemImposto = clientPrice(lpSemImposto, classificatorioEfetivo(), state.promoDiscount, fixo, qtyPct);
           const lineTotal = cp * it.qty;
           return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal };
         }).filter(Boolean);
@@ -6703,8 +6891,8 @@
             } else {
               const manualPct = qtyDiscountFor(r.p.c);
               const effectivePct = Math.max(manualPct, bonus.pct);
-              cp = clientPrice(r.lp, state.channelDiscount, state.promoDiscount, false, effectivePct);
-              cpSemImposto = clientPrice(r.lpSemImposto, state.channelDiscount, state.promoDiscount, false, effectivePct);
+              cp = clientPrice(r.lp, classificatorioEfetivo(), state.promoDiscount, false, effectivePct);
+              cpSemImposto = clientPrice(r.lpSemImposto, classificatorioEfetivo(), state.promoDiscount, false, effectivePct);
             }
           }
           const lineTotal = cp * r.it.qty;
@@ -6733,9 +6921,13 @@
         if (totalItensEl) totalItensEl.textContent = rows.length > 0 ? totalItensLabel(rows.length) : '';
         const avisoEl = document.getElementById('pedidoMinimoAviso');
         if (avisoEl) {
-          if (rows.length > 0 && totalSemImpostos < PEDIDO_MINIMO_SEM_IMPOSTOS) {
-            const falta = PEDIDO_MINIMO_SEM_IMPOSTOS - totalSemImpostos;
-            avisoEl.textContent = `⚠️ Faltam ${brl(falta)} para o pedido mínimo de ${brl(PEDIDO_MINIMO_SEM_IMPOSTOS)} (sem impostos).`;
+          const municipio = state.levCliente ? (FICHA_CNPJ_INFO.get(state.levCliente.id) || {}).municipio : null;
+          const minimo = pedidoMinimoCif(state.uf, municipio);
+          if (rows.length > 0 && totalSemImpostos < PEDIDO_MINIMO_FOB) {
+            avisoEl.textContent = `⚠️ Abaixo do pedido mínimo até pra frete FOB/Redespacho (${brl(PEDIDO_MINIMO_FOB)} sem impostos) — faltam ${brl(PEDIDO_MINIMO_FOB - totalSemImpostos)}. Frete CIF: mínimo ${brl(minimo.valor)} em ${minimo.regiao}.${minimo.obs || ''}`;
+            avisoEl.classList.remove('hidden');
+          } else if (rows.length > 0 && totalSemImpostos < minimo.valor) {
+            avisoEl.textContent = `⚠️ Faltam ${brl(minimo.valor - totalSemImpostos)} pra frete CIF (mínimo ${brl(minimo.valor)} sem impostos em ${minimo.regiao}).${minimo.obs || ''} Abaixo disso, frete FOB/Redespacho.`;
             avisoEl.classList.remove('hidden');
           } else {
             avisoEl.classList.add('hidden');
@@ -7489,9 +7681,18 @@
         // pré-preenche o desconto de canal (classificatório) do cliente - continua
         // editável manualmente depois, isso só evita ter que selecionar de novo
         // toda vez que já se sabe qual é o cliente.
-        if (cliente && cliente.classificatorio_desconto !== undefined && cliente.classificatorio_desconto !== null) {
-          setChannelDiscount(Number(cliente.classificatorio_desconto));
-          showToast(`Desconto de canal ajustado pra ${cliente.classificatorio_desconto}% (${cliente.classificatorio_tipo})`);
+        // Canal e % pelo classificatório do cliente, conforme a Política
+        // Comercial (CLASSI_POR_CANAL) - ex: "Atacado Premium" troca o Canal
+        // pra Atacado e marca 22%. Nome fora da tabela: usa o % do ERP.
+        if (cliente && cliente.classificatorio_tipo) {
+          const politica = classificatorioDaPolitica(cliente.classificatorio_tipo);
+          const pct = politica ? politica.v
+            : (cliente.classificatorio_desconto != null ? Number(cliente.classificatorio_desconto) : null);
+          if (politica && politica.canal !== state.canal) mudarCanal(politica.canal);
+          if (pct != null && !isNaN(pct)) {
+            setChannelDiscount(pct);
+            showToast(`Canal ${NOME_CANAL[state.canal] || state.canal} · ${cliente.classificatorio_tipo} ${rotuloPctClassi(pct)}`);
+          }
         }
         // Cobre "cliente selecionado depois que o produto já estava no
         // carrinho" - o gancho em addToCart cobre a ordem inversa. Roda
@@ -7512,7 +7713,7 @@
       // nunca consulta a Receita. Resposta "tem ficha" fica guardada na sessão;
       // "não tem" é conferida de novo na próxima seleção (o preenchimento
       // automático da madrugada pode ter completado nesse meio tempo).
-      const FICHA_CNPJ_EXISTE = new Set();
+      const FICHA_CNPJ_INFO = new Map(); // cliente id -> { municipio, uf } (só clientes com ficha guardada)
       function urlFichaCnpj(cliente) {
         if (!cliente || !cliente.id) return 'ficha-cnpj.html';
         const params = new URLSearchParams({ cliente: cliente.id, nome: cliente.nome || '', doc: cliente.documento || '' });
@@ -7527,14 +7728,17 @@
         mostrar(false);
         if (!cliente || !cliente.id) return;
         if (String(cliente.documento || '').replace(/\D/g, '').length !== 14) return; // só CNPJ tem ficha
-        if (!FICHA_CNPJ_EXISTE.has(cliente.id)) {
+        if (!FICHA_CNPJ_INFO.has(cliente.id)) {
           try {
             const r = await apiFetch(`/api/clientes/${cliente.id}/ficha-cnpj/existe`);
             if (!r || !r.existe) return;
+            FICHA_CNPJ_INFO.set(cliente.id, { municipio: r.municipio || null, uf: r.uf || null });
           } catch (e) { return; } // sem internet/servidor: só não mostra o botão
-          FICHA_CNPJ_EXISTE.add(cliente.id);
         }
-        if (state.levCliente && state.levCliente.id === cliente.id) mostrar(true);
+        if (state.levCliente && state.levCliente.id === cliente.id) {
+          mostrar(true);
+          renderCart(); // pedido mínimo de SP Capital depende do município da ficha
+        }
       }
       // Aba nova (mesmo padrão de "Produtos comprados") - não perde o
       // pedido/levantamento em andamento aqui.
@@ -7805,7 +8009,7 @@
         const totalPedidoValor = state.survey.reduce((a, i) => {
           const p = productByCod(i.cod);
           if (!p || !i.ped) return a;
-          const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
+          const cp = clientPrice(listPrice(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
           return a + cp * i.ped;
         }, 0);
         const resumoTexto = `<span class="levCountBig">${state.survey.length}</span> ${escapeHtml(totalItensLabel(state.survey.length))} · <b>${totalEstoque}</b> un. em estoque` +
@@ -7829,7 +8033,7 @@
           const p = productByCod(it.cod);
           if (!p) return '';
           const qtyDisc = qtyDiscountFor(p.c);
-          const cp = clientPrice(listPrice(p, state.uf), state.channelDiscount, state.promoDiscount, isPrecoFixoParaCanal(p), qtyDisc);
+          const cp = clientPrice(listPrice(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDisc);
           const edited = isPriceEdited(p.c);
           return `<div class="levitem ${it.qty === 0 ? 'zero' : ''}${it.done ? ' done' : ''}">
       <div class="top">
@@ -8072,6 +8276,7 @@
         if (ok) {
           state.cart = [];
           state.paymentTerm = '';
+          state.descontoPrazoDesligado = false;
           const sel = document.getElementById('paymentTermSelect');
           if (sel) sel.value = '';
           renderCart();
@@ -8099,7 +8304,7 @@
       <div><div class="k">Estado</div><div class="v">${st.uf} — ${st.name}</div></div>
       ${state.levCliente ? `<div><div class="k">Cliente</div><div class="v">${escapeHtml(state.levCliente.nome)} · ${escapeHtml(clienteDocText(state.levCliente))}</div></div>` : ''}
       ${state.seller.trim() ? `<div><div class="k">Atendimento</div><div class="v">${escapeHtml(state.seller)}</div></div>` : ''}
-      ${state.paymentTerm ? `<div><div class="k">Cond. pagamento</div><div class="v">${escapeHtml(state.paymentTerm)}</div></div>` : ''}
+      ${state.paymentTerm ? `<div><div class="k">Cond. pagamento</div><div class="v">${escapeHtml(rotuloPrazoComDesconto())}</div></div>` : ''}
       <div><div class="k">Total de itens</div><div class="v">${rows.length}</div></div>
     </div>
     <table class="ex-table">
@@ -8220,7 +8425,7 @@
           ...linhas,
           '',
           `*Total: ${brl(total)}*`,
-          ...(state.paymentTerm ? [`Cond. pagamento: ${state.paymentTerm}`] : []),
+          ...(state.paymentTerm ? [`Cond. pagamento: ${rotuloPrazoComDesconto()}`] : []),
         ];
         return partes.join('\n');
       }
@@ -8441,11 +8646,11 @@
           const doc14 = String(cliente.documento || '').replace(/\D/g, '');
           if (doc14) {
             const linha = [{ content: 'CNPJ', styles: { fontStyle: 'bold' } }, { content: formatarDocumento(cliente.documento) }];
-            if (state.paymentTerm) linha.push({ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: state.paymentTerm });
+            if (state.paymentTerm) linha.push({ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: rotuloPrazoComDesconto() });
             else linha.push({ content: '', colSpan: 2 });
             linhas.push(linha);
           } else if (state.paymentTerm) {
-            linhas.push([{ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: state.paymentTerm, colSpan: 3 }]);
+            linhas.push([{ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: rotuloPrazoComDesconto(), colSpan: 3 }]);
           }
           if (state.seller) {
             linhas.push([{ content: 'Represent.', styles: { fontStyle: 'bold' } }, { content: state.seller, colSpan: 3 }]);
@@ -8891,7 +9096,7 @@
       function interpretarClassificatorio(valor) {
         if (!valor) return null;
         const texto = String(valor).trim();
-        if (texto === 'Locação') return null;
+        if (texto === 'Locação') return { tipo: 'Locação', desconto: 12 }; // vem sem número na planilha
         const comParenteses = texto.match(/^(.*?)\s*\((\d+)\)\s*$/);
         if (comParenteses) return { tipo: comParenteses[1].trim(), desconto: Number(comParenteses[2]) };
         if (texto === 'Rede') return { tipo: 'Rede', desconto: 18 }; // não vem com número na planilha

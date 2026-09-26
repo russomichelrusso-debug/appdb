@@ -140,6 +140,17 @@ Supabase, sem PR — não é mudança de código.
   também desliga o levantamento aberto, como o antigo botão fazia). Sem cliente, o card vira um
   botão tracejado "+ Selecionar cliente" (sai o rótulo "Cliente (opcional)").
 
+- **Política Comercial rev. 06 no pedido** (etapa 1 de 2): classificatório por canal, canal
+  automático pelo cliente, desconto por prazo somado, prazos por canal e pedido mínimo por região
+  (detalhes em "Motor de preço" no README). Decisões do usuário: desconto de prazo **automático e
+  somado** ao classificatório (não multiplicado como o "Desc. adicional"); Marmoraria/Consumidor
+  final = **+30% sobre a tabela Institucional**; Rede 18% continua no Varejo; o percentual vale
+  **pela política, pelo nome** (o ERP ainda manda "Varejo Exclusive (12)"/"Premium (15)" da
+  política antiga — os 131 clientes com esses valores foram corrigidos direto no banco em 09/2026).
+  A tabela existe em dois lugares que precisam andar juntos: `CLASSI_POR_CANAL` (`index.html`) e
+  `routes/lib/politicaComercial.js`. Etapa 2 pendente: faixas de todos os canais no card do cliente
+  e classificatório pelos **últimos 12 meses** (régua móvel da política) no lugar do ano fechado.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

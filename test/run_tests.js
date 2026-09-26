@@ -714,6 +714,28 @@ async function main() {
     && res.body.hoje.limite === 40 && res.body.janela === '01h–06h',
     'status do preenchimento devolve progresso, limite e janela');
 
+  // 22) Política Comercial: o percentual do classificatório vem do NOME
+  // (routes/lib/politicaComercial.js), não do número do relatório do ERP -
+  // "Varejo Exclusive (12)" da política antiga grava 15.
+  const politica = require('../routes/lib/politicaComercial');
+  assert(
+    politica.descontoPelaPolitica('Varejo Exclusive', 12) === 15 && politica.descontoPelaPolitica('Varejo Premium', 15) === 17
+      && politica.descontoPelaPolitica('E-Commerce Máster', null) === 20 && politica.descontoPelaPolitica('Atacado Premium', 22) === 22
+      && politica.descontoPelaPolitica('Consumidor Final', null) === -30 && politica.descontoPelaPolitica('Locação', null) === 12
+      && politica.descontoPelaPolitica('Tipo Desconhecido', 9) === 9 && politica.descontoPelaPolitica('Tipo Desconhecido', null) === null,
+    'percentual do classificatório pela política (nome sem acento/maiúscula; desconhecido mantém o do ERP)'
+  );
+  mockDb.__seed({ clientes: [{ id: 9401, nome: 'LOJA POLITICA', codigo_oficial: 'COD9401' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'PP9401', codigo_sku: '60863', cliente_codigo_oficial: 'COD9401', cliente_nome: 'LOJA POLITICA', status: 'faturado', valor: 10 }],
+    classificacoes: [{ nome: 'LOJA POLITICA', codigo_oficial: 'COD9401', tipo: 'Varejo Exclusive', desconto: 12, data_referencia: '2026-09-20' }],
+  });
+  const clientePolitica = mockDb.__getClientes().find(c => c.id === 9401);
+  assert(
+    res.status < 300 && clientePolitica && clientePolitica.classificatorio_tipo === 'Varejo Exclusive' && clientePolitica.classificatorio_desconto === 15,
+    'importação grava o % da política (Exclusive 15), não o 12 do relatório'
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { descontoPelaPolitica } = require('./lib/politicaComercial');
 
 router.param('id', validarIdInteiro);
 
@@ -562,7 +563,7 @@ router.post('/classificatorio/importar', async (req, res) => {
            classificatorio_tipo = COALESCE(classificatorio_tipo, $5),
            classificatorio_desconto = COALESCE(classificatorio_desconto, $6)
          WHERE id = $7`,
-        [codigoOficial, it.matrizGrupo || null, !!it.pic, it.vlAcordo ?? null, it.classificatorioTipo || null, it.classificatorioDesconto || null, cliente.id]
+        [codigoOficial, it.matrizGrupo || null, !!it.pic, it.vlAcordo ?? null, it.classificatorioTipo || null, it.classificatorioTipo ? descontoPelaPolitica(it.classificatorioTipo, it.classificatorioDesconto ?? null) : null, cliente.id]
       );
       atualizados++;
     }
