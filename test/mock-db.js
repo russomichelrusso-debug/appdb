@@ -478,9 +478,9 @@ async function query(sql, params = []) {
   }
 
   // cliente_cnpj_ficha (ficha de CNPJ, radar-cnpj.com)
-  if (s.includes('SELECT ATUALIZADO_EM FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
+  if (s.includes('SELECT ATUALIZADO_EM, MUNICIPIO, UF FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
     const row = clienteCnpjFicha[params[0]];
-    return { rows: row ? [{ atualizado_em: row.atualizado_em }] : [] };
+    return { rows: row ? [{ atualizado_em: row.atualizado_em, municipio: row.municipio || null, uf: row.uf || null }] : [] };
   }
   // progresso do preenchimento automático (routes/lib/preenchimentoCnpj.js) -
   // o mock não guarda falhas, então desistidos é sempre 0

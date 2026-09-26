@@ -231,8 +231,11 @@ router.get('/clientes/:id/ficha-cnpj', radarCnpjLimiter, async (req, res) => {
 // cadastral" na barra do cliente sem gastar consulta.
 router.get('/clientes/:id/ficha-cnpj/existe', async (req, res) => {
   try {
-    const r = await pool.query('SELECT atualizado_em FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.id]);
-    res.json({ existe: r.rows.length > 0, atualizado_em: r.rows[0] ? r.rows[0].atualizado_em : null });
+    const r = await pool.query('SELECT atualizado_em, municipio, uf FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.id]);
+    const f = r.rows[0];
+    // município/UF vão junto pro pedido mínimo por região (SP Capital tem
+    // mínimo diferente do resto de SP - ver pedidoMinimoCif em index.html)
+    res.json({ existe: !!f, atualizado_em: f ? f.atualizado_em : null, municipio: f ? f.municipio : null, uf: f ? f.uf : null });
   } catch (e) {
     respostaDeErro(res, e);
   }

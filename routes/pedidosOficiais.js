@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
 const { codigoBase } = require('./lib/skuNormalizacao');
+const { descontoPelaPolitica } = require('./lib/politicaComercial');
 
 // Status geral da importação oficial - pro painel admin mostrar de cara
 // quando foi o último relatório importado, sem precisar abrir cliente por
@@ -292,7 +293,9 @@ router.post('/importar', async (req, res) => {
          WHERE id = $3
            AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
          RETURNING id`,
-        [c.tipo, c.desconto ?? null, clienteId, dataRef]
+        // percentual pela Política Comercial (nome do classificatório), não o
+        // número que veio no relatório - ver routes/lib/politicaComercial.js
+        [c.tipo, descontoPelaPolitica(c.tipo, c.desconto ?? null), clienteId, dataRef]
       );
       if (upd.rows.length > 0) clientesClassificados++;
       else clientesClassifIgnorados++;
