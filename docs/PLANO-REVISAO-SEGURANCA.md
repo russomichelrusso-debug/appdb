@@ -6,7 +6,7 @@
 
 Marque cada item com `[x]` quando for corrigido.
 
-**Situação (09/2026):** executado em 4 PRs (`git log --oneline | grep "Segurança PR"`). 23 dos 24 itens corrigidos; **só o B2 continua aberto**.
+**Situação (09/2026):** executado em 4 PRs (`git log --oneline | grep "Segurança PR"`). **Todos os 24 itens corrigidos** — o B2 foi o último, em 09/2026, fora dos 4 PRs.
 
 ## Pontos já corretos (não mexer)
 
@@ -147,7 +147,7 @@ Marque cada item com `[x]` quando for corrigido.
 - **Problema:** qualquer erro `23505` vira `{ ja_existia: true }`, e o app descarta o pedido. Isso inclui corrida ao criar vendedor, produto ou cliente, e não só cotação duplicada.
 - **Como corrigir:** só tratar como duplicado quando `e.constraint === 'idx_pedidos_numero_cotacao'`. Nos `acharOuCriar*` (`pedidos.js:6`, `levantamentos.js:5`, `clientMatcher.js:65`), usar `INSERT ... ON CONFLICT DO NOTHING RETURNING id` e, se não voltar nada, fazer `SELECT`.
 
-### [ ] B2. Checagem de cotação duplicada fora da transação — **pendente**: a busca da cotação existente ainda roda antes do `BEGIN` (`routes/pedidos.js`, bloco `if (numero_cotacao)`)
+### [x] B2. Checagem de cotação duplicada fora da transação — corrigido em 09/2026 (PR após a revisão): a busca roda depois do `BEGIN`, com `SELECT ... FOR UPDATE`
 - **Onde:** `routes/pedidos.js:53-66`
 - **Problema:** duas atualizações ao mesmo tempo da mesma cotação podem apagar e reinserir itens em paralelo e deixar itens duplicados.
 - **Como corrigir:** mover a busca para dentro da transação, com `SELECT ... FOR UPDATE`.
