@@ -709,6 +709,53 @@ async function main() {
   res = await req('GET', '/api/clientes/999999/historico');
   assert(res.status === 404, 'historico de cliente inexistente responde 404');
 
+  // 18e) POST /api/pedidos com numero_cotacao (item B2 do plano de
+  // segurança): a busca da cotação já gravada roda DENTRO da transação, com
+  // FOR UPDATE, pra duas atualizações simultâneas não regravarem os itens em
+  // paralelo. Mesmo PDF de novo = ja_existia; PDF mais novo = substitui os
+  // itens (sem duplicar); outro usuário não sobrescreve; corrida de duas
+  // cotações novas iguais cai no índice único e vira ja_existia.
+  const cotacaoBase = {
+    cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+    numero_cotacao: 'COT-B2-1', origem: 'pdf',
+  };
+  mockDb.__queryLog.length = 0;
+  res = await req('POST', '/api/pedidos', { ...cotacaoBase, pdf_modificado_em: '2026-09-01T10:00:00Z',
+    itens: [{ codigo_sku: '60863', quantidade: 10, preco_unitario: 28.59 }] });
+  const pedidoCotacaoId = res.body.pedido_id;
+  const logCotacao = mockDb.__queryLog.map(q => q.sql.toUpperCase());
+  const idxBegin = logCotacao.findIndex(q => q === 'BEGIN');
+  const idxBusca = logCotacao.findIndex(q => q.includes('FROM PEDIDOS WHERE NUMERO_COTACAO = $1'));
+  assert(
+    res.status === 201 && idxBegin >= 0 && idxBusca > idxBegin && logCotacao[idxBusca].endsWith('FOR UPDATE'),
+    `cotação: a busca da cotação existente roda depois do BEGIN, com FOR UPDATE (B2): ${JSON.stringify(logCotacao.slice(0, 4))}`
+  );
+  res = await req('POST', '/api/pedidos', { ...cotacaoBase, pdf_modificado_em: '2026-09-01T10:00:00Z',
+    itens: [{ codigo_sku: '60863', quantidade: 99, preco_unitario: 28.59 }] });
+  assert(res.status === 200 && res.body.ja_existia === true && res.body.pedido_id === pedidoCotacaoId,
+    'cotação: mesmo PDF reenviado não grava de novo (ja_existia)');
+  res = await req('POST', '/api/pedidos', { ...cotacaoBase, pdf_modificado_em: '2026-09-02T10:00:00Z',
+    itens: [{ codigo_sku: '60863', quantidade: 12, preco_unitario: 28.59 }, { codigo_sku: '61362', quantidade: 2, preco_unitario: 217.42 }] });
+  const itensCotacao = mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoCotacaoId);
+  assert(res.status === 201 && res.body.atualizado === true && res.body.pedido_id === pedidoCotacaoId
+      && itensCotacao.length === 2 && itensCotacao.some(i => i.quantidade === 12),
+    `cotação: PDF mais novo atualiza o mesmo pedido e substitui os itens, sem duplicar: ${JSON.stringify(itensCotacao)}`);
+  const pedidoPersistido = await mockDb.pool.query('SELECT id FROM pedidos WHERE numero_cotacao = $1 FOR UPDATE', ['COT-B2-1']);
+  assert(pedidoPersistido.rows.length === 1, 'cotação: continua um pedido só por cotação');
+
+  const outroUsuario = await mockDb.pool.query(
+    'INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, false) RETURNING id, nome, email, is_admin',
+    ['Outro Vendedor', 'outro@example.com', 'sub-teste-outro']
+  );
+  const tokenOutro = generateToken();
+  await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tokenOutro), outroUsuario.rows[0].id, '90']);
+  const tokenAntesCotacao = authToken;
+  authToken = tokenOutro;
+  res = await req('POST', '/api/pedidos', { ...cotacaoBase, pdf_modificado_em: '2026-09-03T10:00:00Z',
+    itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
+  authToken = tokenAntesCotacao;
+  assert(res.status === 403, 'cotação: outro usuário (não admin) não sobrescreve a cotação de quem gravou');
+
   // 19) localização da loja gravada ao salvar o levantamento
   // (routes/levantamentos.js) - só leitura precisa (<= 100 m) vira a posição
   // do cliente, e uma pior não substitui uma melhor.

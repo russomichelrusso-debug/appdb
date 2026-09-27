@@ -286,7 +286,7 @@ async function query(sql, params = []) {
     const ids = params[0].map(Number);
     return { rows: clientes.filter(c => ids.includes(Number(c.id))) };
   }
-  if (s.includes('UPDATE PEDIDOS SET CLIENTE_ID')) {
+  if (s.includes('UPDATE PEDIDOS SET CLIENTE_ID') && !s.includes('VENDEDOR_ID = $2')) {
     const [novoId, antigoId] = params;
     pedidos.forEach(p => { if (p.cliente_id == antigoId) p.cliente_id = novoId; });
     return { rows: [] };
@@ -711,9 +711,38 @@ async function query(sql, params = []) {
 
   // pedidos
   if (s.includes('INSERT INTO PEDIDOS')) {
-    const p = { id: nextId.pedidos++, cliente_id: params[0], vendedor_id: params[1], observacao: params[2], data_pedido: new Date().toISOString() };
+    // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id
+    const numeroCotacao = params[3] ?? null;
+    if (numeroCotacao && pedidos.some(p => p.numero_cotacao === numeroCotacao)) {
+      // mesmo comportamento do índice único parcial idx_pedidos_numero_cotacao
+      const err = new Error('duplicate key value violates unique constraint "idx_pedidos_numero_cotacao"');
+      err.code = '23505'; err.constraint = 'idx_pedidos_numero_cotacao';
+      throw err;
+    }
+    const p = {
+      id: nextId.pedidos++, cliente_id: params[0], vendedor_id: params[1], observacao: params[2],
+      numero_cotacao: numeroCotacao, pdf_modificado_em: params[6] ?? null, usuario_id: params[7] ?? null,
+      data_pedido: new Date().toISOString(),
+    };
     pedidos.push(p);
     return { rows: [{ id: p.id, data_pedido: p.data_pedido }] };
+  }
+  // POST /api/pedidos com numero_cotacao: busca (com lock) da cotação já gravada
+  if (s.includes('FROM PEDIDOS WHERE NUMERO_COTACAO = $1')) {
+    return { rows: pedidos.filter(p => p.numero_cotacao === params[0])
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, pdf_modificado_em: p.pdf_modificado_em, usuario_id: p.usuario_id })) };
+  }
+  // ...e a atualização dela quando chega um PDF mais novo
+  if (s.includes('UPDATE PEDIDOS SET CLIENTE_ID = $1, VENDEDOR_ID = $2')) {
+    const p = pedidos.find(x => String(x.id) === String(params[5]));
+    if (!p) return { rows: [] };
+    Object.assign(p, { cliente_id: params[0], vendedor_id: params[1], observacao: params[2], pdf_modificado_em: params[4] });
+    if (params[3]) p.data_pedido = params[3];
+    return { rows: [{ id: p.id, data_pedido: p.data_pedido }] };
+  }
+  if (s.startsWith('DELETE FROM PEDIDO_ITENS WHERE PEDIDO_ID = $1')) {
+    for (let i = pedidoItens.length - 1; i >= 0; i--) if (String(pedidoItens[i].pedido_id) === String(params[0])) pedidoItens.splice(i, 1);
+    return { rows: [] };
   }
   if (s.includes('INSERT INTO PEDIDO_ITENS')) {
     pedidoItens.push({ id: nextId.pedido_itens++, pedido_id: params[0], produto_id: params[1], quantidade: params[2], preco_unitario: params[3] });
@@ -1098,6 +1127,7 @@ module.exports = {
   __seed: seed,
   __getClientes: () => clientes,
   __getLevantamentos: () => levantamentos,
+  __getPedidoItens: () => pedidoItens,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,
 };

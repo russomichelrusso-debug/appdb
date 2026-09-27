@@ -58,39 +58,49 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ erro: 'pdf_modificado_em não pode ser uma data futura.' });
   }
 
-  // checa duplicidade ANTES de abrir a transação. Se a mesma cotação já foi
-  // consolidada antes, só substitui os itens se o PDF novo for mais recente
-  // que o que já está gravado (comparando a data de modificação do arquivo,
-  // não a data de emissão do documento - a emissão pode não mudar numa
-  // reimpressão/correção, o metadado do arquivo sim). Sem essa informação
-  // dos dois lados, mantém o comportamento antigo: recusa como duplicado.
-  let pedidoParaAtualizar = null;
-  if (numero_cotacao) {
-    const existente = await pool.query(
-      'SELECT id, cliente_id, data_pedido, pdf_modificado_em, usuario_id FROM pedidos WHERE numero_cotacao = $1',
-      [numero_cotacao]
-    );
-    if (existente.rows.length > 0) {
-      const atual = existente.rows[0];
-      const novoEhMaisRecente = pdf_modificado_em && (!atual.pdf_modificado_em || new Date(pdf_modificado_em) > new Date(atual.pdf_modificado_em));
-      if (!novoEhMaisRecente) {
-        return res.status(200).json({ ja_existia: true, pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido });
-      }
-      // só o autor original (ou um admin) pode sobrescrever um pedido já
-      // gravado - pedidos sem dono (importados antes dessa coluna existir,
-      // ou vindos do relatório oficial) continuam sobrescrevíveis por
-      // qualquer um, como sempre foi.
-      if (atual.usuario_id && atual.usuario_id !== req.usuario.id && !req.usuario.is_admin) {
-        return res.status(403).json({ erro: 'Esse pedido já foi gravado por outro usuário — só ele ou um administrador pode atualizá-lo.' });
-      }
-      pedidoParaAtualizar = atual.id;
-    }
-  }
-
   let client;
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+
+    // Duplicidade da cotação, checada DENTRO da transação com FOR UPDATE
+    // (antes era antes do BEGIN: duas atualizações simultâneas da mesma
+    // cotação liam o mesmo estado, as duas apagavam e regravavam os itens e
+    // o pedido podia ficar com itens duplicados - item B2 do plano de
+    // segurança). Com o lock, a segunda espera a primeira terminar e já
+    // compara contra a versão que ela gravou. Duas cotações NOVAS iguais ao
+    // mesmo tempo não têm linha pra travar - quem pega esse caso é o índice
+    // único (idx_pedidos_numero_cotacao, tratado no catch).
+    // Se a mesma cotação já foi consolidada antes, só substitui os itens se o
+    // PDF novo for mais recente que o gravado (data de modificação do
+    // arquivo, não a de emissão do documento - a emissão pode não mudar numa
+    // reimpressão/correção, o metadado do arquivo sim). Sem essa informação
+    // dos dois lados, mantém o comportamento antigo: recusa como duplicado.
+    let pedidoParaAtualizar = null;
+    if (numero_cotacao) {
+      const existente = await client.query(
+        'SELECT id, cliente_id, data_pedido, pdf_modificado_em, usuario_id FROM pedidos WHERE numero_cotacao = $1 FOR UPDATE',
+        [numero_cotacao]
+      );
+      if (existente.rows.length > 0) {
+        const atual = existente.rows[0];
+        const novoEhMaisRecente = pdf_modificado_em && (!atual.pdf_modificado_em || new Date(pdf_modificado_em) > new Date(atual.pdf_modificado_em));
+        if (!novoEhMaisRecente) {
+          await client.query('ROLLBACK');
+          return res.status(200).json({ ja_existia: true, pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido });
+        }
+        // só o autor original (ou um admin) pode sobrescrever um pedido já
+        // gravado - pedidos sem dono (importados antes dessa coluna existir,
+        // ou vindos do relatório oficial) continuam sobrescrevíveis por
+        // qualquer um, como sempre foi.
+        if (atual.usuario_id && atual.usuario_id !== req.usuario.id && !req.usuario.is_admin) {
+          await client.query('ROLLBACK');
+          return res.status(403).json({ erro: 'Esse pedido já foi gravado por outro usuário — só ele ou um administrador pode atualizá-lo.' });
+        }
+        pedidoParaAtualizar = atual.id;
+      }
+    }
+
     const clienteId = await acharOuCriarCliente(client, cliente);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
     const criarProdutosDesconhecidos = origem === 'pdf';

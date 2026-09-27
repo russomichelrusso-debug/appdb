@@ -95,8 +95,10 @@ Supabase, sem PR — não é mudança de código.
   erro assíncrono não tratado, rastro de importação, pedido não pode ser sobrescrito por outro
   usuário, dados sujos na importação, vazamento de erro do banco pro cliente, timeout em chamadas
   externas, hash de token de sessão, login Google mais rígido, CORS restrito, e outras corridas
-  menores. Checklist do arquivo atualizado em 09/2026 (cada item aponta o PR que corrigiu): 23 de
-  24 feitos, **só o B2 segue aberto** (ver "Caminho a seguir").
+  menores. Checklist do arquivo atualizado em 09/2026 (cada item aponta o PR que corrigiu): **os
+  24 itens estão feitos** — o último, B2 (cotação duplicada checada fora da transação), veio
+  depois, em PR próprio: a busca da cotação em `POST /api/pedidos` roda dentro da transação com
+  `SELECT ... FOR UPDATE`.
 - Atalhos de produtividade pro vendedor: botão "Produtos comprados" (pula direto pra Curva ABC já
   filtrada no cliente), botão de adicionar direto ao orçamento a partir da Curva ABC, correção da
   lista de campanhas que sumia no Painel Administrativo (race condition de render antes do dado
@@ -271,9 +273,6 @@ Supabase, sem PR — não é mudança de código.
   de usá-la como referência.
 - Correção pequena pendente: mover o `CREATE TABLE usuarios` do `schema.sql` pra antes da
   primeira referência a ele, pra um banco novo subir na primeira execução.
-- **Segurança B2** (único item aberto do plano): em `POST /api/pedidos` a busca da cotação
-  existente roda antes do `BEGIN` — duas atualizações simultâneas da mesma cotação podem duplicar
-  itens. Mover pra dentro da transação com `SELECT ... FOR UPDATE`.
 - **Pendências de dado** (não é código — o usuário importa pelo Painel Administrativo):
   - **Novembro/2025 falta no banco** (R$ 1 mil faturado, contra R$ 430–520 mil nos meses
     vizinhos). Tira ~R$ 500 mil dos 12 meses móveis do classificatório (faixa mais baixa, "risco
