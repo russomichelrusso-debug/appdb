@@ -605,7 +605,8 @@ async function main() {
   const rebolo = (res.body || []).find(r => r.codigo_sku === '70001');
   assert(
     res.status === 200 && res.body.length === 2 && res.body[0].codigo_sku === '70004' && res.body[0].qtd_ultima_compra === 4
-      && rebolo && rebolo.qtd_ultima_compra === 3 && rebolo.num_pedidos === 3 && rebolo.nome === 'REBOLO RETO 6"',
+      // 2 pedidos (R1 e R2): o pedido do app 9913 é a mesma compra que R2 (routes/lib/comprasApp.js)
+      && rebolo && rebolo.qtd_ultima_compra === 3 && rebolo.num_pedidos === 2 && rebolo.nome === 'REBOLO RETO 6"',
     `comprados-recentes: último ano, faturado + app, P+base somados no dia mais recente: ${JSON.stringify(res.body)}`
   );
   res = await req('GET', '/api/clientes/999999/comprados-recentes');
@@ -755,6 +756,54 @@ async function main() {
     itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
   authToken = tokenAntesCotacao;
   assert(res.status === 403, 'cotação: outro usuário (não admin) não sobrescreve a cotação de quem gravou');
+
+  // 18f) Pedido do app não conta em dobro com o faturado oficial
+  // (routes/lib/comprasApp.js): o vendedor fecha no app e o ERP fatura dias
+  // depois - antes eram duas compras e a Rotatividade saía "a cada ~5 dias".
+  // Cópias da importação antiga de faturamento (origem 'faturamento') nunca
+  // contam; pedido do app ainda sem faturamento continua contando.
+  mockDb.__seed({
+    produtos: [
+      { id: 841, codigo_sku: '72001', nome: 'ESPAÇADOR TESTE 2 mm', categoria: '20' },
+      { id: 842, codigo_sku: '72002', nome: 'CUNHA TESTE', categoria: '20' },
+    ],
+    clientes: [{ id: 9141, nome: 'LOJA DUPLA CONTAGEM', documento: '11122233000620', codigo_oficial: 'COD9141' }],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'D1', codigo_sku: '72001', cliente_codigo_oficial: 'COD9141', quantidade: 10, valor: 10, data_faturamento: diasAtrasISO(95), status: 'faturado' },
+    ],
+    pedidos: [
+      { id: 9951, cliente_id: 9141, origem: 'app', data_pedido: diasAtrasISO(100) + 'T12:00:00Z' },         // faturado 5 dias depois (D1)
+      { id: 9952, cliente_id: 9141, origem: 'faturamento', data_pedido: diasAtrasISO(95) + 'T12:00:00Z' }, // cópia antiga de D1
+      { id: 9953, cliente_id: 9141, origem: 'app', data_pedido: diasAtrasISO(3) + 'T12:00:00Z' },           // ainda não faturado
+    ],
+    pedidoItens: [
+      { id: 9961, pedido_id: 9951, produto_id: 841, quantidade: 10, preco_unitario: 1 },
+      { id: 9962, pedido_id: 9952, produto_id: 841, quantidade: 10, preco_unitario: 1 },
+      { id: 9963, pedido_id: 9953, produto_id: 842, quantidade: 4, preco_unitario: 1 },
+    ],
+  });
+  res = await req('GET', '/api/clientes/9141/historico');
+  const hEsp = (res.body || []).find(r => r.codigo_sku === '72001');
+  const hCunha = (res.body || []).find(r => r.codigo_sku === '72002');
+  assert(
+    res.status === 200 && hEsp && hEsp.num_pedidos === 1 && hEsp.total_acumulado === 10 && hEsp.media_dias_entre_pedidos === null
+      && hCunha && hCunha.total_acumulado === 4,
+    `historico: pedido do app faturado dias depois e cópia antiga de faturamento não contam em dobro; app não faturado conta: ${JSON.stringify(res.body)}`
+  );
+  res = await req('GET', '/api/produtos/72001/clientes');
+  const compradorDup = (res.body.compradores || []).find(c => c.id === 9141);
+  assert(res.status === 200 && compradorDup && compradorDup.total_comprado === 10,
+    `já compraram: sem contar o pedido do app que virou faturado: ${JSON.stringify(res.body.compradores)}`);
+
+  // "Sem Classificatório" no relatório oficial = cliente sem classificatório
+  mockDb.__seed({ clientes: [{ id: 9403, nome: 'LOJA SEM CLASSI', codigo_oficial: 'COD9403', classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_atualizado_em: '2026-01-01' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'SC9403', codigo_sku: '60863', cliente_codigo_oficial: 'COD9403', cliente_nome: 'LOJA SEM CLASSI', status: 'faturado', valor: 10 }],
+    classificacoes: [{ nome: 'LOJA SEM CLASSI', codigo_oficial: 'COD9403', tipo: 'Sem Classificatório', desconto: null, data_referencia: '2026-09-20' }],
+  });
+  const clienteSemClassi = mockDb.__getClientes().find(c => c.id === 9403);
+  assert(res.status < 300 && clienteSemClassi && clienteSemClassi.classificatorio_tipo === null && clienteSemClassi.classificatorio_desconto === null,
+    `importação: "Sem Classificatório" grava cliente sem classificatório: ${JSON.stringify(clienteSemClassi)}`);
 
   // 19) localização da loja gravada ao salvar o levantamento
   // (routes/levantamentos.js) - só leitura precisa (<= 100 m) vira a posição

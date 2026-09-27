@@ -68,31 +68,26 @@ async function query(sql, params = []) {
 
   // Sugestões de recompra (routes/relatorios.js) - última compra por SKU no
   // faturado oficial e nos pedidos do app.
+  // sugestões de recompra: uma linha por (SKU, pedido); o app sem as cópias
+  // da importação antiga de faturamento (origem 'faturamento')
   if (s.includes('/* SUGESTOES-RECOMPRA:OFICIAL */')) {
-    const porSku = new Map();
+    const vistos = new Set(), rows = [];
     for (const it of pedidosOficiaisItens) {
       if (it.status !== 'faturado' || it.cliente_codigo_oficial !== params[0] || !it.data_faturamento) continue;
-      const g = porSku.get(it.codigo_sku) || { codigo_sku: it.codigo_sku, ultima_compra: null, pedidos: new Set() };
-      if (!g.ultima_compra || it.data_faturamento > g.ultima_compra) g.ultima_compra = it.data_faturamento;
-      g.pedidos.add(it.nr_pedido);
-      porSku.set(it.codigo_sku, g);
+      const k = `${it.codigo_sku}|${it.data_faturamento}|${it.nr_pedido}`;
+      if (!vistos.has(k)) { vistos.add(k); rows.push({ codigo_sku: it.codigo_sku, data: it.data_faturamento, pedido: it.nr_pedido }); }
     }
-    return { rows: [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size })) };
+    return { rows };
   }
   if (s.includes('/* SUGESTOES-RECOMPRA:APP */')) {
-    const porSku = new Map();
-    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]))) {
+    const rows = [];
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
-        if (!prod) continue;
-        const g = porSku.get(prod.codigo_sku) || { codigo_sku: prod.codigo_sku, ultima_compra: null, pedidos: new Set() };
-        const data = new Date(ped.data_pedido);
-        if (!g.ultima_compra || data > g.ultima_compra) g.ultima_compra = data;
-        g.pedidos.add(ped.id);
-        porSku.set(prod.codigo_sku, g);
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido).toISOString().slice(0, 10), pedido: 'app' + ped.id });
       }
     }
-    return { rows: [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size })) };
+    return { rows };
   }
 
   // comprasDoCliente (routes/relatorios.js) - Histórico, Rotatividade,
@@ -104,7 +99,7 @@ async function query(sql, params = []) {
   }
   if (s.includes('/* COMPRAS-CLIENTE:APP */')) {
     const rows = [];
-    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]))) {
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
         if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido).toISOString().slice(0, 10), quantidade: it.quantidade, pedido: 'app' + ped.id });
@@ -152,7 +147,7 @@ async function query(sql, params = []) {
   if (s.includes('/* COMPRADOS-RECENTES:APP */')) {
     const limite = Date.now() - Number(params[1]) * 86400000;
     const rows = [];
-    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && new Date(p.data_pedido).getTime() > limite)) {
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && new Date(p.data_pedido).getTime() > limite && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
         if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido), quantidade: it.quantidade, pedido: 'app' + ped.id });
@@ -179,7 +174,7 @@ async function query(sql, params = []) {
     const rows = [];
     for (const it of pedidoItens) {
       const prod = produtos.find(p => p.id === it.produto_id);
-      const ped = pedidos.find(p => p.id === it.pedido_id);
+      const ped = pedidos.find(p => p.id === it.pedido_id && p.origem !== 'faturamento');
       const c = ped && clientes.find(cl => String(cl.id) === String(ped.cliente_id));
       if (prod && c && params[0].includes(prod.codigo_sku)) {
         rows.push({ id: c.id, nome: c.nome, documento: c.documento, quantidade: it.quantidade, data: new Date(ped.data_pedido).toISOString().slice(0, 10) });

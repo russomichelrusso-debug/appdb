@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
+const { SQL_PEDIDO_APP_VALIDO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 
 router.param('id', validarIdInteiro);
@@ -67,8 +68,10 @@ const FAIXA_6_A_8_MESES = [180, 269];
 // olhavam o app (desde 05/2026, uma fração das compras) - quem comprava pelo
 // ERP aparecia sem histórico. Mesmas regras de comprados-recentes:
 //  - código promocional (P/P1/P2 + código) conta como o produto base;
-//  - pedido do app e faturado do mesmo SKU no mesmo dia são a mesma compra:
-//    nesse dia vale o faturado (senão somaria em dobro).
+//  - pedido do app que já virou faturado oficial não conta de novo, e as
+//    cópias da importação antiga de faturamento nunca contam (regra e janela
+//    em routes/lib/comprasApp.js);
+//  - se ainda sobrar app e faturado do mesmo SKU no mesmo dia, vale o faturado.
 // Devolve Map codigo_sku -> { codigo_sku, nome, noCatalogo, dias: Map
 // 'AAAA-MM-DD' -> { quantidade, pedidos: Set } }. `null` se o cliente não existe.
 async function comprasDoCliente(clienteId) {
@@ -90,16 +93,19 @@ async function comprasDoCliente(clienteId) {
        FROM pedidos ped
        JOIN pedido_itens pi ON pi.pedido_id = ped.id
        JOIN produtos p ON p.id = pi.produto_id
-       WHERE ped.cliente_id = $1`,
+       WHERE ped.cliente_id = $1 AND ${SQL_PEDIDO_APP_VALIDO}`,
       [clienteId]),
     pool.query('SELECT codigo_sku, nome FROM produtos'),
   ]);
   const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
   const codigosConhecidos = new Set(nomePorCodigo.keys());
   const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+  const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+  const datasOficiais = indexarDatasOficiais(oficial.rows, skuDe);
+  const appNaoFaturado = app.rows.filter(l => !pedidoAppJaFaturado(skuDe(l), l.data, datasOficiais));
   // primeiro separa por origem, depois escolhe a origem de cada dia
   const brutos = new Map(); // sku -> dia -> { oficial: {q, pedidos}, app: {q, pedidos} }
-  for (const [origem, rows] of [['oficial', oficial.rows], ['app', app.rows]]) {
+  for (const [origem, rows] of [['oficial', oficial.rows], ['app', appNaoFaturado]]) {
     for (const l of rows) {
       if (!l.data) continue;
       const sku = codigoBase(String(l.codigo_sku), codigosConhecidos);
@@ -282,12 +288,16 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
          JOIN produtos p ON p.id = pi.produto_id
          JOIN pedidos ped ON ped.id = pi.pedido_id
          JOIN clientes c ON c.id = ped.cliente_id
-         WHERE p.codigo_sku = ANY($1)`,
+         WHERE p.codigo_sku = ANY($1) AND ${SQL_PEDIDO_APP_VALIDO}`,
         [variantes]),
     ]);
     const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+    // pedido do app que já virou faturado oficial desse cliente não conta de
+    // novo (routes/lib/comprasApp.js) - todas as variantes são "o produto"
+    const datasOficiais = indexarDatasOficiais(oficial.rows, r => String(r.id));
+    const appNaoFaturado = app.rows.filter(r => !pedidoAppJaFaturado(String(r.id), r.data, datasOficiais));
     const porCliente = new Map();
-    for (const [origem, rows] of [['oficial', oficial.rows], ['app', app.rows]]) {
+    for (const [origem, rows] of [['oficial', oficial.rows], ['app', appNaoFaturado]]) {
       for (const r of rows) {
         const g = porCliente.get(r.id) || { id: r.id, nome: r.nome, documento: r.documento, dias: new Map(), ultima_compra: null, nota_fiscal: null };
         const d = dia(r.data);
@@ -299,8 +309,7 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
         porCliente.set(r.id, g);
       }
     }
-    // Pedido do app faturado no mesmo dia é a mesma compra (mesma regra de
-    // comprados-recentes): nesse dia vale só a quantidade do faturado.
+    // Se ainda sobrar app e faturado no mesmo dia, vale só o faturado.
     const compradores = [...porCliente.values()]
       .map(g => ({
         id: g.id, nome: g.nome, documento: g.documento,
@@ -387,29 +396,41 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
       codigoOficial
         ? pool.query(
           `/* sugestoes-recompra:oficial */
-           SELECT codigo_sku, MAX(data_faturamento) AS ultima_compra, COUNT(DISTINCT nr_pedido) AS num_pedidos
+           SELECT DISTINCT codigo_sku, data_faturamento AS data, nr_pedido AS pedido
            FROM pedidos_oficiais_itens
-           WHERE status = 'faturado' AND cliente_codigo_oficial = $1 AND data_faturamento IS NOT NULL
-           GROUP BY codigo_sku`,
+           WHERE status = 'faturado' AND cliente_codigo_oficial = $1 AND data_faturamento IS NOT NULL`,
           [codigoOficial])
         : Promise.resolve({ rows: [] }),
       pool.query(
         `/* sugestoes-recompra:app */
-         SELECT p.codigo_sku, MAX(ped.data_pedido) AS ultima_compra, COUNT(DISTINCT ped.id) AS num_pedidos
+         SELECT DISTINCT p.codigo_sku, ped.data_pedido::date AS data, 'app' || ped.id AS pedido
          FROM pedidos ped
          JOIN pedido_itens pi ON pi.pedido_id = ped.id
          JOIN produtos p ON p.id = pi.produto_id
-         WHERE ped.cliente_id = $1
-         GROUP BY p.codigo_sku`,
+         WHERE ped.cliente_id = $1 AND ${SQL_PEDIDO_APP_VALIDO}`,
         [req.params.id]),
       pool.query('SELECT codigo_sku, nome FROM produtos'),
     ]);
 
     const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
     const codigosConhecidos = new Set(nomePorCodigo.keys());
+    // uma linha por (SKU, pedido); pedido do app que já virou faturado oficial
+    // não conta de novo (routes/lib/comprasApp.js)
+    const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+    const datasOficiais = indexarDatasOficiais(oficial.rows, skuDe);
+    const porSku = new Map();
+    for (const l of [...oficial.rows, ...app.rows.filter(l => !pedidoAppJaFaturado(skuDe(l), l.data, datasOficiais))]) {
+      if (!l.data) continue;
+      const sku = skuDe(l);
+      const g = porSku.get(sku) || { codigo_sku: sku, ultima_compra: null, pedidos: new Set() };
+      const data = new Date(l.data);
+      if (!g.ultima_compra || data > g.ultima_compra) g.ultima_compra = data;
+      g.pedidos.add(String(l.pedido));
+      porSku.set(sku, g);
+    }
     const grupos = new Map();
-    for (const linha of [...oficial.rows, ...app.rows]) {
-      const sku = codigoBase(String(linha.codigo_sku), codigosConhecidos);
+    for (const linha of [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size }))) {
+      const sku = linha.codigo_sku;
       const nome = nomePorCodigo.get(sku);
       if (!nome || !linha.ultima_compra) continue; // produto fora do catálogo: sem nome pra agrupar
       const { chave, rotulo } = grupoDoProduto(nome);
@@ -473,7 +494,7 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
          FROM pedidos ped
          JOIN pedido_itens pi ON pi.pedido_id = ped.id
          JOIN produtos p ON p.id = pi.produto_id
-         WHERE ped.cliente_id = $1 AND ped.data_pedido::date > CURRENT_DATE - $2::int`,
+         WHERE ped.cliente_id = $1 AND ped.data_pedido::date > CURRENT_DATE - $2::int AND ${SQL_PEDIDO_APP_VALIDO}`,
         [req.params.id, COMPRADOS_RECENTES_DIAS]),
       pool.query('SELECT codigo_sku, nome FROM produtos'),
     ]);
@@ -482,11 +503,14 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
     const codigosConhecidos = new Set(nomePorCodigo.keys());
     const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
     const porSku = new Map();
-    // Pedido feito pelo app e faturado no mesmo dia é a mesma compra: nesse
-    // dia vale só a quantidade do faturado (senão somaria em dobro).
+    // Pedido do app que já virou faturado oficial não conta de novo
+    // (routes/lib/comprasApp.js); se ainda sobrar app e faturado do mesmo SKU
+    // no mesmo dia, vale só a quantidade do faturado.
+    const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+    const datasOficiais = indexarDatasOficiais(oficial.rows, skuDe);
     const linhas = [
       ...oficial.rows.map(l => ({ ...l, origem: 'oficial' })),
-      ...app.rows.map(l => ({ ...l, origem: 'app' })),
+      ...app.rows.filter(l => !pedidoAppJaFaturado(skuDe(l), l.data, datasOficiais)).map(l => ({ ...l, origem: 'app' })),
     ];
     for (const linha of linhas) {
       if (!linha.data) continue;
