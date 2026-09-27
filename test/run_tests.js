@@ -977,6 +977,30 @@ async function main() {
     'importação grava o % da política (Exclusive 15), não o 12 do relatório'
   );
 
+  // 23) Importação oficial: nr_pedido com zeros à esquerda ("00597502") é o
+  // mesmo pedido que "597502" (não cria linha duplicada), e reimportar um
+  // relatório com a data de implantação certa corrige a que estava errada
+  // (caso real: relatório de 30/11/2025 salvo em Excel americano).
+  mockDb.__seed({
+    clientes: [{ id: 9402, nome: 'LOJA REIMPORT', codigo_oficial: 'COD9402' }],
+    pedidosOficiaisItens: [
+      { nr_pedido: '597502', codigo_sku: '60863', cliente_codigo_oficial: 'COD9402', quantidade: 6, valor: 100, data_implantacao: '2025-05-11', data_faturamento: '2025-06-11', status: 'faturado' },
+    ],
+  });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [
+      { nr_pedido: '00597502', codigo_sku: '60863', cliente_codigo_oficial: 'COD9402', cliente_nome: 'LOJA REIMPORT', status: 'faturado', valor: 100, quantidade: 6, data_implantacao: '2025-11-05', data_faturamento: '2025-11-06' },
+      { nr_pedido: '00490144BRO', codigo_sku: '60067', cliente_codigo_oficial: 'COD9402', cliente_nome: 'LOJA REIMPORT', status: 'faturado', valor: 5, quantidade: 1, data_implantacao: '2024-07-12', data_faturamento: '2024-07-15' },
+    ],
+  });
+  const linhasReimport = mockDb.__getPedidosOficiaisItens().filter(it => it.cliente_codigo_oficial === 'COD9402');
+  const pedidoCorrigido = linhasReimport.find(it => it.nr_pedido === '597502');
+  assert(
+    res.status < 300 && !linhasReimport.some(it => it.nr_pedido === '00597502') && linhasReimport.some(it => it.nr_pedido === '00490144BRO')
+      && pedidoCorrigido && pedidoCorrigido.data_implantacao === '2025-11-05' && pedidoCorrigido.data_faturamento === '2025-11-06',
+    `importação: zeros à esquerda não duplicam o pedido (só em número puro) e reimportar corrige a data de implantação: ${JSON.stringify(linhasReimport)}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

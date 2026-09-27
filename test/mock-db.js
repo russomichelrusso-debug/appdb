@@ -710,6 +710,25 @@ async function query(sql, params = []) {
   }
 
   // pedidos
+  // POST /api/pedidos-oficiais/importar (UNNEST em lote + ON CONFLICT) - vem
+  // antes do INSERT INTO PEDIDOS abaixo, que também casaria com este SQL.
+  if (s.includes('INSERT INTO PEDIDOS_OFICIAIS_ITENS') && s.includes('UNNEST')) {
+    const [nrs, skus, clis, qtds, valores, impls, fats, nfs, classis, transps, sits, status] = params;
+    nrs.forEach((nr, i) => {
+      const novo = {
+        nr_pedido: nr, codigo_sku: skus[i], cliente_codigo_oficial: clis[i], quantidade: qtds[i], valor: valores[i],
+        data_implantacao: impls[i], data_faturamento: fats[i], nota_fiscal: nfs[i], classificatorio: classis[i],
+        transportadora: transps[i], situacao_pedido: sits[i], status: status[i],
+      };
+      const atual = pedidosOficiaisItens.find(it => it.nr_pedido === nr && it.codigo_sku === skus[i]);
+      if (!atual) { pedidosOficiaisItens.push(novo); return; }
+      const novoFaturado = novo.status === 'faturado';
+      if (novoFaturado || atual.status !== 'faturado') { atual.quantidade = novo.quantidade; atual.valor = novo.valor; }
+      atual.data_implantacao = novo.data_implantacao ?? atual.data_implantacao;
+      if (novoFaturado) Object.assign(atual, { data_faturamento: novo.data_faturamento, nota_fiscal: novo.nota_fiscal, status: 'faturado' });
+    });
+    return { rows: [] };
+  }
   if (s.includes('INSERT INTO PEDIDOS')) {
     // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id
     const numeroCotacao = params[3] ?? null;
@@ -1128,6 +1147,7 @@ module.exports = {
   __getClientes: () => clientes,
   __getLevantamentos: () => levantamentos,
   __getPedidoItens: () => pedidoItens,
+  __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,
 };
