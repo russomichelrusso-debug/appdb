@@ -184,7 +184,7 @@ Supabase, sem PR — não é mudança de código.
   e saía do pedido (caso real: 3 rebolos na última compra, prateleira vazia). Com cliente
   selecionado, o Levantamento mostra o que ele comprou nos **últimos 12 meses** e não está na
   contagem (`GET /api/clientes/:id/comprados-recentes`, `routes/relatorios.js`: faturado + app, por
-  SKU, promocional unido ao base; pedido do app e faturado no mesmo dia contam uma vez só).
+  SKU, promocional unido ao base; pedido do app já faturado conta uma vez só — ver "Fontes de dados").
   Decisões do usuário: **lista no Levantamento + aviso ao salvar** ("Incluir e salvar" / "Salvar
   assim"); incluir = **estoque 0 e pedido com a quantidade da última compra**, e o item segue o
   fluxo normal ("Adicionar todos ao orçamento"). Cópia por cliente em `localStorage`
@@ -198,10 +198,16 @@ Supabase, sem PR — não é mudança de código.
     Faturamento — a verdade, ~3.700 pedidos) e `pedidos`/`pedido_itens` (o que o vendedor fecha
     no app, só desde 05/2026, ~260 pedidos). Tela que responde "o que o cliente comprou" usa as
     duas: `comprasDoCliente` (`routes/relatorios.js`) junta faturado + app por SKU e dia, código
-    promocional (P/P1/P2) unido ao base, e app + faturado do mesmo SKU no mesmo dia = uma compra
-    só (vale o faturado). Usada por Histórico, Rotatividade, Recuperar e consumo estimado;
-    "Já compraram" (aba Produtos) e `comprados-recentes` seguem a mesma regra. Antes, 118 dos 293
-    clientes que compraram no ERP em 12 meses apareciam sem histórico nenhum.
+    promocional (P/P1/P2) unido ao base. Usada por Histórico, Rotatividade, Recuperar e consumo
+    estimado; "Já compraram" (aba Produtos), `comprados-recentes` e sugestões seguem a mesma regra.
+    Antes, 118 dos 293 clientes que compraram no ERP em 12 meses apareciam sem histórico nenhum.
+  - **Pedido do app não conta em dobro** (`routes/lib/comprasApp.js`, 09/2026): o vendedor fecha
+    no app (ou importa o PDF) e o ERP fatura dias depois — a regra antiga ("mesmo dia") contava duas
+    compras e a Rotatividade encurtava ("repõe a cada ~5 dias"). Pedido do app/PDF só conta se não
+    houver faturado oficial do mesmo cliente + produto entre 7 dias antes e 45 depois; pedido com
+    `origem = 'faturamento'` (cópias de uma importação antiga de faturamento, já removida — 3.067
+    itens) nunca conta. Pedido do app ainda não faturado continua contando (decisão das sugestões).
+    Toda tela nova que some as duas fontes usa `SQL_PEDIDO_APP_VALIDO` + `pedidoAppJaFaturado`.
   - **Entrada de Pedidos ≠ Faturamento**. O painel oficial conta a entrada pela **data de
     implantação** (`Implantação`/`Dt.Implant` → `data_implantacao`), **carteira + faturado**, e
     **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx: itens avulsos de valor baixo, fora

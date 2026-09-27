@@ -293,6 +293,11 @@ router.post('/importar', async (req, res) => {
     let clientesClassificados = 0, clientesClassifIgnorados = 0;
     for (const c of (classificacoes || [])) {
       if (!c.nome || !c.tipo) continue;
+      // "Sem Classificatório" no relatório = cliente sem classificatório (grava
+      // NULL). Antes virava um tipo com esse nome e o cliente aparecia como
+      // classificado, sem faixa nem desconto.
+      const semClassificatorio = /^SEMCLASSIFICATORIO$/.test(String(c.tipo).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z]/g, ''));
+      const tipo = semClassificatorio ? null : c.tipo;
       const clienteId = await acharOuCriarCliente(client, { nome: c.nome, codigo_oficial: c.codigo_oficial || null });
       const dataRef = c.data_referencia || null;
       const upd = await client.query(
@@ -303,7 +308,7 @@ router.post('/importar', async (req, res) => {
          RETURNING id`,
         // percentual pela Política Comercial (nome do classificatório), não o
         // número que veio no relatório - ver routes/lib/politicaComercial.js
-        [c.tipo, descontoPelaPolitica(c.tipo, c.desconto ?? null), clienteId, dataRef]
+        [tipo, tipo ? descontoPelaPolitica(tipo, c.desconto ?? null) : null, clienteId, dataRef]
       );
       if (upd.rows.length > 0) clientesClassificados++;
       else clientesClassifIgnorados++;
