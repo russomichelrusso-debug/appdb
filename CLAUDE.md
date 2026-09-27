@@ -67,6 +67,12 @@ Pegadinhas de ambiente:
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
   causa do "Adicionar todos ao orçamento" da busca que aparecia sem resultado e não fazia nada,
   PR #128).
+- **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,
+  `data_implantacao`) e `date_trunc(...)` chegam no JSON como meia-noite UTC
+  (`2026-09-11T00:00:00.000Z`); no fuso do Brasil isso vira o dia (ou o mês/trimestre) anterior.
+  Usar `formatDateBr` (`index.html`, formata `AAAA-MM-DD` direto do texto), `partesDoPeriodo`
+  (`curva-abc.html`, rótulos dos gráficos) ou `String(d).slice(0, 10)`. Já causou: faturado 11/09
+  aparecendo 10/09 (PR #134) e o gráfico mensal inteiro um mês atrás, setembro como "ago/26" (PR #135).
 
 ## Fluxo de trabalho
 
@@ -89,9 +95,8 @@ Supabase, sem PR — não é mudança de código.
   erro assíncrono não tratado, rastro de importação, pedido não pode ser sobrescrito por outro
   usuário, dados sujos na importação, vazamento de erro do banco pro cliente, timeout em chamadas
   externas, hash de token de sessão, login Google mais rígido, CORS restrito, e outras corridas
-  menores. **O checklist dentro do próprio arquivo ficou desatualizado (ainda mostra tudo como
-  `[ ]`)** — o histórico do git (`git log --oneline | grep "Segurança PR"`) é a fonte confiável do
-  que já foi corrigido, não o arquivo.
+  menores. Checklist do arquivo atualizado em 09/2026 (cada item aponta o PR que corrigiu): 23 de
+  24 feitos, **só o B2 segue aberto** (ver "Caminho a seguir").
 - Atalhos de produtividade pro vendedor: botão "Produtos comprados" (pula direto pra Curva ABC já
   filtrada no cliente), botão de adicionar direto ao orçamento a partir da Curva ABC, correção da
   lista de campanhas que sumia no Painel Administrativo (race condition de render antes do dado
@@ -112,11 +117,7 @@ Supabase, sem PR — não é mudança de código.
   com número/"Ø"; ~1.700 produtos → ~500 grupos; tipos diferentes de broca continuam separados)
   — reaproveitar sempre que precisar tratar "o produto" em vez de cada SKU. Não confundir com a
   rota antiga `/clientes/:id/recuperar` (cruza com levantamento, por SKU, sem agrupar), que
-  continua existindo. Histórico/Rotatividade/Recuperar/consumo estimado do cliente leem
-  `comprasDoCliente` (`routes/relatorios.js`: faturado oficial + app, P+base unidos, app e
-  faturado do mesmo dia = uma compra) — até 09/2026 liam só pedidos do app e o cliente que
-  comprava pelo ERP aparecia sem histórico. Toda tela nova de "o que o cliente comprou" deve
-  usar essa função (ou a mesma regra), nunca só `pedidos`/`pedido_itens`.
+  continua existindo — ver "Fontes de dados" abaixo.
 - **Localização do cliente gravada ao salvar o Levantamento**: ao tocar em salvar, o app pega o
   GPS do celular (até ~6 s, sem aviso se negar ou falhar) e manda junto no `POST
   /api/levantamentos` — inclusive pela fila offline, com a leitura feita dentro da loja. Escolhido
@@ -188,6 +189,33 @@ Supabase, sem PR — não é mudança de código.
   (`cortagCompradosRecentes_v1`) pra funcionar na loja sem internet. Complementa as 💡 sugestões,
   que cobrem o que ele não compra há mais de 1 ano. `askConfirm` ganhou `opcoes.cancelarLabel`.
 
+- **Fontes de dados conciliadas com o sistema oficial** (PRs #132–#136, 09/2026) — o usuário
+  comparou o Dashboard com o painel do Salesforce e os números não batiam; a revisão achou mais
+  telas lendo a fonte errada. Regras que valem pra qualquer tela nova:
+  - **Duas fontes de "compra"**: `pedidos_oficiais_itens` (relatório do ERP, Carteira +
+    Faturamento — a verdade, ~3.700 pedidos) e `pedidos`/`pedido_itens` (o que o vendedor fecha
+    no app, só desde 05/2026, ~260 pedidos). Tela que responde "o que o cliente comprou" usa as
+    duas: `comprasDoCliente` (`routes/relatorios.js`) junta faturado + app por SKU e dia, código
+    promocional (P/P1/P2) unido ao base, e app + faturado do mesmo SKU no mesmo dia = uma compra
+    só (vale o faturado). Usada por Histórico, Rotatividade, Recuperar e consumo estimado;
+    "Já compraram" (aba Produtos) e `comprados-recentes` seguem a mesma regra. Antes, 118 dos 293
+    clientes que compraram no ERP em 12 meses apareciam sem histórico nenhum.
+  - **Entrada de Pedidos ≠ Faturamento**. O painel oficial conta a entrada pela **data de
+    implantação** (`Implantação`/`Dt.Implant` → `data_implantacao`), **carteira + faturado**, e
+    **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx: itens avulsos de valor baixo, fora
+    do catálogo; a série principal tem 6 dígitos, hoje na casa dos 676000). Com essa regra o
+    gráfico "Qtde. Clientes Mês" bateu cliente a cliente com o oficial de jan a ago/2026. Está em
+    `SQL_ENTRADA_PEDIDOS_MENSAL`/`SQL_ENTRADA_PEDIDOS_DO_MES` (`GET /api/dashboard/resumo`).
+    Faturamento (classificatório, Curva ABC, top clientes, vendas semanal/trimestral) continua
+    por `data_faturamento` (`Dt.Emissão`), só `status = 'faturado'`.
+  - **Dashboard** (`curva-abc.html`, aba Dashboard): "Valor Entrada de Pedidos Mês", "Qtde.
+    Pedidos Mês", "Qtde. Clientes Mês" e ticket médio usam a regra de entrada; tocar no cartão de
+    Entrada de Pedidos abre a lista dos pedidos do mês (cliente, dia, valor; a soma bate com o
+    cartão) — mesmo mecanismo `kpiExpandData`/`toggleKpiExpand` dos cartões de contas sem compra,
+    que ganhou `unidade`/`vazio` por cartão.
+  - Decisão do usuário: em "Já compraram" a data mostrada é a do **faturamento** (a NF ao lado é
+    dela), não a do pedido.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -243,3 +271,17 @@ Supabase, sem PR — não é mudança de código.
   de usá-la como referência.
 - Correção pequena pendente: mover o `CREATE TABLE usuarios` do `schema.sql` pra antes da
   primeira referência a ele, pra um banco novo subir na primeira execução.
+- **Segurança B2** (único item aberto do plano): em `POST /api/pedidos` a busca da cotação
+  existente roda antes do `BEGIN` — duas atualizações simultâneas da mesma cotação podem duplicar
+  itens. Mover pra dentro da transação com `SELECT ... FOR UPDATE`.
+- **Pendências de dado** (não é código — o usuário importa pelo Painel Administrativo):
+  - **Novembro/2025 falta no banco** (R$ 1 mil faturado, contra R$ 430–520 mil nos meses
+    vizinhos). Tira ~R$ 500 mil dos 12 meses móveis do classificatório (faixa mais baixa, "risco
+    de queda" falso, "sem comprar" pra quem comprou em novembro) até sair da janela em 12/2026.
+  - A importação **nunca apaga**: pedido de carteira cancelado no ERP continua como "carteira" até
+    a limpeza de carteira antiga (Painel → Avançado). Provável causa (não confirmada) de a Entrada
+    de Pedidos de set/2026 ter ficado R$ 8,2 mil / 2 clientes acima do oficial (último relatório
+    importado era de 25/09) — conferir de novo depois de importar um relatório atual.
+- Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma
+  no faturamento do classificatório, na Curva ABC e no top clientes (valores pequenos). Se o painel
+  oficial também a exclui dali, dá pra reaproveitar o mesmo filtro (`length(nr_pedido) <= 6`).
