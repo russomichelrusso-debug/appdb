@@ -95,7 +95,7 @@ async function query(sql, params = []) {
   if (s.includes('/* COMPRAS-CLIENTE:OFICIAL */')) {
     return { rows: pedidosOficiaisItens
       .filter(it => it.status === 'faturado' && it.cliente_codigo_oficial === params[0] && it.data_faturamento)
-      .map(it => ({ codigo_sku: it.codigo_sku, data: it.data_faturamento, quantidade: it.quantidade, pedido: it.nr_pedido })) };
+      .map(it => ({ codigo_sku: it.codigo_sku, data: it.data_faturamento, quantidade: it.quantidade, pedido: it.nr_pedido, descricao: it.descricao || null })) };
   }
   if (s.includes('/* COMPRAS-CLIENTE:APP */')) {
     const rows = [];
@@ -439,7 +439,7 @@ async function query(sql, params = []) {
   // agrega pedidos_oficiais_itens por codigo_sku literal, igual a query
   // real faz antes da reconciliação P/P1/P2 (feita em JS depois, no
   // próprio relatorios.js - aqui só precisa devolver os dados crus).
-  if (s.includes('COALESCE(P.NOME, POI.CODIGO_SKU) AS PRODUTO')) {
+  if (s.includes('COALESCE(P.NOME, MAX(POI.DESCRICAO), POI.CODIGO_SKU) AS PRODUTO')) {
     const porCliente = s.includes('POI.CLIENTE_CODIGO_OFICIAL = $1');
     let idx = 0;
     const clienteCodigo = porCliente ? params[idx++] : null;
@@ -452,8 +452,9 @@ async function query(sql, params = []) {
     if (fim) itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim);
     const porCodigo = new Map();
     for (const it of itens) {
-      const atual = porCodigo.get(it.codigo_sku) || { codigo_sku: it.codigo_sku, pedidosSet: new Set(), quantidade_total: 0, faturamento_total: 0 };
+      const atual = porCodigo.get(it.codigo_sku) || { codigo_sku: it.codigo_sku, pedidosSet: new Set(), quantidade_total: 0, faturamento_total: 0, descricao: null };
       atual.pedidosSet.add(it.nr_pedido);
+      if (it.descricao && (!atual.descricao || it.descricao > atual.descricao)) atual.descricao = it.descricao; // MAX(poi.descricao)
       atual.quantidade_total += Number(it.quantidade) || 0;
       atual.faturamento_total += Number(it.valor) || 0;
       porCodigo.set(it.codigo_sku, atual);
@@ -462,7 +463,7 @@ async function query(sql, params = []) {
       const prod = produtos.find(p => p.codigo_sku === g.codigo_sku);
       return {
         codigo_sku: g.codigo_sku,
-        produto: prod ? prod.nome : g.codigo_sku,
+        produto: prod ? prod.nome : (g.descricao || g.codigo_sku),
         categoria: prod ? prod.categoria : null,
         num_pedidos: g.pedidosSet.size,
         quantidade_total: g.quantidade_total,
@@ -708,18 +709,19 @@ async function query(sql, params = []) {
   // POST /api/pedidos-oficiais/importar (UNNEST em lote + ON CONFLICT) - vem
   // antes do INSERT INTO PEDIDOS abaixo, que também casaria com este SQL.
   if (s.includes('INSERT INTO PEDIDOS_OFICIAIS_ITENS') && s.includes('UNNEST')) {
-    const [nrs, skus, clis, qtds, valores, impls, fats, nfs, classis, transps, sits, status] = params;
+    const [nrs, skus, clis, qtds, valores, impls, fats, nfs, classis, transps, sits, status, descs] = params;
     nrs.forEach((nr, i) => {
       const novo = {
         nr_pedido: nr, codigo_sku: skus[i], cliente_codigo_oficial: clis[i], quantidade: qtds[i], valor: valores[i],
         data_implantacao: impls[i], data_faturamento: fats[i], nota_fiscal: nfs[i], classificatorio: classis[i],
-        transportadora: transps[i], situacao_pedido: sits[i], status: status[i],
+        transportadora: transps[i], situacao_pedido: sits[i], status: status[i], descricao: descs ? descs[i] : null,
       };
       const atual = pedidosOficiaisItens.find(it => it.nr_pedido === nr && it.codigo_sku === skus[i]);
       if (!atual) { pedidosOficiaisItens.push(novo); return; }
       const novoFaturado = novo.status === 'faturado';
       if (novoFaturado || atual.status !== 'faturado') { atual.quantidade = novo.quantidade; atual.valor = novo.valor; }
       atual.data_implantacao = novo.data_implantacao ?? atual.data_implantacao;
+      atual.descricao = novo.descricao ?? atual.descricao;
       if (novoFaturado) Object.assign(atual, { data_faturamento: novo.data_faturamento, nota_fiscal: novo.nota_fiscal, status: 'faturado' });
     });
     return { rows: [] };
