@@ -89,14 +89,22 @@ A v2 fica num **repositório separado** (`appdb-v2`, privado), criado a partir d
 3. **Frontend da v2 nunca aponta para a API de produção.** `API_BASE_URL_DEFAULT` (em
    `index.html`, `curva-abc.html`, `ficha-cnpj.html`) vem para a API da v2 no primeiro commit do
    repositório novo. O `keep-alive.yml` copiado passa a pingar a v2 (ou fica desligado).
-4. **Login Google**: acrescentar o endereço da v2 nas "Origens JavaScript autorizadas" do mesmo
+4. **Frontend da v2 em outro endereço (origem) — não no GitHub Pages desta mesma conta.** Todos os
+   repositórios de uma conta publicam em `russomichelrusso-debug.github.io/...`, a mesma origem, e o
+   navegador divide o `localStorage` por origem: a v2 leria e sobrescreveria a sessão
+   (`cortagAuthToken_v1`), o endereço da API (`cortagApiConfig_v1`), o carrinho e a **fila offline**
+   da produção no mesmo celular. Usar Cloudflare Pages ou Vercel (endereço próprio).
+5. **Login Google**: acrescentar o endereço da v2 nas "Origens JavaScript autorizadas" do mesmo
    Client ID (não mexe em nada da produção) — ou criar um Client ID de teste.
-5. **Correção de bug de produção é feita aqui (`appdb`) primeiro** e depois levada para a v2
+6. **Correção de bug de produção é feita aqui (`appdb`) primeiro** e depois levada para a v2
    (`git fetch producao && git merge producao/main` no repositório novo). Nunca o contrário: nada
    da v2 volta para cá antes da troca.
-6. **A troca é um corte planejado**, não um merge: piloto numa região → migração do banco de
-   produção com o `schema.sql` da v2 (testado antes na cópia) → apontar o domínio/Pages para a v2
-   → manter a v1 no ar por algumas semanas como volta.
+7. **A troca é um corte planejado**, não um merge: piloto numa região → migração do banco de
+   produção com o `schema.sql` da v2 (testado antes na cópia) → publicar a v2 **no endereço atual
+   da produção** → manter a v1 num endereço de reserva por algumas semanas como volta. Publicar no
+   mesmo endereço é o que preserva sessão, carrinho e fila offline de quem já usa o app (ficam no
+   `localStorage` daquela origem); a v2 precisa ler as chaves da v1 (`cortag…_v1`) ou migrá-las na
+   primeira abertura — e a fila offline gravada pela v1 tem de ser aceita pela API da v2.
 
 ### Passos manuais (só o dono das contas consegue fazer)
 
@@ -104,9 +112,9 @@ A v2 fica num **repositório separado** (`appdb-v2`, privado), criado a partir d
       Claude não tem permissão de criar repositório; depois disso a cópia é enviada daqui.
 - [ ] Criar o projeto Supabase da v2 e copiar os dados (a string do "Session pooler" vai no Render).
 - [ ] Criar o serviço no Render apontando para `appdb-v2`, com as variáveis da regra 2.
-- [ ] Publicar o frontend da v2 (Cloudflare Pages ou Vercel — versão de teste por PR e rollback
-      num clique; GitHub Pages também serve no começo).
-- [ ] Autorizar o endereço da v2 no Google Cloud Console (regra 4).
+- [ ] Publicar o frontend da v2 em Cloudflare Pages ou Vercel (regra 4 — **não** no GitHub Pages
+      desta conta); de quebra, versão de teste por PR e rollback num clique.
+- [ ] Autorizar o endereço da v2 no Google Cloud Console (regra 5).
 - [ ] Conferir se `ALLOWED_ORIGINS` está definido no Render de **produção** — sem ele a API aceita
       qualquer origem (inclusive a v2).
 
