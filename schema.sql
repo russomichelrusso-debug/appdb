@@ -228,6 +228,10 @@ ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS classificatorio TEXT
 -- ainda, faz sentido: só se sabe depois que foi despachado).
 ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS transportadora TEXT;
 ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS situacao_pedido TEXT;
+-- Descrição do item como vem no relatório ("Descrição") - dá nome aos
+-- produtos que saíram da tabela de preços (não estão em `produtos`), que
+-- antes apareciam só com o código nas telas (94 códigos em 09/2026).
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS descricao TEXT;
 -- Apoia as agregações por mês/semana/trimestre do Dashboard principal
 -- (ver routes/relatorios.js, GET /dashboard/resumo) - antes só havia
 -- índice por cliente_codigo_oficial.

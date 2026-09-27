@@ -223,6 +223,13 @@ Supabase, sem PR — não é mudança de código.
     que ganhou `unidade`/`vazio` por cartão.
   - Decisão do usuário: em "Já compraram" a data mostrada é a do **faturamento** (a NF ao lado é
     dela), não a do pedido.
+  - **Produto que saiu da tabela de preços** aparece com o nome da coluna "Descrição" do relatório
+    (`pedidos_oficiais_itens.descricao`, gravada na importação desde 09/2026), não só com o código.
+    Eram 94 códigos fora de `produtos` (615 linhas, 411 pedidos, 72 sem venda há mais de 1 ano —
+    descontinuados, não arquivo corrompido). Linhas importadas antes ficam sem descrição até alguém
+    reimportar um relatório que tenha o item (7 foram preenchidos a partir dos relatórios de
+    01/11 e 30/11/2025; os outros 87 ainda mostram o código). Nome vem de `produtos` primeiro;
+    `descricao` só entra quando o código não está no catálogo.
 
 ## O que já tentamos e não deu certo
 

@@ -9408,6 +9408,8 @@
         transportadora: ['Transportadora', 'Transp.', 'Transp'],
         situacao_pedido: ['Situação', 'Situação do Pedido', 'Sit.Pedido', 'Status Pedido', 'Situação Pedido'],
         classificatorio: ['Classificatório', 'Classificatorio'],
+        // nome do item no ERP - dá nome ao produto que saiu da tabela de preços
+        descricao: ['Descrição', 'Descricao', 'Descrição Item', 'Desc.Item'],
       };
       // Colunas sem as quais uma linha não pode virar um item de pedido
       // oficial (cliente_codigo_oficial é NOT NULL no banco - ver schema.sql).
@@ -9581,6 +9583,7 @@
             classificatorio: classificatorioBruto ?? null,
             transportadora: campo(r, 'transportadora') ?? null,
             situacao_pedido: campo(r, 'situacao_pedido') ?? null,
+            descricao: campo(r, 'descricao') != null ? String(campo(r, 'descricao')).trim() : null,
             status,
           });
 

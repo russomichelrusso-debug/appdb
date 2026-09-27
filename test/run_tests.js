@@ -1050,6 +1050,24 @@ async function main() {
     `importação: zeros à esquerda não duplicam o pedido (só em número puro) e reimportar corrige a data de implantação: ${JSON.stringify(linhasReimport)}`
   );
 
+  // 24) Produto que saiu da tabela de preços (fora de `produtos`): a
+  // importação grava a "Descrição" do relatório e as telas mostram ela no
+  // lugar do código (antes: cartão "60110 · Cód. 60110").
+  mockDb.__seed({ clientes: [{ id: 9404, nome: 'LOJA DESCONTINUADO', codigo_oficial: 'COD9404' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'DS9404', codigo_sku: '99110', cliente_codigo_oficial: 'COD9404', cliente_nome: 'LOJA DESCONTINUADO', status: 'faturado',
+      valor: 500, quantidade: 2, data_implantacao: '2025-10-01', data_faturamento: '2025-10-03', descricao: 'CORTADOR HD-900' }],
+  });
+  const linhaDesc = mockDb.__getPedidosOficiaisItens().find(it => it.nr_pedido === 'DS9404');
+  const histDesc = await req('GET', '/api/clientes/' + mockDb.__getClientes().find(c => c.codigo_oficial === 'COD9404').id + '/historico');
+  const abcDesc = await req('GET', '/api/produtos-abc-geral');
+  assert(
+    res.status < 300 && linhaDesc && linhaDesc.descricao === 'CORTADOR HD-900'
+      && (histDesc.body || []).some(r => r.codigo_sku === '99110' && r.produto === 'CORTADOR HD-900')
+      && (abcDesc.body || []).some(r => r.codigo_sku === '99110' && r.produto === 'CORTADOR HD-900'),
+    `produto fora da tabela de preços aparece com a Descrição do relatório (histórico e curva ABC): ${JSON.stringify((histDesc.body || []).filter(r => r.codigo_sku === '99110'))}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

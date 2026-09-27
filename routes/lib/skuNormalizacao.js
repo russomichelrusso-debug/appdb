@@ -32,11 +32,15 @@ function mesclarPorCodigoBase(linhas, produtosPorCodigo) {
     atual.quantidade_total += Number(linha.quantidade_total) || 0;
     atual.faturamento_total += Number(linha.faturamento_total) || 0;
     atual._codigosOriginais.push(linha.codigo_sku);
+    // nome que a própria linha trouxe (ex.: "Descrição" do relatório pra
+    // produto fora da tabela de preços) - vale se o catálogo não tiver
+    if (!atual._nomeLinha && linha.produto && String(linha.produto) !== String(linha.codigo_sku)) atual._nomeLinha = linha.produto;
     porGrupo.set(base, atual);
   }
   for (const grupo of porGrupo.values()) {
     const p = produtosPorCodigo[grupo.codigo_sku];
-    grupo.produto = p ? p.nome : grupo.codigo_sku;
+    grupo.produto = p ? p.nome : (grupo._nomeLinha || grupo.codigo_sku);
+    delete grupo._nomeLinha;
     grupo.categoria = p ? p.categoria : null;
   }
   return [...porGrupo.values()];

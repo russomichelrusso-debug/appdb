@@ -174,7 +174,7 @@ router.get('/:clienteId', async (req, res) => {
     if (!codigoOficial) return res.json({ vinculado: false, itens: [] });
 
     const result = await pool.query(
-      `SELECT poi.nr_pedido, poi.codigo_sku, pr.nome AS produto, poi.quantidade, poi.valor,
+      `SELECT poi.nr_pedido, poi.codigo_sku, COALESCE(pr.nome, poi.descricao) AS produto, poi.quantidade, poi.valor,
               poi.data_implantacao, poi.data_faturamento, poi.nota_fiscal, poi.classificatorio,
               poi.transportadora, poi.situacao_pedido, poi.status
        FROM pedidos_oficiais_itens poi
@@ -231,6 +231,7 @@ function mesclarItemOficial(atual, novo) {
     classificatorio: novo.classificatorio ?? atual.classificatorio,
     transportadora: novoFaturado ? novo.transportadora : atual.transportadora,
     situacao_pedido: novoFaturado ? novo.situacao_pedido : atual.situacao_pedido,
+    descricao: novo.descricao || atual.descricao || null,
     status: (novoFaturado || atualFaturado) ? 'faturado' : novo.status,
   };
 }
@@ -348,11 +349,12 @@ router.post('/importar', async (req, res) => {
     const transportadoras = itens.map(it => it.transportadora || null);
     const situacoesPedido = itens.map(it => it.situacao_pedido || null);
     const status = itens.map(it => it.status === 'faturado' ? 'faturado' : 'carteira');
+    const descricoes = itens.map(it => (it.descricao != null && String(it.descricao).trim()) ? String(it.descricao).trim().slice(0, 300) : null);
 
     await client.query(
       `INSERT INTO pedidos_oficiais_itens
-         (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, nota_fiscal, classificatorio, transportadora, situacao_pedido, status)
-       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[])
+         (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, nota_fiscal, classificatorio, transportadora, situacao_pedido, status, descricao)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[])
        ON CONFLICT (nr_pedido, codigo_sku) DO UPDATE SET
          quantidade = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status != 'faturado'
                            THEN EXCLUDED.quantidade ELSE pedidos_oficiais_itens.quantidade END,
@@ -373,8 +375,9 @@ router.post('/importar', async (req, res) => {
                                  ELSE pedidos_oficiais_itens.situacao_pedido END,
          status = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status = 'faturado'
                        THEN 'faturado' ELSE EXCLUDED.status END,
+         descricao = COALESCE(EXCLUDED.descricao, pedidos_oficiais_itens.descricao),
          atualizado_em = now()`,
-      [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, transportadoras, situacoesPedido, status]
+      [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, transportadoras, situacoesPedido, status, descricoes]
     );
 
     await client.query('COMMIT');

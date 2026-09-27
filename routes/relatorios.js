@@ -82,7 +82,7 @@ async function comprasDoCliente(clienteId) {
     codigoOficial
       ? pool.query(
         `/* compras-cliente:oficial */
-         SELECT codigo_sku, data_faturamento AS data, quantidade, nr_pedido AS pedido
+         SELECT codigo_sku, data_faturamento AS data, quantidade, nr_pedido AS pedido, descricao
          FROM pedidos_oficiais_itens
          WHERE status = 'faturado' AND data_faturamento IS NOT NULL AND cliente_codigo_oficial = $1`,
         [codigoOficial])
@@ -101,6 +101,10 @@ async function comprasDoCliente(clienteId) {
   const codigosConhecidos = new Set(nomePorCodigo.keys());
   const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
   const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+  // produto que saiu da tabela de preços (fora de `produtos`): nome pela
+  // "Descrição" do relatório oficial, em vez de mostrar só o código
+  const descricaoPorSku = new Map();
+  for (const l of oficial.rows) if (l.descricao && !descricaoPorSku.has(skuDe(l))) descricaoPorSku.set(skuDe(l), l.descricao);
   const datasOficiais = indexarDatasOficiais(oficial.rows, skuDe);
   const appNaoFaturado = app.rows.filter(l => !pedidoAppJaFaturado(skuDe(l), l.data, datasOficiais));
   // primeiro separa por origem, depois escolhe a origem de cada dia
@@ -125,7 +129,7 @@ async function comprasDoCliente(clienteId) {
       const vale = noDia.oficial.pedidos.size > 0 ? noDia.oficial : noDia.app;
       dias.set(d, { quantidade: vale.q, pedidos: vale.pedidos });
     }
-    compras.set(sku, { codigo_sku: sku, nome: nomePorCodigo.get(sku) || sku, noCatalogo: nomePorCodigo.has(sku), dias });
+    compras.set(sku, { codigo_sku: sku, nome: nomePorCodigo.get(sku) || descricaoPorSku.get(sku) || sku, noCatalogo: nomePorCodigo.has(sku), dias });
   }
   return compras;
 }
@@ -598,7 +602,7 @@ router.get('/produtos-abc-geral', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT poi.codigo_sku,
-              COALESCE(p.nome, poi.codigo_sku) AS produto,
+              COALESCE(p.nome, MAX(poi.descricao), poi.codigo_sku) AS produto,
               p.categoria,
               COUNT(DISTINCT poi.nr_pedido) AS num_pedidos,
               SUM(poi.quantidade) AS quantidade_total,
@@ -643,7 +647,7 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT poi.codigo_sku,
-              COALESCE(p.nome, poi.codigo_sku) AS produto,
+              COALESCE(p.nome, MAX(poi.descricao), poi.codigo_sku) AS produto,
               p.categoria,
               COUNT(DISTINCT poi.nr_pedido) AS num_pedidos,
               SUM(poi.quantidade) AS quantidade_total,
