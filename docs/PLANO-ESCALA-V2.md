@@ -73,7 +73,7 @@ amassada) ou o GPS em segundo plano virarem dor real. B só se entrar uma equipe
 
 ## 3. Como a v2 é construída sem risco
 
-A v2 fica num **repositório separado** (`appdb-v2`, privado), criado a partir de uma cópia deste
+A v2 fica num **repositório separado** (`appdbV2`, privado), criado a partir de uma cópia deste
 (com o histórico — dá para trazer correções daqui com `git merge`). Repositório separado sozinho
 **não isola nada**: o que protege a produção são as regras abaixo.
 
@@ -108,10 +108,10 @@ A v2 fica num **repositório separado** (`appdb-v2`, privado), criado a partir d
 
 ### Passos manuais (só o dono das contas consegue fazer)
 
-- [ ] Criar o repositório **privado** `appdb-v2` vazio no GitHub (sem README) — a integração do
-      Claude não tem permissão de criar repositório; depois disso a cópia é enviada daqui.
+- [x] Criar o repositório **privado** `appdbV2` no GitHub com a cópia do `appdb` (feito em
+      27/09/2026; o isolamento da API e do keep-alive entrou no PR #1 de lá).
 - [ ] Criar o projeto Supabase da v2 e copiar os dados (a string do "Session pooler" vai no Render).
-- [ ] Criar o serviço no Render apontando para `appdb-v2`, com as variáveis da regra 2.
+- [ ] Criar o serviço no Render apontando para `appdbV2`, com as variáveis da regra 2.
 - [ ] Publicar o frontend da v2 em Cloudflare Pages ou Vercel (regra 4 — **não** no GitHub Pages
       desta conta); de quebra, versão de teste por PR e rollback num clique.
 - [ ] Autorizar o endereço da v2 no Google Cloud Console (regra 5).

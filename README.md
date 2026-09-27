@@ -12,7 +12,7 @@ Este repositório contém **frontend (PWA) e backend (API) juntos**, publicados 
 
 O catálogo técnico ilustrado (fotos em alta resolução dos produtos) mora em outro repositório, `cortag-catalogo-tecnico`, publicado à parte no GitHub Pages.
 
-Planos em andamento: `docs/PLANO-ESCALA-V2.md` (escala para 200+ usuários, repositório `appdb-v2`)
+Planos em andamento: `docs/PLANO-ESCALA-V2.md` (escala para 200+ usuários, repositório `appdbV2`)
 e `docs/PLANO-REVISAO-SEGURANCA.md` (concluído).
 
 ## Stack
