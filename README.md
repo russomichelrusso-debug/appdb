@@ -31,19 +31,25 @@ middleware/auth.js          # requireAuth: valida "Authorization: Bearer <token>
 routes/
   auth.js                     # login via Google, /me, logout, CRUD de usuários
   clientes.js                  # CRUD de clientes, import, merge
+  clientesClassificatorio.js    # classificatório do cliente: faixas, status, alertas, objetivo trimestral
   produtos.js                   # catálogo de referência (código+nome+categoria) e sincronização
   catalogoPrecos.js              # catálogo completo de preços por canal x estado (importação da planilha)
   pedidos.js                      # pedidos feitos pelo próprio app (finalizar pedido) e export por período
   pedidosOficiais.js               # importação e consulta da planilha oficial Carteira/Faturamento
   levantamentos.js                  # levantamentos de estoque em campo
-  relatorios.js                      # histórico, rotatividade, consumo estimado, curva ABC geral
+  relatorios.js                      # histórico/rotatividade/recuperar (comprasDoCliente), Já compraram, sugestões, curva ABC, Dashboard
+  produtosPromocionais.js             # SKUs promocionais (P/P1/P2 + código base)
+  radarCnpj.js                        # ficha de CNPJ (radar-cnpj.com + BrasilAPI de reserva)
   previsaoEstoque.js                  # previsão de estoque (relatório ESCE007)
   configuracoes.js                     # configurações chave/valor (campanhas promocionais etc.)
   fichasTecnicas.js                     # balão de ficha técnica (specs resumidas)
   codigosProduto.js                      # EAN-13/DUN-14 por SKU (scanner de código de barras)
   assistente.js                           # assistente de IA (Gemini) — interpreta pergunta falada, nunca inventa dado
-test/                    # suite de testes automatizados (Node) cobrindo login/token
-index.html, curva-abc.html, calculadora-materiais.html, catalogo-embutido.js, manifest.json, icon-*.png  # PWA estático servido pelo GitHub Pages
+  lib/                                     # regras compartilhadas: skuNormalizacao (código promocional → base),
+                                           # agrupamentoProduto (variações → "o produto"), politicaComercial,
+                                           # cnpjBrasilApi, preenchimentoCnpj
+test/                    # suite de testes (node test/run_tests.js), banco simulado em test/mock-db.js
+index.html, curva-abc.html, calculadora-materiais.html, ficha-cnpj.html, catalogo-embutido.js, manifest.json, icon-*.png  # PWA estático servido pelo GitHub Pages
 .github/workflows/keep-alive.yml  # ping em /health a cada 10 min pra evitar o Render dormir (free tier)
 ```
 
@@ -58,6 +64,8 @@ Variáveis de ambiente:
 | `PORT` | Não | Porta HTTP do servidor. Padrão `10000`. |
 | `PREENCHIMENTO_CNPJ_DESLIGADO` | Não | `1` desliga o preenchimento automático das fichas de CNPJ que faltam (ver rota `/api/cnpj-preenchimento/status`). |
 | `GOOGLE_CLIENT_ID` | Não | Client ID do Google usado no login (há um valor fixo no código como padrão). |
+| `ADMIN_EMAIL` | Não | Se definida, só esse e-mail pode virar o **primeiro** usuário (admin) num banco sem usuários. Sem ela, quem logar primeiro vira admin. |
+| `ALLOWED_ORIGINS` | Não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://usuario.github.io`). Sem ela, a API aceita qualquer origem. |
 | `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini usada pelo assistente com IA. |
 | `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.0-flash`. |
 
@@ -105,9 +113,27 @@ Não é usuário/senha. O fluxo:
 - `/api/clientes/:id/ficha-cnpj/existe` — só diz se o cliente já tem ficha guardada (lê o banco, nunca consulta a Receita); usado pelo botão "Ficha cadastral" da barra do cliente, que abre `ficha-cnpj.html?cliente=ID&nome=…&doc=…` direto na ficha
 - `/api/cnpj-preenchimento/status` — progresso do preenchimento automático das fichas que faltam (`routes/lib/preenchimentoCnpj.js`): o servidor completa sozinho, das 01h às 06h de Brasília, no máximo 40 consultas por noite, uma a cada 15 s, só clientes com CNPJ e sem ficha nenhuma; CNPJ não encontrado é tentado até 3 vezes (tabela `cnpj_preenchimento_falhas`); se as duas origens estiverem fora do ar ou no limite, para a noite e retoma na seguinte. Estado do dia em `configuracoes` (`cnpj_preenchimento_auto`)
 - `/api/clientes/:id/comprados-recentes` — SKUs que o cliente comprou nos últimos 12 meses (faturado oficial + pedidos do app, código promocional unido ao base), com a quantidade da compra mais recente; o Levantamento mostra os que não foram contados ("Comprados e não contados") e avisa ao salvar
-- `/api/clientes/:id/historico`, `/rotatividade`, `/levantamentos`, `/consumo-estimado/:produtoId`, `/api/produtos/:codigo/clientes`, `/api/pedidos/exportar`, `/api/produtos-abc-geral` — relatórios
+- `/api/clientes/:id/historico`, `/rotatividade`, `/recuperar`, `/consumo-estimado/:produtoId` — o que o cliente comprou, via `comprasDoCliente` (faturado oficial + pedidos do app; ver "Fontes de dados"). `recuperar` só responde pra cliente com levantamento (produto comprado e zerado/nunca contado na leitura mais recente)
+- `/api/clientes/:id/sugestoes-recompra` — produtos (variações agrupadas) que o cliente não compra há mais de 1 ano
+- `/api/produtos/:codigo/clientes` — "Já compraram" (faturado oficial + app, por cliente, com a última data de faturamento e NF) e "Levantamento" (última contagem por cliente) da aba Produtos
+- `/api/dashboard/resumo` — dados do Dashboard (`curva-abc.html`): entrada de pedidos mensal + lista dos pedidos do mês (`entradaPedidosMes`), vendas semanal/trimestral, top clientes, clientes ativos por canal, contas sem compra
+- `/api/produtos-abc-geral`, `/api/clientes/:id/produtos-abc` — Curva ABC geral e por cliente (faturado oficial)
+- `/api/clientes/:id/classificatorio/status`, `/grupo`, `/api/clientes/classificatorio/alertas` — classificatório (faixas pelos 12 meses móveis de faturado)
+- `/api/clientes/:id/levantamentos`, `/api/pedidos/exportar` — levantamentos do cliente e export de pedidos
 
 `GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade (usado pelo keep-alive).
+
+## Fontes de dados — o que cada tela soma
+
+| Fonte | O que é | Datas |
+|---|---|---|
+| `pedidos_oficiais_itens` | Relatório oficial do ERP (abas Carteira + Faturamento), importado pelo Painel. É a fonte oficial. | `data_implantacao` (entrada do pedido: `Implantação`/`Dt.Implant`) e `data_faturamento` (emissão da NF: `Dt.Emissão`) |
+| `pedidos` / `pedido_itens` | Pedidos fechados pelo vendedor no app (só desde 05/2026, uma fração do total) | `data_pedido` |
+
+- **O que o cliente comprou** (Histórico, Rotatividade, Recuperar, consumo estimado, "Já compraram", comprados-recentes, sugestões): **faturado oficial + app**. Código promocional (P/P1/P2) conta como o produto base; pedido do app e faturado do mesmo SKU no mesmo dia são uma compra só (vale o faturado). Função `comprasDoCliente` em `routes/relatorios.js`. Nunca usar só `pedidos`/`pedido_itens` — a maior parte das compras vem do ERP.
+- **Entrada de Pedidos** (Dashboard: valor, qtde. de pedidos e de clientes, ticket médio): mesma regra do painel oficial — mês pela **data de implantação**, **carteira + faturado**, **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx, itens avulsos fora do catálogo). Conciliado com o Salesforce em 09/2026.
+- **Faturamento** (classificatório, Curva ABC, top clientes, vendas semanal/trimestral): só `status = 'faturado'`, pela `data_faturamento`.
+- **Datas sem hora** (`DATE` e `date_trunc`) chegam no JSON como meia-noite UTC — no navegador, `new Date()` joga pro dia/mês anterior. Exibir sempre com `formatDateBr` (`index.html`) ou `partesDoPeriodo` (`curva-abc.html`).
 
 ## Motor de preço — canal × estado
 
@@ -158,13 +184,16 @@ O carregamento de EAN/DUN-14 (`loadCodigosProduto()`) roda **depois** que o cat�
   O frontend (`index.html`, `parseRelatorioOficialXlsx`) lê as abas "Carteira" e "Faturamento" da planilha .xlsx oficial direto no navegador e monta esse payload — não existe preparo manual de arquivo. Grava em `pedidos_oficiais_itens` (chave `nr_pedido` + `codigo_sku`, nunca duplica, nunca "recua" de faturado pra carteira) e atualiza o classificatório do cliente (`clientes.classificatorio_tipo/desconto`), respeitando qual relatório é mais recente.
   - Qualquer usuário autenticado pode importar.
   - Os nomes de coluna esperados na planilha (`Cliente`, `Cod.Cliente`, `Nr.Pedido`, `Item`, `Nota Fiscal`, `Transportadora`, `Situação`, `Classificatório` etc., com variações aceitas) estão centralizados em `COLUNAS_RELATORIO_OFICIAL` no `index.html` — se uma coluna essencial não for encontrada, o import falha com erro explícito em vez de gravar dado errado.
+  - Datas: `Implantação` (Carteira) / `Dt.Implant` (Faturamento) → `data_implantacao`; `Dt.Emissão` → `data_faturamento` (só nas linhas faturadas). Valor: `Vlr.Faturado` no faturado, `Vl.Pendente` na carteira.
+  - A importação **só acrescenta e atualiza, nunca apaga**: um pedido de carteira cancelado no ERP continua gravado como carteira até a limpeza de "carteira antiga" (Painel → Avançado). Um mês cujo relatório nunca foi importado fica vazio em todos os relatórios (hoje falta novembro/2025).
 - `GET /api/pedidos-oficiais/status` — última data de atualização e totais (carteira/faturado).
 - `GET /api/pedidos-oficiais/:clienteId` e `/:clienteId/resumo` — consulta por cliente.
 
 ## Levantamento — cliente e rascunho não se perdem
 
 - **Cliente local com sincronização em segundo plano**: além de buscar cliente no servidor, o app mantém uma cópia local (`localStorage`) de todos os clientes (`GET /api/clientes/sync`), sincronizada no boot com tentativas escalonadas (`0s, 4s, 8s, 15s`) pra já estar disponível o quanto antes. Se a busca no servidor falhar (rede instável, banco indisponível), o app tenta de novo automaticamente (retry) e só cai pra essa base local como último recurso, evitando a mensagem de "Não foi possível conectar ao servidor de histórico" travar a seleção de cliente.
-- **Botão "Limpar" do cliente**: na aba Levantamento, ao lado do botão "Selecionar" (empilhados verticalmente — "Selecionar" em destaque acima, "Limpar" em cinza neutro abaixo, sem quebrar o nome do cliente), permite remover o cliente selecionado sem precisar escolher outro.
+- **Limpar o cliente**: fica dentro do seletor de cliente ("Limpar seleção", só aparece com cliente escolhido); no Levantamento também fecha o levantamento aberto.
+- **Comprados e não contados**: com cliente selecionado, o Levantamento lista o que ele comprou nos últimos 12 meses e não está na contagem, e avisa ao salvar ("Incluir e salvar" põe estoque 0 e a quantidade da última compra no pedido).
 - **Rascunho de levantamento não salvo**: o levantamento em andamento (itens + cliente) é salvo automaticamente no aparelho e, com um debounce de ~2,5s, também no servidor (`levantamento_rascunhos`), pra sobreviver a fechamento acidental do app, falta de conexão ou troca de aparelho. Ao carregar, os itens do rascunho só são revalidados contra o catálogo depois que ele termina de carregar — evitando que o rascunho seja apagado por engano por uma corrida com o carregamento assíncrono do catálogo.
 
 ## Condição de Pagamento
@@ -180,9 +209,12 @@ Página própria (`calculadora-materiais.html`), separada do `index.html` pelo m
 - Botão "Adicionar ao orçamento" resolve o produto do catálogo certo pra cada modelo/junta (usando o tamanho de embalagem pra distinguir SKU vendável de caixa fechada, e o nome do produto pra diferenciar Standard das demais linhas) e faz o handoff pro carrinho do `index.html` via `localStorage` + redirecionamento (`index.html?importarCalculo=1`), sem precisar duplicar a lógica de carrinho na página separada.
 - Acessível por um ícone (calculadora) no topo do app principal, ao lado do ícone da Curva ABC.
 
-## Curva ABC
+## Dashboard e Curva ABC
 
-Página própria (`curva-abc.html`), separada do `index.html`: uso esporádico, peso de biblioteca de gráfico, e não depende de estado "ao vivo" (só lê histórico já fechado). Acessível a qualquer pessoa logada por um ícone no topo do app principal.
+Página própria (`curva-abc.html`), separada do `index.html`: uso esporádico, peso de biblioteca de gráfico, e não depende de estado "ao vivo" (só lê histórico já fechado). Acessível a qualquer pessoa logada por um ícone no topo do app principal. Duas abas:
+
+- **Dashboard** (inicial): objetivo do mês, **Valor Entrada de Pedidos Mês** (regra do painel oficial — ver "Fontes de dados"; tocar no cartão abre a lista dos pedidos do mês com cliente, dia e valor), ticket médio, clientes ativos por canal, contas de 3–5 e 6–8 meses sem compra, risco de queda / perto de subir (cartões expansíveis), gráficos de entrada de pedidos, pedidos e clientes por mês (12 meses), vendas semanal e trimestral, top 5 clientes e produtos mais vendidos, e valor do mês por família de produtos e por produtos foco.
+- **Curva ABC**: geral ou por cliente (`curva-abc.html?cliente=ID`), pelo faturado oficial, com códigos promocionais unidos ao produto base.
 
 ## Assistente de voz (Gemini)
 
