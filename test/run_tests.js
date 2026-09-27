@@ -611,6 +611,34 @@ async function main() {
   res = await req('GET', '/api/clientes/999999/comprados-recentes');
   assert(res.status === 404, 'comprados-recentes de cliente inexistente responde 404');
 
+  // 18c) GET /api/produtos/:codigo/clientes ("Já compraram" da aba Produtos):
+  // conta o faturado oficial, não só pedido do app - caso real: lixadeira
+  // faturada pelo ERP aparecia "Já compraram (0)". Código promocional conta
+  // como o produto, e pedido do app faturado no mesmo dia não soma em dobro.
+  mockDb.__seed({
+    clientes: [
+      { id: 9121, nome: 'LOJA SÓ ERP', documento: '11122233000306', codigo_oficial: 'COD9121' },
+      { id: 9122, nome: 'LOJA APP E ERP', documento: '11122233000387', codigo_oficial: 'COD9122' },
+    ],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'L1', codigo_sku: '70004', cliente_codigo_oficial: 'COD9121', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(16), nota_fiscal: '915137', status: 'faturado' },
+      { nr_pedido: 'L1', codigo_sku: 'P70004', cliente_codigo_oficial: 'COD9121', quantidade: 2, valor: 10, data_faturamento: diasAtrasISO(16), nota_fiscal: '915137', status: 'faturado' },
+      { nr_pedido: 'L2', codigo_sku: '70004', cliente_codigo_oficial: 'COD9122', quantidade: 5, valor: 10, data_faturamento: diasAtrasISO(40), nota_fiscal: '900001', status: 'faturado' },
+      { nr_pedido: 'L3', codigo_sku: '70004', cliente_codigo_oficial: 'COD9122', quantidade: 7, valor: 10, data_faturamento: null, status: 'carteira' },
+    ],
+    pedidos: [{ id: 9921, cliente_id: 9122, data_pedido: diasAtrasISO(40) + 'T12:00:00Z' }],
+    pedidoItens: [{ id: 9922, pedido_id: 9921, produto_id: 814, quantidade: 5, preco_unitario: 50 }],
+  });
+  res = await req('GET', '/api/produtos/70004/clientes');
+  const soErp = (res.body.compradores || []).find(c => c.id === 9121);
+  const appErp = (res.body.compradores || []).find(c => c.id === 9122);
+  assert(
+    res.status === 200 && soErp && soErp.total_comprado === 3 && soErp.ultima_compra === diasAtrasISO(16) && soErp.nota_fiscal === '915137'
+      && appErp && appErp.total_comprado === 5
+      && res.body.compradores.findIndex(c => c.id === 9121) < res.body.compradores.findIndex(c => c.id === 9122),
+    `produto/clientes: "Já compraram" inclui o faturado oficial (P+base), sem somar app+faturado do mesmo dia: ${JSON.stringify(res.body.compradores)}`
+  );
+
   // 19) localização da loja gravada ao salvar o levantamento
   // (routes/levantamentos.js) - só leitura precisa (<= 100 m) vira a posição
   // do cliente, e uma pior não substitui uma melhor.

@@ -201,23 +201,53 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
     if (produtoResult.rows.length === 0) return res.status(404).json({ erro: 'Produto não encontrado — confira o código ou sincronize o catálogo.' });
     const produtoId = produtoResult.rows[0].id;
 
-    const compradores = await pool.query(
-      `SELECT c.id, c.nome, c.documento, SUM(pi.quantidade) AS total_comprado,
-              po.data_faturamento AS ultima_compra, po.nota_fiscal
-       FROM pedido_itens pi
-       JOIN pedidos ped ON ped.id = pi.pedido_id
-       JOIN clientes c ON c.id = ped.cliente_id
-       LEFT JOIN (
-         SELECT DISTINCT ON (cliente_codigo_oficial) cliente_codigo_oficial, data_faturamento, nota_fiscal
-         FROM pedidos_oficiais_itens
-         WHERE codigo_sku = $2 AND status = 'faturado'
-         ORDER BY cliente_codigo_oficial, data_faturamento DESC NULLS LAST
-       ) po ON po.cliente_codigo_oficial = c.codigo_oficial
-       WHERE pi.produto_id = $1
-       GROUP BY c.id, c.nome, c.documento, po.data_faturamento, po.nota_fiscal
-       ORDER BY po.data_faturamento DESC NULLS LAST`,
-      [produtoId, codigo]
-    );
+    // Quem comprou = faturado oficial (relatório do ERP) + pedidos feitos
+    // pelo app - antes só contava o app, e o cliente que comprou direto pelo
+    // ERP (a maioria) não aparecia. Códigos promocionais (P/P1/P2 + código)
+    // contam como o próprio produto, como na Curva ABC.
+    const variantes = [codigo, `P${codigo}`, `P1${codigo}`, `P2${codigo}`];
+    const [oficial, app] = await Promise.all([
+      pool.query(
+        `/* produto-compradores:oficial */
+         SELECT c.id, c.nome, c.documento, poi.quantidade, poi.data_faturamento AS data, poi.nota_fiscal
+         FROM pedidos_oficiais_itens poi
+         JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
+         WHERE poi.status = 'faturado' AND poi.data_faturamento IS NOT NULL AND poi.codigo_sku = ANY($1)`,
+        [variantes]),
+      pool.query(
+        `/* produto-compradores:app */
+         SELECT c.id, c.nome, c.documento, pi.quantidade, ped.data_pedido::date AS data
+         FROM pedido_itens pi
+         JOIN produtos p ON p.id = pi.produto_id
+         JOIN pedidos ped ON ped.id = pi.pedido_id
+         JOIN clientes c ON c.id = ped.cliente_id
+         WHERE p.codigo_sku = ANY($1)`,
+        [variantes]),
+    ]);
+    const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+    const porCliente = new Map();
+    for (const [origem, rows] of [['oficial', oficial.rows], ['app', app.rows]]) {
+      for (const r of rows) {
+        const g = porCliente.get(r.id) || { id: r.id, nome: r.nome, documento: r.documento, dias: new Map(), ultima_compra: null, nota_fiscal: null };
+        const d = dia(r.data);
+        const q = g.dias.get(d) || { oficial: 0, app: 0 };
+        q[origem] += Number(r.quantidade) || 0;
+        g.dias.set(d, q);
+        if (!g.ultima_compra || d > g.ultima_compra) g.ultima_compra = d;
+        if (origem === 'oficial' && r.nota_fiscal && (!g._dataNf || d >= g._dataNf)) { g.nota_fiscal = r.nota_fiscal; g._dataNf = d; }
+        porCliente.set(r.id, g);
+      }
+    }
+    // Pedido do app faturado no mesmo dia é a mesma compra (mesma regra de
+    // comprados-recentes): nesse dia vale só a quantidade do faturado.
+    const compradores = [...porCliente.values()]
+      .map(g => ({
+        id: g.id, nome: g.nome, documento: g.documento,
+        total_comprado: [...g.dias.values()].reduce((t, q) => t + (q.oficial || q.app), 0),
+        ultima_compra: g.ultima_compra,
+        nota_fiscal: g.nota_fiscal,
+      }))
+      .sort((a, b) => b.ultima_compra.localeCompare(a.ultima_compra));
 
     // só a leitura mais recente de levantamento por cliente (não o histórico
     // inteiro) - o que importa aqui é "quanto ele tem agora", não a série toda
@@ -233,7 +263,7 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
 
     res.json({
       produto: produtoResult.rows[0],
-      compradores: compradores.rows,
+      compradores,
       levantamentos: levantados.rows,
     });
   } catch (e) {
