@@ -10040,7 +10040,7 @@
         if (status.ultimaCompra) {
           const dias = Math.floor((Date.now() - new Date(status.ultimaCompra).getTime()) / 86400000);
           if (dias >= 60) {
-            partes.push(`<div style="margin-top:6px;color:var(--warning);font-size:12px;">Sem comprar há ${dias} dias (última compra: ${new Date(status.ultimaCompra).toLocaleDateString('pt-BR')}).</div>`);
+            partes.push(`<div style="margin-top:6px;color:var(--warning);font-size:12px;">Sem comprar há ${dias} dias (última compra: ${formatDateBr(status.ultimaCompra)}).</div>`);
           }
         }
 
@@ -10139,7 +10139,7 @@
           return `
         <button type="button" class="clientPickerItem"${atual ? ' disabled style="opacity:.6;cursor:default;"' : ''} data-grupo-cliente-id="${m.id}">
           <div class="cpName"><span>${escapeHtml(m.nome)}${atual ? ' · atual' : ''}</span></div>
-          <div class="cpMeta">${brl(m.faturamento12m)} nos últimos 12 meses · ${brl(m.faturamentoAnoCorrente)} no ano corrente${m.ultimaCompra ? ' · última compra ' + new Date(m.ultimaCompra).toLocaleDateString('pt-BR') : ' · sem compras registradas'}</div>
+          <div class="cpMeta">${brl(m.faturamento12m)} nos últimos 12 meses · ${brl(m.faturamentoAnoCorrente)} no ano corrente${m.ultimaCompra ? ' · última compra ' + formatDateBr(m.ultimaCompra) : ' · sem compras registradas'}</div>
         </button>`;
         }).join('');
         wrap.querySelectorAll('[data-grupo-cliente-id]').forEach(btn => {
