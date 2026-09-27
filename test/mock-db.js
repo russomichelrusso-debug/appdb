@@ -429,6 +429,27 @@ async function query(sql, params = []) {
     return { rows: itens };
   }
 
+  // Entrada de pedidos mensal do Dashboard (SQL_ENTRADA_PEDIDOS_MENSAL em
+  // routes/relatorios.js): pela data de implantação, carteira + faturado, só
+  // a série de pedidos de até 6 dígitos, a partir do 1º dia de 11 meses atrás.
+  if (s.includes("DATE_TRUNC('MONTH', DATA_IMPLANTACAO)")) {
+    const hoje = new Date();
+    const corteStr = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 11, 1)).toISOString().slice(0, 10);
+    const grupos = new Map();
+    for (const it of pedidosOficiaisItens) {
+      if (!it.data_implantacao || it.data_implantacao < corteStr || String(it.nr_pedido).length > 6) continue;
+      const key = `${it.data_implantacao.slice(0, 7)}-01`;
+      const atual = grupos.get(key) || { periodo: key, valor: 0, pedidosSet: new Set(), clientesSet: new Set() };
+      atual.valor += Number(it.valor) || 0;
+      atual.pedidosSet.add(it.nr_pedido);
+      if (it.cliente_codigo_oficial) atual.clientesSet.add(it.cliente_codigo_oficial);
+      grupos.set(key, atual);
+    }
+    const rows = [...grupos.values()].sort((a, b) => a.periodo.localeCompare(b.periodo))
+      .map(g => ({ periodo: g.periodo, valor: g.valor, pedidos: g.pedidosSet.size, clientes: g.clientesSet.size }));
+    return { rows };
+  }
+
   // Dashboard principal (curva-abc.html, GET /api/dashboard/resumo) -
   // agregações mensal/semanal/trimestral pro negócio inteiro (sem JOIN em
   // clientes, diferente do trimestral por cliente do classificatório acima)

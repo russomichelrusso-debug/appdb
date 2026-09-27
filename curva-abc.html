@@ -385,7 +385,7 @@
         <div class="head">
           <div>
             <h2>Valor Entrada de Pedidos (Mensal)</h2>
-            <p>Últimos 12 meses · relatório oficial de Faturamento</p>
+            <p>Últimos 12 meses · pedidos pela data de implantação (carteira + faturado)</p>
           </div>
         </div>
         <div class="chartScroll" id="chartMensalHost"></div>
@@ -396,7 +396,7 @@
           <div class="head">
             <div>
               <h2>Qtde. Pedidos Mês</h2>
-              <p>Últimos 12 meses · nº de pedidos distintos faturados</p>
+              <p>Últimos 12 meses · nº de pedidos que entraram no mês</p>
             </div>
           </div>
           <div class="chartScroll" id="chartPedidosMesHost"></div>
@@ -405,7 +405,7 @@
           <div class="head">
             <div>
               <h2>Qtde. Clientes Mês</h2>
-              <p>Últimos 12 meses · nº de clientes distintos faturados</p>
+              <p>Últimos 12 meses · nº de clientes com pedido no mês</p>
             </div>
           </div>
           <div class="chartScroll" id="chartClientesMesHost"></div>
@@ -1083,9 +1083,11 @@
       const mensal = resumo.mensal || [];
       const atual = mensal[mensal.length - 1];
       const anterior = mensal[mensal.length - 2];
-      const fatAtual = atual ? Number(atual.faturamento) || 0 : 0;
+      // Entrada de pedidos (carteira + faturado, pela data de implantação - ver
+      // SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js), não faturamento.
+      const fatAtual = atual ? Number(atual.valor) || 0 : 0;
       const pedidosAtual = atual ? Number(atual.pedidos) || 0 : 0;
-      const fatAnterior = anterior ? Number(anterior.faturamento) || 0 : 0;
+      const fatAnterior = anterior ? Number(anterior.valor) || 0 : 0;
       const deltaPct = fatAnterior ? ((fatAtual - fatAnterior) / fatAnterior) * 100 : null;
       const ticketMedio = pedidosAtual ? fatAtual / pedidosAtual : 0;
       const deltaHtml = deltaPct == null ? 'vs mês anterior — sem dado' : `<span class="delta ${deltaPct >= 0 ? 'up' : 'down'}">${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1)}%</span> vs mês anterior`;
@@ -1123,7 +1125,7 @@
         <div class="kpi">
           <span class="lbl">Ticket médio</span>
           <span class="val">${formatCompact(ticketMedio, true)}</span>
-          <span class="sub">${pedidosAtual} pedido${pedidosAtual === 1 ? '' : 's'} faturado${pedidosAtual === 1 ? '' : 's'} no mês</span>
+          <span class="sub">${pedidosAtual} pedido${pedidosAtual === 1 ? '' : 's'} no mês</span>
         </div>
         <div class="kpi">
           <span class="lbl">Clientes Ativos por Canal</span>
@@ -1217,7 +1219,7 @@
           apiFetch('/api/configuracoes/produtos_foco_categorias').catch(() => ({ valor: [] })),
         ]);
         renderKpisPrincipal(resumo, alertas, metaMensal);
-        renderBarrasSerieTemporal('chartMensalHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'faturamento' });
+        renderBarrasSerieTemporal('chartMensalHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'valor' });
         renderBarrasSerieTemporal('chartPedidosMesHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'pedidos', formatarValor: v => String(Math.round(v)) });
         renderBarrasSerieTemporal('chartClientesMesHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'clientes', formatarValor: v => String(Math.round(v)) });
         renderBarrasSerieTemporal('chartSemanalHost', resumo.semanal, { rotulo: rotuloSemana, valorKey: 'faturamento' });

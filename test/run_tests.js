@@ -477,6 +477,28 @@ async function main() {
     `dashboard/resumo traz a lista de clientes de 3-5 meses sem comprar, com nome e dias: ${JSON.stringify(listaDe3a5)}`
   );
 
+  // 16b) GET /api/dashboard/resumo: "Valor Entrada de Pedidos" segue a regra
+  // do painel oficial - mês pela data de implantação, carteira + faturado, e
+  // sem a série de pedidos de 7 dígitos. Pedido implantado no mês passado e
+  // faturado neste NÃO conta neste mês.
+  const hojeUtc = new Date();
+  const mesAtualISO = new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), 1)).toISOString().slice(0, 10);
+  const mesAnteriorISO = new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
+  mockDb.__seed({
+    pedidosOficiaisItens: [
+      { nr_pedido: '700001', codigo_sku: '1', cliente_codigo_oficial: 'E1', quantidade: 1, valor: 1000, data_implantacao: mesAtualISO, data_faturamento: mesAtualISO, status: 'faturado' },
+      { nr_pedido: '700002', codigo_sku: '1', cliente_codigo_oficial: 'E2', quantidade: 1, valor: 500, data_implantacao: mesAtualISO, data_faturamento: null, status: 'carteira' },
+      { nr_pedido: '1330001', codigo_sku: '1', cliente_codigo_oficial: 'E3', quantidade: 1, valor: 100, data_implantacao: mesAtualISO, data_faturamento: mesAtualISO, status: 'faturado' },
+      { nr_pedido: '690001', codigo_sku: '1', cliente_codigo_oficial: 'E4', quantidade: 1, valor: 9000, data_implantacao: mesAnteriorISO, data_faturamento: mesAtualISO, status: 'faturado' },
+    ],
+  });
+  res = await req('GET', '/api/dashboard/resumo');
+  const entradaMes = (res.body.mensal || []).find(m => String(m.periodo).slice(0, 10) === mesAtualISO);
+  assert(
+    res.status === 200 && entradaMes && entradaMes.valor === 1500 && entradaMes.pedidos === 2 && entradaMes.clientes === 2,
+    `entrada de pedidos do mês = implantados no mês (carteira + faturado), sem série de 7 dígitos: ${JSON.stringify(res.body.mensal)}`
+  );
+
   // 17) Sugestões de recompra: agrupamento de variações pelo nome
   // (routes/lib/agrupamentoProduto.js) - tamanhos diferentes viram um item só,
   // tipos diferentes do mesmo produto continuam separados.
