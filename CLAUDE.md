@@ -248,7 +248,7 @@ Supabase, sem PR — não é mudança de código.
 
 - **Escala para 200+ usuários com gerentes regionais (v2)** — plano completo em
   `docs/PLANO-ESCALA-V2.md` (limitações, escolha de plataforma, fases). Decisão do usuário: a v2 é
-  construída num **repositório separado** (`appdb-v2`, privado, cópia deste com histórico), para não
+  construída num **repositório separado** (`appdbV2`, privado, cópia deste com histórico), para não
   arriscar a versão em uso. Regras que valem daqui: correção de bug de produção é feita **aqui
   primeiro** e depois levada pra v2 (merge deste `main` lá); nada da v2 volta pra cá antes da troca;
   a v2 **nunca** usa o `DATABASE_URL` da produção (o `db.js` roda o `schema.sql` na subida).
