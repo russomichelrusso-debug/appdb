@@ -562,6 +562,20 @@ const SQL_ENTRADA_PEDIDOS_MENSAL = `
     AND length(nr_pedido) <= 6
   GROUP BY 1 ORDER BY 1`;
 
+// Os pedidos por trás do cartão "Valor Entrada de Pedidos Mês" (mesma regra
+// acima, só o mês atual): um por linha, com o nome do cliente, pra lista que
+// abre ao tocar no cartão. Cliente ainda não vinculado ao código oficial
+// (sem linha em clientes) vem com nome null - a tela mostra o código.
+const SQL_ENTRADA_PEDIDOS_DO_MES = `
+  SELECT poi.nr_pedido, poi.cliente_codigo_oficial, MAX(c.nome) AS cliente_nome,
+         MIN(poi.data_implantacao) AS data_implantacao, SUM(poi.valor) AS valor
+  FROM pedidos_oficiais_itens poi
+  LEFT JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
+  WHERE poi.data_implantacao >= date_trunc('month', CURRENT_DATE)
+    AND length(poi.nr_pedido) <= 6
+  GROUP BY poi.nr_pedido, poi.cliente_codigo_oficial
+  ORDER BY data_implantacao DESC, valor DESC NULLS LAST`;
+
 // Resumo do Dashboard principal (curva-abc.html, aba "Dashboard"): entrada de
 // pedidos mensal (12 meses, regra acima), faturamento semanal (10 semanas) e
 // trimestral (8 trimestres), + top 5 clientes por faturamento (12 meses) -
@@ -573,8 +587,9 @@ const SQL_ENTRADA_PEDIDOS_MENSAL = `
 // padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
 router.get('/dashboard/resumo', async (req, res) => {
   try {
-    const [mensal, semanal, trimestral, topClientes, porCliente] = await Promise.all([
+    const [mensal, pedidosDoMes, semanal, trimestral, topClientes, porCliente] = await Promise.all([
       pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
+      pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
          FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
@@ -626,6 +641,7 @@ router.get('/dashboard/resumo', async (req, res) => {
 
     res.json({
       mensal: mensal.rows,
+      entradaPedidosMes: pedidosDoMes.rows,
       semanal: semanal.rows,
       trimestral: trimestral.rows,
       topClientes: topClientes.rows,
