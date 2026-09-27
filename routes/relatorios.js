@@ -62,58 +62,113 @@ function canalDoCliente(classificatorioTipo) {
 const FAIXA_3_A_5_MESES = [90, 179];
 const FAIXA_6_A_8_MESES = [180, 269];
 
+// Tudo que o cliente comprou, por SKU e por dia: faturado oficial (relatório
+// do ERP) + pedidos feitos pelo app. Antes Histórico/Rotatividade/Recuperar só
+// olhavam o app (desde 05/2026, uma fração das compras) - quem comprava pelo
+// ERP aparecia sem histórico. Mesmas regras de comprados-recentes:
+//  - código promocional (P/P1/P2 + código) conta como o produto base;
+//  - pedido do app e faturado do mesmo SKU no mesmo dia são a mesma compra:
+//    nesse dia vale o faturado (senão somaria em dobro).
+// Devolve Map codigo_sku -> { codigo_sku, nome, noCatalogo, dias: Map
+// 'AAAA-MM-DD' -> { quantidade, pedidos: Set } }. `null` se o cliente não existe.
+async function comprasDoCliente(clienteId) {
+  const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [clienteId]);
+  if (cliente.rows.length === 0) return null;
+  const codigoOficial = cliente.rows[0].codigo_oficial;
+  const [oficial, app, produtos] = await Promise.all([
+    codigoOficial
+      ? pool.query(
+        `/* compras-cliente:oficial */
+         SELECT codigo_sku, data_faturamento AS data, quantidade, nr_pedido AS pedido
+         FROM pedidos_oficiais_itens
+         WHERE status = 'faturado' AND data_faturamento IS NOT NULL AND cliente_codigo_oficial = $1`,
+        [codigoOficial])
+      : Promise.resolve({ rows: [] }),
+    pool.query(
+      `/* compras-cliente:app */
+       SELECT p.codigo_sku, ped.data_pedido::date AS data, pi.quantidade, 'app' || ped.id AS pedido
+       FROM pedidos ped
+       JOIN pedido_itens pi ON pi.pedido_id = ped.id
+       JOIN produtos p ON p.id = pi.produto_id
+       WHERE ped.cliente_id = $1`,
+      [clienteId]),
+    pool.query('SELECT codigo_sku, nome FROM produtos'),
+  ]);
+  const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
+  const codigosConhecidos = new Set(nomePorCodigo.keys());
+  const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+  // primeiro separa por origem, depois escolhe a origem de cada dia
+  const brutos = new Map(); // sku -> dia -> { oficial: {q, pedidos}, app: {q, pedidos} }
+  for (const [origem, rows] of [['oficial', oficial.rows], ['app', app.rows]]) {
+    for (const l of rows) {
+      if (!l.data) continue;
+      const sku = codigoBase(String(l.codigo_sku), codigosConhecidos);
+      const d = dia(l.data);
+      const porDia = brutos.get(sku) || new Map();
+      const noDia = porDia.get(d) || { oficial: { q: 0, pedidos: new Set() }, app: { q: 0, pedidos: new Set() } };
+      noDia[origem].q += Number(l.quantidade) || 0;
+      noDia[origem].pedidos.add(String(l.pedido));
+      porDia.set(d, noDia);
+      brutos.set(sku, porDia);
+    }
+  }
+  const compras = new Map();
+  for (const [sku, porDia] of brutos) {
+    const dias = new Map();
+    for (const [d, noDia] of porDia) {
+      const vale = noDia.oficial.pedidos.size > 0 ? noDia.oficial : noDia.app;
+      dias.set(d, { quantidade: vale.q, pedidos: vale.pedidos });
+    }
+    compras.set(sku, { codigo_sku: sku, nome: nomePorCodigo.get(sku) || sku, noCatalogo: nomePorCodigo.has(sku), dias });
+  }
+  return compras;
+}
+
+// Resumo de um SKU a partir de comprasDoCliente: 1ª/última compra, nº de
+// pedidos, total e intervalo médio entre as compras (dias distintos).
+function resumoCompras(c) {
+  const dias = [...c.dias.keys()].sort();
+  const pedidos = new Set();
+  let total = 0;
+  for (const q of c.dias.values()) { total += q.quantidade; q.pedidos.forEach(p => pedidos.add(p)); }
+  const primeira = dias[0];
+  const ultima = dias[dias.length - 1];
+  const media = dias.length > 1
+    ? Math.round((new Date(ultima) - new Date(primeira)) / 86400000 / (dias.length - 1))
+    : null;
+  return {
+    codigo_sku: c.codigo_sku, produto: c.nome,
+    primeira_compra: primeira, ultima_compra: ultima,
+    num_pedidos: pedidos.size, total_acumulado: total, total_comprado: total,
+    media_dias_entre_pedidos: media,
+  };
+}
+
 // Todos os produtos que esse cliente já comprou alguma vez, com primeira/última
 // compra e total acumulado - a pergunta original do projeto.
 router.get('/clientes/:id/historico', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT
-         p.codigo_sku,
-         p.nome AS produto,
-         MIN(ped.data_pedido) AS primeira_compra,
-         MAX(ped.data_pedido) AS ultima_compra,
-         COUNT(DISTINCT ped.id) AS num_pedidos,
-         SUM(pi.quantidade) AS total_acumulado
-       FROM pedidos ped
-       JOIN pedido_itens pi ON ped.id = pi.pedido_id
-       JOIN produtos p ON pi.produto_id = p.id
-       WHERE ped.cliente_id = $1
-       GROUP BY p.id, p.codigo_sku, p.nome
-       ORDER BY ultima_compra DESC`,
-      [req.params.id]
-    );
-    res.json(result.rows);
+    const compras = await comprasDoCliente(req.params.id);
+    if (!compras) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const lista = [...compras.values()].map(resumoCompras)
+      .sort((a, b) => b.ultima_compra.localeCompare(a.ultima_compra));
+    res.json(lista);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao gerar histórico.' });
   }
 });
 
-// Rotatividade: além do histórico, calcula o intervalo médio entre pedidos -
+// Rotatividade: além do histórico, calcula o intervalo médio entre as compras -
 // isso responde "de quanto em quanto tempo esse cliente costuma repor esse item".
 router.get('/clientes/:id/rotatividade', async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT
-         p.codigo_sku,
-         p.nome AS produto,
-         COUNT(DISTINCT ped.id) AS num_pedidos,
-         SUM(pi.quantidade) AS total_comprado,
-         MIN(ped.data_pedido) AS primeira_compra,
-         MAX(ped.data_pedido) AS ultima_compra,
-         CASE WHEN COUNT(DISTINCT ped.id) > 1
-           THEN ROUND(EXTRACT(EPOCH FROM (MAX(ped.data_pedido) - MIN(ped.data_pedido))) / 86400.0 / (COUNT(DISTINCT ped.id) - 1))
-           ELSE NULL
-         END AS media_dias_entre_pedidos
-       FROM pedidos ped
-       JOIN pedido_itens pi ON ped.id = pi.pedido_id
-       JOIN produtos p ON pi.produto_id = p.id
-       WHERE ped.cliente_id = $1
-       GROUP BY p.id, p.codigo_sku, p.nome
-       ORDER BY media_dias_entre_pedidos ASC NULLS LAST`,
-      [req.params.id]
-    );
-    res.json(result.rows);
+    const compras = await comprasDoCliente(req.params.id);
+    if (!compras) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const lista = [...compras.values()].map(resumoCompras)
+      .sort((a, b) => (a.media_dias_entre_pedidos ?? Infinity) - (b.media_dias_entre_pedidos ?? Infinity)
+        || b.ultima_compra.localeCompare(a.ultima_compra));
+    res.json(lista);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular rotatividade.' });
@@ -159,19 +214,25 @@ router.get('/clientes/:id/consumo-estimado/:produtoId', async (req, res) => {
       [id, produtoId]
     );
     const leituras = leiturasResult.rows;
+    // O que entrou entre uma visita e outra vem do faturado oficial + app
+    // (comprasDoCliente) - só o app deixava de fora a compra feita pelo ERP
+    // e o consumo saía menor que o real (ou zerado).
+    const [compras, produto] = await Promise.all([
+      leituras.length > 1 ? comprasDoCliente(id) : null,
+      pool.query('SELECT codigo_sku FROM produtos WHERE id = $1', [produtoId]),
+    ]);
+    const doProduto = compras && produto.rows[0] ? compras.get(String(produto.rows[0].codigo_sku)) : null;
+    const diaDe = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
     const consumos = [];
     for (let i = 1; i < leituras.length; i++) {
       const inicio = leituras[i-1].data_visita;
       const fim = leituras[i].data_visita;
-      const pedidoResult = await pool.query(
-        `SELECT COALESCE(SUM(pi.quantidade), 0) AS pedido_no_periodo
-         FROM pedidos ped
-         JOIN pedido_itens pi ON ped.id = pi.pedido_id
-         WHERE ped.cliente_id = $1 AND pi.produto_id = $2
-           AND ped.data_pedido > $3 AND ped.data_pedido <= $4`,
-        [id, produtoId, inicio, fim]
-      );
-      const pedidoNoPeriodo = Number(pedidoResult.rows[0].pedido_no_periodo);
+      let pedidoNoPeriodo = 0;
+      if (doProduto) {
+        for (const [d, q] of doProduto.dias) {
+          if (d > diaDe(inicio) && d <= diaDe(fim)) pedidoNoPeriodo += q.quantidade;
+        }
+      }
       const dias = (new Date(fim) - new Date(inicio)) / 86400000;
       const consumoEstimado = Number(leituras[i-1].quantidade_contada) + pedidoNoPeriodo - Number(leituras[i].quantidade_contada);
       consumos.push({
@@ -457,34 +518,38 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
 
 router.get('/clientes/:id/recuperar', async (req, res) => {
   try {
-    const result = await pool.query(
-      `WITH historico AS (
-         SELECT p.id AS produto_id, p.codigo_sku, p.nome,
-                MAX(ped.data_pedido) AS ultima_compra,
-                SUM(pi.quantidade) AS total_comprado
-         FROM pedidos ped
-         JOIN pedido_itens pi ON pi.pedido_id = ped.id
-         JOIN produtos p ON p.id = pi.produto_id
-         WHERE ped.cliente_id = $1
-         GROUP BY p.id, p.codigo_sku, p.nome
-       ),
-       ultimo_levantamento AS (
-         SELECT DISTINCT ON (li.produto_id) li.produto_id, li.quantidade_contada, l.data_visita
+    // Já comprou (faturado oficial + app - ver comprasDoCliente), e no
+    // levantamento mais recente em que o produto apareceu estava zerado, ou
+    // nunca foi contado. Só pra quem já tem levantamento: sem nenhum, não há
+    // com o que comparar (e a lista viraria só "o que ele comprou há mais tempo").
+    const [compras, leituras] = await Promise.all([
+      comprasDoCliente(req.params.id),
+      pool.query(
+        `SELECT DISTINCT ON (li.produto_id) p.codigo_sku, li.quantidade_contada, l.data_visita
          FROM levantamento_itens li
          JOIN levantamentos l ON l.id = li.levantamento_id
+         JOIN produtos p ON p.id = li.produto_id
          WHERE l.cliente_id = $1
-         ORDER BY li.produto_id, l.data_visita DESC
-       )
-       SELECT h.codigo_sku, h.nome AS produto, h.ultima_compra, h.total_comprado,
-              COALESCE(ul.quantidade_contada, 0) AS estoque_atual, ul.data_visita AS ultimo_levantamento
-       FROM historico h
-       LEFT JOIN ultimo_levantamento ul ON ul.produto_id = h.produto_id
-       WHERE COALESCE(ul.quantidade_contada, 0) = 0
-       ORDER BY h.ultima_compra ASC
-       LIMIT 30`,
-      [req.params.id]
-    );
-    res.json(result.rows);
+         ORDER BY li.produto_id, l.data_visita DESC`,
+        [req.params.id]),
+    ]);
+    if (!compras) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const temLevantamento = await pool.query('SELECT 1 FROM levantamentos WHERE cliente_id = $1 LIMIT 1', [req.params.id]);
+    if (temLevantamento.rows.length === 0) return res.json([]);
+    const ultimaLeitura = new Map(leituras.rows.map(r => [String(r.codigo_sku), r]));
+    const lista = [];
+    for (const c of compras.values()) {
+      if (!c.noCatalogo) continue; // fora do catálogo: não tem como ir pro orçamento
+      const leitura = ultimaLeitura.get(c.codigo_sku);
+      if (leitura && Number(leitura.quantidade_contada) > 0) continue;
+      const r = resumoCompras(c);
+      lista.push({
+        codigo_sku: r.codigo_sku, produto: r.produto, ultima_compra: r.ultima_compra, total_comprado: r.total_comprado,
+        estoque_atual: 0, ultimo_levantamento: leitura ? leitura.data_visita : null,
+      });
+    }
+    lista.sort((a, b) => a.ultima_compra.localeCompare(b.ultima_compra));
+    res.json(lista.slice(0, 30));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar produtos pra recuperar.' });

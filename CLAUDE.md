@@ -111,8 +111,12 @@ Supabase, sem PR — não é mudança de código.
   `routes/lib/agrupamentoProduto.js` (`grupoDoProduto`: corta em " - " e na primeira palavra
   com número/"Ø"; ~1.700 produtos → ~500 grupos; tipos diferentes de broca continuam separados)
   — reaproveitar sempre que precisar tratar "o produto" em vez de cada SKU. Não confundir com a
-  rota antiga `/clientes/:id/recuperar` (só pedidos do app, cruza com levantamento, sem
-  agrupar), que continua existindo.
+  rota antiga `/clientes/:id/recuperar` (cruza com levantamento, por SKU, sem agrupar), que
+  continua existindo. Histórico/Rotatividade/Recuperar/consumo estimado do cliente leem
+  `comprasDoCliente` (`routes/relatorios.js`: faturado oficial + app, P+base unidos, app e
+  faturado do mesmo dia = uma compra) — até 09/2026 liam só pedidos do app e o cliente que
+  comprava pelo ERP aparecia sem histórico. Toda tela nova de "o que o cliente comprou" deve
+  usar essa função (ou a mesma regra), nunca só `pedidos`/`pedido_itens`.
 - **Localização do cliente gravada ao salvar o Levantamento**: ao tocar em salvar, o app pega o
   GPS do celular (até ~6 s, sem aviso se negar ou falhar) e manda junto no `POST
   /api/levantamentos` — inclusive pela fila offline, com a leitura feita dentro da loja. Escolhido
