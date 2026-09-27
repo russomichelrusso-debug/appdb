@@ -545,10 +545,28 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
   }
 });
 
-// Resumo do Dashboard principal (curva-abc.html, aba "Dashboard"): faturamento
-// mensal (12 meses), semanal (10 semanas) e trimestral (8 trimestres), + top 5
-// clientes por faturamento (12 meses) - tudo a partir de pedidos_oficiais_itens
-// (mesma fonte oficial usada na Curva ABC), num só round-trip. Sem filtro de
+// "Entrada de pedidos" do mês, com a mesma regra do painel do sistema oficial
+// (Salesforce) - conciliado em 09/2026 contra o gráfico "Qtde. Clientes Mês"
+// de lá, que bateu cliente a cliente de jan a ago:
+//  - mês pela data de IMPLANTAÇÃO do pedido (quando ele entrou), não pela de
+//    faturamento;
+//  - carteira + faturado: pedido que entrou e ainda não foi faturado conta;
+//  - só a série principal de pedidos (6 dígitos, hoje na casa dos 676000). A
+//    série de 7 dígitos (10xxxxx-13xxxxx: itens avulsos de valor baixo, fora
+//    do catálogo) não entra no painel oficial.
+const SQL_ENTRADA_PEDIDOS_MENSAL = `
+  SELECT date_trunc('month', data_implantacao) AS periodo, SUM(valor) AS valor,
+         COUNT(DISTINCT nr_pedido) AS pedidos, COUNT(DISTINCT cliente_codigo_oficial) AS clientes
+  FROM pedidos_oficiais_itens
+  WHERE data_implantacao >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
+    AND length(nr_pedido) <= 6
+  GROUP BY 1 ORDER BY 1`;
+
+// Resumo do Dashboard principal (curva-abc.html, aba "Dashboard"): entrada de
+// pedidos mensal (12 meses, regra acima), faturamento semanal (10 semanas) e
+// trimestral (8 trimestres), + top 5 clientes por faturamento (12 meses) -
+// tudo a partir de pedidos_oficiais_itens (mesma fonte oficial usada na Curva
+// ABC), num só round-trip. Sem filtro de
 // vendedor: o relatório oficial do ERP não tem essa granularidade (só
 // `pedidos`, a tabela antiga de cotação do app, tem vendedor_id). Aberto a
 // qualquer usuário logado - é informação de uso diário do vendedor, mesmo
@@ -556,11 +574,7 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
 router.get('/dashboard/resumo', async (req, res) => {
   try {
     const [mensal, semanal, trimestral, topClientes, porCliente] = await Promise.all([
-      pool.query(
-        `SELECT date_trunc('month', data_faturamento) AS periodo, SUM(valor) AS faturamento, COUNT(DISTINCT nr_pedido) AS pedidos, COUNT(DISTINCT cliente_codigo_oficial) AS clientes
-         FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
-         GROUP BY 1 ORDER BY 1`
-      ),
+      pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
          FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'

@@ -232,6 +232,9 @@ ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS situacao_pedido TEXT
 -- (ver routes/relatorios.js, GET /dashboard/resumo) - antes só havia
 -- índice por cliente_codigo_oficial.
 CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_status_data ON pedidos_oficiais_itens (status, data_faturamento);
+-- Entrada de pedidos mensal do Dashboard (agrupa por data de implantação,
+-- carteira + faturado - ver SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js).
+CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_implantacao ON pedidos_oficiais_itens (data_implantacao);
 
 -- Catálogo completo de preços: um valor por produto x canal x estado (27 UFs
 -- x 6 canais). Guardado em JSONB por produto (não um blob único gigante) pra
