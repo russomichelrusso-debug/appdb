@@ -265,7 +265,15 @@ router.post('/importar', async (req, res) => {
   // (nr_pedido+codigo_sku é a chave primária, cliente_codigo_oficial é quem
   // liga ao cliente) - sem esse filtro, String(undefined) virava o texto
   // literal "undefined" gravado no banco, passando pelo NOT NULL.
-  const itensValidos = itensBrutos.filter(it => it.nr_pedido != null && it.codigo_sku != null && it.cliente_codigo_oficial != null);
+  // "00597502" e "597502" são o mesmo pedido (os zeros à esquerda vieram na
+  // aba Carteira de um relatório salvo no Excel em inglês e criaram linhas
+  // duplicadas em carteira) - normaliza aqui também, além do navegador.
+  const itensValidos = itensBrutos
+    .filter(it => it.nr_pedido != null && it.codigo_sku != null && it.cliente_codigo_oficial != null)
+    .map(it => {
+      const nr = String(it.nr_pedido).trim();
+      return /^\d+$/.test(nr) ? { ...it, nr_pedido: nr.replace(/^0+(?=\d)/, '') } : it;
+    });
   const descartados = itensBrutos.length - itensValidos.length;
   if (descartados > 0) {
     console.warn(`Importação de pedidos oficiais: ${descartados} linha(s) descartada(s) por faltar nr_pedido/codigo_sku/cliente_codigo_oficial.`);
@@ -345,7 +353,10 @@ router.post('/importar', async (req, res) => {
                            THEN EXCLUDED.quantidade ELSE pedidos_oficiais_itens.quantidade END,
          valor = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status != 'faturado'
                       THEN EXCLUDED.valor ELSE pedidos_oficiais_itens.valor END,
-         data_implantacao = COALESCE(pedidos_oficiais_itens.data_implantacao, EXCLUDED.data_implantacao),
+         -- a data de implantação do pedido não muda no ERP: a do relatório
+         -- novo vale (antes ficava a primeira gravada, e um relatório com data
+         -- errada nunca era corrigido reimportando o certo)
+         data_implantacao = COALESCE(EXCLUDED.data_implantacao, pedidos_oficiais_itens.data_implantacao),
          data_faturamento = CASE WHEN EXCLUDED.status = 'faturado' THEN EXCLUDED.data_faturamento
                                   ELSE pedidos_oficiais_itens.data_faturamento END,
          nota_fiscal = CASE WHEN EXCLUDED.status = 'faturado' THEN EXCLUDED.nota_fiscal

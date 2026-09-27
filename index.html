@@ -9461,10 +9461,62 @@
         }
         return indices;
       }
-      function paraDataISO(dataRaw) {
-        if (!dataRaw) return null;
-        const d = dataRaw instanceof Date ? dataRaw : new Date(dataRaw);
-        return isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+      // ---- Datas e valores do relatório oficial ----
+      // O ERP exporta data como "05/11/25" (dia/mês/ano) e valor como
+      // "1207,296" (vírgula decimal). Se a planilha for aberta e salva num
+      // Excel configurado em inglês (EUA), ela chega corrompida - aconteceu
+      // com o relatório de 30/11/2025 (09/2026: 1.380 linhas de novembro com
+      // data trocada/vazia e valor errado, corrigidas no banco):
+      //  - data com dia <= 12 vira data numérica com DIA E MÊS TROCADOS
+      //    (05/11 -> 11/05, em formato m/d/yy); dia > 12 fica como texto;
+      //  - valor com 3 casas vira número mil vezes maior ("1207,296" ->
+      //    1207296), os outros ficam como texto "974,58".
+      // Data dá pra consertar com segurança (texto dd/mm é inequívoco, e a
+      // presença dele prova que as datas numéricas da coluna foram
+      // invertidas). Valor não: um número pode ser inteiro legítimo ou 1000x/
+      // 10000x maior - nesse caso a importação recusa o arquivo.
+      const RE_DATA_DDMM = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{2}|\d{4})\s*$/;
+      const RE_VALOR_VIRGULA = /^\s*-?[\d.]*\d,\d+\s*$/;
+      function dataTextoDDMMparaISO(texto) {
+        const m = RE_DATA_DDMM.exec(String(texto));
+        if (!m) return null;
+        const dia = Number(m[1]), mes = Number(m[2]);
+        let ano = Number(m[3]);
+        if (ano < 100) ano += 2000;
+        const d = new Date(Date.UTC(ano, mes - 1, dia));
+        if (mes < 1 || mes > 12 || d.getUTCMonth() !== mes - 1 || d.getUTCDate() !== dia) return null;
+        return d.toISOString().slice(0, 10);
+      }
+      // Coluna de data "salva em Excel americano": tem pelo menos um texto
+      // dd/mm/aa ao lado de datas numéricas.
+      function colunaDataInvertida(dados, idx) {
+        if (idx === -1) return false;
+        return dados.some(r => typeof r[idx] === 'string' && RE_DATA_DDMM.test(r[idx]));
+      }
+      function paraDataISO(dataRaw, colunaInvertida) {
+        if (dataRaw == null || dataRaw === '') return null;
+        if (dataRaw instanceof Date) {
+          if (isNaN(dataRaw.getTime())) return null;
+          // SheetJS monta a data na meia-noite LOCAL: os campos locais são o
+          // dia do calendário da planilha (toISOString voltaria um dia).
+          let dia = dataRaw.getDate(), mes = dataRaw.getMonth() + 1;
+          if (colunaInvertida && dia <= 12) [dia, mes] = [mes, dia];
+          return `${dataRaw.getFullYear()}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+        }
+        return dataTextoDDMMparaISO(dataRaw);
+      }
+      function valorParaNumero(valorBruto) {
+        if (valorBruto == null || valorBruto === '') return null;
+        if (typeof valorBruto === 'number') return valorBruto;
+        const texto = String(valorBruto).trim();
+        const n = RE_VALOR_VIRGULA.test(texto) ? Number(texto.replace(/\./g, '').replace(',', '.')) : Number(texto);
+        return Number.isFinite(n) ? n : null;
+      }
+      // "00597502" (zeros à esquerda, veio assim na aba Carteira do relatório
+      // corrompido) e "597502" são o mesmo pedido - sem isso viravam duas linhas.
+      function normalizarNrPedido(nr) {
+        const t = String(nr ?? '').trim();
+        return /^\d+$/.test(t) ? (t.replace(/^0+(?=\d)/, '')) : t;
       }
 
       // Lê uma aba (Carteira ou Faturamento) e devolve as linhas já no formato
@@ -9485,16 +9537,33 @@
         const col = mapearColunas(cabecalhos, nomeAba);
         const campo = (r, nome) => (col[nome] === -1 ? null : r[col[nome]]);
 
+        // Planilha salva em Excel americano (ver paraDataISO): datas se
+        // consertam; valor misturando número e texto "974,58" não - recusa.
+        const implInvertida = colunaDataInvertida(dados, col.data_implantacao);
+        const emissaoInvertida = colunaDataInvertida(dados, col.data_emissao);
+        if (col.valor !== -1) {
+          const valores = dados.map(r => r[col.valor]).filter(v => v != null && v !== '');
+          const temTextoVirgula = valores.some(v => typeof v === 'string' && RE_VALOR_VIRGULA.test(v));
+          const temNumero = valores.some(v => typeof v === 'number');
+          if (temTextoVirgula && temNumero) {
+            throw new Error(
+              `Aba "${nomeAba}": os valores desta planilha estão corrompidos - ela foi aberta e salva num Excel em inglês ` +
+              `(parte dos valores virou número sem vírgula, até 10.000x maior, e parte ficou como texto "974,58"). ` +
+              `Nada foi importado. Exporte o relatório de novo direto do sistema, sem abrir e salvar no Excel, ou salve com o Excel em português.`
+            );
+          }
+        }
+
         let gravadas = 0;
         for (const r of dados) {
           const clienteNome = String(campo(r, 'cliente_nome') ?? '').trim();
           const clienteCodigo = String(campo(r, 'cliente_codigo_oficial') ?? '').trim();
-          const nrPedido = String(campo(r, 'nr_pedido') ?? '').trim();
+          const nrPedido = normalizarNrPedido(campo(r, 'nr_pedido'));
           const codigoItem = String(campo(r, 'codigo_sku') ?? '').trim();
           if (!clienteNome || !clienteCodigo || !nrPedido || !codigoItem) continue; // linha em branco/rodapé
 
-          const dataEmissaoISO = paraDataISO(campo(r, 'data_emissao'));
-          const dataImplantISO = paraDataISO(campo(r, 'data_implantacao'));
+          const dataEmissaoISO = paraDataISO(campo(r, 'data_emissao'), emissaoInvertida);
+          const dataImplantISO = paraDataISO(campo(r, 'data_implantacao'), implInvertida);
           const valorBruto = campo(r, 'valor');
           const notaFiscalBruta = campo(r, 'nota_fiscal');
           const classificatorioBruto = campo(r, 'classificatorio');
@@ -9505,7 +9574,7 @@
             nr_pedido: nrPedido,
             codigo_sku: codigoItem,
             quantidade: Number(campo(r, 'quantidade')) || 0,
-            valor: valorBruto != null ? Number(valorBruto) : null,
+            valor: valorParaNumero(valorBruto),
             data_implantacao: dataImplantISO,
             data_faturamento: status === 'faturado' ? dataEmissaoISO : null,
             nota_fiscal: notaFiscalBruta != null ? String(notaFiscalBruta) : null,

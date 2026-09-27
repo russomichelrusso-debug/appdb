@@ -274,9 +274,18 @@ Supabase, sem PR — não é mudança de código.
 - Correção pequena pendente: mover o `CREATE TABLE usuarios` do `schema.sql` pra antes da
   primeira referência a ele, pra um banco novo subir na primeira execução.
 - **Pendências de dado** (não é código — o usuário importa pelo Painel Administrativo):
-  - **Novembro/2025 falta no banco** (R$ 1 mil faturado, contra R$ 430–520 mil nos meses
-    vizinhos). Tira ~R$ 500 mil dos 12 meses móveis do classificatório (faixa mais baixa, "risco
-    de queda" falso, "sem comprar" pra quem comprou em novembro) até sair da janela em 12/2026.
+  - **Novembro/2025 — resolvido em 27/09/2026** (era R$ 1 mil faturado; ficou R$ 434 mil). Não
+    faltava: o relatório de 30/11/2025 tinha sido **aberto e salvo num Excel em inglês** e importado
+    assim — data com dia ≤ 12 virou data numérica com dia/mês trocados (05/11 → 11/05, espalhando
+    novembro por mai/jun/jul/out/dez), dia > 12 virou texto "13/11/25" (gravado sem data), valor com
+    vírgula virou texto (gravado vazio) ou número 1.000–10.000× maior, e a aba Carteira trouxe
+    `Nr.Pedido` com zeros à esquerda ("00605401", 25 linhas fantasma em carteira). Corrigido via SQL
+    a partir do próprio arquivo: datas de 1.380 linhas, 344 valores em texto, 25 fantasmas apagadas e
+    639 valores ×10 (os que ficavam exatamente 10× abaixo do preço mediano do produto — todos caíam a
+    ±20% do normal depois do ×10). Backup das 1.790 linhas antes da correção na tabela
+    `backup_pedidos_oficiais_nov2025_20260927` (pode ser apagada quando ninguém mais precisar).
+    A importação agora conserta data de planilha assim e **recusa** a que tem valor corrompido
+    (ver `paraDataISO`/`lerAbaRelatorioOficial` em `index.html`).
   - A importação **nunca apaga**: pedido de carteira cancelado no ERP continua como "carteira" até
     a limpeza de carteira antiga (Painel → Avançado). Provável causa (não confirmada) de a Entrada
     de Pedidos de set/2026 ter ficado R$ 8,2 mil / 2 clientes acima do oficial (último relatório
