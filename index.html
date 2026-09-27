@@ -11321,6 +11321,12 @@
       // ---------------- Abas Produtos e Clientes ----------------
       function formatDateBr(iso) {
         if (!iso) return '—';
+        // Coluna DATE (data_faturamento, data_implantacao...) chega como
+        // "AAAA-MM-DD" ou meia-noite UTC ("AAAA-MM-DDT00:00:00.000Z") -
+        // new Date() no fuso do Brasil jogava pro dia anterior (faturado em
+        // 11/09 aparecia 10/09). Nesses casos formata direto do texto.
+        const soData = /^(\d{4})-(\d{2})-(\d{2})(T00:00:00(\.000)?Z)?$/.exec(String(iso));
+        if (soData) return `${soData[3]}/${soData[2]}/${soData[1]}`;
         return new Date(iso).toLocaleDateString('pt-BR');
       }
       function renderHistProdutoCard(item, showRotation) {
@@ -11738,7 +11744,7 @@
           <div class="hcCode">${c.documento ? escapeHtml(c.documento) : ''}</div>
           <div class="hcStats">
             <div class="hcStat">Total comprado<b>${c.total_comprado}</b></div>
-            <div class="hcStat">Faturado<b>${formatDateBr(c.ultima_compra)}</b></div>
+            <div class="hcStat">Última compra<b>${formatDateBr(c.ultima_compra)}</b></div>
             ${c.nota_fiscal ? `<div class="hcStat">Nota Fiscal<b>${escapeHtml(String(c.nota_fiscal))}</b></div>` : ''}
           </div>
         </div>`).join('')

@@ -111,6 +111,36 @@ async function query(sql, params = []) {
     return { rows };
   }
 
+  // GET /api/produtos/:codigo/clientes ("Já compraram" / "Levantamento" da
+  // aba Produtos) - routes/relatorios.js.
+  if (s.includes('SELECT ID, CODIGO_SKU, NOME FROM PRODUTOS WHERE CODIGO_SKU = $1')) {
+    return { rows: produtos.filter(p => p.codigo_sku === params[0]).map(p => ({ id: p.id, codigo_sku: p.codigo_sku, nome: p.nome })) };
+  }
+  if (s.includes('/* PRODUTO-COMPRADORES:OFICIAL */')) {
+    const rows = [];
+    for (const it of pedidosOficiaisItens) {
+      if (it.status !== 'faturado' || !it.data_faturamento || !params[0].includes(it.codigo_sku)) continue;
+      const c = clientes.find(cl => cl.codigo_oficial === it.cliente_codigo_oficial);
+      if (c) rows.push({ id: c.id, nome: c.nome, documento: c.documento, quantidade: it.quantidade, data: it.data_faturamento, nota_fiscal: it.nota_fiscal || null });
+    }
+    return { rows };
+  }
+  if (s.includes('/* PRODUTO-COMPRADORES:APP */')) {
+    const rows = [];
+    for (const it of pedidoItens) {
+      const prod = produtos.find(p => p.id === it.produto_id);
+      const ped = pedidos.find(p => p.id === it.pedido_id);
+      const c = ped && clientes.find(cl => String(cl.id) === String(ped.cliente_id));
+      if (prod && c && params[0].includes(prod.codigo_sku)) {
+        rows.push({ id: c.id, nome: c.nome, documento: c.documento, quantidade: it.quantidade, data: new Date(ped.data_pedido).toISOString().slice(0, 10) });
+      }
+    }
+    return { rows };
+  }
+  if (s.includes('SELECT DISTINCT ON (C.ID) C.ID, C.NOME, C.DOCUMENTO, LI.QUANTIDADE_CONTADA')) {
+    return { rows: [] };
+  }
+
   // clientes
   if (s.includes('SELECT ID FROM CLIENTES WHERE DOCUMENTO')) {
     const found = clientes.filter(c => c.documento === params[0]);
