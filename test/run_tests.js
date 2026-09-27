@@ -499,6 +499,29 @@ async function main() {
     `entrada de pedidos do mês = implantados no mês (carteira + faturado), sem série de 7 dígitos: ${JSON.stringify(res.body.mensal)}`
   );
 
+  // 16c) ...e a lista que abre ao tocar no cartão traz esses mesmos pedidos,
+  // um por linha (itens somados), com o nome do cliente quando ele existe no
+  // app e o código quando ainda não foi vinculado.
+  mockDb.__seed({
+    clientes: [{
+      id: 9004, nome: 'CLIENTE ENTRADA E1', documento: '11122233000144', codigo_oficial: 'E1',
+      classificatorio_tipo: null, classificatorio_desconto: null, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+    pedidosOficiaisItens: [
+      { nr_pedido: '700001', codigo_sku: '2', cliente_codigo_oficial: 'E1', quantidade: 1, valor: 250, data_implantacao: mesAtualISO, data_faturamento: mesAtualISO, status: 'faturado' },
+    ],
+  });
+  res = await req('GET', '/api/dashboard/resumo');
+  const listaEntrada = res.body.entradaPedidosMes || [];
+  const pedE1 = listaEntrada.find(p => p.nr_pedido === '700001');
+  const pedE2 = listaEntrada.find(p => p.nr_pedido === '700002');
+  assert(
+    res.status === 200 && listaEntrada.length === 2
+      && pedE1 && pedE1.cliente_nome === 'CLIENTE ENTRADA E1' && pedE1.valor === 1250
+      && pedE2 && pedE2.cliente_nome == null && pedE2.cliente_codigo_oficial === 'E2' && pedE2.valor === 500,
+    `lista da entrada de pedidos do mês: um por pedido, com nome do cliente, sem a série de 7 dígitos: ${JSON.stringify(listaEntrada)}`
+  );
+
   // 17) Sugestões de recompra: agrupamento de variações pelo nome
   // (routes/lib/agrupamentoProduto.js) - tamanhos diferentes viram um item só,
   // tipos diferentes do mesmo produto continuam separados.

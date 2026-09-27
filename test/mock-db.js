@@ -450,6 +450,26 @@ async function query(sql, params = []) {
     return { rows };
   }
 
+  // Pedidos do mês atual por trás do cartão "Valor Entrada de Pedidos Mês"
+  // (SQL_ENTRADA_PEDIDOS_DO_MES em routes/relatorios.js) - um por pedido, com
+  // o nome do cliente (null se não houver cliente com aquele codigo_oficial).
+  if (s.includes('GROUP BY POI.NR_PEDIDO, POI.CLIENTE_CODIGO_OFICIAL')) {
+    const hoje = new Date();
+    const inicioMes = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 1)).toISOString().slice(0, 10);
+    const porPedido = new Map();
+    for (const it of pedidosOficiaisItens) {
+      if (!it.data_implantacao || it.data_implantacao < inicioMes || String(it.nr_pedido).length > 6) continue;
+      const chave = `${it.nr_pedido}::${it.cliente_codigo_oficial}`;
+      const cli = clientes.find(c => c.codigo_oficial === it.cliente_codigo_oficial);
+      const atual = porPedido.get(chave) || { nr_pedido: it.nr_pedido, cliente_codigo_oficial: it.cliente_codigo_oficial, cliente_nome: cli ? cli.nome : null, data_implantacao: it.data_implantacao, valor: 0 };
+      atual.valor += Number(it.valor) || 0;
+      if (it.data_implantacao < atual.data_implantacao) atual.data_implantacao = it.data_implantacao;
+      porPedido.set(chave, atual);
+    }
+    const rows = [...porPedido.values()].sort((a, b) => b.data_implantacao.localeCompare(a.data_implantacao) || b.valor - a.valor);
+    return { rows };
+  }
+
   // Dashboard principal (curva-abc.html, GET /api/dashboard/resumo) -
   // agregações mensal/semanal/trimestral pro negócio inteiro (sem JOIN em
   // clientes, diferente do trimestral por cliente do classificatório acima)

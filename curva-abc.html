@@ -723,9 +723,9 @@
       panel.classList.remove('hidden');
       panel.innerHTML = `
         <h3>${escapeHtml(cfg.titulo)}</h3>
-        <p class="cardHint" style="margin:0;">${cfg.lista.length} cliente${cfg.lista.length === 1 ? '' : 's'}</p>
+        <p class="cardHint" style="margin:0;">${cfg.lista.length} ${cfg.unidade || 'cliente'}${cfg.lista.length === 1 ? '' : 's'}</p>
         <div class="kpiExpandList">${cfg.lista.length === 0
-          ? '<div class="lev-empty">Nenhum cliente nessa situação agora.</div>'
+          ? `<div class="lev-empty">${escapeHtml(cfg.vazio || 'Nenhum cliente nessa situação agora.')}</div>`
           : cfg.lista.map(c => `
         <div class="listaAlertaItem">
           <span class="nome">${escapeHtml(c.nome)}</span>
@@ -990,6 +990,11 @@
     function brl(v) {
       return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
     }
+    // Valor de um pedido só (lista da Entrada de Pedidos) - com centavos, pra
+    // bater com o valor que o vendedor vê no sistema oficial.
+    function brlCentavos(v) {
+      return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
 
     function rotuloMes(iso) {
       const d = new Date(iso);
@@ -1095,9 +1100,20 @@
       const canal = resumo.clientesAtivosPorCanal || { total: 0, porCanal: {} };
       const contas = resumo.contasSemComprar || { de3a5Meses: 0, de6a8Meses: 0 };
 
-      // Guarda os dados por trás dos 4 cartões expansíveis, pra
+      // Guarda os dados por trás dos cartões expansíveis, pra
       // toggleKpiExpand() renderizar sem precisar buscar de novo.
       kpiExpandData = {
+        entradaPedidos: {
+          titulo: 'Entrada de Pedidos do Mês', unidade: 'pedido', vazio: 'Nenhum pedido entrou neste mês ainda.',
+          // data_implantacao é DATE - lê o "AAAA-MM-DD" direto da string (new
+          // Date() no fuso do Brasil jogaria pro dia anterior).
+          lista: (resumo.entradaPedidosMes || []).map(p => ({
+            nome: p.cliente_nome || `Cliente ${p.cliente_codigo_oficial}`,
+            dia: String(p.data_implantacao || '').slice(0, 10).split('-').reverse().slice(0, 2).join('/'),
+            valor: Number(p.valor) || 0,
+          })),
+          detalheFn: p => `${p.dia} · ${brlCentavos(p.valor)}`,
+        },
         de3a5: { titulo: 'Contas - 3 a 5 Meses Sem Compra', lista: contas.clientesDe3a5Meses || [], detalheFn: c => `${c.diasSemComprar} dias sem comprar` },
         de6a8: { titulo: 'Contas - 6 a 8 Meses Sem Compra', lista: contas.clientesDe6a8Meses || [], detalheFn: c => `${c.diasSemComprar} dias sem comprar` },
         riscoQueda: { titulo: 'Em risco de queda', lista: alertas.riscoDeQueda || [], detalheFn: c => `Faltam ${formatCompact(c.faltaPraManter, true)}` },
@@ -1117,8 +1133,8 @@
           <span class="val">${metaMensal ? formatCompact(metaMensal, true) : '—'}</span>
           <span class="sub">${metaPct == null ? 'Meta ainda não definida' : `${metaPct}% do objetivo`}</span>
         </div>
-        <div class="kpi">
-          <span class="lbl">Valor Entrada de Pedidos Mês</span>
+        <div class="kpi kpiExpandable" data-kpi-tipo="entradaPedidos" onclick="toggleKpiExpand('entradaPedidos')">
+          <span class="lbl">Valor Entrada de Pedidos Mês ▸</span>
           <span class="val">${formatCompact(fatAtual, true)}</span>
           <span class="sub">${deltaHtml}</span>
         </div>
