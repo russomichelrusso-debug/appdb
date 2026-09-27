@@ -639,6 +639,76 @@ async function main() {
     `produto/clientes: "Já compraram" inclui o faturado oficial (P+base), sem somar app+faturado do mesmo dia: ${JSON.stringify(res.body.compradores)}`
   );
 
+  // 18d) Histórico / Rotatividade / Recuperar / consumo estimado contam o
+  // faturado oficial, não só pedido do app (antes o cliente que comprava pelo
+  // ERP aparecia sem histórico). P+base viram um produto; app e faturado do
+  // mesmo SKU no mesmo dia são uma compra só.
+  mockDb.__seed({
+    produtos: [
+      { id: 831, codigo_sku: '71001', nome: 'DESEMP. AÇO 38 cm', categoria: '20' },
+      { id: 832, codigo_sku: '71002', nome: 'FITA DUPLA FACE 12 mm', categoria: '20' },
+      { id: 833, codigo_sku: '71003', nome: 'SERRA COPO 35mm', categoria: '20' },
+    ],
+    clientes: [
+      { id: 9131, nome: 'LOJA ERP', documento: '11122233000468', codigo_oficial: 'COD9131' },
+      { id: 9132, nome: 'LOJA SEM LEVANTAMENTO', documento: '11122233000549', codigo_oficial: 'COD9132' },
+    ],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'H1', codigo_sku: '71001', cliente_codigo_oficial: 'COD9131', quantidade: 12, valor: 10, data_faturamento: diasAtrasISO(90), status: 'faturado' },
+      { nr_pedido: 'H2', codigo_sku: '71001', cliente_codigo_oficial: 'COD9131', quantidade: 6, valor: 10, data_faturamento: diasAtrasISO(30), status: 'faturado' },
+      { nr_pedido: 'H2', codigo_sku: 'P71001', cliente_codigo_oficial: 'COD9131', quantidade: 6, valor: 10, data_faturamento: diasAtrasISO(30), status: 'faturado' },
+      { nr_pedido: 'H3', codigo_sku: '71002', cliente_codigo_oficial: 'COD9131', quantidade: 24, valor: 10, data_faturamento: diasAtrasISO(200), status: 'faturado' },
+      { nr_pedido: 'H4', codigo_sku: '71003', cliente_codigo_oficial: 'COD9131', quantidade: 3, valor: 10, data_faturamento: diasAtrasISO(150), status: 'faturado' },
+      { nr_pedido: 'H5', codigo_sku: '71001', cliente_codigo_oficial: 'COD9131', quantidade: 99, valor: 10, data_faturamento: null, status: 'carteira' },
+      { nr_pedido: 'H6', codigo_sku: '71001', cliente_codigo_oficial: 'COD9132', quantidade: 5, valor: 10, data_faturamento: diasAtrasISO(10), status: 'faturado' },
+    ],
+    // o mesmo desempenador pedido pelo app no dia do faturamento H2 (mesma compra)
+    pedidos: [{ id: 9931, cliente_id: 9131, data_pedido: diasAtrasISO(30) + 'T12:00:00Z' }],
+    pedidoItens: [{ id: 9932, pedido_id: 9931, produto_id: 831, quantidade: 12, preco_unitario: 10 }],
+    // levantamentos: desempenador contado 10 (há 100 dias) e 4 (há 20 dias);
+    // fita contada 0; serra copo nunca contada.
+    levantamentos: [
+      { id: 9941, cliente_id: 9131, nome: 'visita 1', data_visita: diasAtrasISO(100) + 'T15:00:00Z' },
+      { id: 9942, cliente_id: 9131, nome: 'visita 2', data_visita: diasAtrasISO(20) + 'T15:00:00Z' },
+    ],
+    levantamentoItens: [
+      { id: 9951, levantamento_id: 9941, produto_id: 831, quantidade_contada: 10 },
+      { id: 9952, levantamento_id: 9942, produto_id: 831, quantidade_contada: 4 },
+      { id: 9953, levantamento_id: 9942, produto_id: 832, quantidade_contada: 0 },
+    ],
+  });
+  res = await req('GET', '/api/clientes/9131/historico');
+  const hDesemp = (res.body || []).find(r => r.codigo_sku === '71001');
+  assert(
+    res.status === 200 && res.body.length === 3 && !res.body.some(r => r.codigo_sku === 'P71001')
+      && hDesemp && hDesemp.total_acumulado === 24 && hDesemp.num_pedidos === 2
+      && hDesemp.primeira_compra === diasAtrasISO(90) && hDesemp.ultima_compra === diasAtrasISO(30),
+    `historico: faturado oficial + app, P+base juntos, app do mesmo dia não soma: ${JSON.stringify(res.body)}`
+  );
+  res = await req('GET', '/api/clientes/9131/rotatividade');
+  assert(
+    res.status === 200 && res.body[0].codigo_sku === '71001' && res.body[0].media_dias_entre_pedidos === 60,
+    `rotatividade: intervalo médio entre as compras oficiais (90 e 30 dias atrás = 60): ${JSON.stringify(res.body)}`
+  );
+  res = await req('GET', '/api/clientes/9131/recuperar');
+  const recCodigos = (res.body || []).map(r => r.codigo_sku);
+  assert(
+    res.status === 200 && recCodigos.length === 2 && recCodigos[0] === '71002' && recCodigos[1] === '71003'
+      && res.body[1].ultimo_levantamento === null,
+    `recuperar: zerado ou nunca contado, com o que tem estoque fora, mais antigo primeiro: ${JSON.stringify(res.body)}`
+  );
+  res = await req('GET', '/api/clientes/9132/recuperar');
+  assert(res.status === 200 && Array.isArray(res.body) && res.body.length === 0,
+    `recuperar: cliente sem nenhum levantamento não tem com o que comparar: ${JSON.stringify(res.body)}`);
+  res = await req('GET', '/api/clientes/9131/consumo-estimado/831');
+  const consumo = (res.body.consumos || [])[0];
+  assert(
+    res.status === 200 && consumo && consumo.pedido_no_periodo === 24 && consumo.consumo_estimado === 30,
+    `consumo estimado conta o faturado entre as visitas (10 + 24 - 4 = 30): ${JSON.stringify(res.body.consumos)}`
+  );
+  res = await req('GET', '/api/clientes/999999/historico');
+  assert(res.status === 404, 'historico de cliente inexistente responde 404');
+
   // 19) localização da loja gravada ao salvar o levantamento
   // (routes/levantamentos.js) - só leitura precisa (<= 100 m) vira a posição
   // do cliente, e uma pior não substitui uma melhor.

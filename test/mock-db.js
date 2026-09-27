@@ -51,6 +51,8 @@ function seed(partial) {
   if (partial.produtos) produtos.push(...partial.produtos);
   if (partial.pedidos) pedidos.push(...partial.pedidos);
   if (partial.pedidoItens) pedidoItens.push(...partial.pedidoItens);
+  if (partial.levantamentos) levantamentos.push(...partial.levantamentos);
+  if (partial.levantamentoItens) levantamentoItens.push(...partial.levantamentoItens);
   if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
 }
 
@@ -91,6 +93,54 @@ async function query(sql, params = []) {
       }
     }
     return { rows: [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size })) };
+  }
+
+  // comprasDoCliente (routes/relatorios.js) - Histórico, Rotatividade,
+  // Recuperar e consumo estimado: faturado oficial + app, sem corte de data.
+  if (s.includes('/* COMPRAS-CLIENTE:OFICIAL */')) {
+    return { rows: pedidosOficiaisItens
+      .filter(it => it.status === 'faturado' && it.cliente_codigo_oficial === params[0] && it.data_faturamento)
+      .map(it => ({ codigo_sku: it.codigo_sku, data: it.data_faturamento, quantidade: it.quantidade, pedido: it.nr_pedido })) };
+  }
+  if (s.includes('/* COMPRAS-CLIENTE:APP */')) {
+    const rows = [];
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]))) {
+      for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
+        const prod = produtos.find(p => p.id === it.produto_id);
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido).toISOString().slice(0, 10), quantidade: it.quantidade, pedido: 'app' + ped.id });
+      }
+    }
+    return { rows };
+  }
+  // /clientes/:id/recuperar - leitura mais recente de cada produto no levantamento
+  if (s.includes('SELECT DISTINCT ON (LI.PRODUTO_ID) P.CODIGO_SKU, LI.QUANTIDADE_CONTADA, L.DATA_VISITA')) {
+    const porProduto = new Map();
+    for (const l of levantamentos.filter(l => String(l.cliente_id) === String(params[0]))) {
+      for (const li of levantamentoItens.filter(i => i.levantamento_id === l.id)) {
+        const atual = porProduto.get(li.produto_id);
+        if (!atual || new Date(l.data_visita) > new Date(atual.data_visita)) {
+          const prod = produtos.find(p => p.id === li.produto_id);
+          if (prod) porProduto.set(li.produto_id, { codigo_sku: prod.codigo_sku, quantidade_contada: li.quantidade_contada, data_visita: l.data_visita });
+        }
+      }
+    }
+    return { rows: [...porProduto.values()] };
+  }
+  // /clientes/:id/consumo-estimado/:produtoId - leituras do produto em ordem
+  if (s.includes('SELECT L.DATA_VISITA, LI.QUANTIDADE_CONTADA') && s.includes('ORDER BY L.DATA_VISITA ASC')) {
+    const rows = [];
+    for (const l of levantamentos.filter(l => String(l.cliente_id) === String(params[0]))) {
+      for (const li of levantamentoItens.filter(i => i.levantamento_id === l.id && String(i.produto_id) === String(params[1]))) {
+        rows.push({ data_visita: l.data_visita, quantidade_contada: li.quantidade_contada });
+      }
+    }
+    return { rows: rows.sort((a, b) => new Date(a.data_visita) - new Date(b.data_visita)) };
+  }
+  if (s.includes('SELECT 1 FROM LEVANTAMENTOS WHERE CLIENTE_ID = $1')) {
+    return { rows: levantamentos.some(l => String(l.cliente_id) === String(params[0])) ? [{ '?column?': 1 }] : [] };
+  }
+  if (s.includes('SELECT CODIGO_SKU FROM PRODUTOS WHERE ID = $1')) {
+    return { rows: produtos.filter(p => String(p.id) === String(params[0])).map(p => ({ codigo_sku: p.codigo_sku })) };
   }
 
   if (s.includes('/* COMPRADOS-RECENTES:OFICIAL */')) {
