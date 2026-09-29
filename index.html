@@ -8483,6 +8483,7 @@
 
         const st = STATE_BY_UF[state.uf];
         const today = new Date().toLocaleDateString('pt-BR');
+        const avisoSt = avisoStPr2026(rows);
 
         const tpl = document.getElementById('exportTemplate');
         tpl.innerHTML = `
@@ -8508,7 +8509,7 @@
         ${rows.map(({ p, it, lp, cp, lineTotal }, idx) => `
           <tr>
             <td class="num">${idx + 1}</td>
-            <td><div class="exn">${escapeHtml(p.n)}</div><div class="exc">Cód. ${escapeHtml(p.c)}</div></td>
+            <td><div class="exn">${escapeHtml(p.n)}${marcaSt(avisoSt, p)}</div><div class="exc">Cód. ${escapeHtml(p.c)}</div></td>
             <td class="num">${it.qty}</td>
             <td class="num">${brl(cp)}</td>
             <td class="num">${brl(lineTotal)}</td>
@@ -8522,6 +8523,10 @@
         <div class="v">${brl(total)}</div>
       </div>
     </div>
+    ${avisoSt ? `<div style="margin:14px 36px 0;padding:10px 12px;border:1.5px solid #e6b43c;background:#fff8e1;border-radius:6px;font-size:12px;line-height:1.45;color:#141414;">
+      <div style="font-weight:700;margin-bottom:4px;">${escapeHtml(avisoSt.titulo)}</div>
+      <div>${escapeHtml(avisoSt.frases.join(' '))}</div>
+    </div>` : ''}
     <div class="ex-footer">
       <div>
         <div class="redbar" style="width:60px;"></div>
@@ -8606,8 +8611,9 @@
       function buildCartShareText() {
         const { rows, total } = cartTotals();
         const st = STATE_BY_UF[state.uf];
+        const avisoSt = avisoStPr2026(rows);
         const linhas = rows.map(({ p, it, cp, lineTotal }, idx) =>
-          `${itemNumLabel(idx)} ${p.n} (Cód. ${p.c})\n  ${it.qty} un. x ${brl(cp)} = ${brl(lineTotal)}`
+          `${itemNumLabel(idx)} ${p.n}${marcaSt(avisoSt, p)} (Cód. ${p.c})\n  ${it.qty} un. x ${brl(cp)} = ${brl(lineTotal)}`
         );
         const partes = [
           `*Orçamento Cortag*`,
@@ -8619,6 +8625,7 @@
           '',
           `*Total: ${brl(total)}*`,
           ...(state.paymentTerm ? [`Cond. pagamento: ${rotuloPrazoComDesconto()}`] : []),
+          ...(avisoSt ? ['', `*${avisoSt.titulo}*`, avisoSt.frases.join(' ')] : []),
         ];
         return partes.join('\n');
       }
@@ -8742,6 +8749,124 @@
         return { ipiTotal: ipiUnit * row.it.qty, stTotal: stUnit * row.it.qty };
       }
       const numBr = (v) => (Number(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      // Protocolos ICMS 111/2026 e 95/2026: estes 1.131 códigos saem da
+      // substituição tributária no Paraná a partir de 01/10/2026 (planilha de
+      // exclusão da empresa). O orçamento marca os itens com (*) e explica a
+      // mudança; o aviso some sozinho depois de ST_PR_2026.avisoAte.
+      const ST_PR_2026 = {
+        inicio: '2026-10-01',
+        avisoAte: '2026-12-31',
+        codigos: new Set([
+        '60003 60011 60012 60013 60014 60015 60016 60017 60018 60019 60020 60021 60022 60023 60024 60067 60068 60069 60070 60071',
+        '60072 60073 60074 60076 60077 60078 60079 60080 60081 60082 60083 60085 60086 60087 60088 60089 60090 60091 60092 60093',
+        '60094 60095 60096 60097 60098 60099 60103 60104 60105 60106 60107 60108 60109 60111 60112 60113 60114 60116 60117 60118',
+        '60119 60120 60121 60122 60123 60124 60125 60126 60127 60128 60129 60130 60132 60133 60134 60135 60138 60139 60160 60162',
+        '60163 60164 60166 60167 60168 60169 60174 60178 60179 60181 60185 60206 60210 60215 60226 60227 60228 60233 60234 60236',
+        '60256 60258 60264 60265 60269 60270 60271 60272 60274 60275 60279 60280 60281 60282 60283 60284 60285 60286 60287 60288',
+        '60300 60304 60309 60320 60323 60325 60326 60327 60328 60329 60330 60349 60350 60395 60403 60421 60564 60566 60570 60576',
+        '60577 60597 60598 60599 60649 60651 60657 60658 60659 60662 60663 60666 60667 60668 60671 60695 60697 60700 60701 60702',
+        '60704 60705 60706 60707 60709 60710 60712 60713 60716 60720 60721 60726 60745 60746 60750 60753 60764 60777 60779 60837',
+        '60838 60839 60840 60841 60842 60843 60844 60845 60846 60847 60849 60850 60855 60857 60858 60863 60864 60870 60876 60879',
+        '60880 60881 60882 60883 60884 60886 60887 60891 60892 60893 60895 60896 60897 60898 60899 60900 60901 60902 60904 60925',
+        '60926 60927 60928 60929 60935 60936 60937 60938 60939 60940 60941 60942 60943 60944 60945 60946 60947 60951 60952 60953',
+        '60954 60958 60959 60960 60961 60962 60963 60969 60972 60973 60974 60975 60976 60977 60978 60979 60980 60981 60982 60983',
+        '60984 60985 60986 60987 60988 60989 60990 60991 60992 60993 60994 60995 60996 60997 60998 60999 61000 61001 61002 61003',
+        '61004 61005 61006 61007 61008 61009 61010 61011 61012 61013 61014 61015 61016 61017 61018 61019 61020 61021 61022 61023',
+        '61024 61025 61026 61027 61028 61029 61030 61031 61032 61033 61034 61035 61036 61037 61038 61039 61040 61041 61042 61043',
+        '61044 61045 61046 61047 61048 61049 61050 61051 61052 61053 61054 61055 61056 61057 61058 61059 61060 61061 61062 61063',
+        '61064 61065 61066 61067 61068 61069 61070 61071 61072 61073 61074 61075 61076 61077 61078 61079 61080 61081 61082 61083',
+        '61084 61085 61086 61087 61088 61089 61090 61091 61092 61093 61094 61095 61096 61097 61098 61099 61100 61101 61102 61103',
+        '61104 61105 61106 61107 61108 61109 61110 61111 61112 61113 61114 61115 61116 61117 61118 61119 61120 61121 61122 61123',
+        '61124 61125 61179 61180 61181 61182 61183 61184 61187 61188 61189 61190 61191 61192 61193 61194 61195 61196 61197 61198',
+        '61199 61200 61201 61202 61203 61204 61205 61206 61207 61208 61209 61210 61211 61212 61213 61214 61215 61216 61217 61218',
+        '61219 61220 61221 61222 61223 61224 61225 61226 61227 61228 61229 61230 61231 61232 61233 61234 61235 61236 61237 61238',
+        '61239 61240 61241 61242 61243 61244 61245 61246 61247 61248 61249 61250 61251 61252 61253 61254 61255 61256 61257 61258',
+        '61259 61260 61261 61262 61263 61264 61280 61281 61284 61288 61295 61301 61314 61320 61321 61322 61323 61324 61325 61326',
+        '61327 61340 61341 61346 61347 61348 61349 61353 61357 61364 61409 61412 61413 61414 61415 61416 61417 61418 61419 61420',
+        '61421 61422 61423 61424 61425 61426 61427 61428 61429 61430 61431 61432 61433 61434 61435 61436 61437 61438 61439 61440',
+        '61441 61442 61443 61444 61445 61448 61548 61549 61550 61551 61563 61567 61569 61570 61577 61580 61592 61610 61611 61612',
+        '61613 61614 61615 61616 61617 61618 61619 61620 61623 61681 61682 61698 61699 61727 61730 61732 61741 61742 61743 61744',
+        '61745 61746 61747 61748 61749 61750 61751 61752 61753 61754 61755 61756 61757 61766 61767 61768 61769 61770 61771 61772',
+        '61773 61774 61775 61777 61778 61779 61780 61781 61782 61783 61784 61785 61786 61787 61788 61789 61790 61791 61792 61793',
+        '61794 61795 61796 61797 61798 61804 61805 61806 61807 61808 61809 61810 61812 61825 61826 61827 61829 61832 61833 61834',
+        '61835 61836 61837 61838 61839 61840 61841 61842 61858 61860 61863 61867 61868 61869 61870 61871 61872 61873 61874 61875',
+        '61876 61877 61878 61879 61880 61890 61891 61899 61900 61901 61902 61903 61904 61905 61906 61907 61908 61909 61910 61911',
+        '61912 61913 61914 61915 61916 61917 61918 61919 61920 61921 61922 61923 61924 61925 61926 61927 61928 61929 61930 61931',
+        '61932 61933 61934 61935 61937 61938 61939 61940 61941 61942 61943 61944 61945 61946 61947 61948 61949 61950 61951 61952',
+        '61953 61954 61955 61956 61957 61958 61959 61960 61961 61962 61963 61974 62008 62009 62010 62011 62012 62013 62014 62015',
+        '62016 62017 62018 62019 62020 62021 62022 62023 62024 62025 62026 62027 62028 62029 62030 62055 62072 62088 62092 62093',
+        '62094 62095 62096 62097 62098 62099 62100 62101 62102 62103 62104 62112 62113 62114 62124 62125 62126 62127 62128 62129',
+        '62130 62131 62132 62133 62134 62135 62136 62137 62138 62139 62141 62142 62143 62144 62145 62146 62147 62148 62149 62150',
+        '62151 62153 62154 62157 62158 62159 62160 62168 62169 62170 62171 62172 62173 62224 62241 62242 62243 62244 62245 62246',
+        '62272 62273 62274 62275 62276 62277 62278 62279 62280 62281 62282 62283 62284 62285 62286 62287 62288 62289 62290 62291',
+        '62292 62293 62294 62295 62296 62297 62298 62299 62300 62301 62302 62303 62304 62305 62306 62307 62308 62309 62310 62366',
+        '62378 62381 62429 62430 62431 62432 62433 62434 62435 62436 62437 62438 62439 62440 62441 62442 62443 62444 62445 62446',
+        '62447 62448 62449 62450 62451 62452 62453 62454 62455 62456 62458 62459 62460 62461 62462 62463 62464 62465 62466 62467',
+        '62468 62469 62470 62471 62472 62473 62474 62475 62476 62477 62478 62479 62480 62481 62482 62483 62484 62496 62497 62498',
+        '62499 62500 62501 62502 62503 62504 62505 62506 62535 62536 62537 62538 62539 62540 62546 62584 62585 62586 62587 62588',
+        '62589 62590 62636 62637 62645 62646 62716 62717 62718 62719 62720 62721 62722 62723 62724 62725 62794 62795 62796 62797',
+        '62798 62799 62803 62806 62807 62808 62809 62810 62815 62816 62817 62818 62831 62832 62833 62834 62835 62836 62837 62838',
+        '62839 62845 62846 62847 62875 62876 62903 62904 62905 62906 62907 62909 62910 62911 62912 62920 62930 62931 62932 62933',
+        '62934 62935 62936 62937 62938 62939 62940 62941 62942 62948 62949 62950 62951 62952 62953 62977 62979 62980 62983 62984',
+        '62985 62986 62987 62988 62989 62990 62991 62992 62993 62994 62995 62996 62997 62998 62999 63001 63002 63003 63053 63058',
+        '63059 63060 63061 63062 63063 63064 63065 63066 63067 63068 63073 63085 63086 63087 63088 63089 63090 63118 63119 63120',
+        '63121 63122 63123 63124 63125 63126 63127 63131 63132 63135 63146 63147 63148 63149 63150 63151 63152 63153 63154 63155',
+        '63165 63168 63169 63170 63171 63172 63173 63174 63175 63176 63177 63178 63179 63180 63181 63182 63183 63184 63185 63193',
+        '63194 63210 63241 63306 63307 63308 63448 63449 63450 63451 63476 63477 63478 63479 63481 63482 63483 63484 63492 63493',
+        '63494 63495 63514 63530 63531 63663 68028 68230 68246 68247 68249'
+        ].join(' ').split(' ')),
+      };
+      function codigoSaiDoStPr(cod) {
+        const c = String(cod || '');
+        if (ST_PR_2026.codigos.has(c)) return true;
+        const promo = /^P[12]?(.+)$/.exec(c);
+        return !!(promo && ST_PR_2026.codigos.has(promo[1]));
+      }
+      // 'simples' | 'mei' | 'normal' | null - vem da ficha de CNPJ pela cópia
+      // local de clientes (/api/clientes/sync), pra funcionar sem internet.
+      function regimeTributarioDoCliente(cliente) {
+        if (!cliente) return null;
+        if (cliente.regime_tributario) return cliente.regime_tributario;
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id));
+        return (local && local.regime_tributario) || null;
+      }
+      // null quando o recado não se aplica (outro estado, nenhum item da
+      // lista, ou já passou do prazo do aviso); senão os códigos marcados e as
+      // frases do recado, iguais no PDF, na imagem e no texto.
+      function avisoStPr2026(rows) {
+        if (state.uf !== 'PR') return null;
+        const hoje = todayStr();
+        if (hoje > ST_PR_2026.avisoAte) return null;
+        const marcados = new Set(rows.filter(r => codigoSaiDoStPr(r.p.c)).map(r => r.p.c));
+        if (marcados.size === 0) return null;
+        const antes = hoje < ST_PR_2026.inicio;
+        const aindaComSt = rows.some(r => marcados.has(r.p.c) && separarImpostosDaLinha(r).stTotal > 0.005);
+        const frases = [antes
+          ? 'A partir de 01/10/2026 os itens marcados com (*) deixam de ter ICMS-ST (substituição tributária) no Paraná.'
+          : 'Desde 01/10/2026 os itens marcados com (*) não têm ICMS-ST (substituição tributária) no Paraná.'];
+        if (aindaComSt) {
+          frases.push(antes
+            ? 'Se o pedido for faturado a partir dessa data, a nota sai sem o ICMS-ST desses itens e o total fica menor que o deste orçamento.'
+            : 'Os valores deste orçamento ainda incluem esse ICMS-ST; a nota sai sem ele e o total fica menor.');
+        } else {
+          frases.push('Os valores desses itens neste orçamento já estão sem ICMS-ST.');
+        }
+        const regime = regimeTributarioDoCliente(state.levCliente);
+        if (regime === 'simples' || regime === 'mei') {
+          frases.push('Empresa do Simples Nacional: o ICMS na revenda desses itens passa a ser recolhido no DAS, junto dos demais tributos.');
+        } else if (regime === 'normal') {
+          frases.push('O ICMS destacado na nota da Cortag gera crédito, e o ICMS na revenda desses itens passa a ser apurado pelo próprio cliente.');
+        } else {
+          frases.push('O ICMS na revenda desses itens passa a ser apurado pelo próprio cliente.');
+        }
+        if (marcados.size < rows.length) frases.push('Os demais itens não mudam.');
+        return {
+          marcados,
+          titulo: '(*) ICMS-ST no Paraná — Protocolos ICMS 111/2026 e 95/2026',
+          frases,
+        };
+      }
+      const marcaSt = (aviso, p) => (aviso && aviso.marcados.has(p.c) ? ' (*)' : '');
       // Destaque visual (fundo azul claro) pras colunas/linha de preço já COM
       // impostos - é o valor que o cliente de fato paga, então recebe ênfase
       // em vez de se misturar com o resto da tabela (pedido do usuário depois
@@ -8757,6 +8882,7 @@
       async function generateQuotePDF() {
         const { rows, total, totalSemImpostos } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
+        const avisoSt = avisoStPr2026(rows);
         try {
           await loadJsPdfScripts();
         } catch (e) {
@@ -8877,7 +9003,7 @@
           body: rows.map((r) => {
             const { ipiTotal, stTotal } = separarImpostosDaLinha(r);
             return [
-              r.p.c, r.p.n, String(r.it.qty), 'Un',
+              r.p.c, r.p.n + marcaSt(avisoSt, r.p), String(r.it.qty), 'Un',
               numBr(r.cpSemImposto), numBr(r.lineTotalSemImpostos),
               numBr(ipiTotal), numBr(stTotal),
               numBr(r.cp), numBr(r.lineTotal),
@@ -8921,6 +9047,22 @@
           tableWidth: CONTENT_W,
           bodyStyles: { halign: 'left' },
         });
+
+        if (avisoSt) {
+          doc.autoTable({
+            startY: doc.lastAutoTable.finalY + 5,
+            body: [
+              [{ content: avisoSt.titulo, styles: { fontStyle: 'bold', fontSize: 8.5 } }],
+              [{ content: avisoSt.frases.join(' ') }],
+            ],
+            theme: 'plain',
+            styles: { fontSize: 8, cellPadding: { top: 1.2, bottom: 1.2, left: 3, right: 3 }, textColor: [20, 20, 20], fillColor: [255, 248, 225] },
+            tableLineColor: [230, 180, 60],
+            tableLineWidth: 0.4,
+            margin: TABLE_MARGIN,
+            tableWidth: CONTENT_W,
+          });
+        }
 
         const blob = doc.output('blob');
         const fileName = `orcamento-${todayStr()}.pdf`;

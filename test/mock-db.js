@@ -274,8 +274,18 @@ async function query(sql, params = []) {
     if (c) c.matriz_grupo = matrizGrupo;
     return { rows: c ? [{ nome: c.nome }] : [] };
   }
-  if (s.includes('SELECT ID, NOME, DOCUMENTO, CODIGO_OFICIAL FROM CLIENTES')) {
-    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null })) };
+  if (s.includes('AS REGIME_TRIBUTARIO FROM CLIENTES C')) {
+    const regime = (brutos) => {
+      if (!brutos) return null;
+      if (brutos.mei && brutos.mei.optante === true) return 'mei';
+      if (brutos.simples && brutos.simples.optante === true) return 'simples';
+      if (brutos.simples && brutos.simples.optante === false) return 'normal';
+      return null;
+    };
+    return { rows: clientes.map(c => ({
+      id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null,
+      regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
+    })) };
   }
   if (s.includes('FROM CLIENTES WHERE ID = ANY')) {
     const ids = params[0].map(Number);

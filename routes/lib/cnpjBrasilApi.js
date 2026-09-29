@@ -44,6 +44,13 @@ function texto(v) {
   return s || null;
 }
 
+// radar-cnpj: simples/mei = {optante, dataOpcao, dataExclusao}; a BrasilAPI
+// manda null quando a Receita não informa - aí fica null (regime desconhecido)
+function opcaoRegime(optante, dataOpcao, dataExclusao) {
+  if (typeof optante !== 'boolean') return null;
+  return { optante, dataOpcao: texto(dataOpcao), dataExclusao: texto(dataExclusao) };
+}
+
 function brasilApiParaFormatoRadar(d) {
   const porte = texto(d.porte) || texto(d.descricao_porte);
   return {
@@ -85,6 +92,8 @@ function brasilApiParaFormatoRadar(d) {
     socios: Array.isArray(d.qsa)
       ? d.qsa.map((s) => ({ nome: texto(s.nome_socio), qualificacao: { codigo: s.codigo_qualificacao_socio ?? null, descricao: texto(s.qualificacao_socio) } }))
       : [],
+    simples: opcaoRegime(d.opcao_pelo_simples, d.data_opcao_pelo_simples, d.data_exclusao_do_simples),
+    mei: opcaoRegime(d.opcao_pelo_mei, d.data_opcao_pelo_mei, d.data_exclusao_do_mei),
     // marca de onde veio, só pra diagnóstico - nenhuma tela usa
     origem: 'brasilapi',
   };

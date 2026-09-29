@@ -112,6 +112,28 @@ async function main() {
     res.status === 200 && sincronizado && sincronizado.codigo_oficial === 'COD9010',
     'lista offline (/sync) também traz codigo_oficial, pra funcionar sem internet'
   );
+  assert(sincronizado.regime_tributario === null, 'cliente sem ficha de CNPJ vai pro /sync com regime desconhecido (null)');
+
+  // 5c) regime tributário da ficha de CNPJ no /sync - o recado de ICMS-ST do
+  // orçamento (gerado offline) muda o texto pra Simples/MEI x regime normal
+  mockDb.__seed({
+    clientes: [
+      { id: 9011, nome: 'REGIME SIMPLES', documento: '11122233000144', codigo_oficial: null },
+      { id: 9012, nome: 'REGIME NORMAL', documento: '11122233000225', codigo_oficial: null },
+      { id: 9013, nome: 'REGIME MEI', documento: '11122233000306', codigo_oficial: null },
+    ],
+    fichasCnpj: {
+      9011: { dados_brutos: { simples: { optante: true, dataOpcao: '2007-07-01', dataExclusao: null }, mei: { optante: false } } },
+      9012: { dados_brutos: { simples: { optante: false, dataOpcao: '2008-09-01', dataExclusao: '2010-12-31' }, mei: { optante: false } } },
+      9013: { dados_brutos: { simples: { optante: true }, mei: { optante: true } } },
+    },
+  });
+  res = await req('GET', '/api/clientes/sync');
+  const regimeDe = (id) => (res.body.clientes.find(c => c.id === id) || {}).regime_tributario;
+  assert(
+    regimeDe(9011) === 'simples' && regimeDe(9012) === 'normal' && regimeDe(9013) === 'mei',
+    `/sync traz o regime da ficha (simples/normal/mei): ${regimeDe(9011)}/${regimeDe(9012)}/${regimeDe(9013)}`
+  );
 
   // 6) sincronizar produtos (simulando o precos.json)
   res = await req('POST', '/api/produtos/sync', { produtos: [
@@ -866,8 +888,15 @@ async function main() {
     identificador_matriz_filial: 1, descricao_identificador_matriz_filial: 'MATRIZ',
     cnaes_secundarios: [{ codigo: 4742300, descricao: 'x' }, { codigo: 4741500, descricao: 'y' }],
     qsa: [{ nome_socio: 'FULANO DE TAL', qualificacao_socio: 'Sócio-Administrador', codigo_qualificacao_socio: 49 }],
+    opcao_pelo_simples: true, data_opcao_pelo_simples: '2013-10-03', data_exclusao_do_simples: null,
+    opcao_pelo_mei: false, data_opcao_pelo_mei: null, data_exclusao_do_mei: null,
   };
   const conv = brasilApiParaFormatoRadar(respostaBrasilApi);
+  assert(
+    conv.simples.optante === true && conv.simples.dataOpcao === '2013-10-03' && conv.mei.optante === false
+      && brasilApiParaFormatoRadar({ cnpj: '1', opcao_pelo_simples: null }).simples === null,
+    'BrasilAPI: opção pelo Simples/MEI vira {optante, dataOpcao, dataExclusao} como no radar-cnpj; null = desconhecido'
+  );
   assert(
     conv.razaoSocial === 'MATERIAIS SILVA LTDA' && conv.situacao.label === 'Ativa' && conv.porte.label === 'Microempresa'
       && conv.endereco.logradouro === 'DAS FLORES' && conv.endereco.municipio === 'MOGI MIRIM' && conv.endereco.complemento === null
