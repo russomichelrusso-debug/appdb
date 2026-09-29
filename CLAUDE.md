@@ -231,6 +231,19 @@ Supabase, sem PR — não é mudança de código.
     01/11 e 30/11/2025; os outros 87 ainda mostram o código). Nome vem de `produtos` primeiro;
     `descricao` só entra quando o código não está no catálogo.
 
+- **Recado de ICMS-ST do Paraná no orçamento** (09/2026): pelos Protocolos ICMS 111/2026 e 95/2026,
+  1.131 códigos saem da substituição tributária no PR em 01/10/2026 (lista em `ST_PR_2026`,
+  `index.html`, tirada da planilha de exclusão; promocional P/P1/P2 cai no código base). Com
+  estado PR e algum desses itens no carrinho, o PDF, a imagem e o texto do WhatsApp marcam o item
+  com (\*) e trazem o recado (`avisoStPr2026`): antes de 01/10 avisa que a nota faturada depois
+  sai sem ST e menor; depois de 01/10, se o preço ainda tiver ST (catálogo não atualizado), avisa
+  que a nota sai menor. O texto muda pelo regime da ficha de CNPJ — Simples/MEI (ICMS da revenda
+  no DAS) × regime normal (crédito do ICMS destacado) — que vai no `/api/clientes/sync`
+  (`regime_tributario`) pra funcionar offline. O aviso some sozinho depois de 31/12/2026. Em
+  09/2026 no PR: 193 clientes Simples, 96 regime normal, nenhum MEI; 156 clientes sem ficha
+  (regime desconhecido, recado sem a frase do regime). **O preço em si não muda sozinho** — em
+  01/10 o catálogo precisa vir sem ST nesses itens (LISTA PADRÃO nova ou correção no banco).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

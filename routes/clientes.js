@@ -42,9 +42,21 @@ router.get('/', async (req, res) => {
 // dar pra escolher o cliente de um levantamento/pedido mesmo sem internet no
 // momento. Roda sozinha em segundo plano (ver carregarCatalogoEExtras no
 // front); por isso só os campos que a busca offline precisa, nada mais.
+// regime_tributario ('simples' | 'mei' | 'normal' | null sem ficha) vem da
+// ficha de CNPJ e ajusta o recado de ICMS-ST do orçamento, que é gerado offline.
 router.get('/sync', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, nome, documento, codigo_oficial FROM clientes ORDER BY nome');
+    const result = await pool.query(
+      `SELECT c.id, c.nome, c.documento, c.codigo_oficial,
+              CASE
+                WHEN f.dados_brutos->'mei'->>'optante' = 'true' THEN 'mei'
+                WHEN f.dados_brutos->'simples'->>'optante' = 'true' THEN 'simples'
+                WHEN f.dados_brutos->'simples'->>'optante' = 'false' THEN 'normal'
+              END AS regime_tributario
+       FROM clientes c
+       LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id
+       ORDER BY c.nome`
+    );
     res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });
   } catch (e) {
     console.error(e);
