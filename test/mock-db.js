@@ -17,6 +17,7 @@ let sessoes = [];
 let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
+let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagamento
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
@@ -36,6 +37,7 @@ function reset() {
   codigosProduto = {};
   clienteCnpjFicha = {};
   pedidosOficiaisItens = [];
+  pedidosPendentesPagamento = [];
   configuracoes = {};
   catalogoPrecos = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
@@ -65,6 +67,38 @@ async function query(sql, params = []) {
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };
+
+  // Pedidos à vista aguardando pagamento (routes/pedidosOficiais.js) - no
+  // topo porque os casos genéricos de INSERT INTO PEDIDOS / FROM
+  // PEDIDOS_OFICIAIS_ITENS POI mais abaixo também casariam com estes SQLs.
+  if (s.startsWith('DELETE FROM PEDIDOS_PENDENTES_PAGAMENTO')) {
+    pedidosPendentesPagamento = [];
+    return { rows: [] };
+  }
+  if (s.startsWith('INSERT INTO PEDIDOS_PENDENTES_PAGAMENTO')) {
+    const [nrs, clis, nomes, valores, datas] = params;
+    nrs.forEach((nr, i) => pedidosPendentesPagamento.push({
+      nr_pedido: nr, cliente_codigo_oficial: clis[i], cliente_nome: nomes[i], valor: valores[i], data_implantacao: datas[i],
+    }));
+    return { rows: [] };
+  }
+  if (s.includes('FROM PEDIDOS_PENDENTES_PAGAMENTO PPP')) {
+    const cod = params[0];
+    return { rows: pedidosPendentesPagamento
+      .filter(p => p.cliente_codigo_oficial === cod
+        || pedidosOficiaisItens.some(it => it.nr_pedido === p.nr_pedido && it.cliente_codigo_oficial === cod))
+      .map(p => ({ nr_pedido: p.nr_pedido, valor: p.valor, data_implantacao: p.data_implantacao })) };
+  }
+  // Pedidos oficiais de um cliente (GET /api/pedidos-oficiais/:clienteId).
+  if (s.includes('COALESCE(PR.NOME, POI.DESCRICAO) AS PRODUTO, POI.QUANTIDADE')) {
+    return { rows: pedidosOficiaisItens
+      .filter(it => it.cliente_codigo_oficial === params[0])
+      .map(it => {
+        const prod = produtos.find(p => p.codigo_sku === it.codigo_sku);
+        return { ...it, produto: prod ? prod.nome : (it.descricao || null) };
+      }) };
+  }
+
 
   // Sugestões de recompra (routes/relatorios.js) - última compra por SKU no
   // faturado oficial e nos pedidos do app.
@@ -1155,6 +1189,7 @@ module.exports = {
   __getLevantamentos: () => levantamentos,
   __getPedidoItens: () => pedidoItens,
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
+  __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,
 };

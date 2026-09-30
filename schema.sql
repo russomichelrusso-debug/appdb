@@ -240,6 +240,21 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_status_data ON pedidos_oficiais_
 -- carteira + faturado - ver SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js).
 CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_implantacao ON pedidos_oficiais_itens (data_implantacao);
 
+-- Pedidos à vista aguardando pagamento: aba própria do relatório oficial
+-- ("Pendentes à vista" / "Aguardando pagamento"). Uma linha por pedido. É a
+-- foto do último relatório que trouxe a aba: cada importação com ela troca a
+-- lista inteira, e o pedido que sumiu da aba foi pago. Relatório sem a aba
+-- não mexe na lista.
+CREATE TABLE IF NOT EXISTS pedidos_pendentes_pagamento (
+  nr_pedido TEXT PRIMARY KEY,
+  cliente_codigo_oficial TEXT,
+  cliente_nome TEXT,
+  valor NUMERIC,
+  data_implantacao DATE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pendentes_pagamento_cliente ON pedidos_pendentes_pagamento (cliente_codigo_oficial);
+
 -- Catálogo completo de preços: um valor por produto x canal x estado (27 UFs
 -- x 6 canais). Guardado em JSONB por produto (não um blob único gigante) pra
 -- não repetir o problema de tamanho que já tivemos com fichas técnicas.

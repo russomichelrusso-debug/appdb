@@ -204,7 +204,19 @@ router.get('/:clienteId', async (req, res) => {
         }
       }
     }
-    res.json({ vinculado: true, itens: result.rows });
+    // Pedidos à vista aguardando pagamento desse cliente - pelo código do
+    // cliente na aba ou, se a aba não trouxer o código, pelo Nr.Pedido que
+    // já está na Carteira/Faturamento dele.
+    const pendentes = await pool.query(
+      `SELECT nr_pedido, valor, data_implantacao
+       FROM pedidos_pendentes_pagamento ppp
+       WHERE ppp.cliente_codigo_oficial = $1
+          OR EXISTS (SELECT 1 FROM pedidos_oficiais_itens poi
+                     WHERE poi.nr_pedido = ppp.nr_pedido AND poi.cliente_codigo_oficial = $1)
+       ORDER BY data_implantacao DESC NULLS LAST`,
+      [codigoOficial]
+    );
+    res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar pedidos oficiais.' });
@@ -247,6 +259,32 @@ function deduplicarItensOficiais(itens) {
   return Array.from(porChave.values());
 }
 
+// Aba de pedidos à vista aguardando pagamento: uma linha por pedido (a aba
+// pode vir com uma linha por item - soma o valor e fica com o primeiro
+// cliente/data que aparecer). Nr.Pedido é o único campo obrigatório.
+function normalizarPendentesPagamento(linhas) {
+  const porPedido = new Map();
+  for (const l of linhas) {
+    if (!l || l.nr_pedido == null) continue;
+    let nr = String(l.nr_pedido).trim();
+    if (/^\d+$/.test(nr)) nr = nr.replace(/^0+(?=\d)/, '');
+    if (!nr) continue;
+    const texto = (v) => (v != null && String(v).trim()) ? String(v).trim().slice(0, 300) : null;
+    const valor = l.valor != null && Number.isFinite(Number(l.valor)) ? Number(l.valor) : null;
+    const data = /^\d{4}-\d{2}-\d{2}$/.test(String(l.data_implantacao || '')) ? l.data_implantacao : null;
+    const atual = porPedido.get(nr);
+    if (!atual) {
+      porPedido.set(nr, { nr_pedido: nr, cliente_codigo_oficial: texto(l.cliente_codigo_oficial), cliente_nome: texto(l.cliente_nome), valor, data_implantacao: data });
+    } else {
+      if (valor != null) atual.valor = (atual.valor ?? 0) + valor;
+      atual.cliente_codigo_oficial = atual.cliente_codigo_oficial || texto(l.cliente_codigo_oficial);
+      atual.cliente_nome = atual.cliente_nome || texto(l.cliente_nome);
+      atual.data_implantacao = atual.data_implantacao || data;
+    }
+  }
+  return Array.from(porPedido.values());
+}
+
 // Importa em lote as abas "Carteira" e "Faturamento" do relatório oficial -
 // ÚNICA porta de entrada de pedidos oficiais desde a unificação (antes havia
 // também um upload de JSON pré-preparado à mão pelo usuário, e uma planilha
@@ -259,8 +297,13 @@ router.post('/importar', async (req, res) => {
   // Qualquer usuário logado pode importar (não só admin) - decisão explícita
   // (já valia antes da unificação; mantida aqui inclusive pra classificação
   // de cliente, que antes exigia admin no fluxo separado que foi removido).
-  const { itens: itensBrutos, classificacoes } = req.body;
-  if (!Array.isArray(itensBrutos) || itensBrutos.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const { itens: itensBrutosOuNada, classificacoes, pendentes_pagamento: pendentesBrutos } = req.body;
+  const itensBrutos = Array.isArray(itensBrutosOuNada) ? itensBrutosOuNada : [];
+  // Relatório pode vir só com a aba de pendentes à vista (sem Carteira/
+  // Faturamento) - aí `itens` vem vazio, mas a lista de pendentes vale.
+  const temPendentes = Array.isArray(pendentesBrutos);
+  if (itensBrutos.length === 0 && !temPendentes) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const pendentes = temPendentes ? normalizarPendentesPagamento(pendentesBrutos) : null;
 
   // Linha sem um desses três campos não tem como ser gravada de forma útil
   // (nr_pedido+codigo_sku é a chave primária, cliente_codigo_oficial é quem
@@ -351,7 +394,7 @@ router.post('/importar', async (req, res) => {
     const status = itens.map(it => it.status === 'faturado' ? 'faturado' : 'carteira');
     const descricoes = itens.map(it => (it.descricao != null && String(it.descricao).trim()) ? String(it.descricao).trim().slice(0, 300) : null);
 
-    await client.query(
+    if (itens.length > 0) await client.query(
       `INSERT INTO pedidos_oficiais_itens
          (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, nota_fiscal, classificatorio, transportadora, situacao_pedido, status, descricao)
        SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[])
@@ -380,10 +423,25 @@ router.post('/importar', async (req, res) => {
       [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, transportadoras, situacoesPedido, status, descricoes]
     );
 
+    // Pendentes à vista: a aba é a foto atual - troca a lista inteira (o
+    // pedido que saiu da aba foi pago). Sem a aba no arquivo, não mexe.
+    if (pendentes) {
+      await client.query('DELETE FROM pedidos_pendentes_pagamento');
+      if (pendentes.length > 0) {
+        await client.query(
+          `INSERT INTO pedidos_pendentes_pagamento (nr_pedido, cliente_codigo_oficial, cliente_nome, valor, data_implantacao)
+           SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::date[])`,
+          [pendentes.map(p => p.nr_pedido), pendentes.map(p => p.cliente_codigo_oficial), pendentes.map(p => p.cliente_nome),
+           pendentes.map(p => p.valor), pendentes.map(p => p.data_implantacao)]
+        );
+      }
+    }
+
     await client.query('COMMIT');
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
     await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
-    res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados });
+    res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
+               pendentesPagamento: pendentes ? pendentes.length : null });
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
@@ -400,3 +458,4 @@ module.exports = router;
 // subir servidor/banco - não afeta o roteamento (router continua sendo o
 // export default usado pelo server.js).
 module.exports.deduplicarItensOficiais = deduplicarItensOficiais;
+module.exports.normalizarPendentesPagamento = normalizarPendentesPagamento;
