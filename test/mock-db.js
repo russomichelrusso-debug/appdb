@@ -60,6 +60,12 @@ function seed(partial) {
   if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
 }
 
+// Reproduz sqlFaturadoDeFato (routes/lib/faturadoDeFato.js): item faturado cujo
+// título à vista (nota fiscal) ainda está pendente não conta no faturamento.
+function faturadoDeFato(it) {
+  return it.status === 'faturado' && !titulosAvistaPendentes.some(t => t.titulo === it.nota_fiscal);
+}
+
 async function query(sql, params = []) {
   queryLog.push({ sql: sql.replace(/\s+/g, ' ').trim(), params });
   // normaliza espaço/quebra de linha antes de comparar - as queries reais são
@@ -448,7 +454,7 @@ async function query(sql, params = []) {
     const fimStr = `${ano + 1}-01-01`;
     const inicio12m = inicioJanela12m();
     const rows = grupo.map(c => {
-      const itensDoCliente = pedidosOficiaisItens.filter(it => it.cliente_codigo_oficial === c.codigo_oficial && it.status === 'faturado');
+      const itensDoCliente = pedidosOficiaisItens.filter(it => it.cliente_codigo_oficial === c.codigo_oficial && faturadoDeFato(it));
       const faturamento_12m = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento > inicio12m)
         .reduce((s, it) => s + (Number(it.valor) || 0), 0);
       const faturamento_ano_corrente = itensDoCliente.filter(it => it.data_faturamento && it.data_faturamento >= fimStr)
@@ -510,7 +516,7 @@ async function query(sql, params = []) {
     let inicio = null, fim = null;
     if (s.includes('DATA_FATURAMENTO >=')) inicio = params[idx++];
     if (s.includes('DATA_FATURAMENTO <=')) fim = params[idx++];
-    let itens = pedidosOficiaisItens.filter(it => it.status === 'faturado');
+    let itens = pedidosOficiaisItens.filter(it => faturadoDeFato(it));
     if (porCliente) itens = itens.filter(it => it.cliente_codigo_oficial === clienteCodigo);
     if (inicio) itens = itens.filter(it => it.data_faturamento && it.data_faturamento >= inicio);
     if (fim) itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim);
@@ -542,7 +548,7 @@ async function query(sql, params = []) {
   if (s.startsWith('SELECT COUNT(DISTINCT NR_PEDIDO) AS TOTAL FROM PEDIDOS_OFICIAIS_ITENS') && s.includes('CODIGO_SKU = ANY(')) {
     const codigos = params[0];
     let idx = 1;
-    let itens = pedidosOficiaisItens.filter(it => it.status === 'faturado' && codigos.includes(it.codigo_sku));
+    let itens = pedidosOficiaisItens.filter(it => faturadoDeFato(it) && codigos.includes(it.codigo_sku));
     if (s.includes('CLIENTE_CODIGO_OFICIAL = $')) { const cc = params[idx++]; itens = itens.filter(it => it.cliente_codigo_oficial === cc); }
     if (s.includes('DATA_FATURAMENTO >=')) { const ini = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento >= ini); }
     if (s.includes('DATA_FATURAMENTO <=')) { const fim = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim); }
@@ -619,7 +625,7 @@ async function query(sql, params = []) {
     const diasCorte = { month: 365, week: 70, quarter: 730 }[tipo];
     const corte = new Date(); corte.setDate(corte.getDate() - diasCorte);
     const corteStr = corte.toISOString().slice(0, 10);
-    const itens = pedidosOficiaisItens.filter(it => it.status === 'faturado' && it.data_faturamento && it.data_faturamento >= corteStr);
+    const itens = pedidosOficiaisItens.filter(it => faturadoDeFato(it) && it.data_faturamento && it.data_faturamento >= corteStr);
     const grupos = new Map();
     for (const it of itens) {
       const d = new Date(it.data_faturamento);
@@ -992,7 +998,7 @@ async function query(sql, params = []) {
     const inicio = s.includes('DATA_FATURAMENTO >=') ? params[idx++] : null;
     const fim = s.includes('DATA_FATURAMENTO <=') ? params[idx++] : null;
     const itens = pedidosOficiaisItens.filter(it =>
-      it.status === 'faturado' &&
+      faturadoDeFato(it) &&
       (!porCliente || it.cliente_codigo_oficial === codigoOficial) &&
       (!inicio || it.data_faturamento >= inicio) &&
       (!fim || it.data_faturamento <= fim)
@@ -1135,7 +1141,7 @@ function calcularFaturamentoAnoFechadoParaCliente(clienteId, agruparPorMatrizGru
   if (!cliente) return { faturamento_12m: 0, faturamento_ano_corrente: 0, faturamento_mesmo_periodo_ano_anterior: 0, ultima_compra: null };
   const grupo = agruparPorMatrizGrupo && cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente];
   const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
-  const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.status === 'faturado');
+  const itensFaturados = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && faturadoDeFato(it));
   const ano = anoClassificatorioFechado();
   const inicioStr = `${ano}-01-01`;
   const fimStr = `${ano + 1}-01-01`;

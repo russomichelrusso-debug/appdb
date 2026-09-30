@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
+const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 
 router.param('id', validarIdInteiro);
 
@@ -223,11 +224,11 @@ function sqlFaturamentoClassificatorioPorCliente(agruparPorMatrizGrupo) {
   return `
   SELECT c.id AS cliente_id,
          COALESCE(SUM(poi.valor) FILTER (
-           WHERE poi.status = 'faturado'
+           WHERE ${sqlFaturadoDeFato('poi')}
              AND poi.data_faturamento > ${JANELA_12M_SQL}
          ), 0) AS faturamento_12m,
          COALESCE(SUM(poi.valor) FILTER (
-           WHERE poi.status = 'faturado'
+           WHERE ${sqlFaturadoDeFato('poi')}
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}
          ), 0) AS faturamento_ano_corrente,
          -- Mesmo período do ano fechado (mesma contagem de dias decorridos
@@ -236,11 +237,11 @@ function sqlFaturamentoClassificatorioPorCliente(agruparPorMatrizGrupo) {
          -- ano fechado INTEIRO, que sempre parece maior só porque o ano
          -- corrente ainda não terminou. Pedido do usuário na aba Clientes.
          COALESCE(SUM(poi.valor) FILTER (
-           WHERE poi.status = 'faturado'
+           WHERE ${sqlFaturadoDeFato('poi')}
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
              AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (CURRENT_DATE - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
          ), 0) AS faturamento_mesmo_periodo_ano_anterior,
-         MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
+         MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}) AS ultima_compra
   FROM clientes c
   ${joinC2}
   LEFT JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
@@ -394,14 +395,14 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
     const membrosResult = await pool.query(
       `SELECT c.id, c.nome, c.documento, c.classificatorio_tipo,
               COALESCE(SUM(poi.valor) FILTER (
-                WHERE poi.status = 'faturado'
+                WHERE ${sqlFaturadoDeFato('poi')}
                   AND poi.data_faturamento > ${JANELA_12M_SQL}
               ), 0) AS faturamento_12m,
               COALESCE(SUM(poi.valor) FILTER (
-                WHERE poi.status = 'faturado'
+                WHERE ${sqlFaturadoDeFato('poi')}
                   AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}
               ), 0) AS faturamento_ano_corrente,
-              MAX(poi.data_faturamento) FILTER (WHERE poi.status = 'faturado') AS ultima_compra
+              MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}) AS ultima_compra
        FROM clientes c
        LEFT JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c.codigo_oficial
        WHERE c.matriz_grupo = $1

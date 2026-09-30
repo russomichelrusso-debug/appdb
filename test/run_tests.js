@@ -1159,6 +1159,28 @@ async function main() {
   histTT = await req('GET', '/api/pedidos-oficiais/' + clienteTT);
   assert(res.status < 300 && histTT.body.titulos_avista.length === 0, 'títulos à vista: aba vazia no relatório novo = todos pagos');
 
+  // 27) Faturamento não conta pedido à vista com título pendente (a NF já está
+  // na aba Faturamento, mas o pedido só é faturado depois do pagamento):
+  // Curva ABC sem o item enquanto o título está na aba; pago (sumiu), volta.
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [
+      { nr_pedido: 'FV1', codigo_sku: '99771', cliente_codigo_oficial: 'COD9406', cliente_nome: 'LOJA TITULO', status: 'faturado',
+        valor: 700, quantidade: 7, data_implantacao: hojeISO, data_faturamento: hojeISO, nota_fiscal: '990001' },
+      { nr_pedido: 'FV2', codigo_sku: '99772', cliente_codigo_oficial: 'COD9406', cliente_nome: 'LOJA TITULO', status: 'faturado',
+        valor: 50, quantidade: 1, data_implantacao: hojeISO, data_faturamento: hojeISO, nota_fiscal: '990002' },
+    ],
+    titulos_avista: [{ titulo: '990001', parcela: 1, valor: 700 }],
+  });
+  let abcFV = await req('GET', '/api/produtos-abc-geral');
+  const pendenteFora = !(abcFV.body || []).some(r => r.codigo_sku === '99771') && (abcFV.body || []).some(r => r.codigo_sku === '99772');
+  await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [] });
+  abcFV = await req('GET', '/api/produtos-abc-geral');
+  assert(
+    res.status < 300 && pendenteFora && (abcFV.body || []).some(r => r.codigo_sku === '99771'),
+    'faturamento: item de pedido à vista com título pendente fica fora da Curva ABC e volta quando o título é pago'
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

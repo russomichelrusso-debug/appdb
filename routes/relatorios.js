@@ -6,6 +6,7 @@ const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 
 router.param('id', validarIdInteiro);
 router.param('produtoId', validarIdInteiro);
@@ -31,7 +32,7 @@ async function reconciliarProdutosPorCodigoBase(linhas, { inicio, fim, clienteCo
     if (fim) { fixupParams.push(fim); fixupFiltro += ` AND data_faturamento <= $${fixupParams.length}::date`; }
     const fixup = await pool.query(
       `SELECT COUNT(DISTINCT nr_pedido) AS total FROM pedidos_oficiais_itens
-       WHERE status = 'faturado' AND codigo_sku = ANY($1::text[])${fixupFiltro}`,
+       WHERE ${sqlFaturadoDeFato()} AND codigo_sku = ANY($1::text[])${fixupFiltro}`,
       fixupParams
     );
     grupo.num_pedidos = Number(fixup.rows[0].total);
@@ -609,7 +610,7 @@ router.get('/produtos-abc-geral', async (req, res) => {
               SUM(poi.valor) AS faturamento_total
        FROM pedidos_oficiais_itens poi
        LEFT JOIN produtos p ON p.codigo_sku = poi.codigo_sku
-       WHERE poi.status = 'faturado'${filtroData}
+       WHERE ${sqlFaturadoDeFato('poi')}${filtroData}
        GROUP BY poi.codigo_sku, p.nome, p.categoria
        ORDER BY faturamento_total DESC NULLS LAST`,
       params
@@ -654,7 +655,7 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
               SUM(poi.valor) AS faturamento_total
        FROM pedidos_oficiais_itens poi
        LEFT JOIN produtos p ON p.codigo_sku = poi.codigo_sku
-       WHERE poi.status = 'faturado' AND poi.cliente_codigo_oficial = $1${filtroData}
+       WHERE ${sqlFaturadoDeFato('poi')} AND poi.cliente_codigo_oficial = $1${filtroData}
        GROUP BY poi.codigo_sku, p.nome, p.categoria
        ORDER BY faturamento_total DESC NULLS LAST`,
       params
@@ -715,18 +716,18 @@ router.get('/dashboard/resumo', async (req, res) => {
       pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
-         FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
+         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
          GROUP BY 1 ORDER BY 1`
       ),
       pool.query(
         `SELECT date_trunc('quarter', data_faturamento) AS periodo, SUM(valor) AS faturamento
-         FROM pedidos_oficiais_itens WHERE status = 'faturado' AND data_faturamento >= CURRENT_DATE - INTERVAL '24 months'
+         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '24 months'
          GROUP BY 1 ORDER BY 1`
       ),
       pool.query(
         `SELECT c.id, c.nome, SUM(poi.valor) AS faturamento
          FROM pedidos_oficiais_itens poi JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
-         WHERE poi.status = 'faturado' AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
          GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
       ),
       // Canal + inatividade (cartões "Clientes Ativos por Canal" e "Contas
