@@ -257,8 +257,13 @@ Supabase, sem PR — não é mudança de código.
     uma aba de pedidos e **recusava o relatório real inteiro** ("Pendentes à Vista" não tem Nr.Pedido).
   - Decisão do usuário: aparece **só no histórico do cliente** (aba Pedidos oficiais): selo "À vista ·
     aguardando pagamento" no pedido não liberado; "À vista · pagamento pendente · vence/venceu DD/MM ·
-    R$ X" no pedido faturado (vermelho se vencido). Pedido/título que não está nos pedidos importados
+    R$ X" no pedido da NF (vermelho se vencido). Pedido/título que não está nos pedidos importados
     do cliente ganha um card só com o que a aba traz.
+  - A NF do título **já aparece na aba Faturamento**, mas o pedido **não foi faturado de fato** (o
+    usuário corrigiu: "aparece como faturado, mas não foi"). No card, pedido com pendência à vista
+    mostra "Situação: Aguardando pagamento" + Total, sem "Faturado", selo T/P, transportadora nem
+    "Rastrear entrega". **Só o card muda** — classificatório, Curva ABC e faturamento do Dashboard
+    ainda contam esse pedido como faturado (perguntar ao usuário antes de mexer).
 
 ## O que já tentamos e não deu certo
 
