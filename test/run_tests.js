@@ -1132,6 +1132,33 @@ async function main() {
     `à vista pendente: relatório sem a aba não mexe; com a aba, o pedido que saiu dela (pago) some: ${JSON.stringify(histAV.body.pendentes_pagamento)}`
   );
 
+  // 26) Aba "Pendentes à Vista": títulos (nota fiscal + parcela) de pedido já
+  // faturado com boleto à vista em aberto - ligados ao cliente pelo código ou
+  // pela nota fiscal; mesma regra de foto (sumiu da aba = pago).
+  mockDb.__seed({ clientes: [{ id: 9406, nome: 'LOJA TITULO', codigo_oficial: 'COD9406' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'TT1', codigo_sku: '1001', cliente_codigo_oficial: 'COD9406', cliente_nome: 'LOJA TITULO', status: 'faturado',
+      valor: 9917.82, quantidade: 1, data_implantacao: '2026-09-20', data_faturamento: '2026-09-22', nota_fiscal: '919895' }],
+    titulos_avista: [
+      { titulo: 919895, parcela: 1, vencimento: '2026-09-25', valor: 9917.82 },
+      { titulo: '000555', parcela: 1, cliente_codigo_oficial: 'COD9406', vencimento: '2026-10-05', valor: 100 },
+      { titulo: '777', parcela: 1, cliente_codigo_oficial: 'OUTRO', valor: 1 },
+      { valor: 3 },
+    ],
+  });
+  const clienteTT = mockDb.__getClientes().find(c => c.codigo_oficial === 'COD9406').id;
+  let histTT = await req('GET', '/api/pedidos-oficiais/' + clienteTT);
+  const titTT = (histTT.body && histTT.body.titulos_avista) || [];
+  const pendentesAntes = mockDb.__getPedidosPendentesPagamento().length;
+  assert(
+    res.status < 300 && res.body.titulosAvista === 3 && res.body.pendentesPagamento === null && pendentesAntes > 0
+      && titTT.length === 2 && titTT.some(t => t.titulo === '919895' && t.parcela === '1') && titTT.some(t => t.titulo === '555'),
+    `títulos à vista: importa a aba (sem mexer nos pedidos aguardando pagamento) e o histórico mostra os do cliente, pela NF ou pelo código: ${JSON.stringify(titTT)}`
+  );
+  res = await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [] });
+  histTT = await req('GET', '/api/pedidos-oficiais/' + clienteTT);
+  assert(res.status < 300 && histTT.body.titulos_avista.length === 0, 'títulos à vista: aba vazia no relatório novo = todos pagos');
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

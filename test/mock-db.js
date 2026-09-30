@@ -17,6 +17,7 @@ let sessoes = [];
 let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
+let titulosAvistaPendentes = []; // aba Pendentes à Vista (títulos em aberto)
 let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagamento
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
@@ -38,6 +39,7 @@ function reset() {
   clienteCnpjFicha = {};
   pedidosOficiaisItens = [];
   pedidosPendentesPagamento = [];
+  titulosAvistaPendentes = [];
   configuracoes = {};
   catalogoPrecos = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
@@ -71,6 +73,24 @@ async function query(sql, params = []) {
   // Pedidos à vista aguardando pagamento (routes/pedidosOficiais.js) - no
   // topo porque os casos genéricos de INSERT INTO PEDIDOS / FROM
   // PEDIDOS_OFICIAIS_ITENS POI mais abaixo também casariam com estes SQLs.
+  if (s.startsWith('DELETE FROM TITULOS_AVISTA_PENDENTES')) {
+    titulosAvistaPendentes = [];
+    return { rows: [] };
+  }
+  if (s.startsWith('INSERT INTO TITULOS_AVISTA_PENDENTES')) {
+    const [tits, parcs, clis, nomes, vencs, valores] = params;
+    tits.forEach((t, i) => titulosAvistaPendentes.push({
+      titulo: t, parcela: parcs[i], cliente_codigo_oficial: clis[i], cliente_nome: nomes[i], vencimento: vencs[i], valor: valores[i],
+    }));
+    return { rows: [] };
+  }
+  if (s.includes('FROM TITULOS_AVISTA_PENDENTES TAP')) {
+    const cod = params[0];
+    return { rows: titulosAvistaPendentes
+      .filter(t => t.cliente_codigo_oficial === cod
+        || pedidosOficiaisItens.some(it => it.nota_fiscal === t.titulo && it.cliente_codigo_oficial === cod))
+      .map(t => ({ titulo: t.titulo, parcela: t.parcela, vencimento: t.vencimento, valor: t.valor })) };
+  }
   if (s.startsWith('DELETE FROM PEDIDOS_PENDENTES_PAGAMENTO')) {
     pedidosPendentesPagamento = [];
     return { rows: [] };

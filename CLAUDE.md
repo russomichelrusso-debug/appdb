@@ -244,15 +244,21 @@ Supabase, sem PR — não é mudança de código.
   (regime desconhecido, recado sem a frase do regime). **O preço em si não muda sozinho** — em
   01/10 o catálogo precisa vir sem ST nesses itens (LISTA PADRÃO nova ou correção no banco).
 
-- **Pedidos à vista aguardando pagamento** (09/2026): o relatório oficial tem uma aba própria
-  ("Pendentes à vista"/"Aguardando pagamento" — reconhecida pelo nome, `ehAbaPendentesPagamento` em
-  `index.html`). A importação guarda em `pedidos_pendentes_pagamento` (um por pedido) como **foto do
-  último relatório que trouxe a aba**: cada importação com ela troca a lista inteira (pedido que saiu
-  da aba = pago); relatório sem a aba não mexe. Só Nr.Pedido é obrigatório; o cabeçalho é procurado
-  nas 10 primeiras linhas (a estrutura real da aba ainda não foi conferida contra um arquivo). Decisão
-  do usuário: aparece **só no histórico do cliente** (aba Pedidos oficiais), com o selo "À vista ·
-  aguardando pagamento" no card do pedido; pedido pendente que ainda não está na Carteira/Faturamento
-  ganha um card só com o que a aba traz.
+- **Pagamento à vista pendente** (09/2026, PRs #145 e seguinte): o relatório oficial tem **duas abas**
+  (formato conferido com o relatório real de 30/09/2026), reconhecidas pelo nome em `index.html`:
+  - **"Aguardando Pagamento"** (`ehAbaAguardandoPagamento`): **pedidos** não liberados, mesmo layout
+    da Carteira, Sit.Financeira "Aguardando Aprovacao" — **não** aparecem na aba Carteira. Vão pra
+    `pedidos_pendentes_pagamento` (um por pedido, valor somado).
+  - **"Pendentes à Vista"** (`ehAbaTitulosAvista`): **títulos** em aberto de pedido já faturado —
+    Vencimento, Título, Parcela, Valor, **sem Nr.Pedido**. O Título é o **número da nota fiscal**
+    (liga em `pedidos_oficiais_itens.nota_fiscal`). Vão pra `titulos_avista_pendentes`.
+  - Cada aba é a **foto do último relatório que a trouxe**: a importação troca a lista inteira
+    (sumiu da aba = pago); relatório sem a aba não mexe. A 1ª versão (PR #145) tratava as duas como
+    uma aba de pedidos e **recusava o relatório real inteiro** ("Pendentes à Vista" não tem Nr.Pedido).
+  - Decisão do usuário: aparece **só no histórico do cliente** (aba Pedidos oficiais): selo "À vista ·
+    aguardando pagamento" no pedido não liberado; "À vista · pagamento pendente · vence/venceu DD/MM ·
+    R$ X" no pedido faturado (vermelho se vencido). Pedido/título que não está nos pedidos importados
+    do cliente ganha um card só com o que a aba traz.
 
 ## O que já tentamos e não deu certo
 
