@@ -11858,8 +11858,14 @@
   </div>`;
       }
       function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos) {
+        // À vista sem pagamento (aba "Aguardando Pagamento" ou título em aberto
+        // na "Pendentes à Vista"): o ERP já lista a NF na aba Faturamento, mas
+        // o pedido não saiu - nada de "Faturado", selo T/P, transportadora nem
+        // rastreio; mostra a situação e o total do pedido.
+        const aguardandoPagamento = !!pendente || (titulos && titulos.length > 0);
         const emCarteira = itens.every(it => it.status !== 'faturado');
-        const itemFaturado = itens.find(it => it.status === 'faturado');
+        const itemFaturado = aguardandoPagamento ? null : itens.find(it => it.status === 'faturado');
+        const totalPedido = itens.reduce((soma, it) => soma + (Number(it.valor) || 0), 0);
         let seloPedido = '';
         if (itemFaturado && itemFaturado.situacao_pedido) {
           if (itemFaturado.situacao_pedido === 'Atendido Total') seloPedido = '<span class="pedidoBadge total" title="Pedido totalmente atendido">T</span>';
@@ -11886,8 +11892,11 @@
     ${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
-      <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:var(--warning);' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(itemFaturado.data_faturamento)}</b></div>
-      ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}
+      ${aguardandoPagamento
+        ? `<div class="hcStat">Situação<b style="color:var(--warning);">Aguardando pagamento</b></div>
+      <div class="hcStat">Total<b>${brl(totalPedido)}</b></div>`
+        : `<div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:var(--warning);' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(itemFaturado.data_faturamento)}</b></div>
+      ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}`}
     </div>
     ${listaProdutos}
   </div>`;
