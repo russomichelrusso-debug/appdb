@@ -240,11 +240,11 @@ CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_status_data ON pedidos_oficiais_
 -- carteira + faturado - ver SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js).
 CREATE INDEX IF NOT EXISTS idx_pedidos_oficiais_implantacao ON pedidos_oficiais_itens (data_implantacao);
 
--- Pedidos à vista aguardando pagamento: aba própria do relatório oficial
--- ("Pendentes à vista" / "Aguardando pagamento"). Uma linha por pedido. É a
--- foto do último relatório que trouxe a aba: cada importação com ela troca a
--- lista inteira, e o pedido que sumiu da aba foi pago. Relatório sem a aba
--- não mexe na lista.
+-- Pedidos à vista aguardando pagamento: aba "Aguardando Pagamento" do
+-- relatório oficial (mesmo layout da Carteira, pedido ainda não liberado -
+-- não aparece na aba Carteira). Uma linha por pedido. É a foto do último
+-- relatório que trouxe a aba: cada importação com ela troca a lista inteira,
+-- e o pedido que sumiu da aba foi pago. Relatório sem a aba não mexe.
 CREATE TABLE IF NOT EXISTS pedidos_pendentes_pagamento (
   nr_pedido TEXT PRIMARY KEY,
   cliente_codigo_oficial TEXT,
@@ -254,6 +254,21 @@ CREATE TABLE IF NOT EXISTS pedidos_pendentes_pagamento (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_pendentes_pagamento_cliente ON pedidos_pendentes_pagamento (cliente_codigo_oficial);
+-- Títulos à vista em aberto: aba "Pendentes à Vista" do relatório oficial -
+-- pedido já faturado cujo boleto à vista não foi pago. Não tem Nr.Pedido: o
+-- "Título" é o número da nota fiscal (liga em pedidos_oficiais_itens.nota_fiscal).
+-- Mesma regra de foto da tabela acima (sumiu da aba = pago).
+CREATE TABLE IF NOT EXISTS titulos_avista_pendentes (
+  titulo TEXT NOT NULL,
+  parcela TEXT NOT NULL DEFAULT '',
+  cliente_codigo_oficial TEXT,
+  cliente_nome TEXT,
+  vencimento DATE,
+  valor NUMERIC,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (titulo, parcela)
+);
+CREATE INDEX IF NOT EXISTS idx_titulos_avista_cliente ON titulos_avista_pendentes (cliente_codigo_oficial);
 
 -- Catálogo completo de preços: um valor por produto x canal x estado (27 UFs
 -- x 6 canais). Guardado em JSONB por produto (não um blob único gigante) pra

@@ -216,7 +216,18 @@ router.get('/:clienteId', async (req, res) => {
        ORDER BY data_implantacao DESC NULLS LAST`,
       [codigoOficial]
     );
-    res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows });
+    // Títulos à vista em aberto (pedido faturado, boleto não pago) - pelo
+    // código do cliente na aba ou pela nota fiscal de um pedido dele.
+    const titulos = await pool.query(
+      `SELECT titulo, parcela, vencimento, valor
+       FROM titulos_avista_pendentes tap
+       WHERE tap.cliente_codigo_oficial = $1
+          OR EXISTS (SELECT 1 FROM pedidos_oficiais_itens poi
+                     WHERE poi.nota_fiscal = tap.titulo AND poi.cliente_codigo_oficial = $1)
+       ORDER BY vencimento NULLS LAST, titulo, parcela`,
+      [codigoOficial]
+    );
+    res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows, titulos_avista: titulos.rows });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar pedidos oficiais.' });
@@ -285,6 +296,28 @@ function normalizarPendentesPagamento(linhas) {
   return Array.from(porPedido.values());
 }
 
+// Aba "Pendentes à Vista": um título (nota fiscal) + parcela por linha.
+// Título é obrigatório; repetido (mesmo título+parcela) fica o último.
+function normalizarTitulosAvista(linhas) {
+  const porChave = new Map();
+  for (const l of linhas) {
+    if (!l || l.titulo == null) continue;
+    let titulo = String(l.titulo).trim();
+    if (/^\d+$/.test(titulo)) titulo = titulo.replace(/^0+(?=\d)/, '');
+    if (!titulo) continue;
+    const parcela = l.parcela != null ? String(l.parcela).trim().slice(0, 20) : '';
+    const texto = (v) => (v != null && String(v).trim()) ? String(v).trim().slice(0, 300) : null;
+    porChave.set(`${titulo}::${parcela}`, {
+      titulo, parcela,
+      cliente_codigo_oficial: texto(l.cliente_codigo_oficial),
+      cliente_nome: texto(l.cliente_nome),
+      vencimento: /^\d{4}-\d{2}-\d{2}$/.test(String(l.vencimento || '')) ? l.vencimento : null,
+      valor: l.valor != null && Number.isFinite(Number(l.valor)) ? Number(l.valor) : null,
+    });
+  }
+  return Array.from(porChave.values());
+}
+
 // Importa em lote as abas "Carteira" e "Faturamento" do relatório oficial -
 // ÚNICA porta de entrada de pedidos oficiais desde a unificação (antes havia
 // também um upload de JSON pré-preparado à mão pelo usuário, e uma planilha
@@ -297,13 +330,15 @@ router.post('/importar', async (req, res) => {
   // Qualquer usuário logado pode importar (não só admin) - decisão explícita
   // (já valia antes da unificação; mantida aqui inclusive pra classificação
   // de cliente, que antes exigia admin no fluxo separado que foi removido).
-  const { itens: itensBrutosOuNada, classificacoes, pendentes_pagamento: pendentesBrutos } = req.body;
+  const { itens: itensBrutosOuNada, classificacoes, pendentes_pagamento: pendentesBrutos, titulos_avista: titulosBrutos } = req.body;
   const itensBrutos = Array.isArray(itensBrutosOuNada) ? itensBrutosOuNada : [];
-  // Relatório pode vir só com a aba de pendentes à vista (sem Carteira/
-  // Faturamento) - aí `itens` vem vazio, mas a lista de pendentes vale.
+  // Relatório pode vir só com as abas de pagamento pendente (sem Carteira/
+  // Faturamento) - aí `itens` vem vazio, mas as listas de pendentes valem.
   const temPendentes = Array.isArray(pendentesBrutos);
-  if (itensBrutos.length === 0 && !temPendentes) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const temTitulos = Array.isArray(titulosBrutos);
+  if (itensBrutos.length === 0 && !temPendentes && !temTitulos) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
   const pendentes = temPendentes ? normalizarPendentesPagamento(pendentesBrutos) : null;
+  const titulos = temTitulos ? normalizarTitulosAvista(titulosBrutos) : null;
 
   // Linha sem um desses três campos não tem como ser gravada de forma útil
   // (nr_pedido+codigo_sku é a chave primária, cliente_codigo_oficial é quem
@@ -437,11 +472,23 @@ router.post('/importar', async (req, res) => {
       }
     }
 
+    if (titulos) {
+      await client.query('DELETE FROM titulos_avista_pendentes');
+      if (titulos.length > 0) {
+        await client.query(
+          `INSERT INTO titulos_avista_pendentes (titulo, parcela, cliente_codigo_oficial, cliente_nome, vencimento, valor)
+           SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::date[], $6::numeric[])`,
+          [titulos.map(t => t.titulo), titulos.map(t => t.parcela), titulos.map(t => t.cliente_codigo_oficial),
+           titulos.map(t => t.cliente_nome), titulos.map(t => t.vencimento), titulos.map(t => t.valor)]
+        );
+      }
+    }
+
     await client.query('COMMIT');
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
     await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
     res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
-               pendentesPagamento: pendentes ? pendentes.length : null });
+               pendentesPagamento: pendentes ? pendentes.length : null, titulosAvista: titulos ? titulos.length : null });
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
@@ -459,3 +506,4 @@ module.exports = router;
 // export default usado pelo server.js).
 module.exports.deduplicarItensOficiais = deduplicarItensOficiais;
 module.exports.normalizarPendentesPagamento = normalizarPendentesPagamento;
+module.exports.normalizarTitulosAvista = normalizarTitulosAvista;
