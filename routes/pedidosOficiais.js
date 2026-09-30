@@ -4,6 +4,7 @@ const { pool, registrarImportacao } = require('../db');
 const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
+const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 
 // Status geral da importação oficial - pro painel admin mostrar de cara
 // quando foi o último relatório importado, sem precisar abrir cliente por
@@ -146,7 +147,7 @@ router.get('/:clienteId/resumo', async (req, res) => {
     const soma = await pool.query(
       `SELECT COALESCE(SUM(valor),0) AS acumulado, COUNT(*) AS qtd_itens
        FROM pedidos_oficiais_itens
-       WHERE cliente_codigo_oficial = $1 AND status = 'faturado'${filtroData}`,
+       WHERE cliente_codigo_oficial = $1 AND ${sqlFaturadoDeFato()}${filtroData}`,
       params
     );
     res.json({
