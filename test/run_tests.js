@@ -1097,6 +1097,41 @@ async function main() {
     `produto fora da tabela de preços aparece com a Descrição do relatório (histórico e curva ABC): ${JSON.stringify((histDesc.body || []).filter(r => r.codigo_sku === '99110'))}`
   );
 
+  // 25) Aba de pedidos à vista aguardando pagamento: a importação troca a
+  // lista inteira (o pedido que saiu da aba foi pago), relatório sem a aba
+  // não mexe, e o histórico do cliente devolve os pendentes dele - também
+  // quando a aba não traz o código do cliente (casa pelo Nr.Pedido).
+  mockDb.__seed({ clientes: [{ id: 9405, nome: 'LOJA A VISTA', codigo_oficial: 'COD9405' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'AV1', codigo_sku: '1001', cliente_codigo_oficial: 'COD9405', cliente_nome: 'LOJA A VISTA', status: 'carteira',
+      valor: 300, quantidade: 1, data_implantacao: '2026-09-20' }],
+    pendentes_pagamento: [
+      { nr_pedido: 'AV1', valor: 100, data_implantacao: '2026-09-20' },
+      { nr_pedido: 'AV1', valor: 200 },
+      { nr_pedido: '0000777', cliente_codigo_oficial: 'COD9405', valor: 50, data_implantacao: '2026-09-22' },
+      { nr_pedido: '888', cliente_codigo_oficial: 'OUTRO', valor: 10 },
+      { valor: 99 },
+    ],
+  });
+  const clienteAV = mockDb.__getClientes().find(c => c.codigo_oficial === 'COD9405').id;
+  let histAV = await req('GET', '/api/pedidos-oficiais/' + clienteAV);
+  const pendAV = (histAV.body && histAV.body.pendentes_pagamento) || [];
+  assert(
+    res.status < 300 && res.body.pendentesPagamento === 3 && pendAV.length === 2
+      && pendAV.some(p => p.nr_pedido === 'AV1' && Number(p.valor) === 300) && pendAV.some(p => p.nr_pedido === '777'),
+    `à vista pendente: importa a aba (soma por pedido, zeros à esquerda) e o histórico do cliente mostra os dele: ${JSON.stringify(pendAV)}`
+  );
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'AV2', codigo_sku: '1001', cliente_codigo_oficial: 'COD9405', cliente_nome: 'LOJA A VISTA', status: 'carteira', valor: 1, quantidade: 1 }],
+  });
+  const aindaTres = mockDb.__getPedidosPendentesPagamento().length === 3;
+  res = await req('POST', '/api/pedidos-oficiais/importar', { pendentes_pagamento: [{ nr_pedido: '777', cliente_codigo_oficial: 'COD9405' }] });
+  histAV = await req('GET', '/api/pedidos-oficiais/' + clienteAV);
+  assert(
+    aindaTres && res.status < 300 && histAV.body.pendentes_pagamento.length === 1 && histAV.body.pendentes_pagamento[0].nr_pedido === '777',
+    `à vista pendente: relatório sem a aba não mexe; com a aba, o pedido que saiu dela (pago) some: ${JSON.stringify(histAV.body.pendentes_pagamento)}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

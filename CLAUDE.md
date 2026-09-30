@@ -244,6 +244,16 @@ Supabase, sem PR — não é mudança de código.
   (regime desconhecido, recado sem a frase do regime). **O preço em si não muda sozinho** — em
   01/10 o catálogo precisa vir sem ST nesses itens (LISTA PADRÃO nova ou correção no banco).
 
+- **Pedidos à vista aguardando pagamento** (09/2026): o relatório oficial tem uma aba própria
+  ("Pendentes à vista"/"Aguardando pagamento" — reconhecida pelo nome, `ehAbaPendentesPagamento` em
+  `index.html`). A importação guarda em `pedidos_pendentes_pagamento` (um por pedido) como **foto do
+  último relatório que trouxe a aba**: cada importação com ela troca a lista inteira (pedido que saiu
+  da aba = pago); relatório sem a aba não mexe. Só Nr.Pedido é obrigatório; o cabeçalho é procurado
+  nas 10 primeiras linhas (a estrutura real da aba ainda não foi conferida contra um arquivo). Decisão
+  do usuário: aparece **só no histórico do cliente** (aba Pedidos oficiais), com o selo "À vista ·
+  aguardando pagamento" no card do pedido; pedido pendente que ainda não está na Carteira/Faturamento
+  ganha um card só com o que a aba traz.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

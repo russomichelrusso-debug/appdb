@@ -2880,6 +2880,18 @@
       color: var(--warning);
     }
 
+    /* pedido à vista na aba de pendentes do relatório oficial */
+    .histCard .hcAvistaPendente {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .histCard .hcRotBadge {
       display: inline-block;
       background: none;
@@ -5289,7 +5301,7 @@
             <summary>O que dá pra importar aqui</summary>
             <ul>
               <li><b>Planilha de preços</b> (LISTA PADRÃO, abas PRECIFICAÇÃO/TRIBUTAÇÃO)</li>
-              <li><b>Relatório oficial</b> (abas Carteira e/ou Faturamento)</li>
+              <li><b>Relatório oficial</b> (abas Carteira, Faturamento e/ou Pendentes à vista/Aguardando pagamento)</li>
               <li><b>Objetivo trimestral</b> (aba Export, colunas Matriz e OBJETIVO MÊS) — pede as datas do trimestre</li>
               <li><b>Classificatório do ERP</b> (coluna Classificatorio)</li>
               <li><b>Previsão de estoque</b> (colunas Item e Qt. Disp.)</li>
@@ -9739,8 +9751,52 @@
         return gravadas;
       }
 
+      // Aba de pedidos à vista aguardando pagamento ("Pendentes à vista",
+      // "Aguardando pagamento"). É a foto do momento: o servidor troca a lista
+      // inteira a cada relatório que traz a aba, e o pedido que sumiu dela
+      // foi pago. Só Nr.Pedido é obrigatório; cliente, valor e data entram se
+      // a aba tiver. O cabeçalho é procurado nas primeiras linhas (não se sabe
+      // se a aba tem as 2 linhas de título das outras).
+      function ehAbaPendentesPagamento(nomeAba) {
+        const n = normalizarNomeColuna(nomeAba);
+        return /AVISTA|AGUARDANDOPAG|PENDENTESDEPAG|PENDENTEDEPAG|PENDENTESPAG|PENDENTEPAG/.test(n);
+      }
+      function lerAbaPendentesPagamento(wb) {
+        const nomeAba = wb.SheetNames.find(ehAbaPendentesPagamento);
+        if (!nomeAba) return null; // relatório sem a aba: o servidor não mexe na lista
+        const linhas = window.XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header: 1, defval: null });
+        const idxCab = linhas.slice(0, 10).findIndex(l => Array.isArray(l) && acharIndiceColuna(l, COLUNAS_RELATORIO_OFICIAL.nr_pedido) !== -1);
+        if (idxCab === -1) {
+          // aba vazia (ninguém pendente) é válida; com dados e sem Nr.Pedido, não
+          if (linhas.every(l => !l || l.every(c => c == null || String(c).trim() === ''))) return [];
+          throw new Error(`Aba "${nomeAba}": não encontrei a coluna do número do pedido (Nr.Pedido). Nada foi importado.`);
+        }
+        const cab = linhas[idxCab];
+        const dados = linhas.slice(idxCab + 1);
+        const idx = (nome) => acharIndiceColuna(cab, COLUNAS_RELATORIO_OFICIAL[nome]);
+        const col = { nr: idx('nr_pedido'), cod: idx('cliente_codigo_oficial'), nome: idx('cliente_nome'), valor: idx('valor'), data: idx('data_implantacao') };
+        if (col.data === -1) col.data = idx('data_emissao');
+        const dataInvertida = colunaDataInvertida(dados, col.data);
+        const campo = (r, i) => (i === -1 ? null : r[i]);
+        const pendentes = [];
+        for (const r of dados) {
+          if (!r) continue;
+          const nr = normalizarNrPedido(campo(r, col.nr));
+          if (!nr || !/\d/.test(nr)) continue; // linha em branco/rodapé ("Total")
+          pendentes.push({
+            nr_pedido: nr,
+            cliente_codigo_oficial: campo(r, col.cod) != null ? String(campo(r, col.cod)).trim() : null,
+            cliente_nome: campo(r, col.nome) != null ? String(campo(r, col.nome)).trim() : null,
+            valor: valorParaNumero(campo(r, col.valor)),
+            data_implantacao: paraDataISO(campo(r, col.data), dataInvertida),
+          });
+        }
+        return pendentes;
+      }
+
       // Lê o arquivo .xlsx do relatório oficial (abas "Carteira" e/ou
-      // "Faturamento") e devolve { itens, classificacoes } prontos pra
+      // "Faturamento", mais a de pendentes à vista) e devolve { itens,
+      // classificacoes, pendentesPagamento } prontos pra
       // POST /api/pedidos-oficiais/importar.
       async function parseRelatorioOficialXlsx(arrayBuffer) {
         const XLSX = await loadSheetJs();
@@ -9750,9 +9806,10 @@
         const classificacoesBrutas = []; // pode ter repetição do mesmo cliente entre as duas abas
         const linhasCarteira = lerAbaRelatorioOficial(wb, 'Carteira', 'carteira', itens, classificacoesBrutas);
         const linhasFaturamento = lerAbaRelatorioOficial(wb, 'Faturamento', 'faturado', itens, classificacoesBrutas);
+        const pendentesPagamento = lerAbaPendentesPagamento(wb);
 
-        if (linhasCarteira === 0 && linhasFaturamento === 0) {
-          throw new Error('Não encontrei as abas "Carteira" ou "Faturamento" nesta planilha (ou vieram vazias). Abas encontradas: ' + wb.SheetNames.join(', '));
+        if (linhasCarteira === 0 && linhasFaturamento === 0 && pendentesPagamento === null) {
+          throw new Error('Não encontrei as abas "Carteira", "Faturamento" ou "Pendentes à vista" nesta planilha (ou vieram vazias). Abas encontradas: ' + wb.SheetNames.join(', '));
         }
 
         // dedup de classificação por cliente, ficando com a de data mais
@@ -9768,7 +9825,7 @@
             classificacoesMap.set(chave, c);
           }
         }
-        return { itens, classificacoes: Array.from(classificacoesMap.values()) };
+        return { itens, classificacoes: Array.from(classificacoesMap.values()), pendentesPagamento };
       }
       async function apiImportarPedidosOficiais(payload) {
         return apiFetch('/api/pedidos-oficiais/importar', { method: 'POST', body: JSON.stringify(payload) });
@@ -11203,7 +11260,7 @@
         const wb = XLSX.read(await lerArquivoComoArrayBuffer(file), { type: 'array', sheetRows: 12 });
         const abas = wb.SheetNames.map(normalizarRotuloImport);
         if (abas.includes('PRECIFICACAO') && abas.includes('TRIBUTACAO')) return 'precos';
-        if (abas.includes('CARTEIRA') || abas.includes('FATURAMENTO')) return 'relatorio';
+        if (abas.includes('CARTEIRA') || abas.includes('FATURAMENTO') || wb.SheetNames.some(ehAbaPendentesPagamento)) return 'relatorio';
 
         const nomeAba = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
         const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header: 1, defval: null });
@@ -11706,7 +11763,27 @@
       // Um card por PEDIDO (não por item) - antes cada produto do mesmo
       // pedido virava um card repetindo o mesmo Nr.Pedido, parecendo pedido
       // duplicado. Agrupa por nr_pedido e lista os produtos dentro do card.
-      function renderPedidoOficialGrupo(nrPedido, itens) {
+      // `pendente`: linha da aba de pedidos à vista aguardando pagamento (ou
+      // null) - vira o selo "À vista · aguardando pagamento" no card.
+      function renderSeloAguardandoPagamento(pendente) {
+        if (!pendente) return '';
+        const valor = pendente.valor != null ? ` · ${brl(Number(pendente.valor))}` : '';
+        return `<div class="hcAvistaPendente">À vista · aguardando pagamento${valor}</div>`;
+      }
+      // Pedido que está na aba de pendentes à vista mas não na Carteira/
+      // Faturamento importados - card só com o que a aba traz.
+      function renderPedidoSoPendente(pendente) {
+        return `<div class="histCard">
+    <div class="hcTopo">
+      <div class="hcName">Nr.Pedido ${escapeHtml(String(pendente.nr_pedido))}</div>
+    </div>
+    ${renderSeloAguardandoPagamento(pendente)}
+    <div class="hcStats">
+      <div class="hcStat">Pedido<b>${formatDateBr(pendente.data_implantacao)}</b></div>
+    </div>
+  </div>`;
+      }
+      function renderPedidoOficialGrupo(nrPedido, itens, pendente) {
         const emCarteira = itens.every(it => it.status !== 'faturado');
         const itemFaturado = itens.find(it => it.status === 'faturado');
         let seloPedido = '';
@@ -11732,6 +11809,7 @@
       ${botaoRastreio}
     </div>
     <div class="hcCode">${itens.length} produto${itens.length === 1 ? '' : 's'}</div>
+    ${renderSeloAguardandoPagamento(pendente)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
       <div class="hcStat">${emCarteira ? 'Situação' : 'Faturado'}<b style="${emCarteira ? 'color:var(--warning);' : ''}">${emCarteira ? 'Em Carteira' : formatDateBr(itemFaturado.data_faturamento)}</b></div>
@@ -11872,9 +11950,10 @@
               : '<div class="lev-empty">Nenhum produto nessa situação — ou o cliente ainda não tem levantamento registrado pra comparar.</div>';
           } else if (clienteTabView === 'pedidosoficiais') {
             const resp = await apiPedidosOficiaisCliente(clienteTabSelected.id);
+            const pendentesPorPedido = new Map((resp.pendentes_pagamento || []).map(p => [String(p.nr_pedido), p]));
             if (!resp.vinculado) {
               content.innerHTML = '<div class="lev-empty">Esse cliente ainda não foi encontrado no relatório oficial da empresa (Carteira/Faturamento) — o vínculo é feito automaticamente na importação, casando pelo nome.</div>';
-            } else if (resp.itens.length === 0) {
+            } else if (resp.itens.length === 0 && pendentesPorPedido.size === 0) {
               content.innerHTML = '<div class="lev-empty">Nenhum pedido oficial encontrado pra esse cliente ainda.</div>';
             } else {
               // Agrupa por Nr.Pedido - a API devolve uma linha por produto, e um
@@ -11885,8 +11964,11 @@
                 if (!porPedido.has(item.nr_pedido)) porPedido.set(item.nr_pedido, []);
                 porPedido.get(item.nr_pedido).push(item);
               }
-              content.innerHTML = Array.from(porPedido.entries())
-                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens))
+              // à vista aguardando pagamento que ainda não está na Carteira/
+              // Faturamento importados aparece antes, com o que a aba traz
+              const soPendentes = [...pendentesPorPedido.values()].filter(p => !porPedido.has(String(p.nr_pedido)));
+              content.innerHTML = soPendentes.map(renderPedidoSoPendente).join('') + Array.from(porPedido.entries())
+                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido))))
                 .join('');
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
@@ -12265,9 +12347,9 @@
       // importação avulsa quanto em lote (várias planilhas selecionadas).
       async function processarUmaPlanilhaOficial(file) {
         const arrayBuffer = await lerArquivoComoArrayBuffer(file);
-        const { itens, classificacoes } = await parseRelatorioOficialXlsx(arrayBuffer);
-        if (itens.length === 0) throw new Error('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
-        return apiImportarPedidosOficiais({ itens, classificacoes });
+        const { itens, classificacoes, pendentesPagamento } = await parseRelatorioOficialXlsx(arrayBuffer);
+        if (itens.length === 0 && pendentesPagamento === null) throw new Error('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
+        return apiImportarPedidosOficiais({ itens, classificacoes, ...(pendentesPagamento !== null ? { pendentes_pagamento: pendentesPagamento } : {}) });
       }
 
       async function importarRelatorioOficial(file) {
@@ -12276,6 +12358,7 @@
         const partes = [`${result.itens} linha(s) importada(s)`, `${result.clientesVinculados} cliente(s) vinculado(s) agora`, `${result.clientesClassificados} classificado(s)`];
         if (result.clientesClassifIgnorados) partes.push(`${result.clientesClassifIgnorados} classificação(ões) ignorada(s) (relatório mais antigo que o já registrado)`);
         if (result.clientesNaoEncontrados && result.clientesNaoEncontrados.length) partes.push(`${result.clientesNaoEncontrados.length} cliente(s) não encontrado(s) pelo nome`);
+        if (result.pendentesPagamento != null) partes.push(`${result.pendentesPagamento} pedido(s) à vista aguardando pagamento`);
         return partes.join(' · ') + '.';
       }
 
