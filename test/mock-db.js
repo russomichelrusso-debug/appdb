@@ -591,9 +591,29 @@ async function query(sql, params = []) {
       if (it.cliente_codigo_oficial) atual.clientesSet.add(it.cliente_codigo_oficial);
       grupos.set(key, atual);
     }
-    const rows = [...grupos.values()].sort((a, b) => a.periodo.localeCompare(b.periodo))
-      .map(g => ({ periodo: g.periodo, valor: g.valor, pedidos: g.pedidosSet.size, clientes: g.clientesSet.size }));
+    // Os 12 meses sempre, terminando no atual; mês sem pedido vem zerado
+    // (generate_series + LEFT JOIN no SQL real).
+    const rows = [];
+    for (let i = 11; i >= 0; i--) {
+      const periodo = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - i, 1)).toISOString().slice(0, 10);
+      const g = grupos.get(periodo);
+      rows.push({ periodo, valor: g ? g.valor : 0, pedidos: g ? g.pedidosSet.size : 0, clientes: g ? g.clientesSet.size : 0 });
+    }
     return { rows };
+  }
+
+  // Entrada do mês anterior até o mesmo dia de hoje
+  // (SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE em routes/relatorios.js).
+  if (s.includes('AS ATE, COALESCE(SUM(POI.VALOR), 0) AS VALOR')) {
+    const hoje = new Date();
+    const inicio = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 1, 1));
+    const ultimoDia = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 0)).getUTCDate();
+    const ate = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 1, Math.min(hoje.getUTCDate(), ultimoDia))).toISOString().slice(0, 10);
+    const inicioStr = inicio.toISOString().slice(0, 10);
+    const valor = pedidosOficiaisItens
+      .filter(it => it.data_implantacao && it.data_implantacao >= inicioStr && it.data_implantacao <= ate && String(it.nr_pedido).length <= 6)
+      .reduce((soma, it) => soma + (Number(it.valor) || 0), 0);
+    return { rows: [{ ate, valor }] };
   }
 
   // Pedidos do mês atual por trás do cartão "Valor Entrada de Pedidos Mês"

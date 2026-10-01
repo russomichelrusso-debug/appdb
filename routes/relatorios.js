@@ -678,13 +678,44 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
 //  - só a série principal de pedidos (6 dígitos, hoje na casa dos 676000). A
 //    série de 7 dígitos (10xxxxx-13xxxxx: itens avulsos de valor baixo, fora
 //    do catálogo) não entra no painel oficial.
+//
+// Sempre devolve os 12 meses, terminando no mês atual - mês sem pedido vem
+// com zero. Antes só vinham os meses com pedido, e a tela tomava a última
+// linha como "o mês": no dia 1º, sem pedido importado ainda, os cartões do
+// Dashboard continuavam mostrando o mês anterior inteiro (out/2026 abria com
+// os R$ 480 mil / 98 pedidos de setembro).
+//
+// "Hoje" pelo relógio de Brasília: o banco roda em UTC, e CURRENT_DATE já
+// virava o mês às 21h do último dia (e ainda estava no mês anterior até as
+// 3h do dia 1º).
+const SQL_HOJE_BRASIL = `(now() AT TIME ZONE 'America/Sao_Paulo')::date`;
 const SQL_ENTRADA_PEDIDOS_MENSAL = `
-  SELECT date_trunc('month', data_implantacao) AS periodo, SUM(valor) AS valor,
-         COUNT(DISTINCT nr_pedido) AS pedidos, COUNT(DISTINCT cliente_codigo_oficial) AS clientes
-  FROM pedidos_oficiais_itens
-  WHERE data_implantacao >= date_trunc('month', CURRENT_DATE) - INTERVAL '11 months'
-    AND length(nr_pedido) <= 6
-  GROUP BY 1 ORDER BY 1`;
+  SELECT m.periodo, COALESCE(e.valor, 0) AS valor, COALESCE(e.pedidos, 0) AS pedidos, COALESCE(e.clientes, 0) AS clientes
+  FROM generate_series(date_trunc('month', ${SQL_HOJE_BRASIL}) - INTERVAL '11 months',
+                       date_trunc('month', ${SQL_HOJE_BRASIL}), INTERVAL '1 month') AS m(periodo)
+  LEFT JOIN (
+    SELECT date_trunc('month', data_implantacao) AS periodo, SUM(valor) AS valor,
+           COUNT(DISTINCT nr_pedido) AS pedidos, COUNT(DISTINCT cliente_codigo_oficial) AS clientes
+    FROM pedidos_oficiais_itens
+    WHERE data_implantacao >= date_trunc('month', ${SQL_HOJE_BRASIL}) - INTERVAL '11 months'
+      AND length(nr_pedido) <= 6
+    GROUP BY 1
+  ) e ON e.periodo = m.periodo
+  ORDER BY m.periodo`;
+
+// Entrada do mês anterior só até o mesmo dia de hoje (1º a DD do mês passado),
+// pra comparar o mês em andamento com um período do mesmo tamanho - comparar
+// com o mês anterior inteiro dava "↓ 100%" todo começo de mês. Mês anterior
+// mais curto (hoje 31/03) para no último dia dele (28/02): o "- 1 month" do
+// Postgres já faz isso.
+const SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE = `
+  SELECT (h - INTERVAL '1 month')::date AS ate, COALESCE(SUM(poi.valor), 0) AS valor
+  FROM (SELECT ${SQL_HOJE_BRASIL} AS h) hoje
+  LEFT JOIN pedidos_oficiais_itens poi
+    ON poi.data_implantacao >= date_trunc('month', h) - INTERVAL '1 month'
+   AND poi.data_implantacao <= (h - INTERVAL '1 month')::date
+   AND length(poi.nr_pedido) <= 6
+  GROUP BY h`;
 
 // Os pedidos por trás do cartão "Valor Entrada de Pedidos Mês" (mesma regra
 // acima, só o mês atual): um por linha, com o nome do cliente, pra lista que
@@ -695,7 +726,7 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
          MIN(poi.data_implantacao) AS data_implantacao, SUM(poi.valor) AS valor
   FROM pedidos_oficiais_itens poi
   LEFT JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
-  WHERE poi.data_implantacao >= date_trunc('month', CURRENT_DATE)
+  WHERE poi.data_implantacao >= date_trunc('month', ${SQL_HOJE_BRASIL})
     AND length(poi.nr_pedido) <= 6
   GROUP BY poi.nr_pedido, poi.cliente_codigo_oficial
   ORDER BY data_implantacao DESC, valor DESC NULLS LAST`;
@@ -711,9 +742,10 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
 // padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
 router.get('/dashboard/resumo', async (req, res) => {
   try {
-    const [mensal, pedidosDoMes, semanal, trimestral, topClientes, porCliente] = await Promise.all([
+    const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente] = await Promise.all([
       pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
       pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
+      pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
          FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
@@ -766,6 +798,7 @@ router.get('/dashboard/resumo', async (req, res) => {
     res.json({
       mensal: mensal.rows,
       entradaPedidosMes: pedidosDoMes.rows,
+      entradaMesAnteriorAteHoje: mesAnteriorAteHoje.rows[0] || null,
       semanal: semanal.rows,
       trimestral: trimestral.rows,
       topClientes: topClientes.rows,
