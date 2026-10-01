@@ -3509,6 +3509,21 @@
       background: var(--danger-strong);
     }
 
+    /* Salvar CSV: três escolhas empilhadas, a principal (Salvar no aparelho)
+       em cima. Na ordem do HTML o Cancelar continua sendo o primeiro botão,
+       que é o que o clique fora do card aciona. */
+    #csvDestinoModal .minimodal-btnrow {
+      flex-direction: column-reverse;
+    }
+
+    #csvDestinoModal #csvDestinoCancel {
+      background: transparent;
+    }
+
+    #csvDestinoNome {
+      word-break: break-all;
+    }
+
     /* ---------- Comparação de clientes ao mesclar ---------- */
     .mergeCards {
       display: flex;
@@ -5123,6 +5138,18 @@
         <div class="minimodal-btnrow">
           <button id="csvNameCancel">Cancelar</button>
           <button id="csvNameConfirm">Baixar CSV</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="minimodal hidden" id="csvDestinoModal">
+      <div class="minimodal-card">
+        <h3>Salvar CSV</h3>
+        <p id="csvDestinoNome"></p>
+        <div class="minimodal-btnrow">
+          <button id="csvDestinoCancel">Cancelar</button>
+          <button id="csvDestinoCompartilhar">Compartilhar (WhatsApp, e-mail…)</button>
+          <button id="csvDestinoSalvar">Salvar no aparelho (escolher pasta)</button>
         </div>
       </div>
     </div>
@@ -8049,7 +8076,7 @@
             console.warn('Falha ao enviar pro Google Drive, caindo pro compartilhar normal:', e);
           }
         }
-        await shareOrDownloadBlob(blob, fileName, shareTitle, successMsgLocal);
+        await salvarOuCompartilharCsv(blob, fileName, shareTitle, successMsgLocal);
       }
       // Nome do arquivo do levantamento com o cliente inteiro (pedido do
       // usuário): "Levantamento-comercial-de-ferragens-cofebral-260926.pdf".
@@ -8575,12 +8602,75 @@
             return;
           } catch (e) { /* usuário cancelou, ou o navegador recusou esse tipo de arquivo: cai para o download */ }
         }
+        baixarBlob(blob, fileName);
+        showToast(successMsg);
+      }
+      function baixarBlob(blob, fileName) {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url; a.download = fileName;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 4000);
-        showToast(successMsg);
+      }
+
+      // CSV: onde o navegador deixa escolher a pasta (janela "Salvar como…" -
+      // Chrome no computador e nas versões novas do Android), pergunta antes
+      // entre salvar no aparelho e compartilhar. As duas ficam (pedido do
+      // usuário): o vendedor costuma salvar pra importar, mas quem faz o
+      // serviço pode ser outra pessoa (ex.: secretária) e aí manda o arquivo.
+      // Sem esse recurso (iPhone, Android antigo) segue o compartilhar/baixar
+      // de sempre - no iPhone o "Salvar em Arquivos" do compartilhar já deixa
+      // escolher a pasta.
+      let csvDestinoResolve = null;
+      function perguntarDestinoCsv(fileName) {
+        return new Promise((resolve) => {
+          csvDestinoResolve = resolve;
+          document.getElementById('csvDestinoNome').textContent = fileName;
+          document.getElementById('csvDestinoModal').classList.remove('hidden');
+        });
+      }
+      function fecharDestinoCsv(escolha) {
+        document.getElementById('csvDestinoModal').classList.add('hidden');
+        const resolve = csvDestinoResolve;
+        csvDestinoResolve = null;
+        if (resolve) resolve(escolha);
+      }
+      function initCsvDestino() {
+        document.getElementById('csvDestinoCancel').addEventListener('click', () => fecharDestinoCsv(null));
+        document.getElementById('csvDestinoCompartilhar').addEventListener('click', () => fecharDestinoCsv('compartilhar'));
+        document.getElementById('csvDestinoSalvar').addEventListener('click', () => fecharDestinoCsv('salvar'));
+      }
+      async function salvarOuCompartilharCsv(blob, fileName, shareTitle, successMsg) {
+        if (typeof window.showSaveFilePicker !== 'function') {
+          await shareOrDownloadBlob(blob, fileName, shareTitle, successMsg);
+          return;
+        }
+        const escolha = await perguntarDestinoCsv(fileName);
+        if (escolha === 'compartilhar') { await shareOrDownloadBlob(blob, fileName, shareTitle, successMsg); return; }
+        if (escolha !== 'salvar') return;
+        let handle;
+        try {
+          handle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{ description: 'Planilha CSV', accept: { 'text/csv': ['.csv'] } }],
+          });
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // fechou a janela sem salvar
+          console.warn('Janela de salvar indisponível, baixando normal:', e);
+          baixarBlob(blob, fileName);
+          showToast(successMsg);
+          return;
+        }
+        try {
+          const arquivo = await handle.createWritable();
+          await arquivo.write(blob);
+          await arquivo.close();
+          showToast('Salvo: ' + handle.name);
+        } catch (e) {
+          console.warn('Falha ao gravar na pasta escolhida, baixando normal:', e);
+          baixarBlob(blob, fileName);
+          showToast(successMsg);
+        }
       }
 
       // ---------------- Exportar orçamento em CSV (template de importação) ----------------
@@ -11551,7 +11641,7 @@
           ].map(v => String(v).replace(/;/g, ',')).join(';'));
           const blob = new Blob(['\uFEFF' + [header, ...linhas].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
           const fileName = `pedidos-${inicio}-a-${fim}.csv`;
-          shareOrDownloadBlob(blob, fileName, 'Pedidos do período', 'Baixado — verifique a pasta Downloads do celular');
+          salvarOuCompartilharCsv(blob, fileName, 'Pedidos do período', 'Baixado — verifique a pasta Downloads do celular');
           msg.innerHTML = `<div class="ap-msg success">✓ ${rows.length} linha(s) exportada(s).</div>`;
         } catch (e) {
           msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
@@ -14305,6 +14395,7 @@
           initPrecosCliente();
           initLevShare();
           initCsvNamePrompt();
+          initCsvDestino();
           initPriceEdit();
           initFichaTecnicaModal();
           initVoiceSearch();
