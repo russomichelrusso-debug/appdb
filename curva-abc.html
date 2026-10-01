@@ -1106,10 +1106,23 @@
       // SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js), não faturamento.
       const fatAtual = atual ? Number(atual.valor) || 0 : 0;
       const pedidosAtual = atual ? Number(atual.pedidos) || 0 : 0;
-      const fatAnterior = anterior ? Number(anterior.valor) || 0 : 0;
+      // Compara com o mesmo período do mês anterior (1º até o mesmo dia de
+      // hoje - SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE): contra o mês anterior
+      // inteiro, todo começo de mês dava "↓ 100%". Servidor ainda sem esse
+      // campo (deploy do Render atrás do GitHub Pages) cai no mês inteiro.
+      const mesmoPeriodo = resumo.entradaMesAnteriorAteHoje;
+      let fatAnterior, rotuloComparacao;
+      if (mesmoPeriodo && mesmoPeriodo.ate) {
+        const [, mm, dd] = String(mesmoPeriodo.ate).slice(0, 10).split('-');
+        fatAnterior = Number(mesmoPeriodo.valor) || 0;
+        rotuloComparacao = dd === '01' ? `vs 1º/${mm}` : `vs 1º a ${dd}/${mm}`;
+      } else {
+        fatAnterior = anterior ? Number(anterior.valor) || 0 : 0;
+        rotuloComparacao = 'vs mês anterior';
+      }
       const deltaPct = fatAnterior ? ((fatAtual - fatAnterior) / fatAnterior) * 100 : null;
       const ticketMedio = pedidosAtual ? fatAtual / pedidosAtual : 0;
-      const deltaHtml = deltaPct == null ? 'vs mês anterior — sem dado' : `<span class="delta ${deltaPct >= 0 ? 'up' : 'down'}">${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1)}%</span> vs mês anterior`;
+      const deltaHtml = deltaPct == null ? `${rotuloComparacao} — sem pedido` : `<span class="delta ${deltaPct >= 0 ? 'up' : 'down'}">${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1)}%</span> ${rotuloComparacao}`;
 
       const canal = resumo.clientesAtivosPorCanal || { total: 0, porCanal: {} };
       const contas = resumo.contasSemComprar || { de3a5Meses: 0, de6a8Meses: 0 };

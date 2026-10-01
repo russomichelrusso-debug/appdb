@@ -703,6 +703,20 @@ const SQL_ENTRADA_PEDIDOS_MENSAL = `
   ) e ON e.periodo = m.periodo
   ORDER BY m.periodo`;
 
+// Entrada do mês anterior só até o mesmo dia de hoje (1º a DD do mês passado),
+// pra comparar o mês em andamento com um período do mesmo tamanho - comparar
+// com o mês anterior inteiro dava "↓ 100%" todo começo de mês. Mês anterior
+// mais curto (hoje 31/03) para no último dia dele (28/02): o "- 1 month" do
+// Postgres já faz isso.
+const SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE = `
+  SELECT (h - INTERVAL '1 month')::date AS ate, COALESCE(SUM(poi.valor), 0) AS valor
+  FROM (SELECT ${SQL_HOJE_BRASIL} AS h) hoje
+  LEFT JOIN pedidos_oficiais_itens poi
+    ON poi.data_implantacao >= date_trunc('month', h) - INTERVAL '1 month'
+   AND poi.data_implantacao <= (h - INTERVAL '1 month')::date
+   AND length(poi.nr_pedido) <= 6
+  GROUP BY h`;
+
 // Os pedidos por trás do cartão "Valor Entrada de Pedidos Mês" (mesma regra
 // acima, só o mês atual): um por linha, com o nome do cliente, pra lista que
 // abre ao tocar no cartão. Cliente ainda não vinculado ao código oficial
@@ -728,9 +742,10 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
 // padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
 router.get('/dashboard/resumo', async (req, res) => {
   try {
-    const [mensal, pedidosDoMes, semanal, trimestral, topClientes, porCliente] = await Promise.all([
+    const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente] = await Promise.all([
       pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
       pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
+      pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
          FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
@@ -783,6 +798,7 @@ router.get('/dashboard/resumo', async (req, res) => {
     res.json({
       mensal: mensal.rows,
       entradaPedidosMes: pedidosDoMes.rows,
+      entradaMesAnteriorAteHoje: mesAnteriorAteHoje.rows[0] || null,
       semanal: semanal.rows,
       trimestral: trimestral.rows,
       topClientes: topClientes.rows,

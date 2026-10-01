@@ -602,6 +602,20 @@ async function query(sql, params = []) {
     return { rows };
   }
 
+  // Entrada do mês anterior até o mesmo dia de hoje
+  // (SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE em routes/relatorios.js).
+  if (s.includes('AS ATE, COALESCE(SUM(POI.VALOR), 0) AS VALOR')) {
+    const hoje = new Date();
+    const inicio = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 1, 1));
+    const ultimoDia = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth(), 0)).getUTCDate();
+    const ate = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - 1, Math.min(hoje.getUTCDate(), ultimoDia))).toISOString().slice(0, 10);
+    const inicioStr = inicio.toISOString().slice(0, 10);
+    const valor = pedidosOficiaisItens
+      .filter(it => it.data_implantacao && it.data_implantacao >= inicioStr && it.data_implantacao <= ate && String(it.nr_pedido).length <= 6)
+      .reduce((soma, it) => soma + (Number(it.valor) || 0), 0);
+    return { rows: [{ ate, valor }] };
+  }
+
   // Pedidos do mês atual por trás do cartão "Valor Entrada de Pedidos Mês"
   // (SQL_ENTRADA_PEDIDOS_DO_MES em routes/relatorios.js) - um por pedido, com
   // o nome do cliente (null se não houver cliente com aquele codigo_oficial).

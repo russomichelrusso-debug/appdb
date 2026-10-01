@@ -534,6 +534,28 @@ async function main() {
     `série mensal = 12 meses seguidos terminando no atual, mês sem pedido zerado: ${JSON.stringify(serieMensal)}`
   );
 
+  // 16b3) A comparação do cartão é com o mês anterior só até o mesmo dia de
+  // hoje: pedido do dia 1º do mês passado entra; do último dia (depois de
+  // hoje, exceto no dia 28+) não.
+  const diaHoje = hojeUtc.getUTCDate();
+  const ultimoDiaMesAnterior = new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), 0)).getUTCDate();
+  const ateEsperado = new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth() - 1, Math.min(diaHoje, ultimoDiaMesAnterior))).toISOString().slice(0, 10);
+  const fimMesAnteriorISO = new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth(), 0)).toISOString().slice(0, 10);
+  mockDb.__seed({
+    pedidosOficiaisItens: [
+      { nr_pedido: '690003', codigo_sku: '1', cliente_codigo_oficial: 'E5', quantidade: 1, valor: 300, data_implantacao: fimMesAnteriorISO, data_faturamento: null, status: 'carteira' },
+    ],
+  });
+  res = await req('GET', '/api/dashboard/resumo');
+  const mesmoPeriodo = res.body.entradaMesAnteriorAteHoje;
+  // 9000 = pedido 690001 do dia 1º do mês passado (16b); 300 = último dia do
+  // mês passado, que só entra quando hoje já é esse dia ou depois.
+  const esperadoMesmoPeriodo = 9000 + (fimMesAnteriorISO <= ateEsperado ? 300 : 0);
+  assert(
+    res.status === 200 && mesmoPeriodo && String(mesmoPeriodo.ate).slice(0, 10) === ateEsperado && Number(mesmoPeriodo.valor) === esperadoMesmoPeriodo,
+    `entrada do mês anterior até o mesmo dia de hoje (${ateEsperado}) = ${esperadoMesmoPeriodo}: ${JSON.stringify(mesmoPeriodo)}`
+  );
+
   // 16c) ...e a lista que abre ao tocar no cartão traz esses mesmos pedidos,
   // um por linha (itens somados), com o nome do cliente quando ele existe no
   // app e o código quando ainda não foi vinculado.
