@@ -1093,9 +1093,15 @@
     }
 
     function renderKpisPrincipal(resumo, alertas, metaMensal) {
+      // Procura o mês corrente pela data, não pela última linha da série: no
+      // dia 1º, sem pedido importado ainda, a última linha era o mês passado
+      // e os cartões ficavam mostrando o mês anterior inteiro.
       const mensal = resumo.mensal || [];
-      const atual = mensal[mensal.length - 1];
-      const anterior = mensal[mensal.length - 2];
+      const hoje = new Date();
+      const chaveMes = (ano, mes0) => { const d = new Date(ano, mes0, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+      const doMes = (chave) => mensal.find(m => String(m.periodo).slice(0, 7) === chave);
+      const atual = doMes(chaveMes(hoje.getFullYear(), hoje.getMonth()));
+      const anterior = doMes(chaveMes(hoje.getFullYear(), hoje.getMonth() - 1));
       // Entrada de pedidos (carteira + faturado, pela data de implantação - ver
       // SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js), não faturamento.
       const fatAtual = atual ? Number(atual.valor) || 0 : 0;

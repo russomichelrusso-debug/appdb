@@ -591,8 +591,14 @@ async function query(sql, params = []) {
       if (it.cliente_codigo_oficial) atual.clientesSet.add(it.cliente_codigo_oficial);
       grupos.set(key, atual);
     }
-    const rows = [...grupos.values()].sort((a, b) => a.periodo.localeCompare(b.periodo))
-      .map(g => ({ periodo: g.periodo, valor: g.valor, pedidos: g.pedidosSet.size, clientes: g.clientesSet.size }));
+    // Os 12 meses sempre, terminando no atual; mês sem pedido vem zerado
+    // (generate_series + LEFT JOIN no SQL real).
+    const rows = [];
+    for (let i = 11; i >= 0; i--) {
+      const periodo = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - i, 1)).toISOString().slice(0, 10);
+      const g = grupos.get(periodo);
+      rows.push({ periodo, valor: g ? g.valor : 0, pedidos: g ? g.pedidosSet.size : 0, clientes: g ? g.clientesSet.size : 0 });
+    }
     return { rows };
   }
 

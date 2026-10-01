@@ -521,6 +521,19 @@ async function main() {
     `entrada de pedidos do mês = implantados no mês (carteira + faturado), sem série de 7 dígitos: ${JSON.stringify(res.body.mensal)}`
   );
 
+  // 16b2) A série mensal vem com os 12 meses, terminando no mês atual, e mês
+  // sem pedido vem zerado. Antes só vinham os meses com pedido e a tela pegava
+  // a última linha como "o mês": no dia 1º, sem pedido importado ainda, o
+  // Dashboard mostrava os números do mês passado como se fossem do atual.
+  const serieMensal = res.body.mensal || [];
+  const mesesEsperados = Array.from({ length: 12 }, (_, i) =>
+    new Date(Date.UTC(hojeUtc.getUTCFullYear(), hojeUtc.getUTCMonth() - 11 + i, 1)).toISOString().slice(0, 10));
+  assert(
+    JSON.stringify(serieMensal.map(m => String(m.periodo).slice(0, 10))) === JSON.stringify(mesesEsperados)
+      && serieMensal.some(m => Number(m.valor) === 0 && Number(m.pedidos) === 0),
+    `série mensal = 12 meses seguidos terminando no atual, mês sem pedido zerado: ${JSON.stringify(serieMensal)}`
+  );
+
   // 16c) ...e a lista que abre ao tocar no cartão traz esses mesmos pedidos,
   // um por linha (itens somados), com o nome do cliente quando ele existe no
   // app e o código quando ainda não foi vinculado.
