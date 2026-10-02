@@ -3080,6 +3080,20 @@
       font-weight: 700;
     }
 
+    /* pedido Atendido Parcial: separa o que falta faturar do que já saiu */
+    .histCard .hcSecaoItens {
+      margin-top: 10px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      color: var(--gray);
+    }
+
+    .histCard .hcSecaoItens.pendente {
+      color: var(--warning);
+    }
+
     .histCard .hcAvistaPendente.vencido {
       background: var(--danger-bg);
       color: var(--danger);
@@ -12344,9 +12358,30 @@
           nfTransp = [itemFaturado.nota_fiscal, itemFaturado.transportadora].filter(Boolean).join(' · ');
         }
         const primeiro = itens[0];
-        const listaProdutos = itens.map(it => `
+        const linhasProdutos = (lista) => lista.map(it => `
           <div class="hcCode" style="margin-top:4px;">${escapeHtml(it.produto || ('Cód. ' + it.codigo_sku))} · Qt. ${it.quantidade}</div>
         `).join('');
+        // Pedido faturado em parte: os itens que ficaram na Carteira vêm
+        // primeiro, num bloco próprio - misturados na lista, não dava pra ver
+        // o que não foi faturado (pedido de 70 itens com 1 faltando).
+        const itensFaturados = itens.filter(it => it.status === 'faturado');
+        const itensNaoFaturados = itens.filter(it => it.status !== 'faturado');
+        let listaProdutos;
+        if (!aguardandoPagamento && itensFaturados.length > 0 && itensNaoFaturados.length > 0) {
+          const valorNaoFaturado = itensNaoFaturados.reduce((soma, it) => soma + (Number(it.valor) || 0), 0);
+          listaProdutos = `<div class="hcSecaoItens pendente">Não faturado · em carteira (${itensNaoFaturados.length}${valorNaoFaturado > 0 ? ' · ' + brl(valorNaoFaturado) : ''})</div>`
+            + linhasProdutos(itensNaoFaturados)
+            + `<div class="hcSecaoItens">Faturado (${itensFaturados.length})</div>`
+            + linhasProdutos(itensFaturados);
+        } else {
+          listaProdutos = linhasProdutos(itens);
+          // "Parcial" sem nenhum item em carteira: o que faltou não está no
+          // relatório importado (ex.: mesmo código faturado só em parte - a
+          // linha da Carteira e a do Faturamento viram uma só na importação).
+          if (itemFaturado && itemFaturado.situacao_pedido === 'Atendido Parcial') {
+            listaProdutos = `<div class="hcSecaoItens pendente">Os itens não faturados não vieram no relatório importado</div>` + listaProdutos;
+          }
+        }
         const botaoRastreio = itemFaturado && itemFaturado.nota_fiscal
           ? `<button type="button" class="restoreBtn compacto hcAcaoTopo"
         data-rastrear-nf="${escapeHtml(String(itemFaturado.nota_fiscal))}" data-rastrear-transp="${escapeHtml(itemFaturado.transportadora || '')}">Rastrear entrega</button>`
