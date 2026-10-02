@@ -3094,6 +3094,18 @@
       color: var(--warning);
     }
 
+    /* saldo em carteira abaixo do mínimo da política de cancelamento */
+    .histCard .hcSaldoMinimo {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
     .histCard .hcAvistaPendente.vencido {
       background: var(--danger-bg);
       color: var(--danger);
@@ -12339,7 +12351,51 @@
     </div>
   </div>`;
       }
-      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos) {
+      // Item da planilha de itens em falta (Previsão de estoque) sem data de
+      // chegada pela frente e com saldo negativo - mesma leitura do selo
+      // "sem previsão de chegada" (renderPrevisaoBadge).
+      function itemSemPrevisaoDeChegada(codigo) {
+        const prev = PREVISAO_MAP[codigo];
+        if (!prev) return false;
+        const d = new Date();
+        const hoje = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (prev.previsao && prev.previsao >= hoje) return false;
+        return prev.saldo < 0;
+      }
+      // Política de cancelamento (e-mails "Cancelamento saldo em carteira"): o
+      // saldo do pedido abaixo do mínimo (R$ 300, R$ 600 no Norte/Nordeste -
+      // `saldoMinimo` vem da API pela UF da ficha de CNPJ) é cancelado. Antes
+      // disso o cliente pode aumentar a quantidade: com 1 código no saldo, só
+      // ele; com 2 ou mais, qualquer um. Item sem previsão de chegada não
+      // adianta aumentar (é cancelado por "Sem previsão") - fica de fora da
+      // sugestão. "+N un." = quanto daquele item sozinho completa o mínimo.
+      function renderAvisoSaldoMinimo(itensSaldo, valorSaldo, saldoMinimo) {
+        const minimo = saldoMinimo && Number(saldoMinimo.valor) > 0 ? Number(saldoMinimo.valor) : 300;
+        if (!(valorSaldo > 0) || valorSaldo >= minimo) return '';
+        const falta = minimo - valorSaldo;
+        const nomeItem = (it) => escapeHtml(it.produto || ('Cód. ' + it.codigo_sku));
+        const candidatos = itensSaldo.filter(it => !itemSemPrevisaoDeChegada(String(it.codigo_sku)));
+        let acao;
+        if (candidatos.length === 0) {
+          acao = itensSaldo.length === 1
+            ? 'O item está sem previsão de chegada — aumentar não evita o cancelamento.'
+            : 'Os itens estão sem previsão de chegada — aumentar não evita o cancelamento.';
+        } else {
+          const sugestoes = candidatos.map(it => {
+            const unitario = Number(it.valor) / Number(it.quantidade);
+            const unidades = unitario > 0 ? Math.ceil(falta / unitario) : null;
+            return `${nomeItem(it)}${unidades ? ` (+${unidades} un.)` : ''}`;
+          });
+          acao = candidatos.length === 1
+            ? `Pra faturar, o cliente pode aumentar ${sugestoes[0]}.`
+            : `Pra faturar, o cliente pode aumentar qualquer um: ${sugestoes.join('; ')}.`;
+          const semPrevisao = itensSaldo.length - candidatos.length;
+          if (semPrevisao > 0) acao += semPrevisao === 1 ? ' O outro item está sem previsão de chegada.' : ' Os outros estão sem previsão de chegada.';
+        }
+        const regiao = saldoMinimo && saldoMinimo.regiao ? ` (${escapeHtml(saldoMinimo.regiao)})` : '';
+        return `<div class="hcSaldoMinimo">⚠ Saldo abaixo do mínimo de ${brl(minimo)}${regiao} · faltam ${brl(falta)} · pode ser cancelado. ${acao}</div>`;
+      }
+      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo) {
         // À vista sem pagamento (aba "Aguardando Pagamento" ou título em aberto
         // na "Pendentes à Vista"): o ERP já lista a NF na aba Faturamento, mas
         // o pedido não saiu - nada de "Faturado", selo T/P, transportadora nem
@@ -12362,8 +12418,10 @@
         }
         const primeiro = itens[0];
         const qtdProdutos = new Set(itens.map(it => String(it.codigo_sku))).size;
-        const linhasProdutos = (lista) => lista.map(it => `
-          <div class="hcCode" style="margin-top:4px;">${escapeHtml(it.produto || ('Cód. ' + it.codigo_sku))} · Qt. ${it.quantidade}${notasDoPedido.length > 1 && it.status === 'faturado' && it.nota_fiscal ? ` · NF ${escapeHtml(String(it.nota_fiscal))}` : ''}</div>
+        // no saldo em carteira, o selo da planilha de itens em falta (chega
+        // DD/MM / sem previsão de chegada) mostra se o item vai sair
+        const linhasProdutos = (lista, comPrevisao) => lista.map(it => `
+          <div class="hcCode" style="margin-top:4px;">${escapeHtml(it.produto || ('Cód. ' + it.codigo_sku))} · Qt. ${it.quantidade}${notasDoPedido.length > 1 && it.status === 'faturado' && it.nota_fiscal ? ` · NF ${escapeHtml(String(it.nota_fiscal))}` : ''}${comPrevisao ? ' ' + renderPrevisaoBadge(String(it.codigo_sku)) : ''}</div>
         `).join('');
         // Pedido faturado em parte: os itens que ficaram na Carteira vêm
         // primeiro, num bloco próprio - misturados na lista, não dava pra ver
@@ -12374,7 +12432,8 @@
         if (!aguardandoPagamento && itensFaturados.length > 0 && itensNaoFaturados.length > 0) {
           const valorNaoFaturado = itensNaoFaturados.reduce((soma, it) => soma + (Number(it.valor) || 0), 0);
           listaProdutos = `<div class="hcSecaoItens pendente">Não faturado · em carteira (${itensNaoFaturados.length}${valorNaoFaturado > 0 ? ' · ' + brl(valorNaoFaturado) : ''})</div>`
-            + linhasProdutos(itensNaoFaturados)
+            + renderAvisoSaldoMinimo(itensNaoFaturados, valorNaoFaturado, saldoMinimo)
+            + linhasProdutos(itensNaoFaturados, true)
             + `<div class="hcSecaoItens">Faturado (${itensFaturados.length})</div>`
             + linhasProdutos(itensFaturados);
         } else {
@@ -12577,7 +12636,7 @@
               const soTitulos = [...titulosPorNf.entries()].filter(([nf]) => !nfsNosPedidos.has(nf));
               content.innerHTML = soTitulos.map(([nf, ts]) => renderTituloSoPendente(nf, ts)).join('')
                 + soPendentes.map(renderPedidoSoPendente).join('') + Array.from(porPedido.entries())
-                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens)))
+                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens), resp.saldo_minimo))
                 .join('');
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));

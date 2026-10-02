@@ -311,6 +311,17 @@ Supabase, sem PR — não é mudança de código.
   cancelado no ERP ficava "em carteira" pra sempre — 47 de 156 linhas de carteira em 02/10/2026).
   Dado antigo só se completa reimportando os relatórios. Telas de "o que o cliente comprou" somam as
   notas do mesmo pedido como uma compra (`juntarNotasDoPedido`, `routes/relatorios.js`).
+- **Saldo em carteira abaixo do mínimo** (10/2026): política de cancelamento da Cortag (e-mails
+  "Cancelamento saldo em carteira DD.MM.AAAA" da assistente comercial, chegam depois do corte): o saldo
+  do pedido abaixo de **R$ 300** (**R$ 600 no Norte/Nordeste**) é cancelado, além de item sem
+  previsão/obsoleto, acima de 90 dias e à vista sem pagamento. Regra do usuário pra salvar o saldo:
+  o cliente aumenta a quantidade — **com 1 código no saldo, só ele; com 2 ou mais, qualquer um
+  deles**. O card do pedido parcial mostra "⚠ Saldo abaixo do mínimo · faltam R$ X" com quanto de
+  cada item completa (`renderAvisoSaldoMinimo`, `index.html`), cruzado com a planilha de itens em
+  falta (Previsão de estoque, `PREVISAO_MAP`): item sem previsão de chegada fica fora da sugestão
+  (aumentar não evita o corte) e cada item do saldo leva o selo "chega DD/MM"/"sem previsão". O
+  mínimo vem da API pela UF da ficha de CNPJ (`routes/lib/saldoMinimo.js`; sem ficha = R$ 300).
+  Em aberto: quanto tempo o vendedor tem entre o saldo ficar abaixo do mínimo e o corte.
 
 ## O que já tentamos e não deu certo
 
