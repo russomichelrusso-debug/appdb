@@ -523,6 +523,28 @@ async function main() {
   res = await req('GET', '/api/clientes/9061/classificatorio/status');
   assert(res.body.tipo === 'Varejo Master' && res.body.erp == null, 'import sem data do relatório mantém a faixa e não grava foto');
 
+  // Alertas: o 9060 não tem venda no app (ao vivo = R$0, abaixo do mínimo
+  // do Premium), mas a matriz dele no ERP tem R$ 23.445 de outras empresas
+  // fora do app - o ERP diz que faltam R$ 10.877 pra SUBIR, não que vai cair.
+  // O 9061 (sem foto do ERP) continua pela conta ao vivo.
+  res = await req('GET', '/api/clientes/classificatorio/alertas');
+  const emRisco = (res.body.riscoDeQueda || []).map(c => c.id);
+  assert(
+    res.status === 200 && !emRisco.includes(9060) && emRisco.includes(9061),
+    `alertas: matriz com empresas fora do app usa o veredito do ERP (9060 fora do risco), sem foto continua ao vivo (9061 em risco): ${JSON.stringify(emRisco)}`
+  );
+  const { aplicarLeituraErp } = require('../routes/clientesClassificatorio');
+  let sErp = aplicarLeituraErp({ tipo: 'Varejo Premium', emRiscoDeQueda: true, faltaPraManter: 30000, faixaMin: 0, faixaMax: 30000 },
+    { situacao: 'subir', falta: 10877.47, proximaFaixa: 'Varejo Master' });
+  assert(
+    sErp.emRiscoDeQueda === false && sErp.faltaPraManter == null && sErp.faltaPraProximaFaixa === 10877.47
+      && sErp.proximaFaixa === 'Varejo Master' && sErp.faixaMax == null && sErp.fonteFaixa === 'erp',
+    'aplicarLeituraErp troca "vai cair" ao vivo por "falta pra subir" oficial e tira a barra'
+  );
+  sErp = aplicarLeituraErp({ tipo: 'Varejo Master', emRiscoDeQueda: false, faltaPraProximaFaixa: null },
+    { situacao: 'manter', falta: 4000, faixaAnterior: 'Varejo Premium' });
+  assert(sErp.emRiscoDeQueda === true && sErp.faltaPraManter === 4000 && sErp.faixaAnterior === 'Varejo Premium', 'aplicarLeituraErp: ERP abaixo do mínimo vira risco de queda');
+
   // Leitura da coluna "Diferenca" (conferida contra a planilha real de 02/10/2026)
   const { interpretarDiferencaErp } = require('../routes/clientesClassificatorio');
   let ld = interpretarDiferencaErp({ tipo: 'Varejo Premium', fat12mMatriz: 21438.53, diferenca: 8561.47 });

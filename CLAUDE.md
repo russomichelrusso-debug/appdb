@@ -284,7 +284,10 @@ Supabase, sem PR — não é mudança de código.
     ERP é maior que a soma das empresas dela no app (`fat12mOutrasEmpresas`), o veredito de faixa ao
     vivo sairia errado ("vai cair" quando falta pouco pra subir) — o card esconde barra/meta
     trimestral automática e o card compacto do Pedido/Levantamento usa a leitura oficial
-    (`statusComFaixaOficialErp`). Os alertas de classificatório ainda usam só o ao vivo.
+    (`statusComFaixaOficialErp`); os alertas de classificatório também (`aplicarLeituraErp`, item com
+    "oficial do ERP"). Em 10/2026 era 1 cliente só. Fora isso, alerta ao vivo × ERP divergiam em 6
+    de 130 Premium/Master só pela janela (o app já tirou set/2025 e somou set/2026; o ERP fecha 31/08)
+    — esperado, não é erro.
   - A importação da planilha agora **troca** a faixa gravada quando o relatório é tão ou mais novo
     (antes só preenchia quem não tinha — 22 clientes estavam com faixa de 2023–2025, corrigidos via
     SQL em 02/10/2026; backup em `backup_clientes_classif_20261002`).

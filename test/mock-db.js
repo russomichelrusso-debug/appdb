@@ -423,6 +423,20 @@ async function query(sql, params = []) {
     }
     return { rows: [] };
   }
+  // Alertas em lote: foto do ERP + parte da matriz que vem de empresas fora do app
+  if (s.includes('AS FAT_12M_OUTRAS_EMPRESAS')) {
+    const rows = clientes.filter(c => c.classificatorio_tipo && classificatorioErp[c.id]).map(c => {
+      const e = classificatorioErp[c.id];
+      const soma = clientes
+        .filter(c2 => Number(c2.id) === Number(c.id) || (c.matriz_grupo && c2.matriz_grupo === c.matriz_grupo))
+        .map(c2 => classificatorioErp[c2.id])
+        .filter(e2 => e2 && e2.data_relatorio === e.data_relatorio)
+        .reduce((acc, e2) => acc + (Number(e2.fat_12m_cliente) || 0), 0);
+      return { cliente_id: c.id, fat_12m_matriz: String(e.fat_12m_matriz), diferenca: e.diferenca == null ? null : String(e.diferenca),
+        fat_12m_outras_empresas: String((Number(e.fat_12m_matriz) || 0) - soma) };
+    });
+    return { rows };
+  }
   if (s.includes('SUM(E.FAT_12M_CLIENTE)')) {
     const [id, dataRelatorio, matrizGrupo] = params;
     const soma = clientes
