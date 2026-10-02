@@ -363,6 +363,19 @@ Supabase, sem PR — não é mudança de código.
   a do servidor. O nome vale também pra cópia do pedido no Drive e é reconhecido ao abrir o CSV de
   volta (`pedidoPeloNomeDoArquivo`).
 
+- **CSV vai direto pro WhatsApp** (10/2026): relato de vendedor — o CSV "só salvava no aparelho" e depois
+  ele tinha que procurar o arquivo pra mandar. Causas: com Google Drive conectado o CSV ia só pro Drive, sem
+  oferecer o compartilhar; se o Drive falhava (loja sem internet), o compartilhar saía tarde demais (o
+  navegador só deixa compartilhar logo depois de um toque) e o arquivo baixava sem aviso; fechar a janela
+  de compartilhar também baixava. Agora todo CSV (orçamento, levantamento, pedidos do período) abre a
+  janela `abrirEnvioCsv` (`index.html`): **"Enviar no WhatsApp / Compartilhar"** (principal, o `share` sai
+  direto do toque no botão) ou **"Salvar no aparelho"** (escolhe a pasta onde o navegador deixa); a cópia
+  do Drive vai em segundo plano e o resultado aparece na própria janela. Fechar o compartilhar volta pra
+  janela, sem baixar. Navegador sem compartilhar de arquivo: só "Salvar", com a dica de anexar pelo
+  WhatsApp (📎 › Documento). Pedido do usuário junto: **"Finalizar/Atualizar pedido" abre a mesma janela**
+  ("Enviar o CSV do pedido agora?", "Agora não" fecha) no lugar do toast, com o mesmo arquivo/nome da
+  cópia do Drive (`Pedido-NomeDDMMAA-HHMMSS.csv`, reconhecido ao abrir o CSV de volta).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

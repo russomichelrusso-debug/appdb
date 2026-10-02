@@ -3878,9 +3878,9 @@
       background: var(--danger-strong);
     }
 
-    /* Salvar CSV: três escolhas empilhadas, a principal (Salvar no aparelho)
-       em cima. Na ordem do HTML o Cancelar continua sendo o primeiro botão,
-       que é o que o clique fora do card aciona. */
+    /* Enviar/salvar CSV: três escolhas empilhadas, a principal (Enviar no
+       WhatsApp / Compartilhar) em cima. Na ordem do HTML o Cancelar/Fechar
+       continua sendo o primeiro botão, que é o que o clique fora do card aciona. */
     #csvDestinoModal .minimodal-btnrow {
       flex-direction: column-reverse;
     }
@@ -3889,8 +3889,29 @@
       background: transparent;
     }
 
+    #csvDestinoModal .hidden {
+      display: none;
+    }
+
+    /* sem compartilhar de arquivo no navegador, Salvar vira a ação principal */
+    #csvDestinoModal #csvDestinoSalvar.csvPrincipal {
+      background: var(--red);
+      color: var(--on-accent);
+    }
+
+    #csvDestinoMsg {
+      color: var(--ink);
+      white-space: pre-line;
+    }
+
     #csvDestinoNome {
       word-break: break-all;
+    }
+
+    #csvDestinoAviso,
+    #csvDestinoSemShare {
+      font-size: 12px;
+      margin-top: -8px;
     }
 
     /* Nome do arquivo do CSV do orçamento: sugestões em pílulas, prévia do
@@ -5577,7 +5598,7 @@
 
     <div class="minimodal hidden" id="csvNameModal">
       <div class="minimodal-card">
-        <h3>Salvar orçamento em CSV</h3>
+        <h3>Orçamento em CSV</h3>
         <p>Dê um nome que diferencie o cliente — "Deposito", "Comercial", "Casa"… se repetem em muitos.</p>
         <label for="csvClientName">Nome do arquivo</label>
         <input type="text" id="csvClientName" placeholder="Ex: Deposito Sao Jose" autocomplete="off">
@@ -5587,19 +5608,22 @@
           Usar sempre esse nome pra este cliente</label>
         <div class="minimodal-btnrow">
           <button id="csvNameCancel">Cancelar</button>
-          <button id="csvNameConfirm">Baixar CSV</button>
+          <button id="csvNameConfirm">Continuar</button>
         </div>
       </div>
     </div>
 
     <div class="minimodal hidden" id="csvDestinoModal">
       <div class="minimodal-card">
-        <h3>Salvar CSV</h3>
+        <h3 id="csvDestinoTitulo">CSV pronto</h3>
+        <p id="csvDestinoMsg" class="hidden"></p>
         <p id="csvDestinoNome"></p>
+        <p id="csvDestinoAviso" class="hidden"></p>
+        <p id="csvDestinoSemShare" class="hidden">Este navegador não manda arquivo direto pro WhatsApp — salve no aparelho e anexe pelo WhatsApp (📎 › Documento).</p>
         <div class="minimodal-btnrow">
           <button id="csvDestinoCancel">Cancelar</button>
-          <button id="csvDestinoCompartilhar">Compartilhar (WhatsApp, e-mail…)</button>
-          <button id="csvDestinoSalvar">Salvar no aparelho (escolher pasta)</button>
+          <button id="csvDestinoSalvar">Salvar no aparelho</button>
+          <button id="csvDestinoCompartilhar">Enviar no WhatsApp / Compartilhar</button>
         </div>
       </div>
     </div>
@@ -8544,21 +8568,25 @@
         try { await navigator.clipboard.writeText(text); showToast('Copiado — cole no WhatsApp ou onde precisar'); }
         catch (e) { showToast('Não foi possível compartilhar nem copiar automaticamente.'); }
       }
-      // Pra qualquer CSV do app: se a pessoa já conectou o Google Drive nesse
-      // aparelho, manda direto pro Drive dela; senão, cai no compartilhar/baixar
-      // de sempre. Nunca trava a exportação por causa do Drive - se der erro lá,
-      // ainda baixa o arquivo normalmente.
+      // Pra qualquer CSV do app: abre a janela de enviar/salvar (abrirEnvioCsv)
+      // e, se a pessoa já conectou o Google Drive nesse aparelho, manda uma
+      // cópia pro Drive ao mesmo tempo, em segundo plano. Antes ia só pro Drive,
+      // sem oferecer o compartilhar - e, se o Drive falhava (loja sem internet),
+      // o compartilhar chegava tarde demais e o arquivo baixava sem aviso.
       async function enviarCsvComGoogleDrive(blob, fileName, shareTitle, successMsgLocal) {
-        if (tokenGoogleValido()) {
-          try {
-            await enviarParaGoogleDrive(blob, fileName);
-            showToast('Salvo no seu Google Drive: ' + fileName);
-            return;
-          } catch (e) {
-            console.warn('Falha ao enviar pro Google Drive, caindo pro compartilhar normal:', e);
-          }
+        const comDrive = tokenGoogleValido();
+        const envio = abrirEnvioCsv(blob, fileName, shareTitle, successMsgLocal,
+          comDrive ? { aviso: 'Salvando uma cópia no seu Google Drive…', fecharLabel: 'Fechar' } : {});
+        if (!comDrive) return;
+        try {
+          await enviarParaGoogleDrive(blob, fileName, true);
+          if (csvEnvio === envio) mostrarAvisoEnvioCsv('✓ Cópia salva no seu Google Drive');
+          else showToast('Salvo no seu Google Drive: ' + fileName);
+        } catch (e) {
+          console.warn('Falha ao enviar pro Google Drive:', e);
+          if (csvEnvio === envio) mostrarAvisoEnvioCsv('Não foi pro Google Drive agora (sem internet?) — salve ou compartilhe por aqui.');
+          else showToast('O CSV não foi pro Google Drive: ' + e.message, 'erro');
         }
-        await salvarOuCompartilharCsv(blob, fileName, shareTitle, successMsgLocal);
       }
       // Nome do arquivo do levantamento com o cliente inteiro (pedido do
       // usuário): "Levantamento-comercial-de-ferragens-cofebral-260926.pdf".
@@ -9084,7 +9112,11 @@
           try {
             await navigator.share({ files: [file], title: shareTitle });
             return;
-          } catch (e) { /* usuário cancelou, ou o navegador recusou esse tipo de arquivo: cai para o download */ }
+          } catch (e) {
+            // fechou a janela de compartilhar sem escolher: não baixa por conta própria
+            if (e && e.name === 'AbortError') return;
+            /* o navegador recusou esse tipo de arquivo: cai para o download */
+          }
         }
         baixarBlob(blob, fileName);
         showToast(successMsg);
@@ -9097,41 +9129,75 @@
         setTimeout(() => URL.revokeObjectURL(url), 4000);
       }
 
-      // CSV: onde o navegador deixa escolher a pasta (janela "Salvar como…" -
-      // Chrome no computador e nas versões novas do Android), pergunta antes
-      // entre salvar no aparelho e compartilhar. As duas ficam (pedido do
-      // usuário): o vendedor costuma salvar pra importar, mas quem faz o
-      // serviço pode ser outra pessoa (ex.: secretária) e aí manda o arquivo.
-      // Sem esse recurso (iPhone, Android antigo) segue o compartilhar/baixar
-      // de sempre - no iPhone o "Salvar em Arquivos" do compartilhar já deixa
-      // escolher a pasta.
-      let csvDestinoResolve = null;
-      function perguntarDestinoCsv(fileName) {
-        return new Promise((resolve) => {
-          csvDestinoResolve = resolve;
-          document.getElementById('csvDestinoNome').textContent = fileName;
-          document.getElementById('csvDestinoModal').classList.remove('hidden');
-        });
+      // CSV: sempre abre a janela com as duas escolhas - "Enviar no WhatsApp /
+      // Compartilhar" (principal) e "Salvar no aparelho". Pedido do usuário
+      // (10/2026): vendedor relatou que o CSV "só salvava no aparelho" e depois
+      // tinha que procurar o arquivo pra mandar no WhatsApp. O compartilhar sai
+      // direto do toque no botão (o navegador só deixa compartilhar logo depois
+      // de um toque); fechar a janela de compartilhar volta pra cá, sem baixar
+      // nada. Salvar escolhe a pasta onde o navegador deixa (Chrome no
+      // computador e Android novo), senão baixa pra pasta Downloads - quem faz
+      // a importação pode ser outra pessoa (ex.: secretária), por isso as duas.
+      let csvEnvio = null; // { blob, file, fileName, shareTitle, successMsg, compartilhando }
+      function podeCompartilharArquivo(file) {
+        if (typeof navigator.share !== 'function') return false;
+        if (typeof navigator.canShare !== 'function') return true; // não dá pra saber antes - tenta no toque
+        try { return navigator.canShare({ files: [file] }); } catch (e) { return false; }
       }
-      function fecharDestinoCsv(escolha) {
+      // opcoes: titulo, mensagem (texto acima do nome do arquivo), aviso (linha
+      // abaixo dele, ex.: cópia indo pro Drive), fecharLabel.
+      function abrirEnvioCsv(blob, fileName, shareTitle, successMsg, opcoes = {}) {
+        const file = new File([blob], fileName, { type: blob.type || 'text/csv' });
+        csvEnvio = { blob, file, fileName, shareTitle, successMsg, compartilhando: false };
+        const podeCompartilhar = podeCompartilharArquivo(file);
+        const msg = document.getElementById('csvDestinoMsg');
+        msg.textContent = opcoes.mensagem || '';
+        msg.classList.toggle('hidden', !opcoes.mensagem);
+        document.getElementById('csvDestinoTitulo').textContent = opcoes.titulo || 'CSV pronto';
+        document.getElementById('csvDestinoNome').textContent = fileName;
+        mostrarAvisoEnvioCsv(opcoes.aviso || '');
+        document.getElementById('csvDestinoCompartilhar').classList.toggle('hidden', !podeCompartilhar);
+        document.getElementById('csvDestinoSemShare').classList.toggle('hidden', podeCompartilhar);
+        document.getElementById('csvDestinoSalvar').classList.toggle('csvPrincipal', !podeCompartilhar);
+        document.getElementById('csvDestinoCancel').textContent = opcoes.fecharLabel || 'Cancelar';
+        document.getElementById('csvDestinoModal').classList.remove('hidden');
+        return csvEnvio;
+      }
+      function mostrarAvisoEnvioCsv(texto) {
+        const aviso = document.getElementById('csvDestinoAviso');
+        aviso.textContent = texto;
+        aviso.classList.toggle('hidden', !texto);
+      }
+      function fecharEnvioCsv() {
         document.getElementById('csvDestinoModal').classList.add('hidden');
-        const resolve = csvDestinoResolve;
-        csvDestinoResolve = null;
-        if (resolve) resolve(escolha);
+        csvEnvio = null;
       }
-      function initCsvDestino() {
-        document.getElementById('csvDestinoCancel').addEventListener('click', () => fecharDestinoCsv(null));
-        document.getElementById('csvDestinoCompartilhar').addEventListener('click', () => fecharDestinoCsv('compartilhar'));
-        document.getElementById('csvDestinoSalvar').addEventListener('click', () => fecharDestinoCsv('salvar'));
+      async function compartilharEnvioCsv() {
+        const envio = csvEnvio;
+        if (!envio || envio.compartilhando) return;
+        envio.compartilhando = true;
+        try {
+          // nenhum await antes do share - ele precisa sair no mesmo toque
+          await navigator.share({ files: [envio.file], title: envio.shareTitle });
+          if (csvEnvio === envio) fecharEnvioCsv();
+        } catch (e) {
+          if (e && e.name === 'AbortError') return; // fechou a janela de compartilhar: escolhe de novo aqui
+          console.warn('Compartilhar CSV falhou:', e);
+          showToast('Não deu pra compartilhar o arquivo daqui — toque em "Salvar no aparelho" e anexe no WhatsApp (📎 › Documento).', 'erro');
+        } finally {
+          envio.compartilhando = false;
+        }
       }
-      async function salvarOuCompartilharCsv(blob, fileName, shareTitle, successMsg) {
+      async function salvarEnvioCsv() {
+        const envio = csvEnvio;
+        if (!envio) return;
+        fecharEnvioCsv();
+        const { blob, fileName, successMsg } = envio;
         if (typeof window.showSaveFilePicker !== 'function') {
-          await shareOrDownloadBlob(blob, fileName, shareTitle, successMsg);
+          baixarBlob(blob, fileName);
+          showToast(successMsg);
           return;
         }
-        const escolha = await perguntarDestinoCsv(fileName);
-        if (escolha === 'compartilhar') { await shareOrDownloadBlob(blob, fileName, shareTitle, successMsg); return; }
-        if (escolha !== 'salvar') return;
         let handle;
         try {
           handle = await window.showSaveFilePicker({
@@ -9155,6 +9221,11 @@
           baixarBlob(blob, fileName);
           showToast(successMsg);
         }
+      }
+      function initCsvDestino() {
+        document.getElementById('csvDestinoCancel').addEventListener('click', fecharEnvioCsv);
+        document.getElementById('csvDestinoCompartilhar').addEventListener('click', compartilharEnvioCsv);
+        document.getElementById('csvDestinoSalvar').addEventListener('click', salvarEnvioCsv);
       }
 
       // ---------------- Exportar orçamento em CSV (template de importação) ----------------
@@ -10785,12 +10856,12 @@
       // conseguir, guarda na fila acima pra reenviar sozinho depois. Devolve
       // 'nao-aplicavel' (Drive nunca conectado - não faz nada), 'enviado' ou
       // 'pendente', pra finalizeOrder() montar uma única mensagem combinada.
-      async function backupPedidoCsvNoGoogleDrive(rows, cliente, alterado) {
+      // Recebe o CSV já montado (buildPedidoCsvText/pedidoCsvFileNameFor) - o
+      // mesmo arquivo que finalizeOrder() oferece pra enviar no WhatsApp.
+      async function backupPedidoCsvNoGoogleDrive(csvText, fileName) {
         let jaConectouAntes = false;
         try { jaConectouAntes = !!localStorage.getItem(GOOGLE_TOKEN_LS_KEY); } catch (e) { }
         if (!jaConectouAntes) return 'nao-aplicavel';
-        const csvText = buildPedidoCsvText(rows);
-        const fileName = pedidoCsvFileNameFor(cliente, alterado);
         try {
           const blob = new Blob(['\uFEFF' + csvText], { type: 'text/csv;charset=utf-8;' });
           await enviarParaGoogleDrive(blob, fileName, true);
@@ -12442,7 +12513,7 @@
           ].map(v => String(v).replace(/;/g, ',')).join(';'));
           const blob = new Blob(['\uFEFF' + [header, ...linhas].join('\r\n')], { type: 'text/csv;charset=utf-8;' });
           const fileName = `pedidos-${inicio}-a-${fim}.csv`;
-          salvarOuCompartilharCsv(blob, fileName, 'Pedidos do período', 'Baixado — verifique a pasta Downloads do celular');
+          abrirEnvioCsv(blob, fileName, 'Pedidos do período', 'Baixado — verifique a pasta Downloads do celular');
           msg.innerHTML = `<div class="ap-msg success">✓ ${rows.length} linha(s) exportada(s).</div>`;
         } catch (e) {
           msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
@@ -12524,7 +12595,9 @@
           // ter ido pro servidor ou ter ficado pendente na fila acima; sem
           // conexão nenhuma, entra na fila própria do Drive (ver
           // backupPedidoCsvNoGoogleDrive) e é reenviada sozinha depois.
-          const driveResultado = await backupPedidoCsvNoGoogleDrive(rows, cliente, !!editando);
+          const csvText = buildPedidoCsvText(rows);
+          const csvFileName = pedidoCsvFileNameFor(cliente, !!editando);
+          const driveResultado = await backupPedidoCsvNoGoogleDrive(csvText, csvFileName);
           let msg;
           if (editando) {
             msg = offline
@@ -12542,7 +12615,12 @@
           }
           if (driveResultado === 'enviado') msg += ' · cópia CSV salva no Drive';
           else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
-          showToast(msg, 'longo');
+          // Já oferece mandar o CSV do pedido (pedido do usuário, 10/2026) - a
+          // mesma janela do CSV do orçamento, com o arquivo e o nome da cópia do
+          // Drive (nome que o app reconhece ao abrir o CSV de volta).
+          abrirEnvioCsv(new Blob(['\uFEFF' + csvText], { type: 'text/csv;charset=utf-8;' }), csvFileName,
+            'Pedido Cortag (CSV)', 'Baixado — verifique a pasta Downloads do celular',
+            { titulo: editando ? 'Pedido atualizado' : 'Pedido registrado', mensagem: msg + '\n\nEnviar o CSV do pedido agora?', fecharLabel: 'Agora não' });
           if (!offline) atualizarPedidosSalvos();
         } catch (e) {
           if (editando && /Pedido não encontrado/.test(e.message)) {
