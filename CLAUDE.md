@@ -288,6 +288,12 @@ Supabase, sem PR — não é mudança de código.
     "oficial do ERP"). Em 10/2026 era 1 cliente só. Fora isso, alerta ao vivo × ERP divergiam em 6
     de 130 Premium/Master só pela janela (o app já tirou set/2025 e somou set/2026; o ERP fecha 31/08)
     — esperado, não é erro.
+  - **"Por que é diferente do ERP?"** (recolhível, em "Ao vivo no app"): concilia linha a linha —
+    app − vendas depois da apuração + vendas que o ERP ainda conta e o app já tirou da janela ±
+    "outras diferenças" = ERP (12 meses e acumulado; `erp.conciliacao` na rota de status). Caso real
+    da PEOCA (3663) em 02/10/2026: 141.058,35 − 16.955,40 (set/26) + 13.123,26 (set/25) − 351,54 =
+    136.874,67. As "outras diferenças" (sempre ERP abaixo, sem nota/item que as explique) são
+    provavelmente devolução/abatimento no ERP — o relatório de faturamento traz o valor bruto.
   - A importação da planilha agora **troca** a faixa gravada quando o relatório é tão ou mais novo
     (antes só preenchia quem não tinha — 22 clientes estavam com faixa de 2023–2025, corrigidos via
     SQL em 02/10/2026; backup em `backup_clientes_classif_20261002`).

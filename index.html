@@ -1257,6 +1257,62 @@
       color: var(--success);
     }
 
+    .clsConc {
+      margin-top: 10px;
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      padding: 9px 10px;
+    }
+
+    .clsConc summary {
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .clsConc summary span {
+      font-weight: 500;
+      color: var(--gray);
+    }
+
+    .clsConcBloco {
+      margin-top: 10px;
+    }
+
+    .clsConcTit {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--gray);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      margin-bottom: 4px;
+    }
+
+    .clsConcLinha {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 10px;
+      font-size: 12px;
+      padding: 3px 0;
+      color: var(--ink);
+    }
+
+    .clsConcLinha b {
+      white-space: nowrap;
+      font-weight: 600;
+    }
+
+    .clsConcLinha--total {
+      font-weight: 700;
+    }
+
+    .clsConcLinha--fim {
+      border-top: 0.75px solid var(--hairline);
+      margin-top: 2px;
+    }
+
     .clsInfo {
       display: grid;
       grid-template-columns: auto 1fr;
@@ -10628,6 +10684,8 @@
           </div>
           ${status.revisao && !status.ehRede ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;">${escapeHtml(status.revisao)}</div>` : ''}`);
 
+        if (status.erp && status.erp.conciliacao) partes.push(renderConciliacaoErp(status));
+
         // Matriz com empresas fora do app (filiais de outros representantes):
         // a soma ao vivo fica abaixo da real e "vai cair"/"falta pra subir"
         // estariam errados - não mostra veredito de faixa ao vivo, só avisa.
@@ -10747,6 +10805,51 @@
 
         content.innerHTML = partes.join('');
         if (!status.ehRede) initClienteGrupoUI(status);
+      }
+
+      // "Por que é diferente do ERP?" - conciliação dos números ao vivo com os
+      // oficiais (pedido do usuário). O ERP fecha a apuração no fim do mês e o
+      // app soma até hoje: tira o que entrou depois da apuração, devolve o que
+      // o ERP ainda conta e o app já tirou da janela de 12 meses, e o que
+      // sobra é "outras diferenças" (devolução/abatimento no ERP ou empresa da
+      // matriz fora do app). Valores calculados no backend (conciliacao).
+      function renderConciliacaoErp(status) {
+        const c = status.erp.conciliacao;
+        const sinal = v => `${v < 0 ? '−' : '+'} ${brl(Math.abs(v))}`;
+        const linha = (rotulo, valor, classe = '') => `<div class="clsConcLinha ${classe}"><span>${rotulo}</span><b>${valor}</b></div>`;
+        const notaOutras = status.erp.fat12mOutrasEmpresas > 0
+          ? `inclui ${brl(status.erp.fat12mOutrasEmpresas)} de empresas da matriz que não estão no app; o resto é provável devolução ou abatimento lançado no ERP`
+          : 'provável devolução ou abatimento lançado no ERP (o relatório de faturamento traz as notas pelo valor bruto)';
+        const blocos = [];
+        let temOutras = false;
+        let difTotal = null;
+        if (c.doze) {
+          const d = c.doze;
+          difTotal = d.app - d.erp;
+          const linhas = [linha(`Ao vivo no app · ${formatDateBr(c.periodoApp.inicio)} a ${formatDateBr(c.periodoApp.fim)}`, brl(d.app), 'clsConcLinha--total')];
+          if (Math.abs(d.depoisApuracao) >= 0.01) linhas.push(linha(`Vendas depois da apuração (após ${formatDateBr(c.periodoErp.fim)}) — o ERP ainda não conta`, sinal(-d.depoisApuracao)));
+          if (Math.abs(d.foraDaJanelaApp) >= 0.01) linhas.push(linha(`Vendas de ${formatDateBr(c.periodoErp.inicio)} a ${formatDateBr(c.fimForaDaJanelaApp)} — o ERP ainda conta, o app já tirou`, sinal(d.foraDaJanelaApp)));
+          if (Math.abs(d.outras) >= 1) { linhas.push(linha('Outras diferenças¹', sinal(d.outras))); temOutras = true; }
+          linhas.push(linha(`Oficial do ERP · ${formatDateBr(c.periodoErp.inicio)} a ${formatDateBr(c.periodoErp.fim)}`, brl(d.erp), 'clsConcLinha--total clsConcLinha--fim'));
+          blocos.push(`<div class="clsConcBloco"><div class="clsConcTit">12 meses${status.ehRede ? '' : ' (grupo × matriz)'}</div>${linhas.join('')}</div>`);
+        }
+        if (c.ano) {
+          const a = c.ano;
+          const ano = String(c.periodoErp.fim).slice(0, 4);
+          const linhas = [linha(`Acumulado ${ano} ao vivo no app`, brl(a.app), 'clsConcLinha--total')];
+          if (Math.abs(a.depoisApuracao) >= 0.01) linhas.push(linha(`Vendas depois da apuração (após ${formatDateBr(c.periodoErp.fim)})`, sinal(-a.depoisApuracao)));
+          if (Math.abs(a.outras) >= 1) { linhas.push(linha('Outras diferenças¹', sinal(a.outras))); temOutras = true; }
+          linhas.push(linha(`Acumulado ${ano} oficial do ERP`, brl(a.erp), 'clsConcLinha--total clsConcLinha--fim'));
+          blocos.push(`<div class="clsConcBloco"><div class="clsConcTit">Acumulado do ano</div>${linhas.join('')}</div>`);
+        }
+        if (!blocos.length) return '';
+        const resumo = difTotal != null && Math.abs(difTotal) >= 0.01 ? ` <span>(${sinal(difTotal)} no app)</span>` : '';
+        return `<details class="clsConc">
+          <summary>Por que é diferente do ERP?${resumo}</summary>
+          <div class="clsTileSub" style="margin-top:6px;">O ERP fecha a apuração no fim do mês; o app soma o faturamento importado até hoje.</div>
+          ${blocos.join('')}
+          ${temOutras ? `<div class="clsTileSub" style="margin-top:6px;">¹ ${notaOutras}.</div>` : ''}
+        </details>`;
       }
 
       // Seção "Oficial do ERP" do card de classificatório: os números da

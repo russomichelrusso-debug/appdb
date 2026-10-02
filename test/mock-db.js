@@ -423,6 +423,31 @@ async function query(sql, params = []) {
     }
     return { rows: [] };
   }
+  // Conciliação ERP × app do status individual (vendas depois da apuração /
+  // que o ERP ainda conta e o app já tirou da janela de 12 meses)
+  if (s.includes('AS DEPOIS_12M')) {
+    const [id, apuradoAte] = params;
+    const cliente = clientes.find(c => Number(c.id) === Number(id));
+    const ehRede = s.includes("JOIN CLIENTES C2 ON C2.ID = C.ID JOIN");
+    const grupo = !cliente ? [] : (!ehRede && cliente.matriz_grupo ? clientes.filter(c => c.matriz_grupo === cliente.matriz_grupo) : [cliente]);
+    const codigos = grupo.map(c => c.codigo_oficial).filter(Boolean);
+    const itens = pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && faturadoDeFato(it) && it.data_faturamento);
+    const iso = d => d.toISOString().slice(0, 10);
+    const ap = new Date(apuradoAte + 'T00:00:00Z');
+    const inicioErp = iso(new Date(Date.UTC(ap.getUTCFullYear() - 1, ap.getUTCMonth(), ap.getUTCDate() + 1)));
+    const janela = inicioJanela12m();
+    const hoje = iso(new Date());
+    const inicioAno = `${hoje.slice(0, 4)}-01-01`;
+    const soma = f => itens.filter(f).reduce((acc, it) => acc + (Number(it.valor) || 0), 0);
+    const dJanela = new Date(janela + 'T00:00:00Z'); dJanela.setUTCDate(dJanela.getUTCDate() + 1);
+    return { rows: [{
+      depois_12m: String(soma(it => it.data_faturamento > apuradoAte && it.data_faturamento > janela)),
+      fora_janela_app: String(soma(it => it.data_faturamento >= inicioErp && it.data_faturamento <= janela)),
+      depois_ano: String(soma(it => it.data_faturamento > apuradoAte && it.data_faturamento >= inicioAno)),
+      inicio_erp: inicioErp, inicio_app: iso(dJanela), fim_fora_janela_app: janela, hoje,
+      mesmo_ano: apuradoAte.slice(0, 4) === hoje.slice(0, 4),
+    }] };
+  }
   // Alertas em lote: foto do ERP + parte da matriz que vem de empresas fora do app
   if (s.includes('AS FAT_12M_OUTRAS_EMPRESAS')) {
     const rows = clientes.filter(c => c.classificatorio_tipo && classificatorioErp[c.id]).map(c => {
