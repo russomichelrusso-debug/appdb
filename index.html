@@ -12316,6 +12316,12 @@
       async function apiClassificatorioAlertas() {
         return apiFetch('/api/clientes/classificatorio/alertas');
       }
+      // Cliente cuja matriz também compra por empresas fora do app: o alerta
+      // vem do número oficial do ERP (planilha Classificatório), não da conta
+      // ao vivo - ver aplicarLeituraErp no backend.
+      function seloFonteErp(c) {
+        return c.fonteFaixa === 'erp' ? ' · oficial do ERP' : '';
+      }
       function renderClassificatorioAlertaItem(c, detalhe) {
         return `
       <button type="button" class="clientPickerItem" data-alerta-cliente-id="${c.id}">
@@ -12337,9 +12343,9 @@
           const { pertoDeSubir, riscoDeQueda, semComprarRecente } = await apiClassificatorioAlertas();
           const secoes = [];
           if (riscoDeQueda.length) secoes.push(`<h3 style="font-size:13px;color:var(--danger);margin:12px 0 6px;">⚠️ Em risco de cair de faixa (${riscoDeQueda.length})</h3>` +
-            riscoDeQueda.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}`)).join(''));
+            riscoDeQueda.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}${seloFonteErp(c)}`)).join(''));
           if (pertoDeSubir.length) secoes.push(`<h3 style="font-size:13px;color:var(--success);margin:12px 0 6px;">📈 Perto de subir de faixa (${pertoDeSubir.length})</h3>` +
-            pertoDeSubir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}`)).join(''));
+            pertoDeSubir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}${seloFonteErp(c)}`)).join(''));
           if (semComprarRecente.length) secoes.push(`<h3 style="font-size:13px;color:var(--warning);margin:12px 0 6px;">🕒 Sem comprar há mais de 60 dias (${semComprarRecente.length})</h3>` +
             semComprarRecente.map(c => renderClassificatorioAlertaItem(c, `${c.diasSemComprar} dias sem comprar`)).join(''));
           content.innerHTML = secoes.length ? secoes.join('') : '<div class="lev-empty">Nenhum alerta no momento — todos os clientes classificados estão em dia.</div>';

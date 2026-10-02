@@ -163,6 +163,23 @@ function interpretarDiferencaErp({ tipo, pic, vlAcordo, fat12mMatriz, diferenca 
   return { situacao: 'topo' };
 }
 
+// Troca o veredito de faixa ao vivo pelo oficial do ERP (leitura da coluna
+// "Diferenca", ver interpretarDiferencaErp). Usado quando a matriz do cliente
+// também compra por empresas FORA do app (filiais de outros representantes):
+// aí a soma ao vivo fica abaixo da real e "vai cair"/"falta pra subir" sairiam
+// errados. Mesma regra do card compacto do app (statusComFaixaOficialErp em
+// index.html). Sem barra (faixaMin/faixaMax), que é calculada com o ao vivo.
+function aplicarLeituraErp(status, leitura) {
+  const s = { ...status, emRiscoDeQueda: false, faltaPraManter: null, faltaPraProximaFaixa: null, faltaPraMeta: null,
+    jaQualificaProximaFaixa: false, faixaMin: null, faixaMax: null, fonteFaixa: 'erp' };
+  if (!leitura) return s;
+  if (leitura.situacao === 'manter') Object.assign(s, { emRiscoDeQueda: true, faltaPraManter: leitura.falta, faixaAnterior: leitura.faixaAnterior });
+  else if (leitura.situacao === 'subir') Object.assign(s, { faltaPraProximaFaixa: leitura.falta, proximaFaixa: leitura.proximaFaixa });
+  else if (leitura.situacao === 'qualifica') Object.assign(s, { jaQualificaProximaFaixa: true, proximaFaixa: leitura.proximaFaixa });
+  else if (leitura.situacao === 'meta') Object.assign(s, { faltaPraMeta: leitura.falta });
+  return s;
+}
+
 // Quebra o faturamento em até 4 trimestres civis (mais recentes primeiro
 // na entrada, devolvido em ordem cronológica) e calcula o ritmo necessário
 // pros trimestres restantes do ano de referência baterem a meta anual/da
@@ -532,7 +549,7 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
 // diário, não coisa de admin). Separa clientes classificados em 3 grupos.
 router.get('/classificatorio/alertas', async (req, res) => {
   try {
-    const [result, clientesResult, anoResult, trimResult] = await Promise.all([
+    const [result, clientesResult, anoResult, trimResult, erpResult] = await Promise.all([
       pool.query(
         `${SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE}
          WHERE c.classificatorio_tipo IS NOT NULL
@@ -557,8 +574,23 @@ router.get('/classificatorio/alertas', async (req, res) => {
            AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
          GROUP BY c.id, 2 ORDER BY c.id, 2`
       ),
+      // Foto oficial do ERP + quanto dos 12 meses da matriz vem de empresas
+      // fora do app (mesma conta do status individual, pra todos de uma vez).
+      pool.query(
+        `SELECT e.cliente_id, e.fat_12m_matriz, e.diferenca,
+                e.fat_12m_matriz - COALESCE((
+                  SELECT SUM(e2.fat_12m_cliente)
+                  FROM clientes c2
+                  JOIN cliente_classificatorio_erp e2 ON e2.cliente_id = c2.id AND e2.data_relatorio = e.data_relatorio
+                  WHERE c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)
+                ), 0) AS fat_12m_outras_empresas
+         FROM cliente_classificatorio_erp e
+         JOIN clientes c ON c.id = e.cliente_id
+         WHERE c.classificatorio_tipo IS NOT NULL`
+      ),
     ]);
     const porId = new Map(clientesResult.rows.map(c => [c.id, c]));
+    const erpPorCliente = new Map(erpResult.rows.map(r => [r.cliente_id, r]));
     const anoAtual = Number(anoResult.rows[0].ano_atual);
     const trimestreAtualIdx = Number(trimResult.rows[0].trimestre_atual_idx);
     const trimestresPorCliente = new Map();
@@ -584,7 +616,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
         anoReferencia: anoAtual,
         trimestreReferenciaIdx: trimestreAtualIdx,
       });
-      const status = calcularStatusClassificatorio({
+      let status = calcularStatusClassificatorio({
         tipo: cliente.classificatorio_tipo,
         pic: cliente.classificatorio_pic,
         vlAcordo: cliente.classificatorio_vl_acordo,
@@ -592,6 +624,17 @@ router.get('/classificatorio/alertas', async (req, res) => {
         faturamentoAnoCorrente: Number(row.faturamento_ano_corrente),
         atrasadoNoRitmo: ritmo.situacao === 'atrasado',
       });
+      // Matriz com empresas fora do app: vale o veredito oficial do ERP.
+      const erp = erpPorCliente.get(cliente.id);
+      if (erp && !status.ehRede && Number(erp.fat_12m_outras_empresas) > 1) {
+        status = aplicarLeituraErp(status, interpretarDiferencaErp({
+          tipo: cliente.classificatorio_tipo,
+          pic: cliente.classificatorio_pic,
+          vlAcordo: cliente.classificatorio_vl_acordo,
+          fat12mMatriz: erp.fat_12m_matriz,
+          diferenca: erp.diferenca,
+        }));
+      }
       const item = { id: cliente.id, nome: cliente.nome, documento: cliente.documento, ...status };
 
       if (status.emRiscoDeQueda) {
@@ -783,3 +826,4 @@ module.exports.FAIXAS = FAIXAS;
 module.exports.faixaDoTipo = faixaDoTipo;
 module.exports.SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE = SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE;
 module.exports.interpretarDiferencaErp = interpretarDiferencaErp;
+module.exports.aplicarLeituraErp = aplicarLeituraErp;
