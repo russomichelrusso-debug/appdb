@@ -327,6 +327,25 @@ Supabase, sem PR — não é mudança de código.
   sugestão. Saldo abaixo do mínimo pode ser cortado antes: no e-mail de 29/09/2026 havia pedido de
   18/09 cancelado por "Abaixo R$300,00".
 
+- **Reabrir pedido salvo pra alterar** (10/2026): o cliente pedia pra mudar quantidade ou incluir
+  produto num pedido já fechado e o vendedor fechava outro (vários pedidos do mesmo cliente, mais um
+  CSV). Agora o pedido reabre no orçamento e "Finalizar pedido" vira **"Atualizar pedido"**, que troca
+  os itens do **mesmo** pedido (`PATCH /api/pedidos/:id`, `routes/pedidos.js`; mantém id, cliente e
+  `data_pedido`, marca `atualizado_em`; só autor/admin, só `origem = 'app'`). Três portas: botão
+  **🧾 Pedidos** no card do cliente (aba Pedido), link "Abrir pedido salvo ou arquivo CSV" no
+  orçamento e **abrir o arquivo CSV** do pedido — o app acha de qual pedido ele é pelos mesmos
+  produtos/quantidades, pelo nome do arquivo (`Pedido-NomeDDMMAA-HHMMSS.csv` da cópia do Drive, ±10
+  min; `NomeDDMMAA.csv` do Compartilhar, único do dia) ou, se ele foi mexido fora do app, pergunta
+  quando metade ou mais dos produtos bate; sem pedido correspondente, os itens entram como pedido
+  novo. Pedido **recém-finalizado já fica aberto** pra edição (finalizar de novo não duplica);
+  limpar o orçamento, trocar/limpar o cliente ou "Pedido novo" desligam. O pedido grava o
+  `contexto` do orçamento (estado, canal, classificatório, prazo, descontos e preço editado por
+  item) pra reabrir com os mesmos preços — os gravados antes disso reabrem pela tabela atual. Lista
+  (`GET /api/pedidos/salvos`, 120 dias, só os do vendedor) guardada no aparelho
+  (`cortagPedidosSalvos_v1`) e alteração pela fila offline: funciona sem internet na loja. Estado
+  da edição em `cortagPedidoEditando_v1`. A cópia CSV no Drive da alteração sai com `-alterado`
+  no nome.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

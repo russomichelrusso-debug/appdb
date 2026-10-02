@@ -78,6 +78,47 @@ async function query(sql, params = []) {
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };
 
+  // GET /api/pedidos/salvos (routes/pedidos.js) - pedidos do app do próprio
+  // usuário, com os itens e os dados do cliente, mais recente primeiro
+  if (s.includes("WHERE PED.ORIGEM = 'APP' AND PED.USUARIO_ID = $1")) {
+    const limite = Date.now() - params[1] * 86400000;
+    const quando = (p) => new Date(p.atualizado_em || p.data_pedido).getTime();
+    return { rows: pedidos
+      .filter(p => p.origem === 'app' && p.usuario_id === params[0] && quando(p) >= limite)
+      .sort((a, b) => quando(b) - quando(a))
+      .slice(0, params[2])
+      .map(p => {
+        const c = clientes.find(x => String(x.id) === String(p.cliente_id)) || {};
+        return {
+          id: p.id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em || null,
+          contexto: p.contexto ? JSON.parse(p.contexto) : null,
+          cliente_id: c.id, cliente_nome: c.nome, cliente_documento: c.documento || null,
+          classificatorio_tipo: c.classificatorio_tipo || null, classificatorio_desconto: c.classificatorio_desconto ?? null,
+          codigo_oficial: c.codigo_oficial || null,
+          itens: pedidoItens.filter(i => String(i.pedido_id) === String(p.id)).map(i => ({
+            codigo_sku: (produtos.find(pr => pr.id === i.produto_id) || {}).codigo_sku,
+            quantidade: i.quantidade, preco_unitario: i.preco_unitario,
+          })),
+        };
+      })
+      .filter(p => p.itens.length > 0) };
+  }
+  // PATCH /api/pedidos/:id: pedido travado pra edição...
+  if (s.includes('SELECT ID, CLIENTE_ID, ORIGEM, USUARIO_ID FROM PEDIDOS WHERE ID = $1 FOR UPDATE')) {
+    return { rows: pedidos.filter(p => String(p.id) === String(params[0]))
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, origem: p.origem, usuario_id: p.usuario_id })) };
+  }
+  // ...e a atualização do cabeçalho (itens são trocados pelo DELETE/INSERT de pedido_itens)
+  if (s.includes('UPDATE PEDIDOS SET CONTEXTO = $1::JSONB, ATUALIZADO_EM = NOW()')) {
+    const p = pedidos.find(x => String(x.id) === String(params[3]));
+    if (!p) return { rows: [] };
+    p.contexto = params[0];
+    p.atualizado_em = new Date().toISOString();
+    if (params[1] != null) p.vendedor_id = params[1];
+    if (params[2] != null) p.observacao = params[2];
+    return { rows: [{ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em }] };
+  }
+
   // Pedidos à vista aguardando pagamento (routes/pedidosOficiais.js) - no
   // topo porque os casos genéricos de INSERT INTO PEDIDOS / FROM
   // PEDIDOS_OFICIAIS_ITENS POI mais abaixo também casariam com estes SQLs.
@@ -922,7 +963,7 @@ async function query(sql, params = []) {
     return { rowCount: antes - pedidosOficiaisItens.length, rows: [] };
   }
   if (s.includes('INSERT INTO PEDIDOS')) {
-    // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id
+    // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto
     const numeroCotacao = params[3] ?? null;
     if (numeroCotacao && pedidos.some(p => p.numero_cotacao === numeroCotacao)) {
       // mesmo comportamento do índice único parcial idx_pedidos_numero_cotacao
@@ -933,6 +974,7 @@ async function query(sql, params = []) {
     const p = {
       id: nextId.pedidos++, cliente_id: params[0], vendedor_id: params[1], observacao: params[2],
       numero_cotacao: numeroCotacao, pdf_modificado_em: params[6] ?? null, usuario_id: params[7] ?? null,
+      origem: params[4] || 'app', contexto: params[8] ?? null,
       data_pedido: new Date().toISOString(),
     };
     pedidos.push(p);

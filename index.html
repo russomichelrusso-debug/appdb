@@ -1823,6 +1823,61 @@
       display: none;
     }
 
+    /* Orçamento aberto como um pedido já salvo (reaberto pra editar ou recém-
+       finalizado): "Finalizar" atualiza esse pedido em vez de criar outro. */
+    .pedidoEditandoAviso {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 16px 12px;
+      padding: 10px 12px;
+      border-radius: var(--r-sm);
+      background: var(--info-bg);
+      color: var(--ink);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .pedidoEditandoAviso.hidden {
+      display: none;
+    }
+
+    .pedidoEditandoAviso > div {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .pedidoEditandoAviso span {
+      display: block;
+      color: var(--gray);
+      font-size: 12px;
+    }
+
+    .pedidoEditandoAviso button {
+      flex: none;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .drawerLinkBtn {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 6px;
+      border: none;
+      background: none;
+      color: var(--gray);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
     .subtotalrow {
       display: flex;
       justify-content: space-between;
@@ -3681,6 +3736,55 @@
       margin-top: 2px;
     }
 
+    .pedidoSalvoItem {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      margin-bottom: 6px;
+    }
+
+    .pedidoSalvoItem b {
+      display: block;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .pedidoSalvoItem span {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
+    .pedidoSalvoItem button {
+      flex: none;
+      min-height: 40px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 999px;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .pedidosSalvosTodosBtn {
+      min-height: 40px;
+      padding: 0;
+      margin: -6px 0 6px;
+      border: none;
+      background: none;
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
     .rastreioCampo {
       display: flex;
       align-items: center;
@@ -4841,6 +4945,8 @@
               title="Produtos que o cliente não compra há mais de 1 ano"></button>
             <button type="button" class="clienteAcao hidden" id="precosFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
               title="Abrir a ficha cadastral (CNPJ) desse cliente">📄 Ficha</button>
+            <button type="button" class="clienteAcao" id="precosPedidosSalvosBtn" aria-label="Pedidos salvos desse cliente: reabrir pra alterar"
+              title="Pedidos que você já fechou pra esse cliente — reabrir pra alterar">🧾 Pedidos</button>
             <button type="button" class="clienteAcao" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
               title="Ver produtos que esse cliente já comprou">🛒 Comprados</button>
           </div>
@@ -5157,6 +5263,7 @@
         </div>
         <button class="closeBtn" id="closeDrawer" aria-label="Fechar">&times;</button>
       </div>
+      <div class="pedidoEditandoAviso hidden" id="pedidoEditandoAviso"></div>
       <div class="field" style="padding:0 16px 12px;">
         <label for="paymentTermSelect">Condição de pagamento</label>
         <select id="paymentTermSelect">
@@ -5180,7 +5287,7 @@
             stroke-linejoin="round">
             <path d="M20 6L9 17l-5-5" />
           </svg>
-          Finalizar pedido
+          <span id="finalizeOrderLabel">Finalizar pedido</span>
         </button>
         <div class="btnrow">
           <button class="clearBtn" id="clearCartBtn">Limpar</button>
@@ -5196,6 +5303,7 @@
             Compartilhar orçamento
           </button>
         </div>
+        <button type="button" class="drawerLinkBtn" id="abrirPedidoSalvoBtn">🧾 Abrir pedido salvo ou arquivo CSV</button>
       </div>
     </div>
 
@@ -5304,6 +5412,18 @@
         <div id="sugestoesLista"></div>
         <div class="minimodal-btnrow" style="margin-top:14px;">
           <button type="button" id="sugestoesFecharBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
+    <div class="minimodal hidden" id="pedidosSalvosModal">
+      <div class="minimodal-card" style="max-width:400px;max-height:85vh;overflow-y:auto;">
+        <h3>Pedidos salvos</h3>
+        <p class="ap-hint" id="pedidosSalvosSubtitulo" style="margin:0 0 12px;"></p>
+        <div id="pedidosSalvosLista"></div>
+        <input type="file" id="pedidoCsvInput" accept=".csv,text/csv,text/plain" style="display:none;">
+        <div class="minimodal-btnrow" style="margin-top:14px;">
+          <button type="button" id="pedidosSalvosFecharBtn">Fechar</button>
+          <button type="button" id="pedidoCsvAbrirBtn">📂 Abrir arquivo CSV</button>
         </div>
       </div>
     </div>
@@ -6215,7 +6335,8 @@
         t.classList.toggle('toast--erro', tipo === 'erro');
         t.classList.add('show');
         clearTimeout(showToast._t);
-        showToast._t = setTimeout(() => t.classList.remove('show'), tipo === 'erro' ? 5000 : 1600);
+        // 'longo': aviso normal (não vermelho) que fica o tempo do erro, pra dar tempo de ler
+        showToast._t = setTimeout(() => t.classList.remove('show'), tipo === 'erro' || tipo === 'longo' ? 5000 : 1600);
       }
 
       // ---------------- Init controls ----------------
@@ -8079,6 +8200,15 @@
         carregarSugestoesRecompra(cliente);
         carregarCompradosRecentes(cliente);
         carregarAtalhoFichaCnpj(cliente);
+        atualizarBotaoPedidosSalvos();
+        // Orçamento aberto como o pedido de outro cliente: trocar (ou limpar)
+        // o cliente desliga a edição - o próximo "Finalizar" grava um pedido
+        // novo pro cliente escolhido, nunca altera o pedido do anterior.
+        if (pedidoEditando && (!cliente || String(cliente.id) !== String(pedidoEditando.clienteId))) {
+          const nomeAnterior = pedidoEditando.clienteNome;
+          setPedidoEditando(null);
+          showToast(`Pedido de ${nomeAnterior} fechado — "Finalizar" agora grava um pedido novo`, 'longo');
+        }
       }
 
       // ---------------- Atalho pra ficha cadastral (CNPJ) ----------------
@@ -8431,6 +8561,7 @@
         document.getElementById('precosTrocarClientBtn').addEventListener('click', () => selectLevClient('precos'));
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
+        document.getElementById('precosPedidosSalvosBtn').addEventListener('click', () => abrirPedidosSalvos(state.levCliente));
       }
 
       function addLevPedidoToCart(cod) {
@@ -8748,6 +8879,7 @@
           state.descontoPrazoDesligado = false;
           const sel = document.getElementById('paymentTermSelect');
           if (sel) sel.value = '';
+          setPedidoEditando(null); // orçamento vazio = próximo pedido é novo
           renderCart();
         }
       }
@@ -8920,12 +9052,18 @@
         return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
       }
 
+      // Primeiro nome do cliente, sem acento/espaço, com inicial maiúscula -
+      // começo do nome dos CSVs de orçamento/pedido (e o que liga um CSV aberto
+      // de volta no app ao pedido salvo, ver pedidoPeloNomeDoArquivo).
+      function nomeAbrevArquivo(clientName) {
+        const semAcento = (clientName || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const primeiraPalavra = (semAcento.trim().split(/\s+/)[0] || 'Cliente').replace(/[^a-zA-Z0-9]/g, '') || 'Cliente';
+        return primeiraPalavra.charAt(0).toUpperCase() + primeiraPalavra.slice(1);
+      }
       // Nome do arquivo no formato NomeDDMMAA (ex: "Joao240826.csv") - primeiro
       // nome do cliente, sem acento/espaço, seguido de dia+mês+ano com 2 dígitos.
       function csvFileNameFor(clientName) {
-        const semAcento = (clientName || 'Cliente').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const primeiraPalavra = (semAcento.trim().split(/\s+/)[0] || 'Cliente').replace(/[^a-zA-Z0-9]/g, '') || 'Cliente';
-        const nomeAbrev = primeiraPalavra.charAt(0).toUpperCase() + primeiraPalavra.slice(1);
+        const nomeAbrev = nomeAbrevArquivo(clientName);
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
         const ddmmaa = pad(d.getDate()) + pad(d.getMonth() + 1) + String(d.getFullYear()).slice(-2);
@@ -10351,14 +10489,13 @@
       // Mesmo formato/nome já usado no "Baixar CSV" manual do orçamento, só
       // com hora:min:seg no carimbo (não só a data) - evita sobrescrever no
       // Drive se o mesmo cliente tiver mais de um pedido finalizado no dia.
-      function pedidoCsvFileNameFor(clientName) {
-        const semAcento = (clientName || 'Cliente').normalize('NFD').replace(/[̀-ͯ]/g, '');
-        const primeiraPalavra = (semAcento.trim().split(/\s+/)[0] || 'Cliente').replace(/[^a-zA-Z0-9]/g, '') || 'Cliente';
-        const nomeAbrev = primeiraPalavra.charAt(0).toUpperCase() + primeiraPalavra.slice(1);
+      // Pedido reaberto e atualizado ganha "-alterado" no fim.
+      function pedidoCsvFileNameFor(clientName, alterado) {
+        const nomeAbrev = nomeAbrevArquivo(clientName);
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
         const carimbo = pad(d.getDate()) + pad(d.getMonth() + 1) + String(d.getFullYear()).slice(-2) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
-        return `Pedido-${nomeAbrev}${carimbo}.csv`;
+        return `Pedido-${nomeAbrev}${carimbo}${alterado ? '-alterado' : ''}.csv`;
       }
       function buildPedidoCsvText(rows) {
         const header = 'Código do Item;Quantidade;Preço';
@@ -10391,12 +10528,12 @@
       // conseguir, guarda na fila acima pra reenviar sozinho depois. Devolve
       // 'nao-aplicavel' (Drive nunca conectado - não faz nada), 'enviado' ou
       // 'pendente', pra finalizeOrder() montar uma única mensagem combinada.
-      async function backupPedidoCsvNoGoogleDrive(rows, clientName) {
+      async function backupPedidoCsvNoGoogleDrive(rows, clientName, alterado) {
         let jaConectouAntes = false;
         try { jaConectouAntes = !!localStorage.getItem(GOOGLE_TOKEN_LS_KEY); } catch (e) { }
         if (!jaConectouAntes) return 'nao-aplicavel';
         const csvText = buildPedidoCsvText(rows);
-        const fileName = pedidoCsvFileNameFor(clientName);
+        const fileName = pedidoCsvFileNameFor(clientName, alterado);
         try {
           const blob = new Blob(['\uFEFF' + csvText], { type: 'text/csv;charset=utf-8;' });
           await enviarParaGoogleDrive(blob, fileName, true);
@@ -12091,6 +12228,9 @@
       }
 
       // ---------------- Finalizar pedido (grava no histórico do backend) ----------------
+      // Com o orçamento aberto como um pedido já salvo (pedidoEditando, ver
+      // abaixo), "Finalizar" vira "Atualizar pedido": troca os itens do MESMO
+      // pedido (PATCH /api/pedidos/:id) em vez de gravar outro.
       async function finalizeOrder() {
         const { rows } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
@@ -12100,35 +12240,427 @@
         const cliente = state.levCliente || await openClientPicker();
         if (!cliente) return; // cancelou a escolha do cliente
         if (!state.levCliente) setLevCliente(cliente);
+        // trocar de cliente já desliga a edição (setLevCliente); conferido de
+        // novo aqui pra nunca alterar o pedido de um cliente com o orçamento de outro
+        const editando = pedidoEditando && String(pedidoEditando.clienteId) === String(cliente.id) ? pedidoEditando : null;
 
         const btn = document.getElementById('finalizeOrderBtn');
         const originalHtml = btn.innerHTML;
         btn.disabled = true;
         btn.textContent = 'Gravando…';
         try {
-          const payload = {
-            cliente: { cliente_id: cliente.id, nome: cliente.nome },
-            vendedor_nome: state.seller || undefined,
-            itens: rows.map(({ p, it, cp }) => ({ codigo_sku: p.c, quantidade: it.qty, preco_unitario: Number(cp.toFixed(2)) })),
-          };
-          const result = await apiCriarPedido(payload);
+          const itens = rows.map(({ p, it, cp }) => ({ codigo_sku: p.c, quantidade: it.qty, preco_unitario: Number(cp.toFixed(2)) }));
+          const contexto = contextoDoOrcamento();
+          const result = editando
+            ? await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto })
+            : await apiCriarPedido({
+              cliente: { cliente_id: cliente.id, nome: cliente.nome },
+              vendedor_nome: state.seller || undefined,
+              itens,
+              contexto,
+            });
+          const offline = !!(result && result.__filaOffline);
           // Cópia de segurança em CSV no Drive - independente do pedido em si já
           // ter ido pro servidor ou ter ficado pendente na fila acima; sem
           // conexão nenhuma, entra na fila própria do Drive (ver
           // backupPedidoCsvNoGoogleDrive) e é reenviada sozinha depois.
-          const driveResultado = await backupPedidoCsvNoGoogleDrive(rows, cliente.nome);
-          let msg = result && result.__filaOffline
-            ? `Sem conexão agora — pedido de ${cliente.nome} fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
-            : `Pedido registrado no histórico de ${cliente.nome}`;
+          const driveResultado = await backupPedidoCsvNoGoogleDrive(rows, cliente.nome, !!editando);
+          let msg;
+          if (editando) {
+            msg = offline
+              ? `Sem conexão agora — a alteração do pedido de ${cliente.nome} fica salva aqui e vai pro servidor sozinha quando a rede voltar`
+              : `Pedido de ${cliente.nome} atualizado — o mesmo pedido, sem criar outro`;
+          } else {
+            msg = offline
+              ? `Sem conexão agora — pedido de ${cliente.nome} fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
+              : `Pedido registrado no histórico de ${cliente.nome}`;
+            // recém-gravado já fica aberto: se o cliente mudar alguma coisa
+            // agora, "Atualizar pedido" altera este em vez de duplicar
+            if (!offline && result && result.pedido_id) {
+              setPedidoEditando({ id: result.pedido_id, clienteId: cliente.id, clienteNome: cliente.nome, dataPedido: result.data_pedido });
+            }
+          }
           if (driveResultado === 'enviado') msg += ' · cópia CSV salva no Drive';
           else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
-          showToast(msg);
+          showToast(msg, 'longo');
+          if (!offline) atualizarPedidosSalvos();
         } catch (e) {
-          showToast('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
+          if (editando && /Pedido não encontrado/.test(e.message)) {
+            // excluído no servidor (ex.: limpeza de duplicados no Painel) - solta
+            // o vínculo pra o próximo "Finalizar" gravar como pedido novo
+            setPedidoEditando(null);
+            showToast('Esse pedido não existe mais no servidor (pode ter sido excluído). Toque em "Finalizar pedido" de novo pra gravar como pedido novo.', 'erro');
+          } else {
+            showToast('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
+          }
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalHtml;
+          renderPedidoEditando(); // rótulo do botão pode ter mudado (pedido novo agora aberto pra edição)
         }
+      }
+
+      // ---------------- Pedido salvo: reabrir pra alterar ----------------
+      // O cliente quer mudar a quantidade ou incluir produto num pedido já
+      // fechado: em vez de fechar outro pedido (vários do mesmo cliente no
+      // histórico, mais um CSV), o vendedor reabre o pedido no orçamento - pelo
+      // "🧾 Pedidos" do card do cliente, pelo link no orçamento, ou abrindo o
+      // arquivo CSV do pedido - e "Finalizar" vira "Atualizar pedido".
+      // Pedido recém-finalizado já fica aberto assim. Limpar o orçamento,
+      // trocar de cliente ou "Fazer pedido novo" desligam.
+      const PEDIDO_EDITANDO_LS_KEY = 'cortagPedidoEditando_v1';
+      // Última lista de GET /api/pedidos/salvos, guardada no aparelho - reabrir
+      // e reconhecer o CSV funcionam sem internet na loja (a alteração vai pela
+      // fila offline, como o pedido novo).
+      const PEDIDOS_SALVOS_LS_KEY = 'cortagPedidosSalvos_v1';
+      let pedidoEditando = null; // { id, clienteId, clienteNome, dataPedido }
+      let pedidosSalvos = null; // { dias, pedidos: [...], atualizadoEm }
+
+      async function apiAtualizarPedido(id, payload) {
+        return apiFetch(`/api/pedidos/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }, { tipo: 'pedido', descricao: 'Alteração de pedido' });
+      }
+      // Como o orçamento está montado - vai junto do pedido pra ele reabrir
+      // com os mesmos preços (descontos/preço editado só dos itens do carrinho).
+      function contextoDoOrcamento() {
+        const doCarrinho = (obj) => Object.fromEntries(state.cart
+          .filter(it => Object.prototype.hasOwnProperty.call(obj, it.cod))
+          .map(it => [it.cod, obj[it.cod]]));
+        return {
+          uf: state.uf,
+          canal: state.canal,
+          channelDiscount: state.channelDiscount,
+          promoDiscount: state.promoDiscount,
+          paymentTerm: state.paymentTerm,
+          descontoPrazoDesligado: !!state.descontoPrazoDesligado,
+          priceOverrides: doCarrinho(state.priceOverrides),
+          qtyDiscounts: doCarrinho(state.qtyDiscounts),
+        };
+      }
+      // Volta estado/canal/classificatório/prazo/descontos do pedido salvo -
+      // roda depois de setLevCliente, que já tinha posto o canal e o % do cliente.
+      function aplicarContextoDoPedido(ctx) {
+        if (!ctx || typeof ctx !== 'object') return;
+        if (ctx.uf && STATE_BY_UF[ctx.uf]) {
+          state.uf = ctx.uf;
+          const sel = document.getElementById('stateSelect');
+          if (sel) sel.value = ctx.uf;
+        }
+        if (ctx.canal && CLASSI_POR_CANAL[ctx.canal] && ctx.canal !== state.canal) mudarCanal(ctx.canal);
+        if (typeof ctx.channelDiscount === 'number') setChannelDiscount(ctx.channelDiscount);
+        if (typeof ctx.promoDiscount === 'number') {
+          state.promoDiscount = ctx.promoDiscount;
+          const inp = document.getElementById('promoInput');
+          if (inp) inp.value = String(ctx.promoDiscount);
+        }
+        const overrides = ctx.priceOverrides || {};
+        const descontos = ctx.qtyDiscounts || {};
+        for (const it of state.cart) {
+          if (typeof overrides[it.cod] === 'number') state.priceOverrides[it.cod] = overrides[it.cod];
+          else delete state.priceOverrides[it.cod];
+          const d = Number(descontos[it.cod]) || 0;
+          if ((state.qtyDiscounts[it.cod] || 0) !== d) {
+            if (d) state.qtyDiscounts[it.cod] = d; else delete state.qtyDiscounts[it.cod];
+            state.classiAutoFilledCods.delete(it.cod); // valor do pedido, não do auto-preenchimento
+          }
+        }
+        state.paymentTerm = typeof ctx.paymentTerm === 'string' ? ctx.paymentTerm : '';
+        state.descontoPrazoDesligado = !!ctx.descontoPrazoDesligado;
+        renderCart(); // refaz as opções de prazo pelo total antes de marcar a do pedido
+        const sel = document.getElementById('paymentTermSelect');
+        if (sel && [...sel.options].some(o => o.value === state.paymentTerm)) sel.value = state.paymentTerm;
+        atualizarInfoDescontoPrazo();
+      }
+
+      function dataHoraCurta(iso) {
+        if (!iso) return '';
+        return new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }).replace(',', '');
+      }
+      function setPedidoEditando(info) {
+        pedidoEditando = info || null;
+        try {
+          if (pedidoEditando) localStorage.setItem(PEDIDO_EDITANDO_LS_KEY, JSON.stringify(pedidoEditando));
+          else localStorage.removeItem(PEDIDO_EDITANDO_LS_KEY);
+        } catch (e) { }
+        renderPedidoEditando();
+      }
+      function renderPedidoEditando() {
+        const aviso = document.getElementById('pedidoEditandoAviso');
+        if (aviso) {
+          aviso.classList.toggle('hidden', !pedidoEditando);
+          aviso.innerHTML = pedidoEditando
+            ? `<div>✏️ <b>Alterando o pedido de ${escapeHtml(pedidoEditando.clienteNome || 'cliente')}</b> · ${escapeHtml(dataHoraCurta(pedidoEditando.dataPedido))}
+                <span>"Atualizar pedido" muda este mesmo pedido, sem criar outro.</span></div>
+              <button type="button" data-pedido-novo aria-label="Fazer um pedido novo em vez de alterar este"
+                title="Fazer um pedido novo em vez de alterar este">Pedido novo</button>`
+            : '';
+        }
+        const label = document.getElementById('finalizeOrderLabel');
+        if (label) label.textContent = pedidoEditando ? 'Atualizar pedido' : 'Finalizar pedido';
+      }
+
+      function pedidosSalvosDoCliente(clienteId) {
+        return ((pedidosSalvos && pedidosSalvos.pedidos) || []).filter(p => String(p.cliente_id) === String(clienteId));
+      }
+      function atualizarBotaoPedidosSalvos() {
+        const btn = document.getElementById('precosPedidosSalvosBtn');
+        if (!btn) return;
+        const n = state.levCliente ? pedidosSalvosDoCliente(state.levCliente.id).length : 0;
+        btn.textContent = n ? `🧾 Pedidos (${n})` : '🧾 Pedidos';
+      }
+      // true = lista nova do servidor; false = sem rede (fica a cópia do aparelho)
+      async function atualizarPedidosSalvos() {
+        try {
+          const r = await apiFetch('/api/pedidos/salvos');
+          if (!r || !Array.isArray(r.pedidos)) return false;
+          pedidosSalvos = { dias: r.dias, pedidos: r.pedidos, atualizadoEm: Date.now() };
+          try { localStorage.setItem(PEDIDOS_SALVOS_LS_KEY, JSON.stringify(pedidosSalvos)); } catch (e) { }
+          return true;
+        } catch (e) {
+          return false;
+        } finally {
+          atualizarBotaoPedidosSalvos();
+        }
+      }
+
+      // Lista de pedidos salvos: do cliente escolhido (ou de todos, sem cliente).
+      let pedidosSalvosCliente = null;
+      function totalDoPedidoSalvo(p) {
+        return p.itens.reduce((soma, it) => soma + Number(it.quantidade) * Number(it.preco_unitario), 0);
+      }
+      function renderListaPedidosSalvos(estado) {
+        const cliente = pedidosSalvosCliente;
+        const dias = (pedidosSalvos && pedidosSalvos.dias) || 120;
+        const lista = cliente ? pedidosSalvosDoCliente(cliente.id) : ((pedidosSalvos && pedidosSalvos.pedidos) || []);
+        document.getElementById('pedidosSalvosSubtitulo').textContent = cliente
+          ? `Pedidos que você fechou pra ${cliente.nome} nos últimos ${dias} dias. Abra pra mudar quantidade ou incluir produto — fica o mesmo pedido.`
+          : `Pedidos que você fechou nos últimos ${dias} dias. Abra pra mudar quantidade ou incluir produto — fica o mesmo pedido.`;
+        let topo = '';
+        if (cliente) topo += '<button type="button" class="pedidosSalvosTodosBtn" data-pedidos-todos>Ver os pedidos de todos os clientes</button>';
+        if (estado === 'carregando' && !pedidosSalvos) {
+          document.getElementById('pedidosSalvosLista').innerHTML = topo + '<div class="lev-empty">Carregando…</div>';
+          return;
+        }
+        if (estado === 'offline') {
+          topo += `<div class="pedidoMinimoAviso">${pedidosSalvos
+            ? `Sem conexão — lista de ${escapeHtml(dataHoraCurta(pedidosSalvos.atualizadoEm))}. A alteração vai pro servidor sozinha quando a rede voltar.`
+            : 'Sem conexão e sem cópia da lista neste aparelho. O arquivo CSV abre mesmo assim.'}</div>`;
+        }
+        const itensHtml = lista.map(p => {
+          const aberto = pedidoEditando && String(pedidoEditando.id) === String(p.id);
+          const nItens = p.itens.length;
+          return `<div class="pedidoSalvoItem">
+            <div>
+              <b>${cliente ? '' : escapeHtml(p.cliente_nome) + ' · '}${escapeHtml(dataHoraCurta(p.data_pedido))}${aberto ? ' · aberto' : ''}</b>
+              <span>${nItens} ${nItens === 1 ? 'produto' : 'produtos'} · ${brl(totalDoPedidoSalvo(p))}${p.atualizado_em ? ' · alterado ' + escapeHtml(dataHoraCurta(p.atualizado_em)) : ''}</span>
+            </div>
+            <button type="button" data-abrir-pedido="${escapeHtml(String(p.id))}">${aberto ? 'Reabrir' : 'Abrir'}</button>
+          </div>`;
+        }).join('');
+        document.getElementById('pedidosSalvosLista').innerHTML = topo + (itensHtml || (estado === 'offline' && !pedidosSalvos ? ''
+          : `<div class="lev-empty">${cliente ? 'Nenhum pedido fechado no app pra esse cliente' : 'Nenhum pedido fechado no app'} nos últimos ${dias} dias.</div>`));
+      }
+      async function abrirPedidosSalvos(cliente) {
+        pedidosSalvosCliente = cliente || null;
+        document.getElementById('pedidosSalvosModal').classList.remove('hidden');
+        renderListaPedidosSalvos('carregando');
+        const ok = await atualizarPedidosSalvos();
+        if (!document.getElementById('pedidosSalvosModal').classList.contains('hidden')) renderListaPedidosSalvos(ok ? null : 'offline');
+      }
+      function fecharPedidosSalvos() {
+        document.getElementById('pedidosSalvosModal').classList.add('hidden');
+      }
+
+      // Põe o pedido salvo no orçamento, seleciona o cliente e liga a edição.
+      // opcoes.itens: itens de um CSV que é desse pedido (podem ter sido
+      // mudados no arquivo) - entram no lugar dos itens gravados.
+      async function abrirPedidoSalvoNoOrcamento(pedido, opcoes = {}) {
+        const origem = opcoes.itens || pedido.itens.map(it => ({ cod: String(it.codigo_sku), qty: Number(it.quantidade) }));
+        const itens = origem.filter(it => productByCod(it.cod));
+        const fora = origem.length - itens.length;
+        if (!itens.length) {
+          showToast('Nenhum produto desse pedido está no catálogo carregado agora — sincronize e tente de novo.', 'erro');
+          return false;
+        }
+        if (state.cart.length > 0 && !opcoes.jaConfirmado
+          && !await askConfirm(`Trocar os ${state.cart.length} produto(s) do orçamento atual pelos do pedido de ${pedido.cliente_nome}?`, 'Trocar')) return false;
+        fecharPedidosSalvos();
+        state.cart = itens.map(it => ({ cod: it.cod, qty: it.qty }));
+        // marca a edição antes de selecionar o cliente: setLevCliente desliga
+        // a edição quando o cliente não é o do pedido
+        setPedidoEditando({ id: pedido.id, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido });
+        setLevCliente({
+          id: pedido.cliente_id, nome: pedido.cliente_nome, documento: pedido.cliente_documento,
+          classificatorio_tipo: pedido.classificatorio_tipo, classificatorio_desconto: pedido.classificatorio_desconto,
+          codigo_oficial: pedido.codigo_oficial,
+        });
+        aplicarContextoDoPedido(pedido.contexto);
+        renderResults();
+        renderCartBar();
+        openDrawer();
+        let msg = `Pedido de ${pedido.cliente_nome} aberto — mude o que precisar e toque em "Atualizar pedido"`;
+        if (fora) msg += ` · ${fora} produto(s) fora do catálogo atual ficaram de fora`;
+        if (!pedido.contexto) msg += ' · preços pela tabela atual (pedido gravado antes de dar pra reabrir)';
+        showToast(msg, 'longo');
+        return true;
+      }
+
+      // ---- Abrir o arquivo CSV de um pedido ----
+      // Lê o CSV de pedido do app ("Código do Item;Quantidade;Preço"), o do
+      // orçamento (mesmo formato) e o do levantamento (Código;...;Pedido).
+      function numeroDoCsv(v) {
+        const t = String(v == null ? '' : v).trim();
+        if (!t) return NaN;
+        return Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+      }
+      function lerCsvDePedido(texto) {
+        const linhas = String(texto || '').replace(/^﻿/, '').split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        if (!linhas.length) return [];
+        const sep = [';', '\t', ','].find(x => linhas[0].includes(x)) || ';';
+        let celulas = linhas.map(l => l.split(sep).map(c => c.trim().replace(/^"(.*)"$/, '$1').trim()));
+        let colCod = 0, colQtd = 1;
+        if (isNaN(numeroDoCsv(celulas[0][1]))) { // 1ª linha é cabeçalho
+          const cab = celulas[0].map(c => normalize(c));
+          const iCod = cab.findIndex(c => c.includes('cod'));
+          const iQtd = cab.findIndex(c => c.includes('quant') || c === 'qtd' || c === 'qtde' || c === 'pedido');
+          if (iCod >= 0) colCod = iCod;
+          if (iQtd >= 0) colQtd = iQtd;
+          celulas = celulas.slice(1);
+        }
+        const porCod = new Map();
+        for (const c of celulas) {
+          const cod = (c[colCod] || '').trim();
+          const qtd = numeroDoCsv(c[colQtd]);
+          if (!cod || !(qtd > 0)) continue;
+          porCod.set(cod, (porCod.get(cod) || 0) + qtd);
+        }
+        return [...porCod].map(([cod, qty]) => ({ cod, qty }));
+      }
+      function mesmosItens(itensCsv, pedido) {
+        if (itensCsv.length !== pedido.itens.length) return false;
+        const porCod = new Map(itensCsv.map(i => [i.cod, i.qty]));
+        return pedido.itens.every(it => porCod.get(String(it.codigo_sku)) === Number(it.quantidade));
+      }
+      // Pelo nome do arquivo: "Pedido-Joao021026-143205.csv" (cópia do Drive,
+      // com a hora em que o pedido foi gravado/alterado) ou "Joao021026.csv"
+      // (Compartilhar → CSV, só o dia) - acha o pedido salvo daquele cliente
+      // naquela hora (±10 min) ou, sem hora, o único dele naquele dia.
+      function pedidoPeloNomeDoArquivo(nomeArquivo, candidatos) {
+        const m = /^(?:Pedido-)?([A-Za-z0-9]+?)(\d{2})(\d{2})(\d{2})(?:-(\d{2})(\d{2})(\d{2}))?(?:-alterado)?(?:\s*\(\d+\))?\.csv$/i.exec(String(nomeArquivo || '').trim());
+        if (!m) return null;
+        const [, nome, dd, mm, aa, hh, mi, ss] = m;
+        const doCliente = candidatos.filter(p => nomeAbrevArquivo(p.cliente_nome).toLowerCase() === nome.toLowerCase());
+        const momentos = (p) => [p.data_pedido, p.atualizado_em].filter(Boolean).map(d => new Date(d));
+        if (hh) {
+          const alvo = new Date(2000 + Number(aa), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss)).getTime();
+          // o mais perto da hora do arquivo (dois pedidos do cliente no mesmo intervalo)
+          const distancia = (p) => Math.min(...momentos(p).map(d => Math.abs(d.getTime() - alvo)));
+          const perto = doCliente.filter(p => distancia(p) <= 10 * 60000).sort((a, b) => distancia(a) - distancia(b));
+          return perto[0] || null;
+        }
+        const mesmoDia = doCliente.filter(p => momentos(p).some(d => d.getDate() === Number(dd) && d.getMonth() === Number(mm) - 1 && d.getFullYear() === 2000 + Number(aa)));
+        return mesmoDia.length === 1 ? mesmoDia[0] : null;
+      }
+      // Produtos em comum (pelo código) entre o CSV e o pedido, 0 a 1.
+      function semelhancaComPedido(itensCsv, pedido) {
+        const a = new Set(itensCsv.map(i => i.cod));
+        const b = new Set(pedido.itens.map(it => String(it.codigo_sku)));
+        let comum = 0;
+        for (const c of a) if (b.has(c)) comum++;
+        return comum / new Set([...a, ...b]).size;
+      }
+      async function abrirCsvDePedido(arquivo) {
+        let itensCsv = [];
+        try { itensCsv = lerCsvDePedido(await arquivo.text()); } catch (e) { }
+        if (!itensCsv.length) {
+          showToast('Não achei produtos nesse arquivo — ele precisa ter o código do produto e a quantidade (como o CSV de pedido do app).', 'erro');
+          return;
+        }
+        const online = await atualizarPedidosSalvos();
+        const todos = (pedidosSalvos && pedidosSalvos.pedidos) || [];
+        const doClienteAtual = (p) => state.levCliente && String(p.cliente_id) === String(state.levCliente.id);
+        // 1) mesmos produtos e quantidades de um pedido salvo: é ele
+        const iguais = todos.filter(p => mesmosItens(itensCsv, p));
+        const igual = iguais.find(doClienteAtual) || iguais[0];
+        if (igual) { await abrirPedidoSalvoNoOrcamento(igual); return; }
+        // 2) arquivo mexido fora do app: o nome do arquivo diz de qual pedido é
+        const peloNome = pedidoPeloNomeDoArquivo(arquivo.name, todos);
+        if (peloNome) { await abrirPedidoSalvoNoOrcamento(peloNome, { itens: itensCsv }); return; }
+        // 3) parecido com um pedido salvo (metade dos produtos ou mais): pergunta
+        let recusouParecido = false;
+        const parecidos = todos
+          .map(p => ({ p, nota: semelhancaComPedido(itensCsv, p) + (doClienteAtual(p) ? 0.01 : 0) }))
+          .filter(x => x.nota >= 0.5)
+          .sort((x, y) => y.nota - x.nota);
+        if (parecidos.length) {
+          const p = parecidos[0].p;
+          const comum = p.itens.filter(it => itensCsv.some(i => i.cod === String(it.codigo_sku))).length;
+          const alterar = await askConfirm(
+            `Esse arquivo parece o pedido de ${p.cliente_nome} de ${dataHoraCurta(p.data_pedido)} (${comum} produto(s) em comum).\n\nAbrir como alteração desse pedido? Se não, os produtos do arquivo entram como um pedido novo.`,
+            'Alterar esse pedido', { cancelarLabel: 'Pedido novo' });
+          if (alterar) { await abrirPedidoSalvoNoOrcamento(p, { itens: itensCsv }); return; }
+          recusouParecido = true;
+        }
+        // 4) não é de pedido salvo nenhum: os produtos entram como orçamento novo
+        const noCatalogo = itensCsv.filter(i => productByCod(i.cod));
+        const fora = itensCsv.length - noCatalogo.length;
+        if (!noCatalogo.length) {
+          showToast('Nenhum produto desse arquivo está no catálogo carregado agora — sincronize e tente de novo.', 'erro');
+          return;
+        }
+        if (state.cart.length > 0 && !await askConfirm(`Trocar os ${state.cart.length} produto(s) do orçamento atual pelos ${noCatalogo.length} do arquivo?`, 'Trocar')) return;
+        fecharPedidosSalvos();
+        state.cart = noCatalogo.map(i => ({ cod: i.cod, qty: i.qty }));
+        for (const it of state.cart) autoFillClassificatorioDiscount(it.cod);
+        setPedidoEditando(null);
+        renderResults();
+        renderCart();
+        renderCartBar();
+        openDrawer();
+        let msg = `${noCatalogo.length} produto(s) do arquivo no orçamento`;
+        if (recusouParecido) msg += ' — "Finalizar" grava um pedido novo';
+        else if (online || pedidosSalvos) msg += ' — não é de nenhum pedido salvo, então "Finalizar" grava um pedido novo';
+        else msg += ' — sem conexão pra conferir se já é um pedido salvo; "Finalizar" grava um pedido novo';
+        if (fora) msg += ` · ${fora} fora do catálogo atual ficaram de fora`;
+        showToast(msg, 'longo');
+      }
+
+      function initPedidosSalvos() {
+        try { pedidoEditando = JSON.parse(localStorage.getItem(PEDIDO_EDITANDO_LS_KEY)) || null; } catch (e) { pedidoEditando = null; }
+        try { pedidosSalvos = JSON.parse(localStorage.getItem(PEDIDOS_SALVOS_LS_KEY)) || null; } catch (e) { pedidosSalvos = null; }
+        if (pedidosSalvos && !Array.isArray(pedidosSalvos.pedidos)) pedidosSalvos = null;
+        // cliente do rascunho (restaurado antes, em initLevantamento) não é o do
+        // pedido aberto: solta a edição - "Atualizar" nunca altera pedido de outro cliente
+        if (pedidoEditando && (!state.levCliente || String(state.levCliente.id) !== String(pedidoEditando.clienteId))) {
+          setPedidoEditando(null);
+        }
+        renderPedidoEditando();
+        atualizarBotaoPedidosSalvos();
+        atualizarPedidosSalvos(); // sem await de propósito - deixa a lista pronta (e a cópia no aparelho) em segundo plano
+        document.getElementById('pedidoEditandoAviso').addEventListener('click', (e) => {
+          if (!e.target.closest('[data-pedido-novo]')) return;
+          setPedidoEditando(null);
+          showToast('Ok — "Finalizar pedido" grava um pedido novo com os produtos do orçamento', 'longo');
+        });
+        document.getElementById('abrirPedidoSalvoBtn').addEventListener('click', () => abrirPedidosSalvos(state.levCliente));
+        document.getElementById('pedidosSalvosFecharBtn').addEventListener('click', fecharPedidosSalvos);
+        document.getElementById('pedidosSalvosLista').addEventListener('click', (e) => {
+          if (e.target.closest('[data-pedidos-todos]')) {
+            pedidosSalvosCliente = null;
+            renderListaPedidosSalvos(null);
+            return;
+          }
+          const btn = e.target.closest('[data-abrir-pedido]');
+          if (!btn) return;
+          const pedido = ((pedidosSalvos && pedidosSalvos.pedidos) || []).find(p => String(p.id) === btn.dataset.abrirPedido);
+          if (pedido) abrirPedidoSalvoNoOrcamento(pedido);
+        });
+        const input = document.getElementById('pedidoCsvInput');
+        document.getElementById('pedidoCsvAbrirBtn').addEventListener('click', () => input.click());
+        input.addEventListener('change', async () => {
+          const arquivo = input.files && input.files[0];
+          input.value = ''; // deixa abrir o mesmo arquivo de novo
+          if (arquivo) await abrirCsvDePedido(arquivo);
+        });
       }
 
       // ---------------- Abas Produtos e Clientes ----------------
@@ -14729,6 +15261,9 @@
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PRICE_LIST_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(CART_LS_KEY); } catch (e) { }
+        try { localStorage.removeItem(PEDIDOS_SALVOS_LS_KEY); } catch (e) { }
+        pedidosSalvos = null;
+        setPedidoEditando(null);
       }
 
       // Callback do Google Identity Services (google.accounts.id) quando a pessoa
@@ -14896,6 +15431,7 @@
           initLevantamento();
           initLevSaveOpen();
           initPrecosCliente();
+          initPedidosSalvos();
           initLevShare();
           initCsvNamePrompt();
           initCsvDestino();

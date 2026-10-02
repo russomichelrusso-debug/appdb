@@ -39,6 +39,17 @@ async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
   return depois.rows[0].id;
 }
 
+// "Como o orçamento estava montado" (estado, canal, descontos, preços
+// editados - ver contextoDoOrcamento no index.html), guardado junto do pedido
+// do app pra ele reabrir com os mesmos preços. Só objeto simples e pequeno;
+// qualquer outra coisa vira NULL em vez de recusar o pedido.
+const CONTEXTO_MAX_BYTES = 20000;
+function contextoParaGravar(contexto) {
+  if (!contexto || typeof contexto !== 'object' || Array.isArray(contexto)) return null;
+  const json = JSON.stringify(contexto);
+  return json.length <= CONTEXTO_MAX_BYTES ? json : null;
+}
+
 // Finaliza/grava um pedido. Corpo esperado:
 // {
 //   cliente: { cliente_id? , nome, documento?, contato? },
@@ -48,10 +59,11 @@ async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
 //   data_pedido?: "2026-08-01",   // data original do documento, se souber (senão usa agora)
 //   pdf_modificado_em?: "...",    // data de modificação do ARQUIVO PDF (metadado), pra saber qual versão é mais nova
 //   origem?: "app" | "pdf",       // de onde veio esse registro
+//   contexto?: { uf, canal, ... }, // como o orçamento estava montado (só pedido do app, pra reabrir e editar)
 //   itens: [{ codigo_sku, quantidade, preco_unitario, descricao? }, ...]
 // }
 router.post('/', async (req, res) => {
-  const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, pdf_modificado_em, origem } = req.body;
+  const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, pdf_modificado_em, origem, contexto } = req.body;
   if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
   if (pdf_modificado_em && new Date(pdf_modificado_em) > new Date()) {
@@ -123,10 +135,10 @@ router.post('/', async (req, res) => {
       atualizado = true;
     } else {
       const pedidoResult = await client.query(
-        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8)
+        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb)
          RETURNING id, data_pedido`,
-        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null, pdf_modificado_em || null, req.usuario.id]
+        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto)]
       );
       pedidoId = pedidoResult.rows[0].id;
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
@@ -157,6 +169,116 @@ router.post('/', async (req, res) => {
     // mesmos (ex: "Produto com código X não encontrado") não tem .code e é uma
     // mensagem pensada pra quem está usando o app ler.
     res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar pedido.' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
+// Pedidos que o próprio vendedor fechou no app nos últimos DIAS_PEDIDOS_SALVOS
+// dias, com os itens - lista do "🧾 Pedidos" (reabrir pra editar quando o
+// cliente quer mudar alguma coisa, em vez de fechar outro pedido) e base pra
+// reconhecer um CSV de pedido aberto de volta no app (mesmos códigos e
+// quantidades = mesmo pedido). Só origem 'app': cotação em PDF tem a versão
+// dela no próprio PDF. Os dados do cliente vêm junto pro app selecionar o
+// cliente com canal/classificatório ao reabrir.
+const DIAS_PEDIDOS_SALVOS = 120;
+const LIMITE_PEDIDOS_SALVOS = 150;
+router.get('/salvos', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT ped.id, ped.data_pedido, ped.atualizado_em, ped.contexto,
+              c.id AS cliente_id, c.nome AS cliente_nome, c.documento AS cliente_documento,
+              c.classificatorio_tipo, c.classificatorio_desconto, c.codigo_oficial,
+              json_agg(json_build_object('codigo_sku', pr.codigo_sku, 'quantidade', pi.quantidade,
+                                         'preco_unitario', pi.preco_unitario) ORDER BY pi.id) AS itens
+       FROM pedidos ped
+       JOIN clientes c ON c.id = ped.cliente_id
+       JOIN pedido_itens pi ON pi.pedido_id = ped.id
+       JOIN produtos pr ON pr.id = pi.produto_id
+       WHERE ped.origem = 'app' AND ped.usuario_id = $1
+         AND COALESCE(ped.atualizado_em, ped.data_pedido) >= now() - make_interval(days => $2)
+       GROUP BY ped.id, c.id
+       ORDER BY COALESCE(ped.atualizado_em, ped.data_pedido) DESC
+       LIMIT $3`,
+      [req.usuario.id, DIAS_PEDIDOS_SALVOS, LIMITE_PEDIDOS_SALVOS]
+    );
+    res.json({ dias: DIAS_PEDIDOS_SALVOS, pedidos: result.rows });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar os pedidos salvos.' });
+  }
+});
+
+// Itens de um pedido vindos do app: código, quantidade > 0 e preço >= 0.
+function itensValidos(itens) {
+  return Array.isArray(itens) && itens.length > 0 && itens.every(it => it
+    && typeof it.codigo_sku === 'string' && it.codigo_sku.trim() !== ''
+    && Number.isFinite(Number(it.quantidade)) && Number(it.quantidade) > 0
+    && Number.isFinite(Number(it.preco_unitario)) && Number(it.preco_unitario) >= 0);
+}
+
+// Atualiza um pedido do app já gravado (reaberto pra editar): troca os itens
+// e o contexto, marca atualizado_em e mantém o mesmo id, cliente e data do
+// pedido - um registro só por pedido, em vez de um novo a cada mudança do
+// cliente. Só o autor (ou um admin) e só pedido com origem 'app'. Corpo:
+// { itens: [{ codigo_sku, quantidade, preco_unitario }], contexto?, vendedor_nome?, observacao? }
+router.patch('/:id', async (req, res) => {
+  const { itens, contexto, vendedor_nome, observacao } = req.body || {};
+  if (!itensValidos(itens)) return res.status(400).json({ erro: 'Informe ao menos um item, com código, quantidade e preço.' });
+
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    // FOR UPDATE: duas atualizações do mesmo pedido ao mesmo tempo (ex.: a
+    // fila offline reenviando) não regravam os itens em paralelo.
+    const atualResult = await client.query(
+      'SELECT id, cliente_id, origem, usuario_id FROM pedidos WHERE id = $1 FOR UPDATE',
+      [req.params.id]
+    );
+    const atual = atualResult.rows[0];
+    if (!atual) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Pedido não encontrado — pode ter sido excluído.' });
+    }
+    if (atual.origem !== 'app') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ erro: 'Só pedido fechado no app pode ser editado por aqui.' });
+    }
+    if (atual.usuario_id !== req.usuario.id && !req.usuario.is_admin) {
+      await client.query('ROLLBACK');
+      return res.status(403).json({ erro: 'Esse pedido foi gravado por outro usuário — só ele ou um administrador pode alterá-lo.' });
+    }
+
+    // acha todos os produtos antes de apagar os itens antigos: código que não
+    // existe recusa a edição já aqui, com o pedido intacto
+    const produtoIds = [];
+    for (const item of itens) produtoIds.push(await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), null));
+    const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
+    const upd = await client.query(
+      `UPDATE pedidos SET contexto = $1::jsonb, atualizado_em = now(),
+                          vendedor_id = COALESCE($2, vendedor_id), observacao = COALESCE($3, observacao)
+       WHERE id = $4 RETURNING id, cliente_id, data_pedido, atualizado_em`,
+      [contextoParaGravar(contexto), vendedorId, observacao || null, atual.id]
+    );
+    await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [atual.id]);
+    for (let i = 0; i < itens.length; i++) {
+      await client.query(
+        'INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario) VALUES ($1, $2, $3, $4)',
+        [atual.id, produtoIds[i], Number(itens[i].quantidade), Number(itens[i].preco_unitario)]
+      );
+    }
+
+    await client.query('COMMIT');
+    const pedido = upd.rows[0];
+    console.log(`Pedido #${pedido.id} EDITADO no app (cliente ${pedido.cliente_id}, ${itens.length} item(ns)).`);
+    res.json({ pedido_id: pedido.id, cliente_id: pedido.cliente_id, data_pedido: pedido.data_pedido, atualizado_em: pedido.atualizado_em, atualizado: true });
+  } catch (e) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
+    console.error(e);
+    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao atualizar pedido.' });
   } finally {
     if (client) client.release();
   }

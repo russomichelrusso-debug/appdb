@@ -936,6 +936,65 @@ async function main() {
   authToken = tokenAntesCotacao;
   assert(res.status === 403, 'cotação: outro usuário (não admin) não sobrescreve a cotação de quem gravou');
 
+  // 18e2) Reabrir pedido do app pra editar (cliente quer mudar quantidade ou
+  // incluir produto): GET /api/pedidos/salvos lista os pedidos do próprio
+  // vendedor com itens, cliente e contexto; PATCH /api/pedidos/:id troca os
+  // itens do MESMO pedido (sem criar outro). Só o autor/admin, só origem 'app'.
+  const contextoPedido = { uf: 'SC', canal: 'ATACADO', channelDiscount: 22, paymentTerm: 'A Vista', qtyDiscounts: { '61362': 5 } };
+  res = await req('POST', '/api/pedidos', {
+    cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, vendedor_nome: 'Michel Russo', contexto: contextoPedido,
+    itens: [{ codigo_sku: '60863', quantidade: 20, preco_unitario: 28.59 }],
+  });
+  const pedidoEditavelId = res.body.pedido_id;
+  const dataPedidoEditavel = res.body.data_pedido;
+  let salvos = await req('GET', '/api/pedidos/salvos');
+  let salvo = salvos.body && salvos.body.pedidos.find(p => p.id === pedidoEditavelId);
+  assert(
+    salvos.status === 200 && salvo && salvo.cliente_nome === 'João Silva Materiais' && salvo.contexto && salvo.contexto.canal === 'ATACADO'
+      && salvo.itens.length === 1 && salvo.itens[0].codigo_sku === '60863' && salvo.itens[0].quantidade === 20
+      && !salvos.body.pedidos.some(p => p.id === pedidoCotacaoId),
+    `pedidos salvos: lista o pedido do app com itens, cliente e contexto (e não a cotação em PDF): ${JSON.stringify(salvos.body && salvos.body.pedidos.map(p => p.id))}`
+  );
+  const novoContexto = { ...contextoPedido, paymentTerm: '28 dias' };
+  res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { contexto: novoContexto, itens: [
+    { codigo_sku: '60863', quantidade: 30, preco_unitario: 28.59 }, { codigo_sku: '61362', quantidade: 2, preco_unitario: 206.55 },
+  ] });
+  const itensEditados = mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId);
+  assert(
+    res.status === 200 && res.body.atualizado === true && res.body.pedido_id === pedidoEditavelId && res.body.data_pedido === dataPedidoEditavel
+      && res.body.atualizado_em && itensEditados.length === 2 && itensEditados.some(i => i.quantidade === 30) && itensEditados.some(i => i.quantidade === 2),
+    `editar pedido: troca os itens do mesmo pedido, mantém a data do pedido e marca atualizado_em: ${JSON.stringify(itensEditados)}`
+  );
+  salvos = await req('GET', '/api/pedidos/salvos');
+  salvo = salvos.body.pedidos.filter(p => p.id === pedidoEditavelId);
+  assert(salvo.length === 1 && salvo[0].itens.length === 2 && salvo[0].contexto.paymentTerm === '28 dias' && salvos.body.pedidos[0].id === pedidoEditavelId,
+    'editar pedido: continua um pedido só, com os itens e o contexto novos, no topo da lista (editado por último)');
+  res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: '60863', quantidade: 0, preco_unitario: 28.59 }] });
+  assert(res.status === 400, 'editar pedido: recusa item com quantidade zero');
+  res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [] });
+  assert(res.status === 400, 'editar pedido: recusa pedido sem itens');
+  res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 1 }] });
+  assert(res.status === 400 && res.body.erro.includes('não encontrado') && mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId).length === 2,
+    'editar pedido: produto inexistente recusa sem perder os itens que já estavam gravados (rollback)');
+  res = await req('PATCH', `/api/pedidos/${pedidoCotacaoId}`, { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
+  assert(res.status === 400, 'editar pedido: cotação importada do PDF não é editada por aqui');
+  res = await req('PATCH', '/api/pedidos/999999', { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
+  assert(res.status === 404, 'editar pedido: pedido inexistente responde 404');
+  authToken = tokenOutro;
+  res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
+  const salvosOutro = await req('GET', '/api/pedidos/salvos');
+  authToken = tokenAntesCotacao;
+  assert(res.status === 403, 'editar pedido: outro usuário (não admin) não altera o pedido de quem gravou');
+  assert(salvosOutro.status === 200 && !salvosOutro.body.pedidos.some(p => p.id === pedidoEditavelId),
+    'pedidos salvos: cada vendedor vê só os pedidos que ele fechou');
+  res = await req('POST', '/api/pedidos', {
+    cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, contexto: { lixo: 'x'.repeat(30000) },
+    itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }],
+  });
+  salvos = await req('GET', '/api/pedidos/salvos');
+  salvo = salvos.body.pedidos.find(p => p.id === res.body.pedido_id);
+  assert(res.status === 201 && salvo && salvo.contexto === null, 'pedido: contexto grande demais é ignorado (grava o pedido sem ele)');
+
   // 18f) Pedido do app não conta em dobro com o faturado oficial
   // (routes/lib/comprasApp.js): o vendedor fecha no app e o ERP fatura dias
   // depois - antes eram duas compras e a Rotatividade saía "a cada ~5 dias".
