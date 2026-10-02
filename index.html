@@ -2973,34 +2973,85 @@
       background: var(--danger);
     }
 
+    /* Ações do card: ícone de traço (como os do topo) com o nome embaixo,
+       colunas iguais - 4 nomes inteiros numa linha. Contagem (sugestões,
+       pedidos salvos) vai na bolinha do ícone; botão escondido libera o
+       espaço pros outros. */
     .clienteAcoes {
       display: flex;
-      gap: 6px;
+      gap: 4px;
       margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px solid var(--hairline);
     }
 
     .clienteAcao {
-      flex: 1 1 auto;
+      flex: 1 1 0;
       min-width: 0;
-      height: 40px;
-      padding: 0 8px;
-      border: 1px solid var(--hairline);
-      border-radius: 999px;
-      background: var(--white);
+      min-height: 60px;
+      padding: 6px 2px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border: none;
+      border-radius: var(--r-sm);
+      background: transparent;
       color: var(--ink);
       font-size: 12px;
       font-weight: 600;
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
       cursor: pointer;
     }
 
-    .clienteAcao--destaque {
-      background: var(--warning-bg);
-      border-color: transparent;
-      color: var(--warning);
+    .clienteAcao:active {
+      background: var(--fill);
+    }
+
+    .clienteAcaoIc {
+      position: relative;
+      width: 40px;
+      height: 32px;
+      border-radius: var(--r-sm);
+      background: var(--fill);
+      display: grid;
+      place-items: center;
+    }
+
+    .clienteAcaoIc svg {
+      width: 18px;
+      height: 18px;
+    }
+
+    .clienteAcaoNum {
+      position: absolute;
+      top: -6px;
+      right: -8px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      box-sizing: border-box;
+      border-radius: 9px;
+      background: var(--gray);
+      color: var(--on-accent);
+      font-size: 11px;
       font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+    }
+
+    .clienteAcaoNum:empty {
+      display: none;
+    }
+
+    .clienteAcao--destaque .clienteAcaoIc {
+      background: var(--warning-bg);
+      color: var(--warning);
+    }
+
+    .clienteAcao--destaque .clienteAcaoNum {
+      background: var(--warning-strong);
     }
 
     .clientPickerAtual {
@@ -4942,13 +4993,17 @@
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="precosSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
-              title="Produtos que o cliente não compra há mais de 1 ano"></button>
+              title="Produtos que o cliente não compra há mais de 1 ano">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 00-4 12.7V16h8v-1.3A7 7 0 0012 2z" /></svg><span class="clienteAcaoNum"></span></span>Sugestões</button>
             <button type="button" class="clienteAcao hidden" id="precosFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
-              title="Abrir a ficha cadastral (CNPJ) desse cliente">📄 Ficha</button>
+              title="Abrir a ficha cadastral (CNPJ) desse cliente">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h5" /></svg></span>Ficha</button>
             <button type="button" class="clienteAcao" id="precosPedidosSalvosBtn" aria-label="Pedidos salvos desse cliente: reabrir pra alterar"
-              title="Pedidos que você já fechou pra esse cliente — reabrir pra alterar">🧾 Pedidos</button>
-            <button type="button" class="clienteAcao" id="precosProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
-              title="Ver produtos que esse cliente já comprou">🛒 Comprados</button>
+              title="Pedidos que você já fechou pra esse cliente — reabrir pra alterar">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" /><path d="M9 7h6" /><path d="M9 11h6" /><path d="M9 15h4" /></svg><span class="clienteAcaoNum"></span></span>Pedidos</button>
+            <button type="button" class="clienteAcao" id="precosProdutosClienteBtn" aria-label="Histórico: produtos que esse cliente já comprou (Curva ABC)"
+              title="Produtos que esse cliente já comprou (Curva ABC)">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg></span>Histórico</button>
           </div>
         </div>
       </div>
@@ -5064,11 +5119,14 @@
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="levSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
-              title="Produtos que o cliente não compra há mais de 1 ano"></button>
+              title="Produtos que o cliente não compra há mais de 1 ano">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 00-4 12.7V16h8v-1.3A7 7 0 0012 2z" /></svg><span class="clienteAcaoNum"></span></span>Sugestões</button>
             <button type="button" class="clienteAcao hidden" id="levFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
-              title="Abrir a ficha cadastral (CNPJ) desse cliente">📄 Ficha</button>
-            <button type="button" class="clienteAcao" id="levProdutosClienteBtn" aria-label="Ver produtos que esse cliente já comprou"
-              title="Ver produtos que esse cliente já comprou">🛒 Comprados</button>
+              title="Abrir a ficha cadastral (CNPJ) desse cliente">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h5" /></svg></span>Ficha</button>
+            <button type="button" class="clienteAcao" id="levProdutosClienteBtn" aria-label="Histórico: produtos que esse cliente já comprou (Curva ABC)"
+              title="Produtos que esse cliente já comprou (Curva ABC)">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg></span>Histórico</button>
           </div>
         </div>
       </div>
@@ -8337,7 +8395,7 @@
       // ---------------- Sugestões de recompra ----------------
       // Tipos de produto (variações agrupadas) que o cliente não compra há mais
       // de 1 ano - lembrete pro vendedor oferecer de novo. Só abre pelo botão
-      // "💡 N sugestões" na barra do cliente (Pedido e Levantamento); o botão
+      // "Sugestões" (com o número na bolinha) na barra do cliente (Pedido e Levantamento); o botão
       // só aparece quando há sugestão. Calculado no servidor
       // (GET /api/clientes/:id/sugestoes-recompra), guardado por cliente na sessão.
       const SUGESTOES_CACHE = new Map();
@@ -8345,8 +8403,10 @@
         const mostrar = (lista) => ['precos', 'lev'].forEach(p => {
           const btn = document.getElementById(p + 'SugestoesBtn');
           if (!btn) return;
-          btn.textContent = lista && lista.length ? `💡 ${lista.length} sugest${lista.length === 1 ? 'ão' : 'ões'}` : '';
-          btn.classList.toggle('hidden', !(lista && lista.length));
+          const n = lista ? lista.length : 0;
+          btn.querySelector('.clienteAcaoNum').textContent = n || '';
+          btn.setAttribute('aria-label', `Sugestões de recompra: ${n} produto(s) que o cliente não compra há mais de 1 ano`);
+          btn.classList.toggle('hidden', !n);
         });
         mostrar(null);
         if (!cliente || !cliente.id) return;
@@ -12405,7 +12465,8 @@
         const btn = document.getElementById('precosPedidosSalvosBtn');
         if (!btn) return;
         const n = state.levCliente ? pedidosSalvosDoCliente(state.levCliente.id).length : 0;
-        btn.textContent = n ? `🧾 Pedidos (${n})` : '🧾 Pedidos';
+        btn.querySelector('.clienteAcaoNum').textContent = n || '';
+        btn.setAttribute('aria-label', `Pedidos salvos desse cliente (${n}): reabrir pra alterar`);
       }
       // true = lista nova do servidor; false = sem rede (fica a cópia do aparelho)
       async function atualizarPedidosSalvos() {
