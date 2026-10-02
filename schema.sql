@@ -23,6 +23,32 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_pic BOOLEAN DEFAUL
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS classificatorio_vl_acordo NUMERIC;
 CREATE INDEX IF NOT EXISTS idx_clientes_matriz_grupo ON clientes (matriz_grupo) WHERE matriz_grupo IS NOT NULL;
 
+-- Foto dos números financeiros da planilha "Classificatório" do ERP, um por
+-- cliente, trocada a cada importação (a do relatório mais novo vence). São os
+-- números OFICIAIS da apuração mensal do ERP - fechada até `apurado_ate`
+-- (maior Ult.Compra da planilha), por isso podem ficar abaixo do que o app
+-- soma ao vivo. Ano anterior, acumulado e 12 meses da matriz são do grupo
+-- INTEIRO no ERP (inclusive filiais de outros representantes, que não estão
+-- no app); só fat_12m_cliente é do próprio cliente. `diferenca` = coluna
+-- "Diferenca" (quanto falta pra manter a faixa atual ou subir pra próxima).
+CREATE TABLE IF NOT EXISTS cliente_classificatorio_erp (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  data_relatorio DATE NOT NULL,
+  apurado_ate DATE,
+  fat_ano_anterior NUMERIC,
+  fat_acumulado NUMERIC,
+  fat_12m_cliente NUMERIC,
+  fat_12m_matriz NUMERIC,
+  diferenca NUMERIC,
+  gestor TEXT,
+  situacao TEXT,
+  cidade TEXT,
+  uf TEXT,
+  cliente_desde DATE,
+  ultima_compra DATE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS produtos (
   id SERIAL PRIMARY KEY,
   codigo_sku TEXT UNIQUE NOT NULL,

@@ -269,6 +269,28 @@ Supabase, sem PR — não é mudança de código.
     Continua contando em Entrada de Pedidos (entrou de fato) e no que o cliente comprou (Histórico,
     Rotatividade, sugestões, comprados-recentes). Toda soma nova de faturamento usa `sqlFaturadoDeFato`.
 
+- **Números oficiais da planilha Classificatório no card do cliente** (aba Clientes, 10/2026) — pedido
+  do usuário pra não precisar abrir a planilha. A importação (Painel → planilha "Classificatório")
+  grava uma foto por cliente em `cliente_classificatorio_erp` (relatório mais novo vence; data pelo
+  nome do arquivo `DD.MM.AAAA_...`, apuração = maior Ult.Compra da planilha). O card ganhou a seção
+  **"Oficial do ERP"** (12 meses da matriz × do cliente, ano anterior, acumulado, "Diferenca" lida
+  como falta pra manter/subir, última compra, situação, cidade, cliente desde, gestor) acima de
+  **"Ao vivo no app"** (o cálculo antigo). Conferido contra o relatório real de 02/10/2026:
+  - O ERP **fecha a apuração por mês** (relatório de 02/10 = até 31/08): por isso o "ao vivo" do app
+    (12 meses móveis até hoje) costuma passar do oficial. Com a janela 01/09/2025–31/08/2026 o
+    "Fat.Cliente" bateu com o banco em 235 de 254 clientes não-Rede.
+  - **Ano anterior, acumulado e "Faturamento" são da MATRIZ inteira no ERP**, inclusive filiais de
+    outros representantes (que não estão no app); só "Fat.Cliente" é do cliente. Quando a matriz do
+    ERP é maior que a soma das empresas dela no app (`fat12mOutrasEmpresas`), o veredito de faixa ao
+    vivo sairia errado ("vai cair" quando falta pouco pra subir) — o card esconde barra/meta
+    trimestral automática e o card compacto do Pedido/Levantamento usa a leitura oficial
+    (`statusComFaixaOficialErp`). Os alertas de classificatório ainda usam só o ao vivo.
+  - A importação da planilha agora **troca** a faixa gravada quando o relatório é tão ou mais novo
+    (antes só preenchia quem não tinha — 22 clientes estavam com faixa de 2023–2025, corrigidos via
+    SQL em 02/10/2026; backup em `backup_clientes_classif_20261002`).
+  - Série de 7 dígitos: o ERP **conta** no classificatório na maioria dos casos (8 clientes), mas não
+    em 2 (5569, 21650) — não aplicar o filtro `length(nr_pedido) <= 6` no classificatório.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
