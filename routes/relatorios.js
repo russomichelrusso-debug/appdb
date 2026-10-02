@@ -64,6 +64,25 @@ function canalDoCliente(classificatorioTipo) {
 const FAIXA_3_A_5_MESES = [90, 179];
 const FAIXA_6_A_8_MESES = [180, 269];
 
+// Produto entregue em mais de uma nota fiscal do mesmo pedido (faturado em
+// parte, o saldo saiu depois) vira uma linha por nota em
+// pedidos_oficiais_itens. Pra "o que o cliente comprou" continua sendo uma
+// compra só: soma as notas do mesmo pedido + código, na data da primeira -
+// senão a entrega dividida parecia recompra e encurtava a Rotatividade.
+function juntarNotasDoPedido(rows) {
+  const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+  const porChave = new Map();
+  for (const l of rows) {
+    const chave = `${l.pedido}::${l.codigo_sku}`;
+    const atual = porChave.get(chave);
+    if (!atual) { porChave.set(chave, { ...l, quantidade: Number(l.quantidade) || 0 }); continue; }
+    atual.quantidade += Number(l.quantidade) || 0;
+    if (l.data && (!atual.data || dia(l.data) < dia(atual.data))) atual.data = l.data;
+    if (!atual.descricao && l.descricao) atual.descricao = l.descricao;
+  }
+  return [...porChave.values()];
+}
+
 // Tudo que o cliente comprou, por SKU e por dia: faturado oficial (relatório
 // do ERP) + pedidos feitos pelo app. Antes Histórico/Rotatividade/Recuperar só
 // olhavam o app (desde 05/2026, uma fração das compras) - quem comprava pelo
@@ -102,6 +121,7 @@ async function comprasDoCliente(clienteId) {
   const codigosConhecidos = new Set(nomePorCodigo.keys());
   const dia = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
   const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+  oficial.rows = juntarNotasDoPedido(oficial.rows);
   // produto que saiu da tabela de preços (fora de `produtos`): nome pela
   // "Descrição" do relatório oficial, em vez de mostrar só o código
   const descricaoPorSku = new Map();
@@ -512,6 +532,7 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
     // (routes/lib/comprasApp.js); se ainda sobrar app e faturado do mesmo SKU
     // no mesmo dia, vale só a quantidade do faturado.
     const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+    oficial.rows = juntarNotasDoPedido(oficial.rows);
     const datasOficiais = indexarDatasOficiais(oficial.rows, skuDe);
     const linhas = [
       ...oficial.rows.map(l => ({ ...l, origem: 'oficial' })),

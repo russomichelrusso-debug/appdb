@@ -300,6 +300,18 @@ Supabase, sem PR — não é mudança de código.
   - Série de 7 dígitos: o ERP **conta** no classificatório na maioria dos casos (8 clientes), mas não
     em 2 (5569, 21650) — não aplicar o filtro `length(nr_pedido) <= 6` no classificatório.
 
+- **Pedido faturado em parte** (10/2026, PRs #154 e seguinte): o card do pedido oficial com selo "P"
+  lista à parte "Não faturado · em carteira" (com valor) e "Faturado" — antes ficava tudo misturado.
+  A chave de `pedidos_oficiais_itens` passou a ser `nr_pedido` + `codigo_sku` + `nota_chave` (nota
+  fiscal na linha faturada, `''` no saldo em carteira; migração no `schema.sql`, roda uma vez): antes o
+  saldo do produto faturado em parte era sobrescrito pelo faturado e, de um produto entregue em duas
+  notas, ficava só a última (1.288 de 3.683 pedidos tinham mais de uma nota). A importação
+  (`planejarCarteira`, `routes/pedidosOficiais.js`) apaga o saldo quando o produto sai da Carteira e
+  aparece no Faturamento, e todo o saldo do pedido que o relatório dá como "Atendido Total" (item
+  cancelado no ERP ficava "em carteira" pra sempre — 47 de 156 linhas de carteira em 02/10/2026).
+  Dado antigo só se completa reimportando os relatórios. Telas de "o que o cliente comprou" somam as
+  notas do mesmo pedido como uma compra (`juntarNotasDoPedido`, `routes/relatorios.js`).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -375,10 +387,11 @@ Supabase, sem PR — não é mudança de código.
     `backup_pedidos_oficiais_nov2025_20260927` (pode ser apagada quando ninguém mais precisar).
     A importação agora conserta data de planilha assim e **recusa** a que tem valor corrompido
     (ver `paraDataISO`/`lerAbaRelatorioOficial` em `index.html`).
-  - A importação **nunca apaga**: pedido de carteira cancelado no ERP continua como "carteira" até
-    a limpeza de carteira antiga (Painel → Avançado). Provável causa (não confirmada) de a Entrada
-    de Pedidos de set/2026 ter ficado R$ 8,2 mil / 2 clientes acima do oficial (último relatório
-    importado era de 25/09) — conferir de novo depois de importar um relatório atual.
+  - Pedido de carteira cancelado no ERP ficava como "carteira" até a limpeza de carteira antiga
+    (Painel → Avançado). Desde 10/2026 a importação apaga o saldo do pedido que vem como "Atendido
+    Total", mas as 47 linhas que já estavam assim em 02/10/2026 (pedidos que não voltam mais no
+    relatório) só saem por SQL ou pela limpeza. Provável causa de a Entrada de Pedidos de set/2026
+    ter ficado R$ 8,2 mil / 2 clientes acima do oficial — conferir de novo depois da limpeza.
 - Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma
   no faturamento do classificatório, na Curva ABC e no top clientes (valores pequenos). Se o painel
   oficial também a exclui dali, dá pra reaproveitar o mesmo filtro (`length(nr_pedido) <= 6`).

@@ -235,13 +235,20 @@ router.get('/:clienteId', async (req, res) => {
   }
 });
 
-// Mescla dois itens com o mesmo nr_pedido+codigo_sku, seguindo exatamente
-// a mesma regra de precedência do ON CONFLICT DO UPDATE do INSERT logo
-// abaixo - usada pra deduplicar o array `itens` ANTES do INSERT (o
-// Postgres proíbe que o UPSERT afete a mesma linha duas vezes dentro do
-// mesmo comando, e é comum o mesmo par aparecer nas duas abas da mesma
-// planilha, ex: um pedido que já foi faturado mas a linha antiga ainda
-// consta na aba "Carteira").
+// Terceira parte da chave da linha (coluna nota_chave, ver schema.sql): a
+// nota fiscal na linha faturada, '' na de carteira (o saldo ainda não
+// faturado). Produto faturado só em parte fica com as duas linhas, e o
+// entregue em duas notas, com uma linha por nota.
+function notaChave(item) {
+  return item.status === 'faturado' && item.nota_fiscal != null ? String(item.nota_fiscal) : '';
+}
+
+// Mescla dois itens com a mesma chave (nr_pedido + codigo_sku + nota_chave),
+// seguindo exatamente a mesma regra de precedência do ON CONFLICT DO UPDATE
+// do INSERT logo abaixo - usada pra deduplicar o array `itens` ANTES do
+// INSERT (o Postgres proíbe que o UPSERT afete a mesma linha duas vezes
+// dentro do mesmo comando). Só junta carteira com faturado quando a linha
+// faturada vem sem nota fiscal.
 function mesclarItemOficial(atual, novo) {
   const novoFaturado = novo.status === 'faturado';
   const atualFaturado = atual.status === 'faturado';
@@ -260,15 +267,52 @@ function mesclarItemOficial(atual, novo) {
   };
 }
 
-// Deduplica itens pelo par (nr_pedido, codigo_sku) - ver mesclarItemOficial.
+// Deduplica itens pela chave da linha - ver mesclarItemOficial.
 function deduplicarItensOficiais(itens) {
   const porChave = new Map();
   for (const item of itens) {
-    const chave = `${item.nr_pedido}::${item.codigo_sku}`;
+    const chave = `${item.nr_pedido}::${item.codigo_sku}::${notaChave(item)}`;
     const existente = porChave.get(chave);
     porChave.set(chave, existente ? mesclarItemOficial(existente, item) : item);
   }
   return Array.from(porChave.values());
+}
+
+// O que a importação faz com as linhas de carteira (o saldo não faturado),
+// olhando o relatório inteiro:
+//  - pedido que o relatório dá como "Atendido Total" (todas as linhas dele no
+//    Faturamento) não tem saldo: a linha dele que ainda venha na Carteira é
+//    ignorada e as de carteira já gravadas são apagadas (`pedidosConcluidos`)
+//    - item cancelado no ERP ficava pra sempre "em carteira" e contando na
+//    Entrada de Pedidos;
+//  - produto que está no Faturamento e não está mais na Carteira foi todo
+//    faturado: a linha de carteira dele é apagada (`paresSemSaldo`). Antes o
+//    faturado sobrescrevia a carteira; agora as duas convivem enquanto o
+//    relatório trouxer o saldo.
+// Relatório sem a aba Carteira cai na segunda regra - faturado apaga o saldo,
+// como antes.
+function planejarCarteira(itens) {
+  const situacoesPorPedido = new Map();
+  for (const it of itens) {
+    if (it.status !== 'faturado') continue;
+    const nr = String(it.nr_pedido);
+    if (!situacoesPorPedido.has(nr)) situacoesPorPedido.set(nr, new Set());
+    situacoesPorPedido.get(nr).add(it.situacao_pedido || '');
+  }
+  const pedidosConcluidos = [...situacoesPorPedido]
+    .filter(([, sits]) => sits.size === 1 && sits.has('Atendido Total'))
+    .map(([nr]) => nr);
+  const concluido = new Set(pedidosConcluidos);
+  const gravar = itens.filter(it => it.status === 'faturado' || !concluido.has(String(it.nr_pedido)));
+  const comSaldo = new Set(gravar.filter(it => it.status !== 'faturado').map(it => `${it.nr_pedido}::${it.codigo_sku}`));
+  const paresSemSaldo = new Map();
+  for (const it of gravar) {
+    const par = `${it.nr_pedido}::${it.codigo_sku}`;
+    if (it.status === 'faturado' && !comSaldo.has(par) && !concluido.has(String(it.nr_pedido))) {
+      paresSemSaldo.set(par, { nr_pedido: String(it.nr_pedido), codigo_sku: String(it.codigo_sku) });
+    }
+  }
+  return { gravar, pedidosConcluidos, paresSemSaldo: [...paresSemSaldo.values()] };
 }
 
 // Aba de pedidos à vista aguardando pagamento: uma linha por pedido (a aba
@@ -416,25 +460,46 @@ router.post('/importar', async (req, res) => {
       }
     }
 
-    const nrPedidos = itens.map(it => String(it.nr_pedido));
-    const codigosSku = itens.map(it => String(it.codigo_sku));
-    const clientesCodigos = itens.map(it => String(it.cliente_codigo_oficial));
-    const quantidades = itens.map(it => Number(it.quantidade) || 0);
-    const valores = itens.map(it => it.valor != null ? Number(it.valor) : null);
-    const dataImplant = itens.map(it => it.data_implantacao || null);
-    const dataFat = itens.map(it => it.data_faturamento || null);
-    const notasFiscais = itens.map(it => it.nota_fiscal != null ? String(it.nota_fiscal) : null);
-    const classificatorios = itens.map(it => it.classificatorio || null);
-    const transportadoras = itens.map(it => it.transportadora || null);
-    const situacoesPedido = itens.map(it => it.situacao_pedido || null);
-    const status = itens.map(it => it.status === 'faturado' ? 'faturado' : 'carteira');
-    const descricoes = itens.map(it => (it.descricao != null && String(it.descricao).trim()) ? String(it.descricao).trim().slice(0, 300) : null);
+    // Saldo que deixou de existir (ver planejarCarteira) sai antes de gravar.
+    const { gravar, pedidosConcluidos, paresSemSaldo } = planejarCarteira(itens);
+    let carteiraRemovida = 0;
+    if (pedidosConcluidos.length > 0) {
+      const r = await client.query(
+        `DELETE FROM pedidos_oficiais_itens WHERE status = 'carteira' AND nr_pedido = ANY($1::text[])`,
+        [pedidosConcluidos]
+      );
+      carteiraRemovida += r.rowCount || 0;
+    }
+    if (paresSemSaldo.length > 0) {
+      const r = await client.query(
+        `DELETE FROM pedidos_oficiais_itens poi
+         USING UNNEST($1::text[], $2::text[]) AS sem_saldo(nr_pedido, codigo_sku)
+         WHERE poi.status = 'carteira' AND poi.nr_pedido = sem_saldo.nr_pedido AND poi.codigo_sku = sem_saldo.codigo_sku`,
+        [paresSemSaldo.map(p => p.nr_pedido), paresSemSaldo.map(p => p.codigo_sku)]
+      );
+      carteiraRemovida += r.rowCount || 0;
+    }
 
-    if (itens.length > 0) await client.query(
+    const nrPedidos = gravar.map(it => String(it.nr_pedido));
+    const codigosSku = gravar.map(it => String(it.codigo_sku));
+    const clientesCodigos = gravar.map(it => String(it.cliente_codigo_oficial));
+    const quantidades = gravar.map(it => Number(it.quantidade) || 0);
+    const valores = gravar.map(it => it.valor != null ? Number(it.valor) : null);
+    const dataImplant = gravar.map(it => it.data_implantacao || null);
+    const dataFat = gravar.map(it => it.data_faturamento || null);
+    const notasFiscais = gravar.map(it => it.nota_fiscal != null ? String(it.nota_fiscal) : null);
+    const classificatorios = gravar.map(it => it.classificatorio || null);
+    const transportadoras = gravar.map(it => it.transportadora || null);
+    const situacoesPedido = gravar.map(it => it.situacao_pedido || null);
+    const status = gravar.map(it => it.status === 'faturado' ? 'faturado' : 'carteira');
+    const descricoes = gravar.map(it => (it.descricao != null && String(it.descricao).trim()) ? String(it.descricao).trim().slice(0, 300) : null);
+    const notasChave = gravar.map(notaChave);
+
+    if (gravar.length > 0) await client.query(
       `INSERT INTO pedidos_oficiais_itens
-         (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, nota_fiscal, classificatorio, transportadora, situacao_pedido, status, descricao)
-       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[])
-       ON CONFLICT (nr_pedido, codigo_sku) DO UPDATE SET
+         (nr_pedido, codigo_sku, cliente_codigo_oficial, quantidade, valor, data_implantacao, data_faturamento, nota_fiscal, classificatorio, transportadora, situacao_pedido, status, descricao, nota_chave)
+       SELECT * FROM UNNEST($1::text[], $2::text[], $3::text[], $4::numeric[], $5::numeric[], $6::date[], $7::date[], $8::text[], $9::text[], $10::text[], $11::text[], $12::text[], $13::text[], $14::text[])
+       ON CONFLICT (nr_pedido, codigo_sku, nota_chave) DO UPDATE SET
          quantidade = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status != 'faturado'
                            THEN EXCLUDED.quantidade ELSE pedidos_oficiais_itens.quantidade END,
          valor = CASE WHEN EXCLUDED.status = 'faturado' OR pedidos_oficiais_itens.status != 'faturado'
@@ -456,7 +521,7 @@ router.post('/importar', async (req, res) => {
                        THEN 'faturado' ELSE EXCLUDED.status END,
          descricao = COALESCE(EXCLUDED.descricao, pedidos_oficiais_itens.descricao),
          atualizado_em = now()`,
-      [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, transportadoras, situacoesPedido, status, descricoes]
+      [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, transportadoras, situacoesPedido, status, descricoes, notasChave]
     );
 
     // Pendentes à vista: a aba é a foto atual - troca a lista inteira (o
@@ -486,7 +551,7 @@ router.post('/importar', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado) - por ${req.usuario?.email}.`);
+    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${req.usuario?.email}.`);
     await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
     res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
                pendentesPagamento: pendentes ? pendentes.length : null, titulosAvista: titulos ? titulos.length : null });
@@ -506,5 +571,6 @@ module.exports = router;
 // subir servidor/banco - não afeta o roteamento (router continua sendo o
 // export default usado pelo server.js).
 module.exports.deduplicarItensOficiais = deduplicarItensOficiais;
+module.exports.planejarCarteira = planejarCarteira;
 module.exports.normalizarPendentesPagamento = normalizarPendentesPagamento;
 module.exports.normalizarTitulosAvista = normalizarTitulosAvista;

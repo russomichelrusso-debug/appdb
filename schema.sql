@@ -228,9 +228,9 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_atualizada_em TIMESTAM
 -- Faturamento), guardada separada da tabela "pedidos" (que é só o que o
 -- vendedor bate no próprio app). As duas fontes não têm número em comum,
 -- então em vez de tentar mesclar (arriscado), mostramos as duas lado a lado
--- no histórico do cliente. "Nr.Pedido" + "codigo_sku" é a chave - o mesmo
--- Nr.Pedido aparece na Carteira (ainda não faturado) e depois no Faturamento
--- (já faturado); reimportar não duplica, só atualiza o status pra faturado.
+-- no histórico do cliente. "Nr.Pedido" + "codigo_sku" + nota fiscal é a chave
+-- (ver `nota_chave` abaixo) - o mesmo item aparece na Carteira (ainda não
+-- faturado) e depois no Faturamento (já faturado); reimportar não duplica.
 CREATE TABLE IF NOT EXISTS pedidos_oficiais_itens (
   nr_pedido TEXT NOT NULL,
   codigo_sku TEXT NOT NULL,
@@ -258,6 +258,26 @@ ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS situacao_pedido TEXT
 -- produtos que saíram da tabela de preços (não estão em `produtos`), que
 -- antes apareciam só com o código nas telas (94 códigos em 09/2026).
 ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS descricao TEXT;
+-- Produto faturado só em parte: o saldo continua na aba Carteira e cada nota
+-- fiscal do mesmo produto vem numa linha do Faturamento. Com a chave antiga
+-- (nr_pedido + codigo_sku) essas linhas se sobrescreviam - sumia o saldo, e
+-- do produto entregue em duas notas ficava só a última. `nota_chave` é a nota
+-- fiscal na linha faturada e '' na linha de carteira (o saldo); a chave passa
+-- a ser nr_pedido + codigo_sku + nota_chave. O bloco roda uma vez só (confere
+-- se a chave primária já tem a coluna).
+ALTER TABLE pedidos_oficiais_itens ADD COLUMN IF NOT EXISTS nota_chave TEXT NOT NULL DEFAULT '';
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = ANY (c.conkey)
+    WHERE c.conrelid = 'pedidos_oficiais_itens'::regclass AND c.contype = 'p' AND a.attname = 'nota_chave'
+  ) THEN
+    UPDATE pedidos_oficiais_itens SET nota_chave = COALESCE(nota_fiscal, '') WHERE status = 'faturado';
+    ALTER TABLE pedidos_oficiais_itens DROP CONSTRAINT IF EXISTS pedidos_oficiais_itens_pkey;
+    ALTER TABLE pedidos_oficiais_itens ADD PRIMARY KEY (nr_pedido, codigo_sku, nota_chave);
+  END IF;
+END $$;
 -- Apoia as agregações por mês/semana/trimestre do Dashboard principal
 -- (ver routes/relatorios.js, GET /dashboard/resumo) - antes só havia
 -- índice por cliente_codigo_oficial.
