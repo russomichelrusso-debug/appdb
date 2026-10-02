@@ -5362,7 +5362,7 @@
     </div>
 
     <button class="cartbar hidden" id="cartBar">
-      <span class="l"><span class="badge" id="cartCount">0</span> no orçamento</span>
+      <span class="l"><span class="badge" id="cartCount">0</span> <span id="cartCountLabel">SKUs no orçamento</span></span>
       <span class="r" id="cartTotalPreview">R$ 0,00 ▸</span>
     </button>
 
@@ -7491,11 +7491,13 @@
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
         const bar = document.getElementById('cartBar');
-        const n = state.cart.reduce((a, i) => a + i.qty, 0);
+        // Mostra quantos SKUs (produtos diferentes) há no orçamento, não a soma das quantidades.
+        const n = state.cart.filter(i => i.qty > 0).length;
         if (n === 0) { bar.classList.add('hidden'); return; }
         bar.classList.remove('hidden');
         const { total } = cartTotals();
         document.getElementById('cartCount').textContent = n;
+        document.getElementById('cartCountLabel').textContent = n === 1 ? 'SKU no orçamento' : 'SKUs no orçamento';
         document.getElementById('cartTotalPreview').textContent = brl(total) + ' ▸';
       }
       function renderCart() {
