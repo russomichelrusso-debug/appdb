@@ -321,7 +321,11 @@ Supabase, sem PR — não é mudança de código.
   falta (Previsão de estoque, `PREVISAO_MAP`): item sem previsão de chegada fica fora da sugestão
   (aumentar não evita o corte) e cada item do saldo leva o selo "chega DD/MM"/"sem previsão". O
   mínimo vem da API pela UF da ficha de CNPJ (`routes/lib/saldoMinimo.js`; sem ficha = R$ 300).
-  Em aberto: quanto tempo o vendedor tem entre o saldo ficar abaixo do mínimo e o corte.
+  **Prazo: 90 dias** (usuário) — o saldo é cancelado quando o pedido passa de 90 dias, contados da
+  implantação (`prazoSaldoCarteira`): o cabeçalho "Não faturado" mostra "até DD/MM" (com os dias
+  quando faltam 15 ou menos) e, passado o prazo, avisa que já deve ter sido cancelado no lugar da
+  sugestão. Saldo abaixo do mínimo pode ser cortado antes: no e-mail de 29/09/2026 havia pedido de
+  18/09 cancelado por "Abaixo R$300,00".
 
 ## O que já tentamos e não deu certo
 
