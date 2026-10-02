@@ -448,6 +448,61 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       const fora = Number(erpRow.fat_12m_matriz) - Number(somaResult.rows[0]?.soma || 0);
       if (fora > 1) fat12mOutrasEmpresas = Math.round(fora * 100) / 100;
     }
+    // Conciliação ERP × app (pedido do usuário: "mostra no card a diferença
+    // explicada"). O ERP fecha a apuração no fim do mês (apurado_ate) e o app
+    // soma até hoje, então os dois olham janelas diferentes:
+    //   app 12m - vendas depois da apuração + vendas que o ERP ainda conta e
+    //   o app já tirou da janela = número do ERP, a menos de "outras
+    //   diferenças" (devolução/abatimento lançado no ERP - o relatório de
+    //   faturamento traz as notas pelo valor bruto - ou empresas da matriz
+    //   fora do app). Mesmo agrupamento da conta ao vivo (Rede: só o cliente).
+    let conciliacao = null;
+    if (erpRow && erpRow.apurado_ate) {
+      const r = (await pool.query(
+        `SELECT
+           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento > $2::date
+             AND poi.data_faturamento > ${JANELA_12M_SQL}), 0) AS depois_12m,
+           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento >= ($2::date + 1) - INTERVAL '12 months'
+             AND poi.data_faturamento <= ${JANELA_12M_SQL}), 0) AS fora_janela_app,
+           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento > $2::date
+             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}), 0) AS depois_ano,
+           (($2::date + 1) - INTERVAL '12 months')::date::text AS inicio_erp,
+           (${JANELA_12M_SQL})::date::text AS fim_fora_janela_app,
+           (${JANELA_12M_SQL} + INTERVAL '1 day')::date::text AS inicio_app,
+           CURRENT_DATE::text AS hoje,
+           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM CURRENT_DATE) AS mesmo_ano
+         FROM clientes c
+         JOIN clientes c2 ON c2.id = c.id ${ehRede ? '' : 'OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)'}
+         JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
+         WHERE c.id = $1 AND ${sqlFaturadoDeFato('poi')}`,
+        [req.params.id, erpRow.apurado_ate]
+      )).rows[0] || {};
+      const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
+      // Rede: o ERP só tem o 12 meses do próprio cliente comparável (ano
+      // anterior/acumulado da planilha são da rede inteira).
+      const erp12 = ehRede ? erpRow.fat_12m_cliente : erpRow.fat_12m_matriz;
+      const doze = erp12 == null ? null : {
+        app: r2(faturamento12m),
+        depoisApuracao: r2(r.depois_12m),
+        foraDaJanelaApp: r2(r.fora_janela_app),
+        erp: r2(erp12),
+      };
+      if (doze) doze.outras = r2(doze.erp - (doze.app - doze.depoisApuracao + doze.foraDaJanelaApp));
+      const ano = ehRede || erpRow.fat_acumulado == null || !r.mesmo_ano ? null : {
+        app: r2(faturamentoAnoCorrente),
+        depoisApuracao: r2(r.depois_ano),
+        erp: r2(erpRow.fat_acumulado),
+      };
+      if (ano) ano.outras = r2(ano.erp - (ano.app - ano.depoisApuracao));
+      conciliacao = {
+        periodoErp: { inicio: r.inicio_erp || null, fim: dataTxt(erpRow.apurado_ate) },
+        periodoApp: { inicio: r.inicio_app || null, fim: r.hoje || null },
+        // vendas que o ERP ainda conta e o app já tirou: de periodoErp.inicio até aqui
+        fimForaDaJanelaApp: r.fim_fora_janela_app || null,
+        doze,
+        ano,
+      };
+    }
     const numOuNull = v => (v == null ? null : Number(v));
     const erp = erpRow ? {
       dataRelatorio: dataTxt(erpRow.data_relatorio),
@@ -458,6 +513,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       fat12mMatriz: numOuNull(erpRow.fat_12m_matriz),
       diferenca: numOuNull(erpRow.diferenca),
       fat12mOutrasEmpresas,
+      conciliacao,
       leituraDiferenca: interpretarDiferencaErp({
         tipo: cliente.classificatorio_tipo,
         pic: cliente.classificatorio_pic,

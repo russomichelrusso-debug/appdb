@@ -545,6 +545,38 @@ async function main() {
     { situacao: 'manter', falta: 4000, faixaAnterior: 'Varejo Premium' });
   assert(sErp.emRiscoDeQueda === true && sErp.faltaPraManter === 4000 && sErp.faixaAnterior === 'Varejo Premium', 'aplicarLeituraErp: ERP abaixo do mínimo vira risco de queda');
 
+  // Conciliação ERP × app no status: apuração do ERP fechada há 30 dias.
+  // A = venda depois da apuração (app conta, ERP ainda não); B = venda que o
+  // ERP ainda conta e o app já tirou da janela de 12 meses; C = nos dois.
+  // ERP = B + C - 50 (devolução lançada só no ERP) -> "outras" = -50.
+  {
+    const iso = d => d.toISOString().slice(0, 10);
+    const diasAtras = n => { const d = new Date(); d.setUTCDate(d.getUTCDate() - n); return iso(d); };
+    const apurado = diasAtras(30);
+    const ap = new Date(apurado + 'T00:00:00Z');
+    const dataB = iso(new Date(Date.UTC(ap.getUTCFullYear() - 1, ap.getUTCMonth(), ap.getUTCDate() + 6)));
+    mockDb.__seed({
+      clientes: [{ id: 9062, nome: 'CLIENTE CONCILIACAO', documento: '11222333000343', codigo_oficial: 'COD9062',
+        classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_pic: false, matriz_grupo: null }],
+      pedidosOficiaisItens: [
+        { nr_pedido: 'CA1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9062', quantidade: 1, valor: 1000, data_faturamento: diasAtras(10), status: 'faturado' },
+        { nr_pedido: 'CB1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9062', quantidade: 1, valor: 700, data_faturamento: dataB, status: 'faturado' },
+        { nr_pedido: 'CC1', codigo_sku: '60863', cliente_codigo_oficial: 'COD9062', quantidade: 1, valor: 5000, data_faturamento: diasAtras(100), status: 'faturado' },
+      ],
+    });
+    res = await req('POST', '/api/clientes/classificatorio/importar', {
+      dataRelatorio: diasAtras(0), apuradoAte: apurado,
+      itens: [{ codigoOficial: 'COD9062', classificatorioTipo: 'Varejo Master', classificatorioDesconto: 20, fat12mCliente: 5650, fat12mMatriz: 5650, fatAcumulado: null }],
+    });
+    res = await req('GET', '/api/clientes/9062/classificatorio/status');
+    const doze = res.body.erp?.conciliacao?.doze;
+    assert(
+      doze && doze.app === 6000 && doze.depoisApuracao === 1000 && doze.foraDaJanelaApp === 700 && doze.erp === 5650 && doze.outras === -50
+        && res.body.erp.conciliacao.periodoErp.fim === apurado,
+      `conciliação ERP × app: app 6.000 - 1.000 (depois da apuração) + 700 (ERP ainda conta) - 50 (outras) = ERP 5.650: ${JSON.stringify(res.body.erp?.conciliacao)}`
+    );
+  }
+
   // Leitura da coluna "Diferenca" (conferida contra a planilha real de 02/10/2026)
   const { interpretarDiferencaErp } = require('../routes/clientesClassificatorio');
   let ld = interpretarDiferencaErp({ tipo: 'Varejo Premium', fat12mMatriz: 21438.53, diferenca: 8561.47 });
