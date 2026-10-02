@@ -12353,13 +12353,17 @@
           if (itemFaturado.situacao_pedido === 'Atendido Total') seloPedido = '<span class="pedidoBadge total" title="Pedido totalmente atendido">T</span>';
           else if (itemFaturado.situacao_pedido === 'Atendido Parcial') seloPedido = '<span class="pedidoBadge parcial" title="Pedido parcialmente atendido">P</span>';
         }
+        // pedido entregue em mais de uma nota: todas aparecem, e cada produto
+        // faturado diz de qual nota veio (o mesmo código pode estar em duas)
+        const notasDoPedido = [...new Set(itens.filter(it => it.status === 'faturado' && it.nota_fiscal).map(it => String(it.nota_fiscal)))];
         let nfTransp = '';
-        if (itemFaturado && (itemFaturado.nota_fiscal || itemFaturado.transportadora)) {
-          nfTransp = [itemFaturado.nota_fiscal, itemFaturado.transportadora].filter(Boolean).join(' · ');
+        if (itemFaturado && (notasDoPedido.length || itemFaturado.transportadora)) {
+          nfTransp = [notasDoPedido.join(', '), itemFaturado.transportadora].filter(Boolean).join(' · ');
         }
         const primeiro = itens[0];
+        const qtdProdutos = new Set(itens.map(it => String(it.codigo_sku))).size;
         const linhasProdutos = (lista) => lista.map(it => `
-          <div class="hcCode" style="margin-top:4px;">${escapeHtml(it.produto || ('Cód. ' + it.codigo_sku))} · Qt. ${it.quantidade}</div>
+          <div class="hcCode" style="margin-top:4px;">${escapeHtml(it.produto || ('Cód. ' + it.codigo_sku))} · Qt. ${it.quantidade}${notasDoPedido.length > 1 && it.status === 'faturado' && it.nota_fiscal ? ` · NF ${escapeHtml(String(it.nota_fiscal))}` : ''}</div>
         `).join('');
         // Pedido faturado em parte: os itens que ficaram na Carteira vêm
         // primeiro, num bloco próprio - misturados na lista, não dava pra ver
@@ -12376,8 +12380,8 @@
         } else {
           listaProdutos = linhasProdutos(itens);
           // "Parcial" sem nenhum item em carteira: o que faltou não está no
-          // relatório importado (ex.: mesmo código faturado só em parte - a
-          // linha da Carteira e a do Faturamento viram uma só na importação).
+          // relatório importado (ex.: importado antes de a nota fiscal entrar
+          // na chave - o saldo do mesmo código era sobrescrito pelo faturado).
           if (itemFaturado && itemFaturado.situacao_pedido === 'Atendido Parcial') {
             listaProdutos = `<div class="hcSecaoItens pendente">Os itens não faturados não vieram no relatório importado</div>` + listaProdutos;
           }
@@ -12391,7 +12395,7 @@
       <div class="hcName">Nr.Pedido ${escapeHtml(String(nrPedido))}${seloPedido}</div>
       ${botaoRastreio}
     </div>
-    <div class="hcCode">${itens.length} produto${itens.length === 1 ? '' : 's'}</div>
+    <div class="hcCode">${qtdProdutos} produto${qtdProdutos === 1 ? '' : 's'}</div>
     ${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>

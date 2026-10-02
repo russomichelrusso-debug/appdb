@@ -1338,6 +1338,81 @@ async function main() {
     'faturamento: item de pedido à vista com título pendente fica fora da Curva ABC e volta quando o título é pago'
   );
 
+  // 28) Produto faturado só em parte: o saldo da Carteira e cada nota fiscal
+  // do mesmo código ficam em linhas próprias (antes a chave era só
+  // nr_pedido + codigo_sku e uma linha sobrescrevia a outra - sumia o saldo, e
+  // da entrega em duas notas ficava só a última).
+  const { planejarCarteira } = require('../routes/pedidosOficiais');
+  const plano = planejarCarteira([
+    { nr_pedido: 'X1', codigo_sku: 'A', status: 'faturado', nota_fiscal: '1', situacao_pedido: 'Atendido Parcial' },
+    { nr_pedido: 'X1', codigo_sku: 'A', status: 'carteira', situacao_pedido: 'Atendido Parcial' },
+    { nr_pedido: 'X1', codigo_sku: 'B', status: 'faturado', nota_fiscal: '1', situacao_pedido: 'Atendido Parcial' },
+    { nr_pedido: 'X2', codigo_sku: 'C', status: 'faturado', nota_fiscal: '2', situacao_pedido: 'Atendido Total' },
+    { nr_pedido: 'X2', codigo_sku: 'D', status: 'carteira', situacao_pedido: 'Atendido Total' },
+  ]);
+  assert(
+    plano.gravar.length === 4 && !plano.gravar.some(it => it.codigo_sku === 'D')
+      && JSON.stringify(plano.pedidosConcluidos) === '["X2"]'
+      && JSON.stringify(plano.paresSemSaldo) === '[{"nr_pedido":"X1","codigo_sku":"B"}]',
+    `planejarCarteira: saldo do faturado em parte fica, pedido Atendido Total não fica com carteira: ${JSON.stringify(plano)}`
+  );
+
+  mockDb.__seed({
+    clientes: [{ id: 9407, nome: 'LOJA PARCIAL', codigo_oficial: 'COD9407' }],
+    pedidosOficiaisItens: [
+      // item cancelado no ERP: pedido depois sai como Atendido Total sem ele
+      { nr_pedido: 'PZ29407', codigo_sku: '62001', cliente_codigo_oficial: 'COD9407', quantidade: 3, valor: 30, data_implantacao: '2026-09-01', status: 'carteira', situacao_pedido: 'Aberto' },
+      // relatório só com o Faturamento: o faturado ainda apaga o saldo (como antes)
+      { nr_pedido: 'PZ39407', codigo_sku: '62002', cliente_codigo_oficial: 'COD9407', quantidade: 2, valor: 20, data_implantacao: '2026-09-01', status: 'carteira', situacao_pedido: 'Aberto' },
+      { nr_pedido: 'PZ39407', codigo_sku: '62003', cliente_codigo_oficial: 'COD9407', quantidade: 5, valor: 50, data_implantacao: '2026-09-01', status: 'carteira', situacao_pedido: 'Aberto' },
+    ],
+  });
+  const base9407 = { cliente_codigo_oficial: 'COD9407', cliente_nome: 'LOJA PARCIAL', data_implantacao: '2026-09-01' };
+  const linhasPC = (nr) => mockDb.__getPedidosOficiaisItens().filter(it => it.nr_pedido === nr);
+  // relatório 1: 6 de 10 faturados na NF 5001, 4 ainda na Carteira
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [
+      { ...base9407, nr_pedido: 'PZ19407', codigo_sku: '60863', status: 'carteira', quantidade: 4, valor: 40, situacao_pedido: 'Atendido Parcial' },
+      { ...base9407, nr_pedido: 'PZ19407', codigo_sku: '60863', status: 'faturado', quantidade: 6, valor: 60, data_faturamento: '2026-09-05', nota_fiscal: '5001', situacao_pedido: 'Atendido Parcial' },
+      { ...base9407, nr_pedido: 'PZ29407', codigo_sku: '62004', status: 'faturado', quantidade: 1, valor: 10, data_faturamento: '2026-09-05', nota_fiscal: '5002', situacao_pedido: 'Atendido Total' },
+      { ...base9407, nr_pedido: 'PZ39407', codigo_sku: '62002', status: 'faturado', quantidade: 2, valor: 20, data_faturamento: '2026-09-05', nota_fiscal: '5003', situacao_pedido: 'Atendido Parcial' },
+    ],
+  });
+  const pc1Rel1 = linhasPC('PZ19407');
+  assert(
+    res.status < 300 && pc1Rel1.length === 2
+      && pc1Rel1.some(it => it.status === 'carteira' && Number(it.quantidade) === 4)
+      && pc1Rel1.some(it => it.status === 'faturado' && it.nota_fiscal === '5001' && Number(it.quantidade) === 6),
+    `importação: produto faturado em parte guarda o faturado e o saldo em carteira: ${JSON.stringify(pc1Rel1)}`
+  );
+  assert(
+    linhasPC('PZ29407').length === 1 && linhasPC('PZ29407')[0].status === 'faturado'
+      && linhasPC('PZ39407').length === 2 && !linhasPC('PZ39407').some(it => it.codigo_sku === '62002' && it.status === 'carteira')
+      && linhasPC('PZ39407').some(it => it.codigo_sku === '62003' && it.status === 'carteira'),
+    `importação: pedido Atendido Total perde o que sobrou em carteira; produto faturado sem saldo sai da carteira: ${JSON.stringify([...linhasPC('PZ29407'), ...linhasPC('PZ39407')])}`
+  );
+  // relatório 2: o saldo saiu na NF 5009 - duas notas do mesmo código, sem carteira
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [
+      { ...base9407, nr_pedido: 'PZ19407', codigo_sku: '60863', status: 'faturado', quantidade: 6, valor: 60, data_faturamento: '2026-09-05', nota_fiscal: '5001', situacao_pedido: 'Atendido Total' },
+      { ...base9407, nr_pedido: 'PZ19407', codigo_sku: '60863', status: 'faturado', quantidade: 4, valor: 40, data_faturamento: '2026-09-12', nota_fiscal: '5009', situacao_pedido: 'Atendido Total' },
+    ],
+  });
+  const pc1Rel2 = linhasPC('PZ19407');
+  assert(
+    res.status < 300 && pc1Rel2.length === 2 && pc1Rel2.every(it => it.status === 'faturado')
+      && pc1Rel2.reduce((s, it) => s + Number(it.quantidade), 0) === 10,
+    `importação: entrega em duas notas do mesmo código guarda as duas, e o saldo sai da carteira: ${JSON.stringify(pc1Rel2)}`
+  );
+  // as duas notas do mesmo pedido são uma compra só no histórico/rotatividade
+  const hist9407 = await req('GET', '/api/clientes/9407/historico');
+  const disco9407 = (hist9407.body || []).find(r => r.codigo_sku === '60863');
+  assert(
+    hist9407.status === 200 && disco9407 && disco9407.total_acumulado === 10 && disco9407.num_pedidos === 1
+      && disco9407.media_dias_entre_pedidos === null && disco9407.primeira_compra === disco9407.ultima_compra,
+    `histórico: entrega dividida em duas notas conta como uma compra: ${JSON.stringify(disco9407)}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

@@ -882,22 +882,39 @@ async function query(sql, params = []) {
   // POST /api/pedidos-oficiais/importar (UNNEST em lote + ON CONFLICT) - vem
   // antes do INSERT INTO PEDIDOS abaixo, que também casaria com este SQL.
   if (s.includes('INSERT INTO PEDIDOS_OFICIAIS_ITENS') && s.includes('UNNEST')) {
-    const [nrs, skus, clis, qtds, valores, impls, fats, nfs, classis, transps, sits, status, descs] = params;
+    const [nrs, skus, clis, qtds, valores, impls, fats, nfs, classis, transps, sits, status, descs, chaves] = params;
+    // chave da linha: nr_pedido + codigo_sku + nota_chave (nota fiscal na
+    // linha faturada, '' no saldo em carteira) - ver schema.sql
+    const chaveDe = (it) => it.nota_chave ?? (it.status === 'faturado' && it.nota_fiscal != null ? String(it.nota_fiscal) : '');
     nrs.forEach((nr, i) => {
       const novo = {
         nr_pedido: nr, codigo_sku: skus[i], cliente_codigo_oficial: clis[i], quantidade: qtds[i], valor: valores[i],
         data_implantacao: impls[i], data_faturamento: fats[i], nota_fiscal: nfs[i], classificatorio: classis[i],
         transportadora: transps[i], situacao_pedido: sits[i], status: status[i], descricao: descs ? descs[i] : null,
+        nota_chave: chaves ? chaves[i] : '',
       };
-      const atual = pedidosOficiaisItens.find(it => it.nr_pedido === nr && it.codigo_sku === skus[i]);
+      const atual = pedidosOficiaisItens.find(it => it.nr_pedido === nr && it.codigo_sku === skus[i] && chaveDe(it) === novo.nota_chave);
       if (!atual) { pedidosOficiaisItens.push(novo); return; }
       const novoFaturado = novo.status === 'faturado';
       if (novoFaturado || atual.status !== 'faturado') { atual.quantidade = novo.quantidade; atual.valor = novo.valor; }
       atual.data_implantacao = novo.data_implantacao ?? atual.data_implantacao;
       atual.descricao = novo.descricao ?? atual.descricao;
-      if (novoFaturado) Object.assign(atual, { data_faturamento: novo.data_faturamento, nota_fiscal: novo.nota_fiscal, status: 'faturado' });
+      if (novoFaturado) Object.assign(atual, { data_faturamento: novo.data_faturamento, nota_fiscal: novo.nota_fiscal, situacao_pedido: novo.situacao_pedido, status: 'faturado' });
     });
     return { rows: [] };
+  }
+  // importação: saldo em carteira que deixou de existir (planejarCarteira) -
+  // pedido "Atendido Total" no relatório e produto que saiu da Carteira
+  if (s.startsWith("DELETE FROM PEDIDOS_OFICIAIS_ITENS WHERE STATUS = 'CARTEIRA' AND NR_PEDIDO = ANY($1::TEXT[])")) {
+    const antes = pedidosOficiaisItens.length;
+    pedidosOficiaisItens = pedidosOficiaisItens.filter(it => !(it.status === 'carteira' && params[0].includes(it.nr_pedido)));
+    return { rowCount: antes - pedidosOficiaisItens.length, rows: [] };
+  }
+  if (s.startsWith('DELETE FROM PEDIDOS_OFICIAIS_ITENS POI USING UNNEST')) {
+    const pares = new Set(params[0].map((nr, i) => `${nr}::${params[1][i]}`));
+    const antes = pedidosOficiaisItens.length;
+    pedidosOficiaisItens = pedidosOficiaisItens.filter(it => !(it.status === 'carteira' && pares.has(`${it.nr_pedido}::${it.codigo_sku}`)));
+    return { rowCount: antes - pedidosOficiaisItens.length, rows: [] };
   }
   if (s.includes('INSERT INTO PEDIDOS')) {
     // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id
