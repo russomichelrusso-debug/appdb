@@ -3893,6 +3893,60 @@
       word-break: break-all;
     }
 
+    /* Nome do arquivo do CSV do orçamento: sugestões em pílulas, prévia do
+       nome final e "usar sempre pra este cliente". */
+    .csvNomeSugestoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: -10px 0 12px;
+    }
+
+    .csvNomeSugestoes button {
+      border: 1px solid var(--hairline);
+      background: transparent;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .csvNomeSugestoes button.ativo {
+      border-color: var(--red);
+      color: var(--red);
+      font-weight: 600;
+    }
+
+    .minimodal-card p.csvNomePrevia {
+      margin-bottom: 12px;
+      word-break: break-all;
+    }
+
+    .minimodal-card label.csvNomeLembrar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+
+    .minimodal-card label.csvNomeLembrar.hidden {
+      display: none;
+    }
+
+    .minimodal-card .csvNomeLembrar input {
+      width: auto;
+      margin: 0;
+      padding: 0;
+    }
+
     /* ---------- Comparação de clientes ao mesclar ---------- */
     .mergeCards {
       display: flex;
@@ -5524,9 +5578,13 @@
     <div class="minimodal hidden" id="csvNameModal">
       <div class="minimodal-card">
         <h3>Salvar orçamento em CSV</h3>
-        <p>O nome do cliente entra no nome do arquivo, pra achar mais fácil depois.</p>
-        <label for="csvClientName">Nome do cliente</label>
-        <input type="text" id="csvClientName" placeholder="Ex: João Silva Materiais" autocomplete="off">
+        <p>Dê um nome que diferencie o cliente — "Deposito", "Comercial", "Casa"… se repetem em muitos.</p>
+        <label for="csvClientName">Nome do arquivo</label>
+        <input type="text" id="csvClientName" placeholder="Ex: Deposito Sao Jose" autocomplete="off">
+        <div class="csvNomeSugestoes" id="csvNomeSugestoes"></div>
+        <p class="csvNomePrevia" id="csvNomePrevia"></p>
+        <label class="csvNomeLembrar" id="csvNomeLembrarRow"><input type="checkbox" id="csvNomeLembrar" checked>
+          Usar sempre esse nome pra este cliente</label>
         <div class="minimodal-btnrow">
           <button id="csvNameCancel">Cancelar</button>
           <button id="csvNameConfirm">Baixar CSV</button>
@@ -8502,8 +8560,8 @@
       }
       // Nome do arquivo do levantamento com o cliente inteiro (pedido do
       // usuário): "Levantamento-comercial-de-ferragens-cofebral-260926.pdf".
-      // Não usa csvFileNameFor (só a 1ª palavra) - esse é o formato do CSV do
-      // orçamento, que continua igual.
+      // Não usa csvFileNameFor (1ª palavra ou o nome escolhido pro cliente) -
+      // esse é o formato do CSV do orçamento, que continua igual.
       function levFileNameFor(extensao) {
         const cliente = sanitizeFileNamePart(state.levCliente ? state.levCliente.nome : '').slice(0, 50).replace(/-+$/, '');
         const d = new Date();
@@ -9120,17 +9178,70 @@
         const primeiraPalavra = (semAcento.trim().split(/\s+/)[0] || 'Cliente').replace(/[^a-zA-Z0-9]/g, '') || 'Cliente';
         return primeiraPalavra.charAt(0).toUpperCase() + primeiraPalavra.slice(1);
       }
-      // Nome do arquivo no formato NomeDDMMAA (ex: "Joao240826.csv") - primeiro
-      // nome do cliente, sem acento/espaço, seguido de dia+mês+ano com 2 dígitos.
-      function csvFileNameFor(clientName) {
-        const nomeAbrev = nomeAbrevArquivo(clientName);
+      // Nome que o vendedor escolheu pro arquivo de um cliente (pedido do
+      // usuário: "DEPOSITO", "COMERCIAL"… são comuns no ramo e vários clientes
+      // viravam "Deposito260926.csv"). Fica no aparelho, por id do cliente, e
+      // vale pro CSV do orçamento e pra cópia do pedido no Drive; sem nome
+      // escolhido, continua a 1ª palavra (nomeAbrevArquivo).
+      const NOME_ARQUIVO_CLIENTE_LS_KEY = 'cortagNomeArquivoCliente_v1';
+      function nomesArquivoSalvos() {
+        try { return JSON.parse(localStorage.getItem(NOME_ARQUIVO_CLIENTE_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function nomeArquivoSalvo(clienteId) {
+        if (clienteId == null) return '';
+        return nomesArquivoSalvos()[String(clienteId)] || '';
+      }
+      function salvarNomeArquivoCliente(clienteId, nome) {
+        if (clienteId == null) return;
+        const nomes = nomesArquivoSalvos();
+        if (nome) nomes[String(clienteId)] = nome;
+        else delete nomes[String(clienteId)];
+        try { localStorage.setItem(NOME_ARQUIVO_CLIENTE_LS_KEY, JSON.stringify(nomes)); } catch (e) { }
+      }
+      function nomeArquivoDoCliente(cliente) {
+        return (cliente && nomeArquivoSalvo(cliente.id)) || nomeAbrevArquivo(cliente ? cliente.nome : '');
+      }
+      // Texto livre -> parte do nome do arquivo: sem acento/espaço/símbolo, cada
+      // palavra com inicial maiúscula ("Depósito São José" -> "DepositoSaoJose").
+      // Só letras e números de propósito: é o que pedidoPeloNomeDoArquivo
+      // reconhece ao abrir o CSV de volta no app.
+      function parteNomeArquivo(texto) {
+        const semAcento = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        return semAcento.split(/[^a-zA-Z0-9]+/).filter(Boolean)
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').slice(0, 40);
+      }
+      // Sugestões pro nome do arquivo a partir do nome do cliente (sem LTDA,
+      // ME, "de", "da"…): 1ª palavra (o de sempre), até a 2ª palavra de
+      // verdade ("Sao", "Bom" emendam na seguinte: DepositoSaoJose), o nome
+      // inteiro, 1ª + última e 1ª + código do cliente no ERP.
+      const PALAVRAS_FORA_DO_NOME_ARQUIVO = new Set(['LTDA', 'ME', 'EPP', 'EIRELI', 'MEI', 'SA', 'S', 'A', 'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'EM']);
+      function sugestoesNomeArquivo(cliente) {
+        if (!cliente) return [];
+        const semAcento = String(cliente.nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const palavras = semAcento.split(/[^a-zA-Z0-9]+/).filter(w => w && !PALAVRAS_FORA_DO_NOME_ARQUIVO.has(w.toUpperCase()))
+          .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+        if (!palavras.length) return [];
+        const opcoes = [
+          palavras[0],
+          palavras.slice(0, 1 + palavras.slice(1).findIndex(w => w.length > 3) + 1).join(''),
+          palavras.join('').slice(0, 40),
+          palavras.length > 2 ? palavras[0] + palavras[palavras.length - 1] : '',
+          cliente.codigo_oficial ? palavras[0] + parteNomeArquivo(cliente.codigo_oficial) : '',
+        ];
+        return [...new Set(opcoes.filter(Boolean))];
+      }
+      // Nome do arquivo no formato NomeDDMMAA (ex: "Joao240826.csv") - nome
+      // escolhido pro cliente (ou a 1ª palavra dele), seguido de dia+mês+ano
+      // com 2 dígitos.
+      function csvFileNameFor(parteNome) {
+        const nomeAbrev = parteNome || 'Cliente';
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
         const ddmmaa = pad(d.getDate()) + pad(d.getMonth() + 1) + String(d.getFullYear()).slice(-2);
         return `${nomeAbrev}${ddmmaa}.csv`;
       }
 
-      function exportCartCSV(clientName) {
+      function exportCartCSV(parteNome) {
         const { rows } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
         const header = 'Código do Item;Quantidade;Preço';
@@ -9138,7 +9249,7 @@
         const csvBody = [header, ...lines].join('\r\n');
         const BOM = '\uFEFF';
         const blob = new Blob([BOM + csvBody], { type: 'text/csv;charset=utf-8;' });
-        const fileName = csvFileNameFor(clientName);
+        const fileName = csvFileNameFor(parteNome);
         enviarCsvComGoogleDrive(blob, fileName, 'Orçamento Cortag (CSV)', 'Baixado — verifique a pasta Downloads do celular');
       }
 
@@ -9606,17 +9717,31 @@
         shareOrDownloadBlob(blob, fileName, 'Orçamento Cortag (PDF)', 'PDF baixado — verifique a pasta Downloads do celular');
       }
 
-      // ---------------- Modal: nome do cliente para o export CSV ----------------
+      // ---------------- Modal: nome do arquivo do export CSV ----------------
+      // Com cliente selecionado, vem com o nome já escolhido pra ele (ou a 1ª
+      // palavra), sugestões tiradas do nome dele e "Usar sempre esse nome pra
+      // este cliente" marcado; sem cliente, o último nome digitado.
       const CSV_NAME_LS_KEY = 'cortagLastClientName';
+      function atualizarPreviaNomeCsv() {
+        const parte = parteNomeArquivo(document.getElementById('csvClientName').value);
+        document.getElementById('csvNomePrevia').textContent = 'Arquivo: ' + csvFileNameFor(parte);
+        document.querySelectorAll('#csvNomeSugestoes button').forEach(b => b.classList.toggle('ativo', b.dataset.nome === parte));
+      }
       function openCsvNamePrompt() {
         const { rows } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
         const input = document.getElementById('csvClientName');
+        const cliente = state.levCliente;
         let lastName = '';
         try { lastName = localStorage.getItem(CSV_NAME_LS_KEY) || ''; } catch (e) { }
         // se já tem cliente selecionado nesta visita, usa ele em vez do último nome
         // digitado - é mais provável de estar certo pro pedido de agora.
-        input.value = state.levCliente ? state.levCliente.nome : lastName;
+        input.value = cliente ? nomeArquivoDoCliente(cliente) : parteNomeArquivo(lastName);
+        document.getElementById('csvNomeSugestoes').innerHTML = sugestoesNomeArquivo(cliente)
+          .map(n => `<button type="button" data-nome="${escapeHtml(n)}">${escapeHtml(n)}</button>`).join('');
+        document.getElementById('csvNomeLembrarRow').classList.toggle('hidden', !cliente);
+        document.getElementById('csvNomeLembrar').checked = true;
+        atualizarPreviaNomeCsv();
         document.getElementById('csvNameOverlay').classList.remove('hidden');
         document.getElementById('csvNameModal').classList.remove('hidden');
         setTimeout(() => { input.focus(); input.select(); }, 50);
@@ -9626,13 +9751,26 @@
         document.getElementById('csvNameModal').classList.add('hidden');
       }
       function confirmCsvExport() {
-        const name = document.getElementById('csvClientName').value.trim();
-        try { localStorage.setItem(CSV_NAME_LS_KEY, name); } catch (e) { }
+        const cliente = state.levCliente;
+        const parte = parteNomeArquivo(document.getElementById('csvClientName').value)
+          || (cliente ? nomeAbrevArquivo(cliente.nome) : '');
+        try { localStorage.setItem(CSV_NAME_LS_KEY, parte); } catch (e) { }
+        // igual à 1ª palavra (o padrão) não precisa ficar guardado
+        if (cliente && document.getElementById('csvNomeLembrar').checked) {
+          salvarNomeArquivoCliente(cliente.id, parte === nomeAbrevArquivo(cliente.nome) ? '' : parte);
+        }
         closeCsvNamePrompt();
-        exportCartCSV(name);
+        exportCartCSV(parte);
       }
       function initCsvNamePrompt() {
         const input = document.getElementById('csvClientName');
+        input.addEventListener('input', atualizarPreviaNomeCsv);
+        document.getElementById('csvNomeSugestoes').addEventListener('click', (e) => {
+          const btn = e.target.closest('button[data-nome]');
+          if (!btn) return;
+          input.value = btn.dataset.nome;
+          atualizarPreviaNomeCsv();
+        });
         document.getElementById('csvNameCancel').addEventListener('click', closeCsvNamePrompt);
         document.getElementById('csvNameOverlay').addEventListener('click', closeCsvNamePrompt);
         document.getElementById('csvNameConfirm').addEventListener('click', confirmCsvExport);
@@ -10549,9 +10687,10 @@
       // Mesmo formato/nome já usado no "Baixar CSV" manual do orçamento, só
       // com hora:min:seg no carimbo (não só a data) - evita sobrescrever no
       // Drive se o mesmo cliente tiver mais de um pedido finalizado no dia.
-      // Pedido reaberto e atualizado ganha "-alterado" no fim.
-      function pedidoCsvFileNameFor(clientName, alterado) {
-        const nomeAbrev = nomeAbrevArquivo(clientName);
+      // Pedido reaberto e atualizado ganha "-alterado" no fim. Usa o nome
+      // escolhido pro cliente no CSV do orçamento, se houver.
+      function pedidoCsvFileNameFor(cliente, alterado) {
+        const nomeAbrev = nomeArquivoDoCliente(cliente);
         const d = new Date();
         const pad = n => String(n).padStart(2, '0');
         const carimbo = pad(d.getDate()) + pad(d.getMonth() + 1) + String(d.getFullYear()).slice(-2) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
@@ -10588,12 +10727,12 @@
       // conseguir, guarda na fila acima pra reenviar sozinho depois. Devolve
       // 'nao-aplicavel' (Drive nunca conectado - não faz nada), 'enviado' ou
       // 'pendente', pra finalizeOrder() montar uma única mensagem combinada.
-      async function backupPedidoCsvNoGoogleDrive(rows, clientName, alterado) {
+      async function backupPedidoCsvNoGoogleDrive(rows, cliente, alterado) {
         let jaConectouAntes = false;
         try { jaConectouAntes = !!localStorage.getItem(GOOGLE_TOKEN_LS_KEY); } catch (e) { }
         if (!jaConectouAntes) return 'nao-aplicavel';
         const csvText = buildPedidoCsvText(rows);
-        const fileName = pedidoCsvFileNameFor(clientName, alterado);
+        const fileName = pedidoCsvFileNameFor(cliente, alterado);
         try {
           const blob = new Blob(['\uFEFF' + csvText], { type: 'text/csv;charset=utf-8;' });
           await enviarParaGoogleDrive(blob, fileName, true);
@@ -12324,7 +12463,7 @@
           // ter ido pro servidor ou ter ficado pendente na fila acima; sem
           // conexão nenhuma, entra na fila própria do Drive (ver
           // backupPedidoCsvNoGoogleDrive) e é reenviada sozinha depois.
-          const driveResultado = await backupPedidoCsvNoGoogleDrive(rows, cliente.nome, !!editando);
+          const driveResultado = await backupPedidoCsvNoGoogleDrive(rows, cliente, !!editando);
           let msg;
           if (editando) {
             msg = offline
@@ -12609,7 +12748,9 @@
         const m = /^(?:Pedido-)?([A-Za-z0-9]+?)(\d{2})(\d{2})(\d{2})(?:-(\d{2})(\d{2})(\d{2}))?(?:-alterado)?(?:\s*\(\d+\))?\.csv$/i.exec(String(nomeArquivo || '').trim());
         if (!m) return null;
         const [, nome, dd, mm, aa, hh, mi, ss] = m;
-        const doCliente = candidatos.filter(p => nomeAbrevArquivo(p.cliente_nome).toLowerCase() === nome.toLowerCase());
+        // 1ª palavra do cliente ou o nome escolhido pra ele (nomeArquivoSalvo)
+        const doCliente = candidatos.filter(p => [nomeAbrevArquivo(p.cliente_nome), nomeArquivoSalvo(p.cliente_id)]
+          .some(n => n && n.toLowerCase() === nome.toLowerCase()));
         const momentos = (p) => [p.data_pedido, p.atualizado_em].filter(Boolean).map(d => new Date(d));
         if (hh) {
           const alvo = new Date(2000 + Number(aa), Number(mm) - 1, Number(dd), Number(hh), Number(mi), Number(ss)).getTime();

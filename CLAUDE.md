@@ -350,6 +350,15 @@ Supabase, sem PR — não é mudança de código.
   da edição em `cortagPedidoEditando_v1`. A cópia CSV no Drive da alteração sai com `-alterado`
   no nome.
 
+- **Nome do arquivo CSV escolhido por cliente** (10/2026): o CSV usava só a 1ª palavra do cliente e
+  "DEPOSITO", "COMERCIAL", "CASA"… são comuns no ramo — vários clientes viravam `Deposito260926.csv`.
+  A janela "Salvar orçamento em CSV" agora edita o **nome do arquivo** (texto livre vira
+  `DepositoSaoJose`, só letras e números, com prévia do nome final), com sugestões tiradas do nome do
+  cliente (`sugestoesNomeArquivo`: 1ª palavra, até a 2ª palavra de verdade, nome inteiro, 1ª + última,
+  1ª + código do ERP) e **"Usar sempre esse nome pra este cliente"** (marcado), que guarda no aparelho
+  (`cortagNomeArquivoCliente_v1`, por id). O nome guardado vale também pra cópia do pedido no Drive e
+  é reconhecido ao abrir o CSV de volta (`pedidoPeloNomeDoArquivo`). Por aparelho, não vai pro servidor.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
