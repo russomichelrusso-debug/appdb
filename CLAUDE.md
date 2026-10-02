@@ -153,8 +153,12 @@ Supabase, sem PR — não é mudança de código.
   `.clienteCard` em `index.html`) — escolhido pelo usuário a partir de mockups: nome numa linha
   (corta com "…"), selo de classificatório + CNPJ embaixo, botão ⇄ pra trocar; objetivo do
   trimestre como "faltam R$ 47,5 mil" + barrinha (sem objetivo, a mesma linha mostra a próxima
-  faixa/meta/risco de queda); ações 💡 sugestões · 📄 Ficha · 🛒 Comprados em botões de toque
-  numa linha só. Decisões: **sem avatar de iniciais** (ocupava espaço), **código do cliente no
+  faixa/meta/risco de queda); ações em botões de toque numa linha só (desde 10/2026, opção "B"
+  escolhida pelo usuário a partir de mockups: **ícone de traço com o nome embaixo**, colunas
+  iguais — Sugestões · Ficha · Pedidos · Histórico no Pedido, sem Pedidos no Levantamento; o
+  número de sugestões/pedidos salvos vai numa bolinha no ícone, laranja nas sugestões; antes eram
+  pílulas com emoji e os 4 nomes saíam cortados com "…". "Comprados" virou **"Histórico"** pra não
+  confundir com Pedidos; continua abrindo a Curva ABC do cliente). Decisões: **sem avatar de iniciais** (ocupava espaço), **código do cliente no
   ERP não aparece depois de selecionado** (continua no seletor), **"Limpar" saiu do card e foi
   pra dentro do seletor** ("Limpar seleção", só aparece com cliente escolhido; no Levantamento
   também desliga o levantamento aberto, como o antigo botão fazia). Sem cliente, o card vira um
