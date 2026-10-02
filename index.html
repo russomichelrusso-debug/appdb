@@ -1144,6 +1144,138 @@
       color: var(--ink);
     }
 
+    /* Card de classificatório da aba Clientes: seção "Oficial do ERP" (foto da
+       planilha Classificatório) + seção "Ao vivo no app". */
+    .clsTopo {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px 8px;
+    }
+
+    .clsTopo .classiBadge {
+      font-size: 12px;
+      padding: 3px 10px;
+    }
+
+    .clsGrupo {
+      font-size: 12px;
+      color: var(--gray);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .clsSec {
+      margin-top: 14px;
+      padding-top: 12px;
+      border-top: 0.75px solid var(--hairline);
+    }
+
+    .clsSecTit {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 2px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
+    .clsSecTit span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gray);
+      text-transform: none;
+      letter-spacing: 0;
+    }
+
+    .clsGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .clsTile {
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      padding: 9px 10px;
+      min-width: 0;
+    }
+
+    .clsTile--destaque {
+      background: var(--accent-bg);
+    }
+
+    .clsTileLbl {
+      font-size: 11px;
+      color: var(--gray);
+      font-weight: 600;
+    }
+
+    .clsTileVal {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--ink);
+      margin-top: 2px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .clsTileSub {
+      font-size: 11px;
+      color: var(--gray);
+      margin-top: 1px;
+    }
+
+    .clsAviso {
+      margin-top: 10px;
+      padding: 9px 10px;
+      border-radius: var(--r-sm);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .clsAviso--risco {
+      background: var(--danger-bg);
+      color: var(--danger);
+    }
+
+    .clsAviso--subir {
+      background: var(--warning-bg);
+      color: var(--warning);
+    }
+
+    .clsAviso--ok {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .clsInfo {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 12px;
+      margin-top: 10px;
+      font-size: 12px;
+    }
+
+    .clsInfo dt {
+      color: var(--gray);
+    }
+
+    .clsInfo dd {
+      margin: 0;
+      color: var(--ink);
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
     .card .prow {
       display: flex;
       align-items: center;
@@ -7726,8 +7858,26 @@
         if (Math.abs(n) < 1000) return brl(n);
         return `R$ ${(n / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil`;
       }
-      function renderBarraProgressoCompacta(status) {
-        if (!status || !status.classificado) return '';
+      // Matriz que também compra por empresas fora do app (filiais de outros
+      // representantes): a soma ao vivo do app fica abaixo da real e o
+      // veredito de faixa sairia errado. Troca pelo veredito oficial da
+      // planilha Classificatório do ERP (coluna "Diferenca"), sem barra nem
+      // ritmo trimestral (calculados só com o que está no app).
+      function statusComFaixaOficialErp(status) {
+        if (!status || status.ehRede || !status.erp || !(status.erp.fat12mOutrasEmpresas > 0)) return status;
+        const ld = status.erp.leituraDiferenca;
+        const s = { ...status, emRiscoDeQueda: false, faltaPraManter: null, faltaPraProximaFaixa: null, faltaPraMeta: null,
+          jaQualificaProximaFaixa: false, faixaMin: null, faixaMax: null, trimestral: null };
+        if (!ld) return s;
+        if (ld.situacao === 'manter') Object.assign(s, { emRiscoDeQueda: true, faltaPraManter: ld.falta, faixaAnterior: ld.faixaAnterior });
+        else if (ld.situacao === 'subir') Object.assign(s, { faltaPraProximaFaixa: ld.falta, proximaFaixa: ld.proximaFaixa });
+        else if (ld.situacao === 'qualifica') Object.assign(s, { jaQualificaProximaFaixa: true, proximaFaixa: ld.proximaFaixa });
+        else if (ld.situacao === 'meta') Object.assign(s, { faltaPraMeta: ld.falta });
+        return s;
+      }
+      function renderBarraProgressoCompacta(statusOriginal) {
+        if (!statusOriginal || !statusOriginal.classificado) return '';
+        const status = statusComFaixaOficialErp(statusOriginal);
         if (status.ehRede) {
           // Rede não tem faixa/meta - mostra só o acumulado do PRÓPRIO
           // cliente (a API já devolve individual pra Rede, sem somar com o
@@ -9575,6 +9725,22 @@
         const idxCnpj = acharIndiceColunaClassi(cabecalhos, ['cnpj']);
         const idxPic = acharIndiceColunaClassi(cabecalhos, ['pic']);
         const idxVlAcordo = acharIndiceColunaClassi(cabecalhos, ['vl.acordo', 'vlacordo']);
+        // Números financeiros da apuração do ERP (foto mostrada no card do
+        // cliente, aba Clientes). Ano anterior, acumulado e "Faturamento" (12
+        // meses) são da MATRIZ inteira no ERP; "Fat.Cliente" é só do cliente.
+        const idxFatAnoAnterior = acharIndiceColunaClassi(cabecalhos, ['fat.ano anterior']);
+        const idxFatAcumulado = acharIndiceColunaClassi(cabecalhos, ['fat.acumulado']);
+        const idxFatCliente = acharIndiceColunaClassi(cabecalhos, ['fat.cliente']);
+        const idxFatMatriz = acharIndiceColunaClassi(cabecalhos, ['faturamento']);
+        const idxDiferenca = acharIndiceColunaClassi(cabecalhos, ['diferenca', 'diferença']);
+        const idxGestor = acharIndiceColunaClassi(cabecalhos, ['gestor']);
+        const idxSituacao = acharIndiceColunaClassi(cabecalhos, ['situacao', 'situação']);
+        const idxCidade = acharIndiceColunaClassi(cabecalhos, ['cidade']);
+        const idxUf = acharIndiceColunaClassi(cabecalhos, ['uf']);
+        const idxCadastro = acharIndiceColunaClassi(cabecalhos, ['dt.cadastro']);
+        const idxUltCompra = acharIndiceColunaClassi(cabecalhos, ['ult.compra']);
+        const col = (r, idx) => (idx !== -1 ? r[idx] : null);
+        const textoCol = (r, idx) => { const v = col(r, idx); return v == null || String(v).trim() === '' ? null : String(v).trim(); };
         if (idxCod === -1 || idxClassi === -1 || idxCnpj === -1) {
           throw new Error('Colunas esperadas não encontradas (Cod.Cliente/Classificatorio/CNPJ) — confira o arquivo.');
         }
@@ -9593,18 +9759,42 @@
             classificatorioDesconto: interpretado.desconto,
             pic: idxPic !== -1 ? !!r[idxPic] : false,
             vlAcordo: idxVlAcordo !== -1 && r[idxVlAcordo] ? Number(r[idxVlAcordo]) : null,
+            fatAnoAnterior: valorParaNumero(col(r, idxFatAnoAnterior)),
+            fatAcumulado: valorParaNumero(col(r, idxFatAcumulado)),
+            fat12mCliente: valorParaNumero(col(r, idxFatCliente)),
+            fat12mMatriz: valorParaNumero(col(r, idxFatMatriz)),
+            diferenca: valorParaNumero(col(r, idxDiferenca)),
+            gestor: textoCol(r, idxGestor),
+            situacao: textoCol(r, idxSituacao),
+            cidade: textoCol(r, idxCidade),
+            uf: textoCol(r, idxUf),
+            clienteDesde: paraDataISO(col(r, idxCadastro)),
+            ultimaCompra: paraDataISO(col(r, idxUltCompra)),
           });
         }
         if (itens.length === 0) throw new Error('Nenhuma linha com classificatório encontrada nesta planilha.');
         return itens;
       }
-      async function apiImportarClassificatorio(itens) {
-        return apiFetch('/api/clientes/classificatorio/importar', { method: 'POST', body: JSON.stringify({ itens }) });
+      // Data do relatório pelo nome do arquivo exportado do ERP
+      // ("02.10.2026_RUSSOS_..._Classificatorio.xlsx"); sem data no nome, vale
+      // a de hoje (quem importa costuma subir o relatório do dia).
+      function dataRelatorioClassificatorio(nomeArquivo) {
+        const m = String(nomeArquivo || '').match(/(\d{2})[.\-_](\d{2})[.\-_](\d{4})/);
+        if (m && Number(m[2]) >= 1 && Number(m[2]) <= 12 && Number(m[1]) >= 1 && Number(m[1]) <= 31) return `${m[3]}-${m[2]}-${m[1]}`;
+        const hoje = new Date();
+        return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
+      }
+      async function apiImportarClassificatorio(itens, dataRelatorio, apuradoAte) {
+        return apiFetch('/api/clientes/classificatorio/importar', { method: 'POST', body: JSON.stringify({ itens, dataRelatorio, apuradoAte }) });
       }
       async function importarClassificatorioErp(file) {
         const itens = await parseClassificatorioXlsx(await lerArquivoComoArrayBuffer(file));
-        const result = await apiImportarClassificatorio(itens);
-        return `${result.atualizados} cliente(s) atualizado(s)${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ que bata com um cliente cadastrado)` : ''}.`;
+        const dataRelatorio = dataRelatorioClassificatorio(file && file.name);
+        // O ERP fecha a apuração por mês: a maior "Ult.Compra" da planilha diz
+        // até quando os números vão (no relatório de 02/10/2026, até 31/08).
+        const apuradoAte = itens.reduce((max, it) => (it.ultimaCompra && it.ultimaCompra > (max || '') ? it.ultimaCompra : max), null);
+        const result = await apiImportarClassificatorio(itens, dataRelatorio, apuradoAte);
+        return `${result.atualizados} cliente(s) atualizado(s) · relatório de ${formatDateBr(dataRelatorio)}${apuradoAte ? `, apuração até ${formatDateBr(apuradoAte)}` : ''}${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ que bata com um cliente cadastrado)` : ''}.`;
       }
 
       async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {
@@ -10408,10 +10598,23 @@
         // no backend) - o "(grupo)" ao lado dos rótulos abaixo não se aplica.
         const sufixoGrupo = !status.ehRede && status.matrizGrupo ? ' (grupo)' : '';
         const partes = [];
-        partes.push(`<div class="hist-clientLabel">Classificatório</div>
-          <div style="font-weight:600;font-size:14px;margin-top:2px;">${escapeHtml(status.tipo)}${status.matrizGrupo ? ` <span style="font-weight:400;color:var(--gray);font-size:12px;">· ${status.ehRede ? 'rede' : 'grupo'} ${escapeHtml(status.matrizGrupo)}</span>` : ''}</div>
-          ${status.ehRede ? `<p class="ap-hint" style="margin-top:4px;">Acordo bilateral com a rede/cooperativa — o desconto vale
-            independente do faturamento deste cliente, não tem faixa pra subir ou cair. Os números abaixo são só deste cliente, não somados com o resto da rede.</p>` : ''}
+        // Topo: faixa (mesmo selo colorido do seletor de cliente) + grupo/rede + PIC.
+        partes.push(`<div class="clsTopo">
+            ${renderClassificatorioBadge({ classificatorio_tipo: status.tipo, classificatorio_desconto: null })}
+            ${status.matrizGrupo ? `<span class="clsGrupo">${status.ehRede ? 'Rede' : 'Grupo'} ${escapeHtml(status.matrizGrupo)}</span>` : ''}
+          </div>
+          ${status.pic && status.vlAcordo ? `<div style="font-size:12px;margin-top:6px;">PIC · acordo de <b>${brl(status.vlAcordo)}</b></div>` : ''}
+          ${status.ehRede ? `<p class="ap-hint" style="margin-top:6px;">Acordo bilateral com a rede/cooperativa — o desconto vale
+            independente do faturamento deste cliente, não tem faixa pra subir ou cair.</p>` : ''}`);
+
+        if (status.erp) partes.push(renderClassificatorioErp(status));
+
+        // Ao vivo no app: soma o faturamento importado até hoje (12 meses
+        // móveis), por isso costuma passar do número oficial do ERP, que fecha
+        // a apuração por mês.
+        partes.push(`<div class="clsSec">
+          <div class="clsSecTit">Ao vivo no app <span>faturamento importado até hoje</span></div>
+          ${status.ehRede ? '<div class="clsTileSub" style="margin-top:4px;">Só deste cliente, sem somar o resto da rede.</div>' : ''}
           <div style="display:flex;gap:16px;margin-top:10px;">
             <div>
               <div class="hist-clientLabel">Faturamento últimos 12 meses${sufixoGrupo}</div>
@@ -10425,7 +10628,16 @@
           </div>
           ${status.revisao && !status.ehRede ? `<div style="font-size:12px;color:var(--gray);margin-top:6px;">${escapeHtml(status.revisao)}</div>` : ''}`);
 
-        if (!status.ehRede && status.faixaMin != null && status.faixaMax != null) {
+        // Matriz com empresas fora do app (filiais de outros representantes):
+        // a soma ao vivo fica abaixo da real e "vai cair"/"falta pra subir"
+        // estariam errados - não mostra veredito de faixa ao vivo, só avisa.
+        const semFaixaAoVivo = !status.ehRede && !!status.erp && status.erp.fat12mOutrasEmpresas > 0;
+        if (semFaixaAoVivo) {
+          partes.push(`<div class="clsTileSub" style="margin-top:8px;">A matriz também compra por outras empresas que não estão no app
+            (${brl(status.erp.fat12mOutrasEmpresas)} em 12 meses no ERP). Por isso o app não calcula a faixa ao vivo — vale o oficial acima.</div>`);
+        }
+
+        if (!semFaixaAoVivo && !status.ehRede && status.faixaMin != null && status.faixaMax != null) {
           // faturamentoFaixa: o valor que a API comparou com a faixa (12
           // meses móveis; no PIC, o acumulado do ano) - a barra usa o mesmo.
           const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
@@ -10436,7 +10648,9 @@
             </div>`);
         }
 
-        if (status.emRiscoDeQueda) {
+        if (semFaixaAoVivo) {
+          // sem veredito de faixa (ver acima)
+        } else if (status.emRiscoDeQueda) {
           partes.push(`<div style="margin-top:8px;color:var(--danger);font-weight:600;font-size:13px;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}.</div>`);
         } else if (status.faltaPraMeta != null) {
           partes.push(`<div style="margin-top:8px;font-size:13px;">Meta individual negociada: <b>${brl(status.metaIndividual)}</b> — faltam <b>${brl(status.faltaPraMeta)}</b>.</div>`);
@@ -10474,17 +10688,18 @@
             </div>`);
         }
 
-        if (status.ehRede && status.trimestral && status.trimestral.historico && status.trimestral.historico.some(t => t.faturado > 0)) {
-          // Rede não tem meta/piso (semMeta:true) - só o histórico
+        if ((status.ehRede || semFaixaAoVivo) && status.trimestral && status.trimestral.historico && status.trimestral.historico.some(t => t.faturado > 0)) {
+          // Rede (e matriz com empresas fora do app) não tem meta/piso ao
+          // vivo - só o histórico
           // trimestral individual do próprio cliente, sem caixa de destaque
           // nem linhas de referência (renderMiniGraficoTrimestral já lida
           // bem com metaPorTrimestre/pisoPorTrimestre indefinidos).
           partes.push(`
             <div style="margin-top:10px;">
-              <div style="font-size:12px;color:var(--gray);">Histórico trimestral (individual, sem meta)</div>
-              ${renderMiniGraficoTrimestral(status.trimestral)}
+              <div style="font-size:12px;color:var(--gray);">${status.ehRede ? 'Histórico trimestral (individual, sem meta)' : 'Histórico trimestral (só as empresas que estão no app)'}</div>
+              ${renderMiniGraficoTrimestral(status.ehRede ? status.trimestral : { historico: status.trimestral.historico })}
             </div>`);
-        } else if (status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
+        } else if (!semFaixaAoVivo && status.trimestral && !status.trimestral.semMeta && status.trimestral.historico) {
           // Quando existe objetivo oficial acima e ele ainda não foi
           // batido, não usar o selo verde "✓ adiantado" aqui - contradiz
           // visualmente a caixa do objetivo (reportado pelo usuário: dava
@@ -10515,6 +10730,8 @@
             </div>`);
         }
 
+        partes.push('</div>'); // fecha "Ao vivo no app"
+
         // Grupo (matriz_grupo) - "empresas irmãs" que somam faturamento junto
         // pro classificatório. Rede já é um agrupamento bilateral próprio (a
         // "matriz" ali é a rede/cooperativa) - não faz sentido oferecer
@@ -10530,6 +10747,64 @@
 
         content.innerHTML = partes.join('');
         if (!status.ehRede) initClienteGrupoUI(status);
+      }
+
+      // Seção "Oficial do ERP" do card de classificatório: os números da
+      // planilha Classificatório (última importada), iguais aos dela - o
+      // vendedor não precisa abrir a planilha. Ano anterior, acumulado e 12
+      // meses da matriz são do grupo INTEIRO no ERP (inclusive filiais de
+      // outros representantes); "12 meses · cliente" é só deste cliente.
+      function renderClassificatorioErp(status) {
+        const erp = status.erp;
+        const nomeGrupo = status.ehRede ? 'rede' : 'matriz';
+        const anoApuracao = Number(String(erp.apuradoAte || erp.dataRelatorio).slice(0, 4));
+        const valor = v => (v == null ? '—' : brl(v));
+        const ld = erp.leituraDiferenca;
+        const nomeFaixa = t => escapeHtml(NOME_CURTO_FAIXA[t] || t || '');
+        let aviso = '';
+        if (ld) {
+          if (ld.situacao === 'manter') aviso = `<div class="clsAviso clsAviso--risco">⚠️ Faltam ${brl(ld.falta)} pra manter ${nomeFaixa(status.tipo)}${ld.faixaAnterior ? ` (senão cai pra ${nomeFaixa(ld.faixaAnterior)})` : ''}</div>`;
+          else if (ld.situacao === 'subir') aviso = `<div class="clsAviso clsAviso--subir">↑ Faltam ${brl(ld.falta)} pra subir pra ${nomeFaixa(ld.proximaFaixa)}</div>`;
+          else if (ld.situacao === 'qualifica') aviso = `<div class="clsAviso clsAviso--ok">✓ Já qualifica pra ${nomeFaixa(ld.proximaFaixa)}</div>`;
+          else if (ld.situacao === 'topo') aviso = `<div class="clsAviso clsAviso--ok">✓ Na faixa máxima (${nomeFaixa(status.tipo)})</div>`;
+          else if (ld.situacao === 'meta') aviso = `<div class="clsAviso clsAviso--subir">Faltam ${brl(ld.falta)} pra meta do acordo (${brl(ld.meta)})</div>`;
+          else aviso = `<div class="clsAviso clsAviso--subir">Diferença classificatória: ${brl(ld.falta)}</div>`;
+        }
+        const local = [erp.cidade, erp.uf].filter(Boolean).join('/');
+        const info = [
+          ['Última compra', erp.ultimaCompra ? formatDateBr(erp.ultimaCompra) : 'sem compra registrada'],
+          ['Situação', erp.situacao],
+          ['Cidade', local],
+          ['Cliente desde', erp.clienteDesde ? formatDateBr(erp.clienteDesde) : null],
+          ['Gestor', erp.gestor],
+        ].filter(([, v]) => v);
+        return `<div class="clsSec">
+          <div class="clsSecTit">Oficial do ERP <span>apuração até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio)} · relatório de ${formatDateBr(erp.dataRelatorio)}</span></div>
+          <div class="clsGrid">
+            <div class="clsTile${status.ehRede ? '' : ' clsTile--destaque'}">
+              <div class="clsTileLbl">12 meses · ${nomeGrupo}</div>
+              <div class="clsTileVal">${valor(erp.fat12mMatriz)}</div>
+              ${status.ehRede ? '' : '<div class="clsTileSub">decide a faixa</div>'}
+            </div>
+            <div class="clsTile">
+              <div class="clsTileLbl">12 meses · cliente</div>
+              <div class="clsTileVal">${valor(erp.fat12mCliente)}</div>
+              <div class="clsTileSub">só este CNPJ</div>
+            </div>
+            <div class="clsTile">
+              <div class="clsTileLbl">Ano ${anoApuracao - 1} · ${nomeGrupo}</div>
+              <div class="clsTileVal">${valor(erp.fatAnoAnterior)}</div>
+              <div class="clsTileSub">ano fechado</div>
+            </div>
+            <div class="clsTile">
+              <div class="clsTileLbl">Acumulado ${anoApuracao} · ${nomeGrupo}</div>
+              <div class="clsTileVal">${valor(erp.fatAcumulado)}</div>
+              <div class="clsTileSub">até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5)}</div>
+            </div>
+          </div>
+          ${aviso}
+          ${info.length ? `<dl class="clsInfo">${info.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>` : ''}
+        </div>`;
       }
 
       // ---- Grupo do classificatório (matriz_grupo): expandir/trocar entre

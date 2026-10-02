@@ -472,6 +472,74 @@ async function main() {
     'cliente Rede pulado no import não recebe objetivo trimestral (faltaPObjetivo ausente)'
   );
 
+  // 15c) Planilha Classificatório do ERP com data (nome do arquivo): troca a
+  // faixa parada do cliente (antes só preenchia quem não tinha nenhuma - 22
+  // clientes ficaram com a faixa errada por isso) e grava a foto financeira
+  // oficial, que a rota de status devolve em `erp` pro card da aba Clientes.
+  mockDb.__seed({
+    clientes: [{
+      id: 9060, nome: 'CLIENTE PLANILHA ERP', documento: '11222333000181', codigo_oficial: 'COD9060',
+      classificatorio_tipo: 'Varejo Exclusive', classificatorio_desconto: 15, classificatorio_atualizado_em: '2024-07-24',
+      classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
+    }],
+  });
+  const linhaPlanilhaErp = {
+    codigoOficial: 'COD9060', cnpj: '11.222.333/0001-81', matrizGrupo: 'ROTTA MATERIAIS DE CONSTRUCAO LTDA',
+    classificatorioTipo: 'Varejo Premium', classificatorioDesconto: 17, pic: false, vlAcordo: null,
+    fatAnoAnterior: 35832.56, fatAcumulado: 26856.48, fat12mCliente: 15677.37, fat12mMatriz: 39122.52, diferenca: 10877.47,
+    gestor: 'VILMAR HEDLER JUNIOR', situacao: 'Ativo', cidade: 'Mambore', uf: 'PR', clienteDesde: '2009-07-01', ultimaCompra: '2026-07-27',
+  };
+  res = await req('POST', '/api/clientes/classificatorio/importar', { dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: [linhaPlanilhaErp] });
+  assert(res.status === 200 && res.body.atualizados === 1, `import da planilha Classificatório com data: ${JSON.stringify(res.body)}`);
+  res = await req('GET', '/api/clientes/9060/classificatorio/status');
+  const erp = res.body.erp || {};
+  assert(
+    res.status === 200 && res.body.tipo === 'Varejo Premium' && res.body.matrizGrupo === 'ROTTA MATERIAIS DE CONSTRUCAO LTDA',
+    `planilha mais nova troca a faixa parada (Exclusive de 2024 -> Premium): ${res.body.tipo}`
+  );
+  assert(
+    erp.dataRelatorio === '2026-10-02' && erp.apuradoAte === '2026-08-31' && erp.fat12mCliente === 15677.37
+      && erp.fat12mMatriz === 39122.52 && erp.fatAnoAnterior === 35832.56 && erp.fatAcumulado === 26856.48
+      && erp.ultimaCompra === '2026-07-27' && erp.clienteDesde === '2009-07-01' && erp.cidade === 'Mambore' && erp.gestor === 'VILMAR HEDLER JUNIOR'
+      && erp.leituraDiferenca?.situacao === 'subir' && erp.leituraDiferenca.falta === 10877.47 && erp.leituraDiferenca.proximaFaixa === 'Varejo Master'
+      && erp.fat12mOutrasEmpresas === 23445.15,
+    `status devolve a foto oficial da planilha (números iguais aos dela): ${JSON.stringify(erp)}`
+  );
+  // relatório mais antigo não desfaz nem a faixa nem a foto
+  res = await req('POST', '/api/clientes/classificatorio/importar', {
+    dataRelatorio: '2026-09-01', apuradoAte: '2026-07-31',
+    itens: [{ ...linhaPlanilhaErp, classificatorioTipo: 'Varejo Exclusive', classificatorioDesconto: 15, fat12mCliente: 1 }],
+  });
+  res = await req('GET', '/api/clientes/9060/classificatorio/status');
+  assert(
+    res.body.tipo === 'Varejo Premium' && res.body.erp?.fat12mCliente === 15677.37 && res.body.erp?.dataRelatorio === '2026-10-02',
+    'planilha Classificatório mais antiga não volta a faixa nem a foto financeira'
+  );
+  // sem data (formato antigo do import): não troca faixa existente nem grava foto
+  mockDb.__seed({
+    clientes: [{ id: 9061, nome: 'CLIENTE SEM DATA', documento: '11222333000262', codigo_oficial: 'COD9061', classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_pic: false }],
+  });
+  res = await req('POST', '/api/clientes/classificatorio/importar', { itens: [{ ...linhaPlanilhaErp, codigoOficial: 'COD9061', cnpj: null, classificatorioTipo: 'Varejo Exclusive' }] });
+  res = await req('GET', '/api/clientes/9061/classificatorio/status');
+  assert(res.body.tipo === 'Varejo Master' && res.body.erp == null, 'import sem data do relatório mantém a faixa e não grava foto');
+
+  // Leitura da coluna "Diferenca" (conferida contra a planilha real de 02/10/2026)
+  const { interpretarDiferencaErp } = require('../routes/clientesClassificatorio');
+  let ld = interpretarDiferencaErp({ tipo: 'Varejo Premium', fat12mMatriz: 21438.53, diferenca: 8561.47 });
+  assert(ld.situacao === 'manter' && ld.falta === 8561.47 && ld.faixaAnterior === 'Varejo Exclusive', 'Premium abaixo de 30 mil: Diferenca = falta pra manter Premium');
+  ld = interpretarDiferencaErp({ tipo: 'Varejo Master', fat12mMatriz: 7339.93, diferenca: 42660.07 });
+  assert(ld.situacao === 'manter' && ld.falta === 42660.07, 'Master abaixo de 50 mil: Diferenca = falta pra manter Master');
+  ld = interpretarDiferencaErp({ tipo: 'Varejo Exclusive', fat12mMatriz: 5636.36, diferenca: 24363.63 });
+  assert(ld.situacao === 'subir' && ld.proximaFaixa === 'Varejo Premium', 'Exclusive: Diferenca = falta pra subir pra Premium');
+  ld = interpretarDiferencaErp({ tipo: 'Varejo Exclusive', fat12mMatriz: 30197.44, diferenca: null });
+  assert(ld.situacao === 'qualifica' && ld.proximaFaixa === 'Varejo Premium', 'Exclusive acima de 30 mil sem Diferenca: já qualifica pra Premium');
+  ld = interpretarDiferencaErp({ tipo: 'Varejo Master', fat12mMatriz: 80000, diferenca: null });
+  assert(ld.situacao === 'topo', 'Master acima de 50 mil: faixa máxima');
+  ld = interpretarDiferencaErp({ tipo: 'Varejo Premium', pic: true, vlAcordo: 30000, fat12mMatriz: 23774.73, diferenca: 6225.27 });
+  assert(ld.situacao === 'meta' && ld.falta === 6225.27 && ld.meta === 30000, 'PIC: Diferenca = falta pra meta do acordo');
+  assert(interpretarDiferencaErp({ tipo: 'Varejo Master', pic: true, vlAcordo: 90000, fat12mMatriz: 80237, diferenca: null }) === null, 'PIC sem Diferenca: não afirma nada');
+  assert(interpretarDiferencaErp({ tipo: 'Rede', fat12mMatriz: 6170157.91, diferenca: null }) === null, 'Rede não tem faixa');
+
   // 16) GET /api/dashboard/resumo: os cartões "Contas - 3 a 5/6 a 8 Meses Sem
   // Compra" precisam trazer a LISTA de clientes (não só a contagem), pra dar
   // pra expandir e ver quem são - senão o card só mostra um número sem

@@ -18,6 +18,7 @@ let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
 let titulosAvistaPendentes = []; // aba Pendentes à Vista (títulos em aberto)
+let classificatorioErp = {}; // cliente_id -> foto financeira da planilha Classificatório (cliente_classificatorio_erp)
 let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagamento
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
@@ -40,6 +41,7 @@ function reset() {
   pedidosOficiaisItens = [];
   pedidosPendentesPagamento = [];
   titulosAvistaPendentes = [];
+  classificatorioErp = {};
   configuracoes = {};
   catalogoPrecos = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
@@ -386,17 +388,59 @@ async function query(sql, params = []) {
     return { rows: found.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
   }
   if (s.startsWith('UPDATE CLIENTES SET') && s.includes('CODIGO_OFICIAL = COALESCE')) {
-    const [codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id] = params;
+    const [codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id, dataRelatorio] = params;
     const c = clientes.find(x => Number(x.id) === Number(id));
     if (c) {
       if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
-      c.matriz_grupo = matrizGrupo;
+      if (matrizGrupo) c.matriz_grupo = matrizGrupo;
       c.classificatorio_pic = pic;
-      c.classificatorio_vl_acordo = vlAcordo;
-      if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
-      if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
+      if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
+      // Relatório datado tão ou mais novo que o classificatório atual troca a
+      // faixa; sem data, só preenche quem não tem (comportamento antigo).
+      const trocar = classifTipo && dataRelatorio
+        && (!c.classificatorio_atualizado_em || String(c.classificatorio_atualizado_em) <= dataRelatorio);
+      if (trocar) {
+        c.classificatorio_tipo = classifTipo;
+        c.classificatorio_desconto = classifDesconto;
+        c.classificatorio_atualizado_em = dataRelatorio;
+      } else {
+        if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
+        if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
+      }
     }
     return { rows: [] };
+  }
+  if (s.startsWith('INSERT INTO CLIENTE_CLASSIFICATORIO_ERP')) {
+    const [clienteId, dataRelatorio, apuradoAte, fatAnoAnterior, fatAcumulado, fat12mCliente, fat12mMatriz,
+      diferenca, gestor, situacao, cidade, uf, clienteDesde, ultimaCompra] = params;
+    const atual = classificatorioErp[clienteId];
+    if (!atual || atual.data_relatorio <= dataRelatorio) {
+      classificatorioErp[clienteId] = {
+        data_relatorio: dataRelatorio, apurado_ate: apuradoAte, fat_ano_anterior: fatAnoAnterior, fat_acumulado: fatAcumulado,
+        fat_12m_cliente: fat12mCliente, fat_12m_matriz: fat12mMatriz, diferenca, gestor, situacao, cidade, uf,
+        cliente_desde: clienteDesde, ultima_compra: ultimaCompra,
+      };
+    }
+    return { rows: [] };
+  }
+  if (s.includes('SUM(E.FAT_12M_CLIENTE)')) {
+    const [id, dataRelatorio, matrizGrupo] = params;
+    const soma = clientes
+      .filter(c => Number(c.id) === Number(id) || (matrizGrupo && c.matriz_grupo === matrizGrupo))
+      .map(c => classificatorioErp[c.id])
+      .filter(e => e && e.data_relatorio === dataRelatorio)
+      .reduce((acc, e) => acc + (Number(e.fat_12m_cliente) || 0), 0);
+    return { rows: [{ soma: String(soma) }] };
+  }
+  if (s.includes('FROM CLIENTE_CLASSIFICATORIO_ERP WHERE CLIENTE_ID = $1')) {
+    const linha = classificatorioErp[Number(params[0])];
+    // NUMERIC chega do pg como texto
+    const txt = v => (v == null ? null : String(v));
+    return { rows: linha ? [{
+      ...linha,
+      fat_ano_anterior: txt(linha.fat_ano_anterior), fat_acumulado: txt(linha.fat_acumulado),
+      fat_12m_cliente: txt(linha.fat_12m_cliente), fat_12m_matriz: txt(linha.fat_12m_matriz), diferenca: txt(linha.diferenca),
+    }] : [] };
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
     const clienteDoStatus = clientes.find(c => Number(c.id) === Number(params[0]));
