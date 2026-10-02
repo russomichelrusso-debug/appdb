@@ -79,6 +79,13 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_numero_cotacao ON pedidos(numero_c
 -- uma cotação já existente reenviando o mesmo numero_cotacao. NULL em pedidos
 -- antigos e nos importados do relatório oficial (não têm um usuário "dono").
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id);
+-- Pedido do app reaberto pra editar (cliente pediu pra mudar quantidade ou
+-- incluir produto): atualizado_em marca a última edição (data_pedido continua
+-- a do fechamento) e contexto guarda como o orçamento estava montado (estado,
+-- canal, classificatório, prazo, descontos e preços editados por item) pra
+-- reabrir com os mesmos preços. NULL nos pedidos gravados antes disso.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ;
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS contexto JSONB;
 
 CREATE TABLE IF NOT EXISTS pedido_itens (
   id SERIAL PRIMARY KEY,
