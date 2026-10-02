@@ -800,6 +800,11 @@ async function query(sql, params = []) {
       desistidos: '0',
     }] };
   }
+  // UF do cliente pro saldo mínimo em carteira (GET /api/pedidos-oficiais/:clienteId)
+  if (s.includes('SELECT UF FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
+    const row = clienteCnpjFicha[params[0]];
+    return { rows: row ? [{ uf: row.uf ?? null }] : [] };
+  }
   if (s.includes('SELECT * FROM CLIENTE_CNPJ_FICHA WHERE CLIENTE_ID')) {
     const row = clienteCnpjFicha[params[0]];
     return { rows: row ? [row] : [] };

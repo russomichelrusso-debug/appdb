@@ -5,6 +5,7 @@ const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher')
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { saldoMinimoDaUf } = require('./lib/saldoMinimo');
 
 // Status geral da importação oficial - pro painel admin mostrar de cara
 // quando foi o último relatório importado, sem precisar abrir cliente por
@@ -228,7 +229,11 @@ router.get('/:clienteId', async (req, res) => {
        ORDER BY vencimento NULLS LAST, titulo, parcela`,
       [codigoOficial]
     );
-    res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows, titulos_avista: titulos.rows });
+    // Mínimo do saldo em carteira antes do cancelamento - R$ 600 se a ficha de
+    // CNPJ diz que o cliente é do Norte/Nordeste (ver lib/saldoMinimo.js).
+    const ficha = await pool.query('SELECT uf FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.clienteId]);
+    res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows, titulos_avista: titulos.rows,
+               saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar pedidos oficiais.' });

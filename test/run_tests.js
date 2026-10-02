@@ -1413,6 +1413,24 @@ async function main() {
     `histórico: entrega dividida em duas notas conta como uma compra: ${JSON.stringify(disco9407)}`
   );
 
+  // 29) Saldo mínimo em carteira (política de cancelamento): R$ 300, R$ 600 no
+  // Norte/Nordeste pela UF da ficha de CNPJ; sem ficha vale o padrão.
+  const { saldoMinimoDaUf } = require('../routes/lib/saldoMinimo');
+  assert(
+    saldoMinimoDaUf('PR').valor === 300 && saldoMinimoDaUf(' ba ').valor === 600 && saldoMinimoDaUf('BA').regiao === 'Norte/Nordeste'
+      && saldoMinimoDaUf('AM').valor === 600 && saldoMinimoDaUf(null).valor === 300,
+    'saldo mínimo em carteira: R$ 300, R$ 600 no Norte/Nordeste, padrão sem UF'
+  );
+  let oficiais9407 = await req('GET', '/api/pedidos-oficiais/9407');
+  const minimoSemFicha = oficiais9407.body && oficiais9407.body.saldo_minimo;
+  mockDb.__seed({ fichasCnpj: { 9407: { cliente_id: 9407, uf: 'CE' } } });
+  oficiais9407 = await req('GET', '/api/pedidos-oficiais/9407');
+  assert(
+    minimoSemFicha && minimoSemFicha.valor === 300
+      && oficiais9407.body.saldo_minimo && oficiais9407.body.saldo_minimo.valor === 600 && oficiais9407.body.saldo_minimo.uf === 'CE',
+    `pedidos oficiais do cliente trazem o saldo mínimo pela UF da ficha: ${JSON.stringify([minimoSemFicha, oficiais9407.body.saldo_minimo])}`
+  );
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);
