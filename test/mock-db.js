@@ -387,6 +387,7 @@ async function query(sql, params = []) {
     };
     return { rows: clientes.map(c => ({
       id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null,
+      nome_arquivo: c.nome_arquivo || null, nome_arquivo_em: c.nome_arquivo_em || null,
       regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
     })) };
   }
@@ -567,6 +568,14 @@ async function query(sql, params = []) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
     const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));
     return { rows };
+  }
+  // PUT /api/clientes/:id/nome-arquivo
+  if (s.startsWith('UPDATE CLIENTES SET NOME_ARQUIVO = $1, NOME_ARQUIVO_EM = NOW() WHERE ID = $2')) {
+    const c = clientes.find(x => String(x.id) === String(params[1]));
+    if (!c) return { rows: [] };
+    c.nome_arquivo = params[0];
+    c.nome_arquivo_em = new Date().toISOString();
+    return { rows: [{ id: c.id, nome: c.nome, nome_arquivo: c.nome_arquivo, nome_arquivo_em: c.nome_arquivo_em }] };
   }
   if (s.includes('WHERE C.MATRIZ_GRUPO = $1')) {
     // Faturamento de CADA empresa individualmente (só o próprio

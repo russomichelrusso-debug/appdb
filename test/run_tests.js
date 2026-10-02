@@ -114,6 +114,22 @@ async function main() {
   );
   assert(sincronizado.regime_tributario === null, 'cliente sem ficha de CNPJ vai pro /sync com regime desconhecido (null)');
 
+  // 5b2) nome do arquivo CSV escolhido pro cliente - grava no servidor pra
+  // valer em todos os aparelhos e volta no /sync (usado offline)
+  res = await req('PUT', '/api/clientes/9010/nome-arquivo', { nome_arquivo: 'ClienteCodigo9010' });
+  assert(res.status === 200 && res.body.nome_arquivo === 'ClienteCodigo9010' && res.body.nome_arquivo_em,
+    `grava o nome do arquivo do cliente: ${JSON.stringify(res.body)}`);
+  res = await req('GET', '/api/clientes/sync');
+  const comNomeArquivo = res.body.clientes.find(c => c.id === 9010);
+  assert(comNomeArquivo.nome_arquivo === 'ClienteCodigo9010' && comNomeArquivo.nome_arquivo_em,
+    '/sync traz o nome do arquivo escolhido e quando foi trocado');
+  res = await req('PUT', '/api/clientes/9010/nome-arquivo', { nome_arquivo: 'Deposito São José' });
+  assert(res.status === 400, 'nome do arquivo com espaço/acento é recusado (só letras e números)');
+  res = await req('PUT', '/api/clientes/9010/nome-arquivo', { nome_arquivo: '' });
+  assert(res.status === 200 && res.body.nome_arquivo === null, 'nome vazio volta pra 1ª palavra do cliente (NULL)');
+  res = await req('PUT', '/api/clientes/99999/nome-arquivo', { nome_arquivo: 'Xyz' });
+  assert(res.status === 404, 'cliente inexistente: 404');
+
   // 5c) regime tributário da ficha de CNPJ no /sync - o recado de ICMS-ST do
   // orçamento (gerado offline) muda o texto pra Simples/MEI x regime normal
   mockDb.__seed({

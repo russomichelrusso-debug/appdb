@@ -231,6 +231,14 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS longitude NUMERIC;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_precisao_m NUMERIC;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_atualizada_em TIMESTAMPTZ;
 
+-- Nome que o vendedor escolheu pro arquivo CSV do cliente (orçamento e cópia
+-- do pedido no Drive) - "DEPOSITO", "COMERCIAL"... são comuns no ramo e a 1ª
+-- palavra do nome não diferenciava. Só letras e números (ex: DepositoSaoJose);
+-- NULL = 1ª palavra do nome. nome_arquivo_em decide, no aparelho, entre o
+-- valor do servidor e uma troca feita offline ainda na fila (o mais novo vale).
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_arquivo TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_arquivo_em TIMESTAMPTZ;
+
 -- Situação de pedidos no sistema OFICIAL da empresa (relatório de Carteira +
 -- Faturamento), guardada separada da tabela "pedidos" (que é só o que o
 -- vendedor bate no próprio app). As duas fontes não têm número em comum,

@@ -24,12 +24,12 @@ router.get('/', async (req, res) => {
   try {
     const result = busca
       ? await pool.query(
-          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial FROM clientes
+          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em FROM clientes
            WHERE nome ILIKE $1 OR documento ILIKE $1
            ORDER BY nome LIMIT 20`,
           [`%${busca}%`]
         )
-      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial FROM clientes ORDER BY nome LIMIT 50');
+      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em FROM clientes ORDER BY nome LIMIT 50');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -44,10 +44,12 @@ router.get('/', async (req, res) => {
 // front); por isso só os campos que a busca offline precisa, nada mais.
 // regime_tributario ('simples' | 'mei' | 'normal' | null sem ficha) vem da
 // ficha de CNPJ e ajusta o recado de ICMS-ST do orçamento, que é gerado offline.
+// nome_arquivo/nome_arquivo_em: nome escolhido pro CSV do cliente (ver
+// PUT /:id/nome-arquivo), pra valer em todos os aparelhos e sem internet.
 router.get('/sync', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT c.id, c.nome, c.documento, c.codigo_oficial,
+      `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               CASE
                 WHEN f.dados_brutos->'mei'->>'optante' = 'true' THEN 'mei'
                 WHEN f.dados_brutos->'simples'->>'optante' = 'true' THEN 'simples'
@@ -191,6 +193,32 @@ router.patch('/:id/documento', async (req, res) => {
     if (e.code === '23505') return res.status(400).json({ erro: 'Esse CNPJ já pertence a outro cliente cadastrado — use mesclar em vez de corrigir.' });
     console.error(e);
     res.status(500).json({ erro: 'Erro ao corrigir documento.' });
+  }
+});
+
+// Nome do arquivo CSV do cliente (orçamento e cópia do pedido no Drive),
+// escolhido na janela "Salvar orçamento em CSV" com "Usar sempre esse nome pra
+// este cliente". Vale pra todos os aparelhos (vem no /sync). Qualquer usuário
+// logado: é só o nome do arquivo, não mexe em preço nem histórico. Vazio volta
+// pra 1ª palavra do nome do cliente (NULL). Só letras e números, que é o que o
+// app reconhece ao abrir o CSV de volta (pedidoPeloNomeDoArquivo).
+router.put('/:id/nome-arquivo', async (req, res) => {
+  const nomeArquivo = String(req.body.nome_arquivo ?? '').trim();
+  if (!/^[A-Za-z0-9]{0,40}$/.test(nomeArquivo)) {
+    return res.status(400).json({ erro: 'O nome do arquivo aceita só letras e números (até 40).' });
+  }
+  try {
+    const result = await pool.query(
+      'UPDATE clientes SET nome_arquivo = $1, nome_arquivo_em = now() WHERE id = $2 RETURNING id, nome, nome_arquivo, nome_arquivo_em',
+      [nomeArquivo || null, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const c = result.rows[0];
+    console.log(`Nome do arquivo: ${c.nome} (id ${c.id}) → "${c.nome_arquivo || '(1ª palavra)'}", por ${req.usuario?.email}.`);
+    res.json({ id: c.id, nome_arquivo: c.nome_arquivo, nome_arquivo_em: c.nome_arquivo_em });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao salvar o nome do arquivo.' });
   }
 });
 

@@ -9180,26 +9180,81 @@
       }
       // Nome que o vendedor escolheu pro arquivo de um cliente (pedido do
       // usuário: "DEPOSITO", "COMERCIAL"… são comuns no ramo e vários clientes
-      // viravam "Deposito260926.csv"). Fica no aparelho, por id do cliente, e
-      // vale pro CSV do orçamento e pra cópia do pedido no Drive; sem nome
-      // escolhido, continua a 1ª palavra (nomeAbrevArquivo).
+      // viravam "Deposito260926.csv"). Fica no servidor (clientes.nome_arquivo,
+      // vem na cópia local de clientes - vale em todos os aparelhos e sem
+      // internet) e vale pro CSV do orçamento e pra cópia do pedido no Drive;
+      // sem nome escolhido, continua a 1ª palavra (nomeAbrevArquivo).
+      // A troca feita neste aparelho fica também em NOME_ARQUIVO_CLIENTE_LS_KEY
+      // ({nome, em}) até o servidor confirmar - sem internet ela vai pela fila
+      // offline, e vale a mais nova entre ela e a do servidor (nome_arquivo_em).
       const NOME_ARQUIVO_CLIENTE_LS_KEY = 'cortagNomeArquivoCliente_v1';
-      function nomesArquivoSalvos() {
+      function nomesArquivoPendentes() {
         try { return JSON.parse(localStorage.getItem(NOME_ARQUIVO_CLIENTE_LS_KEY)) || {}; } catch (e) { return {}; }
       }
-      function nomeArquivoSalvo(clienteId) {
-        if (clienteId == null) return '';
-        return nomesArquivoSalvos()[String(clienteId)] || '';
-      }
-      function salvarNomeArquivoCliente(clienteId, nome) {
-        if (clienteId == null) return;
-        const nomes = nomesArquivoSalvos();
-        if (nome) nomes[String(clienteId)] = nome;
-        else delete nomes[String(clienteId)];
+      function gravarNomesArquivoPendentes(nomes) {
         try { localStorage.setItem(NOME_ARQUIVO_CLIENTE_LS_KEY, JSON.stringify(nomes)); } catch (e) { }
       }
+      function nomeArquivoDoServidor(c) {
+        return c && c.nome_arquivo_em ? { nome: c.nome_arquivo || '', em: Date.parse(c.nome_arquivo_em) || 0 } : null;
+      }
+      // clienteObj: o cliente que a tela já tem (pode ter vindo da busca ao
+      // vivo, mais nova que a cópia local); locais: cópia local já lida, pra
+      // quem chama várias vezes seguidas não reler o localStorage a cada uma.
+      function nomeArquivoSalvo(clienteId, clienteObj, locais) {
+        if (clienteId == null) return '';
+        const id = String(clienteId);
+        const pendente = nomesArquivoPendentes()[id];
+        const local = (locais || loadClientesLocais()).find(c => String(c.id) === id);
+        let melhor = null;
+        for (const v of [pendente, nomeArquivoDoServidor(clienteObj), nomeArquivoDoServidor(local)]) {
+          if (v && (!melhor || v.em > melhor.em)) melhor = v;
+        }
+        return melhor ? melhor.nome : '';
+      }
+      function salvarNomeArquivoCliente(cliente, nome) {
+        if (!cliente || cliente.id == null) return;
+        const id = String(cliente.id);
+        const nomes = nomesArquivoPendentes();
+        nomes[id] = { nome, em: Date.now() };
+        gravarNomesArquivoPendentes(nomes);
+        apiFetch(`/api/clientes/${encodeURIComponent(id)}/nome-arquivo`,
+          { method: 'PUT', body: JSON.stringify({ nome_arquivo: nome }) },
+          { tipo: 'nome-arquivo', descricao: 'Nome do arquivo do cliente' })
+          .then(r => { if (r && !r.__filaOffline) confirmarNomeArquivoDoServidor(r); })
+          .catch(e => console.warn('Nome do arquivo não foi pro servidor (fica só neste aparelho por enquanto):', e));
+      }
+      // Servidor confirmou: o valor dele passa a valer (cópia local de
+      // clientes e o cliente selecionado) e a pendência deste aparelho sai.
+      function confirmarNomeArquivoDoServidor(r) {
+        if (!r || r.id == null) return;
+        const id = String(r.id);
+        const locais = loadClientesLocais();
+        const local = locais.find(c => String(c.id) === id);
+        if (local) { local.nome_arquivo = r.nome_arquivo; local.nome_arquivo_em = r.nome_arquivo_em; saveClientesLocais(locais); }
+        if (state.levCliente && String(state.levCliente.id) === id) {
+          state.levCliente.nome_arquivo = r.nome_arquivo;
+          state.levCliente.nome_arquivo_em = r.nome_arquivo_em;
+        }
+        const nomes = nomesArquivoPendentes();
+        delete nomes[id];
+        gravarNomesArquivoPendentes(nomes);
+      }
+      // Depois de baixar a lista de clientes: tira as pendências que o
+      // servidor já tem (troca da fila offline que já foi) ou que outro
+      // aparelho trocou depois.
+      function podarNomesArquivoPendentes(clientes) {
+        const nomes = nomesArquivoPendentes();
+        let mudou = false;
+        for (const c of clientes) {
+          const id = String(c.id);
+          const servidor = nomeArquivoDoServidor(c);
+          if (!nomes[id] || !servidor) continue;
+          if (servidor.nome === nomes[id].nome || servidor.em >= nomes[id].em) { delete nomes[id]; mudou = true; }
+        }
+        if (mudou) gravarNomesArquivoPendentes(nomes);
+      }
       function nomeArquivoDoCliente(cliente) {
-        return (cliente && nomeArquivoSalvo(cliente.id)) || nomeAbrevArquivo(cliente ? cliente.nome : '');
+        return (cliente && nomeArquivoSalvo(cliente.id, cliente)) || nomeAbrevArquivo(cliente ? cliente.nome : '');
       }
       // Texto livre -> parte do nome do arquivo: sem acento/espaço/símbolo, cada
       // palavra com inicial maiúscula ("Depósito São José" -> "DepositoSaoJose").
@@ -9757,7 +9812,8 @@
         try { localStorage.setItem(CSV_NAME_LS_KEY, parte); } catch (e) { }
         // igual à 1ª palavra (o padrão) não precisa ficar guardado
         if (cliente && document.getElementById('csvNomeLembrar').checked) {
-          salvarNomeArquivoCliente(cliente.id, parte === nomeAbrevArquivo(cliente.nome) ? '' : parte);
+          const escolhido = parte.toLowerCase() === nomeAbrevArquivo(cliente.nome).toLowerCase() ? '' : parte;
+          if (escolhido !== nomeArquivoSalvo(cliente.id, cliente)) salvarNomeArquivoCliente(cliente, escolhido);
         }
         closeCsvNamePrompt();
         exportCartCSV(parte);
@@ -10834,7 +10890,10 @@
       async function syncClientesLocais() {
         try {
           const result = await apiFetch('/api/clientes/sync');
-          if (result && Array.isArray(result.clientes)) saveClientesLocais(result.clientes);
+          if (result && Array.isArray(result.clientes)) {
+            saveClientesLocais(result.clientes);
+            podarNomesArquivoPendentes(result.clientes);
+          }
           return true;
         } catch (e) { return false; /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }
       }
@@ -12749,7 +12808,8 @@
         if (!m) return null;
         const [, nome, dd, mm, aa, hh, mi, ss] = m;
         // 1ª palavra do cliente ou o nome escolhido pra ele (nomeArquivoSalvo)
-        const doCliente = candidatos.filter(p => [nomeAbrevArquivo(p.cliente_nome), nomeArquivoSalvo(p.cliente_id)]
+        const locais = loadClientesLocais();
+        const doCliente = candidatos.filter(p => [nomeAbrevArquivo(p.cliente_nome), nomeArquivoSalvo(p.cliente_id, null, locais)]
           .some(n => n && n.toLowerCase() === nome.toLowerCase()));
         const momentos = (p) => [p.data_pedido, p.atualizado_em].filter(Boolean).map(d => new Date(d));
         if (hh) {
