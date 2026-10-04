@@ -28,6 +28,7 @@ require.cache[webPushPath] = { id: webPushPath, filename: webPushPath, loaded: t
 process.env.VAPID_PUBLIC_KEY = 'BChaveDeTeste_123';
 process.env.VAPID_PRIVATE_KEY = 'privada-de-teste';
 process.env.VAPID_SUBJECT = 'https://exemplo.test';
+process.env.IMPORTACAO_EMAIL_CHAVE = 'chave-de-teste-da-importacao-por-email-123456';
 
 process.env.PORT = '4123';
 // não liga o preenchimento automático de fichas de CNPJ (timer) durante o teste
@@ -1712,6 +1713,110 @@ async function main() {
     `push: aviso de teste vai só pros aparelhos de quem pediu: ${JSON.stringify(res.body)}`);
   res = await req('POST', '/api/novidades/push/cancelar', { endpoint: 'https://fcm.googleapis.com/fcm/send/aparelho1' });
   assert(res.status === 200 && mockDb.__getPushInscricoes().length === 0, 'push: desativar apaga a inscrição do aparelho');
+
+  // 31) Importação automática por e-mail (routes/importacaoEmail.js) e leitura
+  // compartilhada das planilhas (importadores.js - a mesma do Painel)
+  const XLSXt = require('@e965/xlsx');
+  const Importadores = require('../importadores');
+  const planilha = (abas) => {
+    const wb = XLSXt.utils.book_new();
+    for (const [nome, linhas] of Object.entries(abas)) XLSXt.utils.book_append_sheet(wb, XLSXt.utils.aoa_to_sheet(linhas, { cellDates: true }), nome);
+    return XLSXt.write(wb, { type: 'buffer', bookType: 'xlsx' });
+  };
+  const dia = (a, m, d) => new Date(a, m - 1, d);
+  const xlsRelatorio = planilha({
+    Carteira: [['Relatório de Carteira'], [],
+      ['Cliente', 'Cod.Cliente', 'Nr.Pedido', 'Item', 'Descrição', 'Qte.Pedida', 'Vlr.Pedido', 'Implantação', 'Classificatório'],
+      ['LOJA EMAIL', 'COD9501', '00676001', '60863', 'DISCO', 4, 400, dia(2026, 10, 1), 'Varejo Premium (17)'],
+      ['Total', null, null, null, null, null, null, null, null]],
+    Faturamento: [['Relatório de Faturamento'], [],
+      ['Cliente', 'Cod.Cliente', 'Nr.Pedido', 'Item', 'Descrição', 'Qte.Faturada', 'Vlr.Faturado', 'Dt.Implant', 'Dt.Emissão', 'Nota Fiscal', 'Classificatório', 'Situação'],
+      ['LOJA EMAIL', 'COD9501', '675990', '61362', 'CORTADOR', 2, 300, dia(2026, 9, 25), dia(2026, 9, 30), 889001, 'Varejo Premium (17)', 'Atendido Total']],
+  });
+  const xlsClassif = planilha({ Cliente: [['Relatório Classificatório'],
+    ['Cod.Cliente', 'CNPJ', 'Matriz', 'Classificatorio', 'Fat.Cliente', 'Ult.Compra'],
+    ['COD9501', '55.555.555/0001-55', 'LOJA EMAIL', 'Varejo Master (20)', 1234.5, dia(2026, 8, 31)],
+    ['COD9502', '66.666.666/0001-66', 'OUTRA', null, 10, dia(2026, 8, 1)]] });
+  const xlsPrevisao = planilha({ Plan1: [['Item', 'Descrição', 'Qt. Disp.', 'Qt. Carteira', 'Qt. Compra', 'Previsão', 'Saldo'],
+    ['60863', 'DISCO', 0, 5, 10, dia(2026, 10, 20), -5],
+    ['61362', 'CORTADOR', 3, 0, 0, 'Sem Previsão', 3]] });
+  const ufsExatas = ['MG', 'RJ', 'PR', 'SC', 'RS'];
+  const xlsPrecos = planilha({
+    'Referência Estados': [[], [], [], ...ufsExatas.map((uf, i) => [uf, null, null, null, null, null, null, 11 + i])],
+    'TRIBUTAÇÃO': [[], [], [], ['60863', 'DISCO DE CORTE', 10, null, '68042211', 0.05, null, null, null, null, 0.1, 0.1, 0.2, 0.1, 0.1]],
+    'PRECIFICAÇÃO': [[], [], [], ['60863', null, ...Array.from({ length: 18 }, (_, i) => 10 + i)]],
+  });
+  const xlsQualquer = planilha({ Plan1: [['Nome', 'Telefone'], ['Fulano', '123']] });
+  {
+    assert(Importadores.detectarTipoPlanilha(XLSXt, xlsRelatorio) === 'relatorio' && Importadores.detectarTipoPlanilha(XLSXt, xlsClassif) === 'classificatorio'
+      && Importadores.detectarTipoPlanilha(XLSXt, xlsPrevisao) === 'previsao' && Importadores.detectarTipoPlanilha(XLSXt, xlsPrecos) === 'precos'
+      && Importadores.detectarTipoPlanilha(XLSXt, xlsQualquer) === null,
+      'importadores: reconhece relatório, Classificatório, previsão e lista de preços pelas abas/colunas');
+    const rel = Importadores.lerRelatorioOficial(XLSXt, xlsRelatorio);
+    const cart = rel.itens.find(i => i.status === 'carteira');
+    const fat = rel.itens.find(i => i.status === 'faturado');
+    assert(rel.itens.length === 2 && cart.nr_pedido === '676001' && cart.data_implantacao === '2026-10-01' && cart.data_faturamento === null && cart.valor === 400
+      && fat.data_implantacao === '2026-09-25' && fat.data_faturamento === '2026-09-30' && fat.nota_fiscal === '889001' && fat.descricao === 'CORTADOR'
+      && rel.classificacoes.length === 1 && rel.classificacoes[0].tipo === 'Varejo Premium' && rel.pendentesPagamento === null,
+      `importadores: lê Carteira e Faturamento (datas, zeros do pedido, classificação): ${JSON.stringify(rel)}`);
+    const cl = Importadores.lerClassificatorio(XLSXt, xlsClassif);
+    assert(cl.length === 1 && cl[0].codigoOficial === 'COD9501' && cl[0].classificatorioTipo === 'Varejo Master' && cl[0].ultimaCompra === '2026-08-31' && cl[0].fat12mCliente === 1234.5
+      && Importadores.dataRelatorioClassificatorio("02.10.2026_RUSSO'S REPRESENTACO_Classificatorio.xlsx") === '2026-10-02',
+      `importadores: lê o Classificatório e a data do relatório pelo nome do arquivo: ${JSON.stringify(cl)}`);
+    const pv = Importadores.lerPrevisao(XLSXt, xlsPrevisao);
+    assert(pv['60863'].previsao === '2026-10-20' && pv['60863'].qtCarteira === 5 && pv['61362'].previsao === null,
+      `importadores: lê os itens em falta (previsão de estoque): ${JSON.stringify(pv)}`);
+  }
+  const CHAVE_EMAIL = process.env.IMPORTACAO_EMAIL_CHAVE;
+  const enviarArquivo = (nome, buf, chave = CHAVE_EMAIL, extra = {}) => req('POST', '/api/importacao-email/arquivo',
+    { nome, arquivoBase64: buf.toString('base64'), remetente: 'noreply@cortag.com.br', assunto: 'teste', recebidoEm: '2026-10-04T06:10:25Z', mensagemId: 'm1', ...extra },
+    { 'X-Chave-Importacao': chave, Authorization: '' });
+  res = await enviarArquivo('ESCE007-28092026060311.xlsx', xlsPrevisao, 'chave-errada');
+  assert(res.status === 401 && mockDb.__getImportacoesEmail().length === 0, 'importação por e-mail: chave errada é recusada antes de ler o arquivo');
+  mockDb.__seed({ clientes: [{ id: 9501, nome: 'LOJA EMAIL', documento: '55555555000155', codigo_oficial: 'COD9501' }] });
+  res = await enviarArquivo('ESCE007-28092026060311.xlsx', xlsPrevisao);
+  assert(res.status === 200 && res.body.tipo === 'previsao' && mockDb.__getPrevisaoEstoque().length === 2
+    && mockDb.__getNovidades().some(n => n.tipo === 'previsao-estoque' && n.texto === '2 itens')
+    && mockDb.__getImportacoesEmail().some(i => i.status === 'ok' && i.tipo === 'previsao' && i.mensagem_id === 'm1'),
+    `importação por e-mail: itens em falta entram, registram e geram a novidade: ${JSON.stringify(res.body)}`);
+  res = await enviarArquivo('ESCE007-28092026060311.xlsx', xlsPrevisao);
+  assert(res.status === 200 && res.body.duplicado === true, 'importação por e-mail: o mesmo arquivo de novo não é importado outra vez');
+  res = await enviarArquivo('Repres-20.xlsx', xlsRelatorio);
+  assert(res.status === 200 && res.body.tipo === 'relatorio' && res.body.resultado.itens === 2
+    && mockDb.__getPedidosOficiaisItens().some(i => i.nr_pedido === '676001' && i.status === 'carteira'),
+    `importação por e-mail: relatório Carteira/Faturamento entra pelo mesmo caminho do Painel: ${JSON.stringify(res.body)}`);
+  res = await enviarArquivo("02.10.2026_RUSSO'S REPRESENTACO_Classificatorio.xlsx", xlsClassif);
+  assert(res.status === 200 && res.body.tipo === 'classificatorio' && res.body.resultado.atualizados === 1,
+    `importação por e-mail: Classificatório entra (sem precisar de admin): ${JSON.stringify(res.body)}`);
+  res = await enviarArquivo('02.09.2026 - LISTA PADRÃO 2026 - NORTE NORDESTE Por Canal_REV 4.xlsx', xlsPrecos, CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+  assert(res.status === 422 && /SUL SUDESTE/.test(res.body.erro), `importação por e-mail: lista de preços de outra região é recusada: ${JSON.stringify(res.body)}`);
+  res = await enviarArquivo('02.09.2026 - LISTA PADRÃO 2026 - SUL SUDESTE Por Canal_REV 4.xlsx', Buffer.concat([xlsPrecos]), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+  {
+    const p = mockDb.__getCatalogoPrecos().find(x => x.codigo_sku === '60863');
+    assert(res.status === 200 && res.body.tipo === 'precos' && p && p.precos.VAREJO.SP === 10.5 && p.precos_sem_imposto.VAREJO.SP === 10,
+      `importação por e-mail: Lista de Preços SUL SUDESTE substitui o catálogo: ${JSON.stringify([res.body, p && p.precos.VAREJO])}`);
+  }
+  res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
+  assert(res.status === 422 && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Repres-21.xlsx'),
+    `importação por e-mail: planilha não reconhecida é recusada (422) e fica registrada: ${JSON.stringify(res.body)}`);
+  res = await enviarArquivo('relatorio.pdf', xlsPrevisao);
+  assert(res.status === 422, 'importação por e-mail: só aceita .xlsx');
+  res = await req('GET', '/api/importacao-email/status', null, { Authorization: '' });
+  assert(res.status === 401, 'importação por e-mail: o status do Painel exige login');
+  res = await req('GET', '/api/importacao-email/status');
+  {
+    const porTipo = Object.fromEntries((res.body.tipos || []).map(t => [t.tipo, t]));
+    assert(res.status === 200 && porTipo.previsao.status === 'ok' && porTipo.precos.status === 'ok' && porTipo.relatorio && porTipo.classificatorio,
+      `importação por e-mail: status do Painel traz o último de cada tipo: ${JSON.stringify(res.body)}`);
+  }
+  {
+    // relatório diário do fim de semana: na segunda sai um push só, o do mais novo
+    const idSab = await nov.avisarImportacao('objetivos-trimestrais', 'sábado');
+    mockDb.__getNovidades().forEach(x => { if (x.id === idSab) { x.atualizado_em = new Date(Date.now() - 3600000); x.push_pendente = true; x.push_enviar_em = new Date(Date.now() + 86400000); } });
+    const idDom = await nov.avisarImportacao('objetivos-trimestrais', 'domingo');
+    const sab = mockDb.__getNovidades().find(x => x.id === idSab);
+    assert(idSab !== idDom && sab.push_pendente === false, 'aviso: novidade nova do mesmo tipo tira da fila o push que ainda esperava o horário');
+  }
 
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');

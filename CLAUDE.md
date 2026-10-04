@@ -413,6 +413,31 @@ Supabase, sem PR — não é mudança de código.
   URL do Render); trocar a chave obriga todo mundo a ativar de novo. Plano free do Render dorme: o push
   agendado pras 7h sai quando o servidor acordar.
 
+- **Importação automática dos relatórios pelo Gmail** (10/2026): os relatórios chegam por e-mail no
+  **russo2055@gmail.com** e eram baixados e importados à mão no Painel. Agora um **script do Google
+  (Apps Script) na própria conta** (`scripts/gmail-importacao/Codigo.gs`, instalação em
+  `docs/IMPORTACAO-EMAIL.md`) olha o e-mail **a cada 15 min** e manda só os anexos conhecidos pro
+  servidor (`POST /api/importacao-email/arquivo`, chave `IMPORTACAO_EMAIL_CHAVE` no cabeçalho, conferida
+  antes de ler o corpo) — o servidor nunca recebe acesso à caixa. Descartados: webhook do Gmail via
+  Pub/Sub (autorização de leitura de e-mail expira em 7 dias numa conta @gmail.com sem auditoria paga
+  do Google), IMAP com senha de app (caixa inteira no Render) e serviço de e-mail de entrada (relatório
+  passando por terceiro). Anexos (conferidos no Gmail em 04/10/2026): de **noreply@cortag.com.br**,
+  Carteira/Faturamento `Repres-*.xlsx` **todo dia ~3h** (inclusive fim de semana), Classificatório
+  `DD.MM.AAAA_..._Classificatorio.xlsx` e itens em falta `ESCE007-*.xlsx` (= previsão de estoque); de
+  **vendas@cortag.com**, `... LISTA PADRÃO ... SUL SUDESTE ... .xlsx` (outras planilhas da vendas@ —
+  Black Friday, Trade News — ficam de fora). Objetivos trimestrais não chegam por e-mail (continuam no
+  Painel). Decisões do usuário: **publica direto**, inclusive preços; arquivo recusado **só ganha o
+  marcador "Cortag/Falhou"** no Gmail (sem aviso no app); o relatório diário gera **push todo dia útil
+  às 7h** (os do fim de semana não se acumulam: novidade nova do mesmo tipo tira da fila o push
+  pendente). O script importa **do mais antigo pro mais novo** (errata da Lista de Preços não é
+  sobrescrita pela anterior) e guarda os IDs de mensagem já tratados; o servidor ignora arquivo
+  repetido pelo hash (`importacoes_email`, que também alimenta a linha "Importação por e-mail" do
+  status do Painel). Pra isso a **leitura das planilhas saiu do `index.html` pro `importadores.js`**
+  (raiz, carregado por `<script src>` e por `require`) e as rotas de importação viraram funções
+  reaproveitáveis (`importarRelatorioOficial`, `importarCatalogoPrecos`, `importarPrevisaoEstoque`,
+  `importarClassificatorioErp`, que devolvem `{ status, json }`) — **mudança na leitura de planilha é
+  feita só no `importadores.js`**, vale pros dois caminhos. Chave cadastrada no Render em 04/10/2026.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -493,6 +518,10 @@ Supabase, sem PR — não é mudança de código.
     Total", mas as 47 linhas que já estavam assim em 02/10/2026 (pedidos que não voltam mais no
     relatório) só saem por SQL ou pela limpeza. Provável causa de a Entrada de Pedidos de set/2026
     ter ficado R$ 8,2 mil / 2 clientes acima do oficial — conferir de novo depois da limpeza.
+- **Outros e-mails automáticos da Cortag** (usuário quer discutir, 10/2026): "Relatório de Clientes Sem
+  Compra" e "Base de Clientes x Compra" (noreply@cortag.com.br, com planilha) e "Cancelamento saldo em
+  carteira DD.MM.AAAA" (assistente comercial, tabela no corpo do e-mail) — o script do Gmail já tem a
+  estrutura pra mandar mais tipos; falta decidir o que o app faz com cada um.
 - Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma
   no faturamento do classificatório, na Curva ABC e no top clientes (valores pequenos). Se o painel
   oficial também a exclui dali, dá pra reaproveitar o mesmo filtro (`length(nr_pedido) <= 6`).

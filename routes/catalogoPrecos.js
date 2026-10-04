@@ -182,25 +182,31 @@ router.post('/importar', async (req, res) => {
   if (arquivoBase64.length > TAMANHO_MAX_PLANILHA_BYTES * 4 / 3) {
     return res.status(413).json({ erro: 'Arquivo muito grande. O limite é 10MB.' });
   }
+  const r = await importarCatalogoPrecos(Buffer.from(arquivoBase64, 'base64'), req.usuario);
+  res.status(r.status).json(r.json);
+});
 
+// Também chamada pela importação automática por e-mail (routes/importacaoEmail.js)
+// - devolve { status, json } em vez de responder direto.
+async function importarCatalogoPrecos(buffer, usuario) {
+  if (buffer.length > TAMANHO_MAX_PLANILHA_BYTES) return { status: 413, json: { erro: 'Arquivo muito grande. O limite é 10MB.' } };
   let produtos;
   try {
-    const buffer = Buffer.from(arquivoBase64, 'base64');
     produtos = converterPlanilha(buffer);
   } catch (e) {
     console.error('Erro ao converter planilha:', e);
-    return res.status(400).json({ erro: 'Erro ao ler a planilha: ' + e.message });
+    return { status: 400, json: { erro: 'Erro ao ler a planilha: ' + e.message } };
   }
 
   if (produtos.length === 0) {
-    return res.status(400).json({ erro: 'Nenhum produto encontrado na planilha - confira se é o arquivo certo.' });
+    return { status: 400, json: { erro: 'Nenhum produto encontrado na planilha - confira se é o arquivo certo.' } };
   }
 
   const codigosInvalidos = produtos.filter(p => !CODIGO_SKU_REGEX.test(p.codigo_sku)).map(p => p.codigo_sku);
   if (codigosInvalidos.length > 0) {
-    return res.status(400).json({
+    return { status: 400, json: {
       erro: 'Códigos de produto em formato inválido na planilha: ' + codigosInvalidos.slice(0, 10).join(', '),
-    });
+    } };
   }
 
   let client;
@@ -245,19 +251,19 @@ router.post('/importar', async (req, res) => {
     if (removidos.rowCount > 0) {
       console.log(`Catálogo de preços: ${removidos.rowCount} produto(s) removido(s) por não estarem mais na planilha.`);
     }
-    await registrarImportacao(req.usuario?.id, 'catalogo-precos/importar', produtos.length);
+    await registrarImportacao(usuario?.id, 'catalogo-precos/importar', produtos.length);
     await avisarImportacao('catalogo-precos', quantos(produtos.length, 'produto', 'produtos'));
-    res.json({ ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount });
+    return { status: 200, json: { ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount } };
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao salvar catálogo no banco.' });
+    return { status: 500, json: { erro: 'Erro ao salvar catálogo no banco.' } };
   } finally {
     if (client) client.release();
   }
-});
+}
 
 // Devolve o catálogo completo, no formato que o app usa como "fonte
 // automática" (substitui o precos.json estático do GitHub Pages - agora
@@ -278,4 +284,5 @@ router.get('/', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.importarCatalogoPrecos = importarCatalogoPrecos;
 module.exports.converterPlanilha = converterPlanilha; // exposto só pra teste da conversão sem precisar subir o servidor inteiro
