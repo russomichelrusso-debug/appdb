@@ -443,6 +443,24 @@ Supabase, sem PR — não é mudança de código.
   começa arquivo novo depois de 3 min. Se as importações ficarem lentas demais, o ganho está em
   juntar as consultas por cliente de `importarRelatorioOficial`/`importarClassificatorioErp`.
 
+- **Pedido bloqueado e à vista pelo e-mail** (10/2026): dois e-mails da noreply@cortag.com.br **sem
+  planilha** — o script do Gmail manda assunto + texto (`POST /api/importacao-email/mensagem`, mesma
+  chave; leitura em `routes/lib/emailCortag.js`, conferida nos e-mails reais de 09/2026). Decisões do
+  usuário (entrevista):
+  - **Pedido Bloqueado** ("Pedido 00677375 foi bloqueado… Cliente: 22236 … Motivo: 02-Rejeitado/Limite
+    Crédito"): **push no horário comercial + selo**. Selo "⛔ Bloqueado · Limite Crédito · desde DD/MM"
+    no pedido do histórico do cliente (card próprio se o pedido ainda não veio no relatório) e faixa
+    vermelha no card do cliente no Pedido e no Levantamento (vem no `/api/clientes/sync`, funciona
+    offline). **Some quando o pedido aparece faturado** no relatório; sem isso, em 30 dias
+    (`sqlBloqueioAtivo`, `routes/lib/pedidosBloqueados.js`). Tabela `pedidos_bloqueados`.
+  - **Pedido de Venda à Vista** ("Boa tarde, CLIENTE, segue anexo pedido de venda No.00677304 Valor R$
+    2.410,03, aguardando O pagamento…"): **selo + push**. Entra em `pedidos_pendentes_pagamento` (o
+    mesmo selo "À vista · aguardando pagamento" da aba do relatório) no mesmo dia; o relatório da
+    madrugada continua sendo a foto oficial (sumiu da aba = pago), e e-mail mais velho que o último
+    relatório importado é ignorado. Cliente pelo pedido no relatório ou pelo nome (`acharClientePorNome`).
+  - Cada pedido é um aviso próprio (`porPedido` em `routes/lib/novidades.js`: não junta nem substitui o
+    anterior do mesmo tipo). E-mail com mais de 2 dias grava o selo sem push (1ª rodada do script).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -523,10 +541,13 @@ Supabase, sem PR — não é mudança de código.
     Total", mas as 47 linhas que já estavam assim em 02/10/2026 (pedidos que não voltam mais no
     relatório) só saem por SQL ou pela limpeza. Provável causa de a Entrada de Pedidos de set/2026
     ter ficado R$ 8,2 mil / 2 clientes acima do oficial — conferir de novo depois da limpeza.
-- **Outros e-mails automáticos da Cortag** (usuário quer discutir, 10/2026): "Relatório de Clientes Sem
-  Compra" e "Base de Clientes x Compra" (noreply@cortag.com.br, com planilha) e "Cancelamento saldo em
-  carteira DD.MM.AAAA" (assistente comercial, tabela no corpo do e-mail) — o script do Gmail já tem a
-  estrutura pra mandar mais tipos; falta decidir o que o app faz com cada um.
+- **Outros e-mails automáticos da Cortag** (entrevista de 10/2026): **Pedido Bloqueado** e **Pedido à
+  Vista** já entram (ver "Pedido bloqueado e à vista pelo e-mail" acima). Combinado pra depois, quando
+  o usuário mandar planilhas de exemplo: **Inadimplência** ("Prévia Relatório de Inadimplência", anexo
+  `20.xlsx`) e **Clientes Sem Compra / Base de Clientes x Compra** (anexos com nome truncado, sem
+  extensão — o script vai precisar reconhecer pelo assunto). **Comissões** (PDF): fora do app, decisão
+  do usuário. "Cancelamento saldo em carteira DD.MM.AAAA" (assistente comercial, tabela no corpo) ainda
+  sem decisão.
 - Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma
   no faturamento do classificatório, na Curva ABC e no top clientes (valores pequenos). Se o painel
   oficial também a exclui dali, dá pra reaproveitar o mesmo filtro (`length(nr_pedido) <= 6`).

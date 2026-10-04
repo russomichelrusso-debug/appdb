@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 
 router.param('id', validarIdInteiro);
 
@@ -54,7 +55,11 @@ router.get('/sync', async (req, res) => {
                 WHEN f.dados_brutos->'mei'->>'optante' = 'true' THEN 'mei'
                 WHEN f.dados_brutos->'simples'->>'optante' = 'true' THEN 'simples'
                 WHEN f.dados_brutos->'simples'->>'optante' = 'false' THEN 'normal'
-              END AS regime_tributario
+              END AS regime_tributario,
+              -- pedidos bloqueados ainda valendo (selo no card do cliente, sem internet)
+              (SELECT json_agg(json_build_object('nr_pedido', pb.nr_pedido, 'motivo', pb.motivo, 'recebido_em', pb.recebido_em) ORDER BY pb.recebido_em DESC)
+               FROM pedidos_bloqueados pb
+               WHERE c.codigo_oficial IS NOT NULL AND pb.cliente_codigo_oficial = c.codigo_oficial AND ${sqlBloqueioAtivo('pb')}) AS bloqueados
        FROM clientes c
        LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id
        ORDER BY c.nome`

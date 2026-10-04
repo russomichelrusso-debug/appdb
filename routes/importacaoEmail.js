@@ -26,6 +26,10 @@ const { importarRelatorioOficial } = require('./pedidosOficiais');
 const { importarCatalogoPrecos } = require('./catalogoPrecos');
 const { importarPrevisaoEstoque } = require('./previsaoEstoque');
 const { importarClassificatorioErp } = require('./clientesClassificatorio');
+const { acharClientePorNome } = require('../clientMatcher');
+const { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista } = require('./lib/emailCortag');
+const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
+const { avisarImportacao } = require('./lib/novidades');
 
 const TAMANHO_MAX_BYTES = 10 * 1024 * 1024;
 const USUARIO_EMAIL = { id: null, email: 'importação por e-mail', is_admin: true };
@@ -34,6 +38,8 @@ const ROTULO_TIPO = {
   precos: 'Lista de Preços',
   classificatorio: 'Classificatório',
   previsao: 'Itens em falta (previsão de estoque)',
+  bloqueado: 'Pedido bloqueado',
+  avista: 'Pedido à vista',
 };
 
 function chaveImportacaoValida(req) {
@@ -145,6 +151,121 @@ router.post('/arquivo', async (req, res) => {
     await registrar(hash, corpo, tipo, 'falhou', e.message, null).catch(err => console.error(err));
     console.warn(`Importação por e-mail recusada: "${nome}" - ${e.message}`);
     res.status(422).json({ erro: e.message, tipo });
+  }
+});
+
+// ---- E-mails sem planilha: só o texto (assunto + corpo) ----
+// Pedido Bloqueado e Pedido de Venda à Vista (noreply@cortag.com.br) - decisões
+// do usuário (10/2026): selo no pedido/card do cliente + push no horário
+// comercial, um aviso por pedido. E-mail antigo (a 1ª rodada do script olha 7
+// dias pra trás) grava o selo mas não gera push.
+const PUSH_SO_SE_RECEBIDO_HA_DIAS = 2;
+
+function dataDoEmail(corpo) {
+  const d = new Date(corpo.recebidoEm);
+  return isNaN(d.getTime()) || d.getTime() > Date.now() + 60000 ? new Date() : d;
+}
+function recente(data) {
+  return Date.now() - data.getTime() < PUSH_SO_SE_RECEBIDO_HA_DIAS * 86400000;
+}
+async function nomeDoCliente(codigoOficial, nomeDoEmail) {
+  if (codigoOficial) {
+    const r = await pool.query('/* importacao-email:cliente-por-codigo */ SELECT nome FROM clientes WHERE codigo_oficial = $1', [codigoOficial]);
+    if (r.rows.length) return r.rows[0].nome;
+  }
+  return nomeDoEmail || 'cliente';
+}
+
+async function receberPedidoBloqueado(p, recebidoEm) {
+  await pool.query(
+    `/* importacao-email:bloqueado */
+     INSERT INTO pedidos_bloqueados (nr_pedido, cliente_codigo_oficial, cliente_nome, motivo, recebido_em)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (nr_pedido) DO UPDATE SET
+       cliente_codigo_oficial = COALESCE(EXCLUDED.cliente_codigo_oficial, pedidos_bloqueados.cliente_codigo_oficial),
+       cliente_nome = COALESCE(EXCLUDED.cliente_nome, pedidos_bloqueados.cliente_nome),
+       motivo = EXCLUDED.motivo, recebido_em = GREATEST(pedidos_bloqueados.recebido_em, EXCLUDED.recebido_em), atualizado_em = now()`,
+    [p.nr_pedido, p.cliente_codigo_oficial, p.cliente_nome, p.motivo, recebidoEm.toISOString()]);
+  const ativo = await pool.query(`/* importacao-email:bloqueio-ativo */ SELECT 1 FROM pedidos_bloqueados pb WHERE pb.nr_pedido = $1 AND ${sqlBloqueioAtivo('pb')}`, [p.nr_pedido]);
+  const avisar = ativo.rows.length > 0 && recente(recebidoEm);
+  if (avisar) {
+    const cliente = await nomeDoCliente(p.cliente_codigo_oficial, p.cliente_nome);
+    await avisarImportacao('pedido-bloqueado', [cliente, p.motivo_curto].filter(Boolean).join(' · '), { titulo: `Pedido ${p.nr_pedido} bloqueado` });
+  }
+  return { ...p, ativo: ativo.rows.length > 0, avisado: avisar };
+}
+
+async function receberPedidoAvista(p, recebidoEm) {
+  // relatório oficial importado DEPOIS deste e-mail já traz a foto certa da
+  // aba "Aguardando Pagamento" (sumiu = pago): não ressuscita o pedido
+  const maisNovo = await pool.query(
+    `/* importacao-email:relatorio-mais-novo */
+     SELECT 1 FROM importacoes_email WHERE tipo = 'relatorio' AND status = 'ok' AND recebido_em > $1 LIMIT 1`,
+    [recebidoEm.toISOString()]);
+  if (maisNovo.rows.length) return { ...p, ignorado: 'relatório oficial mais novo já importado' };
+  // código do cliente: pelo pedido no relatório oficial ou pelo nome
+  let codigo = null;
+  const doPedido = await pool.query('/* importacao-email:cliente-do-pedido */ SELECT cliente_codigo_oficial FROM pedidos_oficiais_itens WHERE nr_pedido = $1 LIMIT 1', [p.nr_pedido]);
+  if (doPedido.rows.length) codigo = doPedido.rows[0].cliente_codigo_oficial;
+  else {
+    const id = await acharClientePorNome(pool, p.cliente_nome);
+    if (id) codigo = ((await pool.query('/* importacao-email:codigo-do-cliente */ SELECT codigo_oficial FROM clientes WHERE id = $1', [id])).rows[0] || {}).codigo_oficial || null;
+  }
+  const dia = recebidoEm.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  await pool.query(
+    `/* importacao-email:avista */
+     INSERT INTO pedidos_pendentes_pagamento (nr_pedido, cliente_codigo_oficial, cliente_nome, valor, data_implantacao)
+     VALUES ($1, $2, $3, $4, $5::date)
+     ON CONFLICT (nr_pedido) DO UPDATE SET
+       cliente_codigo_oficial = COALESCE(EXCLUDED.cliente_codigo_oficial, pedidos_pendentes_pagamento.cliente_codigo_oficial),
+       cliente_nome = COALESCE(EXCLUDED.cliente_nome, pedidos_pendentes_pagamento.cliente_nome),
+       valor = EXCLUDED.valor, atualizado_em = now()`,
+    [p.nr_pedido, codigo, p.cliente_nome, p.valor, dia]);
+  const avisar = recente(recebidoEm);
+  if (avisar) {
+    const cliente = await nomeDoCliente(codigo, p.cliente_nome);
+    const valor = p.valor != null ? ' · R$ ' + p.valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+    await avisarImportacao('pedido-avista', `${cliente}${valor}`, { titulo: `Pedido ${p.nr_pedido} aguardando pagamento` });
+  }
+  return { ...p, cliente_codigo_oficial: codigo, avisado: avisar };
+}
+
+router.post('/mensagem', async (req, res) => {
+  if (!chaveImportacaoValida(req)) return res.status(401).json({ erro: 'Chave de importação inválida.' });
+  const corpo = req.body || {};
+  const assunto = String(corpo.assunto || '').slice(0, 300);
+  const texto = String(corpo.texto || '').slice(0, 20000);
+  if (!assunto || !texto) return res.status(422).json({ erro: 'Envie { assunto, texto }.' });
+  const hash = crypto.createHash('sha256').update(`mensagem\n${corpo.mensagemId || ''}\n${assunto}\n${texto}`).digest('hex');
+  let tipo = null;
+  try {
+    const ja = await pool.query("/* importacao-email:ja-importado */ SELECT tipo FROM importacoes_email WHERE hash = $1 AND status = 'ok'", [hash]);
+    if (ja.rows.length) return res.json({ ok: true, duplicado: true, tipo: ja.rows[0].tipo });
+    const recebidoEm = dataDoEmail(corpo);
+    let resultado;
+    if (ehPedidoBloqueado(assunto)) {
+      tipo = 'bloqueado';
+      const p = lerPedidoBloqueado(assunto, texto);
+      if (!p) throw new Recusado('Não encontrei o número do pedido no e-mail de pedido bloqueado.');
+      resultado = await receberPedidoBloqueado(p, recebidoEm);
+    } else if (ehPedidoAvista(assunto)) {
+      tipo = 'avista';
+      const p = lerPedidoAvista(assunto, texto);
+      if (!p) throw new Recusado('Não encontrei pedido/valor no e-mail de pedido à vista.');
+      resultado = await receberPedidoAvista(p, recebidoEm);
+    } else {
+      throw new Recusado('E-mail não reconhecido.');
+    }
+    await registrar(hash, { ...corpo, nome: assunto }, tipo, 'ok', null, resultado);
+    res.json({ ok: true, tipo, resultado });
+  } catch (e) {
+    if (e instanceof Recusado) {
+      await registrar(hash, { ...corpo, nome: assunto }, tipo, 'falhou', e.message, null).catch(err => console.error(err));
+      return res.status(422).json({ erro: e.message, tipo });
+    }
+    // banco fora/erro nosso: o script tenta de novo na próxima rodada
+    console.error('Importação por e-mail (mensagem):', e);
+    res.status(503).json({ erro: 'Erro ao gravar - tente de novo.', tipo });
   }
 });
 

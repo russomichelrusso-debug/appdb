@@ -2929,6 +2929,22 @@
       margin-top: 12px;
     }
 
+    /* pedido bloqueado pela Cortag (e-mail "Pedido Bloqueado") */
+    .clienteBloqueio {
+      margin-top: 10px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--danger-bg);
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .clienteBloqueio.hidden {
+      display: none;
+    }
+
     .clienteObjetivo {
       display: flex;
       justify-content: space-between;
@@ -3212,9 +3228,19 @@
       line-height: 1.35;
     }
 
-    .histCard .hcAvistaPendente.vencido {
+    .histCard .hcAvistaPendente.vencido,
+    .histCard .hcBloqueado {
       background: var(--danger-bg);
       color: var(--danger);
+    }
+
+    .histCard .hcBloqueado {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
     }
 
     .histCard .hcRotBadge {
@@ -5302,6 +5328,7 @@
             </button>
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
+          <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="precosSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
@@ -5428,6 +5455,7 @@
             </button>
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
+          <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="levSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
@@ -8426,6 +8454,28 @@
           progressEl.innerHTML = ''; // limpa na hora - não deixa o progresso do cliente anterior aparecer enquanto busca o novo
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
+        atualizarBloqueioClienteBar(prefixo, cliente);
+      }
+      function atualizarBloqueioClienteBar(prefixo, cliente) {
+        const bloqueioEl = document.getElementById(prefixo + 'ClientBloqueio');
+        if (!bloqueioEl) return;
+        const bloqueados = pedidosBloqueadosDoCliente(cliente);
+        bloqueioEl.classList.toggle('hidden', bloqueados.length === 0);
+        bloqueioEl.innerHTML = bloqueados.map(b => `⛔ Pedido ${escapeHtml(String(b.nr_pedido))} bloqueado${b.motivo ? ' · ' + escapeHtml(motivoBloqueioCurto(b.motivo)) : ''}`).join('<br>');
+      }
+      // Pedidos bloqueados pela Cortag (e-mail "Pedido Bloqueado", lido pela
+      // importação por e-mail) que ainda valem: o selo some quando o relatório
+      // diário traz o pedido faturado (ou depois de 30 dias). Vem pela cópia
+      // local de clientes (/api/clientes/sync), pra aparecer sem internet.
+      function pedidosBloqueadosDoCliente(cliente) {
+        if (!cliente) return [];
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id));
+        const lista = (local && local.bloqueados) || cliente.bloqueados;
+        return Array.isArray(lista) ? lista : [];
+      }
+      // "Rejeitado/Limite Crédito" -> "Limite Crédito"
+      function motivoBloqueioCurto(motivo) {
+        return String(motivo || '').replace(/^rejeitado\s*\/\s*/i, '').trim();
       }
       // Abre a Curva ABC desse cliente numa aba nova, já com ele selecionado -
       // sem isso, o vendedor precisava abrir o painel, trocar pro modo "Por
@@ -10775,6 +10825,8 @@
           if (result && Array.isArray(result.clientes)) {
             saveClientesLocais(result.clientes);
             podarNomesArquivoPendentes(result.clientes);
+            // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
+            if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); }
           }
           return true;
         } catch (e) { return false; /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }
@@ -13002,12 +13054,29 @@
     ${renderSeloTitulosAvista(titulos)}
   </div>`;
       }
-      function renderPedidoSoPendente(pendente) {
+      function renderSeloBloqueado(bloqueado) {
+        if (!bloqueado) return '';
+        const motivo = bloqueado.motivo ? ` · ${escapeHtml(motivoBloqueioCurto(bloqueado.motivo))}` : '';
+        const desde = bloqueado.recebido_em
+          ? ` · desde ${new Date(bloqueado.recebido_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : '';
+        return `<div class="hcBloqueado">⛔ Bloqueado${motivo}${desde}</div>`;
+      }
+      // Pedido bloqueado que ainda não está no relatório importado (o e-mail
+      // chega antes do relatório da madrugada) - card só com o que o e-mail traz.
+      function renderPedidoSoBloqueado(bloqueado) {
+        return `<div class="histCard">
+    <div class="hcTopo">
+      <div class="hcName">Nr.Pedido ${escapeHtml(String(bloqueado.nr_pedido))}</div>
+    </div>
+    ${renderSeloBloqueado(bloqueado)}
+  </div>`;
+      }
+      function renderPedidoSoPendente(pendente, bloqueado) {
         return `<div class="histCard">
     <div class="hcTopo">
       <div class="hcName">Nr.Pedido ${escapeHtml(String(pendente.nr_pedido))}</div>
     </div>
-    ${renderSeloAguardandoPagamento(pendente)}
+    ${renderSeloBloqueado(bloqueado)}${renderSeloAguardandoPagamento(pendente)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(pendente.data_implantacao)}</b></div>
     </div>
@@ -13070,7 +13139,7 @@
         const regiao = saldoMinimo && saldoMinimo.regiao ? ` (${escapeHtml(saldoMinimo.regiao)})` : '';
         return `<div class="hcSaldoMinimo">⚠ Saldo abaixo do mínimo de ${brl(minimo)}${regiao} · faltam ${brl(falta)} · pode ser cancelado. ${acao}</div>`;
       }
-      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo) {
+      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo, bloqueado) {
         // À vista sem pagamento (aba "Aguardando Pagamento" ou título em aberto
         // na "Pendentes à Vista"): o ERP já lista a NF na aba Faturamento, mas
         // o pedido não saiu - nada de "Faturado", selo T/P, transportadora nem
@@ -13138,7 +13207,7 @@
       ${botaoRastreio}
     </div>
     <div class="hcCode">${qtdProdutos} produto${qtdProdutos === 1 ? '' : 's'}</div>
-    ${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
+    ${renderSeloBloqueado(bloqueado)}${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
       ${aguardandoPagamento
@@ -13458,7 +13527,10 @@
       // (routes/importacaoEmail.js, scripts/gmail-importacao/Codigo.gs). O
       // Painel mostra o último arquivo de cada tipo; recusado = "⚠ falhou"
       // (o e-mail fica com o marcador "Cortag/Falhou" pra importar na mão).
-      const NOME_CURTO_IMPORTACAO_EMAIL = { relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta' };
+      const NOME_CURTO_IMPORTACAO_EMAIL = {
+        relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta',
+        bloqueado: 'Pedido bloqueado', avista: 'Pedido à vista',
+      };
       async function carregarStatusImportacaoEmail() {
         const el = document.getElementById('apImportacaoEmail');
         if (!el) return;
@@ -13486,6 +13558,7 @@
       const NOME_CURTO_NOVIDADE = {
         'relatorio-oficial': 'Relatório', 'catalogo-precos': 'Preços', 'previsao-estoque': 'Previsão de estoque',
         'classificatorio': 'Classificatório', 'objetivos-trimestrais': 'Objetivos',
+        'pedido-bloqueado': 'Pedido bloqueado', 'pedido-avista': 'Pedido à vista',
       };
       let novidadesDados = null; // { novidades, vistas_ate, chave_push }
       let novidadesInscricaoConferida = false;
@@ -13722,6 +13795,7 @@
           } else if (clienteTabView === 'pedidosoficiais') {
             const resp = await apiPedidosOficiaisCliente(clienteTabSelected.id);
             const pendentesPorPedido = new Map((resp.pendentes_pagamento || []).map(p => [String(p.nr_pedido), p]));
+            const bloqueadosPorPedido = new Map((resp.bloqueados || []).map(b => [String(b.nr_pedido), b]));
             const titulosPorNf = new Map();
             for (const t of (resp.titulos_avista || [])) {
               if (!titulosPorNf.has(String(t.titulo))) titulosPorNf.set(String(t.titulo), []);
@@ -13729,7 +13803,7 @@
             }
             if (!resp.vinculado) {
               content.innerHTML = '<div class="lev-empty">Esse cliente ainda não foi encontrado no relatório oficial da empresa (Carteira/Faturamento) — o vínculo é feito automaticamente na importação, casando pelo nome.</div>';
-            } else if (resp.itens.length === 0 && pendentesPorPedido.size === 0 && titulosPorNf.size === 0) {
+            } else if (resp.itens.length === 0 && pendentesPorPedido.size === 0 && titulosPorNf.size === 0 && bloqueadosPorPedido.size === 0) {
               content.innerHTML = '<div class="lev-empty">Nenhum pedido oficial encontrado pra esse cliente ainda.</div>';
             } else {
               // Agrupa por Nr.Pedido - a API devolve uma linha por produto, e um
@@ -13743,6 +13817,9 @@
               // à vista aguardando pagamento que ainda não está na Carteira/
               // Faturamento importados aparece antes, com o que a aba traz
               const soPendentes = [...pendentesPorPedido.values()].filter(p => !porPedido.has(String(p.nr_pedido)));
+              // bloqueado (e-mail) que ainda não veio no relatório nem nos pendentes
+              const soBloqueados = [...bloqueadosPorPedido.values()]
+                .filter(b => !porPedido.has(String(b.nr_pedido)) && !pendentesPorPedido.has(String(b.nr_pedido)));
               // títulos à vista em aberto: ligados ao pedido pela nota fiscal
               const titulosDoPedido = (itens) => {
                 const nfs = new Set(itens.map(it => it.nota_fiscal).filter(Boolean).map(String));
@@ -13750,9 +13827,11 @@
               };
               const nfsNosPedidos = new Set(resp.itens.map(it => it.nota_fiscal).filter(Boolean).map(String));
               const soTitulos = [...titulosPorNf.entries()].filter(([nf]) => !nfsNosPedidos.has(nf));
-              content.innerHTML = soTitulos.map(([nf, ts]) => renderTituloSoPendente(nf, ts)).join('')
-                + soPendentes.map(renderPedidoSoPendente).join('') + Array.from(porPedido.entries())
-                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens), resp.saldo_minimo))
+              content.innerHTML = soBloqueados.map(renderPedidoSoBloqueado).join('')
+                + soTitulos.map(([nf, ts]) => renderTituloSoPendente(nf, ts)).join('')
+                + soPendentes.map(p => renderPedidoSoPendente(p, bloqueadosPorPedido.get(String(p.nr_pedido)))).join('') + Array.from(porPedido.entries())
+                .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens), resp.saldo_minimo,
+                  bloqueadosPorPedido.get(String(nrPedido))))
                 .join('');
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));

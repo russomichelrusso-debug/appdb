@@ -10,6 +10,18 @@ sem abrir o Painel:
 | Itens em falta (previsão de estoque) | noreply@cortag.com.br | `ESCE007-*.xlsx` | ~1 vez por semana |
 | Lista de Preços | vendas@cortag.com | `... LISTA PADRÃO ... SUL SUDESTE ... .xlsx` | quando muda |
 
+E dois avisos **sem planilha** (o script manda só o assunto e o texto do e-mail, pra
+`POST /api/importacao-email/mensagem`):
+
+| Aviso | Remetente | Assunto | O que acontece no app |
+|---|---|---|---|
+| Pedido bloqueado | noreply@cortag.com.br | `Pedido Bloqueado 00677375` | selo "⛔ Bloqueado · motivo" no pedido (histórico do cliente) e no card do cliente (Pedido/Levantamento); some quando o relatório traz o pedido faturado (ou em 30 dias) |
+| Pedido à vista | noreply@cortag.com.br | `Pedido de Venda à Vista - Cortag` | selo "À vista · aguardando pagamento" no pedido no mesmo dia, sem esperar o relatório da madrugada |
+
+Os dois geram um aviso por pedido (faixa de novidades + push no celular em dia útil, 7h–20h). E-mail
+com mais de 2 dias (ex.: a 1ª rodada, que olha 7 dias pra trás) grava o selo sem push; pedido à vista
+mais velho que o último relatório oficial importado é ignorado (o relatório já traz a foto certa).
+
 Como funciona: um script do Google (`scripts/gmail-importacao/Codigo.gs`) roda **na própria conta
 do Gmail**, a cada 15 minutos, e manda só esses anexos pro servidor do app
 (`POST /api/importacao-email/arquivo`, com a chave secreta). O servidor reconhece o tipo pela
@@ -52,6 +64,8 @@ O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra 
   de 3 min e salva o progresso a cada e-mail; se aparecer, cole de novo a versão atual do
   `Codigo.gs`. Nada se perde: o arquivo cortado termina no servidor e, na rodada seguinte, volta
   como "já importado".
+- **Avisos de pedido bloqueado/à vista não chegam**: o script colado no Google é anterior a
+  10/2026 — cole de novo a versão atual do `Codigo.gs` (não precisa rodar o `configurar` de novo).
 - **Servidor dormindo** (Render gratuito): o script espera ele acordar; se não acordar, tenta
   de novo na rodada seguinte, sem marcar o e-mail.
 - **Trocar a chave**: gerar outra (`openssl rand -hex 32`), atualizar `IMPORTACAO_EMAIL_CHAVE`

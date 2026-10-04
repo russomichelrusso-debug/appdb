@@ -24,6 +24,7 @@ let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC d
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
 let novidades = []; // routes/lib/novidades.js
 let importacoesEmail = []; // routes/importacaoEmail.js
+let pedidosBloqueados = []; // pedidos_bloqueados
 let previsaoEstoque = []; // previsao_estoque
 let nextNovidadeId = 1;
 let pushInscricoes = []; // push_inscricoes
@@ -54,6 +55,7 @@ function reset() {
   recompraAdiamentos = [];
   novidades = [];
   importacoesEmail = [];
+  pedidosBloqueados = [];
   previsaoEstoque = [];
   nextNovidadeId = 1;
   pushInscricoes = [];
@@ -76,6 +78,14 @@ function seed(partial) {
   if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
 }
 
+// Reproduz sqlBloqueioAtivo (routes/lib/pedidosBloqueados.js): menos de 30
+// dias e o pedido ainda não apareceu faturado
+function bloqueiosAtivos() {
+  const limite = Date.now() - 30 * 86400000;
+  return pedidosBloqueados.filter(b => new Date(b.recebido_em).getTime() > limite
+    && !pedidosOficiaisItens.some(i => i.nr_pedido === b.nr_pedido && i.status === 'faturado'));
+}
+
 // Reproduz sqlFaturadoDeFato (routes/lib/faturadoDeFato.js): item faturado cujo
 // título à vista (nota fiscal) ainda está pendente não conta no faturamento.
 function faturadoDeFato(it) {
@@ -93,6 +103,39 @@ async function query(sql, params = []) {
   if (s.includes('CREATE TABLE')) return { rows: [] };
 
   // Importação por e-mail - routes/importacaoEmail.js
+  if (s.includes('/* IMPORTACAO-EMAIL:BLOQUEADO */')) {
+    const [nr, cod, nome, motivo, recebido] = params;
+    const atual = pedidosBloqueados.find(b => b.nr_pedido === nr);
+    if (atual) Object.assign(atual, { cliente_codigo_oficial: cod || atual.cliente_codigo_oficial, cliente_nome: nome || atual.cliente_nome, motivo,
+      recebido_em: new Date(recebido) > new Date(atual.recebido_em) ? recebido : atual.recebido_em });
+    else pedidosBloqueados.push({ nr_pedido: nr, cliente_codigo_oficial: cod, cliente_nome: nome, motivo, recebido_em: recebido });
+    return { rows: [] };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:BLOQUEIO-ATIVO */')) {
+    return { rows: bloqueiosAtivos().filter(b => b.nr_pedido === params[0]).map(() => ({ '?column?': 1 })) };
+  }
+  if (s.includes('/* PEDIDOS-OFICIAIS:BLOQUEADOS */')) {
+    return { rows: bloqueiosAtivos().filter(b => b.cliente_codigo_oficial === params[0]).map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em })) };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:CLIENTE-POR-CODIGO */')) {
+    return { rows: clientes.filter(c => c.codigo_oficial === params[0]).map(c => ({ nome: c.nome })) };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:RELATORIO-MAIS-NOVO */')) {
+    return { rows: importacoesEmail.filter(i => i.tipo === 'relatorio' && i.status === 'ok' && i.recebido_em && new Date(i.recebido_em) > new Date(params[0])).slice(0, 1).map(() => ({ '?column?': 1 })) };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:CLIENTE-DO-PEDIDO */')) {
+    return { rows: pedidosOficiaisItens.filter(i => i.nr_pedido === params[0]).slice(0, 1).map(i => ({ cliente_codigo_oficial: i.cliente_codigo_oficial })) };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:CODIGO-DO-CLIENTE */')) {
+    return { rows: clientes.filter(c => String(c.id) === String(params[0])).map(c => ({ codigo_oficial: c.codigo_oficial || null })) };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:AVISTA */')) {
+    const [nr, cod, nome, valor, data] = params;
+    const atual = pedidosPendentesPagamento.find(p => p.nr_pedido === nr);
+    if (atual) Object.assign(atual, { cliente_codigo_oficial: cod || atual.cliente_codigo_oficial, cliente_nome: nome || atual.cliente_nome, valor });
+    else pedidosPendentesPagamento.push({ nr_pedido: nr, cliente_codigo_oficial: cod, cliente_nome: nome, valor, data_implantacao: data });
+    return { rows: [] };
+  }
   if (s.includes('/* IMPORTACAO-EMAIL:JA-IMPORTADO */')) {
     return { rows: importacoesEmail.filter(i => i.hash === params[0] && i.status === 'ok').map(i => ({ tipo: i.tipo })) };
   }
@@ -553,7 +596,7 @@ async function query(sql, params = []) {
     if (c) c.matriz_grupo = matrizGrupo;
     return { rows: c ? [{ nome: c.nome }] : [] };
   }
-  if (s.includes('AS REGIME_TRIBUTARIO FROM CLIENTES C')) {
+  if (s.includes('AS BLOQUEADOS FROM CLIENTES C')) {
     const regime = (brutos) => {
       if (!brutos) return null;
       if (brutos.mei && brutos.mei.optante === true) return 'mei';
@@ -565,6 +608,11 @@ async function query(sql, params = []) {
       id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null,
       nome_arquivo: c.nome_arquivo || null, nome_arquivo_em: c.nome_arquivo_em || null,
       regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
+      bloqueados: (() => {
+        const l = bloqueiosAtivos().filter(b => c.codigo_oficial && b.cliente_codigo_oficial === c.codigo_oficial)
+          .map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em }));
+        return l.length ? l : null;
+      })(),
     })) };
   }
   if (s.includes('FROM CLIENTES WHERE ID = ANY')) {
@@ -1570,6 +1618,7 @@ module.exports = {
   __getRecompraAdiamentos: () => recompraAdiamentos,
   __getNovidades: () => novidades,
   __getImportacoesEmail: () => importacoesEmail,
+  __getPedidosBloqueados: () => pedidosBloqueados,
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
   __getPushInscricoes: () => pushInscricoes,

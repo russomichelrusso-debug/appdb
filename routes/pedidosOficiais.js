@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
 const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
+const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
@@ -230,11 +231,19 @@ router.get('/:clienteId', async (req, res) => {
        ORDER BY vencimento NULLS LAST, titulo, parcela`,
       [codigoOficial]
     );
+    // Pedidos bloqueados pela Cortag (e-mail "Pedido Bloqueado") ainda valendo
+    const bloqueados = await pool.query(
+      `/* pedidos-oficiais:bloqueados */
+       SELECT pb.nr_pedido, pb.motivo, pb.recebido_em FROM pedidos_bloqueados pb
+       WHERE pb.cliente_codigo_oficial = $1 AND ${sqlBloqueioAtivo('pb')}
+       ORDER BY pb.recebido_em DESC`,
+      [codigoOficial]
+    );
     // Mínimo do saldo em carteira antes do cancelamento - R$ 600 se a ficha de
     // CNPJ diz que o cliente é do Norte/Nordeste (ver lib/saldoMinimo.js).
     const ficha = await pool.query('SELECT uf FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.clienteId]);
     res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows, titulos_avista: titulos.rows,
-               saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
+               bloqueados: bloqueados.rows, saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar pedidos oficiais.' });
