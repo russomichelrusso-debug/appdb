@@ -503,3 +503,19 @@ CREATE TABLE IF NOT EXISTS importacoes_email (
 );
 CREATE INDEX IF NOT EXISTS idx_importacoes_email_tipo ON importacoes_email (tipo, atualizado_em DESC);
 ALTER TABLE importacoes_email ENABLE ROW LEVEL SECURITY;
+
+-- Pedidos bloqueados pela Cortag (e-mail "Pedido Bloqueado NNNNNN" da
+-- noreply@cortag.com.br, lido pela importação por e-mail). O selo "⛔
+-- Bloqueado" vale enquanto o pedido não aparece faturado no relatório oficial
+-- e por no máximo 30 dias (pedido que nunca fatura = cancelado) - regra em
+-- routes/lib/pedidosBloqueados.js.
+CREATE TABLE IF NOT EXISTS pedidos_bloqueados (
+  nr_pedido TEXT PRIMARY KEY,
+  cliente_codigo_oficial TEXT,
+  cliente_nome TEXT,
+  motivo TEXT,
+  recebido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pedidos_bloqueados_cliente ON pedidos_bloqueados (cliente_codigo_oficial);
+ALTER TABLE pedidos_bloqueados ENABLE ROW LEVEL SECURITY;

@@ -4,8 +4,10 @@
 // a cada 15 minutos: procura os e-mails da Cortag com planilha anexa e manda
 // cada anexo pro servidor do app (POST /api/importacao-email/arquivo), que lê
 // a planilha e publica sozinho - mesmo efeito de importar pelo Painel (⚙).
-// O servidor NÃO recebe acesso à caixa de e-mail: só os anexos que este
-// script escolhe mandar.
+// Os avisos sem planilha (Pedido Bloqueado, Pedido de Venda à Vista) vão só
+// com assunto + texto (POST /api/importacao-email/mensagem).
+// O servidor NÃO recebe acesso à caixa de e-mail: só os anexos e textos que
+// este script escolhe mandar.
 //
 // Instalação (uma vez): ver docs/IMPORTACAO-EMAIL.md
 //  1. script.google.com (logado no russo2055) › Novo projeto › colar este arquivo;
@@ -33,6 +35,11 @@ const CONFIG = {
     { remetente: 'noreply@cortag.com.br', anexo: /^ESCE007-.*\.xlsx$/i }, // itens em falta = previsão de estoque
     { remetente: 'vendas@cortag.com', anexo: /LISTA PADR\S{1,2}O.*SUL SUDESTE.*\.xlsx$/i }, // Lista de Preços
   ],
+  // e-mails sem planilha: vai o texto (o servidor lê pedido, cliente, motivo/valor)
+  mensagens: [
+    { remetente: 'noreply@cortag.com.br', assunto: /^\s*Pedido Bloqueado\b/i, busca: 'subject:"Pedido Bloqueado"' },
+    { remetente: 'noreply@cortag.com.br', assunto: /Pedido de Venda [àa] Vista/i, busca: 'subject:"Pedido de Venda"' },
+  ],
   maxProcessadosGuardados: 400,
   // o Google corta cada execução em 6 min, e cada relatório leva ~1-3 min no
   // servidor: depois de 3 min não começa outro arquivo (fica pra próxima rodada)
@@ -59,22 +66,28 @@ function verificarEmails() {
   const processados = JSON.parse(props.getProperty('PROCESSADOS') || '[]');
   const jaFeito = new Set(processados);
   const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente)));
-  const consulta = `from:(${remetentes.join(' OR ')}) has:attachment filename:xlsx newer_than:${CONFIG.diasParaTras}d`;
+  const periodo = `newer_than:${CONFIG.diasParaTras}d`;
+  const consultas = [`from:(${remetentes.join(' OR ')}) has:attachment filename:xlsx ${periodo}`]
+    .concat(CONFIG.mensagens.map(m => `from:${m.remetente} ${m.busca} ${periodo}`));
   const limite = new Date(Date.now() - CONFIG.diasParaTras * 86400000);
 
   // junta os e-mails novos e importa do MAIS ANTIGO pro mais novo - senão uma
   // Lista de Preços antiga podia sobrescrever a errata que chegou depois
   const fila = [];
-  GmailApp.search(consulta, 0, 50).forEach(thread => {
+  const naFila = new Set();
+  consultas.forEach(consulta => GmailApp.search(consulta, 0, 50).forEach(thread => {
     thread.getMessages().forEach(msg => {
-      if (jaFeito.has(msg.getId()) || msg.getDate() < limite) return;
+      const id = msg.getId();
+      if (jaFeito.has(id) || naFila.has(id) || msg.getDate() < limite) return;
       const de = msg.getFrom().toLowerCase();
       const anexos = msg.getAttachments({ includeInlineImages: false })
         .filter(a => CONFIG.regras.some(r => de.indexOf(r.remetente) !== -1 && r.anexo.test(a.getName())));
-      if (anexos.length === 0) { processados.push(msg.getId()); return; }
-      fila.push({ thread, msg, anexos });
+      const ehMensagem = CONFIG.mensagens.some(m => de.indexOf(m.remetente) !== -1 && m.assunto.test(msg.getSubject()));
+      if (anexos.length === 0 && !ehMensagem) { processados.push(id); jaFeito.add(id); return; }
+      naFila.add(id);
+      fila.push({ thread, msg, anexos, ehMensagem });
     });
-  });
+  }));
   fila.sort((a, b) => a.msg.getDate() - b.msg.getDate());
 
   const salvar = () => props.setProperty('PROCESSADOS', JSON.stringify(processados.slice(-CONFIG.maxProcessadosGuardados)));
@@ -91,8 +104,10 @@ function verificarEmails() {
     }
     let falhou = false;
     let tentarDeNovo = false;
-    for (const anexo of item.anexos) {
-      const r = enviar_(chave, anexo, item.msg);
+    const resultados = item.anexos.length
+      ? item.anexos.map(anexo => enviar_(chave, anexo, item.msg))
+      : [enviarMensagem_(chave, item.msg)];
+    for (const r of resultados) {
       if (r === 'tentar-de-novo') tentarDeNovo = true;
       else if (r === 'falhou') falhou = true;
     }
@@ -105,20 +120,35 @@ function verificarEmails() {
 
 // 'ok' | 'falhou' (planilha recusada - não adianta repetir) | 'tentar-de-novo'
 function enviar_(chave, anexo, msg) {
+  return postar_(chave, '/api/importacao-email/arquivo', anexo.getName(), {
+    nome: anexo.getName(),
+    arquivoBase64: Utilities.base64Encode(anexo.getBytes()),
+    remetente: msg.getFrom(),
+    assunto: msg.getSubject(),
+    recebidoEm: msg.getDate().toISOString(),
+    mensagemId: msg.getId(),
+  });
+}
+
+// E-mail sem planilha (Pedido Bloqueado, Pedido de Venda à Vista): só o texto.
+function enviarMensagem_(chave, msg) {
+  return postar_(chave, '/api/importacao-email/mensagem', msg.getSubject(), {
+    assunto: msg.getSubject(),
+    texto: msg.getPlainBody().slice(0, 20000),
+    remetente: msg.getFrom(),
+    recebidoEm: msg.getDate().toISOString(),
+    mensagemId: msg.getId(),
+  });
+}
+
+function postar_(chave, caminho, rotulo, corpo) {
   let resp;
   try {
-    resp = UrlFetchApp.fetch(CONFIG.urlServidor + '/api/importacao-email/arquivo', {
+    resp = UrlFetchApp.fetch(CONFIG.urlServidor + caminho, {
       method: 'post',
       contentType: 'application/json',
       headers: { 'X-Chave-Importacao': chave },
-      payload: JSON.stringify({
-        nome: anexo.getName(),
-        arquivoBase64: Utilities.base64Encode(anexo.getBytes()),
-        remetente: msg.getFrom(),
-        assunto: msg.getSubject(),
-        recebidoEm: msg.getDate().toISOString(),
-        mensagemId: msg.getId(),
-      }),
+      payload: JSON.stringify(corpo),
       muteHttpExceptions: true,
     });
   } catch (e) {
@@ -126,7 +156,7 @@ function enviar_(chave, anexo, msg) {
     return 'tentar-de-novo';
   }
   const codigo = resp.getResponseCode();
-  Logger.log('%s: %s %s', anexo.getName(), codigo, resp.getContentText().slice(0, 300));
+  Logger.log('%s: %s %s', rotulo, codigo, resp.getContentText().slice(0, 300));
   if (codigo === 401) throw new Error('O servidor recusou a CHAVE - confira a propriedade CHAVE do script e IMPORTACAO_EMAIL_CHAVE no Render.');
   if (codigo >= 200 && codigo < 300) return 'ok';
   if (codigo === 422) return 'falhou';

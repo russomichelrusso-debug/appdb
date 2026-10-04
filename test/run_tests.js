@@ -1810,6 +1810,81 @@ async function main() {
       `importação por e-mail: status do Painel traz o último de cada tipo: ${JSON.stringify(res.body)}`);
   }
   {
+    // e-mails sem planilha: Pedido Bloqueado e Pedido de Venda à Vista (texto real de 09/2026)
+    const EmailCortag = require('../routes/lib/emailCortag');
+    const textoBloqueado = 'Prezado(a),\r\n\r\nInformamos que o pedido *00677375* foi bloqueado conforme abaixo:\r\n\r\n'
+      + 'Cliente: 22236 DEPOSITO DE MATS. P/ CONSTR. LOANDA LTDA\r\nMotivo: 02-Rejeitado/Limite Crédito\r\n\r\nAtenciosamente';
+    const textoAvista = 'COMUNICADO\n\nBoa tarde, CIA ACABAMENTOS LTDA, segue anexo pedido de venda No.00677304 Valor R$ 2.410,03,\n'
+      + 'aguardando O pagamento para liberação, caso já tenha efetuado o pagamento favor desconsiderar.';
+    const b = EmailCortag.lerPedidoBloqueado('Pedido Bloqueado 00677375', textoBloqueado);
+    assert(EmailCortag.ehPedidoBloqueado('Pedido Bloqueado 00677375') && b && b.nr_pedido === '677375' && b.cliente_codigo_oficial === '22236'
+      && b.cliente_nome === 'DEPOSITO DE MATS. P/ CONSTR. LOANDA LTDA' && b.motivo === 'Rejeitado/Limite Crédito' && b.motivo_curto === 'Limite Crédito',
+      `e-mail Cortag: lê o pedido bloqueado (número sem zeros, cliente, motivo): ${JSON.stringify(b)}`);
+    const a = EmailCortag.lerPedidoAvista('Pedido de Venda à Vista - Cortag', textoAvista);
+    assert(EmailCortag.ehPedidoAvista('Pedido de Venda à Vista - Cortag') && !EmailCortag.ehPedidoAvista('Pedido Bloqueado 1')
+      && a && a.nr_pedido === '677304' && a.cliente_nome === 'CIA ACABAMENTOS LTDA' && a.valor === 2410.03,
+      `e-mail Cortag: lê o pedido à vista (número, cliente, valor): ${JSON.stringify(a)}`);
+
+    const enviarMensagem = (assunto, texto, extra = {}, chave = CHAVE_EMAIL) => req('POST', '/api/importacao-email/mensagem',
+      { assunto, texto, remetente: 'noreply@cortag.com.br', recebidoEm: new Date().toISOString(), mensagemId: 'msg-' + assunto, ...extra },
+      { 'X-Chave-Importacao': chave, Authorization: '' });
+    mockDb.__seed({ clientes: [
+      { id: 9502, nome: 'DEPOSITO LOANDA', documento: '55555555000256', codigo_oficial: '22236' },
+      { id: 9503, nome: 'CIA ACABAMENTOS LTDA', documento: '55555555000337', codigo_oficial: '30001' },
+    ] });
+    res = await enviarMensagem('Pedido Bloqueado 00677375', textoBloqueado, {}, 'chave-errada');
+    assert(res.status === 401 && mockDb.__getPedidosBloqueados().length === 0, 'e-mail Cortag: mensagem com chave errada é recusada');
+
+    const novidadesAntes = mockDb.__getNovidades().length;
+    res = await enviarMensagem('Pedido Bloqueado 00677375', textoBloqueado);
+    const nb = mockDb.__getNovidades().find(n => n.tipo === 'pedido-bloqueado');
+    assert(res.status === 200 && res.body.tipo === 'bloqueado' && res.body.resultado.avisado === true
+      && mockDb.__getPedidosBloqueados().some(x => x.nr_pedido === '677375' && x.cliente_codigo_oficial === '22236')
+      && nb && nb.titulo === 'Pedido 677375 bloqueado' && nb.texto === 'DEPOSITO LOANDA · Limite Crédito',
+      `e-mail Cortag: pedido bloqueado grava o selo e gera o aviso com o nome do cliente no app: ${JSON.stringify([res.body, nb])}`);
+    res = await enviarMensagem('Pedido Bloqueado 00677375', textoBloqueado);
+    assert(res.status === 200 && res.body.duplicado === true && mockDb.__getNovidades().length === novidadesAntes + 1,
+      'e-mail Cortag: a mesma mensagem de novo não gera outro aviso');
+
+    res = await req('GET', '/api/pedidos-oficiais/9502');
+    const bloqueadosDoCliente = res.body.bloqueados || [];
+    res = await req('GET', '/api/clientes/sync');
+    const sync9502 = (res.body.clientes || []).find(c => c.id === 9502);
+    const sync9503 = (res.body.clientes || []).find(c => c.id === 9503);
+    assert(bloqueadosDoCliente.length === 1 && bloqueadosDoCliente[0].motivo === 'Rejeitado/Limite Crédito'
+      && sync9502 && sync9502.bloqueados && sync9502.bloqueados[0].nr_pedido === '677375' && sync9503 && !sync9503.bloqueados,
+      `e-mail Cortag: o bloqueio aparece no histórico do cliente e na cópia local (sync): ${JSON.stringify([bloqueadosDoCliente, sync9502])}`);
+
+    mockDb.__seed({ pedidosOficiaisItens: [{ nr_pedido: '677375', codigo_sku: '60863', cliente_codigo_oficial: '22236', cliente_nome: 'DEPOSITO LOANDA',
+      status: 'faturado', quantidade: 1, valor: 10, data_implantacao: '2026-10-01', data_faturamento: '2026-10-03', nota_fiscal: '900001' }] });
+    res = await req('GET', '/api/pedidos-oficiais/9502');
+    assert((res.body.bloqueados || []).length === 0, `e-mail Cortag: o selo de bloqueado some quando o pedido aparece faturado: ${JSON.stringify(res.body.bloqueados)}`);
+
+    const velho = new Date(Date.now() - 5 * 86400000).toISOString();
+    res = await enviarMensagem('Pedido Bloqueado 00677400', textoBloqueado.replace('00677375', '00677400'), { recebidoEm: velho });
+    assert(res.status === 200 && res.body.resultado.ativo === true && res.body.resultado.avisado === false
+      && !mockDb.__getNovidades().some(n => n.titulo === 'Pedido 677400 bloqueado'),
+      'e-mail Cortag: e-mail antigo (1ª rodada do script) grava o selo sem mandar push');
+
+    res = await enviarMensagem('Pedido de Venda à Vista - Cortag', textoAvista);
+    const na = mockDb.__getNovidades().find(n => n.tipo === 'pedido-avista');
+    const pend = mockDb.__getPedidosPendentesPagamento().find(p => p.nr_pedido === '677304');
+    assert(res.status === 200 && res.body.tipo === 'avista' && pend && pend.cliente_codigo_oficial === '30001' && pend.valor === 2410.03
+      && na && na.titulo === 'Pedido 677304 aguardando pagamento' && na.texto === 'CIA ACABAMENTOS LTDA · R$ 2.410,03',
+      `e-mail Cortag: pedido à vista entra nos pendentes (cliente pelo nome) e gera o aviso: ${JSON.stringify([res.body, pend, na])}`);
+
+    // relatório oficial importado depois do e-mail já traz a foto certa: e-mail velho não ressuscita o pedido
+    res = await enviarMensagem('Pedido de Venda à Vista - Cortag', textoAvista.replace('00677304', '00677299'), { recebidoEm: '2026-10-01T15:00:00Z' });
+    assert(res.status === 200 && res.body.resultado.ignorado && !mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === '677299'),
+      `e-mail Cortag: à vista mais velho que o último relatório oficial é ignorado: ${JSON.stringify(res.body)}`);
+
+    res = await enviarMensagem('Pedido Bloqueado 00677999', 'texto sem o formato esperado');
+    const res2 = await enviarMensagem('Relatório de Comissões', 'qualquer coisa');
+    assert(res.status === 200 && res.body.resultado.nr_pedido === '677999' && res2.status === 422
+      && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Relatório de Comissões'),
+      `e-mail Cortag: número só no assunto ainda vale; e-mail não reconhecido é recusado (422): ${JSON.stringify([res.body, res2.body])}`);
+  }
+  {
     // relatório diário do fim de semana: na segunda sai um push só, o do mais novo
     const idSab = await nov.avisarImportacao('objetivos-trimestrais', 'sábado');
     mockDb.__getNovidades().forEach(x => { if (x.id === idSab) { x.atualizado_em = new Date(Date.now() - 3600000); x.push_pendente = true; x.push_enviar_em = new Date(Date.now() + 86400000); } });

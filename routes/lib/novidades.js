@@ -26,6 +26,10 @@ const TIPOS = {
   'previsao-estoque': { emoji: '📦', titulo: 'Previsão de estoque atualizada' },
   'classificatorio': { emoji: '🏅', titulo: 'Classificatório atualizado' },
   'objetivos-trimestrais': { emoji: '🎯', titulo: 'Objetivos trimestrais atualizados' },
+  // e-mails da Cortag por pedido (routes/importacaoEmail.js): cada pedido é
+  // um aviso próprio - não junta nem substitui o anterior do mesmo tipo
+  'pedido-bloqueado': { emoji: '⛔', titulo: 'Pedido bloqueado', porPedido: true },
+  'pedido-avista': { emoji: '💳', titulo: 'Pedido à vista aguardando pagamento', porPedido: true },
 };
 
 const JUNTAR_MINUTOS = 30;
@@ -141,12 +145,21 @@ async function processarPushPendentes() {
 }
 
 // Grava a novidade (ou atualiza a do mesmo tipo dos últimos 30 min) e tenta
-// mandar o push. Nunca derruba a importação: erro só vai pro log.
-async function avisarImportacao(tipo, texto) {
+// mandar o push. Nunca derruba a importação: erro só vai pro log. Tipo
+// `porPedido` sempre grava uma novidade nova, com o título de `opcoes.titulo`.
+async function avisarImportacao(tipo, texto, opcoes = {}) {
   const def = TIPOS[tipo];
   if (!def) return null;
   try {
     const enviarEm = proximaJanelaPush(new Date());
+    if (def.porPedido) {
+      const r = await pool.query(
+        `/* novidades:inserir */
+         INSERT INTO novidades (tipo, titulo, texto, push_enviar_em) VALUES ($1, $2, $3, $4) RETURNING id`,
+        [tipo, String(opcoes.titulo || def.titulo).slice(0, 200), texto || null, enviarEm]);
+      processarPushPendentes().catch(e => console.error('Erro ao enviar avisos no celular:', e));
+      return r.rows[0].id;
+    }
     const recente = await pool.query(
       `/* novidades:recente */
        SELECT id FROM novidades
