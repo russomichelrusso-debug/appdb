@@ -23,6 +23,7 @@ const catalogoPrecosRoutes = require('./routes/catalogoPrecos');
 const radarCnpjRoutes = require('./routes/radarCnpj');
 const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio');
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
+const recompraRoutes = require('./routes/recompra');
 const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
 
 const app = express();
@@ -98,6 +99,7 @@ app.use('/api/pedidos-oficiais', requireAuth, pedidosOficiaisRoutes);
 app.use('/api/assistente', requireAuth, assistenteRoutes);
 app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
+app.use('/api/recompra', requireAuth, recompraRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 app.use('/api', requireAuth, radarCnpjRoutes); // /api/clientes/:id/ficha-cnpj, /api/radar-cnpj/:cnpj
 

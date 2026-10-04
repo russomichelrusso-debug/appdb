@@ -433,3 +433,14 @@ CREATE TABLE IF NOT EXISTS cnpj_preenchimento_falhas (
   erro TEXT
 );
 ALTER TABLE cnpj_preenchimento_falhas ENABLE ROW LEVEL SECURITY;
+
+-- "Já falei" da Recompra da semana (routes/recompra.js): o vendedor já
+-- contatou o cliente atrasado/com compra prevista e ele some da lista até
+-- `ate` (7 dias). Um por cliente; vale em todos os aparelhos.
+CREATE TABLE IF NOT EXISTS recompra_adiamentos (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  ate DATE NOT NULL,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE recompra_adiamentos ENABLE ROW LEVEL SECURITY;

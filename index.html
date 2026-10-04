@@ -4546,6 +4546,143 @@
       margin-top: 2px;
     }
 
+    /* Recompra da semana (aba Clientes) */
+    .recompra {
+      margin: 12px 16px 0;
+      padding: 12px 14px;
+      background: var(--white);
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-md);
+    }
+
+    .recompra.hidden {
+      display: none;
+    }
+
+    .recompraToggle {
+      display: block;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 4px 0;
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+    }
+
+    .recompraToggle b {
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .recompraResumo {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
+    .recompraHint {
+      margin: 6px 0 4px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .recompraSecao {
+      font-size: 13px;
+      margin: 12px 0 2px;
+    }
+
+    .recompraItem {
+      padding: 10px 0;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .recompraNome {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+      background: none;
+      border: none;
+      padding: 0;
+      text-align: left;
+      cursor: pointer;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .recompraSelo {
+      flex-shrink: 0;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 999px;
+      white-space: nowrap;
+      border: 1px solid currentColor;
+    }
+
+    .recompraSelo--atrasado {
+      color: var(--warning);
+    }
+
+    .recompraSelo--fora {
+      color: var(--danger);
+    }
+
+    .recompraSelo--semana {
+      color: var(--success);
+    }
+
+    .recompraMeta {
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 3px;
+    }
+
+    .recompraAcoes {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .recompraBtn {
+      flex: 1;
+      min-height: 40px;
+      background: var(--fill);
+      border: none;
+      color: var(--ink);
+      border-radius: var(--r-sm);
+      padding: 9px 12px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .recompraBtn--principal {
+      flex: 2;
+      color: var(--red);
+    }
+
+    .recompraMais {
+      display: block;
+      width: 100%;
+      background: none;
+      border: none;
+      color: var(--red);
+      font-weight: 600;
+      font-size: 13px;
+      padding: 10px 0 2px;
+      cursor: pointer;
+    }
+
+    .recompraBtn:disabled {
+      opacity: .5;
+      cursor: default;
+    }
+
     .levitem.zero {
       box-shadow: 0 0 0 1.5px rgba(204, 9, 53, .25), var(--shadow-1);
       background: rgba(204, 9, 53, .03);
@@ -5316,6 +5453,7 @@
     </div>
 
     <div id="tabClientes" class="hidden">
+      <div class="recompra hidden" id="recompraWrap"></div>
       <div class="lev-inputWrap" style="padding-top:12px;">
         <div class="searchBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -13461,12 +13599,220 @@
       function initClassificatorioAlertas() {
         document.getElementById('classificatorioAlertasBtn').addEventListener('click', toggleClassificatorioAlertas);
       }
+      // ---- Recompra da semana (topo da aba Clientes) ----
+      // Clientes cuja próxima compra, pelo ritmo dos últimos 12 meses, está
+      // atrasada ou cai nos próximos 7 dias (cálculo no servidor, GET
+      // /api/recompra - routes/lib/ritmoCompra.js). "Montar proposta" põe no
+      // orçamento os produtos que costumam vir nessa compra, na quantidade
+      // típica; "Já falei" tira o cliente da lista por 7 dias (todos os
+      // aparelhos; sem internet vai pela fila). Última lista guardada no
+      // aparelho pra abrir na loja sem internet.
+      const RECOMPRA_LS_KEY = 'cortagRecompra_v1';
+      const RECOMPRA_ADIADOS_LS_KEY = 'cortagRecompraAdiados_v1'; // id -> 'AAAA-MM-DD' ("Já falei" ainda não confirmado)
+      const RECOMPRA_ABERTO_LS_KEY = 'cortagRecompraAberto_v1';
+      const RECOMPRA_ATUALIZAR_MS = 10 * 60000;
+      const RECOMPRA_POR_SECAO = 8;
+      const RECOMPRA_ANTECEDENCIA_DIAS = 7; // iguais a routes/lib/ritmoCompra.js
+      const RECOMPRA_FORA_DO_RITMO = 1.5;
+      let recompraDados = null; // { hoje, dados_ate, clientes, carregadoEm }
+      let recompraCarregando = false;
+      let recompraVerTodas = { atrasados: false, semana: false };
+
+      function hojeLocalISO() {
+        const d = new Date();
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+      function somarDiasISO(iso, n) {
+        const d = new Date(`${iso}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + n);
+        return d.toISOString().slice(0, 10);
+      }
+      function diasEntreISO(a, b) {
+        return Math.round((new Date(`${b}T00:00:00Z`) - new Date(`${a}T00:00:00Z`)) / 86400000);
+      }
+      function dataCurtaISO(iso) {
+        const [a, m, d] = String(iso).slice(0, 10).split('-');
+        return a === String(new Date().getFullYear()) ? `${d}/${m}` : `${d}/${m}/${a.slice(2)}`;
+      }
+      function lerRecompraAdiados() {
+        try { return JSON.parse(localStorage.getItem(RECOMPRA_ADIADOS_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function gravarRecompraAdiados(adiados) {
+        try { localStorage.setItem(RECOMPRA_ADIADOS_LS_KEY, JSON.stringify(adiados)); } catch (e) { }
+      }
+      function recompraAberta() {
+        try { return localStorage.getItem(RECOMPRA_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      // A lista guardada pode ser de outro dia (aberta sem internet): refaz
+      // atraso e situação pela data de hoje, com a mesma regra do servidor.
+      function recompraVisiveis() {
+        if (!recompraDados || !Array.isArray(recompraDados.clientes)) return [];
+        const hoje = hojeLocalISO();
+        const adiadosLocais = lerRecompraAdiados();
+        return recompraDados.clientes.map(c => {
+          const atraso = diasEntreISO(c.previsao, hoje);
+          const situacao = atraso > RECOMPRA_FORA_DO_RITMO * c.ritmo_dias ? 'fora'
+            : atraso > 0 ? 'atrasado' : atraso >= -RECOMPRA_ANTECEDENCIA_DIAS ? 'semana' : null;
+          return { ...c, atraso_dias: atraso, situacao };
+        }).filter(c => {
+          if (!c.situacao) return false;
+          const adiado = [c.adiado_ate, adiadosLocais[c.cliente_id]].filter(Boolean).sort().pop();
+          return !adiado || adiado < hoje;
+        });
+      }
+      function seloRecompra(c) {
+        const dias = (n) => `${n} dia${n === 1 ? '' : 's'}`;
+        if (c.situacao === 'fora') return `<span class="recompraSelo recompraSelo--fora">fora do ritmo · ${dias(c.atraso_dias)}</span>`;
+        if (c.situacao === 'atrasado') return `<span class="recompraSelo recompraSelo--atrasado">atrasado ${dias(c.atraso_dias)}</span>`;
+        return `<span class="recompraSelo recompraSelo--semana">${c.atraso_dias === 0 ? 'prevista hoje' : 'prevista ' + dataCurtaISO(c.previsao)}</span>`;
+      }
+      function renderRecompraItem(c) {
+        const n = (c.itens || []).length;
+        const rotuloProposta = n ? `Montar proposta · ${n} ${n === 1 ? 'item' : 'itens'}` : 'Montar proposta';
+        return `<div class="recompraItem">
+          <button type="button" class="recompraNome" data-recompra-abrir="${c.cliente_id}"><span>${escapeHtml(c.nome)}</span>${seloRecompra(c)}</button>
+          <div class="recompraMeta">compra a cada ~${c.ritmo_dias} dias · última ${escapeHtml(dataCurtaISO(c.ultima_compra))} · ${c.num_compras} compras em 12 meses</div>
+          <div class="recompraAcoes">
+            <button type="button" class="recompraBtn recompraBtn--principal" data-recompra-proposta="${c.cliente_id}"${n ? '' : ' disabled'}>${rotuloProposta}</button>
+            <button type="button" class="recompraBtn" data-recompra-adiar="${c.cliente_id}">Já falei</button>
+          </div>
+        </div>`;
+      }
+      function renderRecompra() {
+        const el = document.getElementById('recompraWrap');
+        if (!el) return;
+        const visiveis = recompraVisiveis();
+        el.classList.toggle('hidden', !!clienteTabSelected || !recompraDados);
+        if (!recompraDados) { el.innerHTML = ''; return; }
+        const atrasados = visiveis.filter(c => c.situacao !== 'semana');
+        const semana = visiveis.filter(c => c.situacao === 'semana');
+        const aberta = recompraAberta();
+        const partes = [];
+        if (atrasados.length) partes.push(`${atrasados.length} atrasado${atrasados.length === 1 ? '' : 's'}`);
+        if (semana.length) partes.push(`${semana.length} esta semana`);
+        const resumo = partes.length ? partes.join(' · ') : 'ninguém com compra prevista agora';
+        let corpo = '';
+        if (aberta) {
+          const secao = (chave, titulo, cor, lista) => {
+            if (!lista.length) return '';
+            const mostrar = recompraVerTodas[chave] ? lista : lista.slice(0, RECOMPRA_POR_SECAO);
+            const resto = lista.length - mostrar.length;
+            return `<h3 class="recompraSecao" style="color:${cor};">${titulo} (${lista.length})</h3>`
+              + mostrar.map(renderRecompraItem).join('')
+              + (resto > 0 ? `<button type="button" class="recompraMais" data-recompra-mais="${chave}">Ver mais ${resto}</button>` : '');
+          };
+          const dadosAte = recompraDados.dados_ate ? ` · pedidos do ERP até ${escapeHtml(dataCurtaISO(recompraDados.dados_ate))}` : '';
+          corpo = `<p class="recompraHint">Pelo ritmo de compra de cada cliente nos últimos 12 meses${dadosAte}.</p>`
+            + secao('atrasados', 'Atrasados', 'var(--warning)', atrasados)
+            + secao('semana', 'Compra prevista nos próximos 7 dias', 'var(--success)', semana)
+            + (visiveis.length ? '' : '<div class="lev-empty">Nenhum cliente com compra atrasada ou prevista pros próximos 7 dias.</div>');
+        }
+        el.innerHTML = `<button type="button" class="recompraToggle" id="recompraToggle" aria-expanded="${aberta}">
+            <b>${aberta ? '▾' : '▸'} Recompra da semana</b>
+            <span class="recompraResumo">${escapeHtml(resumo)}</span>
+          </button>${corpo}`;
+        const porId = new Map(visiveis.map(c => [String(c.cliente_id), c]));
+        document.getElementById('recompraToggle').addEventListener('click', () => {
+          try { localStorage.setItem(RECOMPRA_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
+          renderRecompra();
+        });
+        el.querySelectorAll('[data-recompra-mais]').forEach(b => b.addEventListener('click', () => {
+          recompraVerTodas[b.dataset.recompraMais] = true;
+          renderRecompra();
+        }));
+        el.querySelectorAll('[data-recompra-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra(porId.get(b.dataset.recompraAbrir))));
+        el.querySelectorAll('[data-recompra-proposta]').forEach(b => b.addEventListener('click', () => montarPropostaRecompra(porId.get(b.dataset.recompraProposta))));
+        el.querySelectorAll('[data-recompra-adiar]').forEach(b => b.addEventListener('click', () => adiarRecompra(porId.get(b.dataset.recompraAdiar))));
+      }
+      async function carregarRecompra(forcar) {
+        if (!recompraDados) {
+          try { recompraDados = JSON.parse(localStorage.getItem(RECOMPRA_LS_KEY)) || null; } catch (e) { recompraDados = null; }
+          renderRecompra();
+        }
+        if (recompraCarregando) return;
+        if (!forcar && recompraDados && Date.now() - (recompraDados.carregadoEm || 0) < RECOMPRA_ATUALIZAR_MS) return;
+        recompraCarregando = true;
+        try {
+          const r = await apiFetch('/api/recompra');
+          if (r && Array.isArray(r.clientes)) {
+            recompraDados = { ...r, carregadoEm: Date.now() };
+            try { localStorage.setItem(RECOMPRA_LS_KEY, JSON.stringify(recompraDados)); } catch (e) { }
+            // "Já falei" que o servidor já tem não precisa mais ficar no aparelho
+            const adiados = lerRecompraAdiados();
+            const hoje = hojeLocalISO();
+            for (const id of Object.keys(adiados)) {
+              const doServidor = r.clientes.find(c => String(c.cliente_id) === id);
+              if (adiados[id] < hoje || (doServidor && doServidor.adiado_ate && doServidor.adiado_ate >= adiados[id])) delete adiados[id];
+            }
+            gravarRecompraAdiados(adiados);
+          }
+        } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
+        recompraCarregando = false;
+        renderRecompra();
+      }
+      async function abrirClienteDaRecompra(c) {
+        if (!c) return;
+        try {
+          openClienteDetail(await apiFetch(`/api/clientes/${c.cliente_id}`));
+        } catch (e) {
+          const local = loadClientesLocais().find(x => String(x.id) === String(c.cliente_id));
+          if (local) openClienteDetail(local);
+          else showToast('Não foi possível abrir esse cliente.');
+        }
+      }
+      // Mesmo caminho de abrir um pedido salvo: troca o orçamento (pergunta se
+      // já tem produto), seleciona o cliente e abre o orçamento pra revisar.
+      // Quantidade arredondada pra cima no múltiplo da embalagem.
+      async function montarPropostaRecompra(c) {
+        if (!c) return;
+        const itens = (c.itens || []).map(it => ({ p: productByCod(it.codigo_sku), qty: Number(it.quantidade) || 1 })).filter(x => x.p);
+        if (!itens.length) { showToast('Nenhum produto dessa proposta está no catálogo carregado agora — sincronize e tente de novo.', 'erro'); return; }
+        if (state.cart.length > 0
+          && !await askConfirm(`Trocar os ${state.cart.length} produto(s) do orçamento atual pela proposta de ${c.nome}?`, 'Trocar')) return;
+        setPedidoEditando(null); // proposta é pedido novo
+        state.cart = itens.map(({ p, qty }) => ({ cod: p.c, qty: Math.ceil(qty / packStep(p)) * packStep(p) }));
+        const cliente = loadClientesLocais().find(x => String(x.id) === String(c.cliente_id))
+          || { id: c.cliente_id, nome: c.nome, documento: c.documento, classificatorio_tipo: c.classificatorio_tipo };
+        setLevCliente(cliente);
+        state.cart.forEach(i => autoFillClassificatorioDiscount(i.cod));
+        await activateMainTab('precos');
+        renderResults();
+        renderCartBar();
+        openDrawer();
+        const fora = (c.itens || []).length - itens.length;
+        const origem = c.itens[0] && c.itens[0].origem === 'frequente' ? 'que vieram nas últimas compras' : 'que costumam vir nessa compra';
+        showToast(`Proposta de ${c.nome}: ${itens.length} produto(s) ${origem} — revise as quantidades antes de enviar`
+          + (fora ? ` · ${fora} fora do catálogo atual ficaram de fora` : ''), 'longo');
+      }
+      function adiarRecompra(c) {
+        if (!c) return;
+        const hoje = hojeLocalISO();
+        const adiados = lerRecompraAdiados();
+        adiados[c.cliente_id] = somarDiasISO(hoje, 7);
+        gravarRecompraAdiados(adiados);
+        renderRecompra();
+        showToast(`${c.nome} sai da lista por 7 dias`);
+        apiFetch(`/api/recompra/${encodeURIComponent(c.cliente_id)}/adiar`,
+          { method: 'POST', body: JSON.stringify({ em: hoje }) },
+          { tipo: 'recompra-adiar', descricao: 'Recompra: já falei' })
+          .then(r => {
+            if (!r || r.__filaOffline || !r.adiado_ate || !recompraDados) return;
+            const item = recompraDados.clientes.find(x => String(x.cliente_id) === String(r.cliente_id));
+            if (item) item.adiado_ate = r.adiado_ate;
+            try { localStorage.setItem(RECOMPRA_LS_KEY, JSON.stringify(recompraDados)); } catch (e) { }
+          })
+          .catch(e => console.warn('"Já falei" não foi pro servidor (fica só neste aparelho por enquanto):', e));
+      }
+      function initRecompra() {
+        document.getElementById('tabBtnClientes').addEventListener('click', () => carregarRecompra(false));
+      }
       function openClienteDetail(cliente) {
         clienteTabSelected = cliente;
         document.getElementById('clienteDetailName').textContent = cliente.nome;
         document.getElementById('clienteDetailDoc').textContent = clienteDocText(cliente);
         document.getElementById('clienteTabListWrap').classList.add('hidden');
         document.getElementById('clienteTabDetail').classList.remove('hidden');
+        renderRecompra();
         document.getElementById('clienteFichaDataInicio').value = '';
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
@@ -13481,6 +13827,7 @@
         document.getElementById('clienteTabListWrap').classList.remove('hidden');
         document.getElementById('classificatorioAlertasWrap').classList.add('hidden');
         document.getElementById('clienteTabList').classList.remove('hidden');
+        renderRecompra();
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
@@ -15836,6 +16183,7 @@
           initProdutosTab();
           initClientesTab();
           initClassificatorioAlertas();
+          initRecompra();
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();
