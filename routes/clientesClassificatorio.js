@@ -725,14 +725,21 @@ router.get('/classificatorio/alertas', async (req, res) => {
 // CNPJ diferente), com CNPJ como segundo critério.
 router.post('/classificatorio/importar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar o classificatório.' });
-  const itens = req.body.itens;
-  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const r = await importarClassificatorioErp(req.body || {});
+  res.status(r.status).json(r.json);
+});
+
+// Também chamada pela importação automática por e-mail (routes/importacaoEmail.js)
+// - devolve { status, json } em vez de responder direto.
+async function importarClassificatorioErp(body) {
+  const itens = body.itens;
+  if (!Array.isArray(itens) || itens.length === 0) return { status: 400, json: { erro: 'Envie { itens: [...] }' } };
   // Data do relatório (do nome do arquivo, "02.10.2026_..._Classificatorio.xlsx")
   // e até quando o ERP apurou (maior Ult.Compra da planilha). Sem data válida,
   // o import continua funcionando como antes (sem foto financeira e sem
   // trocar um classificatório que já existe).
-  const dataRelatorio = dataIsoOuNull(req.body.dataRelatorio);
-  const apuradoAte = dataIsoOuNull(req.body.apuradoAte);
+  const dataRelatorio = dataIsoOuNull(body.dataRelatorio);
+  const apuradoAte = dataIsoOuNull(body.apuradoAte);
 
   let client;
   try {
@@ -813,17 +820,17 @@ router.post('/classificatorio/importar', async (req, res) => {
 
     await client.query('COMMIT');
     await avisarImportacao('classificatorio', quantos(atualizados, 'cliente', 'clientes'));
-    res.json({ atualizados, naoEncontrados, total: itens.length });
+    return { status: 200, json: { atualizados, naoEncontrados, total: itens.length } };
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar classificatório.' });
+    return { status: 500, json: { erro: 'Erro ao importar classificatório.' } };
   } finally {
     if (client) client.release();
   }
-});
+}
 
 // Import do "Objetivo Trimestral" oficial do ERP (ver plano "Meta
 // trimestral oficial") - só admin. Recebe { periodoInicio, periodoFim,
@@ -886,3 +893,4 @@ module.exports.faixaDoTipo = faixaDoTipo;
 module.exports.SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE = SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE;
 module.exports.interpretarDiferencaErp = interpretarDiferencaErp;
 module.exports.aplicarLeituraErp = aplicarLeituraErp;
+module.exports.importarClassificatorioErp = importarClassificatorioErp;

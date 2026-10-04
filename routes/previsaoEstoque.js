@@ -20,8 +20,14 @@ router.get('/', async (req, res) => {
 // item). Qualquer usuário logado pode importar (não só admin) - decisão
 // explícita, mesmo essa operação substituindo a previsão antiga inteira.
 router.post('/importar', async (req, res) => {
-  const { itens } = req.body;
-  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  const r = await importarPrevisaoEstoque(req.body && req.body.itens, req.usuario);
+  res.status(r.status).json(r.json);
+});
+
+// Também chamada pela importação automática por e-mail (routes/importacaoEmail.js)
+// - devolve { status, json } em vez de responder direto.
+async function importarPrevisaoEstoque(itens, usuario) {
+  if (!Array.isArray(itens) || itens.length === 0) return { status: 400, json: { erro: 'Envie { itens: [...] }' } };
 
   // Dedup em memória por codigo_sku (mantendo a última ocorrência) -
   // codigo_sku é chave primária, então duas linhas com o mesmo código no
@@ -48,19 +54,20 @@ router.post('/importar', async (req, res) => {
       ]
     );
     await client.query('COMMIT');
-    console.log(`Previsão de estoque importada: ${unicos.length} produto(s), por ${req.usuario?.email}.`);
-    await registrarImportacao(req.usuario?.id, 'previsao-estoque/importar', unicos.length);
+    console.log(`Previsão de estoque importada: ${unicos.length} produto(s), por ${usuario?.email}.`);
+    await registrarImportacao(usuario?.id, 'previsao-estoque/importar', unicos.length);
     await avisarImportacao('previsao-estoque', quantos(unicos.length, 'item', 'itens'));
-    res.json({ ok: true, total: unicos.length });
+    return { status: 200, json: { ok: true, total: unicos.length } };
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar previsão de estoque.' });
+    return { status: 500, json: { erro: 'Erro ao importar previsão de estoque.' } };
   } finally {
     if (client) client.release();
   }
-});
+}
 
 module.exports = router;
+module.exports.importarPrevisaoEstoque = importarPrevisaoEstoque;

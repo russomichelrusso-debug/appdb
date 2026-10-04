@@ -23,6 +23,8 @@ let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagame
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
 let novidades = []; // routes/lib/novidades.js
+let importacoesEmail = []; // routes/importacaoEmail.js
+let previsaoEstoque = []; // previsao_estoque
 let nextNovidadeId = 1;
 let pushInscricoes = []; // push_inscricoes
 let nextPushId = 1;
@@ -51,6 +53,8 @@ function reset() {
   catalogoPrecos = [];
   recompraAdiamentos = [];
   novidades = [];
+  importacoesEmail = [];
+  previsaoEstoque = [];
   nextNovidadeId = 1;
   pushInscricoes = [];
   nextPushId = 1;
@@ -88,6 +92,50 @@ async function query(sql, params = []) {
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };
 
+  // Importação por e-mail - routes/importacaoEmail.js
+  if (s.includes('/* IMPORTACAO-EMAIL:JA-IMPORTADO */')) {
+    return { rows: importacoesEmail.filter(i => i.hash === params[0] && i.status === 'ok').map(i => ({ tipo: i.tipo })) };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:REGISTRAR */')) {
+    const [hash, nome_arquivo, tipo, remetente, assunto, mensagem_id, recebido_em, status, erro, resultado] = params;
+    const linha = { hash, nome_arquivo, tipo, remetente, assunto, mensagem_id, recebido_em, status, erro, resultado, atualizado_em: new Date() };
+    const i = importacoesEmail.findIndex(x => x.hash === hash);
+    if (i === -1) importacoesEmail.push(linha); else importacoesEmail[i] = linha;
+    return { rows: [] };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:STATUS */')) {
+    const porTipo = new Map();
+    for (const l of importacoesEmail) {
+      if (!l.tipo) continue;
+      const atual = porTipo.get(l.tipo);
+      if (!atual || l.atualizado_em >= atual.atualizado_em) porTipo.set(l.tipo, l);
+    }
+    return { rows: [...porTipo.values()].map(l => ({ tipo: l.tipo, nome_arquivo: l.nome_arquivo, status: l.status, erro: l.erro, recebido_em: l.recebido_em, atualizado_em: l.atualizado_em })) };
+  }
+  // previsão de estoque (routes/previsaoEstoque.js)
+  if (s.startsWith('DELETE FROM PREVISAO_ESTOQUE')) { previsaoEstoque = []; return { rows: [] }; }
+  if (s.includes('INSERT INTO PREVISAO_ESTOQUE')) {
+    const [cods, disp, cart, compra, prev, saldo] = params;
+    cods.forEach((c, i) => previsaoEstoque.push({ codigo_sku: c, qt_disponivel: disp[i], qt_carteira: cart[i], qt_compra: compra[i], previsao: prev[i], saldo: saldo[i] }));
+    return { rows: [] };
+  }
+  // catálogo de preços (routes/catalogoPrecos.js)
+  if (s.includes('INSERT INTO CATALOGO_PRECOS')) {
+    const [cods, nomes, embs, ncms, ipis, familias, fixos, canaisFx, precos, semImposto] = params;
+    cods.forEach((c, i) => {
+      const linha = { codigo_sku: c, nome: nomes[i], emb: embs[i], ncm: ncms[i], ipi: ipis[i], familia: familias[i], preco_fixo: fixos[i],
+        canais_fx: JSON.parse(canaisFx[i]), precos: JSON.parse(precos[i]), precos_sem_imposto: JSON.parse(semImposto[i]) };
+      const j = catalogoPrecos.findIndex(p => p.codigo_sku === c);
+      if (j === -1) catalogoPrecos.push(linha); else catalogoPrecos[j] = linha;
+    });
+    return { rows: [] };
+  }
+  if (s.startsWith('DELETE FROM CATALOGO_PRECOS WHERE CODIGO_SKU <> ALL')) {
+    const removidos = catalogoPrecos.filter(p => !params[0].includes(p.codigo_sku));
+    catalogoPrecos = catalogoPrecos.filter(p => params[0].includes(p.codigo_sku));
+    return { rows: removidos.map(p => ({ codigo_sku: p.codigo_sku })), rowCount: removidos.length };
+  }
+
   // Novidades / avisos no celular - routes/lib/novidades.js e routes/novidades.js
   if (s.includes('/* NOVIDADES:RECENTE */')) {
     const limite = Date.now() - Number(params[1]) * 60000;
@@ -106,6 +154,11 @@ async function query(sql, params = []) {
       push_enviar_em: new Date(params[3]), push_pendente: true, push_enviado_em: null };
     novidades.push(n);
     return { rows: [{ id: n.id }] };
+  }
+  if (s.includes('/* NOVIDADES:SUBSTITUIR-PENDENTES */')) {
+    let n = 0;
+    novidades.forEach(x => { if (x.tipo === params[0] && x.push_pendente && x.id !== params[1]) { x.push_pendente = false; n++; } });
+    return { rows: [], rowCount: n };
   }
   if (s.includes('/* NOVIDADES:RESERVAR-PUSH */')) {
     const agora = new Date();
@@ -1516,6 +1569,9 @@ module.exports = {
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __getRecompraAdiamentos: () => recompraAdiamentos,
   __getNovidades: () => novidades,
+  __getImportacoesEmail: () => importacoesEmail,
+  __getPrevisaoEstoque: () => previsaoEstoque,
+  __getCatalogoPrecos: () => catalogoPrecos,
   __getPushInscricoes: () => pushInscricoes,
   __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
   __anoClassificatorioFechado: anoClassificatorioFechado,

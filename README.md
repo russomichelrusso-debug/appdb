@@ -30,6 +30,8 @@ db.js                   # pool de conexão pg + runMigrations() (executa schema.
 schema.sql               # schema completo do banco (idempotente)
 auth-utils.js             # verificação de ID token do Google + geração de token de sessão opaco
 clientMatcher.js           # casa nome de cliente da planilha oficial com cliente já cadastrado
+importadores.js            # leitura das planilhas importadas (relatório oficial, Classificatório, previsão) e reconhecimento do tipo - usado pelo index.html (<script src>) E pelo servidor (importação por e-mail)
+scripts/gmail-importacao/   # script do Google (Apps Script) que roda no Gmail e manda os relatórios pro servidor
 middleware/auth.js          # requireAuth: valida "Authorization: Bearer <token>" contra a tabela sessoes
 routes/
   auth.js                     # login via Google, /me, logout, CRUD de usuários
@@ -41,6 +43,7 @@ routes/
   pedidosOficiais.js               # importação e consulta da planilha oficial Carteira/Faturamento
   levantamentos.js                  # levantamentos de estoque em campo
   relatorios.js                      # histórico/rotatividade/recuperar (comprasDoCliente), Já compraram, sugestões, curva ABC, Dashboard
+  importacaoEmail.js                  # importação automática dos relatórios que chegam por e-mail (script do Gmail → aqui)
   novidades.js                        # avisos de importação: lista, "vistas", push no celular (lógica em lib/novidades.js)
   recompra.js                         # Recompra da semana: ritmo de compra do cliente, "Já falei" (cálculo em lib/ritmoCompra.js)
   produtosPromocionais.js             # SKUs promocionais (P/P1/P2 + código base)
@@ -73,6 +76,7 @@ Variáveis de ambiente:
 | `ALLOWED_ORIGINS` | Não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://usuario.github.io`). Sem ela, a API aceita qualquer origem. |
 | `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini usada pelo assistente com IA. |
 | `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.0-flash`. |
+| `IMPORTACAO_EMAIL_CHAVE` | Não (para a importação por e-mail) | Chave secreta (≥ 32 caracteres, `openssl rand -hex 32`) que o script do Gmail manda no cabeçalho `X-Chave-Importacao`. Sem ela, `POST /api/importacao-email/arquivo` fica fechado. Ver `docs/IMPORTACAO-EMAIL.md`. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Não (para avisos no celular) | Chave Web Push dos avisos de importação (gerar com `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` = `mailto:` ou URL https). Sem elas, as novidades aparecem só no app. Trocar a chave invalida as inscrições: cada vendedor ativa de novo. |
 
 ## Rodando localmente
@@ -121,6 +125,7 @@ Não é usuário/senha. O fluxo:
 - `/api/clientes/:id/comprados-recentes` — SKUs que o cliente comprou nos últimos 12 meses (faturado oficial + pedidos do app, código promocional unido ao base), com a quantidade da compra mais recente; o Levantamento mostra os que não foram contados ("Comprados e não contados") e avisa ao salvar
 - `/api/clientes/:id/historico`, `/rotatividade`, `/recuperar`, `/consumo-estimado/:produtoId` — o que o cliente comprou, via `comprasDoCliente` (faturado oficial + pedidos do app; ver "Fontes de dados"). `recuperar` só responde pra cliente com levantamento (produto comprado e zerado/nunca contado na leitura mais recente)
 - `/api/clientes/:id/sugestoes-recompra` — produtos (variações agrupadas) que o cliente não compra há mais de 1 ano
+- `POST /api/importacao-email/arquivo` (sem login, com a chave `IMPORTACAO_EMAIL_CHAVE` no cabeçalho `X-Chave-Importacao`, conferida antes de ler o corpo) e `GET /api/importacao-email/status` (com login) — o script do Gmail (`scripts/gmail-importacao/Codigo.gs`) manda os anexos do relatório oficial, Classificatório, itens em falta e Lista de Preços SUL SUDESTE; o servidor reconhece pela planilha (`importadores.js`) e grava pelas mesmas funções das rotas de importação manual. Mesmo arquivo (hash) não entra duas vezes; recusado = 422. Instalação em `docs/IMPORTACAO-EMAIL.md`
 - `/api/novidades` (+ `POST /vistas`, `/push/inscrever`, `/push/cancelar`, `/push/teste`) — avisos de importação: relatório oficial, catálogo de preços, previsão de estoque, Classificatório e objetivos trimestrais viram uma novidade (`routes/lib/novidades.js`). Faixa "🔔 N novidades" abaixo das abas e push no celular (Web Push, `sw.js`) só em dia útil, 7h–20h de Brasília (fora disso, sai no próximo dia útil às 7h); o mesmo tipo reimportado em até 30 min atualiza a mesma novidade e troca o aviso no celular sem tocar de novo
 - `/api/recompra` (+ `POST /api/recompra/:id/adiar`) — Recompra da semana (topo da aba Clientes): clientes com a próxima compra atrasada ou prevista pros próximos 7 dias, pelo ritmo dos últimos 12 meses (mediana dos intervalos, mín. 3 compras; compras a até 7 dias uma da outra = uma só), com os produtos pro "Montar proposta" (`routes/lib/ritmoCompra.js`). `adiar` = "Já falei": sai da lista por 7 dias (tabela `recompra_adiamentos`)
 - `/api/produtos/:codigo/clientes` — "Já compraram" (faturado oficial + app, por cliente, com a última data de faturamento e NF) e "Levantamento" (última contagem por cliente) da aba Produtos

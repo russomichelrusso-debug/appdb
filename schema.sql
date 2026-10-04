@@ -482,3 +482,24 @@ CREATE TABLE IF NOT EXISTS push_inscricoes (
   ultimo_envio_em TIMESTAMPTZ
 );
 ALTER TABLE push_inscricoes ENABLE ROW LEVEL SECURITY;
+
+-- Importação automática por e-mail (routes/importacaoEmail.js): um registro
+-- por arquivo recebido (hash SHA-256 do conteúdo) - o mesmo arquivo nunca é
+-- importado duas vezes - com o resultado ('ok'/'falhou') pro Painel.
+CREATE TABLE IF NOT EXISTS importacoes_email (
+  id SERIAL PRIMARY KEY,
+  hash TEXT NOT NULL UNIQUE,
+  nome_arquivo TEXT,
+  tipo TEXT,
+  remetente TEXT,
+  assunto TEXT,
+  mensagem_id TEXT,
+  recebido_em TIMESTAMPTZ,
+  status TEXT NOT NULL,
+  erro TEXT,
+  resultado JSONB,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_importacoes_email_tipo ON importacoes_email (tipo, atualizado_em DESC);
+ALTER TABLE importacoes_email ENABLE ROW LEVEL SECURITY;

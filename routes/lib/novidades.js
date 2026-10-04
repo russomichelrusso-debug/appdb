@@ -168,6 +168,13 @@ async function avisarImportacao(tipo, texto) {
         [tipo, def.titulo, texto || null, enviarEm]);
       id = r.rows[0].id;
     }
+    // aviso do mesmo tipo que ainda esperava a janela de horário (ex.: o
+    // relatório diário de sábado e domingo) fica pra trás: na segunda sai
+    // um push só, o do mais novo
+    await pool.query(
+      `/* novidades:substituir-pendentes */
+       UPDATE novidades SET push_pendente = false WHERE tipo = $1 AND push_pendente AND id <> $2`,
+      [tipo, id]);
     processarPushPendentes().catch(e => console.error('Erro ao enviar avisos no celular:', e));
     return id;
   } catch (e) {

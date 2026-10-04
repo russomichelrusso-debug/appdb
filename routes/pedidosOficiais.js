@@ -377,17 +377,16 @@ function normalizarTitulosAvista(linhas) {
 // Pode rodar quantas vezes quiser: o mesmo Nr.Pedido+código não duplica, só
 // atualiza - e uma vez "faturado", nunca volta pra "carteira" mesmo que uma
 // planilha antiga de carteira seja reimportada por engano depois.
-router.post('/importar', async (req, res) => {
-  // Qualquer usuário logado pode importar (não só admin) - decisão explícita
-  // (já valia antes da unificação; mantida aqui inclusive pra classificação
-  // de cliente, que antes exigia admin no fluxo separado que foi removido).
-  const { itens: itensBrutosOuNada, classificacoes, pendentes_pagamento: pendentesBrutos, titulos_avista: titulosBrutos } = req.body;
+// Também chamada pela importação automática por e-mail (routes/importacaoEmail.js)
+// - devolve { status, json } em vez de responder direto.
+async function importarRelatorioOficial(body, usuario) {
+  const { itens: itensBrutosOuNada, classificacoes, pendentes_pagamento: pendentesBrutos, titulos_avista: titulosBrutos } = body || {};
   const itensBrutos = Array.isArray(itensBrutosOuNada) ? itensBrutosOuNada : [];
   // Relatório pode vir só com as abas de pagamento pendente (sem Carteira/
   // Faturamento) - aí `itens` vem vazio, mas as listas de pendentes valem.
   const temPendentes = Array.isArray(pendentesBrutos);
   const temTitulos = Array.isArray(titulosBrutos);
-  if (itensBrutos.length === 0 && !temPendentes && !temTitulos) return res.status(400).json({ erro: 'Envie { itens: [...] }' });
+  if (itensBrutos.length === 0 && !temPendentes && !temTitulos) return { status: 400, json: { erro: 'Envie { itens: [...] }' } };
   const pendentes = temPendentes ? normalizarPendentesPagamento(pendentesBrutos) : null;
   const titulos = temTitulos ? normalizarTitulosAvista(titulosBrutos) : null;
 
@@ -557,22 +556,29 @@ router.post('/importar', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${req.usuario?.email}.`);
-    await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
+    console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${usuario?.email}.`);
+    await registrarImportacao(usuario?.id, 'pedidos-oficiais/importar', itens.length);
     const ultimoPedido = await pool.query('/* novidades:pedidos-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens');
     const pedidosAte = formatarDataBr(ultimoPedido.rows[0] && ultimoPedido.rows[0].ate);
     await avisarImportacao('relatorio-oficial', pedidosAte ? `Pedidos até ${pedidosAte}` : null);
-    res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
-               pendentesPagamento: pendentes ? pendentes.length : null, titulosAvista: titulos ? titulos.length : null });
+    return { status: 200, json: { ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
+               pendentesPagamento: pendentes ? pendentes.length : null, titulosAvista: titulos ? titulos.length : null } };
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     console.error(e);
-    res.status(500).json({ erro: 'Erro ao importar pedidos oficiais.' });
+    return { status: 500, json: { erro: 'Erro ao importar pedidos oficiais.' } };
   } finally {
     if (client) client.release();
   }
+}
+// Qualquer usuário logado pode importar (não só admin) - decisão explícita
+// (já valia antes da unificação; mantida aqui inclusive pra classificação
+// de cliente, que antes exigia admin no fluxo separado que foi removido).
+router.post('/importar', async (req, res) => {
+  const r = await importarRelatorioOficial(req.body, req.usuario);
+  res.status(r.status).json(r.json);
 });
 
 module.exports = router;
@@ -583,3 +589,4 @@ module.exports.deduplicarItensOficiais = deduplicarItensOficiais;
 module.exports.planejarCarteira = planejarCarteira;
 module.exports.normalizarPendentesPagamento = normalizarPendentesPagamento;
 module.exports.normalizarTitulosAvista = normalizarTitulosAvista;
+module.exports.importarRelatorioOficial = importarRelatorioOficial;

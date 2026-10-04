@@ -25,6 +25,7 @@ const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio'
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
 const recompraRoutes = require('./routes/recompra');
 const novidadesRoutes = require('./routes/novidades');
+const importacaoEmailRoutes = require('./routes/importacaoEmail');
 const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
 const { iniciarEnvioAgendado } = require('./routes/lib/novidades');
 
@@ -63,7 +64,14 @@ app.use((req, res, next) => {
 const jsonPadrao = express.json({ limit: '1mb' });
 const jsonGrande = express.json({ limit: '25mb' });
 const ROTAS_PAYLOAD_GRANDE = ['/api/catalogo-precos', '/api/fichas-tecnicas'];
+// Importação por e-mail (routes/importacaoEmail.js): arquivo grande, mas sem
+// login - só aceita quem manda a chave certa, conferida ANTES de ler o corpo.
+const ROTA_IMPORTACAO_EMAIL = '/api/importacao-email/arquivo';
 app.use((req, res, next) => {
+  if (req.path === ROTA_IMPORTACAO_EMAIL) {
+    if (!importacaoEmailRoutes.chaveImportacaoValida(req)) return res.status(401).json({ erro: 'Chave de importação inválida.' });
+    return jsonGrande(req, res, next);
+  }
   const parser = ROTAS_PAYLOAD_GRANDE.some(p => req.path.startsWith(p)) ? jsonGrande : jsonPadrao;
   parser(req, res, next);
 });
@@ -103,6 +111,8 @@ app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
 app.use('/api/recompra', requireAuth, recompraRoutes);
 app.use('/api/novidades', requireAuth, novidadesRoutes);
+// /arquivo pela chave do script do Gmail; /status exige login (dentro da rota)
+app.use('/api/importacao-email', rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }), importacaoEmailRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 app.use('/api', requireAuth, radarCnpjRoutes); // /api/clientes/:id/ficha-cnpj, /api/radar-cnpj/:cnpj
 
