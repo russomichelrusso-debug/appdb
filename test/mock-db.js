@@ -22,6 +22,10 @@ let classificatorioErp = {}; // cliente_id -> foto financeira da planilha Classi
 let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagamento
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
+let novidades = []; // routes/lib/novidades.js
+let nextNovidadeId = 1;
+let pushInscricoes = []; // push_inscricoes
+let nextPushId = 1;
 let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
@@ -46,6 +50,10 @@ function reset() {
   configuracoes = {};
   catalogoPrecos = [];
   recompraAdiamentos = [];
+  novidades = [];
+  nextNovidadeId = 1;
+  pushInscricoes = [];
+  nextPushId = 1;
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
@@ -79,6 +87,79 @@ async function query(sql, params = []) {
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };
+
+  // Novidades / avisos no celular - routes/lib/novidades.js e routes/novidades.js
+  if (s.includes('/* NOVIDADES:RECENTE */')) {
+    const limite = Date.now() - Number(params[1]) * 60000;
+    const n = novidades.filter(x => x.tipo === params[0] && x.atualizado_em.getTime() > limite)
+      .sort((a, b) => b.atualizado_em - a.atualizado_em)[0];
+    return { rows: n ? [{ id: n.id }] : [] };
+  }
+  if (s.includes('/* NOVIDADES:ATUALIZAR */')) {
+    const n = novidades.find(x => x.id === params[0]);
+    if (n) Object.assign(n, { texto: params[1], atualizado_em: new Date(), push_pendente: true, push_enviar_em: new Date(params[2]) });
+    return { rows: [], rowCount: n ? 1 : 0 };
+  }
+  if (s.includes('/* NOVIDADES:INSERIR */')) {
+    const agora = new Date();
+    const n = { id: nextNovidadeId++, tipo: params[0], titulo: params[1], texto: params[2], criado_em: agora, atualizado_em: agora,
+      push_enviar_em: new Date(params[3]), push_pendente: true, push_enviado_em: null };
+    novidades.push(n);
+    return { rows: [{ id: n.id }] };
+  }
+  if (s.includes('/* NOVIDADES:RESERVAR-PUSH */')) {
+    const agora = new Date();
+    const prontas = novidades.filter(n => n.push_pendente && n.push_enviar_em <= agora);
+    prontas.forEach(n => { n.push_pendente = false; n.push_enviado_em = agora; });
+    return { rows: prontas.map(n => ({ id: n.id, tipo: n.tipo, titulo: n.titulo, texto: n.texto })) };
+  }
+  if (s.includes('/* NOVIDADES:LISTA */')) {
+    const limite = Date.now() - Number(params[0]) * 86400000;
+    return { rows: novidades.filter(n => n.atualizado_em.getTime() > limite)
+      .sort((a, b) => b.atualizado_em - a.atualizado_em).slice(0, Number(params[1]))
+      .map(n => ({ id: n.id, tipo: n.tipo, titulo: n.titulo, texto: n.texto, criado_em: n.criado_em, atualizado_em: n.atualizado_em })) };
+  }
+  if (s.includes('/* NOVIDADES:VISTAS */')) {
+    const u = usuarios.find(x => x.id === params[0]);
+    return { rows: u ? [{ novidades_vistas_ate: u.novidades_vistas_ate || null }] : [] };
+  }
+  if (s.includes('/* NOVIDADES:MARCAR-VISTAS */')) {
+    const u = usuarios.find(x => x.id === params[0]);
+    if (!u) return { rows: [] };
+    const nova = new Date(params[1]);
+    if (!u.novidades_vistas_ate || nova > u.novidades_vistas_ate) u.novidades_vistas_ate = nova;
+    return { rows: [{ novidades_vistas_ate: u.novidades_vistas_ate }] };
+  }
+  if (s.includes('/* NOVIDADES:PEDIDOS-ATE */')) {
+    const datas = pedidosOficiaisItens.map(it => it.data_implantacao).filter(Boolean).map(d => String(d).slice(0, 10)).sort();
+    return { rows: [{ ate: datas.length ? datas[datas.length - 1] : null }] };
+  }
+  if (s.includes('/* PUSH:INSCREVER */')) {
+    const atual = pushInscricoes.find(i => i.endpoint === params[1]);
+    if (atual) Object.assign(atual, { usuario_id: params[0], p256dh: params[2], auth: params[3] });
+    else pushInscricoes.push({ id: nextPushId++, usuario_id: params[0], endpoint: params[1], p256dh: params[2], auth: params[3] });
+    return { rows: [] };
+  }
+  if (s.includes('/* PUSH:CANCELAR */')) {
+    const antes = pushInscricoes.length;
+    pushInscricoes = pushInscricoes.filter(i => !(i.endpoint === params[0] && i.usuario_id === params[1]));
+    return { rows: [], rowCount: antes - pushInscricoes.length };
+  }
+  if (s.includes('/* PUSH:INSCRICOES-USUARIO */')) {
+    return { rows: pushInscricoes.filter(i => i.usuario_id === params[0]) };
+  }
+  if (s.includes('/* PUSH:INSCRICOES */')) {
+    return { rows: pushInscricoes.slice() };
+  }
+  if (s.includes('/* PUSH:ENVIADO */')) {
+    const i = pushInscricoes.find(x => x.id === params[0]);
+    if (i) i.ultimo_envio_em = new Date();
+    return { rows: [] };
+  }
+  if (s.includes('/* PUSH:APAGAR */')) {
+    pushInscricoes = pushInscricoes.filter(i => i.id !== params[0]);
+    return { rows: [] };
+  }
 
   // GET /api/pedidos/salvos (routes/pedidos.js) - pedidos do app do próprio
   // usuário, com os itens e os dados do cliente, mais recente primeiro
@@ -1434,6 +1515,8 @@ module.exports = {
   __getPedidoItens: () => pedidoItens,
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __getRecompraAdiamentos: () => recompraAdiamentos,
+  __getNovidades: () => novidades,
+  __getPushInscricoes: () => pushInscricoes,
   __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,

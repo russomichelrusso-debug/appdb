@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { avisarImportacao, quantos } = require('./lib/novidades');
 
 router.param('id', validarIdInteiro);
 
@@ -811,6 +812,7 @@ router.post('/classificatorio/importar', async (req, res) => {
     }
 
     await client.query('COMMIT');
+    await avisarImportacao('classificatorio', quantos(atualizados, 'cliente', 'clientes'));
     res.json({ atualizados, naoEncontrados, total: itens.length });
   } catch (e) {
     if (client) {
@@ -868,6 +870,7 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
     );
 
     console.log(`Objetivos trimestrais (${periodoInicio} a ${periodoFim}) importados por ${req.usuario?.email}: ${importados} objetivo(s), ${pulosRede} Rede pulado(s), ${naoReconhecidos.length} não reconhecido(s).`);
+    await avisarImportacao('objetivos-trimestrais', quantos(importados, 'objetivo', 'objetivos'));
     res.json({ importados, pulosRede, naoReconhecidos, total: itens.length });
   } catch (e) {
     console.error(e);

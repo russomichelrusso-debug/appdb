@@ -24,7 +24,9 @@ const radarCnpjRoutes = require('./routes/radarCnpj');
 const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio');
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
 const recompraRoutes = require('./routes/recompra');
+const novidadesRoutes = require('./routes/novidades');
 const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
+const { iniciarEnvioAgendado } = require('./routes/lib/novidades');
 
 const app = express();
 app.set('trust proxy', 1);  
@@ -100,6 +102,7 @@ app.use('/api/assistente', requireAuth, assistenteRoutes);
 app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
 app.use('/api/recompra', requireAuth, recompraRoutes);
+app.use('/api/novidades', requireAuth, novidadesRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
 app.use('/api', requireAuth, radarCnpjRoutes); // /api/clientes/:id/ficha-cnpj, /api/radar-cnpj/:cnpj
 
@@ -120,6 +123,8 @@ runMigrations()
       console.log(`Servidor rodando na porta ${PORT}`);
       // completa sozinho, de madrugada, as fichas de CNPJ que faltam
       iniciarPreenchimentoAutomatico(pool, radarCnpjRoutes.obterFicha);
+      // avisos no celular de importação feita fora do horário (dia útil, 7h-20h)
+      iniciarEnvioAgendado();
     });
   })
   .catch(err => {

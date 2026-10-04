@@ -13,6 +13,22 @@ Module._resolveFilename = function (request, ...args) {
 };
 require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: mockDb };
 
+// web-push falso (routes/lib/novidades.js): registra o que seria enviado, sem
+// sair pra internet. Endpoint com "morta" responde 410 (inscrição expirada).
+const webPushEnviados = [];
+const webPushPath = require.resolve('web-push');
+require.cache[webPushPath] = { id: webPushPath, filename: webPushPath, loaded: true, exports: {
+  setVapidDetails: () => {},
+  sendNotification: async (sub, payload, opts) => {
+    if (sub.endpoint.includes('morta')) { const e = new Error('gone'); e.statusCode = 410; throw e; }
+    webPushEnviados.push({ endpoint: sub.endpoint, payload: JSON.parse(payload), opts });
+    return {};
+  },
+} };
+process.env.VAPID_PUBLIC_KEY = 'BChaveDeTeste_123';
+process.env.VAPID_PRIVATE_KEY = 'privada-de-teste';
+process.env.VAPID_SUBJECT = 'https://exemplo.test';
+
 process.env.PORT = '4123';
 // não liga o preenchimento automático de fichas de CNPJ (timer) durante o teste
 process.env.NODE_ENV = 'test';
@@ -1627,6 +1643,75 @@ async function main() {
       && oficiais9407.body.saldo_minimo && oficiais9407.body.saldo_minimo.valor === 600 && oficiais9407.body.saldo_minimo.uf === 'CE',
     `pedidos oficiais do cliente trazem o saldo mínimo pela UF da ficha: ${JSON.stringify([minimoSemFicha, oficiais9407.body.saldo_minimo])}`
   );
+
+  // 30) Avisos de importação (routes/lib/novidades.js + routes/novidades.js)
+  const nov = require('../routes/lib/novidades');
+  {
+    // push só em dia útil, 7h-20h de Brasília (UTC-3)
+    const j = (iso) => nov.proximaJanelaPush(new Date(iso)).toISOString();
+    assert(j('2026-10-07T13:00:00Z') === '2026-10-07T13:00:00.000Z', 'push: quarta 10h sai na hora');
+    assert(j('2026-10-07T23:30:00Z') === '2026-10-08T10:00:00.000Z', 'push: quarta 20h30 fica pra quinta 7h');
+    assert(j('2026-10-07T08:00:00Z') === '2026-10-07T10:00:00.000Z', 'push: quarta 5h fica pras 7h do mesmo dia');
+    assert(j('2026-10-09T23:10:00Z') === '2026-10-12T10:00:00.000Z', 'push: sexta 20h10 fica pra segunda 7h');
+    assert(j('2026-10-10T15:00:00Z') === '2026-10-12T10:00:00.000Z', 'push: sábado fica pra segunda 7h');
+    assert(j('2026-10-12T02:00:00Z') === '2026-10-12T10:00:00.000Z', 'push: domingo 23h fica pra segunda 7h');
+    assert(nov.endpointPushValido('https://fcm.googleapis.com/fcm/send/abc') && nov.endpointPushValido('https://web.push.apple.com/xyz')
+      && !nov.endpointPushValido('http://fcm.googleapis.com/x') && !nov.endpointPushValido('https://exemplo.com/fcm.googleapis.com')
+      && !nov.endpointPushValido('https://googleapis.com.evil.test/x'),
+      'push: só aceita endpoint https dos serviços de push dos navegadores');
+  }
+  // as importações feitas acima (classificatório, objetivos, relatório oficial
+  // várias vezes) viraram novidades - reimportação em até 30 min = a mesma
+  res = await req('GET', '/api/novidades');
+  {
+    const tipos = (res.body.novidades || []).map(n => n.tipo);
+    const rel = (res.body.novidades || []).find(n => n.tipo === 'relatorio-oficial');
+    assert(res.status === 200 && tipos.filter(t => t === 'relatorio-oficial').length === 1 && tipos.includes('classificatorio') && tipos.includes('objetivos-trimestrais')
+      && rel && rel.emoji === '📋' && /^Pedidos até \d{2}\/\d{2}$/.test(rel.texto) && res.body.chave_push === 'BChaveDeTeste_123' && res.body.vistas_ate === null,
+      `novidades: uma por tipo (reimportação junta), com emoji e texto curto: ${JSON.stringify(res.body)}`);
+    const maisNova = res.body.novidades[0].atualizado_em;
+    res = await req('POST', '/api/novidades/vistas', { ate: maisNova });
+    const r2 = await req('GET', '/api/novidades');
+    assert(res.status === 200 && new Date(r2.body.vistas_ate).getTime() === new Date(maisNova).getTime(),
+      `novidades: abrir a lista marca como vistas até a mais nova: ${JSON.stringify(r2.body.vistas_ate)}`);
+    res = await req('POST', '/api/novidades/vistas', { ate: '2020-01-01T00:00:00Z' });
+    assert(new Date(res.body.vistas_ate).getTime() === new Date(maisNova).getTime(), 'novidades: "vistas" nunca volta pra trás');
+  }
+  res = await req('POST', '/api/novidades/push/inscrever', { endpoint: 'http://169.254.169.254/latest', keys: { p256dh: 'abc', auth: 'def' } });
+  assert(res.status === 400, 'push: inscrição com endpoint fora dos serviços de push é recusada');
+  res = await req('POST', '/api/novidades/push/inscrever', { endpoint: 'https://fcm.googleapis.com/fcm/send/aparelho1', keys: { p256dh: 'BPchave-1_x', auth: 'auth1' } });
+  const res2 = await req('POST', '/api/novidades/push/inscrever', { endpoint: 'https://fcm.googleapis.com/fcm/send/morta', keys: { p256dh: 'BPchave2', auth: 'auth2' } });
+  assert(res.status === 200 && res2.status === 200 && mockDb.__getPushInscricoes().length === 2, 'push: aparelho ativa os avisos');
+  await new Promise(r => setTimeout(r, 50));
+  webPushEnviados.length = 0;
+  {
+    const id1 = await nov.avisarImportacao('catalogo-precos', '10 produtos');
+    const id2 = await nov.avisarImportacao('catalogo-precos', '12 produtos');
+    const n = mockDb.__getNovidades().find(x => x.id === id1);
+    assert(id1 && id1 === id2 && n && n.texto === '12 produtos' && mockDb.__getNovidades().filter(x => x.tipo === 'catalogo-precos').length === 1,
+      `aviso: o mesmo tipo em até 30 min atualiza a mesma novidade: ${JSON.stringify([id1, id2, n])}`);
+    // força a janela (o teste pode rodar à noite/fim de semana) e envia
+    await new Promise(r => setTimeout(r, 50));
+    mockDb.__getNovidades().forEach(x => { if (x.id === id1) { x.push_pendente = true; x.push_enviar_em = new Date(Date.now() - 1000); } });
+    webPushEnviados.length = 0;
+    await nov.processarPushPendentes();
+    const p = webPushEnviados.find(e => e.payload.tag === `novidade-${id1}`);
+    assert(p && p.endpoint.endsWith('aparelho1') && p.payload.titulo === '💲 Catálogo de preços atualizado' && p.payload.texto === '12 produtos'
+      && p.payload.url === './index.html#novidades' && p.opts.topic === `novidade${id1}`,
+      `push: sai com o título do tipo, texto curto, tag da novidade e abre a lista: ${JSON.stringify(webPushEnviados)}`);
+    assert(mockDb.__getPushInscricoes().length === 1 && !mockDb.__getPushInscricoes().some(i => i.endpoint.includes('morta')),
+      'push: inscrição expirada (410) é apagada');
+    webPushEnviados.length = 0;
+    assert(await nov.processarPushPendentes() === 0 && webPushEnviados.length === 0, 'push: o que já foi enviado não sai de novo');
+    mockDb.__getNovidades().forEach(x => { if (x.id === id1) { x.push_pendente = true; x.push_enviar_em = new Date(Date.now() + 3600000); } });
+    assert(await nov.processarPushPendentes() === 0 && webPushEnviados.length === 0, 'push: fora do horário fica esperando a janela');
+  }
+  webPushEnviados.length = 0;
+  res = await req('POST', '/api/novidades/push/teste', {});
+  assert(res.status === 200 && res.body.enviados === 1 && webPushEnviados.length === 1 && webPushEnviados[0].payload.tag === 'teste',
+    `push: aviso de teste vai só pros aparelhos de quem pediu: ${JSON.stringify(res.body)}`);
+  res = await req('POST', '/api/novidades/push/cancelar', { endpoint: 'https://fcm.googleapis.com/fcm/send/aparelho1' });
+  assert(res.status === 200 && mockDb.__getPushInscricoes().length === 0, 'push: desativar apaga a inscrição do aparelho');
 
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');

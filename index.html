@@ -4546,6 +4546,105 @@
       margin-top: 2px;
     }
 
+    /* Novidades (avisos de importação) - faixa abaixo das abas + lista */
+    .novidadesFaixa {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: calc(100% - 32px);
+      margin: 10px 16px 0;
+      padding: 11px 14px;
+      min-height: 44px;
+      background: rgba(204, 9, 53, .07);
+      border: 0.75px solid rgba(204, 9, 53, .25);
+      border-radius: var(--r-md);
+      color: var(--ink);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .novidadesFaixa.hidden {
+      display: none;
+    }
+
+    .novidadesFaixa .seta {
+      color: var(--red);
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .novidadeItem {
+      display: flex;
+      gap: 10px;
+      padding: 10px 0;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .novidadeItem .emoji {
+      font-size: 20px;
+      line-height: 1.2;
+    }
+
+    .novidadeItem b {
+      display: block;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    .novidadeItem span {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
+    .novidadeItem.naoLida b::after {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-left: 6px;
+      border-radius: 50%;
+      background: var(--red);
+      vertical-align: middle;
+    }
+
+    .pushArea {
+      margin: 12px 0 16px;
+    }
+
+    .pushArea .ap-hint {
+      margin: 6px 0 0;
+    }
+
+    .pushStatus {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .pushAcoes {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .pushAcoes .restoreBtn {
+      flex: 1;
+      font-size: 13px;
+    }
+
+    .pushPasso {
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--ink);
+      background: var(--fill);
+      border-radius: var(--r-sm);
+      padding: 10px 12px;
+    }
+
     /* Recompra da semana (aba Clientes) */
     .recompra {
       margin: 12px 16px 0;
@@ -5183,6 +5282,7 @@
       <button type="button" class="tabbtn" id="tabBtnProdutos" data-tab="produtos">Produtos</button>
       <button type="button" class="tabbtn" id="tabBtnClientes" data-tab="clientes">Clientes</button>
     </div>
+    <button type="button" class="novidadesFaixa hidden" id="novidadesFaixa" aria-label="Ver novidades"></button>
 
     <div id="tabPrecos">
       <div class="clienteCard" id="precosClienteCard">
@@ -5580,6 +5680,18 @@
 
     <div class="overlay hidden" id="shareSheetOverlay"></div>
     <div class="overlay hidden" id="clientPickerOverlay"></div>
+    <div class="minimodal hidden" id="novidadesModal">
+      <div class="minimodal-card" style="max-height:82vh;overflow-y:auto;">
+        <h3>🔔 Novidades</h3>
+        <p style="margin-bottom:8px;">Relatórios e tabelas importados nos últimos 30 dias.</p>
+        <div id="novidadesLista"></div>
+        <div class="pushArea" id="novidadesPush"></div>
+        <div class="minimodal-btnrow">
+          <button type="button" id="novidadesFecharBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="minimodal hidden" id="clientPickerModal">
       <div class="minimodal-card" style="max-height:82vh;overflow-y:auto;">
         <h3>Selecionar cliente</h3>
@@ -5924,6 +6036,11 @@
           <button class="fileBtn" id="apSyncAgoraBtn" style="margin-top:12px;">Sincronizar agora</button>
           <div id="syncProdutosMsg" style="margin-top:8px;"></div>
           <div id="apPlanilhaMsg"></div>
+        </div>
+
+        <div class="ap-card">
+          <h3>Avisos no celular</h3>
+          <div class="pushArea" id="apPushArea" style="margin:0;"></div>
         </div>
 
         <!-- Porta de entrada única de arquivos: reconhece sozinha o tipo pelas
@@ -13803,6 +13920,208 @@
           })
           .catch(e => console.warn('"Já falei" não foi pro servidor (fica só neste aparelho por enquanto):', e));
       }
+      // ---------------- Novidades (avisos de importação) ----------------
+      // Relatório oficial, catálogo de preços, previsão de estoque,
+      // Classificatório e objetivos trimestrais importados viram novidades
+      // (routes/lib/novidades.js). Não lidas aparecem numa faixa abaixo das
+      // abas; tocar abre a lista e marca como vistas (vale em todos os
+      // aparelhos). Na lista e no Painel (⚙) fica "Ativar avisos no celular"
+      // (Web Push, sw.js) - no iPhone só com o app na Tela de Início.
+      const NOVIDADES_ATUALIZAR_MS = 5 * 60000;
+      const NOME_CURTO_NOVIDADE = {
+        'relatorio-oficial': 'Relatório', 'catalogo-precos': 'Preços', 'previsao-estoque': 'Previsão de estoque',
+        'classificatorio': 'Classificatório', 'objetivos-trimestrais': 'Objetivos',
+      };
+      let novidadesDados = null; // { novidades, vistas_ate, chave_push }
+      let novidadesInscricaoConferida = false;
+
+      async function carregarNovidades() {
+        try {
+          const r = await apiFetch('/api/novidades');
+          if (r && Array.isArray(r.novidades)) novidadesDados = r;
+        } catch (e) { return; } // sem internet: fica com o que já tinha
+        renderNovidadesFaixa();
+        renderPushArea(document.getElementById('apPushArea'));
+        if (!novidadesInscricaoConferida) { novidadesInscricaoConferida = true; reenviarInscricaoPush(); }
+      }
+      function novidadesNaoLidas() {
+        if (!novidadesDados) return [];
+        const vistas = novidadesDados.vistas_ate ? new Date(novidadesDados.vistas_ate).getTime() : 0;
+        return novidadesDados.novidades.filter(n => new Date(n.atualizado_em).getTime() > vistas);
+      }
+      function renderNovidadesFaixa() {
+        const el = document.getElementById('novidadesFaixa');
+        if (!el) return;
+        const naoLidas = novidadesNaoLidas();
+        el.classList.toggle('hidden', naoLidas.length === 0);
+        if (!naoLidas.length) { el.innerHTML = ''; return; }
+        const nomes = [...new Set(naoLidas.map(n => NOME_CURTO_NOVIDADE[n.tipo] || n.titulo))];
+        el.innerHTML = `<span>🔔 <b>${naoLidas.length} novidade${naoLidas.length === 1 ? '' : 's'}</b> · ${escapeHtml(nomes.join(', '))}</span><span class="seta" aria-hidden="true">›</span>`;
+      }
+      function quandoNovidade(iso) {
+        const d = new Date(iso);
+        const hora = d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const dia = (x) => x.toDateString();
+        const ontem = new Date(); ontem.setDate(ontem.getDate() - 1);
+        if (dia(d) === dia(new Date())) return `hoje ${hora}`;
+        if (dia(d) === dia(ontem)) return `ontem ${hora}`;
+        return `${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`;
+      }
+      async function abrirNovidades() {
+        const lista = document.getElementById('novidadesLista');
+        const naoLidas = new Set(novidadesNaoLidas().map(n => n.id));
+        if (!novidadesDados) {
+          lista.innerHTML = '<div class="lev-empty">Sem conexão com o servidor agora — tente de novo daqui a pouco.</div>';
+        } else if (!novidadesDados.novidades.length) {
+          lista.innerHTML = '<div class="lev-empty">Nenhuma importação nos últimos 30 dias.</div>';
+        } else {
+          lista.innerHTML = novidadesDados.novidades.map(n => `
+            <div class="novidadeItem${naoLidas.has(n.id) ? ' naoLida' : ''}">
+              <div class="emoji" aria-hidden="true">${escapeHtml(n.emoji || '🔔')}</div>
+              <div><b>${escapeHtml(n.titulo)}</b><span>${n.texto ? escapeHtml(n.texto) + ' · ' : ''}${escapeHtml(quandoNovidade(n.atualizado_em))}</span></div>
+            </div>`).join('');
+        }
+        document.getElementById('novidadesModal').classList.remove('hidden');
+        renderPushArea(document.getElementById('novidadesPush'));
+        // abriu = viu tudo até a mais nova mostrada
+        const maisNova = novidadesDados && novidadesDados.novidades[0];
+        if (maisNova && naoLidas.size) {
+          novidadesDados.vistas_ate = maisNova.atualizado_em;
+          renderNovidadesFaixa();
+          apiFetch('/api/novidades/vistas', { method: 'POST', body: JSON.stringify({ ate: maisNova.atualizado_em }) }).catch(() => { });
+        }
+      }
+      function fecharNovidades() {
+        document.getElementById('novidadesModal').classList.add('hidden');
+      }
+
+      // --- Avisos no celular (Web Push) ---
+      function pushSuportado() {
+        return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+      }
+      function ehIphoneSemInstalar() {
+        const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const instalado = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+        return ios && !instalado;
+      }
+      function chavePushParaBytes(base64Url) {
+        const base64 = (base64Url + '='.repeat((4 - base64Url.length % 4) % 4)).replace(/-/g, '+').replace(/_/g, '/');
+        return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+      }
+      async function inscricaoPushAtual() {
+        if (!pushSuportado()) return null;
+        try {
+          const reg = await navigator.serviceWorker.getRegistration();
+          return reg ? await reg.pushManager.getSubscription() : null;
+        } catch (e) { return null; }
+      }
+      // A cada abertura do app: aparelho já inscrito manda a inscrição de
+      // novo (o servidor pode ter apagado, ou outra pessoa entrou neste aparelho).
+      async function reenviarInscricaoPush() {
+        if (!novidadesDados || !novidadesDados.chave_push || !pushSuportado() || Notification.permission !== 'granted') return;
+        const sub = await inscricaoPushAtual();
+        if (sub) apiFetch('/api/novidades/push/inscrever', { method: 'POST', body: JSON.stringify(sub.toJSON()) }).catch(() => { });
+      }
+      function atualizarAreasPush() {
+        renderPushArea(document.getElementById('apPushArea'));
+        if (!document.getElementById('novidadesModal').classList.contains('hidden')) renderPushArea(document.getElementById('novidadesPush'));
+      }
+      async function renderPushArea(el) {
+        if (!el) return;
+        if (!novidadesDados) { el.innerHTML = '<p class="ap-hint">Carregando…</p>'; return; }
+        if (!novidadesDados.chave_push) {
+          el.innerHTML = '<p class="ap-hint">Os avisos no celular ainda não estão ligados no servidor — as novidades aparecem só aqui no app.</p>';
+          return;
+        }
+        if (ehIphoneSemInstalar()) {
+          el.innerHTML = `<div class="pushPasso"><b>Avisos no iPhone:</b> adicione o app à Tela de Início — toque em <b>Compartilhar</b> (quadrado com a seta pra cima) › <b>Adicionar à Tela de Início</b>. Depois abra o Cortag pelo ícone novo e ative os avisos aqui.</div>`;
+          return;
+        }
+        if (!pushSuportado()) {
+          el.innerHTML = '<p class="ap-hint">Este navegador não recebe avisos no celular. No Android, use o Chrome; no iPhone, o app adicionado à Tela de Início.</p>';
+          return;
+        }
+        if (Notification.permission === 'denied') {
+          el.innerHTML = '<p class="ap-hint">Os avisos estão bloqueados pra este app. Libere em Configurações do navegador › Notificações (ou nas permissões do site) e volte aqui.</p>';
+          return;
+        }
+        const sub = await inscricaoPushAtual();
+        if (sub && Notification.permission === 'granted') {
+          el.innerHTML = `<div class="pushStatus">✓ Avisos ativados neste celular</div>
+            <p class="ap-hint">Avisa quando um relatório ou tabela nova é importada — dias úteis, das 7h às 20h.</p>
+            <div class="pushAcoes">
+              <button type="button" class="restoreBtn" data-push="teste">Enviar teste</button>
+              <button type="button" class="restoreBtn" data-push="desativar">Desativar</button>
+            </div>`;
+        } else {
+          el.innerHTML = `<button type="button" class="fileBtn" data-push="ativar">🔔 Ativar avisos no celular</button>
+            <p class="ap-hint">Avisa quando um relatório ou tabela nova é importada — dias úteis, das 7h às 20h.</p>`;
+        }
+        el.querySelector('[data-push="ativar"]')?.addEventListener('click', ativarPush);
+        el.querySelector('[data-push="desativar"]')?.addEventListener('click', desativarPush);
+        el.querySelector('[data-push="teste"]')?.addEventListener('click', testarPush);
+      }
+      async function ativarPush() {
+        // pedir permissão precisa ser a primeira coisa depois do toque
+        const permissao = await Notification.requestPermission();
+        if (permissao !== 'granted') {
+          showToast('Sem permissão de notificação — as novidades ficam só no app.', 'erro');
+          atualizarAreasPush();
+          return;
+        }
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const chave = chavePushParaBytes(novidadesDados.chave_push);
+          let sub = await reg.pushManager.getSubscription();
+          if (!sub) {
+            try { sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chave }); }
+            catch (e) {
+              // inscrição antiga com outra chave: refaz
+              const antiga = await reg.pushManager.getSubscription();
+              if (antiga) await antiga.unsubscribe();
+              sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: chave });
+            }
+          }
+          await apiFetch('/api/novidades/push/inscrever', { method: 'POST', body: JSON.stringify(sub.toJSON()) });
+          showToast('Avisos no celular ativados — mandamos um aviso de teste');
+          apiFetch('/api/novidades/push/teste', { method: 'POST' }).catch(() => { });
+        } catch (e) {
+          showToast('Não foi possível ativar os avisos: ' + e.message, 'erro');
+        }
+        atualizarAreasPush();
+      }
+      async function desativarPush() {
+        const sub = await inscricaoPushAtual();
+        if (sub) {
+          apiFetch('/api/novidades/push/cancelar', { method: 'POST', body: JSON.stringify({ endpoint: sub.endpoint }) }).catch(() => { });
+          try { await sub.unsubscribe(); } catch (e) { }
+        }
+        showToast('Avisos no celular desativados neste aparelho');
+        atualizarAreasPush();
+      }
+      async function testarPush() {
+        try {
+          const r = await apiFetch('/api/novidades/push/teste', { method: 'POST' });
+          showToast(r && r.enviados ? 'Aviso de teste enviado' : 'Nenhum aparelho recebeu — desative e ative de novo', r && r.enviados ? undefined : 'erro');
+        } catch (e) { showToast(e.message, 'erro'); }
+      }
+      function initNovidades() {
+        document.getElementById('novidadesFaixa').addEventListener('click', abrirNovidades);
+        document.getElementById('novidadesFecharBtn').addEventListener('click', fecharNovidades);
+        document.getElementById('novidadesModal').addEventListener('click', (e) => { if (e.target.id === 'novidadesModal') fecharNovidades(); });
+        // tocar no aviso com o app aberto (sw.js manda a mensagem) ou abrindo
+        // o app pelo aviso (index.html#novidades)
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.addEventListener('message', (e) => {
+            if (e.data && e.data.tipo === 'abrir-novidades') carregarNovidades().then(abrirNovidades);
+          });
+        }
+        const abrirPeloAviso = location.hash === '#novidades';
+        if (abrirPeloAviso) history.replaceState(null, '', location.pathname + location.search);
+        carregarNovidades().then(() => { if (abrirPeloAviso) abrirNovidades(); });
+        setInterval(carregarNovidades, NOVIDADES_ATUALIZAR_MS);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregarNovidades(); });
+      }
       function initRecompra() {
         document.getElementById('tabBtnClientes').addEventListener('click', () => carregarRecompra(false));
       }
@@ -15980,6 +16299,12 @@
       }
       async function logout() {
         if (!await askConfirm('Sair do app?')) return;
+        // aparelho deslogado não continua recebendo os avisos no celular
+        const inscricaoPush = await inscricaoPushAtual();
+        if (inscricaoPush) {
+          try { await apiFetch('/api/novidades/push/cancelar', { method: 'POST', body: JSON.stringify({ endpoint: inscricaoPush.endpoint }) }); } catch (e) { }
+          try { await inscricaoPush.unsubscribe(); } catch (e) { }
+        }
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
@@ -16184,6 +16509,7 @@
           initClientesTab();
           initClassificatorioAlertas();
           initRecompra();
+          initNovidades();
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();

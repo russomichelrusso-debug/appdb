@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
+const { avisarImportacao, quantos } = require('./lib/novidades');
 
 // Devolve a previsão de todos os produtos - qualquer usuário logado pode
 // ver (todo mundo precisa do aviso de estoque na busca, não só o admin).
@@ -49,6 +50,7 @@ router.post('/importar', async (req, res) => {
     await client.query('COMMIT');
     console.log(`Previsão de estoque importada: ${unicos.length} produto(s), por ${req.usuario?.email}.`);
     await registrarImportacao(req.usuario?.id, 'previsao-estoque/importar', unicos.length);
+    await avisarImportacao('previsao-estoque', quantos(unicos.length, 'item', 'itens'));
     res.json({ ok: true, total: unicos.length });
   } catch (e) {
     if (client) {

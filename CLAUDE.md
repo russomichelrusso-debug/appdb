@@ -393,6 +393,26 @@ Supabase, sem PR — não é mudança de código.
   lista depende de importar o relatório em dia (pedido ainda não importado parece atraso) — por isso
   o bloco mostra "pedidos do ERP até DD/MM". É a primeira peça do painel de "oportunidades do dia".
 
+- **Avisos de importação no celular** (10/2026): quando um relatório ou tabela é importado, todos os
+  usuários ficam sabendo. Decisões do usuário (entrevista): **push no celular + aviso no app**; avisam
+  **relatório oficial, catálogo de preços, previsão de estoque, Classificatório e objetivos
+  trimestrais** (não a sincronização automática de produtos); mensagem **curta, só o que foi
+  importado** ("Relatório oficial atualizado · Pedidos até 03/10"); **todos recebem, inclusive quem
+  importou**; tocar no push abre a **lista de novidades**; reimportação do mesmo tipo em **até 30 min
+  substitui** o aviso (mesma linha em `novidades`, mesma `tag` no celular, sem tocar de novo); push só
+  em **dias úteis, 7h–20h** de Brasília (fora disso, sai no próximo dia útil às 7h; feriado não conta);
+  no app, **faixa abaixo das abas** "🔔 N novidades · Relatório, Preços" só quando há não lidas
+  (vistas por usuário, `usuarios.novidades_vistas_ate`, valem em todos os aparelhos). Equipe usa
+  Android e iPhone: no iPhone o push só funciona com o app na Tela de Início (iOS 16.4+) — o app mostra
+  o passo a passo no lugar do botão. "Ativar avisos no celular" fica na lista e no Painel (⚙), com
+  "Enviar teste"; sair do app cancela o push do aparelho. Código: `routes/lib/novidades.js` (janela de
+  horário, envio, `avisarImportacao` chamado no fim de cada importação — nunca derruba a importação),
+  `routes/novidades.js`, handlers `push`/`notificationclick` no `sw.js`, tabelas `novidades` e
+  `push_inscricoes`. O servidor só faz POST pra endpoints dos serviços de push dos navegadores
+  (`HOSTS_PUSH`). Chave VAPID cadastrada no Render em 04/10/2026 (`VAPID_*`, assunto =
+  URL do Render); trocar a chave obriga todo mundo a ativar de novo. Plano free do Render dorme: o push
+  agendado pras 7h sai quando o servidor acordar.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

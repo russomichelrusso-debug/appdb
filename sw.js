@@ -86,3 +86,38 @@ self.addEventListener('fetch', (event) => {
     })
   );
 });
+
+// Avisos no celular (Web Push - routes/lib/novidades.js): relatório/tabela
+// nova importada. `tag` igual substitui o aviso que já está na tela sem tocar
+// de novo (renotify: false) - é assim que a reimportação de correção em até
+// 30 min troca o aviso anterior.
+self.addEventListener('push', (event) => {
+  let dados = {};
+  try { dados = event.data ? event.data.json() : {}; } catch (e) { dados = { texto: event.data ? event.data.text() : '' }; }
+  const titulo = dados.titulo || 'Cortag';
+  event.waitUntil(self.registration.showNotification(titulo, {
+    body: dados.texto || '',
+    tag: dados.tag || 'cortag',
+    renotify: false,
+    icon: './icon-192.png',
+    badge: './icon-192.png',
+    data: { url: dados.url || './index.html#novidades' },
+  }));
+});
+
+// Tocar no aviso: abre a lista de novidades - no app que já estiver aberto
+// (manda uma mensagem pra ele) ou abrindo o app de novo.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = new URL((event.notification.data && event.notification.data.url) || './index.html#novidades', self.registration.scope).href;
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((janelas) => {
+      const app = janelas.find((j) => new URL(j.url).pathname.endsWith('/index.html') || new URL(j.url).pathname.endsWith('/'));
+      if (app) {
+        app.postMessage({ tipo: 'abrir-novidades' });
+        return app.focus();
+      }
+      return self.clients.openWindow(url);
+    })
+  );
+});
