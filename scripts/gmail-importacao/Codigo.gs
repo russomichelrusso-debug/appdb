@@ -34,6 +34,9 @@ const CONFIG = {
     { remetente: 'vendas@cortag.com', anexo: /LISTA PADR\S{1,2}O.*SUL SUDESTE.*\.xlsx$/i }, // Lista de Preços
   ],
   maxProcessadosGuardados: 400,
+  // o Google corta cada execução em 6 min, e cada relatório leva ~1-3 min no
+  // servidor: depois de 3 min não começa outro arquivo (fica pra próxima rodada)
+  tempoMaximoMs: 3 * 60 * 1000,
 };
 
 // Rodar uma vez: confere a chave, cria os marcadores e o agendamento de 15 min.
@@ -50,6 +53,7 @@ function configurar() {
 }
 
 function verificarEmails() {
+  const inicio = Date.now();
   const props = PropertiesService.getScriptProperties();
   const chave = chave_();
   const processados = JSON.parse(props.getProperty('PROCESSADOS') || '[]');
@@ -73,8 +77,14 @@ function verificarEmails() {
   });
   fila.sort((a, b) => a.msg.getDate() - b.msg.getDate());
 
+  const salvar = () => props.setProperty('PROCESSADOS', JSON.stringify(processados.slice(-CONFIG.maxProcessadosGuardados)));
+  salvar();
   let servidorAcordado = false;
   for (const item of fila) {
+    if (Date.now() - inicio > CONFIG.tempoMaximoMs) {
+      Logger.log('Tempo da rodada esgotado - o resto fica pra próxima (%s e-mail(s)).', fila.length - fila.indexOf(item));
+      break;
+    }
     if (!servidorAcordado) {
       if (!acordarServidor_()) break; // fora do ar: tenta tudo de novo na próxima rodada
       servidorAcordado = true;
@@ -89,8 +99,8 @@ function verificarEmails() {
     if (tentarDeNovo) break; // mantém a ordem: o resto fica pra próxima rodada
     item.thread.addLabel(marcador_(falhou ? CONFIG.marcadorFalhou : CONFIG.marcadorImportado));
     processados.push(item.msg.getId());
+    salvar(); // a cada e-mail: se a execução for cortada, o que já foi não volta
   }
-  props.setProperty('PROCESSADOS', JSON.stringify(processados.slice(-CONFIG.maxProcessadosGuardados)));
 }
 
 // 'ok' | 'falhou' (planilha recusada - não adianta repetir) | 'tentar-de-novo'
