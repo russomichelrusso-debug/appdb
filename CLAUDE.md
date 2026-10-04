@@ -436,7 +436,12 @@ Supabase, sem PR — não é mudança de código.
   (raiz, carregado por `<script src>` e por `require`) e as rotas de importação viraram funções
   reaproveitáveis (`importarRelatorioOficial`, `importarCatalogoPrecos`, `importarPrevisaoEstoque`,
   `importarClassificatorioErp`, que devolvem `{ status, json }`) — **mudança na leitura de planilha é
-  feita só no `importadores.js`**, vale pros dois caminhos. Chave cadastrada no Render em 04/10/2026.
+  feita só no `importadores.js`**, vale pros dois caminhos. Chave cadastrada no Render em 04/10/2026. Na 1ª execução
+  (04/10/2026, 7 dias de atraso) cada relatório levou ~1 min e o Classificatório ~2,5 min no servidor
+  (as importações fazem uma consulta por cliente, e o Render fica em Oregon e o Supabase em São Paulo)
+  e o Google cortou a execução nos 6 min — por isso o script salva o progresso a cada e-mail e não
+  começa arquivo novo depois de 3 min. Se as importações ficarem lentas demais, o ganho está em
+  juntar as consultas por cliente de `importarRelatorioOficial`/`importarClassificatorioErp`.
 
 ## O que já tentamos e não deu certo
 

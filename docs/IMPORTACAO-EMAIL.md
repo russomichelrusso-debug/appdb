@@ -47,6 +47,11 @@ O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra 
   `IMPORTACAO_EMAIL_CHAVE` no Render. Copie de novo, sem espaços.
 - **E-mail marcado "Cortag/Falhou"**: veja o motivo em Execuções (ou na tabela
   `importacoes_email`, coluna `erro`) e importe o anexo pelo Painel.
+- **"Exceeded maximum execution time"** (versão antiga do script): o Google corta cada execução em
+  6 min e cada relatório leva ~1–3 min no servidor. O script atual para de pegar arquivo novo depois
+  de 3 min e salva o progresso a cada e-mail; se aparecer, cole de novo a versão atual do
+  `Codigo.gs`. Nada se perde: o arquivo cortado termina no servidor e, na rodada seguinte, volta
+  como "já importado".
 - **Servidor dormindo** (Render gratuito): o script espera ele acordar; se não acordar, tenta
   de novo na rodada seguinte, sem marcar o e-mail.
 - **Trocar a chave**: gerar outra (`openssl rand -hex 32`), atualizar `IMPORTACAO_EMAIL_CHAVE`
