@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const XLSX = require('@e965/xlsx');
 const { pool, registrarImportacao } = require('../db');
+const { avisarImportacao, quantos } = require('./lib/novidades');
 
 // ---------------------------------------------------------------------
 // Conversor da planilha "LISTA PADRÃO" (6 canais x 3 regiões, com
@@ -245,6 +246,7 @@ router.post('/importar', async (req, res) => {
       console.log(`Catálogo de preços: ${removidos.rowCount} produto(s) removido(s) por não estarem mais na planilha.`);
     }
     await registrarImportacao(req.usuario?.id, 'catalogo-precos/importar', produtos.length);
+    await avisarImportacao('catalogo-precos', quantos(produtos.length, 'produto', 'produtos'));
     res.json({ ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount });
   } catch (e) {
     if (client) {

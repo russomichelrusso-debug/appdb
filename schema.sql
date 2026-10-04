@@ -444,3 +444,41 @@ CREATE TABLE IF NOT EXISTS recompra_adiamentos (
   criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE recompra_adiamentos ENABLE ROW LEVEL SECURITY;
+
+-- Avisos de importação (routes/lib/novidades.js): cada importação de relatório
+-- oficial, catálogo de preços, previsão de estoque, Classificatório ou objetivos
+-- trimestrais vira uma novidade - faixa "🔔 N novidades" no app e push no
+-- celular. O mesmo tipo importado de novo em até 30 min atualiza a mesma linha
+-- (atualizado_em) em vez de criar outra. Push só sai em dia útil, 7h-20h de
+-- Brasília: push_enviar_em guarda quando; push_pendente = ainda falta enviar.
+CREATE TABLE IF NOT EXISTS novidades (
+  id SERIAL PRIMARY KEY,
+  tipo TEXT NOT NULL,
+  titulo TEXT NOT NULL,
+  texto TEXT,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  push_enviar_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  push_pendente BOOLEAN NOT NULL DEFAULT true,
+  push_enviado_em TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_novidades_atualizado ON novidades (atualizado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_novidades_push_pendente ON novidades (push_enviar_em) WHERE push_pendente;
+ALTER TABLE novidades ENABLE ROW LEVEL SECURITY;
+-- Até quando o usuário já viu as novidades (abriu a lista) - vale em todos os
+-- aparelhos dele.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS novidades_vistas_ate TIMESTAMPTZ;
+
+-- Aparelhos que ativaram "Avisos no celular" (Web Push). endpoint é único por
+-- navegador/aparelho; o push service devolve 404/410 quando a inscrição morre
+-- e aí a linha é apagada.
+CREATE TABLE IF NOT EXISTS push_inscricoes (
+  id SERIAL PRIMARY KEY,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL UNIQUE,
+  p256dh TEXT NOT NULL,
+  auth TEXT NOT NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ultimo_envio_em TIMESTAMPTZ
+);
+ALTER TABLE push_inscricoes ENABLE ROW LEVEL SECURITY;

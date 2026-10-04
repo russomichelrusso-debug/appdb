@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
+const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
 const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
@@ -558,6 +559,9 @@ router.post('/importar', async (req, res) => {
     await client.query('COMMIT');
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${req.usuario?.email}.`);
     await registrarImportacao(req.usuario?.id, 'pedidos-oficiais/importar', itens.length);
+    const ultimoPedido = await pool.query('/* novidades:pedidos-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens');
+    const pedidosAte = formatarDataBr(ultimoPedido.rows[0] && ultimoPedido.rows[0].ate);
+    await avisarImportacao('relatorio-oficial', pedidosAte ? `Pedidos até ${pedidosAte}` : null);
     res.json({ ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
                pendentesPagamento: pendentes ? pendentes.length : null, titulosAvista: titulos ? titulos.length : null });
   } catch (e) {
