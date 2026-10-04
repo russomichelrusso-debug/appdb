@@ -41,6 +41,7 @@ routes/
   pedidosOficiais.js               # importação e consulta da planilha oficial Carteira/Faturamento
   levantamentos.js                  # levantamentos de estoque em campo
   relatorios.js                      # histórico/rotatividade/recuperar (comprasDoCliente), Já compraram, sugestões, curva ABC, Dashboard
+  recompra.js                         # Recompra da semana: ritmo de compra do cliente, "Já falei" (cálculo em lib/ritmoCompra.js)
   produtosPromocionais.js             # SKUs promocionais (P/P1/P2 + código base)
   radarCnpj.js                        # ficha de CNPJ (radar-cnpj.com + BrasilAPI de reserva)
   previsaoEstoque.js                  # previsão de estoque (relatório ESCE007)
@@ -118,6 +119,7 @@ Não é usuário/senha. O fluxo:
 - `/api/clientes/:id/comprados-recentes` — SKUs que o cliente comprou nos últimos 12 meses (faturado oficial + pedidos do app, código promocional unido ao base), com a quantidade da compra mais recente; o Levantamento mostra os que não foram contados ("Comprados e não contados") e avisa ao salvar
 - `/api/clientes/:id/historico`, `/rotatividade`, `/recuperar`, `/consumo-estimado/:produtoId` — o que o cliente comprou, via `comprasDoCliente` (faturado oficial + pedidos do app; ver "Fontes de dados"). `recuperar` só responde pra cliente com levantamento (produto comprado e zerado/nunca contado na leitura mais recente)
 - `/api/clientes/:id/sugestoes-recompra` — produtos (variações agrupadas) que o cliente não compra há mais de 1 ano
+- `/api/recompra` (+ `POST /api/recompra/:id/adiar`) — Recompra da semana (topo da aba Clientes): clientes com a próxima compra atrasada ou prevista pros próximos 7 dias, pelo ritmo dos últimos 12 meses (mediana dos intervalos, mín. 3 compras; compras a até 7 dias uma da outra = uma só), com os produtos pro "Montar proposta" (`routes/lib/ritmoCompra.js`). `adiar` = "Já falei": sai da lista por 7 dias (tabela `recompra_adiamentos`)
 - `/api/produtos/:codigo/clientes` — "Já compraram" (faturado oficial + app, por cliente, com a última data de faturamento e NF) e "Levantamento" (última contagem por cliente) da aba Produtos
 - `/api/dashboard/resumo` — dados do Dashboard (`curva-abc.html`): entrada de pedidos mensal + lista dos pedidos do mês (`entradaPedidosMes`), vendas semanal/trimestral, top clientes, clientes ativos por canal, contas sem compra
 - `/api/produtos-abc-geral`, `/api/clientes/:id/produtos-abc` — Curva ABC geral e por cliente (faturado oficial)
@@ -134,6 +136,7 @@ Não é usuário/senha. O fluxo:
 | `pedidos` / `pedido_itens` | Pedidos fechados pelo vendedor no app (só desde 05/2026, uma fração do total) | `data_pedido` |
 
 - **O que o cliente comprou** (Histórico, Rotatividade, Recuperar, consumo estimado, "Já compraram", comprados-recentes, sugestões): **faturado oficial + app**. Código promocional (P/P1/P2) conta como o produto base; pedido do app ou de PDF só conta se não houver faturado oficial do mesmo cliente + produto entre 7 dias antes e 45 depois (senão é a mesma compra, faturada dias depois), e pedido com `origem = 'faturamento'` (cópias de uma importação antiga) nunca conta — `routes/lib/comprasApp.js`. Função `comprasDoCliente` em `routes/relatorios.js`. Nunca usar só `pedidos`/`pedido_itens` — a maior parte das compras vem do ERP.
+- **Recompra da semana**: compra = **entrada do pedido** (carteira + faturado pela data de implantação, sem a série de 7 dígitos) + pedidos do app (mesma regra de não contar em dobro) — o cliente sai da lista assim que pede, sem esperar faturar.
 - **Entrada de Pedidos** (Dashboard: valor, qtde. de pedidos e de clientes, ticket médio): mesma regra do painel oficial — mês pela **data de implantação**, **carteira + faturado**, **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx, itens avulsos fora do catálogo). Conciliado com o Salesforce em 09/2026.
 - **Faturamento** (classificatório, Curva ABC, top clientes, vendas semanal/trimestral): só `status = 'faturado'`, pela `data_faturamento`.
 - **Datas sem hora** (`DATE` e `date_trunc`) chegam no JSON como meia-noite UTC — no navegador, `new Date()` joga pro dia/mês anterior. Exibir sempre com `formatDateBr` (`index.html`) ou `partesDoPeriodo` (`curva-abc.html`).

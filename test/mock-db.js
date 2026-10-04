@@ -22,6 +22,7 @@ let classificatorioErp = {}; // cliente_id -> foto financeira da planilha Classi
 let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagamento
 let pedidosOficiaisItens = []; // relatório oficial de Faturamento (curva ABC de produtos/clientes)
 let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
+let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -44,6 +45,7 @@ function reset() {
   classificatorioErp = {};
   configuracoes = {};
   catalogoPrecos = [];
+  recompraAdiamentos = [];
   nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 }
 
@@ -239,6 +241,46 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT CODIGO_SKU FROM PRODUTOS WHERE ID = $1')) {
     return { rows: produtos.filter(p => String(p.id) === String(params[0])).map(p => ({ codigo_sku: p.codigo_sku })) };
+  }
+
+  // Recompra da semana - routes/recompra.js
+  if (s.includes('/* RECOMPRA:CLIENTES */')) {
+    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null, classificatorio_tipo: c.classificatorio_tipo || null })) };
+  }
+  if (s.includes('/* RECOMPRA:OFICIAL */')) {
+    const inicio = new Date(`${params[0]}T00:00:00Z`).getTime() - Number(params[1]) * 86400000;
+    return { rows: pedidosOficiaisItens
+      .map(it => ({ it, data: it.data_implantacao || it.data_faturamento }))
+      .filter(({ it, data }) => data && new Date(`${String(data).slice(0, 10)}T00:00:00Z`).getTime() > inicio && String(it.nr_pedido).length <= 6)
+      .map(({ it, data }) => ({ cliente_codigo_oficial: it.cliente_codigo_oficial, codigo_sku: it.codigo_sku, quantidade: it.quantidade, data, data_faturamento: it.data_faturamento || null })) };
+  }
+  if (s.includes('/* RECOMPRA:APP */')) {
+    const inicio = new Date(`${params[0]}T00:00:00Z`).getTime() - Number(params[1]) * 86400000;
+    const rows = [];
+    for (const ped of pedidos.filter(p => p.cliente_id != null && new Date(String(p.data_pedido).slice(0, 10) + 'T00:00:00Z').getTime() > inicio && p.origem !== 'faturamento')) {
+      for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
+        const prod = produtos.find(p => p.id === it.produto_id);
+        if (prod) rows.push({ cliente_id: ped.cliente_id, codigo_sku: prod.codigo_sku, quantidade: it.quantidade, data: String(ped.data_pedido).slice(0, 10) });
+      }
+    }
+    return { rows };
+  }
+  if (s.includes('/* RECOMPRA:ADIAMENTOS */')) {
+    return { rows: recompraAdiamentos.filter(a => a.ate >= params[0]).map(a => ({ cliente_id: a.cliente_id, ate: a.ate })) };
+  }
+  if (s.includes('/* RECOMPRA:DADOS-ATE */')) {
+    const datas = pedidosOficiaisItens.map(it => it.data_implantacao).filter(Boolean).map(d => String(d).slice(0, 10)).sort();
+    return { rows: [{ ate: datas.length ? datas[datas.length - 1] : null }] };
+  }
+  if (s.includes('/* RECOMPRA:ADIAR */')) {
+    const [clienteId, ate, usuarioId] = params;
+    const atual = recompraAdiamentos.find(a => String(a.cliente_id) === String(clienteId));
+    if (atual) { atual.ate = atual.ate > ate ? atual.ate : ate; atual.usuario_id = usuarioId; return { rows: [{ ate: atual.ate }] }; }
+    recompraAdiamentos.push({ cliente_id: Number(clienteId), ate, usuario_id: usuarioId });
+    return { rows: [{ ate }] };
+  }
+  if (s.startsWith('SELECT ID FROM CLIENTES WHERE ID = $1')) {
+    return { rows: clientes.filter(c => String(c.id) === String(params[0])).map(c => ({ id: c.id })) };
   }
 
   if (s.includes('/* COMPRADOS-RECENTES:OFICIAL */')) {
@@ -1391,6 +1433,7 @@ module.exports = {
   __getLevantamentos: () => levantamentos,
   __getPedidoItens: () => pedidoItens,
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
+  __getRecompraAdiamentos: () => recompraAdiamentos,
   __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,

@@ -376,6 +376,23 @@ Supabase, sem PR — não é mudança de código.
   ("Enviar o CSV do pedido agora?", "Agora não" fecha) no lugar do toast, com o mesmo arquivo/nome da
   cópia do Drive (`Pedido-NomeDDMMAA-HHMMSS.csv`, reconhecido ao abrir o CSV de volta).
 
+- **Recompra da semana** (10/2026): o cliente tem um ritmo de compra e o vendedor quer oferecer na
+  hora certa. Bloco recolhível no **topo da aba Clientes** com quem está **atrasado** (passou da data
+  prevista; "fora do ritmo" quando o atraso passa de 1,5x o ritmo) ou com compra prevista nos
+  **próximos 7 dias** (`GET /api/recompra`, `routes/recompra.js`; cálculo puro em
+  `routes/lib/ritmoCompra.js`). Decisões do usuário (entrevista): ritmo do **cliente** (data) **e** de
+  cada **produto** (o que entra na proposta); **12 meses**, mínimo **3 compras** (menos que isso fica fora);
+  ritmo = **mediana** dos intervalos; **por CNPJ** (filiais não se somam); **"Montar proposta"** troca o
+  orçamento pelos produtos que vencem até a compra prevista (+7 dias), na **mediana das 3 últimas
+  compras** (arredondada pra cima no múltiplo da embalagem) — sem nenhum, os que vieram em 2 das 3
+  últimas compras; sai da lista quando **compra** ou com **"Já falei"** (7 dias, no servidor em
+  `recompra_adiamentos`, pela fila offline sem internet). Escolhas técnicas: compra = **entrada do
+  pedido** (implantação, carteira + faturado, sem série de 7 dígitos) + app sem contar em dobro;
+  compras a até 7 dias uma da outra = uma só. Lista guardada no aparelho (`cortagRecompra_v1`) e
+  refeita pela data de hoje sem internet. Em 04/10/2026: 163 clientes com ritmo, ~54 na lista. A
+  lista depende de importar o relatório em dia (pedido ainda não importado parece atraso) — por isso
+  o bloco mostra "pedidos do ERP até DD/MM". É a primeira peça do painel de "oportunidades do dia".
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

@@ -807,6 +807,128 @@ async function main() {
   res = await req('GET', '/api/clientes/999999/comprados-recentes');
   assert(res.status === 404, 'comprados-recentes de cliente inexistente responde 404');
 
+  // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
+  // ritmo = mediana dos intervalos entre compras dos últimos 12 meses (mín. 3),
+  // compras a até 7 dias uma da outra viram uma só, previsão = última + ritmo.
+  const ritmoLib = require('../routes/lib/ritmoCompra');
+  const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  const antesBr = (n) => ritmoLib.somarDias(hojeBr, -n);
+  {
+    const compras = ritmoLib.juntarCompras([
+      { data: antesBr(90), quantidade: 2 }, { data: antesBr(60), quantidade: 1 },
+      { data: antesBr(57), quantidade: 3 }, { data: antesBr(30), quantidade: 6 },
+    ]);
+    assert(compras.length === 3 && compras[1].quantidade === 4 && compras[1].fim === antesBr(57),
+      `juntarCompras junta compras a até 7 dias uma da outra: ${JSON.stringify(compras)}`);
+    const r = ritmoLib.ritmoDasCompras(compras, hojeBr);
+    assert(r && r.ritmo_dias === 30 && r.previsao === hojeBr && r.atraso_dias === 0 && ritmoLib.situacaoDoRitmo(r) === 'semana',
+      `ritmoDasCompras: mediana dos intervalos, previsão = última + ritmo: ${JSON.stringify(r)}`);
+    assert(ritmoLib.ritmoDasCompras(compras.slice(0, 2), hojeBr) === null, 'menos de 3 compras = sem ritmo');
+    assert(ritmoLib.mediana([10, 30, 200]) === 30 && ritmoLib.quantidadeTipica([{ quantidade: 2 }, { quantidade: 10 }, { quantidade: 4 }, { quantidade: 3 }]) === 4,
+      'mediana ignora a compra fora da curva; quantidade típica = mediana das 3 últimas');
+    const sit = (atraso, ritmo) => ritmoLib.situacaoDoRitmo({ atraso_dias: atraso, ritmo_dias: ritmo });
+    assert(sit(-8, 30) === null && sit(-7, 30) === 'semana' && sit(1, 30) === 'atrasado' && sit(45, 30) === 'atrasado' && sit(46, 30) === 'fora',
+      'situação: 7 dias antes = semana, passou = atrasado, atraso > 1,5x o ritmo = fora');
+  }
+  mockDb.__seed({
+    produtos: [
+      { id: 821, codigo_sku: '71001', nome: 'DESEMPENADEIRA RITMO', categoria: '16' },
+      { id: 822, codigo_sku: '71002', nome: 'ESPATULA RITMO', categoria: '16' },
+      { id: 823, codigo_sku: '71003', nome: 'NIVEL RITMO', categoria: '16' },
+      { id: 824, codigo_sku: '71004', nome: 'TRENA RITMO', categoria: '16' },
+    ],
+    clientes: [
+      { id: 9201, nome: 'RITMO ATRASADO', documento: '22200000000101', codigo_oficial: 'COD9201' },
+      { id: 9202, nome: 'RITMO SEMANA SO APP', documento: '22200000000102' },
+      { id: 9203, nome: 'RITMO EM DIA', documento: '22200000000103', codigo_oficial: 'COD9203' },
+      { id: 9204, nome: 'RITMO DUAS COMPRAS', documento: '22200000000104', codigo_oficial: 'COD9204' },
+      { id: 9205, nome: 'RITMO ENTREGA JUNTA', documento: '22200000000105', codigo_oficial: 'COD9205' },
+      { id: 9206, nome: 'RITMO FORA', documento: '22200000000106', codigo_oficial: 'COD9206' },
+    ],
+    pedidosOficiaisItens: [
+      // 9201: a cada 30 dias (100, 70, 40) -> previsto há 10 dias = atrasado.
+      // Desempenadeira nas 3 (2, P+base 4, 3 -> mediana 3); espátula só em 1.
+      { nr_pedido: '920101', codigo_sku: '71001', cliente_codigo_oficial: 'COD9201', quantidade: 2, valor: 10, data_implantacao: antesBr(100), data_faturamento: antesBr(98), status: 'faturado' },
+      { nr_pedido: '920102', codigo_sku: '71001', cliente_codigo_oficial: 'COD9201', quantidade: 1, valor: 10, data_implantacao: antesBr(70), data_faturamento: antesBr(66), status: 'faturado' },
+      { nr_pedido: '920102', codigo_sku: 'P71001', cliente_codigo_oficial: 'COD9201', quantidade: 3, valor: 10, data_implantacao: antesBr(70), data_faturamento: antesBr(66), status: 'faturado' },
+      { nr_pedido: '920102', codigo_sku: '71002', cliente_codigo_oficial: 'COD9201', quantidade: 5, valor: 10, data_implantacao: antesBr(70), data_faturamento: antesBr(66), status: 'faturado' },
+      { nr_pedido: '920103', codigo_sku: '71001', cliente_codigo_oficial: 'COD9201', quantidade: 3, valor: 10, data_implantacao: antesBr(40), data_faturamento: null, status: 'carteira' },
+      // série de 7 dígitos (avulso) há 5 dias: não conta como compra
+      { nr_pedido: '1092010', codigo_sku: '71004', cliente_codigo_oficial: 'COD9201', quantidade: 1, valor: 5, data_implantacao: antesBr(5), data_faturamento: antesBr(3), status: 'faturado' },
+      // 9203: comprou há 2 dias, ritmo ~29 -> longe da data, fora da lista
+      { nr_pedido: '920301', codigo_sku: '71001', cliente_codigo_oficial: 'COD9203', quantidade: 1, valor: 10, data_implantacao: antesBr(60), data_faturamento: antesBr(58), status: 'faturado' },
+      { nr_pedido: '920302', codigo_sku: '71001', cliente_codigo_oficial: 'COD9203', quantidade: 1, valor: 10, data_implantacao: antesBr(30), data_faturamento: antesBr(28), status: 'faturado' },
+      { nr_pedido: '920303', codigo_sku: '71001', cliente_codigo_oficial: 'COD9203', quantidade: 1, valor: 10, data_implantacao: antesBr(2), data_faturamento: null, status: 'carteira' },
+      // 9204: só 2 compras -> sem ritmo
+      { nr_pedido: '920401', codigo_sku: '71001', cliente_codigo_oficial: 'COD9204', quantidade: 1, valor: 10, data_implantacao: antesBr(90), data_faturamento: antesBr(88), status: 'faturado' },
+      { nr_pedido: '920402', codigo_sku: '71001', cliente_codigo_oficial: 'COD9204', quantidade: 1, valor: 10, data_implantacao: antesBr(60), data_faturamento: antesBr(58), status: 'faturado' },
+      // 9205: 90, 60 + 57 (mesma compra), 30 -> ritmo 30, prevista hoje = semana
+      // (sem juntar seria mediana 27, prevista há 3 dias = atrasado)
+      { nr_pedido: '920501', codigo_sku: '71003', cliente_codigo_oficial: 'COD9205', quantidade: 1, valor: 10, data_implantacao: antesBr(90), data_faturamento: antesBr(88), status: 'faturado' },
+      { nr_pedido: '920502', codigo_sku: '71003', cliente_codigo_oficial: 'COD9205', quantidade: 1, valor: 10, data_implantacao: antesBr(60), data_faturamento: antesBr(58), status: 'faturado' },
+      { nr_pedido: '920503', codigo_sku: '71004', cliente_codigo_oficial: 'COD9205', quantidade: 1, valor: 10, data_implantacao: antesBr(57), data_faturamento: antesBr(55), status: 'faturado' },
+      { nr_pedido: '920504', codigo_sku: '71003', cliente_codigo_oficial: 'COD9205', quantidade: 1, valor: 10, data_implantacao: antesBr(30), data_faturamento: antesBr(28), status: 'faturado' },
+      // 9206: 200, 170, 140 -> ritmo 30, atraso 110 > 45 = fora do ritmo
+      { nr_pedido: '920601', codigo_sku: '71001', cliente_codigo_oficial: 'COD9206', quantidade: 1, valor: 10, data_implantacao: antesBr(200), data_faturamento: antesBr(198), status: 'faturado' },
+      { nr_pedido: '920602', codigo_sku: '71001', cliente_codigo_oficial: 'COD9206', quantidade: 1, valor: 10, data_implantacao: antesBr(170), data_faturamento: antesBr(168), status: 'faturado' },
+      { nr_pedido: '920603', codigo_sku: '71001', cliente_codigo_oficial: 'COD9206', quantidade: 1, valor: 10, data_implantacao: antesBr(140), data_faturamento: antesBr(138), status: 'faturado' },
+    ],
+    pedidos: [
+      // 9201: pedido do app que virou o 920103 (mesma compra, não conta de novo)
+      { id: 9921, cliente_id: 9201, data_pedido: antesBr(41) + 'T12:00:00Z' },
+      // 9202 (sem código no ERP): só app, 55, 35 e 15 dias -> ritmo 20, prevista em 5 dias.
+      // Nenhum produto em 3 compras -> proposta com os que vieram em 2 das 3 últimas.
+      { id: 9922, cliente_id: 9202, data_pedido: antesBr(55) + 'T12:00:00Z' },
+      { id: 9923, cliente_id: 9202, data_pedido: antesBr(35) + 'T12:00:00Z' },
+      { id: 9924, cliente_id: 9202, data_pedido: antesBr(15) + 'T12:00:00Z' },
+    ],
+    pedidoItens: [
+      { id: 9931, pedido_id: 9921, produto_id: 821, quantidade: 3, preco_unitario: 10 },
+      { id: 9932, pedido_id: 9922, produto_id: 823, quantidade: 2, preco_unitario: 10 },
+      { id: 9933, pedido_id: 9923, produto_id: 823, quantidade: 4, preco_unitario: 10 },
+      { id: 9934, pedido_id: 9923, produto_id: 824, quantidade: 1, preco_unitario: 10 },
+      { id: 9935, pedido_id: 9924, produto_id: 824, quantidade: 1, preco_unitario: 10 },
+      { id: 9936, pedido_id: 9924, produto_id: 822, quantidade: 9, preco_unitario: 10 },
+    ],
+  });
+  res = await req('GET', '/api/recompra');
+  {
+    const doTeste = (res.body && res.body.clientes || []).filter(c => c.cliente_id >= 9201 && c.cliente_id <= 9206);
+    const porId = new Map(doTeste.map(c => [c.cliente_id, c]));
+    const a = porId.get(9201), b = porId.get(9202), e = porId.get(9205), f = porId.get(9206);
+    assert(res.status === 200 && res.body.hoje === hojeBr && doTeste.length === 4 && !porId.has(9203) && !porId.has(9204),
+      `recompra: lista só quem está atrasado/na semana/fora, com 3+ compras: ${JSON.stringify(doTeste.map(c => [c.cliente_id, c.situacao]))}`);
+    assert(a && a.situacao === 'atrasado' && a.ritmo_dias === 30 && a.num_compras === 3 && a.ultima_compra === antesBr(40) && a.atraso_dias === 10
+      && a.itens.length === 1 && a.itens[0].codigo_sku === '71001' && a.itens[0].quantidade === 3 && a.itens[0].origem === 'ritmo' && a.itens[0].nome === 'DESEMPENADEIRA RITMO',
+      `recompra: entrada pela implantação (carteira conta), sem série de 7 dígitos, app já no oficial não repete, P+base: ${JSON.stringify(a)}`);
+    assert(b && b.situacao === 'semana' && b.ritmo_dias === 20 && b.previsao === ritmoLib.somarDias(hojeBr, 5)
+      && b.itens.map(i => i.codigo_sku).sort().join() === '71003,71004' && b.itens.every(i => i.origem === 'frequente')
+      && b.itens.find(i => i.codigo_sku === '71003').quantidade === 3,
+      `recompra: cliente só do app; sem produto com ritmo, proposta com os de 2 das 3 últimas compras: ${JSON.stringify(b)}`);
+    assert(e && e.situacao === 'semana' && e.ritmo_dias === 30 && e.num_compras === 3,
+      `recompra: compras a até 7 dias uma da outra contam como uma só: ${JSON.stringify(e)}`);
+    assert(f && f.situacao === 'fora' && f.atraso_dias === 110 && f.itens.length === 1 && f.itens[0].origem === 'frequente',
+      `recompra: fora do ritmo (atraso > 1,5x), proposta pelos itens frequentes: ${JSON.stringify(f)}`);
+    const ordem = doTeste.map(c => c.cliente_id);
+    assert(ordem.indexOf(9201) < ordem.indexOf(9206) && ordem.indexOf(9206) < ordem.indexOf(9205) && ordem.indexOf(9205) < ordem.indexOf(9202),
+      `recompra: atrasados primeiro, depois fora do ritmo, depois a semana pela data: ${JSON.stringify(ordem)}`);
+  }
+  res = await req('POST', '/api/recompra/9201/adiar', {});
+  assert(res.status === 200 && res.body.adiado_ate === ritmoLib.somarDias(hojeBr, 7), `"Já falei" adia 7 dias: ${JSON.stringify(res.body)}`);
+  res = await req('POST', '/api/recompra/9202/adiar', { em: antesBr(3) });
+  assert(res.status === 200 && res.body.adiado_ate === ritmoLib.somarDias(hojeBr, 4), `"Já falei" pela fila offline conta do dia em que foi tocado: ${JSON.stringify(res.body)}`);
+  res = await req('POST', '/api/recompra/9202/adiar', { em: ritmoLib.somarDias(hojeBr, 30) });
+  assert(res.status === 200 && res.body.adiado_ate === ritmoLib.somarDias(hojeBr, 7), `"Já falei" com data no futuro vale de hoje: ${JSON.stringify(res.body)}`);
+  res = await req('GET', '/api/recompra');
+  {
+    const a = (res.body.clientes || []).find(c => c.cliente_id === 9201);
+    assert(a && a.adiado_ate === ritmoLib.somarDias(hojeBr, 7), `recompra devolve até quando o cliente foi adiado: ${JSON.stringify(a && a.adiado_ate)}`);
+  }
+  res = await req('POST', '/api/recompra/999999/adiar', {});
+  assert(res.status === 404, '"Já falei" de cliente inexistente responde 404');
+  res = await req('POST', '/api/recompra/abc/adiar', {});
+  assert(res.status === 400, '"Já falei" com id inválido responde 400');
+
   // 18c) GET /api/produtos/:codigo/clientes ("Já compraram" da aba Produtos):
   // conta o faturado oficial, não só pedido do app - caso real: lixadeira
   // faturada pelo ERP aparecia "Já compraram (0)". Código promocional conta
