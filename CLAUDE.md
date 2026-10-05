@@ -94,11 +94,12 @@ Pegadinhas de ambiente:
   internet (o teste do `run_tests.js` acusa a que faltar). O SW guarda página/script do app pelo
   endereço sem parâmetros (`chaveDaPagina`).
 - Fila offline (`drenarFilaSync`, `index.html`): uma aba por vez (Web Locks — o app instalado e uma aba
-  do navegador dividem o `localStorage`), cada envio com prazo de 30 s (um envio travado segurava a trava);
-  item que o servidor recusa de verdade (403/404/409/422 com a mensagem do app — **400 não**, o servidor
-  também responde 400 a falha passageira do banco) sai da fila com aviso e fica guardado em
-  `cortagFilaRecusados_v1` (contado no Painel); a fila é relida no fim pra não perder o que entrou durante
-  o envio. Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
+  do navegador dividem o `localStorage`); **sem prazo no envio** de propósito (abortar não para o servidor,
+  que terminava de gravar o levantamento e o reenvio gravava de novo); item que o servidor recusa de verdade
+  (403/404/409/422 com a mensagem do app — **400 não**, o servidor também responde 400 a falha passageira do
+  banco) sai da fila com aviso e fica guardado em `cortagFilaRecusados_v1`; Painel › "Ver pendências e
+  recusados" mostra a fila com o último erro de cada item, baixa tudo em JSON e descarta os recusados; a
+  fila é relida no fim pra não perder o que entrou durante o envio. Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
   `PUT` e o nome do arquivo do cliente nunca chegava do app publicado; teste no `run_tests.js`). Biblioteca carregada sob demanda que falhou tenta de novo na próxima vez (o pdf.js com
   `?tentativa=N`, que o `sw.js` atende pela cópia sem parâmetro).
 - **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,

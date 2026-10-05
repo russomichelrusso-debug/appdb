@@ -982,15 +982,30 @@ async function main() {
     const antes = mockDb.__getPedidos().length;
     const e1 = await req('POST', '/api/pedidos', corpo);
     const e2 = await req('POST', '/api/pedidos', corpo);
-    // corrida (duas abas): a consulta não acha e o INSERT bate no índice único
-    const queryOriginal = mockDb.pool.query;
-    let escondeu = false;
-    mockDb.pool.query = async (sql, params) => {
-      if (!escondeu && sql.includes('WHERE id_envio = $1')) { escondeu = true; return { rows: [] }; }
-      return queryOriginal(sql, params);
+    // troca a consulta do banco simulado também dentro da transação (pool.connect)
+    const comConsulta = async (troca, fn) => {
+      const q0 = mockDb.pool.query, c0 = mockDb.pool.connect;
+      const q = (sql, params) => troca(sql, params, q0);
+      mockDb.pool.query = q;
+      mockDb.pool.connect = async () => ({ query: q, release: () => {} });
+      try { return await fn(); } finally { mockDb.pool.query = q0; mockDb.pool.connect = c0; }
     };
-    let e3;
-    try { e3 = await req('POST', '/api/pedidos', corpo); } finally { mockDb.pool.query = queryOriginal; }
+    // corrida (duas abas): a consulta não acha e o INSERT bate no índice único
+    let buscas3 = 0;
+    const e3 = await comConsulta(async (sql, params, q0) => {
+      if (sql.includes('WHERE id_envio = $1') && buscas3++ === 0) return { rows: [] };
+      return q0(sql, params);
+    }, () => req('POST', '/api/pedidos', corpo));
+    // corrida e a busca do já gravado falha (banco instável): 503 (fica na fila e o próximo
+    // envio acha o pedido), não 409 - o 409 tirava da fila como "recusado"
+    let buscas4 = 0;
+    const e4 = await comConsulta(async (sql, params, q0) => {
+      if (sql.includes('WHERE id_envio = $1') && buscas4++ === 0) return { rows: [] };
+      if (sql.includes('WHERE id_envio = $1')) throw new Error('Connection terminated');
+      return q0(sql, params);
+    }, () => req('POST', '/api/pedidos', corpo));
+    assert(e4.status === 503 && buscas3 === 2 && buscas4 === 2,
+      `pedido do app: corrida sem conseguir confirmar o já gravado = 503 (tenta de novo): ${JSON.stringify([e4.status, e4.body, buscas3, buscas4])}`);
     const semId = await req('POST', '/api/pedidos', { ...corpo, id_envio: 'curto' }); // inválido: vira pedido normal
     assert(e1.status === 201 && e2.status === 200 && e2.body.mesmo_envio === true && e2.body.pedido_id === e1.body.pedido_id
       && e3.status === 200 && e3.body.pedido_id === e1.body.pedido_id && semId.status === 201
