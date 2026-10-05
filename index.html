@@ -10773,9 +10773,13 @@
         const resto = fila.filter(it => !condicao(it));
         if (resto.length !== fila.length) saveSyncQueueList(resto);
       }
+      // Devolve false quando não conseguiu gravar (aparelho sem espaço, armazenamento
+      // bloqueado): quem põe item novo na fila precisa saber que ele não ficou guardado
       function saveSyncQueueList(queue) {
-        try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
+        let ok = true;
+        try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { ok = false; }
         refreshSyncQueueBadge();
+        return ok;
       }
       // Envios que o servidor recusou (saem da fila, mas ficam guardados aqui -
       // o pedido não tem outra cópia no aparelho)
@@ -10897,8 +10901,11 @@
         if (recusadosGuardados) recusados.forEach(r => tirar.add(r.item.id));
         else recusados.forEach(r => erros.set(r.item.id, `Recusado pelo servidor: ${r.erro} (sem espaço no aparelho pra guardar à parte)`));
         // relê a fila: o que entrou nela enquanto enviava (outra ação sem rede) fica
-        saveSyncQueueList(loadSyncQueue().filter(it => !tirar.has(it.id))
+        const restantes = loadSyncQueue().filter(it => !tirar.has(it.id));
+        const gravou = saveSyncQueueList(restantes
           .map(it => (erros.has(it.id) ? { ...it, ultimoErro: erros.get(it.id), tentativas: (it.tentativas || 0) + 1 } : it)));
+        // sem espaço nem pro texto do erro: grava ao menos sem os enviados (senão iam de novo)
+        if (!gravou) saveSyncQueueList(restantes);
         const detalhe = document.getElementById('apSyncQueueDetalhe');
         if (detalhe && detalhe.innerHTML) renderDetalheFila();
         if (recusadosGuardados) {
@@ -11046,8 +11053,12 @@
           if (filaInfo) {
             const fila = loadSyncQueue();
             fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path, options, criadoEm: Date.now(), ...filaInfo });
-            saveSyncQueueList(fila);
-            return { __filaOffline: true };
+            // só diz "fica salvo e vai sozinho" se ficou mesmo: antes a falha do
+            // localStorage era engolida e o app anunciava salvo sem ter gravado
+            if (saveSyncQueueList(fila)) return { __filaOffline: true };
+            const semEspaco = new Error('Sem conexão com o servidor, e o aparelho está sem espaço pra guardar este envio na fila — ele NÃO foi salvo. Tente de novo quando tiver internet (ou libere espaço no navegador).');
+            semEspaco.semEspacoNaFila = true;
+            throw semEspaco;
           }
           throw new Error('Não foi possível conectar ao servidor de histórico (sem internet, ou o serviço está fora do ar).');
         }
