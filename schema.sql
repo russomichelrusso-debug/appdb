@@ -86,6 +86,12 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuar
 -- reabrir com os mesmos preços. NULL nos pedidos gravados antes disso.
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS atualizado_em TIMESTAMPTZ;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS contexto JSONB;
+-- Identificador que o app gera no toque em "Finalizar pedido": com sinal
+-- fraco o servidor gravava, a resposta se perdia, o pedido ia pra fila offline
+-- e o reenvio criava um segundo pedido. O reenvio com o mesmo id_envio devolve
+-- o pedido já gravado. NULL nos pedidos antigos e nos de PDF.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_envio TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_id_envio ON pedidos(id_envio) WHERE id_envio IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS pedido_itens (
   id SERIAL PRIMARY KEY,

@@ -958,6 +958,30 @@ async function main() {
       `pedido/alteração do app grava a hora do toque no relógio do servidor (fila offline): ${JSON.stringify([r1, r2, r3, r4].map(r => gravado(r)?.data_pedido).concat(alt.status, gravado(r1)?.atualizado_em))}`);
   }
 
+  // 18b1c) Pedido reenviado pela fila offline com o mesmo id_envio (a resposta se
+  // perdeu com sinal fraco): devolve o pedido já gravado, não cria outro
+  {
+    const corpo = { cliente: { cliente_id: 9121, nome: 'LOJA FUSO' }, itens: [{ codigo_sku: '70011', quantidade: 3, preco_unitario: 10 }],
+      id_envio: '7f3c2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6' };
+    const antes = mockDb.__getPedidos().length;
+    const e1 = await req('POST', '/api/pedidos', corpo);
+    const e2 = await req('POST', '/api/pedidos', corpo);
+    // corrida (duas abas): a consulta não acha e o INSERT bate no índice único
+    const queryOriginal = mockDb.pool.query;
+    let escondeu = false;
+    mockDb.pool.query = async (sql, params) => {
+      if (!escondeu && sql.includes('WHERE id_envio = $1')) { escondeu = true; return { rows: [] }; }
+      return queryOriginal(sql, params);
+    };
+    let e3;
+    try { e3 = await req('POST', '/api/pedidos', corpo); } finally { mockDb.pool.query = queryOriginal; }
+    const semId = await req('POST', '/api/pedidos', { ...corpo, id_envio: 'curto' }); // inválido: vira pedido normal
+    assert(e1.status === 201 && e2.status === 200 && e2.body.mesmo_envio === true && e2.body.pedido_id === e1.body.pedido_id
+      && e3.status === 200 && e3.body.pedido_id === e1.body.pedido_id && semId.status === 201
+      && mockDb.__getPedidos().length === antes + 2,
+      `pedido do app: reenvio com o mesmo id_envio devolve o gravado (também na corrida): ${JSON.stringify([e1.body, e2.body, e3.body, semId.status])}`);
+  }
+
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
   // ritmo = mediana dos intervalos entre compras dos últimos 12 meses (mín. 3),
   // pedido a menos de 7 dias do anterior entra na mesma compra (até 14 dias de
