@@ -39,23 +39,34 @@ const versaoDoApp = (toque, enviadoEm) => horaDoPedidoDoApp(toque, enviadoEm);
 const versaoMaisVelha = (nova, gravada) => !!(nova && gravada && new Date(nova).getTime() <= new Date(gravada).getTime());
 
 // O que fazer com uma versão do app que chega pra um pedido já gravado:
-// - 'igual': mesmos itens = reenvio da mesma versão (resposta perdida com sinal
+// - 'igual': mesmos itens e mesmo contexto = reenvio da mesma versão (resposta perdida com sinal
 //   fraco). É sucesso, sem regravar. Os itens são comparados ANTES da versão: a
 //   versão carrega a demora daquele envio, e o reenvio que chega mais rápido que
 //   o 1º saía "mais velho" e voltava como versão antiga - aviso falso, e a lista
 //   do aparelho ficava com os itens de antes (achado do revisor-cortag). A versão
 //   gravada só sobe (GREATEST): A -> B -> A com o B atrasado na fila não volta.
-// - 'antiga': mais velha que a gravada, ou sem hora confiável (relógio do
-//   aparelho mudou no meio, mais de 30 dias na fila) quando já há uma gravada -
-//   sem saber a hora, não passa por cima de uma alteração mais nova.
-// - 'aplicar': troca os itens.
-async function compararComGravado(client, pedido, itens, versao) {
+//   Só o contexto mudou (prazo/canal sem mudar preço) não é reenvio: aplica.
+// - 'antiga': mais velha que a gravada, ou com a hora mandada mas não confiável
+//   (relógio do aparelho mudou no meio, mais de 30 dias na fila) quando já há
+//   uma gravada - sem saber a hora, não passa por cima de uma alteração mais
+//   nova. App antigo, que não manda hora nenhuma, aplica como antes.
+// - 'aplicar': troca os itens e o contexto.
+const jsonCanonico = (v) => (v == null ? 'null'
+  : Array.isArray(v) ? `[${v.map(jsonCanonico).join(',')}]`
+  : typeof v === 'object' ? `{${Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => `${JSON.stringify(k)}:${jsonCanonico(v[k])}`).join(',')}}`
+  : JSON.stringify(v));
+function mesmoContexto(gravado, contexto) {
+  const novo = contextoParaGravar(contexto);
+  const antigo = typeof gravado === 'string' ? JSON.parse(gravado) : gravado; // jsonb chega como objeto
+  return jsonCanonico(antigo) === jsonCanonico(novo == null ? null : JSON.parse(novo));
+}
+async function compararComGravado(client, pedido, itens, contexto, versao, horaMandada) {
   if (!itensValidos(itens)) return 'igual'; // não troca por itens inválidos (devolve o gravado)
-  if (mesmosItens(await itensDoPedido(client, pedido.id), itens)) {
+  if (mesmoContexto(pedido.contexto, contexto) && mesmosItens(await itensDoPedido(client, pedido.id), itens)) {
     if (versao) await client.query('/* versao-app */ UPDATE pedidos SET versao_app = GREATEST(versao_app, $1::timestamptz) WHERE id = $2', [versao, pedido.id]);
     return 'igual';
   }
-  if (pedido.versao_app && !versao) {
+  if (pedido.versao_app && !versao && horaMandada) {
     console.warn(`Pedido #${pedido.id}: alteração sem hora confiável (enviado_em/alterado_em) não aplicada sobre a versão gravada.`);
     return 'antiga';
   }
@@ -121,7 +132,7 @@ function contextoParaGravar(contexto) {
 // }
 const ID_ENVIO = /^[A-Za-z0-9-]{16,64}$/;
 async function pedidoDoMesmoEnvio(client, idEnvio, usuarioId, travar = false) {
-  const r = await client.query(`SELECT id, cliente_id, data_pedido, usuario_id, versao_app FROM pedidos WHERE id_envio = $1${travar ? ' FOR UPDATE' : ''}`, [idEnvio]);
+  const r = await client.query(`SELECT id, cliente_id, data_pedido, usuario_id, versao_app, contexto FROM pedidos WHERE id_envio = $1${travar ? ' FOR UPDATE' : ''}`, [idEnvio]);
   const p = r.rows[0];
   // de outro usuário (não acontece com UUID): não devolve o pedido dele
   return p && p.usuario_id === usuarioId ? p : (p ? false : null);
@@ -158,7 +169,7 @@ router.post('/', async (req, res) => {
       if (mesmo) {
         const versao = versaoDoApp(req.body.alterado_em || data_pedido, req.body.enviado_em);
         const resposta = { pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true };
-        const decisao = await compararComGravado(client, mesmo, itens, versao);
+        const decisao = await compararComGravado(client, mesmo, itens, contexto, versao, !!req.body.enviado_em);
         if (decisao !== 'aplicar') {
           await client.query(decisao === 'igual' ? 'COMMIT' : 'ROLLBACK');
           return res.status(200).json(decisao === 'antiga' ? { ...resposta, versao_antiga: true } : resposta);
@@ -382,7 +393,7 @@ router.patch('/:id', async (req, res) => {
     // FOR UPDATE: duas atualizações do mesmo pedido ao mesmo tempo (ex.: a
     // fila offline reenviando) não regravam os itens em paralelo.
     const atualResult = await client.query(
-      'SELECT id, cliente_id, origem, usuario_id, data_pedido, atualizado_em, versao_app FROM pedidos WHERE id = $1 FOR UPDATE',
+      'SELECT id, cliente_id, origem, usuario_id, data_pedido, atualizado_em, versao_app, contexto FROM pedidos WHERE id = $1 FOR UPDATE',
       [req.params.id]
     );
     const atual = atualResult.rows[0];
@@ -403,7 +414,7 @@ router.patch('/:id', async (req, res) => {
     // não apaga a mais nova
     // (e o reenvio da mesma alteração, com a resposta perdida, é sucesso sem regravar)
     const versao = versaoDoApp(alterado_em, enviado_em);
-    const decisao = await compararComGravado(client, atual, itens, versao);
+    const decisao = await compararComGravado(client, atual, itens, contexto, versao, !!(alterado_em || enviado_em));
     if (decisao !== 'aplicar') {
       await client.query(decisao === 'igual' ? 'COMMIT' : 'ROLLBACK');
       return res.json({ pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido, atualizado_em: atual.atualizado_em,

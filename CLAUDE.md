@@ -404,8 +404,9 @@ Supabase, sem PR — não é mudança de código.
   não foi aplicada por isso (`versao_antiga`). Os **itens são comparados antes da versão**
   (`compararComGravado`): a versão carrega a demora daquele envio, e o reenvio da mesma versão que chegava
   mais rápido que o 1º voltava como "versão antiga" (aviso falso, lista do aparelho com os itens de antes);
-  mesmos itens = sucesso sem regravar, e a versão gravada só sobe. Versão sem hora confiável (relógio do
-  aparelho mudou no meio, mais de 30 dias na fila) não passa por cima de uma gravada. O pedido gravado cuja
+  mesmos itens e mesmo contexto = sucesso sem regravar (só o prazo/canal mudou = grava), e a versão gravada
+  só sobe. Versão com hora mandada mas não confiável (relógio do aparelho mudou no meio, mais de 30 dias na
+  fila) não passa por cima de uma gravada; app antigo, sem hora nenhuma, aplica como antes. O pedido gravado cuja
   resposta se perdeu (POST ainda na fila) aparece na lista junto do pedido do servidor pelo `id_envio`
   (`GET /salvos` devolve), com a versão da fila por cima, e alterar ele tira esse POST da fila. Envios com o mesmo `id_envio` passam um de cada vez
   (`pg_advisory_xact_lock`);

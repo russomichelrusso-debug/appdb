@@ -295,9 +295,9 @@ async function query(sql, params = []) {
       .filter(p => p.itens.length > 0) };
   }
   // PATCH /api/pedidos/:id: pedido travado pra edição...
-  if (s.includes('SELECT ID, CLIENTE_ID, ORIGEM, USUARIO_ID, DATA_PEDIDO, ATUALIZADO_EM, VERSAO_APP FROM PEDIDOS WHERE ID = $1 FOR UPDATE')) {
+  if (s.includes('SELECT ID, CLIENTE_ID, ORIGEM, USUARIO_ID, DATA_PEDIDO, ATUALIZADO_EM, VERSAO_APP, CONTEXTO FROM PEDIDOS WHERE ID = $1 FOR UPDATE')) {
     return { rows: pedidos.filter(p => String(p.id) === String(params[0]))
-      .map(p => ({ id: p.id, cliente_id: p.cliente_id, origem: p.origem, usuario_id: p.usuario_id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em || null, versao_app: p.versao_app || null })) };
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, origem: p.origem, usuario_id: p.usuario_id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em || null, versao_app: p.versao_app || null, contexto: p.contexto ? JSON.parse(p.contexto) : null })) };
   }
   // itens do pedido com o código (POST com o mesmo id_envio: os itens mudaram?)
   if (s.includes('/* ITENS-DO-PEDIDO */')) {
@@ -1295,7 +1295,7 @@ async function query(sql, params = []) {
   // POST /api/pedidos com id_envio: o reenvio do mesmo pedido devolve o gravado
   if (s.includes('FROM PEDIDOS WHERE ID_ENVIO = $1')) {
     return { rows: pedidos.filter(p => p.id_envio && p.id_envio === params[0])
-      .map(p => ({ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, usuario_id: p.usuario_id, versao_app: p.versao_app || null })) };
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, usuario_id: p.usuario_id, versao_app: p.versao_app || null, contexto: p.contexto ? JSON.parse(p.contexto) : null })) };
   }
   // POST /api/pedidos com numero_cotacao: busca (com lock) da cotação já gravada
   if (s.includes('FROM PEDIDOS WHERE NUMERO_COTACAO = $1')) {

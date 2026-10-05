@@ -1057,6 +1057,20 @@ async function main() {
       && pa.body.atualizado === true && pb.status === 200 && pb.body.atualizado === true && !pb.body.versao_antiga
       && semHora.body.versao_antiga === true && JSON.stringify(itensDe(pid)) === '[7]',
       `pedido do app: reenvio da mesma versão (enviado_em novo, chegando mais rápido) não vira "versão antiga"; sem hora não sobrescreve: ${JSON.stringify([r2.body, pb.body, semHora.body, itensDe(pid)])}`);
+    // só o contexto mudou (prazo sem mudar preço): não é reenvio, grava; o mesmo contexto
+    // com as chaves em outra ordem (jsonb não guarda a ordem) é reenvio
+    const ctxDe = (id) => JSON.parse(mockDb.__getPedidos().find(x => x.id === id).contexto || 'null');
+    const soCtx = await req('PATCH', `/api/pedidos/${pid}`, { itens: p7, contexto: { uf: 'SP', paymentTerm: '28/56 dias' }, alterado_em: agoraIso(), enviado_em: agoraIso() });
+    const ctxGravado = ctxDe(pid);
+    const atualizadoEm = mockDb.__getPedidos().find(x => x.id === pid).atualizado_em;
+    const ordem = await req('PATCH', `/api/pedidos/${pid}`, { itens: p7, contexto: { paymentTerm: '28/56 dias', uf: 'SP' }, alterado_em: agoraIso(), enviado_em: new Date(Date.now() + 3000).toISOString() });
+    const atualizadoEmDepois = mockDb.__getPedidos().find(x => x.id === pid).atualizado_em; // reenvio não regrava
+    // app antigo (sem alterado_em/enviado_em): aplica como antes, não some sem aviso
+    const legado = await req('PATCH', `/api/pedidos/${pid}`, { itens: [{ codigo_sku: '70011', quantidade: 8, preco_unitario: 10 }], contexto: { uf: 'SP', paymentTerm: '28/56 dias' } });
+    assert(soCtx.body.atualizado === true && ctxGravado && ctxGravado.paymentTerm === '28/56 dias'
+      && ordem.body.atualizado === true && !ordem.body.versao_antiga && atualizadoEmDepois === atualizadoEm
+      && legado.body.atualizado === true && !legado.body.versao_antiga && JSON.stringify(itensDe(pid)) === '[8]',
+      `pedido do app: alteração só do contexto grava; mesmo contexto em outra ordem é reenvio; app sem hora aplica: ${JSON.stringify([soCtx.body, ctxGravado, ordem.body, legado.body, itensDe(pid)])}`);
 
     // A -> B -> A: o vendedor volta ao que já estava gravado (A de novo, mesmos itens)
     // enquanto B ainda espera na fila de outro aparelho. A versão gravada sobe com o
