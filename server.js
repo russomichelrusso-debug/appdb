@@ -48,7 +48,9 @@ app.use((req, res, next) => {
     res.header('Vary', 'Origin');
   }
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
+  // PUT: nome do arquivo do cliente (PUT /api/clientes/:id/nome-arquivo) - sem ele o
+  // navegador barrava a chamada do app publicado (outro domínio) antes de chegar aqui
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });

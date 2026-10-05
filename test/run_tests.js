@@ -52,7 +52,7 @@ function req(method, urlPath, body, headers = {}) {
       res.on('end', () => {
         let json = null;
         try { json = JSON.parse(chunks); } catch (e) {}
-        resolve({ status: res.statusCode, body: json });
+        resolve({ status: res.statusCode, body: json, headers: res.headers });
       });
     });
     r.on('error', reject);
@@ -113,6 +113,22 @@ async function main() {
     const r2 = await req('GET', '/health');
     assert(res.status === 503 && !JSON.stringify(res.body).includes('SEGREDO') && r2.status === 200,
       `health do banco: banco fora = 503 sem detalhe, e o /health continua 200: ${JSON.stringify(res.body)}`);
+  }
+
+  // 1c) CORS: todo método que as rotas usam está liberado na checagem prévia do navegador
+  // (o app publicado roda em outro domínio). Faltava PUT e o nome do arquivo do cliente
+  // nunca chegava ao servidor (achado da 4ª rodada do revisor-cortag).
+  {
+    const fs = require('fs');
+    const metodos = new Set();
+    for (const f of fs.readdirSync(path.join(__dirname, '../routes')).filter(f => f.endsWith('.js'))) {
+      for (const m of fs.readFileSync(path.join(__dirname, '../routes', f), 'utf8').matchAll(/router\.(get|post|put|patch|delete)\(/g)) metodos.add(m[1].toUpperCase());
+    }
+    const pre = await req('OPTIONS', '/api/clientes/1/nome-arquivo', null, { Origin: 'https://example.com', 'Access-Control-Request-Method': 'PUT' });
+    const liberados = String(pre.headers['access-control-allow-methods'] || '').split(/\s*,\s*/);
+    const faltando = [...metodos].filter(m => !liberados.includes(m));
+    assert(pre.status === 204 && metodos.has('PUT') && faltando.length === 0,
+      `CORS libera todos os métodos usados pelas rotas: ${JSON.stringify({ liberados, faltando })}`);
   }
 
   // 2) endpoint protegido sem token -> 401

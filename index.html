@@ -10623,12 +10623,23 @@
         try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
         refreshSyncQueueBadge();
       }
+      // Envios que o servidor recusou (saem da fila, mas ficam guardados aqui -
+      // o pedido não tem outra cópia no aparelho)
+      const FILA_RECUSADOS_LS_KEY = 'cortagFilaRecusados_v1';
+      function loadFilaRecusados() {
+        try { return JSON.parse(localStorage.getItem(FILA_RECUSADOS_LS_KEY)) || []; } catch (e) { return []; }
+      }
+      function guardarFilaRecusados(novos) {
+        try { localStorage.setItem(FILA_RECUSADOS_LS_KEY, JSON.stringify(loadFilaRecusados().concat(novos).slice(-30))); } catch (e) { }
+      }
       function refreshSyncQueueBadge() {
         const badge = document.getElementById('syncQueueBadge');
         const n = loadSyncQueue().length;
         if (badge) { badge.textContent = n; badge.classList.toggle('hidden', n === 0); }
         const adminBtn = document.getElementById('apSyncQueueCount');
-        if (adminBtn) adminBtn.textContent = n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente';
+        const recusados = loadFilaRecusados().length;
+        if (adminBtn) adminBtn.textContent = (n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente')
+          + (recusados ? ` · ${recusados} recusado${recusados === 1 ? '' : 's'} pelo servidor` : '');
         atualizarResumoStatus();
       }
       let syncQueueDraining = false;
@@ -10651,6 +10662,12 @@
           syncQueueDraining = false;
         }
       }
+      function prazoDeEnvio(ms) {
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+        const c = new AbortController();
+        setTimeout(() => c.abort(), ms);
+        return c.signal;
+      }
       async function drenarFilaSyncAgora(silencioso) {
         const fila = loadSyncQueue();
         const tirar = new Set();
@@ -10658,7 +10675,9 @@
         let enviados = 0;
         for (const item of fila) {
           try {
-            await apiFetch(item.path, item.options);
+            // com prazo: um envio travado (sinal fraco, aba congelada) segurava a
+            // trava da fila e nenhuma outra aba enviava mais nada
+            await apiFetch(item.path, { ...item.options, signal: prazoDeEnvio(30000) });
             enviados++;
             tirar.add(item.id);
           } catch (e) {
@@ -10669,10 +10688,11 @@
           }
         }
         // relê a fila: o que entrou nela enquanto enviava (outra ação sem rede) fica
+        if (recusados.length) guardarFilaRecusados(recusados.map(r => ({ ...r.item, erro: r.erro, recusadoEm: Date.now() })));
         saveSyncQueueList(loadSyncQueue().filter(it => !tirar.has(it.id)));
         if (recusados.length) {
           const r = recusados[0];
-          showToast(`O servidor recusou e tirou da fila: ${r.item.descricao || 'envio pendente'} — ${r.erro}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}`, 'erro');
+          showToast(`O servidor recusou: ${r.item.descricao || 'envio pendente'} — ${String(r.erro).replace(/\.$/, '')}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}. Ficou guardado no aparelho (Painel › pendências).`, 'erro');
           console.warn('Fila offline: itens recusados pelo servidor e retirados da fila', recusados);
         } else if (enviados > 0 && !silencioso) {
           showToast(`${enviados} pendente(s) sincronizado(s) agora`);
@@ -10806,9 +10826,11 @@
         if (!resp.ok) {
           const erro = new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
           erro.status = resp.status;
-          // 4xx = o servidor recusou o pedido em si (não adianta reenviar); menos
-          // sessão expirada (401, reenvia depois de entrar), tempo esgotado e limite de uso
-          erro.recusado = resp.status >= 400 && resp.status < 500 && ![401, 408, 429].includes(resp.status);
+          // recusa de verdade (não adianta reenviar): só sem permissão, pedido que
+          // não existe mais, conflito ou dado inválido - E com a mensagem do app
+          // (404 do Render no meio de um deploy vem sem ela). 400 fica de fora: o
+          // servidor também responde 400 a falha passageira do banco.
+          erro.recusado = [403, 404, 409, 422].includes(resp.status) && !!(body && body.erro);
           throw erro;
         }
         return body;
