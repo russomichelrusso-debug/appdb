@@ -11225,13 +11225,26 @@
         const qs = params.toString();
         return apiFetch(`/api/pedidos-oficiais/${clienteId}/resumo${qs ? '?' + qs : ''}`);
       }
+      // Contadores de requisição da tela do cliente (aba Clientes): com o
+      // servidor lento, a resposta de um cliente (ou período/aba) anterior
+      // chegava depois e aparecia sob o cliente atual - cada carga descarta
+      // a resposta que não é mais a última pedida.
+      let clienteFichaResumoReq = 0;
+      let clienteClassificatorioReq = 0;
+      let clienteDetailReq = 0;
+      let clienteGrupoReq = 0;
       async function loadClienteFichaResumo() {
         const el = document.getElementById('clienteFichaClassificatorio');
         const elAcum = document.getElementById('clienteFichaAcumulado');
         const inicio = document.getElementById('clienteFichaDataInicio').value;
         const fim = document.getElementById('clienteFichaDataFim').value;
+        const cliente = clienteTabSelected;
+        if (!cliente) return;
+        const req = ++clienteFichaResumoReq;
+        const velha = () => req !== clienteFichaResumoReq || clienteTabSelected !== cliente;
         try {
-          const resumo = await apiPedidosOficiaisResumo(clienteTabSelected.id, inicio, fim);
+          const resumo = await apiPedidosOficiaisResumo(cliente.id, inicio, fim);
+          if (velha()) return;
           if (!resumo.vinculado) {
             el.textContent = 'Não vinculado ao relatório oficial ainda';
             elAcum.textContent = '—';
@@ -11240,6 +11253,7 @@
           el.textContent = resumo.classificatorio || 'Sem classificatório registrado';
           elAcum.textContent = resumo.acumulado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         } catch (e) {
+          if (velha()) return;
           el.textContent = '—';
           elAcum.textContent = '—';
         }
@@ -11586,27 +11600,34 @@
         if (!abrindo) { wrap.classList.add('hidden'); return; }
         wrap.classList.remove('hidden');
         wrap.innerHTML = '<div class="lev-empty">Carregando…</div>';
+        const cliente = clienteTabSelected;
+        const req = ++clienteGrupoReq;
+        const velha = () => req !== clienteGrupoReq || clienteTabSelected !== cliente || !wrap.isConnected;
         try {
-          const { membros } = await apiClassificatorioGrupo(clienteTabSelected.id);
-          renderClienteGrupoLista(membros, clienteTabSelected.id);
+          const { membros } = await apiClassificatorioGrupo(cliente.id);
+          if (velha()) return;
+          renderClienteGrupoLista(membros, cliente.id);
         } catch (e) {
+          if (velha()) return;
           wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
-      async function incluirClienteNoGrupo(status) {
+      async function incluirClienteNoGrupo(status, cliente) {
+        if (!cliente) return;
         let grupo = status.matrizGrupo;
         if (!grupo) {
-          const digitado = await askText('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', clienteTabSelected.nome, 'Criar grupo');
+          const digitado = await askText('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', cliente.nome, 'Criar grupo');
           if (!digitado || !digitado.trim()) return;
           grupo = digitado.trim();
         }
         const outro = await openClientPicker();
         if (!outro) return;
-        if (Number(outro.id) === Number(clienteTabSelected.id)) { showToast('Esse já é o cliente atual.'); return; }
+        if (Number(outro.id) === Number(cliente.id)) { showToast('Esse já é o cliente atual.'); return; }
         try {
-          if (!status.matrizGrupo) await apiDefinirMatrizGrupo(clienteTabSelected.id, grupo);
+          if (!status.matrizGrupo) await apiDefinirMatrizGrupo(cliente.id, grupo);
           await apiDefinirMatrizGrupo(outro.id, grupo);
           showToast(`${outro.nome} incluído no grupo.`);
+          if (clienteTabSelected !== cliente) return;
           loadClienteClassificatorioStatus();
           const wrap = document.getElementById('clienteGrupoLista');
           if (wrap && !wrap.classList.contains('hidden')) wrap.classList.add('hidden'); // reabre carregado de novo, sob demanda
@@ -11617,8 +11638,9 @@
       function initClienteGrupoUI(status) {
         const toggleBtn = document.getElementById('clienteGrupoToggleBtn');
         const incluirBtn = document.getElementById('clienteGrupoIncluirBtn');
+        const cliente = clienteTabSelected; // o card (e o status) são deste cliente
         if (toggleBtn) toggleBtn.addEventListener('click', toggleClienteGrupo);
-        if (incluirBtn) incluirBtn.addEventListener('click', () => incluirClienteNoGrupo(status));
+        if (incluirBtn) incluirBtn.addEventListener('click', () => incluirClienteNoGrupo(status, cliente));
       }
       // Mini gráfico de barras (SVG inline, sem dependência) mostrando o
       // faturamento de cada trimestre com duas linhas de referência: a meta
@@ -11681,10 +11703,16 @@
       async function loadClienteClassificatorioStatus() {
         const card = document.getElementById('clienteClassificatorioCard');
         card.classList.add('hidden');
+        const cliente = clienteTabSelected;
+        if (!cliente) return;
+        const req = ++clienteClassificatorioReq;
+        const velha = () => req !== clienteClassificatorioReq || clienteTabSelected !== cliente;
         try {
-          const status = await apiClassificatorioStatus(clienteTabSelected.id);
+          const status = await apiClassificatorioStatus(cliente.id);
+          if (velha()) return;
           renderClienteClassificatorioCard(status);
         } catch (e) {
+          if (velha()) return;
           card.classList.add('hidden'); // best effort - não trava a ficha do cliente por causa disso
         }
       }
@@ -14211,22 +14239,30 @@
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
-        if (!clienteTabSelected) return;
+        const cliente = clienteTabSelected;
+        if (!cliente) return;
+        const req = ++clienteDetailReq;
+        // outro cliente/aba foi aberto enquanto esperava: descarta
+        const velha = () => req !== clienteDetailReq || clienteTabSelected !== cliente;
         content.innerHTML = '<div class="lev-empty">Carregando…</div>';
         try {
           if (clienteTabView === 'historico') {
-            const rows = await apiHistoricoCliente(clienteTabSelected.id);
+            const rows = await apiHistoricoCliente(cliente.id);
+            if (velha()) return;
             content.innerHTML = rows.length ? rows.map(r => renderHistProdutoCard(r, false)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
           } else if (clienteTabView === 'rotatividade') {
-            const rows = await apiRotatividadeCliente(clienteTabSelected.id);
+            const rows = await apiRotatividadeCliente(cliente.id);
+            if (velha()) return;
             content.innerHTML = rows.length ? rows.map(r => renderHistProdutoCard(r, true)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
           } else if (clienteTabView === 'recuperar') {
-            const rows = await apiRecuperarCliente(clienteTabSelected.id);
+            const rows = await apiRecuperarCliente(cliente.id);
+            if (velha()) return;
             content.innerHTML = rows.length
               ? '<p class="ap-hint" style="margin-bottom:12px;">Já comprou antes, sem repor há um tempo, e sem estoque no levantamento mais recente — boa chance de oferecer de novo.</p>' + rows.map(renderRecuperarCard).join('')
               : '<div class="lev-empty">Nenhum produto nessa situação — ou o cliente ainda não tem levantamento registrado pra comparar.</div>';
           } else if (clienteTabView === 'pedidosoficiais') {
-            const resp = await apiPedidosOficiaisCliente(clienteTabSelected.id);
+            const resp = await apiPedidosOficiaisCliente(cliente.id);
+            if (velha()) return;
             const pendentesPorPedido = new Map((resp.pendentes_pagamento || []).map(p => [String(p.nr_pedido), p]));
             const bloqueadosPorPedido = new Map((resp.bloqueados || []).map(b => [String(b.nr_pedido), b]));
             const titulosPorNf = new Map();
@@ -14267,10 +14303,11 @@
                   bloqueadosPorPedido.get(String(nrPedido))))
                 .join('');
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
-                abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
+                abrirRastreio(cliente, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
             }
           }
         } catch (e) {
+          if (velha()) return;
           content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
