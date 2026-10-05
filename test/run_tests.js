@@ -2833,6 +2833,22 @@ async function main() {
       `importação do relatório oficial em lote: 250 clientes em ${consultas} consultas (antes ~860), mesmas regras: ${JSON.stringify({ ...res.body, clientesNaoEncontrados: res.body.clientesNaoEncontrados.length })}`);
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
   }
+  {
+    // planilha Classificatório em lote: antes ~3 consultas por linha (~730 pra 244 linhas)
+    const pad = (i) => String(i).padStart(3, '0');
+    const linhas = Array.from({ length: 200 }, (_, i) => ({ codigoOficial: `QL${pad(i)}`, classificatorioTipo: 'Varejo Master', classificatorioDesconto: 20,
+      pic: i === 2, vlAcordo: i === 2 ? 7000 : null, matrizGrupo: i === 4 ? 'MATRIZ LOTE' : null, fat12mCliente: 100 + i, gestor: 'G' }));
+    linhas.push({ codigoOficial: 'NAO-EXISTE-LOTE', fat12mCliente: 1 }, { codigoOficial: 'QL002', classificatorioTipo: 'Varejo Premium', classificatorioDesconto: 17, fat12mCliente: 999 });
+    const antes = mockDb.__queryLog.length;
+    res = await req('POST', '/api/clientes/classificatorio/importar', { dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: linhas });
+    const consultas = mockDb.__queryLog.length - antes;
+    const c3 = mockDb.__getClientes().find(c => c.id === 30003);
+    assert(res.status === 200 && res.body.atualizados === 201 && res.body.naoEncontrados === 1 && c3.classificatorio_pic === false && Number(c3.classificatorio_vl_acordo) === 7000
+      && c3.classificatorio_tipo === 'Varejo Premium' && mockDb.__getClientes().find(c => c.id === 30005).matriz_grupo === 'MATRIZ LOTE' && consultas <= 20,
+      `importação do Classificatório em lote: 202 linhas em ${consultas} consultas, o mesmo cliente duas vezes vale a 2ª: ${JSON.stringify([res.body, c3, mockDb.__getClientes().find(c => c.id === 30005)])}`);
+    res = await req('GET', '/api/clientes/30003/classificatorio/status');
+    assert(res.body.erp && res.body.erp.fat12mCliente === 999, `importação do Classificatório em lote: a foto do cliente repetido é a da 2ª linha: ${JSON.stringify(res.body.erp)}`);
+  }
 
   {
     // Service Worker: toda biblioteca de CDN que as páginas carregam está na lista

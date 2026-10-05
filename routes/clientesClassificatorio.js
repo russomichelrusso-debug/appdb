@@ -752,67 +752,92 @@ async function importarClassificatorioErp(body) {
     let atualizados = 0;
     let naoEncontrados = 0;
 
+    // Em lote (antes eram ~3 consultas por linha da planilha, cada uma uma ida
+    // de Oregon a São Paulo): os clientes que podem casar vêm numa consulta, o
+    // casamento é feito em memória na ordem da planilha e a gravação sai num
+    // UPDATE + um INSERT da foto por rodada. Cliente que aparece duas vezes
+    // (pelo código e pelo CNPJ) vai na rodada seguinte, comparando com o que a
+    // 1ª gravou - como no laço antigo.
+    const codigosEntrada = [...new Set(itens.map(it => (it.codigoOficial != null ? String(it.codigoOficial) : null)).filter(Boolean))];
+    const docsEntrada = [...new Set(itens.map(it => (it.cnpj ? normalizarDoc(it.cnpj) : null)).filter(Boolean))];
+    const carga = await client.query(
+      `/* classificatorio:clientes */
+       SELECT id, codigo_oficial, regexp_replace(documento, '\\D', '', 'g') AS doc FROM clientes
+       WHERE codigo_oficial = ANY($1::text[]) OR regexp_replace(documento, '\\D', '', 'g') = ANY($2::text[])
+       ORDER BY id`,
+      [codigosEntrada, docsEntrada]
+    );
+    const porCodigo = new Map();
+    const porDoc = new Map();
+    for (const r of carga.rows) {
+      const reg = { id: r.id, codigo: r.codigo_oficial || null };
+      if (reg.codigo) porCodigo.set(reg.codigo, reg);
+      if (r.doc && !porDoc.has(r.doc)) porDoc.set(r.doc, reg);
+    }
+    const rodadas = [];
+    const vezes = new Map();
     for (const it of itens) {
       const codigoOficial = it.codigoOficial != null ? String(it.codigoOficial) : null;
       const documento = it.cnpj ? normalizarDoc(it.cnpj) : null;
       if (!codigoOficial && !documento) { naoEncontrados++; continue; }
-
-      let cliente = null;
-      if (codigoOficial) {
-        const r = await client.query('SELECT id, codigo_oficial FROM clientes WHERE codigo_oficial = $1', [codigoOficial]);
-        if (r.rows.length > 0) cliente = r.rows[0];
-      }
-      if (!cliente && documento) {
-        const r = await client.query(
-          `SELECT id, codigo_oficial FROM clientes WHERE regexp_replace(documento, '\\D', '', 'g') = $1`,
-          [documento]
-        );
-        if (r.rows.length > 0) cliente = r.rows[0];
-      }
+      let cliente = (codigoOficial && porCodigo.get(codigoOficial)) || null;
+      if (!cliente && documento) cliente = porDoc.get(documento) || null;
       if (!cliente) { naoEncontrados++; continue; }
+      // codigo_oficial = COALESCE(codigo_oficial, código da planilha): a linha
+      // seguinte com esse código já acha o cliente
+      if (!cliente.codigo && codigoOficial) { cliente.codigo = codigoOficial; porCodigo.set(codigoOficial, cliente); }
+      const n = vezes.get(cliente) || 0;
+      vezes.set(cliente, n + 1);
+      (rodadas[n] = rodadas[n] || []).push({ id: cliente.id, codigoOficial, it });
+      atualizados++;
+    }
 
-      // Classificatório: a planilha é a classificação oficial do ERP, então
-      // troca o que estiver gravado quando o relatório é tão ou mais novo que
-      // o que definiu o atual (mesma regra da importação do relatório de
-      // faturamento, routes/pedidosOficiais.js). Antes só preenchia quem não
-      // tinha nenhum - em 10/2026, 22 clientes estavam com faixa parada desde
-      // 2023-2025 por isso. Sem data do relatório, mantém o comportamento antigo.
-      // Matriz, PIC e valor de acordo: só da planilha tão ou mais nova que a
-      // última Classificatório gravada pro cliente (data da foto em
-      // cliente_classificatorio_erp, que só esta importação grava) - antes uma
-      // planilha antiga reimportada voltava os três. A data da faixa
-      // (classificatorio_atualizado_em) não serve aqui: o relatório oficial
-      // diário também a avança, e aí o PIC não seria mais atualizado.
-      const planilhaMaisNova = `($8::date IS NULL OR NOT EXISTS (SELECT 1 FROM cliente_classificatorio_erp e
-                                 WHERE e.cliente_id = clientes.id AND e.data_relatorio > $8::date))`;
+    // Classificatório: a planilha é a classificação oficial do ERP, então
+    // troca o que estiver gravado quando o relatório é tão ou mais novo que
+    // o que definiu o atual (mesma regra da importação do relatório de
+    // faturamento, routes/pedidosOficiais.js). Antes só preenchia quem não
+    // tinha nenhum - em 10/2026, 22 clientes estavam com faixa parada desde
+    // 2023-2025 por isso. Sem data do relatório, mantém o comportamento antigo.
+    // Matriz, PIC e valor de acordo: só da planilha tão ou mais nova que a
+    // última Classificatório gravada pro cliente (data da foto em
+    // cliente_classificatorio_erp, que só esta importação grava) - antes uma
+    // planilha antiga reimportada voltava os três. A data da faixa
+    // (classificatorio_atualizado_em) não serve aqui: o relatório oficial
+    // diário também a avança, e aí o PIC não seria mais atualizado.
+    const planilhaMaisNova = `($1::date IS NULL OR NOT EXISTS (SELECT 1 FROM cliente_classificatorio_erp e
+                               WHERE e.cliente_id = c.id AND e.data_relatorio > $1::date))`;
+    const trocaFaixa = `u.tipo IS NOT NULL AND $1::date IS NOT NULL
+              AND (c.classificatorio_atualizado_em IS NULL OR c.classificatorio_atualizado_em <= $1::date)`;
+    for (const rodada of rodadas) {
       await client.query(
-        `UPDATE clientes SET
-           codigo_oficial = COALESCE(codigo_oficial, $1),
-           matriz_grupo = CASE WHEN ${planilhaMaisNova} THEN COALESCE($2, matriz_grupo) ELSE matriz_grupo END,
-           classificatorio_pic = CASE WHEN ${planilhaMaisNova} THEN $3 ELSE classificatorio_pic END,
-           classificatorio_vl_acordo = CASE WHEN ${planilhaMaisNova} THEN COALESCE($4, classificatorio_vl_acordo) ELSE classificatorio_vl_acordo END,
-           classificatorio_tipo = CASE
-             WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
-              AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $5::text
-             ELSE COALESCE(classificatorio_tipo, $5::text) END,
-           classificatorio_desconto = CASE
-             WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
-              AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $6::numeric
-             ELSE COALESCE(classificatorio_desconto, $6::numeric) END,
-           classificatorio_atualizado_em = CASE
-             WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
-              AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $8::date
-             ELSE classificatorio_atualizado_em END
-         WHERE id = $7`,
-        [codigoOficial, it.matrizGrupo || null, !!it.pic, it.vlAcordo ?? null, it.classificatorioTipo || null, it.classificatorioTipo ? descontoPelaPolitica(it.classificatorioTipo, it.classificatorioDesconto ?? null) : null, cliente.id, dataRelatorio]
+        `/* classificatorio:atualizar */
+         UPDATE clientes c SET
+           codigo_oficial = COALESCE(c.codigo_oficial, u.codigo),
+           matriz_grupo = CASE WHEN ${planilhaMaisNova} THEN COALESCE(u.matriz, c.matriz_grupo) ELSE c.matriz_grupo END,
+           classificatorio_pic = CASE WHEN ${planilhaMaisNova} THEN u.pic ELSE c.classificatorio_pic END,
+           classificatorio_vl_acordo = CASE WHEN ${planilhaMaisNova} THEN COALESCE(u.vl_acordo, c.classificatorio_vl_acordo) ELSE c.classificatorio_vl_acordo END,
+           classificatorio_tipo = CASE WHEN ${trocaFaixa} THEN u.tipo ELSE COALESCE(c.classificatorio_tipo, u.tipo) END,
+           classificatorio_desconto = CASE WHEN ${trocaFaixa} THEN u.desconto ELSE COALESCE(c.classificatorio_desconto, u.desconto) END,
+           classificatorio_atualizado_em = CASE WHEN ${trocaFaixa} THEN $1::date ELSE c.classificatorio_atualizado_em END
+         FROM UNNEST($2::int[], $3::text[], $4::text[], $5::boolean[], $6::numeric[], $7::text[], $8::numeric[])
+           AS u(id, codigo, matriz, pic, vl_acordo, tipo, desconto)
+         WHERE c.id = u.id`,
+        [dataRelatorio, rodada.map(r => r.id), rodada.map(r => r.codigoOficial), rodada.map(r => r.it.matrizGrupo || null), rodada.map(r => !!r.it.pic),
+          rodada.map(r => r.it.vlAcordo ?? null), rodada.map(r => r.it.classificatorioTipo || null),
+          rodada.map(r => (r.it.classificatorioTipo ? descontoPelaPolitica(r.it.classificatorioTipo, r.it.classificatorioDesconto ?? null) : null))]
       );
       if (dataRelatorio) {
         // Foto financeira oficial - um relatório mais antigo não sobrescreve um mais novo.
         await client.query(
-          `INSERT INTO cliente_classificatorio_erp
+          `/* classificatorio:foto */
+           INSERT INTO cliente_classificatorio_erp
              (cliente_id, data_relatorio, apurado_ate, fat_ano_anterior, fat_acumulado, fat_12m_cliente, fat_12m_matriz,
               diferenca, gestor, situacao, cidade, uf, cliente_desde, ultima_compra, atualizado_em)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
+           SELECT u.cliente_id, $1::date, $2::date, u.fat_ano_anterior, u.fat_acumulado, u.fat_12m_cliente, u.fat_12m_matriz,
+                  u.diferenca, u.gestor, u.situacao, u.cidade, u.uf, u.cliente_desde, u.ultima_compra, now()
+           FROM UNNEST($3::int[], $4::numeric[], $5::numeric[], $6::numeric[], $7::numeric[], $8::numeric[], $9::text[], $10::text[],
+                       $11::text[], $12::text[], $13::date[], $14::date[])
+             AS u(cliente_id, fat_ano_anterior, fat_acumulado, fat_12m_cliente, fat_12m_matriz, diferenca, gestor, situacao, cidade, uf, cliente_desde, ultima_compra)
            ON CONFLICT (cliente_id) DO UPDATE SET
              data_relatorio = EXCLUDED.data_relatorio, apurado_ate = EXCLUDED.apurado_ate,
              fat_ano_anterior = EXCLUDED.fat_ano_anterior, fat_acumulado = EXCLUDED.fat_acumulado,
@@ -821,13 +846,13 @@ async function importarClassificatorioErp(body) {
              cidade = EXCLUDED.cidade, uf = EXCLUDED.uf, cliente_desde = EXCLUDED.cliente_desde,
              ultima_compra = EXCLUDED.ultima_compra, atualizado_em = now()
            WHERE cliente_classificatorio_erp.data_relatorio <= EXCLUDED.data_relatorio`,
-          [cliente.id, dataRelatorio, apuradoAte, numeroOuNull(it.fatAnoAnterior), numeroOuNull(it.fatAcumulado),
-            numeroOuNull(it.fat12mCliente), numeroOuNull(it.fat12mMatriz), numeroOuNull(it.diferenca),
-            textoOuNull(it.gestor), textoOuNull(it.situacao), textoOuNull(it.cidade), textoOuNull(it.uf),
-            dataIsoOuNull(it.clienteDesde), dataIsoOuNull(it.ultimaCompra)]
+          [dataRelatorio, apuradoAte, rodada.map(r => r.id),
+            rodada.map(r => numeroOuNull(r.it.fatAnoAnterior)), rodada.map(r => numeroOuNull(r.it.fatAcumulado)),
+            rodada.map(r => numeroOuNull(r.it.fat12mCliente)), rodada.map(r => numeroOuNull(r.it.fat12mMatriz)), rodada.map(r => numeroOuNull(r.it.diferenca)),
+            rodada.map(r => textoOuNull(r.it.gestor)), rodada.map(r => textoOuNull(r.it.situacao)), rodada.map(r => textoOuNull(r.it.cidade)), rodada.map(r => textoOuNull(r.it.uf)),
+            rodada.map(r => dataIsoOuNull(r.it.clienteDesde)), rodada.map(r => dataIsoOuNull(r.it.ultimaCompra))]
         );
       }
-      atualizados++;
     }
 
     await client.query('COMMIT');

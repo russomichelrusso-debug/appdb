@@ -778,44 +778,27 @@ async function query(sql, params = []) {
     return { rows: found.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
   }
   if (s.startsWith('UPDATE CLIENTES SET') && s.includes('CODIGO_OFICIAL = COALESCE')) {
-    const [codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id, dataRelatorio] = params;
-    const c = clientes.find(x => Number(x.id) === Number(id));
-    if (c) {
-      if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
-      // matriz/PIC/acordo: só planilha tão ou mais nova que a última foto do cliente
-      const foto = classificatorioErp[c.id];
-      const planilhaMaisNova = !dataRelatorio || !foto || foto.data_relatorio <= dataRelatorio;
-      if (planilhaMaisNova) {
-        if (matrizGrupo) c.matriz_grupo = matrizGrupo;
-        c.classificatorio_pic = pic;
-        if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
-      }
-      // Relatório datado tão ou mais novo que o classificatório atual troca a
-      // faixa; sem data, só preenche quem não tem (comportamento antigo).
-      const trocar = classifTipo && dataRelatorio
-        && (!c.classificatorio_atualizado_em || String(c.classificatorio_atualizado_em) <= dataRelatorio);
-      if (trocar) {
-        c.classificatorio_tipo = classifTipo;
-        c.classificatorio_desconto = classifDesconto;
-        c.classificatorio_atualizado_em = dataRelatorio;
-      } else {
-        if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
-        if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
-      }
-    }
+    aplicarLinhaClassificatorio(...params);
+    return { rows: [] };
+  }
+  // importação da planilha Classificatório em lote (routes/clientesClassificatorio.js)
+  if (s.includes('/* CLASSIFICATORIO:CLIENTES */')) {
+    const [codigos, docs] = params;
+    return { rows: clientes.filter(c => (c.codigo_oficial && codigos.includes(c.codigo_oficial)) || (c.documento && docs.includes(String(c.documento).replace(/\D/g, ''))))
+      .sort((a, b) => a.id - b.id).map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial || null, doc: c.documento == null ? null : String(c.documento).replace(/\D/g, '') })) };
+  }
+  if (s.includes('/* CLASSIFICATORIO:ATUALIZAR */')) {
+    const [dataRelatorio, ids, codigos, matrizes, pics, vls, tipos, descontos] = params;
+    ids.forEach((id, i) => aplicarLinhaClassificatorio(codigos[i], matrizes[i], pics[i], vls[i], tipos[i], descontos[i], id, dataRelatorio));
+    return { rows: [], rowCount: ids.length };
+  }
+  if (s.includes('/* CLASSIFICATORIO:FOTO */')) {
+    const [dataRelatorio, apuradoAte, ids, ...cols] = params;
+    ids.forEach((id, i) => fotoClassificatorio([id, dataRelatorio, apuradoAte, ...cols.map(col => col[i])]));
     return { rows: [] };
   }
   if (s.startsWith('INSERT INTO CLIENTE_CLASSIFICATORIO_ERP')) {
-    const [clienteId, dataRelatorio, apuradoAte, fatAnoAnterior, fatAcumulado, fat12mCliente, fat12mMatriz,
-      diferenca, gestor, situacao, cidade, uf, clienteDesde, ultimaCompra] = params;
-    const atual = classificatorioErp[clienteId];
-    if (!atual || atual.data_relatorio <= dataRelatorio) {
-      classificatorioErp[clienteId] = {
-        data_relatorio: dataRelatorio, apurado_ate: apuradoAte, fat_ano_anterior: fatAnoAnterior, fat_acumulado: fatAcumulado,
-        fat_12m_cliente: fat12mCliente, fat_12m_matriz: fat12mMatriz, diferenca, gestor, situacao, cidade, uf,
-        cliente_desde: clienteDesde, ultima_compra: ultimaCompra,
-      };
-    }
+    fotoClassificatorio(params);
     return { rows: [] };
   }
   // Conciliação ERP × app do status individual (vendas depois da apuração /
@@ -1741,6 +1724,45 @@ async function query(sql, params = []) {
   }
 
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
+}
+
+function aplicarLinhaClassificatorio(codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id, dataRelatorio) {
+  const c = clientes.find(x => Number(x.id) === Number(id));
+  if (c) {
+    if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
+    // matriz/PIC/acordo: só planilha tão ou mais nova que a última foto do cliente
+    const foto = classificatorioErp[c.id];
+    const planilhaMaisNova = !dataRelatorio || !foto || foto.data_relatorio <= dataRelatorio;
+    if (planilhaMaisNova) {
+      if (matrizGrupo) c.matriz_grupo = matrizGrupo;
+      c.classificatorio_pic = pic;
+      if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
+    }
+    // Relatório datado tão ou mais novo que o classificatório atual troca a
+    // faixa; sem data, só preenche quem não tem (comportamento antigo).
+    const trocar = classifTipo && dataRelatorio
+      && (!c.classificatorio_atualizado_em || String(c.classificatorio_atualizado_em) <= dataRelatorio);
+    if (trocar) {
+      c.classificatorio_tipo = classifTipo;
+      c.classificatorio_desconto = classifDesconto;
+      c.classificatorio_atualizado_em = dataRelatorio;
+    } else {
+      if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
+      if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
+    }
+  }
+}
+function fotoClassificatorio(params) {
+  const [clienteId, dataRelatorio, apuradoAte, fatAnoAnterior, fatAcumulado, fat12mCliente, fat12mMatriz,
+    diferenca, gestor, situacao, cidade, uf, clienteDesde, ultimaCompra] = params;
+  const atual = classificatorioErp[clienteId];
+  if (!atual || atual.data_relatorio <= dataRelatorio) {
+    classificatorioErp[clienteId] = {
+      data_relatorio: dataRelatorio, apurado_ate: apuradoAte, fat_ano_anterior: fatAnoAnterior, fat_acumulado: fatAcumulado,
+      fat_12m_cliente: fat12mCliente, fat_12m_matriz: fat12mMatriz, diferenca, gestor, situacao, cidade, uf,
+      cliente_desde: clienteDesde, ultima_compra: ultimaCompra,
+    };
+  }
 }
 
 // Ano civil fechado usado pela revisão do classificatório (ver
