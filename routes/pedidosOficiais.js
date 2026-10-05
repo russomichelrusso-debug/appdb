@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
-const { acharClientePorNome, acharOuCriarCliente } = require('../clientMatcher');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
@@ -392,6 +391,196 @@ function dataDoRelatorio(itens, pendentes, agora = new Date()) {
   for (const p of pendentes || []) ver(p.data_implantacao);
   return max;
 }
+// Normalização de nome do clientMatcher.js (acharClientePorNome): exata
+// (maiúsculas, espaços colapsados) e tolerante (também sem ponto/vírgula).
+const sqlNomeExato = (col) => `regexp_replace(upper(trim(${col})), '\\s+', ' ', 'g')`;
+const sqlNomeTolerante = (col) => `regexp_replace(upper(trim(${col})), '[.,\\s]+', ' ', 'g')`;
+const ehSemClassificatorio = (tipo) => /^SEMCLASSIFICATORIO$/.test(String(tipo).toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z]/g, ''));
+
+// Classificatório e código oficial dos clientes do relatório. Mesmas regras
+// do laço antigo (um acharOuCriarCliente + UPDATE por classificação, e um
+// SELECT + acharClientePorNome + UPDATE por código novo - ~750 consultas por
+// relatório, cada uma uma ida de Oregon a São Paulo): os clientes que podem
+// casar (pelo código ou pelo nome normalizado no próprio Postgres) vêm numa
+// consulta só, a ordem das decisões é refeita em memória e a gravação sai em
+// lote.
+//  - Classificação (Varejo Master/Premium/Exclusive/Rede), de qualquer aba
+//    que tiver a coluna: só sobrescreve se o relatório for mais novo que o
+//    que definiu o classificatório atual - subir um relatório antigo por
+//    engano faria o cliente "voltar" pra uma categoria que já mudou.
+//    "Sem Classificatório" grava NULL (antes virava um tipo com esse nome).
+//    Percentual pela Política Comercial, não o do relatório.
+//  - Código oficial: cliente ainda sem o código casado pelo nome, só na
+//    primeira vez que o código aparece.
+async function classificarEVincularClientes(client, classificacoes, itens) {
+  const classifs = classificacoes.filter(c => c.nome && c.tipo);
+  const paresUnicos = new Map();
+  for (const it of itens) {
+    if (it.cliente_codigo_oficial && it.cliente_nome && !paresUnicos.has(it.cliente_codigo_oficial)) {
+      paresUnicos.set(it.cliente_codigo_oficial, it.cliente_nome);
+    }
+  }
+  const resultado = { clientesClassificados: 0, clientesClassifIgnorados: 0, clientesVinculados: 0, clientesNaoEncontrados: [] };
+  if (classifs.length === 0 && paresUnicos.size === 0) return resultado;
+
+  const codigos = [...new Set([...classifs.map(c => c.codigo_oficial), ...paresUnicos.keys()].filter(Boolean).map(String))];
+  const nomes = [...new Set([...classifs.map(c => c.nome), ...paresUnicos.values()].map(String))];
+  const carga = await client.query(
+    `/* relatorio-oficial:clientes */
+     WITH entrada AS (
+       SELECT nome, ${sqlNomeExato('nome')} AS exato, ${sqlNomeTolerante('nome')} AS tolerante FROM UNNEST($2::text[]) AS e(nome)
+     ), cli AS (
+       SELECT id, codigo_oficial, ${sqlNomeExato('nome')} AS exato, ${sqlNomeTolerante('nome')} AS tolerante FROM clientes
+     )
+     SELECT 'cliente' AS fonte, cli.id, NULL::text AS nome, cli.codigo_oficial, cli.exato, cli.tolerante FROM cli
+     WHERE cli.codigo_oficial = ANY($1::text[]) OR cli.exato IN (SELECT exato FROM entrada) OR cli.tolerante IN (SELECT tolerante FROM entrada)
+     UNION ALL
+     SELECT 'entrada', NULL, nome, NULL, exato, tolerante FROM entrada`,
+    [codigos, nomes]
+  );
+
+  // Clientes em memória, na ordem em que a consulta por nome os acharia (os já
+  // gravados por id, os criados agora depois deles)
+  const chaveDoNome = new Map();
+  const porCodigo = new Map();
+  const porExato = new Map();
+  const porTolerante = new Map();
+  const indexar = (reg) => {
+    if (!porExato.has(reg.exato)) porExato.set(reg.exato, reg);
+    if (!porTolerante.has(reg.tolerante)) porTolerante.set(reg.tolerante, reg);
+  };
+  const existentes = [];
+  for (const r of carga.rows) {
+    if (r.fonte === 'entrada') chaveDoNome.set(r.nome, { exato: r.exato, tolerante: r.tolerante });
+    else existentes.push({ id: r.id, codigo: r.codigo_oficial || null, exato: r.exato, tolerante: r.tolerante });
+  }
+  existentes.sort((a, b) => a.id - b.id);
+  for (const reg of existentes) {
+    indexar(reg);
+    if (reg.codigo) porCodigo.set(reg.codigo, reg);
+  }
+  const acharPorNome = (nome) => {
+    const k = chaveDoNome.get(String(nome));
+    return k ? (porExato.get(k.exato) || porTolerante.get(k.tolerante) || null) : null;
+  };
+  // acharOuCriarCliente (clientMatcher.js) com nome + código, sem CNPJ
+  const novos = [];
+  const acharOuCriar = (nome, codigo) => {
+    if (codigo && porCodigo.has(codigo)) return porCodigo.get(codigo);
+    const porNome = acharPorNome(nome);
+    // mesmo nome com OUTRO código é outra empresa: cria
+    if (porNome && (!codigo || !porNome.codigo || porNome.codigo === codigo)) return porNome;
+    const k = chaveDoNome.get(String(nome));
+    const reg = { id: null, nome: String(nome), codigo: codigo || null, codigoNaCriacao: codigo || null, exato: k.exato, tolerante: k.tolerante };
+    indexar(reg);
+    if (reg.codigo) porCodigo.set(reg.codigo, reg);
+    novos.push(reg);
+    return reg;
+  };
+
+  const tentativas = classifs.map(c => {
+    const tipo = ehSemClassificatorio(c.tipo) ? null : c.tipo;
+    const codigo = c.codigo_oficial ? String(c.codigo_oficial) : null;
+    return {
+      reg: acharOuCriar(c.nome, codigo), tipo,
+      // percentual pela Política Comercial (nome do classificatório), não o
+      // número que veio no relatório - ver routes/lib/politicaComercial.js
+      desconto: tipo ? descontoPelaPolitica(tipo, c.desconto ?? null) : null,
+      dataRef: c.data_referencia || null,
+    };
+  });
+  // código de quem estava sem, casando pelo nome (depois das classificações,
+  // como antes: inclui os clientes que elas criaram)
+  const codigoAntes = new Map([...porCodigo].map(([cod, reg]) => [cod, reg]));
+  const vinculos = [];
+  for (const [codigo, nome] of paresUnicos) {
+    if (porCodigo.has(String(codigo))) continue;
+    const reg = acharPorNome(nome);
+    if (!reg) { resultado.clientesNaoEncontrados.push({ codigo, nome }); continue; }
+    if (reg.codigo && porCodigo.get(reg.codigo) === reg) porCodigo.delete(reg.codigo);
+    reg.codigo = String(codigo);
+    porCodigo.set(reg.codigo, reg);
+    vinculos.push({ reg, codigo: String(codigo) });
+    resultado.clientesVinculados++;
+  }
+
+  // 1) clientes novos: com código, em lote (ON CONFLICT DO NOTHING como no
+  // clientMatcher; o código liga a linha devolvida ao cliente); sem código, um
+  // a um (não há como ligar a linha devolvida)
+  const comCodigo = novos.filter(r => r.codigoNaCriacao);
+  if (comCodigo.length > 0) {
+    const criados = await client.query(
+      `/* relatorio-oficial:criar-clientes */
+       INSERT INTO clientes (nome, codigo_oficial)
+       SELECT nome, codigo FROM UNNEST($1::text[], $2::text[]) WITH ORDINALITY AS n(nome, codigo, ordem) ORDER BY ordem
+       ON CONFLICT DO NOTHING RETURNING id, codigo_oficial`,
+      [comCodigo.map(r => r.nome), comCodigo.map(r => r.codigoNaCriacao)]
+    );
+    const idPorCodigo = new Map(criados.rows.map(r => [r.codigo_oficial, r.id]));
+    const faltando = comCodigo.filter(r => !idPorCodigo.has(r.codigoNaCriacao)).map(r => r.codigoNaCriacao);
+    if (faltando.length > 0) {
+      // corrida: outra requisição criou o mesmo código entre a leitura e o INSERT
+      const depois = await client.query('/* relatorio-oficial:clientes-por-codigo */ SELECT id, codigo_oficial FROM clientes WHERE codigo_oficial = ANY($1::text[])', [faltando]);
+      for (const r of depois.rows) idPorCodigo.set(r.codigo_oficial, r.id);
+    }
+    for (const reg of comCodigo) {
+      reg.id = idPorCodigo.get(reg.codigoNaCriacao);
+      if (reg.id == null) throw new Error(`Corrida ao criar cliente "${reg.nome}" - não encontrei o registro depois do conflito.`);
+    }
+  }
+  for (const reg of novos.filter(r => !r.codigoNaCriacao)) {
+    const r = await client.query('INSERT INTO clientes (nome, documento, codigo_oficial, contato) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING RETURNING id', [reg.nome, null, null, null]);
+    if (!r.rows.length) throw new Error(`Corrida ao criar cliente "${reg.nome}" - não encontrei o registro depois do conflito.`);
+    reg.id = r.rows[0].id;
+  }
+
+  // 2) classificações: uma rodada por vez que o mesmo cliente aparece (a 2ª
+  // compara com o que a 1ª gravou, como no laço antigo); a condição de data
+  // fica no WHERE, igual à de antes
+  const rodadas = [];
+  const vezes = new Map();
+  for (const t of tentativas) {
+    const n = vezes.get(t.reg) || 0;
+    vezes.set(t.reg, n + 1);
+    (rodadas[n] = rodadas[n] || []).push(t);
+  }
+  for (const rodada of rodadas) {
+    const r = await client.query(
+      `/* relatorio-oficial:classificar */
+       UPDATE clientes c
+       SET classificatorio_tipo = u.tipo, classificatorio_desconto = u.desconto,
+           classificatorio_atualizado_em = COALESCE(u.data_ref, c.classificatorio_atualizado_em, now()::date)
+       FROM UNNEST($1::int[], $2::text[], $3::numeric[], $4::date[]) AS u(id, tipo, desconto, data_ref)
+       WHERE c.id = u.id
+         AND (c.classificatorio_atualizado_em IS NULL OR u.data_ref IS NULL OR c.classificatorio_atualizado_em <= u.data_ref)
+       RETURNING c.id`,
+      [rodada.map(t => t.reg.id), rodada.map(t => t.tipo), rodada.map(t => t.desconto), rodada.map(t => t.dataRef)]
+    );
+    const gravados = r.rowCount != null ? r.rowCount : r.rows.length;
+    resultado.clientesClassificados += gravados;
+    resultado.clientesClassifIgnorados += rodada.length - gravados;
+  }
+
+  // 3) códigos aprendidos. Em lote só com o código final de cada cliente; se
+  // algum código passa de um cliente pra outro (o índice único reclamaria no
+  // meio do lote), um a um na ordem de antes.
+  if (vinculos.length > 0) {
+    const finalPorReg = new Map();
+    for (const v of vinculos) finalPorReg.set(v.reg, v.codigo);
+    const trocaDeDono = [...finalPorReg].some(([reg, codigo]) => codigoAntes.has(codigo) && codigoAntes.get(codigo) !== reg);
+    if (trocaDeDono) {
+      for (const v of vinculos) await client.query('UPDATE clientes SET codigo_oficial = $1 WHERE id = $2', [v.codigo, v.reg.id]);
+    } else {
+      await client.query(
+        `/* relatorio-oficial:vincular-codigos */
+         UPDATE clientes c SET codigo_oficial = u.codigo FROM UNNEST($1::int[], $2::text[]) AS u(id, codigo) WHERE c.id = u.id`,
+        [[...finalPorReg.keys()].map(r => r.id), [...finalPorReg.values()]]
+      );
+    }
+  }
+  return resultado;
+}
+
 const CHAVE_RELATORIO_MAIS_NOVO = 'relatorio_oficial_mais_novo';
 const dataComAno = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
@@ -458,56 +647,10 @@ async function importarRelatorioOficial(body, usuario) {
     const dataMaisNova = gravadaResult.rows[0] ? gravadaResult.rows[0].data : null;
     const relatorioAntigo = !!(dataArquivo && dataMaisNova && dataArquivo < dataMaisNova);
 
-    // Classificatório do cliente (Varejo Master/Premium/Exclusive/Rede),
-    // vindo de qualquer uma das abas que tiver a coluna preenchida. Só
-    // sobrescreve se esse relatório for mais novo que o que definiu o
-    // classificatório atual - senão, subir um relatório antigo por engano
-    // faria o cliente "voltar" pra uma categoria que já mudou.
-    let clientesClassificados = 0, clientesClassifIgnorados = 0;
-    for (const c of (classificacoes || [])) {
-      if (!c.nome || !c.tipo) continue;
-      // "Sem Classificatório" no relatório = cliente sem classificatório (grava
-      // NULL). Antes virava um tipo com esse nome e o cliente aparecia como
-      // classificado, sem faixa nem desconto.
-      const semClassificatorio = /^SEMCLASSIFICATORIO$/.test(String(c.tipo).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Z]/g, ''));
-      const tipo = semClassificatorio ? null : c.tipo;
-      const clienteId = await acharOuCriarCliente(client, { nome: c.nome, codigo_oficial: c.codigo_oficial || null });
-      const dataRef = c.data_referencia || null;
-      const upd = await client.query(
-        `UPDATE clientes
-         SET classificatorio_tipo = $1, classificatorio_desconto = $2, classificatorio_atualizado_em = COALESCE($4::date, classificatorio_atualizado_em, now()::date)
-         WHERE id = $3
-           AND (classificatorio_atualizado_em IS NULL OR $4::date IS NULL OR classificatorio_atualizado_em <= $4::date)
-         RETURNING id`,
-        // percentual pela Política Comercial (nome do classificatório), não o
-        // número que veio no relatório - ver routes/lib/politicaComercial.js
-        [tipo, tipo ? descontoPelaPolitica(tipo, c.desconto ?? null) : null, clienteId, dataRef]
-      );
-      if (upd.rows.length > 0) clientesClassificados++;
-      else clientesClassifIgnorados++;
-    }
-
-    // Aprende o codigo_oficial de clientes que ainda não têm, casando por
-    // nome - só na primeira vez que aquele código aparece. Depois disso, o
-    // vínculo já fica salvo e não precisa casar nome de novo.
-    const paresUnicos = new Map();
-    for (const it of itens) {
-      if (it.cliente_codigo_oficial && it.cliente_nome && !paresUnicos.has(it.cliente_codigo_oficial)) {
-        paresUnicos.set(it.cliente_codigo_oficial, it.cliente_nome);
-      }
-    }
-    let clientesVinculados = 0, clientesNaoEncontrados = [];
-    for (const [codigo, nome] of paresUnicos) {
-      const jaVinculado = await client.query('SELECT id FROM clientes WHERE codigo_oficial = $1', [codigo]);
-      if (jaVinculado.rows.length > 0) continue;
-      const clienteId = await acharClientePorNome(client, nome);
-      if (clienteId) {
-        await client.query('UPDATE clientes SET codigo_oficial = $1 WHERE id = $2', [codigo, clienteId]);
-        clientesVinculados++;
-      } else {
-        clientesNaoEncontrados.push({ codigo, nome });
-      }
-    }
+    // Classificação e vínculo do código oficial dos clientes do relatório -
+    // em lote (ver classificarEVincularClientes).
+    const { clientesClassificados, clientesClassifIgnorados, clientesVinculados, clientesNaoEncontrados } =
+      await classificarEVincularClientes(client, classificacoes || [], itens);
 
     // Saldo que deixou de existir (ver planejarCarteira) sai antes de gravar.
     // Relatório antigo: só as faturadas, sem apagar nem gravar carteira.

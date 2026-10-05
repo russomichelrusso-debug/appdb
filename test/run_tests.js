@@ -2803,6 +2803,35 @@ async function main() {
     });
     assert(tabelas.length >= 27 && semRls.length === 0 && !/FORCE\s+ROW\s+LEVEL/i.test(schema),
       `schema.sql: RLS ligado (sem FORCE) em todas as ${tabelas.length} tabelas: ${JSON.stringify(semRls)}`);
+    // Importação em lote: o relatório oficial fazia ~3 consultas por cliente (ida de
+    // Oregon a São Paulo cada uma) - ~860 pra 250 clientes. Agora é um número fixo.
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+    const pad = (i) => String(i).padStart(3, '0');
+    mockDb.__seed({ clientes: [
+      ...Array.from({ length: 200 }, (_, i) => ({ id: 30001 + i, nome: `LOTE ${pad(i)} LTDA`, codigo_oficial: `QL${pad(i)}`, classificatorio_atualizado_em: i % 2 ? '2027-01-01' : null })),
+      ...Array.from({ length: 30 }, (_, i) => ({ id: 30301 + i, nome: i % 2 ? `LOTE SEM CODIGO ${pad(i)}, LTDA` : `LOTE  SEM CODIGO  ${pad(i)} LTDA`, codigo_oficial: null })),
+    ] });
+    const itens = [], classificacoes = [];
+    const cods = [...Array.from({ length: 200 }, (_, i) => [`QL${pad(i)}`, `LOTE ${pad(i)} LTDA`]),
+      ...Array.from({ length: 30 }, (_, i) => [`QN${pad(i)}`, `LOTE SEM CODIGO ${pad(i)} LTDA`]),
+      ...Array.from({ length: 20 }, (_, i) => [`QX${pad(i)}`, `LOTE NOVO ${pad(i)}`])];
+    cods.forEach(([cod, nome], k) => {
+      itens.push({ nr_pedido: String(690000 + k), codigo_sku: '60863', cliente_codigo_oficial: cod, cliente_nome: nome, status: 'faturado', quantidade: 1, valor: 10,
+        data_implantacao: '2026-09-20', data_faturamento: '2026-09-25', nota_fiscal: String(990000 + k), situacao_pedido: 'Atendido Total' });
+      if (k < 200 || k >= 240) classificacoes.push({ nome, codigo_oficial: cod, tipo: 'Varejo Premium', desconto: 15, data_referencia: '2026-09-20' });
+    });
+    const antes = mockDb.__queryLog.length;
+    res = await req('POST', '/api/pedidos-oficiais/importar', { itens, classificacoes });
+    const consultas = mockDb.__queryLog.length - antes;
+    const cli = mockDb.__getClientes();
+    assert(res.status === 200 && res.body.clientesClassificados === 110 && res.body.clientesClassifIgnorados === 100 && res.body.clientesVinculados === 30
+      && res.body.clientesNaoEncontrados.length === 10 && res.body.clientesNaoEncontrados[0].codigo === 'QX000'
+      && cli.find(c => c.id === 30301).codigo_oficial === 'QN000' && cli.find(c => c.id === 30002).classificatorio_tipo == null
+      && cli.find(c => c.id === 30001).classificatorio_tipo === 'Varejo Premium' && Number(cli.find(c => c.id === 30001).classificatorio_desconto) === 17
+      && cli.some(c => c.codigo_oficial === 'QX015' && c.classificatorio_tipo === 'Varejo Premium') && !cli.some(c => c.codigo_oficial === 'QX005')
+      && consultas <= 25,
+      `importação do relatório oficial em lote: 250 clientes em ${consultas} consultas (antes ~860), mesmas regras: ${JSON.stringify({ ...res.body, clientesNaoEncontrados: res.body.clientesNaoEncontrados.length })}`);
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
   }
 
   {

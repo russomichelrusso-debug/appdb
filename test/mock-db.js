@@ -174,6 +174,51 @@ async function query(sql, params = []) {
     cods.forEach((c, i) => previsaoEstoque.push({ codigo_sku: c, qt_disponivel: disp[i], qt_carteira: cart[i], qt_compra: compra[i], previsao: prev[i], saldo: saldo[i] }));
     return { rows: [] };
   }
+  // relatório oficial: clientes que podem casar pelo código ou pelo nome, em lote
+  // (classificarEVincularClientes, routes/pedidosOficiais.js) - mesma
+  // normalização dos handlers de acharClientePorNome abaixo
+  if (s.includes('/* RELATORIO-OFICIAL:CLIENTES */')) {
+    const exato = (n) => String(n || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const tolerante = (n) => String(n || '').trim().toUpperCase().replace(/[.,\s]+/g, ' ');
+    const [codigos, nomes] = params;
+    const ex = new Set(nomes.map(exato)), tol = new Set(nomes.map(tolerante));
+    const rows = clientes.filter(c => (c.codigo_oficial && codigos.includes(c.codigo_oficial)) || ex.has(exato(c.nome)) || tol.has(tolerante(c.nome)))
+      .map(c => ({ fonte: 'cliente', id: c.id, nome: null, codigo_oficial: c.codigo_oficial || null, exato: exato(c.nome), tolerante: tolerante(c.nome) }));
+    nomes.forEach(n => rows.push({ fonte: 'entrada', id: null, nome: n, codigo_oficial: null, exato: exato(n), tolerante: tolerante(n) }));
+    return { rows };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:CRIAR-CLIENTES */')) {
+    const rows = [];
+    params[0].forEach((nome, i) => {
+      if (clientes.some(c => c.codigo_oficial === params[1][i])) return; // ON CONFLICT DO NOTHING
+      const c = { id: nextId.clientes++, nome, documento: null, codigo_oficial: params[1][i], contato: null, classificatorio_tipo: null, classificatorio_desconto: null };
+      clientes.push(c);
+      rows.push({ id: c.id, codigo_oficial: c.codigo_oficial });
+    });
+    return { rows, rowCount: rows.length };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:CLIENTES-POR-CODIGO */')) {
+    return { rows: clientes.filter(c => c.codigo_oficial && params[0].includes(c.codigo_oficial)).map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:CLASSIFICAR */')) {
+    const [ids, tipos, descontos, datas] = params;
+    const rows = [];
+    ids.forEach((id, i) => {
+      const c = clientes.find(x => Number(x.id) === Number(id));
+      const dataRef = datas[i];
+      if (c && (!c.classificatorio_atualizado_em || !dataRef || c.classificatorio_atualizado_em <= dataRef)) {
+        c.classificatorio_tipo = tipos[i];
+        c.classificatorio_desconto = descontos[i];
+        c.classificatorio_atualizado_em = dataRef || c.classificatorio_atualizado_em || new Date().toISOString().slice(0, 10);
+        rows.push({ id: c.id });
+      }
+    });
+    return { rows, rowCount: rows.length };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:VINCULAR-CODIGOS */')) {
+    params[0].forEach((id, i) => { const c = clientes.find(x => Number(x.id) === Number(id)); if (c) c.codigo_oficial = params[1][i]; });
+    return { rows: [], rowCount: params[0].length };
+  }
   // relatório oficial: data do mais novo já importado (routes/pedidosOficiais.js)
   if (s.includes('/* RELATORIO-OFICIAL:DATA-MAIS-NOVA */')) {
     if (!configuracoes[params[0]]) configuracoes[params[0]] = { valor: null, atualizado_em: new Date().toISOString() };
