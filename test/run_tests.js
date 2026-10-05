@@ -2578,6 +2578,9 @@ async function main() {
       for (const m of fs.readFileSync(path.join(raiz, f), 'utf8').matchAll(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"`\s)]+/g)) usadas.add(m[0]);
     }
     const faltando = [...usadas].filter(u => !sw.includes(`'${u}'`));
+    // SheetJS do cdnjs parou na 0.18.5 (CVE-2023-30533, CVE-2024-22363): só a do pacote @e965/xlsx
+    const xlsxVelho = [...usadas].filter(u => /\/xlsx\/0\.1\d\./.test(u) || (/xlsx/.test(u) && !/@e965\/xlsx@0\.2/.test(u)));
+    assert(xlsxVelho.length === 0 && [...usadas].some(u => u.includes('@e965/xlsx@0.20.3')), `páginas carregam o SheetJS 0.20.3 (@e965/xlsx), não o 0.18.5 vulnerável: ${JSON.stringify(xlsxVelho)}`);
     // versão fixa no endereço: o SW guarda pelo endereço e não busca de novo (@latest ficaria preso)
     assert(usadas.size >= 5 && faltando.length === 0 && ![...usadas].some(u => u.includes('@latest')) && /cache\.put\(chave,/.test(sw) && !/ignoreSearch:\s*true/.test(sw),
       `service worker guarda offline todas as bibliotecas de CDN das páginas e as páginas sem parâmetro: ${JSON.stringify(faltando)}`);
