@@ -22,6 +22,10 @@
 //  - "Cortag/Nao autenticado": o e-mail diz vir da Cortag mas o Gmail não
 //    confirmou (DKIM/DMARC) - NÃO é mandado pro app. Ver "Segurança" abaixo.
 // Servidor dormindo/fora do ar: não marca nada e tenta de novo na próxima rodada.
+// Servidor que RESPONDE com erro (5xx) pro mesmo e-mail: tenta de novo nas
+// próximas rodadas e, na 4ª vez (~1 h), desiste dele ("Cortag/Falhou") pra não
+// travar a fila - senão o relatório diário e os pedidos bloqueados que
+// chegassem depois ficavam parados atrás dele pra sempre.
 //
 // Segurança: o app publica direto (inclusive preços), então só vale e-mail que
 // é mesmo da Cortag. O "De:" se falsifica à vontade ("vendas@cortag.com"
@@ -52,6 +56,9 @@ const CONFIG = {
     { remetente: 'noreply@cortag.com.br', assunto: /Pedido de Venda [àa] Vista/i, busca: 'subject:"Pedido de Venda"' },
   ],
   maxProcessadosGuardados: 400,
+  // e-mail com erro do servidor (5xx) nesta quantidade de rodadas seguidas:
+  // desiste dele e segue a fila
+  maxTentativasErroServidor: 4,
   // o Google corta cada execução em 6 min, e cada relatório leva ~1-3 min no
   // servidor: depois de 3 min não começa outro arquivo (fica pra próxima rodada)
   tempoMaximoMs: 3 * 60 * 1000,
@@ -122,21 +129,35 @@ function verificarEmails() {
     }
     let falhou = false;
     let tentarDeNovo = false;
+    let erroServidor = false;
     const resultados = item.anexos.length
       ? item.anexos.map(anexo => enviar_(chave, anexo, item.msg))
       : [enviarMensagem_(chave, item.msg)];
     for (const r of resultados) {
       if (r === 'tentar-de-novo') tentarDeNovo = true;
+      else if (r === 'erro-servidor') erroServidor = true;
       else if (r === 'falhou') falhou = true;
     }
     if (tentarDeNovo) break; // mantém a ordem: o resto fica pra próxima rodada
+    if (erroServidor) {
+      const tentativas = contarTentativa_(props, item.msg.getId());
+      if (tentativas < CONFIG.maxTentativasErroServidor) {
+        Logger.log('Erro do servidor em "%s" (%s de %s) - tento de novo na próxima rodada.', item.msg.getSubject(), tentativas, CONFIG.maxTentativasErroServidor);
+        break; // mantém a ordem
+      }
+      Logger.log('Erro do servidor em "%s" %s vezes seguidas - desisto dele e sigo a fila.', item.msg.getSubject(), tentativas);
+      falhou = true;
+    }
     item.thread.addLabel(marcador_(falhou ? CONFIG.marcadorFalhou : CONFIG.marcadorImportado));
     processados.push(item.msg.getId());
+    esquecerTentativas_(props, item.msg.getId());
     salvar(); // a cada e-mail: se a execução for cortada, o que já foi não volta
   }
 }
 
-// 'ok' | 'falhou' (planilha recusada - não adianta repetir) | 'tentar-de-novo'
+// 'ok' | 'falhou' (planilha recusada - não adianta repetir) | 'erro-servidor'
+// (o servidor respondeu com erro - tenta de novo, até um limite) |
+// 'tentar-de-novo' (sem resposta, limite de uso - tenta de novo, sem limite)
 function enviar_(chave, anexo, msg) {
   return postar_(chave, '/api/importacao-email/arquivo', anexo.getName(), {
     nome: anexo.getName(),
@@ -178,7 +199,26 @@ function postar_(chave, caminho, rotulo, corpo) {
   if (codigo === 401) throw new Error('O servidor recusou a CHAVE - confira a propriedade CHAVE do script e IMPORTACAO_EMAIL_CHAVE no Render.');
   if (codigo >= 200 && codigo < 300) return 'ok';
   if (codigo === 422) return 'falhou';
-  return 'tentar-de-novo'; // 5xx, 429 (limite), 408...
+  if (codigo >= 500) return 'erro-servidor';
+  return 'tentar-de-novo'; // 429 (limite), 408...
+}
+
+// Rodadas seguidas com erro do servidor por e-mail (id -> n), guardadas entre
+// as execuções. Devolve a contagem com esta.
+function contarTentativa_(props, id) {
+  const tentativas = JSON.parse(props.getProperty('TENTATIVAS') || '{}');
+  tentativas[id] = (tentativas[id] || 0) + 1;
+  const ids = Object.keys(tentativas);
+  if (ids.length > 50) ids.slice(0, ids.length - 50).forEach(k => { delete tentativas[k]; });
+  props.setProperty('TENTATIVAS', JSON.stringify(tentativas));
+  return tentativas[id];
+}
+
+function esquecerTentativas_(props, id) {
+  const tentativas = JSON.parse(props.getProperty('TENTATIVAS') || '{}');
+  if (!(id in tentativas)) return;
+  delete tentativas[id];
+  props.setProperty('TENTATIVAS', JSON.stringify(tentativas));
 }
 
 // O Render gratuito dorme sem uso: chama /health e espera acordar (até ~1,5 min).

@@ -64,11 +64,18 @@ function conferirRemetente(tipo, corpo) {
   }
 }
 
+// Erro dos leitores de planilha (aba/coluna faltando, valor corrompido) é da
+// planilha: recusada, não adianta tentar de novo. Qualquer outro erro que
+// escape é nosso (banco etc.) e o script tenta de novo.
+function lendo(ler) {
+  try { return ler(); } catch (e) { throw new Recusado(e.message); }
+}
+
 // Lê a planilha do tipo reconhecido e grava pelo mesmo caminho da importação
 // manual. Devolve { status, json } da função de importação.
 async function importarPorTipo(tipo, buffer, nomeArquivo) {
   if (tipo === 'relatorio') {
-    const { itens, classificacoes, pendentesPagamento, titulosAvista } = Importadores.lerRelatorioOficial(XLSX, buffer);
+    const { itens, classificacoes, pendentesPagamento, titulosAvista } = lendo(() => Importadores.lerRelatorioOficial(XLSX, buffer));
     if (itens.length === 0 && pendentesPagamento === null && titulosAvista === null) {
       throw new Recusado('Nenhum item reconhecido nas abas "Carteira"/"Faturamento" desta planilha.');
     }
@@ -84,13 +91,13 @@ async function importarPorTipo(tipo, buffer, nomeArquivo) {
     return importarCatalogoPrecos(buffer, USUARIO_EMAIL);
   }
   if (tipo === 'classificatorio') {
-    const itens = Importadores.lerClassificatorio(XLSX, buffer);
+    const itens = lendo(() => Importadores.lerClassificatorio(XLSX, buffer));
     const dataRelatorio = Importadores.dataRelatorioClassificatorio(nomeArquivo);
     const apuradoAte = itens.reduce((max, it) => (it.ultimaCompra && it.ultimaCompra > (max || '') ? it.ultimaCompra : max), null);
     return importarClassificatorioErp({ itens, dataRelatorio, apuradoAte });
   }
   if (tipo === 'previsao') {
-    const mapa = Importadores.lerPrevisao(XLSX, buffer);
+    const mapa = lendo(() => Importadores.lerPrevisao(XLSX, buffer));
     const itens = Object.entries(mapa).map(([codigo_sku, p]) => ({
       codigo_sku, qt_disponivel: p.qtDisponivel, qt_carteira: p.qtCarteira,
       qt_compra: p.qtCompra, previsao: p.previsao, saldo: p.saldo,
@@ -151,14 +158,24 @@ router.post('/arquivo', async (req, res) => {
       return res.status(503).json({ erro: (r.json && r.json.erro) || 'Erro ao importar.', tipo });
     }
     if (r.status >= 400) throw new Recusado((r.json && r.json.erro) || 'Planilha recusada.');
-    await registrar(hash, corpo, tipo, 'ok', null, r.json);
+    // já gravou: se só o registro falhar, a importação continua valendo (antes
+    // virava 422 e o e-mail ganhava "Cortag/Falhou" com o arquivo dentro do app)
+    try {
+      await registrar(hash, corpo, tipo, 'ok', null, r.json);
+    } catch (err) {
+      console.error(`Importação por e-mail: "${nome}" importado, mas o registro em importacoes_email falhou:`, err);
+    }
     console.log(`Importação por e-mail: ${ROTULO_TIPO[tipo]} "${nome}" importado.`);
     res.json({ ok: true, tipo, resultado: r.json });
   } catch (e) {
-    // erro de banco volta como status 500 das funções de importação (acima);
-    // o que chega aqui é a planilha recusada pelos leitores (aba/coluna
-    // faltando, valor corrompido etc.) - não adianta tentar de novo
-    if (!(e instanceof Recusado)) console.error('Importação por e-mail:', e);
+    if (!(e instanceof Recusado)) {
+      // erro nosso (banco, bug): o script tenta de novo; a mensagem crua fica
+      // só no log do servidor
+      console.error('Importação por e-mail:', e);
+      await registrar(hash, corpo, tipo, 'falhou', 'Erro interno ao importar - o script tenta de novo.', null).catch(err => console.error(err));
+      return res.status(503).json({ erro: 'Erro ao importar - tente de novo.', tipo });
+    }
+    // planilha recusada (leitores, validação, remetente) - não adianta tentar de novo
     await registrar(hash, corpo, tipo, 'falhou', e.message, null).catch(err => console.error(err));
     console.warn(`Importação por e-mail recusada: "${nome}" - ${e.message}`);
     res.status(422).json({ erro: e.message, tipo });
