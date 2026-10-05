@@ -977,8 +977,9 @@ async function main() {
   // 18b1c) Pedido reenviado pela fila offline com o mesmo id_envio (a resposta se
   // perdeu com sinal fraco): devolve o pedido já gravado, não cria outro
   {
+    const toque0 = new Date(Date.now() - 3 * 3600000).toISOString();
     const corpo = { cliente: { cliente_id: 9121, nome: 'LOJA FUSO' }, itens: [{ codigo_sku: '70011', quantidade: 3, preco_unitario: 10 }],
-      id_envio: '7f3c2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6' };
+      id_envio: '7f3c2a10-1b2c-4d5e-8f90-a1b2c3d4e5f6', data_pedido: toque0 };
     const antes = mockDb.__getPedidos().length;
     const e1 = await req('POST', '/api/pedidos', corpo);
     const e2 = await req('POST', '/api/pedidos', corpo);
@@ -1011,6 +1012,25 @@ async function main() {
       && e3.status === 200 && e3.body.pedido_id === e1.body.pedido_id && semId.status === 201
       && mockDb.__getPedidos().length === antes + 2,
       `pedido do app: reenvio com o mesmo id_envio devolve o gravado (também na corrida): ${JSON.stringify([e1.body, e2.body, e3.body, semId.status])}`);
+
+    // Pedido feito sem internet e ALTERADO antes de o 1º envio sair: o app manda o mesmo
+    // id_envio com os itens novos (e a hora do toque da alteração) - troca os itens do
+    // mesmo pedido. A versão velha que chegar depois (fila de outro aparelho) não volta.
+    const itensDe = (id) => mockDb.__getPedidoItens().filter(i => i.pedido_id === id).map(i => i.quantidade);
+    const toque1 = new Date(Date.now() - 2 * 3600000).toISOString();
+    const nPedidos = mockDb.__getPedidos().length;
+    const alt = await req('POST', '/api/pedidos', { ...corpo, itens: [{ codigo_sku: '70011', quantidade: 5, preco_unitario: 10 }], alterado_em: toque1 });
+    const depoisAlt = itensDe(e1.body.pedido_id);
+    const velho = await req('POST', '/api/pedidos', corpo); // a versão de antes chegando atrasada
+    const depoisVelho = itensDe(e1.body.pedido_id);
+    // PATCH (pedido já com número): alteração mais velha que a gravada também não volta
+    const patchVelho = await req('PATCH', `/api/pedidos/${e1.body.pedido_id}`, { itens: [{ codigo_sku: '70011', quantidade: 1, preco_unitario: 10 }], alterado_em: toque0 });
+    const patchNovo = await req('PATCH', `/api/pedidos/${e1.body.pedido_id}`, { itens: [{ codigo_sku: '70011', quantidade: 7, preco_unitario: 10 }], alterado_em: new Date().toISOString() });
+    assert(alt.status === 200 && alt.body.atualizado === true && alt.body.pedido_id === e1.body.pedido_id && JSON.stringify(depoisAlt) === '[5]'
+      && velho.status === 200 && JSON.stringify(depoisVelho) === '[5]'
+      && patchVelho.body.versao_antiga === true && patchNovo.body.atualizado === true && JSON.stringify(itensDe(e1.body.pedido_id)) === '[7]'
+      && mockDb.__getPedidos().length === nPedidos,
+      `pedido do app: alteração pelo mesmo envio troca os itens; versão mais velha não sobrescreve (POST e PATCH): ${JSON.stringify([alt.body, depoisAlt, depoisVelho, patchVelho.body, itensDe(e1.body.pedido_id)])}`);
   }
 
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):

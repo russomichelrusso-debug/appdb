@@ -29,6 +29,15 @@ function horaDoPedidoDoApp(valor, enviadoEm, agora = new Date()) {
   return new Date(t % 86400000 === 0 ? t - 1 : t).toISOString();
 }
 
+// Versão do pedido do app = hora do toque em Finalizar/Atualizar, pelo relógio
+// do aparelho (só hora completa com fuso). Serve só pra comparar versões do
+// mesmo pedido: a mais velha que chegar depois não sobrescreve a mais nova.
+function versaoDoApp(valor) {
+  return typeof valor === 'string' && HORA_COM_FUSO.test(valor) && Number.isFinite(new Date(valor).getTime())
+    ? new Date(valor).toISOString() : null;
+}
+const versaoMaisVelha = (nova, gravada) => !!(nova && gravada && new Date(nova).getTime() <= new Date(gravada).getTime());
+
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
@@ -87,8 +96,8 @@ function contextoParaGravar(contexto) {
 //   itens: [{ codigo_sku, quantidade, preco_unitario, descricao? }, ...]
 // }
 const ID_ENVIO = /^[A-Za-z0-9-]{16,64}$/;
-async function pedidoDoMesmoEnvio(client, idEnvio, usuarioId) {
-  const r = await client.query('SELECT id, cliente_id, data_pedido, usuario_id FROM pedidos WHERE id_envio = $1', [idEnvio]);
+async function pedidoDoMesmoEnvio(client, idEnvio, usuarioId, travar = false) {
+  const r = await client.query(`SELECT id, cliente_id, data_pedido, usuario_id, versao_app FROM pedidos WHERE id_envio = $1${travar ? ' FOR UPDATE' : ''}`, [idEnvio]);
   const p = r.rows[0];
   // de outro usuário (não acontece com UUID): não devolve o pedido dele
   return p && p.usuario_id === usuarioId ? p : (p ? false : null);
@@ -109,15 +118,34 @@ router.post('/', async (req, res) => {
 
     // Reenvio do mesmo pedido (resposta perdida com sinal fraco -> fila offline
     // -> reenvio): devolve o que já foi gravado, sem criar outro
+    // O mesmo id_envio também é a ALTERAÇÃO do pedido feito sem internet (o
+    // vendedor tocou em "Atualizar pedido" antes de o 1º envio sair): se os itens
+    // mudaram e a versão é mais nova, troca os itens do mesmo pedido.
     if (idEnvio) {
-      const mesmo = await pedidoDoMesmoEnvio(client, idEnvio, req.usuario.id);
+      const mesmo = await pedidoDoMesmoEnvio(client, idEnvio, req.usuario.id, true);
       if (mesmo === false) {
         await client.query('ROLLBACK');
         return res.status(409).json({ erro: 'Identificador de envio já usado.' });
       }
       if (mesmo) {
-        await client.query('ROLLBACK');
-        return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
+        const versao = versaoDoApp(req.body.alterado_em) || versaoDoApp(data_pedido);
+        const resposta = { pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true };
+        if (versaoMaisVelha(versao, mesmo.versao_app) || !itensValidos(itens)
+          || mesmosItens(await itensDoPedido(client, mesmo.id), itens)) {
+          await client.query('ROLLBACK');
+          return res.status(200).json(resposta);
+        }
+        await trocarItensDoPedido(client, mesmo.id, itens);
+        const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
+        await client.query(
+          `UPDATE pedidos SET contexto = $1::jsonb, atualizado_em = COALESCE($2::timestamptz, now()),
+                              vendedor_id = COALESCE($3, vendedor_id), versao_app = COALESCE($4::timestamptz, versao_app)
+           WHERE id = $5`,
+          [contextoParaGravar(contexto), horaDoPedidoDoApp(req.body.alterado_em, req.body.enviado_em), vendedorId, versao, mesmo.id]
+        );
+        await client.query('COMMIT');
+        console.log(`Pedido #${mesmo.id} ALTERADO pelo mesmo envio (alterado antes de o 1º envio chegar), ${itens.length} item(ns).`);
+        return res.status(200).json({ ...resposta, atualizado: true });
       }
     }
 
@@ -183,10 +211,11 @@ router.post('/', async (req, res) => {
       atualizado = true;
     } else {
       const pedidoResult = await client.query(
-        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto, id_envio)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb, $10)
+        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto, id_envio, versao_app)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb, $10, $11::timestamptz)
          RETURNING id, data_pedido`,
-        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origemFinal, dataPedidoGravar, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto), idEnvio]
+        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origemFinal, dataPedidoGravar, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto), idEnvio,
+          origemFinal === 'app' ? (versaoDoApp(req.body.alterado_em) || versaoDoApp(data_pedido)) : null]
       );
       pedidoId = pedidoResult.rows[0].id;
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
@@ -273,6 +302,31 @@ router.get('/salvos', async (req, res) => {
 });
 
 // Itens de um pedido vindos do app: código, quantidade > 0 e preço >= 0.
+// Itens do pedido (código, quantidade, preço) - pra saber se uma versão mudou algo
+async function itensDoPedido(client, pedidoId) {
+  const r = await client.query(
+    `/* itens-do-pedido */ SELECT pr.codigo_sku, pi.quantidade, pi.preco_unitario
+     FROM pedido_itens pi JOIN produtos pr ON pr.id = pi.produto_id WHERE pi.pedido_id = $1`, [pedidoId]);
+  return r.rows;
+}
+function mesmosItens(a, b) {
+  const chave = (lista) => lista.map(it => `${String(it.codigo_sku).trim()}|${Number(it.quantidade)}|${Number(it.preco_unitario).toFixed(2)}`).sort().join(';');
+  return chave(a) === chave(b);
+}
+// Troca os itens do pedido. Acha todos os produtos ANTES de apagar os antigos:
+// código que não existe recusa a troca já aqui, com o pedido intacto.
+async function trocarItensDoPedido(client, pedidoId, itens) {
+  const produtoIds = [];
+  for (const item of itens) produtoIds.push(await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), null));
+  await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [pedidoId]);
+  for (let i = 0; i < itens.length; i++) {
+    await client.query(
+      'INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario) VALUES ($1, $2, $3, $4)',
+      [pedidoId, produtoIds[i], Number(itens[i].quantidade), Number(itens[i].preco_unitario)]
+    );
+  }
+}
+
 function itensValidos(itens) {
   return Array.isArray(itens) && itens.length > 0 && itens.every(it => it
     && typeof it.codigo_sku === 'string' && it.codigo_sku.trim() !== ''
@@ -296,7 +350,7 @@ router.patch('/:id', async (req, res) => {
     // FOR UPDATE: duas atualizações do mesmo pedido ao mesmo tempo (ex.: a
     // fila offline reenviando) não regravam os itens em paralelo.
     const atualResult = await client.query(
-      'SELECT id, cliente_id, origem, usuario_id FROM pedidos WHERE id = $1 FOR UPDATE',
+      'SELECT id, cliente_id, origem, usuario_id, data_pedido, atualizado_em, versao_app FROM pedidos WHERE id = $1 FOR UPDATE',
       [req.params.id]
     );
     const atual = atualResult.rows[0];
@@ -313,24 +367,22 @@ router.patch('/:id', async (req, res) => {
       return res.status(403).json({ erro: 'Esse pedido foi gravado por outro usuário — só ele ou um administrador pode alterá-lo.' });
     }
 
-    // acha todos os produtos antes de apagar os itens antigos: código que não
-    // existe recusa a edição já aqui, com o pedido intacto
-    const produtoIds = [];
-    for (const item of itens) produtoIds.push(await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), null));
+    // alteração mais velha que a gravada (fila offline atrasada, outro aparelho):
+    // não apaga a mais nova
+    const versao = versaoDoApp(alterado_em);
+    if (versaoMaisVelha(versao, atual.versao_app)) {
+      await client.query('ROLLBACK');
+      return res.json({ pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido, atualizado_em: atual.atualizado_em, atualizado: false, versao_antiga: true });
+    }
+    await trocarItensDoPedido(client, atual.id, itens);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
     const upd = await client.query(
       `UPDATE pedidos SET contexto = $1::jsonb, atualizado_em = COALESCE($5::timestamptz, now()),
-                          vendedor_id = COALESCE($2, vendedor_id), observacao = COALESCE($3, observacao)
+                          vendedor_id = COALESCE($2, vendedor_id), observacao = COALESCE($3, observacao),
+                          versao_app = COALESCE($6::timestamptz, versao_app)
        WHERE id = $4 RETURNING id, cliente_id, data_pedido, atualizado_em`,
-      [contextoParaGravar(contexto), vendedorId, observacao || null, atual.id, horaDoPedidoDoApp(alterado_em, enviado_em)]
+      [contextoParaGravar(contexto), vendedorId, observacao || null, atual.id, horaDoPedidoDoApp(alterado_em, enviado_em), versao]
     );
-    await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [atual.id]);
-    for (let i = 0; i < itens.length; i++) {
-      await client.query(
-        'INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario) VALUES ($1, $2, $3, $4)',
-        [atual.id, produtoIds[i], Number(itens[i].quantidade), Number(itens[i].preco_unitario)]
-      );
-    }
 
     await client.query('COMMIT');
     const pedido = upd.rows[0];

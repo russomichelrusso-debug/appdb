@@ -92,6 +92,10 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS contexto JSONB;
 -- o pedido já gravado. NULL nos pedidos antigos e nos de PDF.
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS id_envio TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_id_envio ON pedidos(id_envio) WHERE id_envio IS NOT NULL;
+-- Hora (relógio do aparelho) em que o vendedor tocou em Finalizar/Atualizar na
+-- versão gravada. Uma versão mais velha que chegue depois (fila offline atrasada,
+-- reenvio de outro aparelho) não apaga a mais nova. NULL nos pedidos antigos.
+ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS versao_app TIMESTAMPTZ;
 
 CREATE TABLE IF NOT EXISTS pedido_itens (
   id SERIAL PRIMARY KEY,

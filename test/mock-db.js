@@ -295,9 +295,26 @@ async function query(sql, params = []) {
       .filter(p => p.itens.length > 0) };
   }
   // PATCH /api/pedidos/:id: pedido travado pra edição...
-  if (s.includes('SELECT ID, CLIENTE_ID, ORIGEM, USUARIO_ID FROM PEDIDOS WHERE ID = $1 FOR UPDATE')) {
+  if (s.includes('SELECT ID, CLIENTE_ID, ORIGEM, USUARIO_ID, DATA_PEDIDO, ATUALIZADO_EM, VERSAO_APP FROM PEDIDOS WHERE ID = $1 FOR UPDATE')) {
     return { rows: pedidos.filter(p => String(p.id) === String(params[0]))
-      .map(p => ({ id: p.id, cliente_id: p.cliente_id, origem: p.origem, usuario_id: p.usuario_id })) };
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, origem: p.origem, usuario_id: p.usuario_id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em || null, versao_app: p.versao_app || null })) };
+  }
+  // itens do pedido com o código (POST com o mesmo id_envio: os itens mudaram?)
+  if (s.includes('/* ITENS-DO-PEDIDO */')) {
+    return { rows: pedidoItens.filter(i => String(i.pedido_id) === String(params[0])).map(i => {
+      const prod = produtos.find(p => p.id === i.produto_id);
+      return { codigo_sku: prod ? prod.codigo_sku : null, quantidade: i.quantidade, preco_unitario: i.preco_unitario };
+    }) };
+  }
+  // POST com o mesmo id_envio e itens novos: cabeçalho da alteração
+  if (s.includes('UPDATE PEDIDOS SET CONTEXTO = $1::JSONB, ATUALIZADO_EM = COALESCE($2::TIMESTAMPTZ, NOW())')) {
+    const p = pedidos.find(x => String(x.id) === String(params[4]));
+    if (!p) return { rows: [] };
+    p.contexto = params[0];
+    p.atualizado_em = params[1] ? new Date(params[1]).toISOString() : new Date().toISOString();
+    if (params[2] != null) p.vendedor_id = params[2];
+    if (params[3]) p.versao_app = params[3];
+    return { rows: [] };
   }
   // ...e a atualização do cabeçalho (itens são trocados pelo DELETE/INSERT de pedido_itens)
   if (s.includes('UPDATE PEDIDOS SET CONTEXTO = $1::JSONB, ATUALIZADO_EM = COALESCE($5::TIMESTAMPTZ, NOW())')) {
@@ -307,6 +324,7 @@ async function query(sql, params = []) {
     p.atualizado_em = params[4] ? new Date(params[4]).toISOString() : new Date().toISOString();
     if (params[1] != null) p.vendedor_id = params[1];
     if (params[2] != null) p.observacao = params[2];
+    if (params[5]) p.versao_app = params[5];
     return { rows: [{ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em }] };
   }
 
@@ -1260,7 +1278,7 @@ async function query(sql, params = []) {
     const p = {
       id: nextId.pedidos++, cliente_id: params[0], vendedor_id: params[1], observacao: params[2],
       numero_cotacao: numeroCotacao, pdf_modificado_em: params[6] ?? null, usuario_id: params[7] ?? null,
-      origem: params[4] || 'app', contexto: params[8] ?? null, id_envio: params[9] ?? null,
+      origem: params[4] || 'app', contexto: params[8] ?? null, id_envio: params[9] ?? null, versao_app: params[10] ?? null,
       data_pedido: params[5] ? new Date(params[5]).toISOString() : new Date().toISOString(),
     };
     pedidos.push(p);
@@ -1269,7 +1287,7 @@ async function query(sql, params = []) {
   // POST /api/pedidos com id_envio: o reenvio do mesmo pedido devolve o gravado
   if (s.includes('FROM PEDIDOS WHERE ID_ENVIO = $1')) {
     return { rows: pedidos.filter(p => p.id_envio && p.id_envio === params[0])
-      .map(p => ({ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, usuario_id: p.usuario_id })) };
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, usuario_id: p.usuario_id, versao_app: p.versao_app || null })) };
   }
   // POST /api/pedidos com numero_cotacao: busca (com lock) da cotação já gravada
   if (s.includes('FROM PEDIDOS WHERE NUMERO_COTACAO = $1')) {

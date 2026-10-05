@@ -10621,6 +10621,14 @@
       function loadSyncQueue() {
         try { return JSON.parse(localStorage.getItem(SYNC_QUEUE_LS_KEY)) || []; } catch (e) { return []; }
       }
+      function corpoDaFila(item) {
+        try { return JSON.parse((item.options && item.options.body) || '{}') || {}; } catch (e) { return {}; }
+      }
+      function removerDaFila(condicao) {
+        const fila = loadSyncQueue();
+        const resto = fila.filter(it => !condicao(it));
+        if (resto.length !== fila.length) saveSyncQueueList(resto);
+      }
       function saveSyncQueueList(queue) {
         try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
         refreshSyncQueueBadge();
@@ -10711,9 +10719,14 @@
             // sem prazo de propósito: abortar não para o servidor, que terminava de
             // gravar o levantamento/alteração e o reenvio gravava de novo (achado do
             // revisor-cortag, 10/2026)
-            await apiFetch(item.path, item.options);
+            const r = await apiFetch(item.path, item.options);
             enviados++;
             tirar.add(item.id);
+            // o pedido aberto pra alteração era o feito sem internet: agora tem número
+            if (r && r.pedido_id && pedidoEditando && !pedidoEditando.id && item.path === '/api/pedidos'
+              && corpoDaFila(item).id_envio === pedidoEditando.idEnvio) {
+              setPedidoEditando({ ...pedidoEditando, id: r.pedido_id, dataPedido: r.data_pedido || pedidoEditando.dataPedido, pendente: false });
+            }
           } catch (e) {
             // o servidor recusou (ex.: alterar pedido que foi excluído): reenviar
             // não muda nada - antes ficava na fila pra sempre, de 30 em 30 s
@@ -12545,21 +12558,34 @@
         try {
           const itens = rows.map(({ p, it, cp }) => ({ codigo_sku: p.c, quantidade: it.qty, preco_unitario: Number(cp.toFixed(2)) }));
           const contexto = contextoDoOrcamento();
-          const result = editando
-            ? await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto, alterado_em: new Date().toISOString(), enviado_em: null })
-            : await apiCriarPedido({
+          const agora = new Date().toISOString();
+          let result, idEnvio = null, dataToque = null;
+          if (editando && editando.id) {
+            // a alteração anterior ainda na fila (sem internet) sai: esta a substitui
+            removerDaFila(it => it.path === `/api/pedidos/${editando.id}` && (it.options || {}).method === 'PATCH');
+            result = await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto, alterado_em: agora, enviado_em: null });
+          } else {
+            // pedido novo, ou o feito sem internet que ainda não tem número no
+            // servidor: o MESMO id_envio - o servidor troca os itens do mesmo pedido
+            // (antes um 2º "Finalizar" sem internet gravava outro pedido)
+            idEnvio = (editando && editando.idEnvio) || novoIdEnvio();
+            dataToque = (editando && editando.dataToque) || agora;
+            if (editando) removerDaFila(it => it.path === '/api/pedidos' && corpoDaFila(it).id_envio === idEnvio);
+            result = await apiCriarPedido({
               cliente: { cliente_id: cliente.id, nome: cliente.nome },
               vendedor_nome: state.seller || undefined,
               itens,
               contexto,
               // hora do toque + hora do envio (carimbada pelo apiFetch): sem internet
               // o pedido sai da fila depois, até no dia seguinte
-              data_pedido: new Date().toISOString(),
+              data_pedido: dataToque,
+              alterado_em: editando ? agora : undefined,
               enviado_em: null,
               // gerado no toque: se a resposta se perder (sinal fraco) e o pedido for
               // reenviado pela fila, o servidor devolve o já gravado em vez de criar outro
-              id_envio: novoIdEnvio(),
+              id_envio: idEnvio,
             });
+          }
           const offline = !!(result && result.__filaOffline);
           // Cópia de segurança em CSV no Drive - independente do pedido em si já
           // ter ido pro servidor ou ter ficado pendente na fila acima; sem
@@ -12577,11 +12603,14 @@
             msg = offline
               ? `Sem conexão agora — pedido de ${cliente.nome} fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
               : `Pedido registrado no histórico de ${cliente.nome}`;
-            // recém-gravado já fica aberto: se o cliente mudar alguma coisa
-            // agora, "Atualizar pedido" altera este em vez de duplicar
-            if (!offline && result && result.pedido_id) {
-              setPedidoEditando({ id: result.pedido_id, clienteId: cliente.id, clienteNome: cliente.nome, dataPedido: result.data_pedido });
-            }
+          }
+          // recém-gravado já fica aberto: se o cliente mudar alguma coisa agora,
+          // "Atualizar pedido" altera este em vez de duplicar - também o feito sem
+          // internet (ainda sem número: vai pelo mesmo id_envio)
+          if (idEnvio) {
+            setPedidoEditando(!offline && result && result.pedido_id
+              ? { id: result.pedido_id, idEnvio, dataToque, clienteId: cliente.id, clienteNome: cliente.nome, dataPedido: result.data_pedido }
+              : { id: null, idEnvio, dataToque, clienteId: cliente.id, clienteNome: cliente.nome, dataPedido: dataToque, pendente: true });
           }
           if (driveResultado === 'enviado') msg += ' · cópia CSV salva no Drive';
           else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
@@ -12621,7 +12650,9 @@
       // e reconhecer o CSV funcionam sem internet na loja (a alteração vai pela
       // fila offline, como o pedido novo).
       const PEDIDOS_SALVOS_LS_KEY = 'cortagPedidosSalvos_v1';
-      let pedidoEditando = null; // { id, clienteId, clienteNome, dataPedido }
+      // { id (null enquanto o pedido feito sem internet não chegou), idEnvio, dataToque,
+      //   clienteId, clienteNome, dataPedido, pendente }
+      let pedidoEditando = null;
       let pedidosSalvos = null; // { dias, pedidos: [...], atualizadoEm }
 
       async function apiAtualizarPedido(id, payload) {
@@ -12696,7 +12727,7 @@
         if (aviso) {
           aviso.classList.toggle('hidden', !pedidoEditando);
           aviso.innerHTML = pedidoEditando
-            ? `<div>✏️ <b>Alterando o pedido de ${escapeHtml(pedidoEditando.clienteNome || 'cliente')}</b> · ${escapeHtml(dataHoraCurta(pedidoEditando.dataPedido))}
+            ? `<div>✏️ <b>Alterando o pedido de ${escapeHtml(pedidoEditando.clienteNome || 'cliente')}</b> · ${escapeHtml(dataHoraCurta(pedidoEditando.dataPedido))}${pedidoEditando.pendente ? ' · ainda não enviado' : ''}
                 <span>"Atualizar pedido" muda este mesmo pedido, sem criar outro.</span></div>
               <button type="button" data-pedido-novo aria-label="Fazer um pedido novo em vez de alterar este"
                 title="Fazer um pedido novo em vez de alterar este">Pedido novo</button>`
