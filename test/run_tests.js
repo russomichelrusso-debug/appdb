@@ -1958,6 +1958,25 @@ async function main() {
     assert(res.status === 422 && !mockDb.__getPedidosBloqueados().some(x => x.nr_pedido === '677998'),
       `e-mail Cortag: pedido bloqueado de outro remetente é recusado (sem selo nem push): ${JSON.stringify(res.body)}`);
 
+    {
+      // gravou o selo e mandou o aviso, mas o registro final falhou: 200 (com 503 o script
+      // reenviava e cada reenvio mandava outro push)
+      const queryOriginal = mockDb.pool.query;
+      mockDb.pool.query = async (sql, params) => {
+        if (sql.includes('importacao-email:registrar') && params && params[7] === 'ok') throw new Error('conexão perdida');
+        return queryOriginal(sql, params);
+      };
+      const avisosAntes = mockDb.__getNovidades().filter(n => n.titulo === 'Pedido 677997 bloqueado').length;
+      try {
+        res = await enviarMensagem('Pedido Bloqueado 00677997', textoBloqueado.replace('00677375', '00677997'));
+      } finally {
+        mockDb.pool.query = queryOriginal;
+      }
+      assert(res.status === 200 && res.body.tipo === 'bloqueado'
+        && mockDb.__getNovidades().filter(n => n.titulo === 'Pedido 677997 bloqueado').length === avisosAntes + 1,
+        `e-mail Cortag: falha só no registro depois de gravar o bloqueio responde 200 (sem reenvio = sem push repetido): ${JSON.stringify(res.body)}`);
+    }
+
     res = await enviarMensagem('Pedido Bloqueado 00677999', 'texto sem o formato esperado');
     const res2 = await enviarMensagem('Relatório de Comissões', 'qualquer coisa');
     assert(res.status === 200 && res.body.resultado.nr_pedido === '677999' && res2.status === 422
@@ -2025,14 +2044,16 @@ async function main() {
     // considerado; endereço da Cortag sem autenticação: "Cortag/Nao autenticado").
     const props = { CHAVE: 'chave-teste' };
     const marcadores = {};
+    const leiturasCompletas = {};
+    const logs = [];
     const enviados = [];
     const autenticado = 'Authentication-Results: mx.google.com;\r\n dkim=pass header.i=@cortag.com.br;\r\n dmarc=pass header.from=cortag.com.br';
     const emailFalso = (id, de, nomeAnexo, data, cab) => {
-      const thread = { addLabel: (l) => { marcadores[id] = l.nome; }, getMessages: () => [msg] };
+      const thread = { addLabel: (l) => { marcadores[id] = marcadores[id] ? marcadores[id] + '+' + l.nome : l.nome; }, getMessages: () => [msg] };
       const msg = {
         getId: () => id, getDate: () => data, getFrom: () => de, getSubject: () => 'Relatório ' + id,
-        getAttachments: () => [{ getName: () => nomeAnexo, getBytes: () => [1, 2, 3] }],
-        getRawContent: () => cab + '\r\nFrom: ' + de + '\r\n\r\ncorpo',
+        getAttachments: () => [].concat(nomeAnexo).map(n => ({ getName: () => n, getBytes: () => [1, 2, 3] })),
+        getRawContent: () => { leiturasCompletas[id] = (leiturasCompletas[id] || 0) + 1; return cab + '\r\nFrom: ' + de + '\r\n\r\ncorpo'; },
       };
       return thread;
     };
@@ -2045,9 +2066,13 @@ async function main() {
         'Authentication-Results: mx.google.com; dmarc=fail header.from=outro.com'),
       emailFalso('golpe-endereco', 'noreply@cortag.com.br', 'Repres-4.xlsx', new Date(agora - 5400000),
         'Authentication-Results: mx.google.com; spf=softfail; dmarc=fail header.from=cortag.com.br'),
+      // dois anexos: um entra, outro é recusado (422) -> os dois marcadores
+      emailFalso('dois-anexos', 'noreply@cortag.com.br', ['Repres-5.xlsx', 'Repres-6-ruim.xlsx'], new Date(agora - 1800000), autenticado),
+      // "De:" com comentário em vez de <...>: fica de fora, mas avisa no log
+      emailFalso('outro-formato', 'noreply@cortag.com.br (Cortag)', 'Repres-7.xlsx', new Date(agora - 1700000), autenticado),
     ];
     const ctx = {
-      Logger: { log: () => {} },
+      Logger: { log: (...a) => { logs.push(a.join(' ')); } },
       Utilities: { base64Encode: () => 'AQID', sleep: () => {} },
       PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
       GmailApp: { search: () => threads, getUserLabelByName: n => ({ nome: n }), createLabel: n => ({ nome: n }) },
@@ -2056,7 +2081,7 @@ async function main() {
         if (url.endsWith('/health/banco')) return { getResponseCode: () => (bancoFora ? 503 : 200) };
         const corpo = JSON.parse(opts.payload);
         enviados.push(corpo.nome);
-        const codigo = corpo.nome === 'Repres-1.xlsx' ? 503 : 200;
+        const codigo = corpo.nome === 'Repres-1.xlsx' ? 503 : corpo.nome === 'Repres-6-ruim.xlsx' ? 422 : 200;
         return { getResponseCode: () => codigo, getContentText: () => '{}' };
       } },
     };
@@ -2074,11 +2099,18 @@ async function main() {
       rodadas.push({ velho: marcadores['velho-503'] || null, novo: marcadores['novo-ok'] || null, enviados: enviados.splice(0).join(',') });
     }
     assert(rodadas.slice(0, 3).every(r => !r.velho && !r.novo && r.enviados === 'Repres-1.xlsx')
-      && rodadas[3].velho === 'Cortag/Falhou' && rodadas[3].novo === 'Cortag/Importado' && rodadas[3].enviados === 'Repres-1.xlsx,Repres-2.xlsx'
+      && rodadas[3].velho === 'Cortag/Falhou' && rodadas[3].novo === 'Cortag/Importado'
+      && rodadas[3].enviados === 'Repres-1.xlsx,Repres-2.xlsx,Repres-5.xlsx,Repres-6-ruim.xlsx'
       && !marcadores['golpe-nome'] && marcadores['golpe-endereco'] === 'Cortag/Nao autenticado'
       && !('velho-503' in JSON.parse(props.TENTATIVAS || '{}'))
-      && comBancoFora.enviados === 0 && comBancoFora.marcadores === 0 && comBancoFora.tentativas === '{}',
-      `script do Gmail: erro do servidor tenta 4 rodadas e desiste sem travar a fila; banco fora não conta tentativa; remetente falso não é mandado: ${JSON.stringify([comBancoFora, rodadas, marcadores])}`);
+      && comBancoFora.enviados === 0 && comBancoFora.marcadores === 0 && comBancoFora.tentativas === '{}'
+      // o e-mail que esperou na fila 9 rodadas (5 de banco fora + 4 de erro) foi lido inteiro 1 vez só
+      && leiturasCompletas['velho-503'] === 1 && leiturasCompletas['novo-ok'] === 1
+      && JSON.parse(props.AUTENTICADOS || '{}')['velho-503'] === undefined
+      && marcadores['dois-anexos'] === 'Cortag/Importado+Cortag/Falhou'
+      && !marcadores['outro-formato'] && !leiturasCompletas['outro-formato']
+      && logs.some(l => l.includes('não é exatamente o da Cortag') && l.includes('(Cortag)')),
+      `script do Gmail: erro do servidor tenta 4 rodadas e desiste sem travar a fila; banco fora não conta tentativa; remetente falso não é mandado; e-mail na fila lido 1 vez; 2 anexos = 2 marcadores; "De:" fora do padrão avisa: ${JSON.stringify([comBancoFora, rodadas, marcadores, leiturasCompletas])}`);
   }
   {
     // relatório diário do fim de semana: na segunda sai um push só, o do mais novo

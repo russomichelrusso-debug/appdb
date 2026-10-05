@@ -35,6 +35,11 @@ No Gmail, cada e-mail tratado ganha um marcador:
   região). Importar na mão pelo Painel. Ninguém é avisado no app.
 - **Cortag/Nao autenticado** — o e-mail diz vir da Cortag, mas o Gmail não confirmou. **Não vai
   pro app** (ver "Segurança" abaixo).
+- E-mail com mais de um anexo em que parte entrou e parte foi recusada ganha **os dois** marcadores
+  (Importado e Falhou); a execução diz quais.
+- "De:" que cita um remetente da Cortag mas fora do formato `Nome <endereço>` / `endereço` (ex.:
+  `noreply@cortag.com.br (Cortag)`) fica de fora e aparece como "Ignorado - o endereço não é
+  exatamente o da Cortag" em Execuções; o `conferirAutenticacao` lista esses como "OUTRO ENDEREÇO".
 
 ## Segurança: só e-mail que é mesmo da Cortag
 

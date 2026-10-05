@@ -286,7 +286,14 @@ router.post('/mensagem', async (req, res) => {
     } else {
       throw new Recusado('E-mail não reconhecido.');
     }
-    await registrar(hash, { ...corpo, nome: assunto }, tipo, 'ok', null, resultado);
+    // já gravou o selo e mandou o aviso: se só o registro falhar, responde 200
+    // mesmo assim - com 503 o script reenviava e cada reenvio mandava outro push
+    // (aviso "porPedido" sempre insere)
+    try {
+      await registrar(hash, { ...corpo, nome: assunto }, tipo, 'ok', null, resultado);
+    } catch (err) {
+      console.error(`Importação por e-mail: "${assunto}" gravado, mas o registro em importacoes_email falhou:`, err);
+    }
     res.json({ ok: true, tipo, resultado });
   } catch (e) {
     if (e instanceof Recusado) {

@@ -85,6 +85,7 @@ function verificarEmails() {
   const processados = JSON.parse(props.getProperty('PROCESSADOS') || '[]');
   const jaFeito = new Set(processados);
   const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente)));
+  const remetentesTodos = Array.from(new Set(remetentes.concat(CONFIG.mensagens.map(m => m.remetente))));
   const periodo = `newer_than:${CONFIG.diasParaTras}d`;
   const consultas = [`from:(${remetentes.join(' OR ')}) has:attachment filename:xlsx ${periodo}`]
     .concat(CONFIG.mensagens.map(m => `from:${m.remetente} ${m.busca} ${periodo}`));
@@ -102,8 +103,15 @@ function verificarEmails() {
       const anexos = msg.getAttachments({ includeInlineImages: false })
         .filter(a => CONFIG.regras.some(r => de === r.remetente && r.anexo.test(a.getName())));
       const ehMensagem = CONFIG.mensagens.some(m => de === m.remetente && m.assunto.test(msg.getSubject()));
-      if (anexos.length === 0 && !ehMensagem) { processados.push(id); jaFeito.add(id); return; }
-      if (!autenticadoPeloGmail_(cabecalhos_(msg), de)) {
+      if (anexos.length === 0 && !ehMensagem) {
+        // "De:" que cita um remetente da Cortag mas não é exatamente ele: fica de
+        // fora, mas deixa rastro no log (pode ser a Cortag mudando o formato)
+        if (remetentesTodos.some(r => msg.getFrom().toLowerCase().indexOf(r) !== -1 && de !== r)) {
+          Logger.log('Ignorado - o endereço não é exatamente o da Cortag: "%s" de %s', msg.getSubject(), msg.getFrom());
+        }
+        processados.push(id); jaFeito.add(id); return;
+      }
+      if (!autenticadoComCache_(props, msg, de)) {
         Logger.log('NÃO autenticado (não vai pro app): "%s" de %s', msg.getSubject(), msg.getFrom());
         thread.addLabel(marcador_(CONFIG.marcadorNaoAutenticado));
         processados.push(id); jaFeito.add(id);
@@ -130,6 +138,7 @@ function verificarEmails() {
     let falhou = false;
     let tentarDeNovo = false;
     let erroServidor = false;
+    let algumOk = false;
     const resultados = item.anexos.length
       ? item.anexos.map(anexo => enviar_(chave, anexo, item.msg))
       : [enviarMensagem_(chave, item.msg)];
@@ -137,6 +146,7 @@ function verificarEmails() {
       if (r === 'tentar-de-novo') tentarDeNovo = true;
       else if (r === 'erro-servidor') erroServidor = true;
       else if (r === 'falhou') falhou = true;
+      else if (r === 'ok') algumOk = true;
     }
     if (tentarDeNovo) break; // mantém a ordem: o resto fica pra próxima rodada
     if (erroServidor) {
@@ -148,9 +158,14 @@ function verificarEmails() {
       Logger.log('Erro do servidor em "%s" %s vezes seguidas - desisto dele e sigo a fila.', item.msg.getSubject(), tentativas);
       falhou = true;
     }
-    item.thread.addLabel(marcador_(falhou ? CONFIG.marcadorFalhou : CONFIG.marcadorImportado));
+    // e-mail com mais de um anexo pode ter parte importada e parte recusada:
+    // ganha os dois marcadores (antes ficava só "Falhou", com anexo dentro do app)
+    if (algumOk || !falhou) item.thread.addLabel(marcador_(CONFIG.marcadorImportado));
+    if (falhou) item.thread.addLabel(marcador_(CONFIG.marcadorFalhou));
+    if (algumOk && falhou) Logger.log('"%s": parte dos anexos entrou e parte não - veja acima quais.', item.msg.getSubject());
     processados.push(item.msg.getId());
     esquecerTentativas_(props, item.msg.getId());
+    esquecerAutenticacao_(props, item.msg.getId());
     salvar(); // a cada e-mail: se a execução for cortada, o que já foi não volta
   }
 }
@@ -255,6 +270,31 @@ function enderecoDe_(from) {
   return (m ? m[1] : s).trim().toLowerCase();
 }
 
+// autenticadoPeloGmail_ com memória entre as rodadas: o cabeçalho só vem com
+// o e-mail inteiro (getRawContent, ~9 MB numa Lista de Preços), e um e-mail
+// que espera na fila (servidor com erro, tempo esgotado) era relido a cada 15
+// min. Guarda só o "autenticado" dos que estão na fila (some ao processar).
+function autenticadoComCache_(props, msg, de) {
+  const id = msg.getId();
+  const guardados = JSON.parse(props.getProperty('AUTENTICADOS') || '{}');
+  if (guardados[id] === de) return true;
+  const ok = autenticadoPeloGmail_(cabecalhos_(msg), de);
+  if (ok) {
+    guardados[id] = de;
+    const ids = Object.keys(guardados);
+    if (ids.length > 100) ids.slice(0, ids.length - 100).forEach(k => { delete guardados[k]; });
+    props.setProperty('AUTENTICADOS', JSON.stringify(guardados));
+  }
+  return ok;
+}
+
+function esquecerAutenticacao_(props, id) {
+  const guardados = JSON.parse(props.getProperty('AUTENTICADOS') || '{}');
+  if (!(id in guardados)) return;
+  delete guardados[id];
+  props.setProperty('AUTENTICADOS', JSON.stringify(guardados));
+}
+
 // Só os cabeçalhos do e-mail (até a 1ª linha em branco), com as linhas
 // continuadas juntadas.
 function cabecalhos_(msg) {
@@ -299,8 +339,15 @@ function conferirAutenticacao() {
     const threads = GmailApp.search(`from:${remetente} newer_than:30d`, 0, 10);
     let ok = 0;
     let total = 0;
+    let outroEndereco = 0;
     threads.forEach(t => t.getMessages().forEach(msg => {
-      if (enderecoDe_(msg.getFrom()) !== remetente) return;
+      if (enderecoDe_(msg.getFrom()) !== remetente) {
+        // a busca do Gmail achou, mas o endereço não é exatamente este: não
+        // seria importado (antes era pulado sem aviso)
+        outroEndereco++;
+        Logger.log('OUTRO ENDEREÇO (não seria importado)  %s | %s | De: %s', remetente, msg.getSubject(), msg.getFrom());
+        return;
+      }
       const cab = cabecalhos_(msg);
       const passou = autenticadoPeloGmail_(cab, remetente);
       total++;
@@ -308,8 +355,9 @@ function conferirAutenticacao() {
       const linha = cab.split(/\r?\n/).find(l => /^Authentication-Results:/i.test(l)) || '(sem Authentication-Results)';
       Logger.log('%s  %s | %s | %s', passou ? 'OK ' : 'NÃO', remetente, msg.getSubject(), linha.slice(0, 400));
     }));
-    Logger.log('== %s: %s de %s e-mail(s) autenticado(s)%s', remetente, ok, total,
-      total && ok < total ? ' - os que deram NÃO não seriam importados; avise antes de usar esta versão' : '');
+    Logger.log('== %s: %s de %s e-mail(s) autenticado(s)%s%s', remetente, String(ok), String(total),
+      total && ok < total ? ' - os que deram NÃO não seriam importados; avise antes de usar esta versão' : '',
+      outroEndereco ? ` - e ${outroEndereco} com outro formato de endereço (veja "OUTRO ENDEREÇO" acima)` : '');
   });
 }
 
