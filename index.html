@@ -7,8 +7,24 @@
   <!-- CSP de defesa em profundidade: como o app é um script inline único, script-src
        ainda precisa de 'unsafe-inline' (a correção real do XSS é o escapeHtml() nos
        dados renderizados). Mesmo assim isso restringe de onde scripts/estilos/objetos
-       podem carregar e bloqueia clickjacking (frame-ancestors) e <object>/<embed>. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+       podem carregar e bloqueia <object>/<embed>. Sem frame-ancestors: no <meta> ele
+       não tem efeito (só em cabeçalho HTTP) - a proteção contra iframe é a de baixo. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self';">
+  <!-- Contra clickjacking (o app aberto dentro de um iframe de outro site, pra
+       enganar o toque): frame-ancestors só vale em cabeçalho HTTP - no <meta> o
+       navegador ignora - e o GitHub Pages não deixa mandar cabeçalho. Então a página
+       começa escondida e só aparece se não estiver dentro de um frame; dentro de um,
+       tenta sair dele (abrir no lugar da página de fora). O login do Google não é
+       afetado: o botão dele é um iframe do Google DENTRO da nossa página (a nossa
+       continua sendo a janela de cima), e o login do Drive abre em popup. -->
+  <style id="antiFrame">html { display: none !important; }</style>
+  <script>
+    if (window.top === window.self) {
+      document.getElementById('antiFrame').remove();
+    } else {
+      try { window.top.location = window.self.location.href; } catch (e) { }
+    }
+  </script>
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="var(--red)">
@@ -16508,6 +16524,8 @@
       // "lembrar-me", sessionStorage se não) - se sim, pula direto pro app; senão,
       // mostra a tela de login.
       async function boot() {
+        // dentro de um iframe de outro site o app não monta (ver antiFrame no <head>)
+        if (window.top !== window.self) return;
         fecharOverlaysOrfaos();
         initLoginScreen();
         const token = getStoredToken();
