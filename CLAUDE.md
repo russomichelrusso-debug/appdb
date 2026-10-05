@@ -89,6 +89,10 @@ Pegadinhas de ambiente:
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
   causa do "Adicionar todos ao orçamento" da busca que aparecia sem resultado e não fazia nada,
   PR #128).
+- Biblioteca de CDN (cdnjs/jsdelivr) nova ou com versão trocada nas páginas entra também na lista
+  `LIBS` do `sw.js` — é ela que deixa imagem/PDF do orçamento e a câmera do iPhone funcionarem sem
+  internet (o teste do `run_tests.js` acusa a que faltar). O SW guarda página/script do app pelo
+  endereço sem parâmetros (`chaveDaPagina`).
 - **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,
   `data_implantacao`) e `date_trunc(...)` chegam no JSON como meia-noite UTC
   (`2026-09-11T00:00:00.000Z`); no fuso do Brasil isso vira o dia (ou o mês/trimestre) anterior.

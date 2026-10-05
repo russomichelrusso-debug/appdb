@@ -9756,7 +9756,7 @@
           };
           s1.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s1);
-        });
+        }).catch(e => { jsPdfLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return jsPdfLoadPromise;
       }
       // Converte o logo (colorido) já embutido no app pra escala de cinza, só na hora
@@ -10445,7 +10445,7 @@
           s.onload = () => resolve(window.XLSX);
           s.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s);
-        });
+        }).catch(e => { sheetJsLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return sheetJsLoadPromise;
       }
       // Previsão de estoque (relatório ESCE007 / "itens em falta"): leitura em
@@ -13997,7 +13997,7 @@
           lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs';
           window.__pdfjsLib = lib;
           return lib;
-        });
+        }).catch(e => { pdfJsLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return pdfJsLoadPromise;
       }
 
@@ -15630,7 +15630,7 @@
       // Duas engines possíveis: BarcodeDetector nativo do navegador (prioridade,
       // quando disponível - roda no motor do próprio Chrome, não em JS puro) ou
       // ZXing via CDN como alternativa pra navegador sem essa API.
-      const ZXING_CDN = 'https://cdn.jsdelivr.net/npm/@zxing/library@latest/umd/index.min.js';
+      const ZXING_CDN = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js'; // versão fixa: o sw.js guarda pelo endereço
       let zxingLoadPromise = null;
       let scannerControls = null;
       let scannerTickerId = null;
@@ -15672,7 +15672,7 @@
           s.onload = () => resolve();
           s.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s);
-        });
+        }).catch(e => { zxingLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return zxingLoadPromise;
       }
 
