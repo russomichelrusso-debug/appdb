@@ -19,6 +19,12 @@
 // Pula o "v3" de propósito: era o número do SW antigo removido em 30/08 (acima),
 // e um cache com nome parecido de um aparelho esquecido não pode ser reaproveitado.
 const CACHE_VERSION = 'cortag-sw-v4';
+// Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
+// cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
+// esperava até o navegador desistir - o app demorava a abrir dentro da loja.
+const PRAZO_REDE_PAGINA_MS = 4000;
+// quando a última página saiu da cópia por causa do prazo (o script vai junto)
+let paginaDaCopiaEm = 0;
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',
@@ -136,25 +142,49 @@ self.addEventListener('fetch', (event) => {
   // revisor-cortag, 10/2026).
   const isScript = req.destination === 'script' || url.pathname.endsWith('.js');
   if (isNavegacao || isScript) {
-    // Páginas HTML (index.html, curva-abc.html etc.) e scripts: sempre tenta
-    // a rede primeiro, pra nunca travar numa versão velha do app - só cai
-    // pro cache se estiver offline.
+    // Páginas HTML (index.html, curva-abc.html etc.) e scripts: tenta a rede
+    // primeiro, pra nunca travar numa versão velha do app. Cai pra cópia
+    // guardada (sem os parâmetros) sem internet - e também quando a rede não
+    // responde em PRAZO_REDE_PAGINA_MS (sinal fraco): aí a busca continua em
+    // segundo plano e a cópia nova fica pra próxima abertura. Sem cópia
+    // guardada, espera a rede o quanto for.
     const chave = chaveDaPagina(req.url);
-    event.respondWith(
-      fetch(req)
-        .then((resp) => {
-          // só guarda respostas de sucesso - um 404/500 cacheado ficaria
-          // "travado" servindo erro pra sempre no fallback offline; resposta
-          // que veio de redirecionamento não pode responder uma navegação
-          if (resp.ok && !resp.redirected) {
-            const clone = resp.clone();
-            caches.open(CACHE_VERSION).then((cache) => cache.put(chave, clone));
-          }
-          return resp;
-        })
+    // mantém o SW vivo até a cópia nova ser gravada, mesmo depois de responder
+    let fimDoCache;
+    event.waitUntil(new Promise((r) => { fimDoCache = r; }));
+    const daRede = fetch(req).then((resp) => {
+      // só guarda respostas de sucesso - um 404/500 cacheado ficaria
+      // "travado" servindo erro pra sempre no fallback offline; resposta
+      // que veio de redirecionamento não pode responder uma navegação
+      if (resp.ok && !resp.redirected) {
+        const clone = resp.clone();
+        caches.open(CACHE_VERSION).then((cache) => cache.put(chave, clone)).catch(() => {}).then(fimDoCache);
+      } else {
+        fimDoCache();
+      }
+      return resp;
+    });
+    daRede.catch(fimDoCache);
+    const daCopia = () => caches.match(chave, { cacheName: CACHE_VERSION });
+    // Página e script andam juntos (versões diferentes quebram: HTML novo chamando
+    // função que o importadores.js velho não tem - achado do revisor-cortag): o
+    // prazo vale só pra página; o script segue o que a página fez - página da cópia
+    // nos últimos segundos = script da cópia na hora; senão, espera a rede.
+    const seguirCopia = isScript && !isNavegacao && Date.now() - paginaDaCopiaEm < 60000;
+    event.respondWith(new Promise((responder) => {
+      const prazo = isNavegacao ? setTimeout(() => {
+        daCopia().then((copia) => { if (copia) { paginaDaCopiaEm = Date.now(); responder(copia); } }).catch(() => {});
+      }, PRAZO_REDE_PAGINA_MS) : null;
+      if (seguirCopia) daCopia().then((copia) => { if (copia) responder(copia); }).catch(() => {});
+      daRede.then(
+        (resp) => { clearTimeout(prazo); if (isNavegacao) paginaDaCopiaEm = 0; responder(resp); },
         // sem internet: a cópia da página (sem os parâmetros)
-        .catch(() => caches.match(chave, { cacheName: CACHE_VERSION }).then((r) => r || Response.error()))
-    );
+        () => {
+          clearTimeout(prazo);
+          daCopia().then((copia) => responder(copia || Response.error()), () => responder(Response.error()));
+        }
+      );
+    }));
     return;
   }
 

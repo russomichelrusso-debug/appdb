@@ -4,6 +4,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Contra clickjacking (a página aberta dentro de um iframe de outro site, pra
+       enganar o toque): frame-ancestors só vale em cabeçalho HTTP - no <meta> o
+       navegador ignora - e o GitHub Pages não deixa mandar cabeçalho. Então ela
+       começa escondida e só aparece se não estiver dentro de um frame; dentro de um,
+       tenta sair dele (abrir no lugar da página de fora). O login do Google não é
+       afetado: o botão dele é um iframe do Google DENTRO da nossa página (a nossa
+       continua sendo a janela de cima), e o login do Drive abre em popup. -->
+  <style id="antiFrame">html { display: none !important; }</style>
+  <script>
+    if (window.top === window.self) {
+      document.getElementById('antiFrame').remove();
+    } else {
+      try { window.top.location = window.self.location.href; } catch (e) { }
+    }
+  </script>
   <title>Cortag · Ficha Cadastral do Cliente</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#CC0935">
@@ -540,14 +555,22 @@
       document.getElementById('atualizarFichaBtn').addEventListener('click', () => carregarFicha(true));
     }
 
+    // Cada consulta leva um número: com o servidor lento, a ficha do cliente
+    // anterior chegava depois e aparecia sob o cliente escolhido agora.
+    let fichaReq = 0;
     async function carregarFicha(forcar) {
       const host = document.getElementById('fichaHost');
       host.innerHTML = '<div class="card"><div class="lev-empty">Consultando…</div></div>';
+      const req = ++fichaReq;
+      const clienteId = state.clienteId;
+      const velha = () => req !== fichaReq || state.clienteId !== clienteId;
       try {
-        const path = `/api/clientes/${state.clienteId}/ficha-cnpj` + (forcar ? '/atualizar' : '');
+        const path = `/api/clientes/${clienteId}/ficha-cnpj` + (forcar ? '/atualizar' : '');
         const resp = await apiFetch(path, forcar ? { method: 'POST' } : {});
+        if (velha()) return;
         renderFicha(resp.ficha, resp.fonte, resp.aviso);
       } catch (e) {
+        if (velha()) return;
         host.innerHTML = `<div class="card"><div class="ap-msg error inline">${escapeHtml(e.message)}</div></div>`;
       }
     }
@@ -566,6 +589,7 @@
     }
 
     function selecionarCliente(id, nome, doc) {
+      fichaReq++; // a consulta em andamento (outro cliente) não aparece mais
       state.clienteId = id; state.clienteNome = nome; state.clienteDoc = doc;
       document.getElementById('clientPickerNome').textContent = nome;
       document.getElementById('clientPickerSelected').classList.remove('hidden');
@@ -580,6 +604,7 @@
     }
 
     function esqueceCliente() {
+      fichaReq++;
       state.clienteId = null; state.clienteNome = ''; state.clienteDoc = '';
       document.getElementById('clientPickerSelected').classList.add('hidden');
       document.getElementById('clientPickerSearch').classList.remove('hidden');
@@ -594,10 +619,14 @@
         const host = document.getElementById('clientPickerResults');
         if (termo.length < 2) { host.innerHTML = ''; return; }
         clientBuscaDebounce = setTimeout(async () => {
+          // resposta de um termo que já não está no campo (chegou atrasada) não troca a lista
+          const campo = document.getElementById('clientPickerInput');
           try {
             const resultados = await apiFetch('/api/clientes?busca=' + encodeURIComponent(termo));
+            if (campo.value.trim() !== termo) return;
             renderClientResults(resultados);
           } catch (e) {
+            if (campo.value.trim() !== termo) return;
             host.innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
           }
         }, 250);

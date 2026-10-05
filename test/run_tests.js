@@ -2627,6 +2627,11 @@ async function main() {
     // versão fixa no endereço: o SW guarda pelo endereço e não busca de novo (@latest ficaria preso)
     assert(usadas.size >= 5 && faltando.length === 0 && ![...usadas].some(u => u.includes('@latest')) && /cache\.put\(chave,/.test(sw) && !/ignoreSearch:\s*true/.test(sw),
       `service worker guarda offline todas as bibliotecas de CDN das páginas e as páginas sem parâmetro: ${JSON.stringify(faltando)}`);
+    // sinal fraco: página/script não espera a rede sem limite - abre com a cópia
+    // guardada depois do prazo e a rede termina em segundo plano
+    const prazo = Number((sw.match(/PRAZO_REDE_PAGINA_MS\s*=\s*(\d+)/) || [])[1]);
+    assert(prazo >= 2000 && prazo <= 8000 && /setTimeout\([\s\S]{0,200}daCopia\(\)/.test(sw) && /event\.waitUntil\(/.test(sw),
+      `service worker abre a página guardada se a rede não responder em ${prazo} ms (e guarda a nova em segundo plano)`);
   }
 
   console.log();

@@ -4,6 +4,21 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Contra clickjacking (a página aberta dentro de um iframe de outro site, pra
+       enganar o toque): frame-ancestors só vale em cabeçalho HTTP - no <meta> o
+       navegador ignora - e o GitHub Pages não deixa mandar cabeçalho. Então ela
+       começa escondida e só aparece se não estiver dentro de um frame; dentro de um,
+       tenta sair dele (abrir no lugar da página de fora). O login do Google não é
+       afetado: o botão dele é um iframe do Google DENTRO da nossa página (a nossa
+       continua sendo a janela de cima), e o login do Drive abre em popup. -->
+  <style id="antiFrame">html { display: none !important; }</style>
+  <script>
+    if (window.top === window.self) {
+      document.getElementById('antiFrame').remove();
+    } else {
+      try { window.top.location = window.self.location.href; } catch (e) { }
+    }
+  </script>
   <title>Cortag · Calculadora de Materiais</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#CC0935">

@@ -94,7 +94,22 @@ Pegadinhas de ambiente:
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
   causa do "Adicionar todos ao orçamento" da busca que aparecia sem resultado e não fazia nada,
-  PR #128).
+  PR #128). O `scripts/checar-html.js` acusa elemento com id que liga/desliga `.hidden` sem regra
+  própria (ou com `display` inline) — em 10/2026 eram 11, entre eles o botão "Entrando…" do login,
+  o card de classificatório e a lista de clientes (que, escondida de verdade com os alertas
+  abertos, faz a busca fechar os alertas).
+- Tela que carrega dado de um cliente/aba com `await` (aba Clientes, ficha de CNPJ, busca de
+  cliente) guarda o alvo e um contador antes do `await` e descarta resposta velha (`velha()`,
+  `novaBuscaCliente`): com o servidor lento, a resposta de A aparecia sob B (10/2026).
+- `init()` roda uma vez por carga de página (`appIniciado`); novo login com o app aberto (sessão
+  expirada) recarrega a página — init de novo duplicava os listeners e "Finalizar pedido" gravava
+  dois pedidos.
+- `sw.js`: página do app vai à rede, mas com sinal fraco abre com a cópia guardada depois de
+  `PRAZO_REDE_PAGINA_MS` (4 s) e grava a nova em segundo plano; o script (`importadores.js`) segue
+  a página (página da cópia = script da cópia), pra nunca misturar versões.
+- Proteção contra iframe: `frame-ancestors` no `<meta>` não vale (só em cabeçalho, e o GitHub Pages
+  não manda). Cada página começa escondida (`#antiFrame`) e só aparece fora de frame; página nova
+  separada leva o mesmo trecho no `<head>`.
 - Biblioteca de CDN (cdnjs/jsdelivr) nova ou com versão trocada nas páginas entra também na lista
   `LIBS` do `sw.js` — é ela que deixa imagem/PDF do orçamento e a câmera do iPhone funcionarem sem
   internet (o teste do `run_tests.js` acusa a que faltar). O SW guarda página/script do app pelo
@@ -105,7 +120,10 @@ Pegadinhas de ambiente:
   (403/404/409/422 com a mensagem do app — **400 não**, o servidor também responde 400 a falha passageira do
   banco) sai da fila com aviso e fica guardado em `cortagFilaRecusados_v1`; Painel › "Ver pendências e
   recusados" mostra a fila com o último erro de cada item, baixa tudo em JSON e descarta os recusados; a
-  fila é relida no fim pra não perder o que entrou durante o envio. Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
+  fila é relida no fim pra não perder o que entrou durante o envio. `saveSyncQueueList` devolve se
+  gravou; sem espaço, o `apiFetch` lança erro (`semEspacoNaFila`) em vez de dizer "fica salvo" (o pedido
+  oferece o CSV na hora). A fila do Drive (`drenarFilaDriveCsv`) segue o mesmo padrão: Web Lock, relê
+  a fila no fim, e sem espaço não diz "pendente". Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
   `PUT` e o nome do arquivo do cliente nunca chegava do app publicado; teste no `run_tests.js`). Biblioteca carregada sob demanda que falhou tenta de novo na próxima vez (o pdf.js com
   `?tentativa=N`, que o `sw.js` atende pela cópia sem parâmetro).
 - **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,

@@ -7,8 +7,24 @@
   <!-- CSP de defesa em profundidade: como o app é um script inline único, script-src
        ainda precisa de 'unsafe-inline' (a correção real do XSS é o escapeHtml() nos
        dados renderizados). Mesmo assim isso restringe de onde scripts/estilos/objetos
-       podem carregar e bloqueia clickjacking (frame-ancestors) e <object>/<embed>. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none';">
+       podem carregar e bloqueia <object>/<embed>. Sem frame-ancestors: no <meta> ele
+       não tem efeito (só em cabeçalho HTTP) - a proteção contra iframe é a de baixo. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self';">
+  <!-- Contra clickjacking (o app aberto dentro de um iframe de outro site, pra
+       enganar o toque): frame-ancestors só vale em cabeçalho HTTP - no <meta> o
+       navegador ignora - e o GitHub Pages não deixa mandar cabeçalho. Então a página
+       começa escondida e só aparece se não estiver dentro de um frame; dentro de um,
+       tenta sair dele (abrir no lugar da página de fora). O login do Google não é
+       afetado: o botão dele é um iframe do Google DENTRO da nossa página (a nossa
+       continua sendo a janela de cima), e o login do Drive abre em popup. -->
+  <style id="antiFrame">html { display: none !important; }</style>
+  <script>
+    if (window.top === window.self) {
+      document.getElementById('antiFrame').remove();
+    } else {
+      try { window.top.location = window.self.location.href; } catch (e) { }
+    }
+  </script>
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="var(--red)">
@@ -4264,7 +4280,18 @@
     #apImportTodosWrap.hidden,
     #appConfirmInput.hidden,
     #promocoesVazia.hidden,
-    #exportPedidosCard.hidden {
+    #exportPedidosCard.hidden,
+    #classificatorioAlertasWrap.hidden,
+    #clienteTabList.hidden,
+    #targetCatWrap.hidden,
+    #selfWrap.hidden,
+    #promoProdutoOriginalSelecionado.hidden,
+    #classiTargetCatWrap.hidden,
+    #classiTargetProdWrap.hidden,
+    #classiTargetSkuListWrap.hidden,
+    #clienteClassificatorioCard.hidden,
+    #clienteGrupoLista.hidden,
+    #loginSubmitBtn.hidden {
       display: none;
     }
 
@@ -8427,7 +8454,8 @@
             ? `Sem conexão agora — "${cliente.nome}" fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
             : `Levantamento salvo no histórico de ${cliente.nome}${result && result.localizacao_registrada ? ' · 📍 localização da loja registrada' : ''}`);
         } catch (e) {
-          showToast('Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
+          // sem espaço no aparelho pra pôr na fila: a mensagem já diz o que fazer
+          showToast(e.semEspacoNaFila ? e.message : 'Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalHtml;
@@ -10762,9 +10790,13 @@
         const resto = fila.filter(it => !condicao(it));
         if (resto.length !== fila.length) saveSyncQueueList(resto);
       }
+      // Devolve false quando não conseguiu gravar (aparelho sem espaço, armazenamento
+      // bloqueado): quem põe item novo na fila precisa saber que ele não ficou guardado
       function saveSyncQueueList(queue) {
-        try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
+        let ok = true;
+        try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { ok = false; }
         refreshSyncQueueBadge();
+        return ok;
       }
       // Envios que o servidor recusou (saem da fila, mas ficam guardados aqui -
       // o pedido não tem outra cópia no aparelho)
@@ -10886,8 +10918,11 @@
         if (recusadosGuardados) recusados.forEach(r => tirar.add(r.item.id));
         else recusados.forEach(r => erros.set(r.item.id, `Recusado pelo servidor: ${r.erro} (sem espaço no aparelho pra guardar à parte)`));
         // relê a fila: o que entrou nela enquanto enviava (outra ação sem rede) fica
-        saveSyncQueueList(loadSyncQueue().filter(it => !tirar.has(it.id))
+        const restantes = loadSyncQueue().filter(it => !tirar.has(it.id));
+        const gravou = saveSyncQueueList(restantes
           .map(it => (erros.has(it.id) ? { ...it, ultimoErro: erros.get(it.id), tentativas: (it.tentativas || 0) + 1 } : it)));
+        // sem espaço nem pro texto do erro: grava ao menos sem os enviados (senão iam de novo)
+        if (!gravou) saveSyncQueueList(restantes);
         const detalhe = document.getElementById('apSyncQueueDetalhe');
         if (detalhe && detalhe.innerHTML) renderDetalheFila();
         if (recusadosGuardados) {
@@ -10915,9 +10950,12 @@
       function loadDriveCsvQueue() {
         try { return JSON.parse(localStorage.getItem(DRIVE_CSV_QUEUE_LS_KEY)) || []; } catch (e) { return []; }
       }
+      // true = gravou (sem espaço no aparelho: false, quem chamou avisa)
       function saveDriveCsvQueue(queue) {
-        try { localStorage.setItem(DRIVE_CSV_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
+        let ok = true;
+        try { localStorage.setItem(DRIVE_CSV_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { ok = false; }
         refreshDriveCsvQueueBadge();
+        return ok;
       }
       function refreshDriveCsvQueueBadge() {
         const el = document.getElementById('apDriveCsvQueueCount');
@@ -10944,25 +10982,44 @@
         return [header, ...linhas].join('\r\n');
       }
       let driveCsvQueueDraining = false;
+      // item sem id (não deveria existir, mas a fila é do aparelho): nome + hora
+      const chaveFilaDrive = (it) => it.id || `${it.fileName}|${it.criadoEm}`;
       async function drenarFilaDriveCsv(silencioso) {
         if (driveCsvQueueDraining) return;
-        const fila = loadDriveCsvQueue();
-        if (fila.length === 0) return;
+        if (loadDriveCsvQueue().length === 0) return;
         driveCsvQueueDraining = true;
-        let enviados = 0;
-        const restantes = [];
+        try {
+          // uma aba por vez (mesmo motivo da fila principal, drenarFilaSync): o app
+          // instalado e uma aba do navegador mandavam o mesmo CSV duas vezes
+          if (navigator.locks && navigator.locks.request) {
+            await navigator.locks.request('cortag-fila-drive-csv', { ifAvailable: true }, async (lock) => {
+              if (lock) await drenarFilaDriveCsvAgora(silencioso);
+            });
+          } else {
+            await drenarFilaDriveCsvAgora(silencioso);
+          }
+        } finally {
+          driveCsvQueueDraining = false;
+        }
+      }
+      async function drenarFilaDriveCsvAgora(silencioso) {
+        const fila = loadDriveCsvQueue();
+        const enviados = new Set();
         for (const item of fila) {
+          // outra aba (sem Web Locks) já mandou e tirou da fila
+          if (!loadDriveCsvQueue().some(it => chaveFilaDrive(it) === chaveFilaDrive(item))) continue;
           try {
             const blob = new Blob(['\uFEFF' + item.csvText], { type: 'text/csv;charset=utf-8;' });
             await enviarParaGoogleDrive(blob, item.fileName, true); // silencioso: nunca abre popup de login sozinho
-            enviados++;
+            enviados.add(chaveFilaDrive(item));
           } catch (e) {
-            restantes.push(item); // continua sem rede/Drive, ou falhou de novo - mantém na fila
+            // continua sem rede/Drive, ou falhou de novo - fica na fila
           }
         }
-        saveDriveCsvQueue(restantes);
-        driveCsvQueueDraining = false;
-        if (enviados > 0 && !silencioso) showToast(`${enviados} CSV(s) de pedido enviado(s) ao Drive agora`);
+        // relê a fila: CSV que entrou nela durante o envio (pedido finalizado
+        // enquanto o Drive respondia) fica - antes era sobrescrito e sumia
+        if (enviados.size) saveDriveCsvQueue(loadDriveCsvQueue().filter(it => !enviados.has(chaveFilaDrive(it))));
+        if (enviados.size > 0 && !silencioso) showToast(`${enviados.size} CSV(s) de pedido enviado(s) ao Drive agora`);
       }
       // Chamado logo depois de gravar um pedido (online ou já enfileirado pro
       // servidor) - gera o CSV e tenta mandar pro Drive na hora; se não
@@ -10982,8 +11039,8 @@
         } catch (e) {
           const fila = loadDriveCsvQueue();
           fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), csvText, fileName, criadoEm: Date.now() });
-          saveDriveCsvQueue(fila);
-          return 'pendente';
+          // sem espaço pra guardar: não promete que vai sozinho depois
+          return saveDriveCsvQueue(fila) ? 'pendente' : 'sem-espaco';
         }
       }
 
@@ -11016,8 +11073,12 @@
           if (filaInfo) {
             const fila = loadSyncQueue();
             fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path, options, criadoEm: Date.now(), ...filaInfo });
-            saveSyncQueueList(fila);
-            return { __filaOffline: true };
+            // só diz "fica salvo e vai sozinho" se ficou mesmo: antes a falha do
+            // localStorage era engolida e o app anunciava salvo sem ter gravado
+            if (saveSyncQueueList(fila)) return { __filaOffline: true };
+            const semEspaco = new Error('Sem conexão com o servidor, e o aparelho está sem espaço pra guardar este envio na fila — ele NÃO foi salvo. Tente de novo quando tiver internet (ou libere espaço no navegador).');
+            semEspaco.semEspacoNaFila = true;
+            throw semEspaco;
           }
           throw new Error('Não foi possível conectar ao servidor de histórico (sem internet, ou o serviço está fora do ar).');
         }
@@ -11146,6 +11207,21 @@
         if (locais.length > 0) return locais;
         throw ultimoErro;
       }
+      // Busca de cliente por campo: apiBuscarClientes tenta de novo depois de
+      // 2,5 s e 4 s, então a resposta de "dep" podia chegar depois da de
+      // "deposito sao" e trocar a lista. Cada busca pega um número; a resposta
+      // só entra se ainda for a última daquele campo e o campo ainda tiver o
+      // mesmo termo.
+      const buscaClienteReq = {};
+      function novaBuscaCliente(campoId, term) {
+        const n = (buscaClienteReq[campoId] || 0) + 1;
+        buscaClienteReq[campoId] = n;
+        return () => {
+          if (buscaClienteReq[campoId] !== n) return true;
+          const campo = document.getElementById(campoId);
+          return !!campo && campo.value.trim() !== String(term || '').trim();
+        };
+      }
       async function apiCriarCliente(cliente) {
         return apiFetch('/api/clientes', { method: 'POST', body: JSON.stringify(cliente) });
       }
@@ -11214,13 +11290,26 @@
         const qs = params.toString();
         return apiFetch(`/api/pedidos-oficiais/${clienteId}/resumo${qs ? '?' + qs : ''}`);
       }
+      // Contadores de requisição da tela do cliente (aba Clientes): com o
+      // servidor lento, a resposta de um cliente (ou período/aba) anterior
+      // chegava depois e aparecia sob o cliente atual - cada carga descarta
+      // a resposta que não é mais a última pedida.
+      let clienteFichaResumoReq = 0;
+      let clienteClassificatorioReq = 0;
+      let clienteDetailReq = 0;
+      let clienteGrupoReq = 0;
       async function loadClienteFichaResumo() {
         const el = document.getElementById('clienteFichaClassificatorio');
         const elAcum = document.getElementById('clienteFichaAcumulado');
         const inicio = document.getElementById('clienteFichaDataInicio').value;
         const fim = document.getElementById('clienteFichaDataFim').value;
+        const cliente = clienteTabSelected;
+        if (!cliente) return;
+        const req = ++clienteFichaResumoReq;
+        const velha = () => req !== clienteFichaResumoReq || clienteTabSelected !== cliente;
         try {
-          const resumo = await apiPedidosOficiaisResumo(clienteTabSelected.id, inicio, fim);
+          const resumo = await apiPedidosOficiaisResumo(cliente.id, inicio, fim);
+          if (velha()) return;
           if (!resumo.vinculado) {
             el.textContent = 'Não vinculado ao relatório oficial ainda';
             elAcum.textContent = '—';
@@ -11229,6 +11318,7 @@
           el.textContent = resumo.classificatorio || 'Sem classificatório registrado';
           elAcum.textContent = resumo.acumulado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         } catch (e) {
+          if (velha()) return;
           el.textContent = '—';
           elAcum.textContent = '—';
         }
@@ -11575,27 +11665,34 @@
         if (!abrindo) { wrap.classList.add('hidden'); return; }
         wrap.classList.remove('hidden');
         wrap.innerHTML = '<div class="lev-empty">Carregando…</div>';
+        const cliente = clienteTabSelected;
+        const req = ++clienteGrupoReq;
+        const velha = () => req !== clienteGrupoReq || clienteTabSelected !== cliente || !wrap.isConnected;
         try {
-          const { membros } = await apiClassificatorioGrupo(clienteTabSelected.id);
-          renderClienteGrupoLista(membros, clienteTabSelected.id);
+          const { membros } = await apiClassificatorioGrupo(cliente.id);
+          if (velha()) return;
+          renderClienteGrupoLista(membros, cliente.id);
         } catch (e) {
+          if (velha()) return;
           wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
-      async function incluirClienteNoGrupo(status) {
+      async function incluirClienteNoGrupo(status, cliente) {
+        if (!cliente) return;
         let grupo = status.matrizGrupo;
         if (!grupo) {
-          const digitado = await askText('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', clienteTabSelected.nome, 'Criar grupo');
+          const digitado = await askText('Esse cliente ainda não tem um grupo (matriz). Digite o nome do grupo pra criar:', cliente.nome, 'Criar grupo');
           if (!digitado || !digitado.trim()) return;
           grupo = digitado.trim();
         }
         const outro = await openClientPicker();
         if (!outro) return;
-        if (Number(outro.id) === Number(clienteTabSelected.id)) { showToast('Esse já é o cliente atual.'); return; }
+        if (Number(outro.id) === Number(cliente.id)) { showToast('Esse já é o cliente atual.'); return; }
         try {
-          if (!status.matrizGrupo) await apiDefinirMatrizGrupo(clienteTabSelected.id, grupo);
+          if (!status.matrizGrupo) await apiDefinirMatrizGrupo(cliente.id, grupo);
           await apiDefinirMatrizGrupo(outro.id, grupo);
           showToast(`${outro.nome} incluído no grupo.`);
+          if (clienteTabSelected !== cliente) return;
           loadClienteClassificatorioStatus();
           const wrap = document.getElementById('clienteGrupoLista');
           if (wrap && !wrap.classList.contains('hidden')) wrap.classList.add('hidden'); // reabre carregado de novo, sob demanda
@@ -11606,8 +11703,9 @@
       function initClienteGrupoUI(status) {
         const toggleBtn = document.getElementById('clienteGrupoToggleBtn');
         const incluirBtn = document.getElementById('clienteGrupoIncluirBtn');
+        const cliente = clienteTabSelected; // o card (e o status) são deste cliente
         if (toggleBtn) toggleBtn.addEventListener('click', toggleClienteGrupo);
-        if (incluirBtn) incluirBtn.addEventListener('click', () => incluirClienteNoGrupo(status));
+        if (incluirBtn) incluirBtn.addEventListener('click', () => incluirClienteNoGrupo(status, cliente));
       }
       // Mini gráfico de barras (SVG inline, sem dependência) mostrando o
       // faturamento de cada trimestre com duas linhas de referência: a meta
@@ -11670,10 +11768,16 @@
       async function loadClienteClassificatorioStatus() {
         const card = document.getElementById('clienteClassificatorioCard');
         card.classList.add('hidden');
+        const cliente = clienteTabSelected;
+        if (!cliente) return;
+        const req = ++clienteClassificatorioReq;
+        const velha = () => req !== clienteClassificatorioReq || clienteTabSelected !== cliente;
         try {
-          const status = await apiClassificatorioStatus(clienteTabSelected.id);
+          const status = await apiClassificatorioStatus(cliente.id);
+          if (velha()) return;
           renderClienteClassificatorioCard(status);
         } catch (e) {
+          if (velha()) return;
           card.classList.add('hidden'); // best effort - não trava a ficha do cliente por causa disso
         }
       }
@@ -11727,10 +11831,12 @@
       }
       async function runClientSearch(term) {
         const results = document.getElementById('clientPickerResults');
+        const velha = novaBuscaCliente('clientPickerSearch', term);
         if (!term || term.trim().length < 2) { results.innerHTML = ''; return; }
         results.innerHTML = '<div class="promoEmpty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          if (velha()) return;
           if (clientes.length === 0) { results.innerHTML = '<div class="promoEmpty">Nenhum cliente encontrado — pode cadastrar um novo abaixo.</div>'; return; }
           const porId = new Map(clientes.map(c => [String(c.id), c]));
           results.innerHTML = clientes.map(c => `
@@ -11746,6 +11852,7 @@
             btn.addEventListener('click', () => closeClientPicker(porId.get(btn.dataset.clientId)));
           });
         } catch (e) {
+          if (velha()) return;
           results.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
         }
       }
@@ -12154,10 +12261,12 @@
 
       async function searchManageClients(term) {
         const wrap = document.getElementById('manageClientResults');
+        const velha = novaBuscaCliente('manageClientSearch', term);
         if (!term || term.trim().length < 2) { wrap.innerHTML = ''; return; }
         wrap.innerHTML = '<div class="promoEmpty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          if (velha()) return;
           if (clientes.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhum cliente encontrado.</div>'; return; }
           wrap.innerHTML = clientes.map(c => `
       <div class="promoRuleItem">
@@ -12213,6 +12322,7 @@
             });
           });
         } catch (e) {
+          if (velha()) return;
           wrap.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
         }
       }
@@ -12797,6 +12907,7 @@
           }
           if (driveResultado === 'enviado') msg += ' · cópia CSV salva no Drive';
           else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
+          else if (driveResultado === 'sem-espaco') msg += ' · cópia no Drive não foi feita (aparelho sem espaço) — mande o CSV agora';
           // Já oferece mandar o CSV do pedido (pedido do usuário, 10/2026) - a
           // mesma janela do CSV do orçamento, com o arquivo e o nome da cópia do
           // Drive (nome que o app reconhece ao abrir o CSV de volta).
@@ -12810,6 +12921,12 @@
             // o vínculo pra o próximo "Finalizar" gravar como pedido novo
             setPedidoEditando(null);
             showToast('Esse pedido não existe mais no servidor (pode ter sido excluído). Toque em "Finalizar pedido" de novo pra gravar como pedido novo.', 'erro');
+          } else if (e.semEspacoNaFila) {
+            // sem internet e sem espaço pra guardar o envio: o CSV é o jeito de mandar
+            // o pedido agora (a janela oferece o WhatsApp)
+            abrirEnvioCsv(new Blob(['\uFEFF' + buildPedidoCsvText(rows)], { type: 'text/csv;charset=utf-8;' }), pedidoCsvFileNameFor(cliente, !!editando),
+              'Pedido Cortag (CSV)', 'Baixado — verifique a pasta Downloads do celular',
+              { titulo: 'Pedido não gravado', mensagem: e.message + '\n\nMande o CSV do pedido agora pra não perder:', fecharLabel: 'Agora não' });
           } else {
             showToast('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
           }
@@ -13669,10 +13786,12 @@
 
       async function searchClienteTabList(term) {
         const wrap = document.getElementById('clienteTabList');
+        const velha = novaBuscaCliente('clienteTabSearch', term);
         if (!term || term.trim().length < 2) { wrap.innerHTML = '<div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>'; return; }
         wrap.innerHTML = '<div class="lev-empty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          if (velha()) return;
           const porId = new Map(clientes.map(c => [String(c.id), c]));
           wrap.innerHTML = clientes.length
             ? clientes.map(c => `
@@ -13688,6 +13807,7 @@
             btn.addEventListener('click', () => openClienteDetail(porId.get(btn.dataset.clienteId)));
           });
         } catch (e) {
+          if (velha()) return;
           wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
@@ -14200,22 +14320,30 @@
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
-        if (!clienteTabSelected) return;
+        const cliente = clienteTabSelected;
+        if (!cliente) return;
+        const req = ++clienteDetailReq;
+        // outro cliente/aba foi aberto enquanto esperava: descarta
+        const velha = () => req !== clienteDetailReq || clienteTabSelected !== cliente;
         content.innerHTML = '<div class="lev-empty">Carregando…</div>';
         try {
           if (clienteTabView === 'historico') {
-            const rows = await apiHistoricoCliente(clienteTabSelected.id);
+            const rows = await apiHistoricoCliente(cliente.id);
+            if (velha()) return;
             content.innerHTML = rows.length ? rows.map(r => renderHistProdutoCard(r, false)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
           } else if (clienteTabView === 'rotatividade') {
-            const rows = await apiRotatividadeCliente(clienteTabSelected.id);
+            const rows = await apiRotatividadeCliente(cliente.id);
+            if (velha()) return;
             content.innerHTML = rows.length ? rows.map(r => renderHistProdutoCard(r, true)).join('') : '<div class="lev-empty">Esse cliente ainda não tem nenhum pedido registrado.</div>';
           } else if (clienteTabView === 'recuperar') {
-            const rows = await apiRecuperarCliente(clienteTabSelected.id);
+            const rows = await apiRecuperarCliente(cliente.id);
+            if (velha()) return;
             content.innerHTML = rows.length
               ? '<p class="ap-hint" style="margin-bottom:12px;">Já comprou antes, sem repor há um tempo, e sem estoque no levantamento mais recente — boa chance de oferecer de novo.</p>' + rows.map(renderRecuperarCard).join('')
               : '<div class="lev-empty">Nenhum produto nessa situação — ou o cliente ainda não tem levantamento registrado pra comparar.</div>';
           } else if (clienteTabView === 'pedidosoficiais') {
-            const resp = await apiPedidosOficiaisCliente(clienteTabSelected.id);
+            const resp = await apiPedidosOficiaisCliente(cliente.id);
+            if (velha()) return;
             const pendentesPorPedido = new Map((resp.pendentes_pagamento || []).map(p => [String(p.nr_pedido), p]));
             const bloqueadosPorPedido = new Map((resp.bloqueados || []).map(b => [String(b.nr_pedido), b]));
             const titulosPorNf = new Map();
@@ -14256,27 +14384,36 @@
                   bloqueadosPorPedido.get(String(nrPedido))))
                 .join('');
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
-                abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
+                abrirRastreio(cliente, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
             }
-            content.querySelectorAll('[data-recuperar-add]').forEach(btn => {
-              btn.addEventListener('click', () => {
-                const cod = btn.dataset.recuperarAdd;
-                if (!productByCod(cod)) { showToast('Esse produto não está no catálogo carregado agora — sincronize e tente de novo.'); return; }
-                addToCart(cod);
-              });
-            });
           }
         } catch (e) {
+          if (velha()) return;
           content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
       function initClientesTab() {
         document.getElementById('clienteTabSearch').addEventListener('input', (e) => {
+          // alertas abertos escondem a lista: digitar na busca volta pra lista
+          // (senão o resultado ia pra lista escondida - achado do revisor-cortag)
+          const alertas = document.getElementById('classificatorioAlertasWrap');
+          if (alertas && !alertas.classList.contains('hidden')) {
+            alertas.classList.add('hidden');
+            document.getElementById('clienteTabList').classList.remove('hidden');
+          }
           clearTimeout(clienteTabDebounce);
           const term = e.target.value;
           clienteTabDebounce = setTimeout(() => searchClienteTabList(term), 300);
         });
         document.getElementById('clienteDetailBackBtn').addEventListener('click', closeClienteDetail);
+        // "+ Orçamento" da aba Recuperar: delegação no conteúdo, que é refeito a cada aba
+        document.getElementById('clienteDetailContent').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-recuperar-add]');
+          if (!btn) return;
+          const cod = btn.dataset.recuperarAdd;
+          if (!productByCod(cod)) { showToast('Esse produto não está no catálogo carregado agora — sincronize e tente de novo.'); return; }
+          addToCart(cod);
+        });
         document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(b => {
           b.addEventListener('click', () => {
             document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
@@ -16354,7 +16491,13 @@
           state.currentUser = { nome: result.nome, email: result.email, is_admin: !!result.is_admin };
           if (!state.seller) state.seller = result.nome;
           clearSessionData();
+          // Sessão que expirou com o app já aberto: init() de novo ligava cada
+          // listener duas vezes - um toque em "Finalizar pedido" gravava dois
+          // pedidos (achado do revisor-cortag). Recarrega a página limpa.
+          if (appIniciado) { window.location.reload(); return; }
           hideLoginScreen();
+          btn.classList.add('hidden');
+          btn.disabled = false;
           showLoadingScreen();
           await init();
         } catch (e) {
@@ -16405,6 +16548,8 @@
       // "lembrar-me", sessionStorage se não) - se sim, pula direto pro app; senão,
       // mostra a tela de login.
       async function boot() {
+        // dentro de um iframe de outro site o app não monta (ver antiFrame no <head>)
+        if (window.top !== window.self) return;
         fecharOverlaysOrfaos();
         initLoginScreen();
         const token = getStoredToken();
@@ -16464,7 +16609,11 @@
         renderClassiDiscountRulesList(); // mesmo problema, mesma causa (ver comentário acima)
       }
 
+      // init() liga os listeners da tela inteira: só uma vez por carga de página
+      let appIniciado = false;
       async function init() {
+        if (appIniciado) return;
+        appIniciado = true;
         try {
           // dispara o carregamento do catálogo em paralelo, sem esperar por ele -
           // é o que fazia a aba Clientes (que não precisa de catálogo nenhum) ficar
