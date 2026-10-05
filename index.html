@@ -2446,6 +2446,30 @@
       color: var(--warning);
     }
 
+    /* canais em que a campanha vale (formulário da regra) */
+    .promoCanais {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 16px;
+      margin-bottom: 16px;
+    }
+
+    .promoCanais label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 36px;
+      margin: 0;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--ink);
+    }
+
+    .promoCanais input {
+      width: auto;
+      margin: 0;
+    }
+
     .novaPromoOpcao {
       display: block;
       width: 100%;
@@ -6378,6 +6402,16 @@
           </div>
         </div>
 
+        <label>Vale nos canais</label>
+        <div class="promoCanais" id="promoCanais">
+          <label><input type="checkbox" value="VAREJO"> Varejo</label>
+          <label><input type="checkbox" value="ATACADO"> Atacado</label>
+          <label><input type="checkbox" value="E-COMMERCE"> E-commerce</label>
+          <label><input type="checkbox" value="MODERNO"> Moderno</label>
+          <label><input type="checkbox" value="CONSTRUTORA"> Construtora</label>
+          <label><input type="checkbox" value="INSTITUCIONAL"> Institucional</label>
+        </div>
+
         <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);margin-bottom:16px;">
           <input type="checkbox" id="promoStacks" checked style="width:auto;margin:0;">
           Soma com o desconto individual do item (se desligado, usa o maior dos dois)
@@ -6633,7 +6667,10 @@
           sel.value = valorAtual;
         } else {
           sel.value = '';
-          if (state.paymentTerm && !disponiveis.includes(state.paymentTerm)) state.paymentTerm = '';
+          // item do carrinho ainda fora do catálogo (carregando): o total está
+          // incompleto - não descarta o prazo escolhido por isso
+          const totalIncompleto = state.cart.some(it => !productByCod(it.cod));
+          if (state.paymentTerm && !disponiveis.includes(state.paymentTerm) && !totalIncompleto) state.paymentTerm = '';
         }
         atualizarInfoDescontoPrazo();
       }
@@ -6703,9 +6740,26 @@
       // pronto em p.precos[CANAL][UF] (imposto já incluso, calculado no servidor).
       // Produtos do catálogo antigo (bundle do app) ainda usam o formato por região
       // (lsp/lss/lnc + perfil de ST) - mantido funcionando enquanto os dois convivem.
+      // Preço editado no lápis ("preço base antes de impostos"): guardado SEM imposto
+      // e o imposto do produto entra por cima - antes o valor digitado ia cru pro
+      // orçamento (sem IPI/ST, mais barato que o devido) e, nos produtos da Lista de
+      // Preços (sem lsp/lss/lnc), o lápis nem abria (achado do /review, 10/2026).
+      function fatorImposto(p, uf, canal) {
+        canal = canal || state.canal || 'VAREJO';
+        if (p.precos && p.precosSemImposto) {
+          const com = (p.precos[canal] || p.precos.VAREJO || {})[uf];
+          const sem = (p.precosSemImposto[canal] || p.precosSemImposto.VAREJO || {})[uf];
+          if (typeof com === 'number' && typeof sem === 'number' && sem > 0) return com / sem;
+        }
+        if (p.precos) return 1; // sem o preço sem imposto: o base já é o preço cheio (ver listPriceSemImposto)
+        const st = STATE_BY_UF[uf];
+        const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
+        const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
+        return (1 + (Number(p.ipi) || 0)) * (1 + stRate);
+      }
       function listPrice(p, uf, canal) {
         canal = canal || state.canal || 'VAREJO';
-        if (Object.prototype.hasOwnProperty.call(state.priceOverrides, p.c)) return state.priceOverrides[p.c];
+        if (Object.prototype.hasOwnProperty.call(state.priceOverrides, p.c)) return state.priceOverrides[p.c] * fatorImposto(p, uf, canal);
         if (p.precos) {
           const porCanal = p.precos[canal] || p.precos.VAREJO;
           if (porCanal && typeof porCanal[uf] === 'number') return porCanal[uf];
@@ -6750,6 +6804,12 @@
       }
       function qtyDiscountFor(cod) {
         return state.qtyDiscounts[cod] || 0;
+      }
+      // O que a tela mostra no campo/selo de desconto do item: nada quando ele é
+      // preço fixo no canal atual (o preço ignora o desconto; o valor fica guardado
+      // pra quando o canal voltar a aceitar)
+      function descontoItemVisivel(p) {
+        return isPrecoFixoParaCanal(p) ? 0 : qtyDiscountFor(p.c);
       }
       function clientPrice(list, channelPct, promoPct, isFixed, qtyPct) {
         if (isFixed) return list; // Preço Fixo: só imposto, sem desconto comercial
@@ -7336,7 +7396,7 @@
         const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
         const hasDiscount = cp < lp - 0.005;
         const edited = isPriceEdited(p.c);
-        const qtyDisc = qtyDiscountFor(p.c);
+        const qtyDisc = descontoItemVisivel(p);
         const rotuloFamilia = p.familia || (p.cat != null ? DB.categories[p.cat] : '');
         return `<div class="card">
     <span class="catbadge">${escapeHtml(rotuloFamilia)}</span>
@@ -7353,7 +7413,7 @@
         <button data-pending-inc="${escapeHtml(p.c)}" aria-label="Aumentar quantidade">+</button>
       </div>
       <div class="pct-wrap mini">
-        <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
+        <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
       </div>
     </div>
     <div class="prow">
@@ -7415,7 +7475,7 @@
         document.getElementById('priceEditProdName').textContent = p.n;
         document.getElementById('priceEditUf').textContent = state.uf;
         const input = document.getElementById('priceEditInput');
-        input.value = effectiveLiq(p, state.uf).toFixed(2);
+        input.value = (Number(listPriceSemImposto(p, state.uf)) || 0).toFixed(2);
         updatePriceEditPreview();
         document.getElementById('priceEditOverlay').classList.remove('hidden');
         document.getElementById('priceEditModal').classList.remove('hidden');
@@ -7432,12 +7492,7 @@
         if (!p) { preview.innerHTML = ''; return; }
         const val = parseFloat(document.getElementById('priceEditInput').value);
         if (isNaN(val) || val < 0) { preview.innerHTML = 'Digite um preço válido.'; return; }
-        const st = STATE_BY_UF[state.uf];
-        // mesma blindagem de listPrice() - sem perfil de ICMS-ST disponível no
-        // cliente, considera 0% em vez de quebrar (ver comentário em listPrice).
-        const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
-        const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
-        const lp = val * (1 + p.ipi) * (1 + stRate);
+        const lp = val * fatorImposto(p, state.uf); // o mesmo imposto que listPrice() põe por cima
         const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
         preview.innerHTML = `Com impostos (${state.uf}): <b>${brl(lp)}</b><br>Preço ao cliente agora: <b>${brl(cp)}</b>`;
       }
@@ -7533,6 +7588,7 @@
           lastCartJson = JSON.stringify(state.cart);
           localStorage.setItem(CART_LS_KEY, lastCartJson);
         } catch (e) { /* sem localStorage - segue sem persistir */ }
+        salvarContextoDoCarrinho(); // item adicionado pela busca não passa pelo renderCart
       }
       function loadCartFromLS() {
         try {
@@ -7540,6 +7596,35 @@
           lastCartJson = raw;
           state.cart = raw ? (JSON.parse(raw) || []) : [];
         } catch (e) { state.cart = []; }
+      }
+      // ...e como o orçamento estava montado (estado, canal, classificatório,
+      // desconto adicional, prazo, desconto e preço editado por item): só os itens
+      // voltavam, e o orçamento reaberto (depois da calculadora, ou com o iPhone
+      // fechando o app em segundo plano) saía com preço de PR e sem os descontos
+      // (achado do /review, 10/2026). Chave à parte porque a Curva ABC lê o
+      // cortagCart_v1 como lista de itens. Só grava depois de restaurar - antes
+      // disso a abertura do app desenha o carrinho com os valores padrão e
+      // apagaria o que estava guardado.
+      const CART_CTX_LS_KEY = 'cortagCartContexto_v1';
+      let contextoDoCarrinhoRestaurado = false;
+      function salvarContextoDoCarrinho() {
+        if (!contextoDoCarrinhoRestaurado) return;
+        try {
+          if (state.cart.length) localStorage.setItem(CART_CTX_LS_KEY, JSON.stringify(contextoDoOrcamento()));
+          else localStorage.removeItem(CART_CTX_LS_KEY);
+        } catch (e) { /* sem localStorage - segue sem persistir */ }
+      }
+      // Na abertura, com o catálogo carregado e depois de o cliente do rascunho
+      // voltar (setLevCliente põe o canal e o % dele) - o que estava no orçamento
+      // vale por cima. Catálogo que não carregou: não restaura nem grava (o
+      // guardado continua lá pra próxima abertura).
+      function restaurarContextoDoCarrinho() {
+        if (contextoDoCarrinhoRestaurado) return;
+        let ctx = null;
+        try { ctx = JSON.parse(localStorage.getItem(CART_CTX_LS_KEY) || 'null'); } catch (e) { }
+        if (ctx && state.cart.length) aplicarContextoDoPedido(ctx);
+        contextoDoCarrinhoRestaurado = true;
+        salvarContextoDoCarrinho();
       }
       // O evento 'storage' só dispara em OUTRAS abas, nunca na que escreveu -
       // cobre o caso de curva-abc.html (botão de carrinho na Curva ABC) aberto
@@ -7676,7 +7761,16 @@
       //   basketItems: [{type:"category"|"product", value:"...", minQty:1}, ...], // usado só quando basis === "combo"
       //   comboPct: 15,                           // usado só quando basis === "combo"
       //   stacks: true, // true = soma com desconto manual do item; false = usa o maior dos dois
+      //   canais: ["VAREJO", ...], // canais em que vale; regra sem o campo (as criadas antes) = só Varejo
       // }
+      // A campanha é de um canal: a mesma promoção não vale sozinha nos outros
+      // (pedido do usuário, 10/2026 - antes toda regra valia em todos os canais).
+      function canaisDaRegra(rule) {
+        return Array.isArray(rule.canais) && rule.canais.length ? rule.canais : ['VAREJO'];
+      }
+      function regraValeNoCanal(rule, canal) {
+        return canaisDaRegra(rule).includes(canal || state.canal || 'VAREJO');
+      }
 
       function productFamilia(p) {
         return p.familia || (p.cat != null ? DB.categories[p.cat] : null) || '';
@@ -7708,7 +7802,7 @@
       function computeCampaignBonuses(rows) {
         const bonusByTarget = {}; // chave "type|value" -> {pct, stacks, ruleName}
         for (const rule of (state.promoRules || [])) {
-          if (!rule.active) continue;
+          if (!rule.active || !regraValeNoCanal(rule)) continue;
           let pct = 0;
 
           if (rule.basis === 'combo') {
@@ -7779,7 +7873,7 @@
           const bonus = bestBonusForProduct(bonuses, r.p);
           let cp = r.cp, cpSemImposto = r.cpSemImposto;
           let campaignPct = 0, campaignName = null;
-          if (bonus && r.p.fx !== 1) { // Preço Fixo bloqueia bônus de campanha, igual aos outros descontos
+          if (bonus && !isPrecoFixoParaCanal(r.p)) { // Preço Fixo (no canal atual) bloqueia bônus de campanha, igual aos outros descontos
             campaignPct = bonus.pct;
             campaignName = bonus.ruleName;
             if (bonus.stacks) {
@@ -7814,6 +7908,7 @@
         document.getElementById('cartTotalPreview').textContent = brl(total) + ' ▸';
       }
       function renderCart() {
+        salvarContextoDoCarrinho(); // estado/canal/descontos/prazo mudam e o carrinho é redesenhado
         const { rows, total, totalSemImpostos } = cartTotals();
         document.getElementById('cartTotalSemImpostos').textContent = brl(totalSemImpostos);
         const totalItensEl = document.getElementById('cartTotalItens');
@@ -7832,7 +7927,16 @@
             avisoEl.classList.add('hidden');
           }
         }
-        refreshPaymentTermOptions(totalSemImpostos);
+        // as parcelas disponíveis contam o total SEM o desconto do próprio prazo: com
+        // ele, "14 dias" (1,5%) num orçamento de R$ 600-609 derrubava o total abaixo
+        // do mínimo e a opção escolhida sumia sozinha (achado do /review, 10/2026)
+        let totalSemDescontoDePrazo = totalSemImpostos;
+        if (descontoPrazoAtual()) {
+          const desligado = state.descontoPrazoDesligado;
+          state.descontoPrazoDesligado = true;
+          try { totalSemDescontoDePrazo = cartTotals().totalSemImpostos; } finally { state.descontoPrazoDesligado = desligado; }
+        }
+        refreshPaymentTermOptions(totalSemDescontoDePrazo);
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
           body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>`;
@@ -7843,7 +7947,7 @@
           <div>
             <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
-            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c) > 0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
+            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${descontoItemVisivel(p) > 0 ? ` <span class="editedbadge">-${descontoItemVisivel(p)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${escapeHtml(p.c)}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
@@ -7857,7 +7961,7 @@
               <button data-inc="${escapeHtml(p.c)}">+</button>
             </div>
             <div class="pct-wrap mini">
-              <input class="num-input${qtyDiscountFor(p.c) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDiscountFor(p.c) > 0 ? qtyDiscountFor(p.c) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${p.fx ? 'disabled' : ''}>
+              <input class="num-input${descontoItemVisivel(p) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${descontoItemVisivel(p) > 0 ? descontoItemVisivel(p) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
             </div>
           </div>
           <div>
@@ -8130,7 +8234,9 @@
       // conta como manual e nunca mais é mexida automaticamente.
       function setItemDiscount(cod, rawValue, { origem = 'manual' } = {}) {
         const p = productByCod(cod);
-        if (p && p.fx) return; // Preço Fixo: não recebe nenhum tipo de desconto
+        // Preço Fixo no canal atual: não recebe nenhum tipo de desconto (o item da
+        // Lista de Preços só é fixo em Varejo/Atacado/E-commerce - isPrecoFixoParaCanal)
+        if (p && isPrecoFixoParaCanal(p)) return;
         let v = parseFloat(rawValue);
         if (isNaN(v) || v <= 0) { delete state.qtyDiscounts[cod]; }
         else { state.qtyDiscounts[cod] = Math.min(v, 90); }
@@ -9090,7 +9196,7 @@
         listEl.innerHTML = ordered.map((it, idx) => {
           const p = productByCod(it.cod);
           if (!p) return '';
-          const qtyDisc = qtyDiscountFor(p.c);
+          const qtyDisc = descontoItemVisivel(p);
           const cp = clientPrice(listPrice(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDisc);
           const edited = isPriceEdited(p.c);
           return `<div class="levitem ${it.qty === 0 ? 'zero' : ''}${it.done ? ' done' : ''}">
@@ -9128,7 +9234,7 @@
               <button data-lev-pedinc="${escapeHtml(p.c)}">+</button>
             </div>
             <div class="pct-wrap mini">
-              <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto extra por quantidade" title="Desconto extra por quantidade" ${p.fx ? 'disabled' : ''}>
+              <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto extra por quantidade" title="Desconto extra por quantidade" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
             </div>
           </div>
         </div>
@@ -12698,6 +12804,7 @@
           paymentTerm: state.paymentTerm,
           descontoPrazoDesligado: !!state.descontoPrazoDesligado,
           priceOverrides: doCarrinho(state.priceOverrides),
+          overridesSemImposto: true, // preço editado = base sem imposto (antes era o preço com imposto)
           qtyDiscounts: doCarrinho(state.qtyDiscounts),
         };
       }
@@ -12720,8 +12827,13 @@
         const overrides = ctx.priceOverrides || {};
         const descontos = ctx.qtyDiscounts || {};
         for (const it of state.cart) {
-          if (typeof overrides[it.cod] === 'number') state.priceOverrides[it.cod] = overrides[it.cod];
-          else delete state.priceOverrides[it.cod];
+          if (typeof overrides[it.cod] === 'number') {
+            // pedido gravado antes de o lápis guardar o base sem imposto: o número
+            // era o preço final - tira o imposto pra reabrir com o mesmo preço
+            const prod = productByCod(it.cod);
+            const fator = !ctx.overridesSemImposto && prod ? fatorImposto(prod, state.uf, state.canal) : 1;
+            state.priceOverrides[it.cod] = fator > 0 ? overrides[it.cod] / fator : overrides[it.cod];
+          } else delete state.priceOverrides[it.cod];
           const d = Number(descontos[it.cod]) || 0;
           if ((state.qtyDiscounts[it.cod] || 0) !== d) {
             if (d) state.qtyDiscounts[it.cod] = d; else delete state.qtyDiscounts[it.cod];
@@ -14979,6 +15091,7 @@
           <div class="prName${r.active ? '' : ' inactive'}">${escapeHtml(r.name)}</div>
           <div class="prDetail">${escapeHtml(ruleSummaryText(r))}</div>
           <div class="prDetail">${r.stacks !== false ? 'Soma com desconto individual do item' : 'Usa o maior entre esse bônus e o desconto individual'}</div>
+          <div class="prDetail">Canais: ${escapeHtml(canaisDaRegra(r).map(c => NOME_CANAL[c] || c).join(', '))}</div>
         </div>
         <div class="prBtns">
           <button data-toggle-rule="${r.id}" class="${r.active ? 'prToggleOn' : ''}" aria-label="Ativar/desativar" title="Ativar/desativar">${r.active ? ICON_ATIVO : ICON_INATIVO}</button>
@@ -15168,6 +15281,8 @@
         document.getElementById('promoComboPct').value = rule ? (rule.comboPct || '') : '';
 
         document.getElementById('promoStacks').checked = rule ? rule.stacks !== false : true;
+        const canais = rule ? canaisDaRegra(rule) : ['VAREJO'];
+        document.querySelectorAll('#promoCanais input').forEach(inp => { inp.checked = canais.includes(inp.value); });
         document.getElementById('promoFormMsg').innerHTML = '';
         document.getElementById('promoRuleModal').classList.remove('hidden');
       }
@@ -15185,10 +15300,12 @@
         else targetValue = document.getElementById('promoTargetProd').value.trim();
         const basis = document.getElementById('basisSeg').querySelector('button.active').dataset.v;
         const stacks = document.getElementById('promoStacks').checked;
+        const canais = [...document.querySelectorAll('#promoCanais input:checked')].map(inp => inp.value);
         const msg = document.getElementById('promoFormMsg');
 
         if (!name) { msg.innerHTML = '<div class="ap-msg error">Dê um nome pra essa regra.</div>'; return; }
         if (!targetValue) { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, produto ou grupo que recebe o desconto.</div>'; return; }
+        if (!canais.length) { msg.innerHTML = '<div class="ap-msg error">Marque ao menos um canal em que a campanha vale.</div>'; return; }
         if (targetType === 'product' && !productByCod(targetValue)) {
           msg.innerHTML = '<div class="ap-msg error">Código de produto não encontrado — confira o código.</div>';
           return;
@@ -15203,7 +15320,7 @@
           targetValue = codes.join(',');
         }
 
-        const rule = { id: promoEditingId || ('r' + Date.now()), name, active: true, targetType, targetValue, basis, stacks };
+        const rule = { id: promoEditingId || ('r' + Date.now()), name, active: true, targetType, targetValue, basis, stacks, canais };
 
         if (basis === 'self') {
           rule.selfMetric = document.getElementById('promoSelfMetric').value;
@@ -16159,6 +16276,7 @@
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PRICE_LIST_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(CART_LS_KEY); } catch (e) { }
+        try { localStorage.removeItem(CART_CTX_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PEDIDOS_SALVOS_LS_KEY); } catch (e) { }
         pedidosSalvos = null;
         setPedidoEditando(null);
@@ -16299,7 +16417,9 @@
           // EAN/DUN-14 em cada produto; sem isso, o scanner de código de barras
           // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
           const catalogoPromise = carregarCatalogoEExtras();
-          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
+          // contexto do orçamento guardado só volta com o catálogo: sem ele o total dá 0 e
+          // o prazo escolhido sumia (só "A Vista" cabe) e era regravado vazio
+          catalogoPromise.then(() => { restaurarContextoDoCarrinho(); loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
           // checagem de sincronização do Painel só depois do catálogo carregar - antes
           // disso o aparelho tem 0 produtos e parecia "desatualizado" (e o admin
           // disparava um sync vazio, que o servidor recusa).
