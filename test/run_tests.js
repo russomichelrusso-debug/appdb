@@ -84,6 +84,26 @@ async function main() {
   let res = await req('GET', '/health');
   assert(res.status === 200 && res.body.status === 'ok', 'health check responde OK');
 
+  // 1a) "\" no nome do cliente (o "/" escapado de exportação, "MATS. P\/ CONSTR.") não
+  // cria cliente duplicado: sai na leitura da planilha, na busca e na gravação
+  {
+    const { limparNomeCliente, acharOuCriarCliente } = require('../clientMatcher');
+    const XLSXt = require('@e965/xlsx');
+    const Imp = require('../importadores');
+    const wb = XLSXt.utils.book_new();
+    XLSXt.utils.book_append_sheet(wb, XLSXt.utils.aoa_to_sheet([
+      ['Carteira'], [], // o relatório tem 2 linhas de título antes do cabeçalho
+      ['Nr.Pedido', 'Cod.Cliente', 'Cliente', 'Item', 'Quantidade', 'Valor', 'Implantação'],
+      ['676001', '777', 'CASA DOS MATS. P\\/ CONSTR. LTDA', '60863', 1, 10, '01/10/2026'],
+    ]), 'Carteira');
+    const lido = Imp.lerRelatorioOficial(XLSXt, XLSXt.write(wb, { type: 'array', bookType: 'xlsx' }));
+    mockDb.__seed({ clientes: [{ id: 9701, nome: 'CASA DOS MATS. P/ CONSTR. LTDA' }] });
+    const achado = await acharOuCriarCliente(mockDb.pool, { nome: 'CASA DOS MATS. P\\/ CONSTR. LTDA' });
+    const nomeLido = (lido.itens || [])[0] && lido.itens[0].cliente_nome;
+    assert(limparNomeCliente('A \\/ B /\\ C') === 'A / B / C' && achado === 9701 && nomeLido === 'CASA DOS MATS. P/ CONSTR. LTDA',
+      `nome com "\\" de exportação não duplica cliente: ${JSON.stringify([achado, nomeLido])}`);
+  }
+
   // 1b) /health/banco: servidor no ar E banco respondendo (o script do Gmail usa antes de
   // mandar arquivo); banco com erro = 503 genérico, sem a mensagem do banco
   // A resposta fica guardada (300 ms no teste, 15 s de verdade) e chamadas ao mesmo
@@ -2178,6 +2198,25 @@ async function main() {
       `planilha só com as abas de pagamento troca a lista à vista: ${JSON.stringify(rSoPagamento.body)}`);
     await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [], pendentes_pagamento: [] });
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+  }
+
+  // 28b) Filiais com o mesmo nome (mesma razão social, CNPJs diferentes): o código
+  // novo que aparece no relatório vai pra filial de mesmo nome ainda sem código -
+  // nunca troca o código da que já tem outro (ficava trocando a cada relatório)
+  {
+    const nomeF = 'COMERCIO DE MATERIAIS FILIAL TESTE LTDA';
+    mockDb.__seed({ clientes: [
+      { id: 9801, nome: nomeF, codigo_oficial: 'F1', documento: '11.111.111/0001-11' },
+      { id: 9802, nome: nomeF, codigo_oficial: null, documento: '11.111.111/0004-11' },
+    ] });
+    const linha = (cod, nr) => ({ cliente_codigo_oficial: cod, cliente_nome: nomeF, nr_pedido: nr, codigo_sku: '60863', status: 'carteira', quantidade: 1, valor: 10, situacao_pedido: 'Aberto' });
+    const r1 = await req('POST', '/api/pedidos-oficiais/importar', { itens: [linha('F2', 'PF9801')] });
+    const cli = (id) => mockDb.__getClientes().find(c => c.id === id);
+    // terceira filial, todas as de mesmo nome já com código: não troca ninguém
+    const r2 = await req('POST', '/api/pedidos-oficiais/importar', { itens: [linha('F3', 'PF9802')] });
+    assert(r1.status === 200 && cli(9801).codigo_oficial === 'F1' && cli(9802).codigo_oficial === 'F2'
+      && r2.status === 200 && cli(9801).codigo_oficial === 'F1' && cli(9802).codigo_oficial === 'F2',
+      `filial de mesmo nome: código novo vai pra que está sem, nunca troca o de outra: ${JSON.stringify([cli(9801).codigo_oficial, cli(9802).codigo_oficial, r1.body.clientesVinculados, r2.body])}`);
   }
 
   // 29) Saldo mínimo em carteira (política de cancelamento): R$ 300, R$ 600 no

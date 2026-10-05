@@ -1,4 +1,5 @@
 const express = require('express');
+const { limparNomeCliente } = require('../clientMatcher');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
@@ -100,7 +101,8 @@ router.get('/:id', async (req, res) => {
 // Cria um cliente novo, ou devolve o já existente se o documento (CNPJ/CPF)
 // já estiver cadastrado - evita duplicar o mesmo cliente em visitas diferentes.
 router.post('/', async (req, res) => {
-  const { nome, documento, contato } = req.body;
+  const { documento, contato } = req.body;
+  const nome = limparNomeCliente(req.body.nome); // sem "\" de exportação de planilha
   if (!nome) return res.status(400).json({ erro: 'Nome é obrigatório.' });
   const documentoFormatado = documento ? formatarDocumento(documento) : null;
   try {
@@ -146,7 +148,7 @@ router.post('/import', async (req, res) => {
   // second time" se o mesmo CNPJ/CPF aparecer duas vezes no mesmo lote.
   const porDocumento = new Map();
   for (const c of validos) porDocumento.set(formatarDocumento(c.cnpj), c);
-  const unicos = Array.from(porDocumento.entries()).map(([documento, c]) => ({ nome: c.nome, documento }));
+  const unicos = Array.from(porDocumento.entries()).map(([documento, c]) => ({ nome: limparNomeCliente(c.nome), documento }));
 
   const nomes = unicos.map(c => c.nome);
   const documentos = unicos.map(c => c.documento);
