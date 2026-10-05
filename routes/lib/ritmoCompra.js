@@ -78,9 +78,13 @@ function juntarCompras(eventos) {
 // última compra (a mesma régua do ritmo) - contando do último pedido dela, a
 // previsão atrasava o tanto que a compra durou (até 14 dias) e o cliente mensal
 // com complemento só entrava na lista depois do dia em que costuma comprar
-// (achado do revisor-cortag, 10/2026). Trava: nunca antes do dia seguinte ao
-// último pedido (quem acabou de comprar não aparece atrasado). A última compra
-// mostrada é o último pedido (`fim`).
+// (achado do revisor-cortag, 10/2026). Piso: no mínimo 8 dias depois do último
+// pedido - quem acabou de pedir não fica na lista nem como "semana". Antes o
+// piso era o dia seguinte, e o cliente de 7-13 dias que fechava o pedido no dia
+// em que estava atrasado (emendado na compra anterior) voltava "atrasado" 2
+// dias depois; contar a previsão do último pedido resolvia isso mas empurrava
+// a de todo cliente com complemento (achados do revisor-cortag, 10/2026). A
+// última compra mostrada é o último pedido (`fim`).
 // atraso_dias > 0 = passou da data prevista; negativo = faltam N dias.
 function ritmoDasCompras(compras, hoje) {
   if (!compras || compras.length < MIN_COMPRAS) return null;
@@ -90,8 +94,8 @@ function ritmoDasCompras(compras, hoje) {
   const ultimaCompra = compras[compras.length - 1];
   const ultima = ultimaCompra.fim;
   const pelaRegua = somarDias(ultimaCompra.data, ritmo);
-  const diaSeguinte = somarDias(ultima, 1);
-  const previsao = pelaRegua > diaSeguinte ? pelaRegua : diaSeguinte;
+  const piso = somarDias(ultima, ANTECEDENCIA_DIAS + 1);
+  const previsao = pelaRegua > piso ? pelaRegua : piso;
   return {
     num_compras: compras.length,
     ritmo_dias: ritmo,
@@ -121,8 +125,21 @@ function quantidadeTipica(compras) {
 // 1º: produtos com ritmo próprio que vencem até a compra prevista do cliente
 //     (+ a antecedência). Produto "fora do ritmo" fica de fora: o cliente
 //     continuou comprando e esse item não veio, então parou de levar.
-// Se nenhum: os que vieram em pelo menos 2 das 3 últimas compras do cliente.
-function itensDaProposta(ritmoCliente, comprasCliente, comprasPorSku, hoje) {
+// Se nenhum: os que vieram em pelo menos 2 das 3 últimas compras do cliente,
+// na mediana do que veio em cada uma delas (eventosPorSku = Map codigo_sku ->
+// pedidos [{ data, quantidade }] do produto; sem ele, pelas compras do produto).
+function itensDaProposta(ritmoCliente, comprasCliente, comprasPorSku, hoje, eventosPorSku) {
+  // quantidade por compra do CLIENTE (mediana das últimas 3 em que o produto
+  // veio): a compra do produto é juntada à parte e pode atravessar duas do
+  // cliente, somando as duas (achados do revisor-cortag, 10/2026)
+  const qtdPorCompraDoCliente = (sku, compras) => {
+    const eventos = eventosPorSku && eventosPorSku.get(sku);
+    if (!eventos) return quantidadeTipica(compras);
+    const porCompra = comprasCliente
+      .map(u => ({ quantidade: eventos.filter(e => diaISO(e.data) >= u.data && diaISO(e.data) <= u.fim).reduce((t, e) => t + (Number(e.quantidade) || 0), 0) }))
+      .filter(c => c.quantidade > 0);
+    return porCompra.length ? quantidadeTipica(porCompra) : quantidadeTipica(compras);
+  };
   const base = ritmoCliente.previsao > hoje ? ritmoCliente.previsao : hoje;
   const limite = somarDias(base, ANTECEDENCIA_DIAS);
   const porRitmo = [];
@@ -130,7 +147,7 @@ function itensDaProposta(ritmoCliente, comprasCliente, comprasPorSku, hoje) {
     const r = ritmoDasCompras(compras, hoje);
     if (!r || r.previsao > limite || situacaoDoRitmo(r) === 'fora') continue;
     porRitmo.push({
-      codigo_sku: sku, quantidade: quantidadeTipica(compras), origem: 'ritmo',
+      codigo_sku: sku, quantidade: qtdPorCompraDoCliente(sku, compras), origem: 'ritmo',
       ritmo_dias: r.ritmo_dias, ultima_compra: r.ultima_compra, previsao: r.previsao,
     });
   }
@@ -145,7 +162,7 @@ function itensDaProposta(ritmoCliente, comprasCliente, comprasPorSku, hoje) {
     if (ultimas.filter(tocaEm).length < FREQUENTE_MIN) continue;
     const nas = compras.filter(c => ultimas.some(u => c.data <= u.fim && c.fim >= u.data));
     frequentes.push({
-      codigo_sku: sku, quantidade: quantidadeTipica(nas), origem: 'frequente',
+      codigo_sku: sku, quantidade: qtdPorCompraDoCliente(sku, nas), origem: 'frequente',
       ritmo_dias: null, ultima_compra: compras[compras.length - 1].fim, previsao: null,
     });
   }

@@ -114,7 +114,7 @@ router.get('/', async (req, res) => {
         situacao,
         ...ritmo,
         adiado_ate: adiadoAte.get(id) || null,
-        itens: itensDaProposta(ritmo, comprasCliente, comprasPorSku, hoje)
+        itens: itensDaProposta(ritmo, comprasCliente, comprasPorSku, hoje, porSku)
           .map(it => ({ ...it, nome: nomePorCodigo.get(it.codigo_sku) })),
       });
     }
