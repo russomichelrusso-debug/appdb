@@ -604,10 +604,14 @@
         const host = document.getElementById('clientPickerResults');
         if (termo.length < 2) { host.innerHTML = ''; return; }
         clientBuscaDebounce = setTimeout(async () => {
+          // resposta de um termo que já não está no campo (chegou atrasada) não troca a lista
+          const campo = document.getElementById('clientPickerInput');
           try {
             const resultados = await apiFetch('/api/clientes?busca=' + encodeURIComponent(termo));
+            if (campo.value.trim() !== termo) return;
             renderClientResults(resultados);
           } catch (e) {
+            if (campo.value.trim() !== termo) return;
             host.innerHTML = `<div class="ap-msg error inline">${escapeHtml(e.message)}</div>`;
           }
         }, 250);

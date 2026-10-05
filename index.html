@@ -11157,6 +11157,21 @@
         if (locais.length > 0) return locais;
         throw ultimoErro;
       }
+      // Busca de cliente por campo: apiBuscarClientes tenta de novo depois de
+      // 2,5 s e 4 s, então a resposta de "dep" podia chegar depois da de
+      // "deposito sao" e trocar a lista. Cada busca pega um número; a resposta
+      // só entra se ainda for a última daquele campo e o campo ainda tiver o
+      // mesmo termo.
+      const buscaClienteReq = {};
+      function novaBuscaCliente(campoId, term) {
+        const n = (buscaClienteReq[campoId] || 0) + 1;
+        buscaClienteReq[campoId] = n;
+        return () => {
+          if (buscaClienteReq[campoId] !== n) return true;
+          const campo = document.getElementById(campoId);
+          return !!campo && campo.value.trim() !== String(term || '').trim();
+        };
+      }
       async function apiCriarCliente(cliente) {
         return apiFetch('/api/clientes', { method: 'POST', body: JSON.stringify(cliente) });
       }
@@ -11766,10 +11781,12 @@
       }
       async function runClientSearch(term) {
         const results = document.getElementById('clientPickerResults');
+        const velha = novaBuscaCliente('clientPickerSearch', term);
         if (!term || term.trim().length < 2) { results.innerHTML = ''; return; }
         results.innerHTML = '<div class="promoEmpty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          if (velha()) return;
           if (clientes.length === 0) { results.innerHTML = '<div class="promoEmpty">Nenhum cliente encontrado — pode cadastrar um novo abaixo.</div>'; return; }
           const porId = new Map(clientes.map(c => [String(c.id), c]));
           results.innerHTML = clientes.map(c => `
@@ -11785,6 +11802,7 @@
             btn.addEventListener('click', () => closeClientPicker(porId.get(btn.dataset.clientId)));
           });
         } catch (e) {
+          if (velha()) return;
           results.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
         }
       }
@@ -12193,10 +12211,12 @@
 
       async function searchManageClients(term) {
         const wrap = document.getElementById('manageClientResults');
+        const velha = novaBuscaCliente('manageClientSearch', term);
         if (!term || term.trim().length < 2) { wrap.innerHTML = ''; return; }
         wrap.innerHTML = '<div class="promoEmpty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          if (velha()) return;
           if (clientes.length === 0) { wrap.innerHTML = '<div class="promoEmpty">Nenhum cliente encontrado.</div>'; return; }
           wrap.innerHTML = clientes.map(c => `
       <div class="promoRuleItem">
@@ -12252,6 +12272,7 @@
             });
           });
         } catch (e) {
+          if (velha()) return;
           wrap.innerHTML = `<div class="promoEmpty">${escapeHtml(e.message)}</div>`;
         }
       }
@@ -13708,10 +13729,12 @@
 
       async function searchClienteTabList(term) {
         const wrap = document.getElementById('clienteTabList');
+        const velha = novaBuscaCliente('clienteTabSearch', term);
         if (!term || term.trim().length < 2) { wrap.innerHTML = '<div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>'; return; }
         wrap.innerHTML = '<div class="lev-empty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
+          if (velha()) return;
           const porId = new Map(clientes.map(c => [String(c.id), c]));
           wrap.innerHTML = clientes.length
             ? clientes.map(c => `
@@ -13727,6 +13750,7 @@
             btn.addEventListener('click', () => openClienteDetail(porId.get(btn.dataset.clienteId)));
           });
         } catch (e) {
+          if (velha()) return;
           wrap.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
