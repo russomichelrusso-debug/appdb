@@ -124,9 +124,10 @@ Pegadinhas de ambiente:
   gravou; sem espaço, o `apiFetch` lança erro (`semEspacoNaFila`) em vez de dizer "fica salvo" (o pedido
   oferece o CSV na hora). A fila do Drive (`drenarFilaDriveCsv`) segue o mesmo padrão: Web Lock, relê
   a fila no fim, e sem espaço não diz "pendente". Erro permanente das rotas de pedido/levantamento
-  (produto que não existe nem no catálogo, itens inválidos, origem desconhecida) responde **422**
-  (`ErroPermanente`, `routes/lib/produtoPorSku.js`); produto que está na Lista de Preços e ainda não em
-  `produtos` é criado na hora (e a importação da lista já cria os novos). O levantamento também leva
+  (itens inválidos, origem desconhecida, código em formato inválido) responde **422** (`ErroPermanente`,
+  `routes/lib/produtoPorSku.js`); produto que está na Lista de Preços ou nos promocionais do Painel e ainda
+  não em `produtos` é criado na hora (e a importação da lista já cria os novos); produto que não está em
+  lugar nenhum responde 400 (a fila tenta de novo — o catálogo pode chegar depois). O levantamento também leva
   `id_envio` (`idx_levantamentos_id_envio`): o reenvio devolve o já gravado. Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
   `PUT` e o nome do arquivo do cliente nunca chegava do app publicado; teste no `run_tests.js`). Biblioteca carregada sob demanda que falhou tenta de novo na próxima vez (o pdf.js com
   `?tentativa=N`, que o `sw.js` atende pela cópia sem parâmetro).
@@ -580,9 +581,10 @@ Supabase, sem PR — não é mudança de código.
   idêntico (só o desempate entre clientes com o mesmo nome, antes ao acaso do `LIMIT 1`, agora é o de
   menor id). **Lista de Preços pelo e-mail** que tiraria mais de 5% dos códigos do catálogo é recusada
   ("Cortag/Falhou"); pelo Painel continua sem trava. **Relatório oficial mais antigo que o já importado**
-  (`configuracoes.relatorio_oficial_mais_novo` = maior implantação/faturamento do arquivo) grava só as
-  linhas faturadas e as descrições: não mexe em carteira nem nas listas à vista e não gera novidade; a
-  resposta traz `relatorioAntigo`/`aviso`.
+  (`configuracoes.relatorio_oficial_mais_novo` = maior implantação/faturamento das linhas de pedido, até
+  hoje; os pendentes à vista não contam) grava só as linhas faturadas e as descrições e apaga o saldo do
+  que aparece faturado: não grava carteira nem troca as listas à vista e não gera novidade; a resposta
+  traz `relatorioAntigo`/`aviso`. Planilha só com as abas de pagamento nunca é "antiga".
 
 - **Pedido bloqueado e à vista pelo e-mail** (10/2026): dois e-mails da noreply@cortag.com.br **sem
   planilha** — o script do Gmail manda assunto + texto (`POST /api/importacao-email/mensagem`, mesma
