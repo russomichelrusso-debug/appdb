@@ -274,25 +274,30 @@ function enderecoDe_(from) {
 // o e-mail inteiro (getRawContent, ~9 MB numa Lista de Preços), e um e-mail
 // que espera na fila (servidor com erro, tempo esgotado) era relido a cada 15
 // min. Guarda só o "autenticado" dos que estão na fila (some ao processar).
+// A chave tem versão: quando a checagem muda (ficou mais rígida em 10/2026), o
+// "autenticado" guardado pela regra antiga não vale mais - o e-mail é conferido
+// de novo pela regra nova.
+const CHAVE_AUTENTICADOS = 'AUTENTICADOS_v2';
 function autenticadoComCache_(props, msg, de) {
   const id = msg.getId();
-  const guardados = JSON.parse(props.getProperty('AUTENTICADOS') || '{}');
+  if (props.getProperty('AUTENTICADOS') !== null) props.deleteProperty('AUTENTICADOS'); // versão anterior
+  const guardados = JSON.parse(props.getProperty(CHAVE_AUTENTICADOS) || '{}');
   if (guardados[id] === de) return true;
   const ok = autenticadoPeloGmail_(cabecalhos_(msg), de);
   if (ok) {
     guardados[id] = de;
     const ids = Object.keys(guardados);
     if (ids.length > 100) ids.slice(0, ids.length - 100).forEach(k => { delete guardados[k]; });
-    props.setProperty('AUTENTICADOS', JSON.stringify(guardados));
+    props.setProperty(CHAVE_AUTENTICADOS, JSON.stringify(guardados));
   }
   return ok;
 }
 
 function esquecerAutenticacao_(props, id) {
-  const guardados = JSON.parse(props.getProperty('AUTENTICADOS') || '{}');
+  const guardados = JSON.parse(props.getProperty(CHAVE_AUTENTICADOS) || '{}');
   if (!(id in guardados)) return;
   delete guardados[id];
-  props.setProperty('AUTENTICADOS', JSON.stringify(guardados));
+  props.setProperty(CHAVE_AUTENTICADOS, JSON.stringify(guardados));
 }
 
 // Só os cabeçalhos do e-mail (até a 1ª linha em branco), com as linhas
@@ -323,11 +328,38 @@ function autenticadoPeloGmail_(cabecalhos, endereco) {
   let limpa = linha.replace(/^Authentication-Results:\s*mx\.google\.com\s*;/i, '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
   for (let antes = ''; antes !== limpa;) { antes = limpa; limpa = limpa.replace(/\([^()]*\)/g, ' '); }
   if (/["()]/.test(limpa.replace(/""/g, ''))) return false; // aspas ou parênteses soltos: não dá pra confiar
-  const d = dominio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const fimDominio = '(?=[\\s;]|$)';
-  return limpa.split(';').some(r =>
-    new RegExp('^\\s*dmarc=pass(?:\\s.*)?\\sheader\\.from=' + d + fimDominio, 'i').test(r)
-    || new RegExp('^\\s*dkim=pass(?:\\s.*)?\\sheader\\.(?:i=[^\\s;@]*@|d=)' + d + fimDominio, 'i').test(r));
+  const dom = dominio.toLowerCase();
+  return resultadosAutenticacao_(limpa).some(r => r.resultado === 'pass' && (
+    (r.metodo === 'dmarc' && r.props['header.from'] === dom)
+    || (r.metodo === 'dkim' && (r.props['header.d'] === dom || dominioDoI_(r.props['header.i']) === dom))));
+}
+function dominioDoI_(valor) {
+  const m = /^[^@]*@(.+)$/.exec(valor || '');
+  return m ? m[1] : null;
+}
+
+// Separa os resultados ("metodo=resultado chave.sub=valor ...", RFC 8601), já sem
+// comentários e com o texto entre aspas vazio. Resultado com qualquer pedaço fora
+// desse formato, ou com a mesma chave duas vezes, é descartado inteiro - antes
+// bastava ter "dmarc=pass" no começo e "header.from=dominio" em qualquer lugar
+// depois (achado do revisor-cortag, 10/2026).
+function resultadosAutenticacao_(limpa) {
+  const resultados = [];
+  for (const trecho of limpa.split(';')) {
+    const pedacos = trecho.trim().split(/\s+/).filter(Boolean);
+    const m = /^([a-z0-9-]+)=([a-z]+)$/i.exec(pedacos[0] || '');
+    if (!m) continue;
+    const props = {};
+    let valido = true;
+    for (const pedaco of pedacos.slice(1)) {
+      const p = /^([a-z0-9-]+\.[a-z0-9-]+)=(\S*)$/i.exec(pedaco);
+      const chave = p && p[1].toLowerCase();
+      if (!p || chave in props) { valido = false; break; }
+      props[chave] = p[2].toLowerCase();
+    }
+    if (valido) resultados.push({ metodo: m[1].toLowerCase(), resultado: m[2].toLowerCase(), props });
+  }
+  return resultados;
 }
 
 // Rodar à mão antes de deixar esta versão valer (e sempre que a Cortag trocar o

@@ -2178,11 +2178,23 @@ async function main() {
       && gs.autenticadoPeloGmail_(cab(envelope('"x;dkim=pass header.i=@cortag.com y"')), 'vendas@cortag.com') === false
       && gs.autenticadoPeloGmail_(cab(envelope('"x(;dmarc=pass header.from=cortag.com.br"')), 'noreply@cortag.com.br') === false,
       'script do Gmail: "pass" escondido no endereço de envio (entre aspas/parênteses) não vale');
+    // cada resultado tem que estar inteiro no formato "metodo=resultado chave.sub=valor":
+    // pedaço solto no meio ou chave repetida descarta o resultado
+    assert(gs.autenticadoPeloGmail_(cab(['dmarc=pass golpe header.from=cortag.com.br']), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(['dmarc=pass header.from=golpe.com header.from=cortag.com.br']), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(['dmarc=pass header.from=cortag.com.br=x']), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(['dkim=pass x=y header.i=@cortag.com']), 'vendas@cortag.com') === false
+      && gs.autenticadoPeloGmail_(cab(['dmarc=pass header.from=cortag.com.br.golpe.com']), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(['dkim=pass header.i=@cortag.com header.d=cortag.com header.b=""']), 'vendas@cortag.com') === true
+      && gs.autenticadoPeloGmail_(cab(['DMARC=Pass header.from=Cortag.com.br']), 'noreply@cortag.com.br') === true,
+      'script do Gmail: resultado de autenticação só vale inteiro no formato (sem pedaço solto nem chave repetida)');
     // verificarEmails de ponta a ponta, com Gmail/servidor falsos: e-mail com erro do
     // servidor (503) não trava a fila pra sempre - na 4ª rodada vira "Falhou" e o
     // seguinte entra; remetente falso nunca é mandado (endereço de fora: nem é
     // considerado; endereço da Cortag sem autenticação: "Cortag/Nao autenticado").
-    const props = { CHAVE: 'chave-teste' };
+    // "autenticado" guardado pela checagem antiga (chave sem versão) não vale mais:
+    // o golpe-endereco é conferido de novo e marcado
+    const props = { CHAVE: 'chave-teste', AUTENTICADOS: JSON.stringify({ 'golpe-endereco': 'noreply@cortag.com.br' }) };
     const marcadores = {};
     const leiturasCompletas = {};
     const logs = [];
@@ -2214,7 +2226,7 @@ async function main() {
     const ctx = {
       Logger: { log: (...a) => { logs.push(a.join(' ')); } },
       Utilities: { base64Encode: () => 'AQID', sleep: () => {} },
-      PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
+      PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; }, deleteProperty: k => { delete props[k]; } }) },
       GmailApp: { search: () => threads, getUserLabelByName: n => ({ nome: n }), createLabel: n => ({ nome: n }) },
       UrlFetchApp: { fetch: (url, opts) => {
         if (url.endsWith('/health')) return { getResponseCode: () => 200 };
@@ -2246,7 +2258,7 @@ async function main() {
       && comBancoFora.enviados === 0 && comBancoFora.marcadores === 0 && comBancoFora.tentativas === '{}'
       // o e-mail que esperou na fila 9 rodadas (5 de banco fora + 4 de erro) foi lido inteiro 1 vez só
       && leiturasCompletas['velho-503'] === 1 && leiturasCompletas['novo-ok'] === 1
-      && JSON.parse(props.AUTENTICADOS || '{}')['velho-503'] === undefined
+      && JSON.parse(props.AUTENTICADOS_v2 || '{}')['velho-503'] === undefined && !('AUTENTICADOS' in props)
       && marcadores['dois-anexos'] === 'Cortag/Importado+Cortag/Falhou'
       && !marcadores['outro-formato'] && !leiturasCompletas['outro-formato']
       && logs.some(l => l.includes('não é exatamente o da Cortag') && l.includes('(Cortag)')),

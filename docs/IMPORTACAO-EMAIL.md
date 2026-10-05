@@ -55,7 +55,8 @@ Por isso o script só manda um e-mail pro app quando:
    a noreply@cortag.com.br passa **só pelo DMARC** (`dmarc=pass header.from=cortag.com.br`) — o
    DKIM dela é assinado por `cortagind.onmicrosoft.com`, que não é o domínio do remetente.
    O que vem entre aspas e entre parênteses nesse cabeçalho (o endereço de envio, escolhido por
-   quem manda) é ignorado na leitura.
+   quem manda) é ignorado na leitura, e cada resultado só vale inteiro no formato
+   `metodo=resultado chave.sub=valor …` (pedaço solto no meio ou chave repetida = não vale).
 
 O servidor confere de novo o remetente de cada tipo (Lista de Preços só de vendas@cortag.com, o
 resto só de noreply@cortag.com.br) e recusa (422) o que vier de outro endereço.
