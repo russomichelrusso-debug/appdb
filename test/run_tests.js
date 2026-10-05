@@ -707,16 +707,27 @@ async function main() {
       && erp.fat12mOutrasEmpresas === 23445.15,
     `status devolve a foto oficial da planilha (números iguais aos dela): ${JSON.stringify(erp)}`
   );
-  // relatório mais antigo não desfaz nem a faixa nem a foto
+  // relatório mais antigo não desfaz nem a faixa nem a foto - nem matriz, PIC e valor de acordo
   res = await req('POST', '/api/clientes/classificatorio/importar', {
     dataRelatorio: '2026-09-01', apuradoAte: '2026-07-31',
-    itens: [{ ...linhaPlanilhaErp, classificatorioTipo: 'Varejo Exclusive', classificatorioDesconto: 15, fat12mCliente: 1 }],
+    itens: [{ ...linhaPlanilhaErp, classificatorioTipo: 'Varejo Exclusive', classificatorioDesconto: 15, fat12mCliente: 1, pic: true, vlAcordo: 99999, matrizGrupo: 'MATRIZ ANTIGA' }],
   });
   res = await req('GET', '/api/clientes/9060/classificatorio/status');
+  const c9060 = mockDb.__getClientes().find(c => c.id === 9060);
   assert(
     res.body.tipo === 'Varejo Premium' && res.body.erp?.fat12mCliente === 15677.37 && res.body.erp?.dataRelatorio === '2026-10-02',
     'planilha Classificatório mais antiga não volta a faixa nem a foto financeira'
   );
+  assert(c9060.classificatorio_pic === false && c9060.classificatorio_vl_acordo == null && c9060.matriz_grupo === 'ROTTA MATERIAIS DE CONSTRUCAO LTDA',
+    `planilha Classificatório mais antiga não volta PIC, valor de acordo nem matriz: ${JSON.stringify(c9060)}`);
+  // a do mesmo dia (ou mais nova) troca
+  res = await req('POST', '/api/clientes/classificatorio/importar', {
+    dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: [{ ...linhaPlanilhaErp, pic: true, vlAcordo: 5000 }],
+  });
+  assert(c9060.classificatorio_pic === true && Number(c9060.classificatorio_vl_acordo) === 5000,
+    `planilha Classificatório do mesmo dia troca PIC e valor de acordo: ${JSON.stringify(c9060)}`);
+  await req('POST', '/api/clientes/classificatorio/importar', { dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: [linhaPlanilhaErp] });
+  c9060.classificatorio_vl_acordo = null;
   // sem data (formato antigo do import): não troca faixa existente nem grava foto
   mockDb.__seed({
     clientes: [{ id: 9061, nome: 'CLIENTE SEM DATA', documento: '11222333000262', codigo_oficial: 'COD9061', classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_pic: false }],

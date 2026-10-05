@@ -773,12 +773,20 @@ async function importarClassificatorioErp(body) {
       // faturamento, routes/pedidosOficiais.js). Antes só preenchia quem não
       // tinha nenhum - em 10/2026, 22 clientes estavam com faixa parada desde
       // 2023-2025 por isso. Sem data do relatório, mantém o comportamento antigo.
+      // Matriz, PIC e valor de acordo: só da planilha tão ou mais nova que a
+      // última Classificatório gravada pro cliente (data da foto em
+      // cliente_classificatorio_erp, que só esta importação grava) - antes uma
+      // planilha antiga reimportada voltava os três. A data da faixa
+      // (classificatorio_atualizado_em) não serve aqui: o relatório oficial
+      // diário também a avança, e aí o PIC não seria mais atualizado.
+      const planilhaMaisNova = `($8::date IS NULL OR NOT EXISTS (SELECT 1 FROM cliente_classificatorio_erp e
+                                 WHERE e.cliente_id = clientes.id AND e.data_relatorio > $8::date))`;
       await client.query(
         `UPDATE clientes SET
            codigo_oficial = COALESCE(codigo_oficial, $1),
-           matriz_grupo = COALESCE($2, matriz_grupo),
-           classificatorio_pic = $3,
-           classificatorio_vl_acordo = COALESCE($4, classificatorio_vl_acordo),
+           matriz_grupo = CASE WHEN ${planilhaMaisNova} THEN COALESCE($2, matriz_grupo) ELSE matriz_grupo END,
+           classificatorio_pic = CASE WHEN ${planilhaMaisNova} THEN $3 ELSE classificatorio_pic END,
+           classificatorio_vl_acordo = CASE WHEN ${planilhaMaisNova} THEN COALESCE($4, classificatorio_vl_acordo) ELSE classificatorio_vl_acordo END,
            classificatorio_tipo = CASE
              WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
               AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $5::text

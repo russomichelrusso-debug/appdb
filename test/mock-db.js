@@ -737,9 +737,14 @@ async function query(sql, params = []) {
     const c = clientes.find(x => Number(x.id) === Number(id));
     if (c) {
       if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
-      if (matrizGrupo) c.matriz_grupo = matrizGrupo;
-      c.classificatorio_pic = pic;
-      if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
+      // matriz/PIC/acordo: só planilha tão ou mais nova que a última foto do cliente
+      const foto = classificatorioErp[c.id];
+      const planilhaMaisNova = !dataRelatorio || !foto || foto.data_relatorio <= dataRelatorio;
+      if (planilhaMaisNova) {
+        if (matrizGrupo) c.matriz_grupo = matrizGrupo;
+        c.classificatorio_pic = pic;
+        if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
+      }
       // Relatório datado tão ou mais novo que o classificatório atual troca a
       // faixa; sem data, só preenche quem não tem (comportamento antigo).
       const trocar = classifTipo && dataRelatorio
