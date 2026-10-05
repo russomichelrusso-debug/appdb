@@ -11807,7 +11807,9 @@
           // agrupa por cliente+dia, pra mostrar como "grupos" em vez de lista solta
           const grupos = new Map();
           pedidos.forEach(p => {
-            const dia = p.data_pedido.slice(0, 10);
+            // dia do pedido em Brasília, calculado no servidor (sqlDiaDoPedido); o
+            // data_pedido vem em UTC e o pedido das 21h+ caía no dia seguinte
+            const dia = p.dia || String(p.data_pedido).slice(0, 10);
             const chave = `${p.cliente_id}|${dia}`;
             if (!grupos.has(chave)) grupos.set(chave, { cliente_nome: p.cliente_nome, dia, pedidos: [] });
             grupos.get(chave).pedidos.push(p);
@@ -12344,7 +12346,7 @@
           }
           const header = 'Data;Cliente;Documento;Vendedor;Código;Produto;Quantidade;Preço Unitário;Origem;Cotação';
           const linhas = rows.map(r => [
-            formatDateBr(r.data_pedido),
+            formatDateBr(r.dia || r.data_pedido),
             r.cliente_nome,
             r.cliente_documento || '',
             r.vendedor_nome || '',
@@ -12433,6 +12435,9 @@
               vendedor_nome: state.seller || undefined,
               itens,
               contexto,
+              // hora do toque: sem internet o pedido sai da fila depois (até no dia
+              // seguinte) e o servidor gravaria a hora do envio
+              data_pedido: new Date().toISOString(),
             });
           const offline = !!(result && result.__filaOffline);
           // Cópia de segurança em CSV no Drive - independente do pedido em si já

@@ -377,8 +377,9 @@ router.get('/pedidos/exportar', async (req, res) => {
   if (!inicio || !fim) return res.status(400).json({ erro: 'Informe as datas de início e fim (?inicio=AAAA-MM-DD&fim=AAAA-MM-DD).' });
   try {
     const result = await pool.query(
-      `SELECT
-         ped.data_pedido, c.nome AS cliente_nome, c.documento AS cliente_documento,
+      `/* pedidos:exportar */
+       SELECT
+         ped.data_pedido, ${sqlDiaDoPedido()}::text AS dia, c.nome AS cliente_nome, c.documento AS cliente_documento,
          v.nome AS vendedor_nome, p.codigo_sku, p.nome AS produto_nome,
          pi.quantidade, pi.preco_unitario, ped.origem, ped.numero_cotacao
        FROM pedidos ped
@@ -387,7 +388,7 @@ router.get('/pedidos/exportar', async (req, res) => {
        JOIN produtos p ON p.id = pi.produto_id
        LEFT JOIN vendedores v ON v.id = ped.vendedor_id
        WHERE ${sqlDiaDoPedido()} BETWEEN $1::date AND $2::date
-       ORDER BY ped.data_pedido DESC`,
+       ORDER BY ${sqlDiaDoPedido()} DESC, ped.data_pedido DESC`,
       [inicio, fim]
     );
     console.log(`Exportação de pedidos (${inicio} a ${fim}): ${result.rows.length} linha(s), por ${req.usuario?.email}.`);
@@ -510,7 +511,7 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
            SELECT codigo_sku, data_faturamento AS data, quantidade, nr_pedido AS pedido
            FROM pedidos_oficiais_itens
            WHERE status = 'faturado' AND cliente_codigo_oficial = $1
-             AND data_faturamento > CURRENT_DATE - $2::int`,
+             AND data_faturamento > ${SQL_HOJE_BR} - $2::int`,
           [codigoOficial, COMPRADOS_RECENTES_DIAS])
         : Promise.resolve({ rows: [] }),
       pool.query(

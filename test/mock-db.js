@@ -88,6 +88,17 @@ function bloqueiosAtivos() {
 
 // Reproduz sqlFaturadoDeFato (routes/lib/faturadoDeFato.js): item faturado cujo
 // título à vista (nota fiscal) ainda está pendente não conta no faturamento.
+// sqlDiaDoPedido (routes/lib/comprasApp.js): meia-noite UTC exata = "só a data"
+// (pedido de PDF/faturamento), o resto vai pro dia de Brasília
+const DIA_BR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+function diaDoPedidoBr(dataPedido) {
+  const t = new Date(dataPedido);
+  if (t.getTime() % 86400000 === 0) return t.toISOString().slice(0, 10);
+  return DIA_BR.format(t);
+}
+function hojeBr() { return DIA_BR.format(new Date()); }
+function diasAntes(iso, n) { return new Date(new Date(`${iso}T00:00:00Z`).getTime() - n * 86400000).toISOString().slice(0, 10); }
+
 function faturadoDeFato(it) {
   return it.status === 'faturado' && !titulosAvistaPendentes.some(t => t.titulo === it.nota_fiscal);
 }
@@ -367,7 +378,7 @@ async function query(sql, params = []) {
     for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
-        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido).toISOString().slice(0, 10), pedido: 'app' + ped.id });
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: diaDoPedidoBr(ped.data_pedido), pedido: 'app' + ped.id });
       }
     }
     return { rows };
@@ -385,7 +396,7 @@ async function query(sql, params = []) {
     for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
-        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido).toISOString().slice(0, 10), quantidade: it.quantidade, pedido: 'app' + ped.id });
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: diaDoPedidoBr(ped.data_pedido), quantidade: it.quantidade, pedido: 'app' + ped.id });
       }
     }
     return { rows };
@@ -433,12 +444,12 @@ async function query(sql, params = []) {
       .map(({ it, data }) => ({ cliente_codigo_oficial: it.cliente_codigo_oficial, codigo_sku: it.codigo_sku, quantidade: it.quantidade, data, data_faturamento: it.data_faturamento || null })) };
   }
   if (s.includes('/* RECOMPRA:APP */')) {
-    const inicio = new Date(`${params[0]}T00:00:00Z`).getTime() - Number(params[1]) * 86400000;
+    const inicio = diasAntes(params[0], Number(params[1]));
     const rows = [];
-    for (const ped of pedidos.filter(p => p.cliente_id != null && new Date(String(p.data_pedido).slice(0, 10) + 'T00:00:00Z').getTime() > inicio && p.origem !== 'faturamento')) {
+    for (const ped of pedidos.filter(p => p.cliente_id != null && diaDoPedidoBr(p.data_pedido) > inicio && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
-        if (prod) rows.push({ cliente_id: ped.cliente_id, codigo_sku: prod.codigo_sku, quantidade: it.quantidade, data: String(ped.data_pedido).slice(0, 10) });
+        if (prod) rows.push({ cliente_id: ped.cliente_id, codigo_sku: prod.codigo_sku, quantidade: it.quantidade, data: diaDoPedidoBr(ped.data_pedido) });
       }
     }
     return { rows };
@@ -462,18 +473,18 @@ async function query(sql, params = []) {
   }
 
   if (s.includes('/* COMPRADOS-RECENTES:OFICIAL */')) {
-    const limite = Date.now() - Number(params[1]) * 86400000;
+    const limite = diasAntes(hojeBr(), Number(params[1]));
     return { rows: pedidosOficiaisItens
-      .filter(it => it.status === 'faturado' && it.cliente_codigo_oficial === params[0] && it.data_faturamento && new Date(it.data_faturamento).getTime() > limite)
+      .filter(it => it.status === 'faturado' && it.cliente_codigo_oficial === params[0] && it.data_faturamento && String(it.data_faturamento).slice(0, 10) > limite)
       .map(it => ({ codigo_sku: it.codigo_sku, data: it.data_faturamento, quantidade: it.quantidade, pedido: it.nr_pedido })) };
   }
   if (s.includes('/* COMPRADOS-RECENTES:APP */')) {
-    const limite = Date.now() - Number(params[1]) * 86400000;
+    const limite = diasAntes(hojeBr(), Number(params[1]));
     const rows = [];
-    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && new Date(p.data_pedido).getTime() > limite && p.origem !== 'faturamento')) {
+    for (const ped of pedidos.filter(p => String(p.cliente_id) === String(params[0]) && diaDoPedidoBr(p.data_pedido) > limite && p.origem !== 'faturamento')) {
       for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
         const prod = produtos.find(p => p.id === it.produto_id);
-        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: new Date(ped.data_pedido), quantidade: it.quantidade, pedido: 'app' + ped.id });
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, data: diaDoPedidoBr(ped.data_pedido), quantidade: it.quantidade, pedido: 'app' + ped.id });
       }
     }
     return { rows };
@@ -500,7 +511,7 @@ async function query(sql, params = []) {
       const ped = pedidos.find(p => p.id === it.pedido_id && p.origem !== 'faturamento');
       const c = ped && clientes.find(cl => String(cl.id) === String(ped.cliente_id));
       if (prod && c && params[0].includes(prod.codigo_sku)) {
-        rows.push({ id: c.id, nome: c.nome, documento: c.documento, quantidade: it.quantidade, data: new Date(ped.data_pedido).toISOString().slice(0, 10) });
+        rows.push({ id: c.id, nome: c.nome, documento: c.documento, quantidade: it.quantidade, data: diaDoPedidoBr(ped.data_pedido) });
       }
     }
     return { rows };
@@ -1196,6 +1207,41 @@ async function query(sql, params = []) {
     pedidosOficiaisItens = pedidosOficiaisItens.filter(it => !(it.status === 'carteira' && pares.has(`${it.nr_pedido}::${it.codigo_sku}`)));
     return { rowCount: antes - pedidosOficiaisItens.length, rows: [] };
   }
+  // GET /api/pedidos/exportar (routes/relatorios.js): período pelo dia do pedido em Brasília
+  if (s.includes('/* PEDIDOS:EXPORTAR */')) {
+    const rows = [];
+    for (const ped of pedidos) {
+      const dia = diaDoPedidoBr(ped.data_pedido);
+      if (dia < params[0] || dia > params[1]) continue;
+      const c = clientes.find(cl => String(cl.id) === String(ped.cliente_id));
+      const v = vendedores.find(vd => vd.id === ped.vendedor_id);
+      for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
+        const prod = produtos.find(p => p.id === it.produto_id);
+        if (c && prod) rows.push({ data_pedido: ped.data_pedido, dia, cliente_nome: c.nome, cliente_documento: c.documento || null,
+          vendedor_nome: v ? v.nome : null, codigo_sku: prod.codigo_sku, produto_nome: prod.nome, quantidade: it.quantidade,
+          preco_unitario: it.preco_unitario, origem: ped.origem, numero_cotacao: ped.numero_cotacao || null });
+      }
+    }
+    rows.sort((a, b) => (a.dia === b.dia ? new Date(b.data_pedido) - new Date(a.data_pedido) : (a.dia < b.dia ? 1 : -1)));
+    return { rows };
+  }
+  // GET /api/pedidos/duplicados: mesmo cliente, mesmo dia (Brasília), algum produto em comum
+  if (s.includes('/* PEDIDOS:DUPLICADOS */')) {
+    const prodsDe = (ped) => new Set(pedidoItens.filter(i => i.pedido_id === ped.id).map(i => i.produto_id));
+    const dup = pedidos.filter(p2 => pedidos.some(p3 => p3.id !== p2.id && String(p3.cliente_id) === String(p2.cliente_id)
+      && diaDoPedidoBr(p3.data_pedido) === diaDoPedidoBr(p2.data_pedido) && [...prodsDe(p3)].some(id => prodsDe(p2).has(id))));
+    const rows = dup.map(ped => {
+      const c = clientes.find(cl => String(cl.id) === String(ped.cliente_id));
+      return { pedido_id: ped.id, cliente_id: ped.cliente_id, cliente_nome: c ? c.nome : null, data_pedido: ped.data_pedido,
+        dia: diaDoPedidoBr(ped.data_pedido), origem: ped.origem, numero_cotacao: ped.numero_cotacao || null,
+        itens: pedidoItens.filter(i => i.pedido_id === ped.id).map(i => {
+          const prod = produtos.find(p => p.id === i.produto_id);
+          return { codigo_sku: prod?.codigo_sku, produto: prod?.nome, quantidade: i.quantidade };
+        }) };
+    });
+    rows.sort((a, b) => (Number(a.cliente_id) - Number(b.cliente_id)) || (a.dia < b.dia ? 1 : a.dia > b.dia ? -1 : 0));
+    return { rows };
+  }
   if (s.includes('INSERT INTO PEDIDOS')) {
     // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto
     const numeroCotacao = params[3] ?? null;
@@ -1209,7 +1255,7 @@ async function query(sql, params = []) {
       id: nextId.pedidos++, cliente_id: params[0], vendedor_id: params[1], observacao: params[2],
       numero_cotacao: numeroCotacao, pdf_modificado_em: params[6] ?? null, usuario_id: params[7] ?? null,
       origem: params[4] || 'app', contexto: params[8] ?? null,
-      data_pedido: new Date().toISOString(),
+      data_pedido: params[5] ? new Date(params[5]).toISOString() : new Date().toISOString(),
     };
     pedidos.push(p);
     return { rows: [{ id: p.id, data_pedido: p.data_pedido }] };
@@ -1615,6 +1661,7 @@ module.exports = {
   __getClientes: () => clientes,
   __getLevantamentos: () => levantamentos,
   __getPedidoItens: () => pedidoItens,
+  __getPedidos: () => pedidos,
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __getRecompraAdiamentos: () => recompraAdiamentos,
   __getNovidades: () => novidades,

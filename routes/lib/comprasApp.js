@@ -32,10 +32,13 @@ const SQL_PEDIDO_APP_VALIDO = "ped.origem IS DISTINCT FROM 'faturamento'";
 // UTC = "só a data", fica o dia gravado; o resto (hora real, com microssegundos)
 // vai pro dia de Brasília. Conferido no banco em 05/10/2026: 13 de 13 do PDF e
 // 234 de 234 de 'faturamento' à meia-noite UTC; 1 de 20 do app muda de dia.
+// O "meia-noite"/"dia gravado" é lido em UTC explícito (AT TIME ZONE 'UTC'), não
+// no fuso da sessão: se o banco um dia rodar em outro fuso, ::time/::date da
+// TIMESTAMPTZ mudariam junto e o teste deixaria de pegar o PDF.
 const FUSO = 'America/Sao_Paulo';
 function sqlDiaDoPedido(alias = 'ped') {
   const d = `${alias}.data_pedido`;
-  return `(CASE WHEN ${d}::time = '00:00:00' THEN ${d}::date ELSE (${d} AT TIME ZONE '${FUSO}')::date END)`;
+  return `(CASE WHEN (${d} AT TIME ZONE 'UTC')::time = '00:00:00' THEN (${d} AT TIME ZONE 'UTC')::date ELSE (${d} AT TIME ZONE '${FUSO}')::date END)`;
 }
 const SQL_HOJE_BR = `(now() AT TIME ZONE '${FUSO}')::date`;
 
