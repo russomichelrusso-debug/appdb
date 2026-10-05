@@ -1981,6 +1981,28 @@ async function main() {
       && gs.autenticadoPeloGmail_(cab(['spf=pass smtp.mailfrom=vendas@cortag.com', 'dmarc=none header.from=cortag.com']), 'vendas@cortag.com') === false
       && gs.autenticadoPeloGmail_('From: vendas@cortag.com', 'vendas@cortag.com') === false,
       'script do Gmail: não vale "pass" escrito por quem mandou (abaixo do do Gmail), de outro domínio/subdomínio, só SPF ou sem Authentication-Results');
+    // formatos reais do log do conferirAutenticacao (05/10/2026): a noreply passa SÓ pelo
+    // DMARC (DKIM de cortagind.onmicrosoft.com, não alinhado); a vendas@ às vezes traz
+    // header.b entre aspas
+    const realNoreply = ['dkim=pass header.i=@cortagind.onmicrosoft.com header.s=selector2-cortagind-onmicrosoft-com header.b=e3BvrIva',
+      'arc=pass (i=1 spf=pass spfdomain=cortag.com.br dkim=pass dkdomain=cortag.com.br dmarc=pass fromdomain=cortag.com.br)',
+      'spf=pass (google.com: domain of noreply@cortag.com.br designates 2a01:111:f403:c10d::1 as permitted sender) smtp.mailfrom=noreply@cortag.com.br',
+      'dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=cortag.com.br'];
+    const realVendasAspas = ['dkim=pass header.i=@cortag.com header.s=selector1 header.b="ALsKnD/O"',
+      'spf=pass (google.com: domain of vendas@cortag.com designates 2a01:111:f403:c10d::3 as permitted sender) smtp.mailfrom=vendas@cortag.com',
+      'dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=cortag.com'];
+    assert(gs.autenticadoPeloGmail_(cab(realNoreply), 'noreply@cortag.com.br') === true
+      && gs.autenticadoPeloGmail_(cab(realVendasAspas), 'vendas@cortag.com') === true
+      && gs.autenticadoPeloGmail_(cab(realNoreply.filter(r => !r.startsWith('dmarc='))), 'noreply@cortag.com.br') === false,
+      'script do Gmail: formato real da noreply (só DMARC) e da vendas@ (header.b entre aspas) passam; noreply sem o DMARC não');
+    // endereço de envio escolhido por quem manda, repetido pelo Gmail no comentário do spf e
+    // no smtp.mailfrom: um ";dmarc=pass header.from=..." dentro dele não vira resultado
+    const envelope = (texto) => ['dkim=none', `spf=pass (google.com: domain of ${texto}@golpe.com designates 1.2.3.4 as permitted sender) smtp.mailfrom=${texto}@golpe.com`,
+      'dmarc=fail (p=NONE sp=NONE dis=NONE) header.from=cortag.com.br'];
+    assert(gs.autenticadoPeloGmail_(cab(envelope('"x;dmarc=pass header.from=cortag.com.br y"')), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(envelope('"x;dkim=pass header.i=@cortag.com y"')), 'vendas@cortag.com') === false
+      && gs.autenticadoPeloGmail_(cab(envelope('"x(;dmarc=pass header.from=cortag.com.br"')), 'noreply@cortag.com.br') === false,
+      'script do Gmail: "pass" escondido no endereço de envio (entre aspas/parênteses) não vale');
     // verificarEmails de ponta a ponta, com Gmail/servidor falsos: e-mail com erro do
     // servidor (503) não trava a fila pra sempre - na 4ª rodada vira "Falhou" e o
     // seguinte entra; remetente falso nunca é mandado (endereço de fora: nem é
