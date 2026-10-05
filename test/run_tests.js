@@ -6,6 +6,8 @@ const path = require('path');
 const mockDb = require('./mock-db');
 const { generateToken, hashToken } = require('../auth-utils');
 const dbPath = path.resolve(__dirname, '../db.js');
+// /health/banco guarda a resposta por 15 s (server.js); no teste, 300 ms
+process.env.HEALTH_BANCO_CACHE_MS = '300';
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...args) {
   const resolved = originalResolve.call(this, request, ...args);
@@ -75,8 +77,24 @@ async function main() {
 
   // 1b) /health/banco: servidor no ar E banco respondendo (o script do Gmail usa antes de
   // mandar arquivo); banco com erro = 503 genérico, sem a mensagem do banco
-  res = await req('GET', '/health/banco');
-  assert(res.status === 200 && res.body.banco === 'ok', `health do banco responde OK: ${JSON.stringify(res.body)}`);
+  // A resposta fica guardada (300 ms no teste, 15 s de verdade) e chamadas ao mesmo
+  // tempo esperam a mesma consulta: rota pública em loop não ocupa o banco.
+  {
+    const queryOriginal = mockDb.pool.query;
+    let consultas = 0;
+    mockDb.pool.query = async (sql, params) => {
+      if (sql.includes('health:banco')) { consultas++; await new Promise(r => setTimeout(r, 50)); }
+      return queryOriginal(sql, params);
+    };
+    let juntas;
+    try {
+      juntas = await Promise.all([1, 2, 3, 4, 5].map(() => req('GET', '/health/banco')));
+      res = await req('GET', '/health/banco');
+    } finally { mockDb.pool.query = queryOriginal; }
+    assert(juntas.every(r => r.status === 200 && r.body.banco === 'ok') && res.status === 200 && consultas === 1,
+      `health do banco responde OK; 6 chamadas = 1 consulta ao banco: ${JSON.stringify([res.body, consultas])}`);
+  }
+  await new Promise(r => setTimeout(r, 350)); // passa a validade da resposta guardada
   {
     const queryOriginal = mockDb.pool.query;
     mockDb.pool.query = async (sql, params) => {
@@ -84,6 +102,14 @@ async function main() {
       return queryOriginal(sql, params);
     };
     try { res = await req('GET', '/health/banco'); } finally { mockDb.pool.query = queryOriginal; }
+    // erro lançado na hora (sem promise) também não trava: passada a validade, consulta de novo
+    await new Promise(r => setTimeout(r, 350));
+    mockDb.pool.query = (sql, params) => { if (sql.includes('health:banco')) throw new Error('síncrono'); return queryOriginal(sql, params); };
+    let rSinc;
+    try { rSinc = await req('GET', '/health/banco'); } finally { mockDb.pool.query = queryOriginal; }
+    await new Promise(r => setTimeout(r, 350));
+    const rVolta = await req('GET', '/health/banco');
+    assert(rSinc.status === 503 && rVolta.status === 200, `health do banco: erro síncrono não deixa a consulta presa: ${JSON.stringify([rSinc.status, rVolta.status])}`);
     const r2 = await req('GET', '/health');
     assert(res.status === 503 && !JSON.stringify(res.body).includes('SEGREDO') && r2.status === 200,
       `health do banco: banco fora = 503 sem detalhe, e o /health continua 200: ${JSON.stringify(res.body)}`);
