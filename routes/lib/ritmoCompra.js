@@ -9,8 +9,12 @@
 //  - aparece 7 dias antes da data prevista; "fora do ritmo" quando o atraso
 //    passa de 1,5x o ritmo;
 //  - quantidade sugerida = mediana das 3 últimas compras do produto.
-// Compras a até 7 dias uma da outra contam como uma só (entrega dividida,
-// pedido complementar na mesma semana) - senão o ritmo encurtava.
+// Pedidos na mesma semana contam como uma compra só (entrega dividida, pedido
+// complementar) - senão o ritmo encurtava. A semana conta do 1º pedido da
+// compra, sem emendar: emendando (cada pedido a até 7 dias do anterior), quem
+// compra toda semana virava UMA compra no ano e sumia da lista, e quem tinha
+// pedidos seguidos ficava com a "última compra" no 1º deles - aparecia
+// atrasado tendo comprado há duas semanas (achado do revisor-cortag, 10/2026).
 
 const JANELA_DIAS = 365;
 const MIN_COMPRAS = 3;
@@ -43,8 +47,8 @@ function mediana(nums) {
 }
 
 // eventos [{ data, quantidade? }] -> compras [{ data, fim, quantidade }], em
-// ordem. Evento a até JUNTAR_DIAS do anterior entra na mesma compra; `data` é
-// o 1º dia da compra e `fim` o último.
+// ordem. Evento a menos de JUNTAR_DIAS do 1º dia da compra entra nela; `data`
+// é o 1º dia da compra e `fim` o último (nunca mais de 6 dias depois).
 function juntarCompras(eventos) {
   const ordenados = eventos
     .filter(e => e && e.data)
@@ -53,7 +57,7 @@ function juntarCompras(eventos) {
   const compras = [];
   for (const e of ordenados) {
     const atual = compras[compras.length - 1];
-    if (atual && diasEntre(atual.fim, e.data) <= JUNTAR_DIAS) {
+    if (atual && diasEntre(atual.data, e.data) < JUNTAR_DIAS) {
       atual.fim = e.data;
       atual.quantidade += e.quantidade;
     } else {
@@ -64,13 +68,15 @@ function juntarCompras(eventos) {
 }
 
 // compras (de juntarCompras) -> ritmo, ou null com menos de MIN_COMPRAS.
+// Intervalos entre o 1º dia de cada compra; última compra = o último pedido
+// dela (`fim`) e a previsão conta dele.
 // atraso_dias > 0 = passou da data prevista; negativo = faltam N dias.
 function ritmoDasCompras(compras, hoje) {
   if (!compras || compras.length < MIN_COMPRAS) return null;
   const intervalos = [];
   for (let i = 1; i < compras.length; i++) intervalos.push(diasEntre(compras[i - 1].data, compras[i].data));
   const ritmo = Math.round(mediana(intervalos));
-  const ultima = compras[compras.length - 1].data;
+  const ultima = compras[compras.length - 1].fim;
   const previsao = somarDias(ultima, ritmo);
   return {
     num_compras: compras.length,
@@ -123,7 +129,7 @@ function itensDaProposta(ritmoCliente, comprasCliente, comprasPorSku, hoje) {
     if (nas.length < FREQUENTE_MIN) continue;
     frequentes.push({
       codigo_sku: sku, quantidade: quantidadeTipica(nas), origem: 'frequente',
-      ritmo_dias: null, ultima_compra: compras[compras.length - 1].data, previsao: null,
+      ritmo_dias: null, ultima_compra: compras[compras.length - 1].fim, previsao: null,
     });
   }
   return frequentes.sort((a, b) => b.ultima_compra.localeCompare(a.ultima_compra) || a.codigo_sku.localeCompare(b.codigo_sku));

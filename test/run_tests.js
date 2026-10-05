@@ -826,7 +826,8 @@ async function main() {
 
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
   // ritmo = mediana dos intervalos entre compras dos últimos 12 meses (mín. 3),
-  // compras a até 7 dias uma da outra viram uma só, previsão = última + ritmo.
+  // pedidos a menos de 7 dias do 1º da compra viram uma compra só (sem emendar),
+  // previsão = último pedido da última compra + ritmo.
   const ritmoLib = require('../routes/lib/ritmoCompra');
   const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const antesBr = (n) => ritmoLib.somarDias(hojeBr, -n);
@@ -836,11 +837,23 @@ async function main() {
       { data: antesBr(57), quantidade: 3 }, { data: antesBr(30), quantidade: 6 },
     ]);
     assert(compras.length === 3 && compras[1].quantidade === 4 && compras[1].fim === antesBr(57),
-      `juntarCompras junta compras a até 7 dias uma da outra: ${JSON.stringify(compras)}`);
+      `juntarCompras junta os pedidos da mesma semana: ${JSON.stringify(compras)}`);
     const r = ritmoLib.ritmoDasCompras(compras, hojeBr);
     assert(r && r.ritmo_dias === 30 && r.previsao === hojeBr && r.atraso_dias === 0 && ritmoLib.situacaoDoRitmo(r) === 'semana',
       `ritmoDasCompras: mediana dos intervalos, previsão = última + ritmo: ${JSON.stringify(r)}`);
     assert(ritmoLib.ritmoDasCompras(compras.slice(0, 2), hojeBr) === null, 'menos de 3 compras = sem ritmo');
+    // quem compra toda semana: cada semana é uma compra (emendando, o ano inteiro virava uma só)
+    const semanal = ritmoLib.juntarCompras(Array.from({ length: 52 }, (_, i) => ({ data: antesBr(i * 7), quantidade: 1 })));
+    const rs = ritmoLib.ritmoDasCompras(semanal, hojeBr);
+    assert(semanal.length === 52 && rs && rs.ritmo_dias === 7 && rs.ultima_compra === hojeBr && ritmoLib.situacaoDoRitmo(rs) === 'semana',
+      `juntarCompras: quem compra toda semana tem ritmo de 7 dias: ${JSON.stringify([semanal.length, rs])}`);
+    // pedidos seguidos (35, 29, 22, 15 dias): a semana conta do 1º pedido, e a última
+    // compra é o pedido de 15 dias atrás, não o início da sequência
+    const seguidas = ritmoLib.juntarCompras([95, 65, 35, 29, 22, 15].map(n => ({ data: antesBr(n), quantidade: 1 })));
+    const rq = ritmoLib.ritmoDasCompras(seguidas, hojeBr);
+    assert(seguidas.length === 5 && seguidas[2].data === antesBr(35) && seguidas[2].fim === antesBr(29)
+      && rq.ultima_compra === antesBr(15) && rq.atraso_dias < 0 && ritmoLib.situacaoDoRitmo(rq) !== 'atrasado',
+      `juntarCompras: quem acabou de comprar não aparece atrasado: ${JSON.stringify([seguidas, rq])}`);
     assert(ritmoLib.mediana([10, 30, 200]) === 30 && ritmoLib.quantidadeTipica([{ quantidade: 2 }, { quantidade: 10 }, { quantidade: 4 }, { quantidade: 3 }]) === 4,
       'mediana ignora a compra fora da curva; quantidade típica = mediana das 3 últimas');
     const sit = (atraso, ritmo) => ritmoLib.situacaoDoRitmo({ atraso_dias: atraso, ritmo_dias: ritmo });
@@ -923,7 +936,7 @@ async function main() {
       && b.itens.find(i => i.codigo_sku === '71003').quantidade === 3,
       `recompra: cliente só do app; sem produto com ritmo, proposta com os de 2 das 3 últimas compras: ${JSON.stringify(b)}`);
     assert(e && e.situacao === 'semana' && e.ritmo_dias === 30 && e.num_compras === 3,
-      `recompra: compras a até 7 dias uma da outra contam como uma só: ${JSON.stringify(e)}`);
+      `recompra: pedidos da mesma semana contam como uma compra só: ${JSON.stringify(e)}`);
     assert(f && f.situacao === 'fora' && f.atraso_dias === 110 && f.itens.length === 1 && f.itens[0].origem === 'frequente',
       `recompra: fora do ritmo (atraso > 1,5x), proposta pelos itens frequentes: ${JSON.stringify(f)}`);
     const ordem = doTeste.map(c => c.cliente_id);
