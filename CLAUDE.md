@@ -72,6 +72,12 @@ Automação do Claude Code (`.claude/`):
   dobro, `.hidden` × display inline, CRLF, tabelas da política). Rodar antes de abrir PR que
   mexa em `routes/`, `schema.sql`, `importadores.js` ou nas `.html`; regra nova que entrar aqui
   em "Pegadinhas"/"Fontes de dados" vale a pena copiar pra lá.
+- Plugin **agent-skills** (`addyosmani/agent-skills`, registrado em `settings.json` por
+  `extraKnownMarketplaces` + `enabledPlugins`, instala sozinho em toda sessão do projeto): skills
+  genéricas de engenharia (revisão, testes, segurança, desempenho web…), comandos `/spec`, `/plan`,
+  `/build`, `/test`, `/review`, `/ship`, `/code-simplify`, `/constraints`, `/webperf` e agentes
+  code-reviewer/security-auditor/test-engineer/web-performance-auditor. São regras gerais: o que
+  está neste arquivo e no `revisor-cortag` vale por cima delas (ex.: o fluxo de PR daqui).
 - MCP **Playwright** (`.mcp.json` → `.claude/mcp-playwright.js`): navegador com tela de celular
   (Pixel 7) pra abrir o app e tirar print. Com `scripts/app-local.js` rodando, abrir
   `http://localhost:8080/__entrar`. Na nuvem usa o Chromium de `/opt/pw-browsers` (sem janela,
