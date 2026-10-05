@@ -163,6 +163,28 @@ async function main() {
     [hashToken(authToken), criado.rows[0].id, '90']
   );
 
+  // 2c) rota de payload grande (25 MB): sem token, responde 401 sem ler o corpo
+  // (antes o parse de até 25 MB rodava antes do login). O corpo anuncia 20 MB e só
+  // 1 KB é mandado: se o servidor esperasse o corpo, não haveria resposta.
+  {
+    const semToken = await new Promise((resolve) => {
+      const r = http.request({ hostname: 'localhost', port: 4123, path: '/api/fichas-tecnicas/importar', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': 20 * 1024 * 1024 } }, (resp) => {
+        let b = ''; resp.on('data', c => b += c); resp.on('end', () => { clearTimeout(t); resolve({ status: resp.statusCode, body: b }); });
+      });
+      const t = setTimeout(() => { r.destroy(); resolve({ status: 'sem resposta' }); }, 2000);
+      r.on('error', () => {});
+      r.write('{"fichas":{"x":"' + 'a'.repeat(1024));
+    });
+    assert(semToken.status === 401, `payload grande sem token: 401 antes de ler o corpo: ${JSON.stringify(semToken)}`);
+    // com token: corpo acima de 1 MB continua passando (parser de 25 MB) e o login é conferido 1 vez só
+    const antesLog = mockDb.__queryLog.length;
+    const grande = await req('POST', '/api/fichas-tecnicas/importar', { fichas: {}, enchimento: 'a'.repeat(2 * 1024 * 1024) });
+    const consultasSessao = mockDb.__queryLog.slice(antesLog).filter(q => /FROM sessoes s/i.test(q.sql)).length;
+    assert(grande.status === 400 && /Nenhuma ficha/.test(grande.body.erro) && consultasSessao === 1,
+      `payload grande com token: corpo de 2 MB lido e sessão conferida 1 vez: ${JSON.stringify([grande.status, grande.body, consultasSessao])}`);
+  }
+
   // 3) criar cliente
   res = await req('POST', '/api/clientes', { nome: 'João Silva Materiais', documento: '12345678000199', contato: '11999998888' });
   assert(res.status === 201 && res.body.id, 'cria cliente novo');

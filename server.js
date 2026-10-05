@@ -74,8 +74,13 @@ app.use((req, res, next) => {
     if (!importacaoEmailRoutes.chaveImportacaoValida(req)) return res.status(401).json({ erro: 'Chave de importação inválida.' });
     return jsonGrande(req, res, next);
   }
-  const parser = ROTAS_PAYLOAD_GRANDE.some(p => req.path.startsWith(p)) ? jsonGrande : jsonPadrao;
-  parser(req, res, next);
+  // Rota de payload grande: confere o login ANTES de ler o corpo - senão qualquer
+  // um sem token mandava 25 MB e o servidor fazia o parse inteiro antes do 401.
+  // (o requireAuth do app.use da rota, mais abaixo, vê req.usuario e não consulta de novo)
+  if (ROTAS_PAYLOAD_GRANDE.some(p => req.path.startsWith(p))) {
+    return requireAuth(req, res, (err) => (err ? next(err) : jsonGrande(req, res, next)));
+  }
+  jsonPadrao(req, res, next);
 });
 
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));

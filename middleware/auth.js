@@ -8,6 +8,9 @@ const { pool } = require('../db');
 const { hashToken } = require('../auth-utils');
 
 async function requireAuth(req, res, next) {
+  // já conferido nesta requisição (server.js confere antes de ler o corpo das
+  // rotas de payload grande) - não consulta o banco de novo
+  if (req.usuario) return next();
   const token = (req.header('Authorization') || '').replace('Bearer ', '').trim();
   if (!token) return res.status(401).json({ erro: 'Não autenticado — faça login novamente.' });
   try {
