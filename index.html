@@ -6667,7 +6667,10 @@
           sel.value = valorAtual;
         } else {
           sel.value = '';
-          if (state.paymentTerm && !disponiveis.includes(state.paymentTerm)) state.paymentTerm = '';
+          // item do carrinho ainda fora do catálogo (carregando): o total está
+          // incompleto - não descarta o prazo escolhido por isso
+          const totalIncompleto = state.cart.some(it => !productByCod(it.cod));
+          if (state.paymentTerm && !disponiveis.includes(state.paymentTerm) && !totalIncompleto) state.paymentTerm = '';
         }
         atualizarInfoDescontoPrazo();
       }
@@ -6801,6 +6804,12 @@
       }
       function qtyDiscountFor(cod) {
         return state.qtyDiscounts[cod] || 0;
+      }
+      // O que a tela mostra no campo/selo de desconto do item: nada quando ele é
+      // preço fixo no canal atual (o preço ignora o desconto; o valor fica guardado
+      // pra quando o canal voltar a aceitar)
+      function descontoItemVisivel(p) {
+        return isPrecoFixoParaCanal(p) ? 0 : qtyDiscountFor(p.c);
       }
       function clientPrice(list, channelPct, promoPct, isFixed, qtyPct) {
         if (isFixed) return list; // Preço Fixo: só imposto, sem desconto comercial
@@ -7387,7 +7396,7 @@
         const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDiscountFor(p.c));
         const hasDiscount = cp < lp - 0.005;
         const edited = isPriceEdited(p.c);
-        const qtyDisc = qtyDiscountFor(p.c);
+        const qtyDisc = descontoItemVisivel(p);
         const rotuloFamilia = p.familia || (p.cat != null ? DB.categories[p.cat] : '');
         return `<div class="card">
     <span class="catbadge">${escapeHtml(rotuloFamilia)}</span>
@@ -7579,6 +7588,7 @@
           lastCartJson = JSON.stringify(state.cart);
           localStorage.setItem(CART_LS_KEY, lastCartJson);
         } catch (e) { /* sem localStorage - segue sem persistir */ }
+        salvarContextoDoCarrinho(); // item adicionado pela busca não passa pelo renderCart
       }
       function loadCartFromLS() {
         try {
@@ -7604,9 +7614,12 @@
           else localStorage.removeItem(CART_CTX_LS_KEY);
         } catch (e) { /* sem localStorage - segue sem persistir */ }
       }
-      // Na abertura, depois de o cliente do rascunho voltar (setLevCliente põe o
-      // canal e o % dele) - o que estava no orçamento vale por cima.
+      // Na abertura, com o catálogo carregado e depois de o cliente do rascunho
+      // voltar (setLevCliente põe o canal e o % dele) - o que estava no orçamento
+      // vale por cima. Catálogo que não carregou: não restaura nem grava (o
+      // guardado continua lá pra próxima abertura).
       function restaurarContextoDoCarrinho() {
+        if (contextoDoCarrinhoRestaurado) return;
         let ctx = null;
         try { ctx = JSON.parse(localStorage.getItem(CART_CTX_LS_KEY) || 'null'); } catch (e) { }
         if (ctx && state.cart.length) aplicarContextoDoPedido(ctx);
@@ -7934,7 +7947,7 @@
           <div>
             <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
             <span class="catbadge">${escapeHtml(productFamilia(p))}</span>
-            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${qtyDiscountFor(p.c) > 0 ? ` <span class="editedbadge">-${qtyDiscountFor(p.c)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
+            <div class="pname">${escapeHtml(p.n)}${isPrecoFixoParaCanal(p) ? ' <span class="fixedbadge" style="margin-left:4px;">Preço fixo</span>' : ''}${isPriceEdited(p.c) ? ' <span class="editedbadge">Preço editado</span>' : ''}${descontoItemVisivel(p) > 0 ? ` <span class="editedbadge">-${descontoItemVisivel(p)}%</span>` : ''}${campaignPct > 0 ? ` <span class="campaignbadge" title="${escapeHtml(campaignName || '')}">🎉 -${campaignPct}% campanha</span>` : ''}</div>
             <div class="pcode">Cód. ${escapeHtml(p.c)}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
@@ -7948,7 +7961,7 @@
               <button data-inc="${escapeHtml(p.c)}">+</button>
             </div>
             <div class="pct-wrap mini">
-              <input class="num-input${qtyDiscountFor(p.c) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDiscountFor(p.c) > 0 ? qtyDiscountFor(p.c) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
+              <input class="num-input${descontoItemVisivel(p) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${descontoItemVisivel(p) > 0 ? descontoItemVisivel(p) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
             </div>
           </div>
           <div>
@@ -9183,7 +9196,7 @@
         listEl.innerHTML = ordered.map((it, idx) => {
           const p = productByCod(it.cod);
           if (!p) return '';
-          const qtyDisc = qtyDiscountFor(p.c);
+          const qtyDisc = descontoItemVisivel(p);
           const cp = clientPrice(listPrice(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDisc);
           const edited = isPriceEdited(p.c);
           return `<div class="levitem ${it.qty === 0 ? 'zero' : ''}${it.done ? ' done' : ''}">
@@ -12791,6 +12804,7 @@
           paymentTerm: state.paymentTerm,
           descontoPrazoDesligado: !!state.descontoPrazoDesligado,
           priceOverrides: doCarrinho(state.priceOverrides),
+          overridesSemImposto: true, // preço editado = base sem imposto (antes era o preço com imposto)
           qtyDiscounts: doCarrinho(state.qtyDiscounts),
         };
       }
@@ -12813,8 +12827,13 @@
         const overrides = ctx.priceOverrides || {};
         const descontos = ctx.qtyDiscounts || {};
         for (const it of state.cart) {
-          if (typeof overrides[it.cod] === 'number') state.priceOverrides[it.cod] = overrides[it.cod];
-          else delete state.priceOverrides[it.cod];
+          if (typeof overrides[it.cod] === 'number') {
+            // pedido gravado antes de o lápis guardar o base sem imposto: o número
+            // era o preço final - tira o imposto pra reabrir com o mesmo preço
+            const prod = productByCod(it.cod);
+            const fator = !ctx.overridesSemImposto && prod ? fatorImposto(prod, state.uf, state.canal) : 1;
+            state.priceOverrides[it.cod] = fator > 0 ? overrides[it.cod] / fator : overrides[it.cod];
+          } else delete state.priceOverrides[it.cod];
           const d = Number(descontos[it.cod]) || 0;
           if ((state.qtyDiscounts[it.cod] || 0) !== d) {
             if (d) state.qtyDiscounts[it.cod] = d; else delete state.qtyDiscounts[it.cod];
@@ -16398,7 +16417,9 @@
           // EAN/DUN-14 em cada produto; sem isso, o scanner de código de barras
           // parava de funcionar (corria em paralelo e sempre achava o índice vazio).
           const catalogoPromise = carregarCatalogoEExtras();
-          catalogoPromise.then(() => { loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
+          // contexto do orçamento guardado só volta com o catálogo: sem ele o total dá 0 e
+          // o prazo escolhido sumia (só "A Vista" cabe) e era regravado vazio
+          catalogoPromise.then(() => { restaurarContextoDoCarrinho(); loadCodigosProduto(); revalidarLevSurveyContraCatalogo(); processarHandoffCalculadora(); renderPriceList(); });
           // checagem de sincronização do Painel só depois do catálogo carregar - antes
           // disso o aparelho tem 0 produtos e parecia "desatualizado" (e o admin
           // disparava um sync vazio, que o servidor recusa).
@@ -16432,7 +16453,6 @@
           initTabs();
           initClienteFichaPeriodo();
           initLevantamento();
-          restaurarContextoDoCarrinho(); // depois do cliente do rascunho (initLevantamento)
           initLevSaveOpen();
           initPrecosCliente();
           initPedidosSalvos();
