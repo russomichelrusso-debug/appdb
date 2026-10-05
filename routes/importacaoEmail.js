@@ -11,6 +11,10 @@
 //    itens em falta (ESCE007-*.xlsx = previsão de estoque);
 //  - vendas@cortag.com: LISTA PADRÃO ... SUL SUDESTE ... .xlsx (catálogo).
 //
+// Remetente: o script só manda e-mail que o Gmail autenticou como da Cortag
+// (DKIM/DMARC) e aqui cada tipo só vale do remetente dele (REMETENTE_DO_TIPO
+// em lib/emailCortag.js) - o "De:" sozinho se falsifica.
+//
 // Autenticação: não é login do Google, é a chave IMPORTACAO_EMAIL_CHAVE (Render)
 // no cabeçalho X-Chave-Importacao - conferida no server.js ANTES de ler o
 // corpo (até 25 MB), pra ninguém sem a chave fazer o servidor ler arquivo.
@@ -27,7 +31,7 @@ const { importarCatalogoPrecos } = require('./catalogoPrecos');
 const { importarPrevisaoEstoque } = require('./previsaoEstoque');
 const { importarClassificatorioErp } = require('./clientesClassificatorio');
 const { acharClientePorNome } = require('../clientMatcher');
-const { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista } = require('./lib/emailCortag');
+const { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista, remetenteValido, REMETENTE_DO_TIPO } = require('./lib/emailCortag');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { avisarImportacao } = require('./lib/novidades');
 
@@ -53,6 +57,12 @@ function chaveImportacaoValida(req) {
 }
 
 class Recusado extends Error {}
+
+function conferirRemetente(tipo, corpo) {
+  if (!remetenteValido(tipo, corpo.remetente)) {
+    throw new Recusado(`${ROTULO_TIPO[tipo]} só vale de ${REMETENTE_DO_TIPO[tipo]} (veio de "${String(corpo.remetente || '').slice(0, 120)}").`);
+  }
+}
 
 // Lê a planilha do tipo reconhecido e grava pelo mesmo caminho da importação
 // manual. Devolve { status, json } da função de importação.
@@ -133,6 +143,7 @@ router.post('/arquivo', async (req, res) => {
   try {
     try { tipo = Importadores.detectarTipoPlanilha(XLSX, buffer); } catch (e) { throw new Recusado('Não foi possível abrir a planilha: ' + e.message); }
     if (!ROTULO_TIPO[tipo]) throw new Recusado(tipo ? `Planilha de "${tipo}" não é importada por e-mail.` : 'Tipo de planilha não reconhecido.');
+    conferirRemetente(tipo, corpo);
     const r = await importarPorTipo(tipo, buffer, nome);
     if (r.status >= 500) {
       // falha nossa (banco): o script tenta de novo na próxima rodada
@@ -245,11 +256,13 @@ router.post('/mensagem', async (req, res) => {
     let resultado;
     if (ehPedidoBloqueado(assunto)) {
       tipo = 'bloqueado';
+      conferirRemetente(tipo, corpo);
       const p = lerPedidoBloqueado(assunto, texto);
       if (!p) throw new Recusado('Não encontrei o número do pedido no e-mail de pedido bloqueado.');
       resultado = await receberPedidoBloqueado(p, recebidoEm);
     } else if (ehPedidoAvista(assunto)) {
       tipo = 'avista';
+      conferirRemetente(tipo, corpo);
       const p = lerPedidoAvista(assunto, texto);
       if (!p) throw new Recusado('Não encontrei pedido/valor no e-mail de pedido à vista.');
       resultado = await receberPedidoAvista(p, recebidoEm);

@@ -33,6 +33,23 @@ No Gmail, cada e-mail tratado ganha um marcador:
 - **Cortag/Importado** — entrou no app;
 - **Cortag/Falhou** — o app recusou a planilha (formato estranho, corrompida, lista de outra
   região). Importar na mão pelo Painel. Ninguém é avisado no app.
+- **Cortag/Nao autenticado** — o e-mail diz vir da Cortag, mas o Gmail não confirmou. **Não vai
+  pro app** (ver "Segurança" abaixo).
+
+## Segurança: só e-mail que é mesmo da Cortag
+
+O app publica direto, inclusive preços, então um e-mail falso não pode entrar. O campo "De:" se
+falsifica à vontade — `"vendas@cortag.com" <qualquer@outro.com>` aparece como "vendas@cortag.com".
+Por isso o script só manda um e-mail pro app quando:
+
+1. o **endereço** (o que fica entre `< >`) é exatamente o remetente da tabela acima; e
+2. o **Gmail autenticou o domínio** desse endereço: no cabeçalho `Authentication-Results` que o
+   Gmail escreve ao receber, `dmarc=pass` (header.from = o domínio) ou `dkim=pass` assinado pelo
+   domínio. Conferido em 05/10/2026 num e-mail real da vendas@cortag.com: `dkim=pass
+   header.i=@cortag.com` e `dmarc=pass (p=QUARANTINE) header.from=cortag.com`.
+
+O servidor confere de novo o remetente de cada tipo (Lista de Preços só de vendas@cortag.com, o
+resto só de noreply@cortag.com.br) e recusa (422) o que vier de outro endereço.
 
 O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra a linha
 **"Importação por e-mail"** com o último arquivo de cada tipo.
@@ -45,7 +62,12 @@ O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra 
 3. ⚙ **Configurações do projeto** › **Propriedades do script** › **Adicionar propriedade**:
    - Propriedade: `CHAVE`
    - Valor: a chave da importação (a mesma de `IMPORTACAO_EMAIL_CHAVE` no Render).
-4. Volte ao editor, escolha a função **`configurar`** na barra de cima e toque em **Executar**.
+4. **Antes de ligar**, escolha a função **`conferirAutenticacao`** na barra de cima e toque em
+   **Executar** (autorize como no passo 5). Em **Execuções** › o log mostra cada e-mail dos
+   últimos 30 dias de cada remetente com **OK** ou **NÃO** e uma linha de resumo por remetente. Se
+   algum e-mail verdadeiro da Cortag der **NÃO**, não siga: esses e-mails ficariam de fora da
+   importação (mande o log pra quem mantém o app).
+   Depois, escolha a função **`configurar`** e toque em **Executar**.
 5. O Google pede autorização: escolha a conta russo2055 › "Avançado" › "Acessar Cortag
    importação (não seguro)" › **Permitir**. (O aviso aparece porque o script é seu, não
    publicado; ele só lê o Gmail, cria os marcadores e chama o servidor do app.)
@@ -64,6 +86,11 @@ O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra 
   de 3 min e salva o progresso a cada e-mail; se aparecer, cole de novo a versão atual do
   `Codigo.gs`. Nada se perde: o arquivo cortado termina no servidor e, na rodada seguinte, volta
   como "já importado".
+- **E-mail verdadeiro marcado "Cortag/Nao autenticado"**: a Cortag mudou o jeito de mandar e o
+  Gmail não confirma mais o domínio. Rode `conferirAutenticacao` e veja a linha
+  `Authentication-Results` do e-mail no log; enquanto isso, importe o anexo pelo Painel.
+- **Atualizar o script** (versão nova do `Codigo.gs`): no script.google.com, apague o conteúdo e
+  cole o novo; rode `conferirAutenticacao` e depois `configurar` (cria o marcador novo, se houver).
 - **Avisos de pedido bloqueado/à vista não chegam**: o script colado no Google é anterior a
   10/2026 — cole de novo a versão atual do `Codigo.gs` (não precisa rodar o `configurar` de novo).
 - **Servidor dormindo** (Render gratuito): o script espera ele acordar; se não acordar, tenta

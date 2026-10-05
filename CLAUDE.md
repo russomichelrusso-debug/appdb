@@ -443,7 +443,11 @@ Supabase, sem PR — não é mudança de código.
   antes de ler o corpo) — o servidor nunca recebe acesso à caixa. Descartados: webhook do Gmail via
   Pub/Sub (autorização de leitura de e-mail expira em 7 dias numa conta @gmail.com sem auditoria paga
   do Google), IMAP com senha de app (caixa inteira no Render) e serviço de e-mail de entrada (relatório
-  passando por terceiro). Anexos (conferidos no Gmail em 04/10/2026): de **noreply@cortag.com.br**,
+  passando por terceiro). **Só e-mail autenticado** (10/2026, achado do `revisor-cortag`: o "De:"
+  se falsificava pelo nome de exibição e o repositório é público): o script compara o endereço
+  exato e exige `dmarc=pass`/`dkim=pass` do domínio no `Authentication-Results` do Gmail (senão
+  marca "Cortag/Nao autenticado"); o servidor confere o remetente de cada tipo
+  (`REMETENTE_DO_TIPO`, `routes/lib/emailCortag.js`). Anexos (conferidos no Gmail em 04/10/2026): de **noreply@cortag.com.br**,
   Carteira/Faturamento `Repres-*.xlsx` **todo dia ~3h** (inclusive fim de semana), Classificatório
   `DD.MM.AAAA_..._Classificatorio.xlsx` e itens em falta `ESCE007-*.xlsx` (= previsão de estoque); de
   **vendas@cortag.com**, `... LISTA PADRÃO ... SUL SUDESTE ... .xlsx` (outras planilhas da vendas@ —

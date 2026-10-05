@@ -18,8 +18,18 @@
 // Resultado de cada e-mail fica num marcador do Gmail:
 //  - "Cortag/Importado": entrou no app;
 //  - "Cortag/Falhou": o app recusou a planilha (formato estranho, corrompida) -
-//    importar na mão pelo Painel. Ninguém é avisado no app (decisão do usuário).
+//    importar na mão pelo Painel. Ninguém é avisado no app (decisão do usuário);
+//  - "Cortag/Nao autenticado": o e-mail diz vir da Cortag mas o Gmail não
+//    confirmou (DKIM/DMARC) - NÃO é mandado pro app. Ver "Segurança" abaixo.
 // Servidor dormindo/fora do ar: não marca nada e tenta de novo na próxima rodada.
+//
+// Segurança: o app publica direto (inclusive preços), então só vale e-mail que
+// é mesmo da Cortag. O "De:" se falsifica à vontade ("vendas@cortag.com"
+// <qualquer@outro.com>), então: (1) o endereço tem que ser EXATAMENTE o da
+// regra e (2) o Gmail tem que ter autenticado o domínio dele - DMARC ou DKIM
+// "pass" do próprio domínio no cabeçalho Authentication-Results que o Gmail
+// põe por cima de tudo ao receber. Pra conferir os e-mails reais antes de
+// valer: rodar a função "conferirAutenticacao" (ver docs/IMPORTACAO-EMAIL.md).
 
 const CONFIG = {
   urlServidor: 'https://appdb-z6uh.onrender.com',
@@ -27,6 +37,7 @@ const CONFIG = {
   diasParaTras: 7,
   marcadorImportado: 'Cortag/Importado',
   marcadorFalhou: 'Cortag/Falhou',
+  marcadorNaoAutenticado: 'Cortag/Nao autenticado',
   // remetente + nome do anexo de cada relatório (o servidor confere de novo
   // o tipo pelas abas/colunas da planilha)
   regras: [
@@ -51,6 +62,7 @@ function configurar() {
   chave_();
   marcador_(CONFIG.marcadorImportado);
   marcador_(CONFIG.marcadorFalhou);
+  marcador_(CONFIG.marcadorNaoAutenticado);
   ScriptApp.getProjectTriggers()
     .filter(t => t.getHandlerFunction() === 'verificarEmails')
     .forEach(t => ScriptApp.deleteTrigger(t));
@@ -79,11 +91,17 @@ function verificarEmails() {
     thread.getMessages().forEach(msg => {
       const id = msg.getId();
       if (jaFeito.has(id) || naFila.has(id) || msg.getDate() < limite) return;
-      const de = msg.getFrom().toLowerCase();
+      const de = enderecoDe_(msg.getFrom());
       const anexos = msg.getAttachments({ includeInlineImages: false })
-        .filter(a => CONFIG.regras.some(r => de.indexOf(r.remetente) !== -1 && r.anexo.test(a.getName())));
-      const ehMensagem = CONFIG.mensagens.some(m => de.indexOf(m.remetente) !== -1 && m.assunto.test(msg.getSubject()));
+        .filter(a => CONFIG.regras.some(r => de === r.remetente && r.anexo.test(a.getName())));
+      const ehMensagem = CONFIG.mensagens.some(m => de === m.remetente && m.assunto.test(msg.getSubject()));
       if (anexos.length === 0 && !ehMensagem) { processados.push(id); jaFeito.add(id); return; }
+      if (!autenticadoPeloGmail_(cabecalhos_(msg), de)) {
+        Logger.log('NÃO autenticado (não vai pro app): "%s" de %s', msg.getSubject(), msg.getFrom());
+        thread.addLabel(marcador_(CONFIG.marcadorNaoAutenticado));
+        processados.push(id); jaFeito.add(id);
+        return;
+      }
       naFila.add(id);
       fila.push({ thread, msg, anexos, ehMensagem });
     });
@@ -174,6 +192,64 @@ function acordarServidor_() {
   }
   Logger.log('Servidor não respondeu - tento de novo na próxima rodada.');
   return false;
+}
+
+// "Vendas <vendas@cortag.com>" -> "vendas@cortag.com". Só o que está dentro
+// de <...>: o nome de exibição é texto livre de quem mandou.
+function enderecoDe_(from) {
+  const s = String(from || '');
+  const m = s.match(/<([^<>]*)>\s*$/);
+  return (m ? m[1] : s).trim().toLowerCase();
+}
+
+// Só os cabeçalhos do e-mail (até a 1ª linha em branco), com as linhas
+// continuadas juntadas.
+function cabecalhos_(msg) {
+  const bruto = msg.getRawContent();
+  const fim = bruto.search(/\r?\n\r?\n/);
+  return (fim === -1 ? bruto : bruto.slice(0, fim)).replace(/\r?\n[ \t]+/g, ' ');
+}
+
+// O Gmail autenticou o domínio do remetente? Lê o PRIMEIRO cabeçalho
+// "Authentication-Results" - o Gmail escreve o dele em todo e-mail que chega
+// de fora, acima dos cabeçalhos de quem mandou; um que venha mais abaixo foi
+// escrito pelo remetente e não vale.
+// Aceita DMARC "pass" do domínio ou DKIM "pass" assinado pelo domínio (não um
+// subdomínio nem um domínio que só começa igual).
+function autenticadoPeloGmail_(cabecalhos, endereco) {
+  const dominio = String(endereco || '').split('@')[1];
+  if (!dominio) return false;
+  const linha = String(cabecalhos || '').split(/\r?\n/).find(l => /^Authentication-Results:/i.test(l));
+  if (!linha || !/^Authentication-Results:\s*mx\.google\.com\s*;/i.test(linha)) return false;
+  const d = dominio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fimDominio = '(?=[\\s;)]|$)';
+  const resultados = linha.replace(/^Authentication-Results:\s*mx\.google\.com\s*;/i, '').split(';');
+  return resultados.some(r =>
+    new RegExp('^\\s*dmarc=pass\\b.*\\bheader\\.from=' + d + fimDominio, 'i').test(r)
+    || new RegExp('^\\s*dkim=pass\\b.*\\bheader\\.(?:i=[^\\s;@]*@|d=)' + d + fimDominio, 'i').test(r));
+}
+
+// Rodar à mão antes de deixar esta versão valer (e sempre que a Cortag trocar o
+// jeito de mandar e-mail): lista os e-mails dos últimos 30 dias de cada
+// remetente e diz se passariam na checagem. Não manda nada pro app.
+function conferirAutenticacao() {
+  const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente).concat(CONFIG.mensagens.map(m => m.remetente))));
+  remetentes.forEach(remetente => {
+    const threads = GmailApp.search(`from:${remetente} newer_than:30d`, 0, 10);
+    let ok = 0;
+    let total = 0;
+    threads.forEach(t => t.getMessages().forEach(msg => {
+      if (enderecoDe_(msg.getFrom()) !== remetente) return;
+      const cab = cabecalhos_(msg);
+      const passou = autenticadoPeloGmail_(cab, remetente);
+      total++;
+      if (passou) ok++;
+      const linha = cab.split(/\r?\n/).find(l => /^Authentication-Results:/i.test(l)) || '(sem Authentication-Results)';
+      Logger.log('%s  %s | %s | %s', passou ? 'OK ' : 'NÃO', remetente, msg.getSubject(), linha.slice(0, 400));
+    }));
+    Logger.log('== %s: %s de %s e-mail(s) autenticado(s)%s', remetente, ok, total,
+      total && ok < total ? ' - os que deram NÃO não seriam importados; avise antes de usar esta versão' : '');
+  });
 }
 
 function chave_() {

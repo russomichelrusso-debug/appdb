@@ -57,4 +57,28 @@ function lerPedidoAvista(assunto, corpo) {
   return { nr_pedido: semZeros(m[2]), cliente_nome: m[1].trim(), valor: valorBr(m[3]) };
 }
 
-module.exports = { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista };
+// Quem manda cada tipo. O script do Gmail só manda e-mail desses endereços que
+// o Gmail autenticou (DKIM/DMARC); aqui é a 2ª barreira: com a chave certa mas
+// outro remetente (script desatualizado, chave vazada), recusa.
+const NOREPLY = 'noreply@cortag.com.br';
+const REMETENTE_DO_TIPO = {
+  relatorio: NOREPLY, classificatorio: NOREPLY, previsao: NOREPLY, bloqueado: NOREPLY, avista: NOREPLY,
+  precos: 'vendas@cortag.com',
+};
+
+// "Vendas <vendas@cortag.com>" -> "vendas@cortag.com" (o nome de exibição é
+// texto livre de quem mandou e não conta)
+function enderecoDoRemetente(from) {
+  const s = String(from || '');
+  const m = s.match(/<([^<>]*)>\s*$/);
+  return (m ? m[1] : s).trim().toLowerCase();
+}
+
+function remetenteValido(tipo, from) {
+  return Boolean(REMETENTE_DO_TIPO[tipo]) && enderecoDoRemetente(from) === REMETENTE_DO_TIPO[tipo];
+}
+
+module.exports = {
+  ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista,
+  REMETENTE_DO_TIPO, enderecoDoRemetente, remetenteValido,
+};
