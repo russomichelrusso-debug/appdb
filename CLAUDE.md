@@ -222,6 +222,17 @@ Supabase, sem PR — não é mudança de código.
   - Tabelas que precisam andar juntas: `CLASSI_POR_CANAL` (`index.html`) ↔
     `routes/lib/politicaComercial.js` (percentuais) e `FAIXAS` em `routes/clientesClassificatorio.js`
     (valores das faixas; buscar sempre via `faixaDoTipo`, que ignora acento/maiúscula).
+  - **Campanhas por canal** (10/2026, pedido do usuário: "as promoções são diferentes por canal"): cada
+    regra de campanha do Painel (Promoções › quantidade/valor/cesta, chave `promocoes`) tem `canais`; as
+    criadas antes, sem o campo, valem **só no Varejo** (`canaisDaRegra`) — antes toda regra valia em todos.
+  - **Preço fixo é por canal**: o item "PREÇO FIXO" da Lista de Preços só é fixo em Varejo/Atacado/
+    E-commerce (`canaisFx`); tudo que trava desconto (campo por item, `setItemDiscount`, campanha) usa
+    `isPrecoFixoParaCanal`, nunca o `p.fx` puro (que diz "fixo em algum canal").
+  - **Lápis "Editar preço base"** guarda o valor **sem imposto** e o `listPrice` põe o imposto do produto
+    por cima (`fatorImposto`: preço com ÷ sem imposto da Lista de Preços, ou IPI×ST no formato antigo).
+  - O orçamento guardado no aparelho leva o contexto junto (`cortagCartContexto_v1`, mesmo formato do
+    `contexto` do pedido) e volta na abertura; o `cortagCart_v1` continua só a lista de itens (a Curva
+    ABC lê). As parcelas disponíveis contam o total **sem** o desconto do próprio prazo.
   - Fora de propósito: Home Center Master e Trading ("a consultar"/lista específica — o vendedor
     usa o "Desc. adicional"); Institucional, Construtora e Atacarejo não têm faixa.
 
