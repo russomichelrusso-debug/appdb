@@ -9257,6 +9257,10 @@
             renderLevList();
             setTimeout(() => document.getElementById('levInput').focus(), 50);
           }
+          // aqui e não no clique do botão da aba: também se chega na aba Clientes
+          // pelo selo de classificatório do card (activateMainTab), e o bloco
+          // "Recompra da semana" ficava escondido nesse caminho
+          if (tab === 'clientes') carregarRecompra(false);
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -13750,9 +13754,6 @@
         setInterval(carregarNovidades, NOVIDADES_ATUALIZAR_MS);
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregarNovidades(); });
       }
-      function initRecompra() {
-        document.getElementById('tabBtnClientes').addEventListener('click', () => carregarRecompra(false));
-      }
       function openClienteDetail(cliente) {
         clienteTabSelected = cliente;
         document.getElementById('clienteDetailName').textContent = cliente.nome;
@@ -16142,7 +16143,6 @@
           initProdutosTab();
           initClientesTab();
           initClassificatorioAlertas();
-          initRecompra();
           initNovidades();
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
