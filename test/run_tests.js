@@ -1827,6 +1827,30 @@ async function main() {
     `importação por e-mail: planilha não reconhecida é recusada (422) e fica registrada: ${JSON.stringify(res.body)}`);
   res = await enviarArquivo('relatorio.pdf', xlsPrevisao);
   assert(res.status === 422, 'importação por e-mail: só aceita .xlsx');
+  {
+    // planilha que parece relatório mas sem as colunas: erro do leitor = recusada (422, não tenta de novo)
+    const xlsSemColunas = planilha({ Carteira: [['Relatório de Carteira'], [], ['Cliente', 'Coisa'], ['LOJA', 'x']] });
+    res = await enviarArquivo('Repres-23.xlsx', xlsSemColunas);
+    assert(res.status === 422 && res.body.tipo === 'relatorio',
+      `importação por e-mail: erro do leitor da planilha é recusa (422): ${JSON.stringify(res.body)}`);
+    // importou, mas o registro em importacoes_email falhou: continua 200 (antes: 422 "Cortag/Falhou"
+    // com o arquivo já dentro do app, e a mensagem crua do banco na resposta)
+    const queryOriginal = mockDb.pool.query;
+    mockDb.pool.query = async (sql, params) => {
+      if (sql.includes('importacao-email:registrar') && params && params[7] === 'ok') throw new Error('conexão perdida SEGREDO-DO-BANCO');
+      return queryOriginal(sql, params);
+    };
+    const xlsPrevisao2 = planilha({ Plan1: [['Item', 'Descrição', 'Qt. Disp.', 'Qt. Carteira', 'Qt. Compra', 'Previsão', 'Saldo'],
+      ['60863', 'DISCO', 1, 5, 10, dia(2026, 10, 25), -4]] });
+    try {
+      res = await enviarArquivo('ESCE007-05102026060311.xlsx', xlsPrevisao2);
+    } finally {
+      mockDb.pool.query = queryOriginal;
+    }
+    assert(res.status === 200 && res.body.tipo === 'previsao' && !JSON.stringify(res.body).includes('SEGREDO')
+      && mockDb.__getPrevisaoEstoque().some(p => p.codigo_sku === '60863' && Number(p.qt_disponivel) === 1),
+      `importação por e-mail: falha só no registro depois de importar não vira "Falhou": ${JSON.stringify(res.body)}`);
+  }
   res = await req('GET', '/api/importacao-email/status', null, { Authorization: '' });
   assert(res.status === 401, 'importação por e-mail: o status do Painel exige login');
   res = await req('GET', '/api/importacao-email/status');
@@ -1947,6 +1971,56 @@ async function main() {
       && gs.autenticadoPeloGmail_(cab(['spf=pass smtp.mailfrom=vendas@cortag.com', 'dmarc=none header.from=cortag.com']), 'vendas@cortag.com') === false
       && gs.autenticadoPeloGmail_('From: vendas@cortag.com', 'vendas@cortag.com') === false,
       'script do Gmail: não vale "pass" escrito por quem mandou (abaixo do do Gmail), de outro domínio/subdomínio, só SPF ou sem Authentication-Results');
+    // verificarEmails de ponta a ponta, com Gmail/servidor falsos: e-mail com erro do
+    // servidor (503) não trava a fila pra sempre - na 4ª rodada vira "Falhou" e o
+    // seguinte entra; remetente falso nunca é mandado (endereço de fora: nem é
+    // considerado; endereço da Cortag sem autenticação: "Cortag/Nao autenticado").
+    const props = { CHAVE: 'chave-teste' };
+    const marcadores = {};
+    const enviados = [];
+    const autenticado = 'Authentication-Results: mx.google.com;\r\n dkim=pass header.i=@cortag.com.br;\r\n dmarc=pass header.from=cortag.com.br';
+    const emailFalso = (id, de, nomeAnexo, data, cab) => {
+      const thread = { addLabel: (l) => { marcadores[id] = l.nome; }, getMessages: () => [msg] };
+      const msg = {
+        getId: () => id, getDate: () => data, getFrom: () => de, getSubject: () => 'Relatório ' + id,
+        getAttachments: () => [{ getName: () => nomeAnexo, getBytes: () => [1, 2, 3] }],
+        getRawContent: () => cab + '\r\nFrom: ' + de + '\r\n\r\ncorpo',
+      };
+      return thread;
+    };
+    const agora = Date.now();
+    const threads = [
+      emailFalso('velho-503', 'noreply@cortag.com.br', 'Repres-1.xlsx', new Date(agora - 3 * 3600000), autenticado),
+      emailFalso('novo-ok', 'noreply@cortag.com.br', 'Repres-2.xlsx', new Date(agora - 3600000), autenticado),
+      emailFalso('golpe-nome', '"noreply@cortag.com.br" <golpe@outro.com>', 'Repres-3.xlsx', new Date(agora - 7200000),
+        'Authentication-Results: mx.google.com; dmarc=fail header.from=outro.com'),
+      emailFalso('golpe-endereco', 'noreply@cortag.com.br', 'Repres-4.xlsx', new Date(agora - 5400000),
+        'Authentication-Results: mx.google.com; spf=softfail; dmarc=fail header.from=cortag.com.br'),
+    ];
+    const ctx = {
+      Logger: { log: () => {} },
+      Utilities: { base64Encode: () => 'AQID', sleep: () => {} },
+      PropertiesService: { getScriptProperties: () => ({ getProperty: k => (k in props ? props[k] : null), setProperty: (k, v) => { props[k] = v; } }) },
+      GmailApp: { search: () => threads, getUserLabelByName: n => ({ nome: n }), createLabel: n => ({ nome: n }) },
+      UrlFetchApp: { fetch: (url, opts) => {
+        if (url.endsWith('/health')) return { getResponseCode: () => 200 };
+        const corpo = JSON.parse(opts.payload);
+        enviados.push(corpo.nome);
+        const codigo = corpo.nome === 'Repres-1.xlsx' ? 503 : 200;
+        return { getResponseCode: () => codigo, getContentText: () => '{}' };
+      } },
+    };
+    require('vm').runInNewContext(codigoGs, ctx);
+    const rodadas = [];
+    for (let i = 0; i < 4; i++) {
+      ctx.verificarEmails();
+      rodadas.push({ velho: marcadores['velho-503'] || null, novo: marcadores['novo-ok'] || null, enviados: enviados.splice(0).join(',') });
+    }
+    assert(rodadas.slice(0, 3).every(r => !r.velho && !r.novo && r.enviados === 'Repres-1.xlsx')
+      && rodadas[3].velho === 'Cortag/Falhou' && rodadas[3].novo === 'Cortag/Importado' && rodadas[3].enviados === 'Repres-1.xlsx,Repres-2.xlsx'
+      && !marcadores['golpe-nome'] && marcadores['golpe-endereco'] === 'Cortag/Nao autenticado'
+      && !('velho-503' in JSON.parse(props.TENTATIVAS || '{}')),
+      `script do Gmail: erro do servidor tenta 4 rodadas e desiste sem travar a fila; remetente falso não é mandado: ${JSON.stringify([rodadas, marcadores])}`);
   }
   {
     // relatório diário do fim de semana: na segunda sai um push só, o do mais novo

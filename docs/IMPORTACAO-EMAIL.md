@@ -95,6 +95,10 @@ O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra 
   10/2026 — cole de novo a versão atual do `Codigo.gs` (não precisa rodar o `configurar` de novo).
 - **Servidor dormindo** (Render gratuito): o script espera ele acordar; se não acordar, tenta
   de novo na rodada seguinte, sem marcar o e-mail.
+- **Servidor responde com erro** (5xx) pro mesmo e-mail: tenta de novo nas rodadas seguintes e, na
+  4ª vez seguida (~1 h), marca "Cortag/Falhou" e segue com os próximos — um arquivo que sempre dá
+  erro não trava mais o relatório diário nem os avisos de pedido. Importar esse anexo pelo Painel.
+  (Precisa do `Codigo.gs` de 10/2026 ou mais novo.)
 - **Trocar a chave**: gerar outra (`openssl rand -hex 32`), atualizar `IMPORTACAO_EMAIL_CHAVE`
   no Render e a propriedade `CHAVE` do script.
 - **Parar**: no script.google.com, menu **Acionadores** (relógio) › excluir o acionador de
