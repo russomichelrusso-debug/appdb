@@ -389,7 +389,20 @@ Supabase, sem PR — não é mudança de código.
   produtos/quantidades, pelo nome do arquivo (`Pedido-NomeDDMMAA-HHMMSS.csv` da cópia do Drive, ±10
   min; `NomeDDMMAA.csv` do Compartilhar, único do dia) ou, se ele foi mexido fora do app, pergunta
   quando metade ou mais dos produtos bate; sem pedido correspondente, os itens entram como pedido
-  novo. Pedido **recém-finalizado já fica aberto** pra edição (finalizar de novo não duplica);
+  novo. Pedido **recém-finalizado já fica aberto** pra edição (finalizar de novo não duplica) — **também o
+  feito sem internet** (10/2026, relato do usuário: duplicava): ainda sem número, ele fica aberto pelo
+  `id_envio` e "Atualizar pedido" manda o mesmo `id_envio` com os itens novos (o servidor troca os itens do
+  mesmo pedido); a versão anterior ainda na fila sai dela (vale também pro PATCH); quando a fila envia, o
+  pedido aberto ganha o número. O pedido ainda na fila aparece na lista 🧾 Pedidos ("ainda não enviado") e é
+  reconhecido ao abrir o CSV dele (`pedidosPendentesDaFila`), mesmo depois de "Pedido novo"; a alteração
+  de pedido já numerado ainda na fila aparece por cima dele ("alteração ainda não enviada",
+  `todosPedidosSalvos`), e o que a fila envia entra na lista do aparelho na hora
+  (`registrarEnvioNaListaDePedidos`); alteração descartada por ser mais velha avisa na fila. A versão
+  anterior só sai da fila depois que a nova é aceita ou entra nela. `pedidos.versao_app` (hora do toque já
+  no relógio do servidor, `horaDoPedidoDoApp` — não o relógio do aparelho) impede que uma versão mais velha
+  chegando atrasada (outro aparelho, envio em andamento) apague a mais nova; o app avisa quando a alteração
+  não foi aplicada por isso (`versao_antiga`). Envios com o mesmo `id_envio` passam um de cada vez
+  (`pg_advisory_xact_lock`);
   limpar o orçamento, trocar/limpar o cliente ou "Pedido novo" desligam. O pedido grava o
   `contexto` do orçamento (estado, canal, classificatório, prazo, descontos e preço editado por
   item) pra reabrir com os mesmos preços — os gravados antes disso reabrem pela tabela atual. Lista
