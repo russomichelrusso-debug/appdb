@@ -410,7 +410,7 @@ Supabase, sem PR — não é mudança de código.
   últimas compras; sai da lista quando **compra** ou com **"Já falei"** (7 dias, no servidor em
   `recompra_adiamentos`, pela fila offline sem internet). Escolhas técnicas: compra = **entrada do
   pedido** (implantação, carteira + faturado, sem série de 7 dígitos) + app sem contar em dobro;
-  pedidos a menos de 7 dias do 1º pedido da compra = uma compra só (sem emendar — emendando, quem compra toda semana virava uma compra no ano; achado do `revisor-cortag`), e a última compra/previsão conta do último pedido dela. Lista guardada no aparelho (`cortagRecompra_v1`) e
+  pedido a menos de 7 dias do anterior entra na mesma compra, que dura no máximo 14 dias (sem o teto, quem compra toda semana virava uma compra no ano; contando só do 1º pedido, o complemento 8 dias depois partia a compra do cliente mensal — achados do `revisor-cortag`), e a última compra/previsão conta do último pedido dela. Lista guardada no aparelho (`cortagRecompra_v1`) e
   refeita pela data de hoje sem internet. Em 04/10/2026: 163 clientes com ritmo, ~54 na lista. A
   lista depende de importar o relatório em dia (pedido ainda não importado parece atraso) — por isso
   o bloco mostra "pedidos do ERP até DD/MM". É a primeira peça do painel de "oportunidades do dia".

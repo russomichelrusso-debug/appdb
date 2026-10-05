@@ -826,8 +826,8 @@ async function main() {
 
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
   // ritmo = mediana dos intervalos entre compras dos últimos 12 meses (mín. 3),
-  // pedidos a menos de 7 dias do 1º da compra viram uma compra só (sem emendar),
-  // previsão = último pedido da última compra + ritmo.
+  // pedido a menos de 7 dias do anterior entra na mesma compra (até 14 dias de
+  // compra), previsão = último pedido da última compra + ritmo.
   const ritmoLib = require('../routes/lib/ritmoCompra');
   const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   const antesBr = (n) => ritmoLib.somarDias(hojeBr, -n);
@@ -854,6 +854,16 @@ async function main() {
     assert(seguidas.length === 5 && seguidas[2].data === antesBr(35) && seguidas[2].fim === antesBr(29)
       && rq.ultima_compra === antesBr(15) && rq.atraso_dias < 0 && ritmoLib.situacaoDoRitmo(rq) !== 'atrasado',
       `juntarCompras: quem acabou de comprar não aparece atrasado: ${JSON.stringify([seguidas, rq])}`);
+    // cliente mensal com complementos 5 e 8 dias depois do pedido principal: cada mês é
+    // uma compra (contando a semana só do 1º pedido, partia em duas e o ritmo dava ~8)
+    const rajadas = ritmoLib.juntarCompras([152, 147, 144, 122, 117, 114, 92, 87, 84, 62, 57, 54, 32, 27, 24]
+      .map(n => ({ data: antesBr(n), quantidade: 1 })));
+    const rr = ritmoLib.ritmoDasCompras(rajadas, hojeBr);
+    // compra que se arrasta (pedido a cada 6 dias) para em 14 dias
+    const arrastada = ritmoLib.juntarCompras([0, 6, 12, 18].map(n => ({ data: antesBr(60 - n), quantidade: 1 })));
+    assert(rajadas.length === 5 && rr.ritmo_dias === 30 && rr.ultima_compra === antesBr(24) && ritmoLib.situacaoDoRitmo(rr) === 'semana'
+      && arrastada.length === 2 && arrastada[0].fim === antesBr(48) && arrastada[1].data === antesBr(42),
+      `juntarCompras: complemento até 14 dias fica na mesma compra (mensal = ritmo 30): ${JSON.stringify([rajadas.length, rr, arrastada])}`);
     assert(ritmoLib.mediana([10, 30, 200]) === 30 && ritmoLib.quantidadeTipica([{ quantidade: 2 }, { quantidade: 10 }, { quantidade: 4 }, { quantidade: 3 }]) === 4,
       'mediana ignora a compra fora da curva; quantidade típica = mediana das 3 últimas');
     const sit = (atraso, ritmo) => ritmoLib.situacaoDoRitmo({ atraso_dias: atraso, ritmo_dias: ritmo });

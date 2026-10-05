@@ -9,16 +9,21 @@
 //  - aparece 7 dias antes da data prevista; "fora do ritmo" quando o atraso
 //    passa de 1,5x o ritmo;
 //  - quantidade sugerida = mediana das 3 últimas compras do produto.
-// Pedidos na mesma semana contam como uma compra só (entrega dividida, pedido
-// complementar) - senão o ritmo encurtava. A semana conta do 1º pedido da
-// compra, sem emendar: emendando (cada pedido a até 7 dias do anterior), quem
-// compra toda semana virava UMA compra no ano e sumia da lista, e quem tinha
-// pedidos seguidos ficava com a "última compra" no 1º deles - aparecia
-// atrasado tendo comprado há duas semanas (achado do revisor-cortag, 10/2026).
+// Pedidos seguidos contam como uma compra só (entrega dividida, pedido
+// complementar) - senão o ritmo encurtava. Entra na compra o pedido feito a
+// MENOS de 7 dias do anterior, e a compra dura no máximo 14 dias. Histórico
+// (achados do revisor-cortag, 10/2026):
+//  - emendando sem limite (até 7 dias do anterior), quem compra toda semana
+//    virava UMA compra no ano e sumia da lista;
+//  - contando a semana só do 1º pedido, o complemento 5 e 8 dias depois do
+//    pedido principal partia a compra em duas e o cliente mensal ficava com
+//    ritmo de ~8 dias. Nos 164 clientes reais (05/10/2026) as duas regras
+//    davam o mesmo, menos 1 (ritmo 17 x 18).
 
 const JANELA_DIAS = 365;
 const MIN_COMPRAS = 3;
 const JUNTAR_DIAS = 7;
+const DURACAO_MAX_COMPRA = 14;
 const ANTECEDENCIA_DIAS = 7;
 const FORA_DO_RITMO = 1.5;
 const QTD_ULTIMAS_COMPRAS = 3;
@@ -47,8 +52,9 @@ function mediana(nums) {
 }
 
 // eventos [{ data, quantidade? }] -> compras [{ data, fim, quantidade }], em
-// ordem. Evento a menos de JUNTAR_DIAS do 1º dia da compra entra nela; `data`
-// é o 1º dia da compra e `fim` o último (nunca mais de 6 dias depois).
+// ordem. Evento a menos de JUNTAR_DIAS do último pedido da compra entra nela,
+// se a compra não passar de DURACAO_MAX_COMPRA dias; `data` é o 1º dia da
+// compra e `fim` o último.
 function juntarCompras(eventos) {
   const ordenados = eventos
     .filter(e => e && e.data)
@@ -57,7 +63,7 @@ function juntarCompras(eventos) {
   const compras = [];
   for (const e of ordenados) {
     const atual = compras[compras.length - 1];
-    if (atual && diasEntre(atual.data, e.data) < JUNTAR_DIAS) {
+    if (atual && diasEntre(atual.fim, e.data) < JUNTAR_DIAS && diasEntre(atual.data, e.data) <= DURACAO_MAX_COMPRA) {
       atual.fim = e.data;
       atual.quantidade += e.quantidade;
     } else {
