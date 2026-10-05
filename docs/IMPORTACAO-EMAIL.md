@@ -45,8 +45,12 @@ Por isso o script só manda um e-mail pro app quando:
 1. o **endereço** (o que fica entre `< >`) é exatamente o remetente da tabela acima; e
 2. o **Gmail autenticou o domínio** desse endereço: no cabeçalho `Authentication-Results` que o
    Gmail escreve ao receber, `dmarc=pass` (header.from = o domínio) ou `dkim=pass` assinado pelo
-   domínio. Conferido em 05/10/2026 num e-mail real da vendas@cortag.com: `dkim=pass
-   header.i=@cortag.com` e `dmarc=pass (p=QUARANTINE) header.from=cortag.com`.
+   domínio. Conferido em 05/10/2026 com o `conferirAutenticacao` (21 de 21 e-mails reais OK):
+   a vendas@cortag.com passa por `dkim=pass header.i=@cortag.com` e `dmarc=pass (p=QUARANTINE)`;
+   a noreply@cortag.com.br passa **só pelo DMARC** (`dmarc=pass header.from=cortag.com.br`) — o
+   DKIM dela é assinado por `cortagind.onmicrosoft.com`, que não é o domínio do remetente.
+   O que vem entre aspas e entre parênteses nesse cabeçalho (o endereço de envio, escolhido por
+   quem manda) é ignorado na leitura.
 
 O servidor confere de novo o remetente de cada tipo (Lista de Preços só de vendas@cortag.com, o
 resto só de noreply@cortag.com.br) e recusa (422) o que vier de outro endereço.

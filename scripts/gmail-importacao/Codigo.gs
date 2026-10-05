@@ -255,18 +255,26 @@ function cabecalhos_(msg) {
 // de fora, acima dos cabeçalhos de quem mandou; um que venha mais abaixo foi
 // escrito pelo remetente e não vale.
 // Aceita DMARC "pass" do domínio ou DKIM "pass" assinado pelo domínio (não um
-// subdomínio nem um domínio que só começa igual).
+// subdomínio nem um domínio que só começa igual). A noreply@cortag.com.br passa
+// pelo DMARC: o DKIM dela é assinado por cortagind.onmicrosoft.com (conferido
+// em 05/10/2026 com o conferirAutenticacao).
+// Texto entre aspas e entre parênteses sai antes de separar os resultados por
+// ";": o Gmail repete ali o endereço de envio (smtp.mailfrom, o comentário do
+// spf), que é escolhido por quem manda - um "x;dmarc=pass header.from=..."@golpe
+// virava um resultado falso (achado do revisor-cortag, 10/2026).
 function autenticadoPeloGmail_(cabecalhos, endereco) {
   const dominio = String(endereco || '').split('@')[1];
   if (!dominio) return false;
   const linha = String(cabecalhos || '').split(/\r?\n/).find(l => /^Authentication-Results:/i.test(l));
   if (!linha || !/^Authentication-Results:\s*mx\.google\.com\s*;/i.test(linha)) return false;
+  let limpa = linha.replace(/^Authentication-Results:\s*mx\.google\.com\s*;/i, '').replace(/"(?:[^"\\]|\\.)*"/g, '""');
+  for (let antes = ''; antes !== limpa;) { antes = limpa; limpa = limpa.replace(/\([^()]*\)/g, ' '); }
+  if (/["()]/.test(limpa.replace(/""/g, ''))) return false; // aspas ou parênteses soltos: não dá pra confiar
   const d = dominio.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const fimDominio = '(?=[\\s;)]|$)';
-  const resultados = linha.replace(/^Authentication-Results:\s*mx\.google\.com\s*;/i, '').split(';');
-  return resultados.some(r =>
-    new RegExp('^\\s*dmarc=pass\\b.*\\bheader\\.from=' + d + fimDominio, 'i').test(r)
-    || new RegExp('^\\s*dkim=pass\\b.*\\bheader\\.(?:i=[^\\s;@]*@|d=)' + d + fimDominio, 'i').test(r));
+  const fimDominio = '(?=[\\s;]|$)';
+  return limpa.split(';').some(r =>
+    new RegExp('^\\s*dmarc=pass(?:\\s.*)?\\sheader\\.from=' + d + fimDominio, 'i').test(r)
+    || new RegExp('^\\s*dkim=pass(?:\\s.*)?\\sheader\\.(?:i=[^\\s;@]*@|d=)' + d + fimDominio, 'i').test(r));
 }
 
 // Rodar à mão antes de deixar esta versão valer (e sempre que a Cortag trocar o
