@@ -2529,6 +2529,22 @@ async function main() {
   }
 
   {
+    // RLS ligado em toda tabela do schema.sql (verificador do Supabase acusa
+    // rls_disabled_in_public), depois de ela existir num banco novo, e nunca FORCE
+    // (o app conecta como dono das tabelas e seria barrado junto).
+    const fs = require('fs');
+    const schema = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8').replace(/--.*$/gm, '');
+    const tabelas = [...schema.matchAll(/CREATE TABLE IF NOT EXISTS\s+(\w+)/gi)].map(m => m[1].toLowerCase());
+    const semRls = tabelas.filter(t => {
+      const criada = schema.search(new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${t}\\b`, 'i'));
+      const rls = schema.search(new RegExp(`ALTER TABLE\\s+${t}\\s+ENABLE ROW LEVEL SECURITY`, 'i'));
+      return rls < 0 || rls < criada;
+    });
+    assert(tabelas.length >= 27 && semRls.length === 0 && !/FORCE\s+ROW\s+LEVEL/i.test(schema),
+      `schema.sql: RLS ligado (sem FORCE) em todas as ${tabelas.length} tabelas: ${JSON.stringify(semRls)}`);
+  }
+
+  {
     // Service Worker: toda biblioteca de CDN que as páginas carregam está na lista
     // do sw.js (senão quebra sem internet - imagem/PDF do orçamento, câmera no
     // iPhone); e página/script do app guardados sem os parâmetros (?cliente=…).

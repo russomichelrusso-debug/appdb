@@ -534,3 +534,30 @@ CREATE TABLE IF NOT EXISTS pedidos_bloqueados (
 );
 CREATE INDEX IF NOT EXISTS idx_pedidos_bloqueados_cliente ON pedidos_bloqueados (cliente_codigo_oficial);
 ALTER TABLE pedidos_bloqueados ENABLE ROW LEVEL SECURITY;
+
+-- RLS em TODAS as tabelas do schema (verificador do Supabase: rls_disabled_in_public).
+-- Mesmo motivo do bloco de levantamento_rascunhos acima: fecha o acesso pela API
+-- REST pública do Supabase (PostgREST, roles anon/authenticated); sem política =
+-- nega tudo pra quem não é dono. O app conecta como DONO das tabelas e não é
+-- afetado - por isso nunca usar FORCE ROW LEVEL SECURITY aqui (aí o dono também
+-- passaria a ser barrado). Idempotente: ligar de novo não muda nada. Tabela nova
+-- neste arquivo entra nesta lista (o test/run_tests.js confere).
+ALTER TABLE clientes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE cliente_classificatorio_erp ENABLE ROW LEVEL SECURITY;
+ALTER TABLE produtos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE vendedores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pedidos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pedido_itens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE levantamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE levantamento_itens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
+ALTER TABLE import_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sessoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE previsao_estoque ENABLE ROW LEVEL SECURITY;
+ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fichas_tecnicas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE codigos_produto ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pedidos_oficiais_itens ENABLE ROW LEVEL SECURITY;
+ALTER TABLE pedidos_pendentes_pagamento ENABLE ROW LEVEL SECURITY;
+ALTER TABLE titulos_avista_pendentes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE catalogo_precos ENABLE ROW LEVEL SECURITY;
