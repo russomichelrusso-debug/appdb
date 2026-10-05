@@ -23,6 +23,22 @@ const JANELA_DIAS_DEPOIS = 45;
 // Filtro SQL (alias `ped` = pedidos) que tira as cópias da importação antiga.
 const SQL_PEDIDO_APP_VALIDO = "ped.origem IS DISTINCT FROM 'faturamento'";
 
+// Dia do pedido do app no fuso de Brasília. data_pedido é TIMESTAMPTZ e o banco
+// (Supabase) roda em UTC: data_pedido::date punha o pedido fechado depois das
+// 21h no dia seguinte (Histórico, Rotatividade, Recompra; achado do
+// revisor-cortag, 10/2026). Mas o pedido importado de PDF (e as cópias antigas
+// de origem 'faturamento') guardam SÓ A DATA, gravada como meia-noite UTC -
+// convertidos pro fuso, iam pro dia anterior. Por isso: hora exatamente 00:00:00
+// UTC = "só a data", fica o dia gravado; o resto (hora real, com microssegundos)
+// vai pro dia de Brasília. Conferido no banco em 05/10/2026: 13 de 13 do PDF e
+// 234 de 234 de 'faturamento' à meia-noite UTC; 1 de 20 do app muda de dia.
+const FUSO = 'America/Sao_Paulo';
+function sqlDiaDoPedido(alias = 'ped') {
+  const d = `${alias}.data_pedido`;
+  return `(CASE WHEN ${d}::time = '00:00:00' THEN ${d}::date ELSE (${d} AT TIME ZONE '${FUSO}')::date END)`;
+}
+const SQL_HOJE_BR = `(now() AT TIME ZONE '${FUSO}')::date`;
+
 function diaISO(d) {
   return (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
 }
@@ -55,4 +71,4 @@ function pedidoAppJaFaturado(chave, dataApp, datasOficiais) {
   return datas.some(d => d >= inicio && d <= fim);
 }
 
-module.exports = { SQL_PEDIDO_APP_VALIDO, JANELA_DIAS_ANTES, JANELA_DIAS_DEPOIS, diaISO, indexarDatasOficiais, pedidoAppJaFaturado };
+module.exports = { SQL_PEDIDO_APP_VALIDO, FUSO, sqlDiaDoPedido, SQL_HOJE_BR, JANELA_DIAS_ANTES, JANELA_DIAS_DEPOIS, diaISO, indexarDatasOficiais, pedidoAppJaFaturado };

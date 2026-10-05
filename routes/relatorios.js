@@ -4,7 +4,7 @@ const { pool } = require('../db');
 const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
-const { SQL_PEDIDO_APP_VALIDO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
+const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 
@@ -109,7 +109,7 @@ async function comprasDoCliente(clienteId) {
       : Promise.resolve({ rows: [] }),
     pool.query(
       `/* compras-cliente:app */
-       SELECT p.codigo_sku, ped.data_pedido::date AS data, pi.quantidade, 'app' || ped.id AS pedido
+       SELECT p.codigo_sku, ${sqlDiaDoPedido()} AS data, pi.quantidade, 'app' || ped.id AS pedido
        FROM pedidos ped
        JOIN pedido_itens pi ON pi.pedido_id = ped.id
        JOIN produtos p ON p.id = pi.produto_id
@@ -308,7 +308,7 @@ router.get('/produtos/:codigo/clientes', async (req, res) => {
         [variantes]),
       pool.query(
         `/* produto-compradores:app */
-         SELECT c.id, c.nome, c.documento, pi.quantidade, ped.data_pedido::date AS data
+         SELECT c.id, c.nome, c.documento, pi.quantidade, ${sqlDiaDoPedido()} AS data
          FROM pedido_itens pi
          JOIN produtos p ON p.id = pi.produto_id
          JOIN pedidos ped ON ped.id = pi.pedido_id
@@ -386,7 +386,7 @@ router.get('/pedidos/exportar', async (req, res) => {
        JOIN clientes c ON c.id = ped.cliente_id
        JOIN produtos p ON p.id = pi.produto_id
        LEFT JOIN vendedores v ON v.id = ped.vendedor_id
-       WHERE ped.data_pedido >= $1 AND ped.data_pedido < ($2::date + interval '1 day')
+       WHERE ${sqlDiaDoPedido()} BETWEEN $1::date AND $2::date
        ORDER BY ped.data_pedido DESC`,
       [inicio, fim]
     );
@@ -428,7 +428,7 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
         : Promise.resolve({ rows: [] }),
       pool.query(
         `/* sugestoes-recompra:app */
-         SELECT DISTINCT p.codigo_sku, ped.data_pedido::date AS data, 'app' || ped.id AS pedido
+         SELECT DISTINCT p.codigo_sku, ${sqlDiaDoPedido()} AS data, 'app' || ped.id AS pedido
          FROM pedidos ped
          JOIN pedido_itens pi ON pi.pedido_id = ped.id
          JOIN produtos p ON p.id = pi.produto_id
@@ -515,11 +515,11 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
         : Promise.resolve({ rows: [] }),
       pool.query(
         `/* comprados-recentes:app */
-         SELECT p.codigo_sku, ped.data_pedido::date AS data, pi.quantidade, 'app' || ped.id AS pedido
+         SELECT p.codigo_sku, ${sqlDiaDoPedido()} AS data, pi.quantidade, 'app' || ped.id AS pedido
          FROM pedidos ped
          JOIN pedido_itens pi ON pi.pedido_id = ped.id
          JOIN produtos p ON p.id = pi.produto_id
-         WHERE ped.cliente_id = $1 AND ped.data_pedido::date > CURRENT_DATE - $2::int AND ${SQL_PEDIDO_APP_VALIDO}`,
+         WHERE ped.cliente_id = $1 AND ${sqlDiaDoPedido()} > ${SQL_HOJE_BR} - $2::int AND ${SQL_PEDIDO_APP_VALIDO}`,
         [req.params.id, COMPRADOS_RECENTES_DIAS]),
       pool.query('SELECT codigo_sku, nome FROM produtos'),
     ]);

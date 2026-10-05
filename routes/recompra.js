@@ -18,7 +18,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { codigoBase } = require('./lib/skuNormalizacao');
-const { SQL_PEDIDO_APP_VALIDO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
+const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const {
   JANELA_DIAS, diaISO, somarDias, diasEntre,
@@ -49,11 +49,11 @@ router.get('/', async (req, res) => {
         [hoje, JANELA_DIAS]),
       pool.query(
         `/* recompra:app */
-         SELECT ped.cliente_id, p.codigo_sku, pi.quantidade, ped.data_pedido::date::text AS data
+         SELECT ped.cliente_id, p.codigo_sku, pi.quantidade, ${sqlDiaDoPedido()}::text AS data
          FROM pedidos ped
          JOIN pedido_itens pi ON pi.pedido_id = ped.id
          JOIN produtos p ON p.id = pi.produto_id
-         WHERE ped.cliente_id IS NOT NULL AND ped.data_pedido::date > $1::date - $2::int
+         WHERE ped.cliente_id IS NOT NULL AND ${sqlDiaDoPedido()} > $1::date - $2::int
            AND ${SQL_PEDIDO_APP_VALIDO}`,
         [hoje, JANELA_DIAS]),
       pool.query('SELECT codigo_sku, nome FROM produtos'),

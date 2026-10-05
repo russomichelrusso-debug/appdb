@@ -234,6 +234,12 @@ Supabase, sem PR — não é mudança de código.
     `origem = 'faturamento'` (cópias de uma importação antiga de faturamento, já removida — 3.067
     itens) nunca conta. Pedido do app ainda não faturado continua contando (decisão das sugestões).
     Toda tela nova que some as duas fontes usa `SQL_PEDIDO_APP_VALIDO` + `pedidoAppJaFaturado`.
+  - **Dia do pedido do app = `sqlDiaDoPedido`** (`routes/lib/comprasApp.js`, 10/2026): `data_pedido` é
+    TIMESTAMPTZ e o banco roda em UTC, então `data_pedido::date` punha o pedido fechado depois das 21h
+    no dia seguinte. Mas o importado de PDF e as cópias de `origem = 'faturamento'` guardam **só a
+    data**, à meia-noite UTC — converter pro fuso os jogaria pro dia anterior. A expressão trata hora
+    exatamente 00:00:00 UTC como "só a data" e converte o resto pro fuso de Brasília (em 05/10/2026
+    mudou 1 pedido de 267). Nunca usar `data_pedido::date`/`DATE(data_pedido)` direto.
   - **Entrada de Pedidos ≠ Faturamento**. O painel oficial conta a entrada pela **data de
     implantação** (`Implantação`/`Dt.Implant` → `data_implantacao`), **carteira + faturado**, e
     **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx: itens avulsos de valor baixo, fora
