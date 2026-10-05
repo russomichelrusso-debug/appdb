@@ -10955,25 +10955,44 @@
         return [header, ...linhas].join('\r\n');
       }
       let driveCsvQueueDraining = false;
+      // item sem id (não deveria existir, mas a fila é do aparelho): nome + hora
+      const chaveFilaDrive = (it) => it.id || `${it.fileName}|${it.criadoEm}`;
       async function drenarFilaDriveCsv(silencioso) {
         if (driveCsvQueueDraining) return;
-        const fila = loadDriveCsvQueue();
-        if (fila.length === 0) return;
+        if (loadDriveCsvQueue().length === 0) return;
         driveCsvQueueDraining = true;
-        let enviados = 0;
-        const restantes = [];
+        try {
+          // uma aba por vez (mesmo motivo da fila principal, drenarFilaSync): o app
+          // instalado e uma aba do navegador mandavam o mesmo CSV duas vezes
+          if (navigator.locks && navigator.locks.request) {
+            await navigator.locks.request('cortag-fila-drive-csv', { ifAvailable: true }, async (lock) => {
+              if (lock) await drenarFilaDriveCsvAgora(silencioso);
+            });
+          } else {
+            await drenarFilaDriveCsvAgora(silencioso);
+          }
+        } finally {
+          driveCsvQueueDraining = false;
+        }
+      }
+      async function drenarFilaDriveCsvAgora(silencioso) {
+        const fila = loadDriveCsvQueue();
+        const enviados = new Set();
         for (const item of fila) {
+          // outra aba (sem Web Locks) já mandou e tirou da fila
+          if (!loadDriveCsvQueue().some(it => chaveFilaDrive(it) === chaveFilaDrive(item))) continue;
           try {
             const blob = new Blob(['\uFEFF' + item.csvText], { type: 'text/csv;charset=utf-8;' });
             await enviarParaGoogleDrive(blob, item.fileName, true); // silencioso: nunca abre popup de login sozinho
-            enviados++;
+            enviados.add(chaveFilaDrive(item));
           } catch (e) {
-            restantes.push(item); // continua sem rede/Drive, ou falhou de novo - mantém na fila
+            // continua sem rede/Drive, ou falhou de novo - fica na fila
           }
         }
-        saveDriveCsvQueue(restantes);
-        driveCsvQueueDraining = false;
-        if (enviados > 0 && !silencioso) showToast(`${enviados} CSV(s) de pedido enviado(s) ao Drive agora`);
+        // relê a fila: CSV que entrou nela durante o envio (pedido finalizado
+        // enquanto o Drive respondia) fica - antes era sobrescrito e sumia
+        if (enviados.size) saveDriveCsvQueue(loadDriveCsvQueue().filter(it => !enviados.has(chaveFilaDrive(it))));
+        if (enviados.size > 0 && !silencioso) showToast(`${enviados.size} CSV(s) de pedido enviado(s) ao Drive agora`);
       }
       // Chamado logo depois de gravar um pedido (online ou já enfileirado pro
       // servidor) - gera o CSV e tenta mandar pro Drive na hora; se não
