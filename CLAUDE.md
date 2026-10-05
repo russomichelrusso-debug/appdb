@@ -241,9 +241,10 @@ Supabase, sem PR — não é mudança de código.
     exatamente 00:00:00 UTC como "só a data" e converte o resto pro fuso de Brasília (em 05/10/2026
     mudou 1 pedido de 267). O "meia-noite UTC" é lido com `AT TIME ZONE 'UTC'` (não depende do fuso da
     sessão). Nunca usar `data_pedido::date`/`DATE(data_pedido)` direto; a tela recebe o dia pronto (`dia`)
-    em vez de cortar o `data_pedido` (que vem em UTC). Pedido do app fechado sem internet grava a hora do
-    toque em "Finalizar pedido" (o app manda `data_pedido`; o servidor aceita só hora completa dos
-    últimos 30 dias, `horaDoPedidoDoApp`), não a hora em que a fila enviou.
+    em vez de cortar o `data_pedido` (que vem em UTC). Pedido do app fechado (ou alterado) sem internet grava
+    a hora do toque, não a hora em que a fila enviou: o app manda a hora do toque (`data_pedido`/
+    `alterado_em`) e o `apiFetch` carimba `enviado_em` em cada envio; o servidor desconta essa espera do
+    relógio dele (`horaDoPedidoDoApp`) — relógio errado do celular não entra.
   - **Entrada de Pedidos ≠ Faturamento**. O painel oficial conta a entrada pela **data de
     implantação** (`Implantação`/`Dt.Implant` → `data_implantacao`), **carteira + faturado**, e
     **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx: itens avulsos de valor baixo, fora

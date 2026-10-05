@@ -10741,6 +10741,17 @@
       setInterval(() => { drenarFilaSync(true); drenarFilaDriveCsv(true); }, 30000); // reforço - 'online' nem sempre dispara de forma confiável no celular
       setInterval(() => syncClientesLocais(), 5 * 60000); // mantém a cópia local de clientes fresca em segundo plano
 
+      // Corpo com "enviado_em" (pedido novo/alteração) ganha a hora deste envio -
+      // também no reenvio da fila: com a hora do toque, o servidor sabe quanto o
+      // pedido esperou sem internet (horaDoPedidoDoApp, routes/pedidos.js)
+      function carimbarEnvio(body) {
+        if (typeof body !== 'string' || !body.includes('"enviado_em"')) return body;
+        try {
+          const obj = JSON.parse(body);
+          if (!obj || typeof obj !== 'object' || !('enviado_em' in obj)) return body;
+          return JSON.stringify({ ...obj, enviado_em: new Date().toISOString() });
+        } catch (e) { return body; }
+      }
       async function apiFetch(path, options = {}, filaInfo) {
         const { baseUrl } = getApiConfig();
         const token = getStoredToken();
@@ -10748,6 +10759,7 @@
         try {
           resp = await fetch(baseUrl + path, {
             ...options,
+            body: carimbarEnvio(options.body),
             headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) },
           });
         } catch (e) {
@@ -12429,15 +12441,16 @@
           const itens = rows.map(({ p, it, cp }) => ({ codigo_sku: p.c, quantidade: it.qty, preco_unitario: Number(cp.toFixed(2)) }));
           const contexto = contextoDoOrcamento();
           const result = editando
-            ? await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto })
+            ? await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto, alterado_em: new Date().toISOString(), enviado_em: null })
             : await apiCriarPedido({
               cliente: { cliente_id: cliente.id, nome: cliente.nome },
               vendedor_nome: state.seller || undefined,
               itens,
               contexto,
-              // hora do toque: sem internet o pedido sai da fila depois (até no dia
-              // seguinte) e o servidor gravaria a hora do envio
+              // hora do toque + hora do envio (carimbada pelo apiFetch): sem internet
+              // o pedido sai da fila depois, até no dia seguinte
               data_pedido: new Date().toISOString(),
+              enviado_em: null,
             });
           const offline = !!(result && result.__filaOffline);
           // Cópia de segurança em CSV no Drive - independente do pedido em si já

@@ -300,11 +300,11 @@ async function query(sql, params = []) {
       .map(p => ({ id: p.id, cliente_id: p.cliente_id, origem: p.origem, usuario_id: p.usuario_id })) };
   }
   // ...e a atualização do cabeçalho (itens são trocados pelo DELETE/INSERT de pedido_itens)
-  if (s.includes('UPDATE PEDIDOS SET CONTEXTO = $1::JSONB, ATUALIZADO_EM = NOW()')) {
+  if (s.includes('UPDATE PEDIDOS SET CONTEXTO = $1::JSONB, ATUALIZADO_EM = COALESCE($5::TIMESTAMPTZ, NOW())')) {
     const p = pedidos.find(x => String(x.id) === String(params[3]));
     if (!p) return { rows: [] };
     p.contexto = params[0];
-    p.atualizado_em = new Date().toISOString();
+    p.atualizado_em = params[4] ? new Date(params[4]).toISOString() : new Date().toISOString();
     if (params[1] != null) p.vendedor_id = params[1];
     if (params[2] != null) p.observacao = params[2];
     return { rows: [{ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em }] };
