@@ -23,6 +23,8 @@ const CACHE_VERSION = 'cortag-sw-v4';
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.
 const PRAZO_REDE_PAGINA_MS = 4000;
+// quando a última página saiu da cópia por causa do prazo (o script vai junto)
+let paginaDaCopiaEm = 0;
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',
@@ -164,12 +166,18 @@ self.addEventListener('fetch', (event) => {
     });
     daRede.catch(fimDoCache);
     const daCopia = () => caches.match(chave, { cacheName: CACHE_VERSION });
+    // Página e script andam juntos (versões diferentes quebram: HTML novo chamando
+    // função que o importadores.js velho não tem - achado do revisor-cortag): o
+    // prazo vale só pra página; o script segue o que a página fez - página da cópia
+    // nos últimos segundos = script da cópia na hora; senão, espera a rede.
+    const seguirCopia = isScript && !isNavegacao && Date.now() - paginaDaCopiaEm < 60000;
     event.respondWith(new Promise((responder) => {
-      const prazo = setTimeout(() => {
-        daCopia().then((copia) => { if (copia) responder(copia); }).catch(() => {});
-      }, PRAZO_REDE_PAGINA_MS);
+      const prazo = isNavegacao ? setTimeout(() => {
+        daCopia().then((copia) => { if (copia) { paginaDaCopiaEm = Date.now(); responder(copia); } }).catch(() => {});
+      }, PRAZO_REDE_PAGINA_MS) : null;
+      if (seguirCopia) daCopia().then((copia) => { if (copia) responder(copia); }).catch(() => {});
       daRede.then(
-        (resp) => { clearTimeout(prazo); responder(resp); },
+        (resp) => { clearTimeout(prazo); if (isNavegacao) paginaDaCopiaEm = 0; responder(resp); },
         // sem internet: a cópia da página (sem os parâmetros)
         () => {
           clearTimeout(prazo);
