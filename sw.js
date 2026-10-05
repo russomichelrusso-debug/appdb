@@ -23,9 +23,29 @@ const STATIC_ASSETS = [
   './icon-512-maskable.png',
 ];
 
+// O app e as páginas separadas, guardados já na instalação: o SW é registrado
+// depois que a página carrega, então a 1ª abertura não passa por ele - e a
+// troca de CACHE_VERSION apaga o cache anterior. Sem isto, depois de um deploy
+// que sobe a versão, quem abrisse o app sem internet antes de uma 2ª abertura
+// online via a página de erro do navegador (achado do revisor-cortag, 10/2026).
+const PAGINAS_OFFLINE = [
+  './',
+  './index.html',
+  './importadores.js',
+  './curva-abc.html',
+  './calculadora-materiais.html',
+  './ficha-cnpj.html',
+];
+
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) => cache.addAll(STATIC_ASSETS)).catch(() => {})
+    caches.open(CACHE_VERSION).then((cache) => Promise.all(
+      // um por um: um arquivo que falhe não impede de guardar os outros
+      // (cache.addAll é tudo-ou-nada); 'reload' pula o cache HTTP do navegador
+      STATIC_ASSETS.concat(PAGINAS_OFFLINE).map((url) =>
+        cache.add(new Request(url, { cache: 'reload' })).catch(() => {})
+      )
+    ))
   );
   self.skipWaiting();
 });
@@ -71,7 +91,9 @@ self.addEventListener('fetch', (event) => {
           }
           return resp;
         })
-        .catch(() => caches.match(req))
+        // sem internet: a cópia desta URL; senão a mesma página sem os
+        // parâmetros (curva-abc.html?cliente=… guardada como curva-abc.html)
+        .catch(() => caches.match(req).then((r) => r || caches.match(req, { ignoreSearch: true })))
     );
     return;
   }
