@@ -143,6 +143,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_google_sub ON usuarios(google_sub
 -- como obrigatórios - relaxa isso pra permitir cadastrar gente só com e-mail.
 ALTER TABLE usuarios ALTER COLUMN usuario DROP NOT NULL;
 ALTER TABLE usuarios ALTER COLUMN senha_hash DROP NOT NULL;
+-- Vendedor que saiu é DESATIVADO, não excluído: pedidos e importações dele
+-- (pedidos.usuario_id, import_log.usuario_id) continuam com o nome no histórico.
+-- Inativo não entra (login Google recusa) e a sessão que ele tinha deixa de valer
+-- (middleware/auth.js); ao desativar, as sessões e os avisos no celular dele são apagados.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT true;
 
 -- Registro de quem fez cada importação em massa (catálogo, produtos, clientes,
 -- previsão de estoque, pedidos oficiais) - essas rotas continuam liberadas pra

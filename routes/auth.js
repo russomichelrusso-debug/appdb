@@ -65,15 +65,20 @@ router.post('/google', async (req, res) => {
       // que já tem google_sub de outra conta Google associado não entra por
       // aqui - evita que reatribuir o e-mail (comum em Workspace) dê acesso
       // à conta de quem usava esse e-mail antes.
-      const porSub = await client.query('SELECT id, nome, email, is_admin, google_sub FROM usuarios WHERE google_sub = $1', [google.sub]);
+      const porSub = await client.query('SELECT id, nome, email, is_admin, google_sub, ativo FROM usuarios WHERE google_sub = $1', [google.sub]);
       const existente = porSub.rows.length > 0
         ? porSub
-        : await client.query('SELECT id, nome, email, is_admin, google_sub FROM usuarios WHERE email = $1 AND google_sub IS NULL', [google.email]);
+        : await client.query('SELECT id, nome, email, is_admin, google_sub, ativo FROM usuarios WHERE email = $1 AND google_sub IS NULL', [google.email]);
       if (existente.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(403).json({ erro: 'Esse e-mail do Google não está cadastrado — peça pra um administrador te cadastrar antes.' });
       }
       usuario = existente.rows[0];
+      // vendedor que saiu: desativado pelo admin (o histórico dele continua), não entra mais
+      if (usuario.ativo === false) {
+        await client.query('ROLLBACK');
+        return res.status(403).json({ erro: 'Seu acesso foi desativado — fale com o administrador.' });
+      }
       if (!usuario.google_sub) {
         // primeira vez que esse cadastro (feito por e-mail pelo admin) loga de
         // fato - grava o "sub" do Google pra próxima vez conferir por ele também.
@@ -111,7 +116,7 @@ router.get('/me', async (req, res) => {
     const result = await pool.query(
       `SELECT u.nome, u.email, u.is_admin FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
-       WHERE s.token = $1 AND s.expira_em > now()`,
+       WHERE s.token = $1 AND s.expira_em > now() AND u.ativo`,
       [hashToken(token)]
     );
     if (result.rows.length === 0) return res.status(401).json({ erro: 'Sessão expirada ou inválida.' });
@@ -160,7 +165,7 @@ router.post('/usuarios', requireAuth, async (req, res) => {
 router.get('/usuarios', requireAuth, async (req, res) => {
   if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver a lista de usuários.' });
   try {
-    const result = await pool.query('SELECT id, nome, email, is_admin, criado_em FROM usuarios ORDER BY nome');
+    const result = await pool.query('SELECT id, nome, email, is_admin, ativo, criado_em FROM usuarios ORDER BY ativo DESC, nome');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -168,9 +173,63 @@ router.get('/usuarios', requireAuth, async (req, res) => {
   }
 });
 
+// Desativa/reativa um usuário - só admin. É o caminho pro vendedor que saiu:
+// excluir não dá quando ele tem pedidos/importações gravados (o histórico
+// continua com o nome dele). Desativado não entra (login Google recusa) e a
+// sessão que ele tinha deixa de valer; aqui também apaga as sessões e os avisos
+// no celular (push) dele. Mesmas travas da exclusão: não desativa a si mesmo
+// nem o último admin ativo.
+router.patch('/usuarios/:id', requireAuth, async (req, res) => {
+  if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode desativar ou reativar usuário.' });
+  const { id } = req.params;
+  const { ativo } = req.body || {};
+  if (typeof ativo !== 'boolean') return res.status(400).json({ erro: 'Envie { ativo: true | false }.' });
+  if (!ativo && Number(id) === req.usuario.id) {
+    return res.status(400).json({ erro: 'Você não pode desativar a própria conta enquanto estiver logado nela.' });
+  }
+  let client;
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+    const alvo = await client.query('SELECT id, is_admin, ativo FROM usuarios WHERE id = $1 FOR UPDATE', [id]);
+    if (alvo.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    }
+    if (!ativo && alvo.rows[0].is_admin && alvo.rows[0].ativo) {
+      // FOR UPDATE: duas desativações ao mesmo tempo não zeram os admins (ver exclusão abaixo)
+      const admins = await client.query('SELECT id FROM usuarios WHERE is_admin = true AND ativo = true FOR UPDATE');
+      if (admins.rows.length <= 1) {
+        await client.query('ROLLBACK');
+        return res.status(400).json({ erro: 'Esse é o último administrador ativo do sistema — não é possível desativá-lo. Promova outro usuário a admin antes.' });
+      }
+    }
+    const result = await client.query(
+      'UPDATE usuarios SET ativo = $2 WHERE id = $1 RETURNING id, nome, email, is_admin, ativo, criado_em',
+      [id, ativo]
+    );
+    if (!ativo) {
+      await client.query('DELETE FROM sessoes WHERE usuario_id = $1', [id]);
+      await client.query('DELETE FROM push_inscricoes WHERE usuario_id = $1', [id]);
+    }
+    await client.query('COMMIT');
+    console.log(`Usuário ${ativo ? 'reativado' : 'desativado'}: ${result.rows[0].email} por ${req.usuario.email}`);
+    res.json(result.rows[0]);
+  } catch (e) {
+    if (client) {
+      try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao alterar o usuário.' });
+  } finally {
+    if (client) client.release();
+  }
+});
+
 // Exclui um usuário - só admin. Duas proteções pra não travar o sistema:
 // não pode se auto-excluir (evita ficar sem acesso sem querer), e não pode
-// excluir o último admin restante.
+// excluir o último admin ativo. Usuário com pedidos/importações gravados não
+// sai (chave estrangeira) - responde 409 pedindo pra desativar em vez disso.
 router.delete('/usuarios/:id', requireAuth, async (req, res) => {
   if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode excluir usuário.' });
   const { id } = req.params;
@@ -181,18 +240,18 @@ router.delete('/usuarios/:id', requireAuth, async (req, res) => {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
-    const alvo = await client.query('SELECT is_admin FROM usuarios WHERE id = $1', [id]);
+    const alvo = await client.query('SELECT is_admin, ativo FROM usuarios WHERE id = $1', [id]);
     if (alvo.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ erro: 'Usuário não encontrado.' });
     }
-    if (alvo.rows[0].is_admin) {
+    if (alvo.rows[0].is_admin && alvo.rows[0].ativo) {
       // FOR UPDATE trava as linhas de admin até o fim da transação - sem
       // isso, duas exclusões concorrentes podiam cada uma contar ">1 admin"
       // antes da outra terminar, e as duas passarem, zerando os admins.
       // (Postgres não aceita FOR UPDATE junto de COUNT(*)/agregação, por
       // isso traz as linhas e conta em JS.)
-      const totalAdmins = await client.query('SELECT id FROM usuarios WHERE is_admin = true FOR UPDATE');
+      const totalAdmins = await client.query('SELECT id FROM usuarios WHERE is_admin = true AND ativo = true FOR UPDATE');
       if (totalAdmins.rows.length <= 1) {
         await client.query('ROLLBACK');
         return res.status(400).json({ erro: 'Esse é o último administrador do sistema — não é possível excluí-lo. Promova outro usuário a admin antes.' });
@@ -205,6 +264,9 @@ router.delete('/usuarios/:id', requireAuth, async (req, res) => {
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
+    if (e.code === '23503') {
+      return res.status(409).json({ erro: 'Esse usuário tem pedidos ou importações gravados — desative em vez de excluir (o histórico continua com o nome dele).' });
     }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao excluir usuário.' });

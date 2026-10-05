@@ -6167,9 +6167,10 @@
           <div class="ap-groupBody">
             <div class="ap-card" id="manageUsersCard">
               <h3>Gerenciar usuários</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode
-                ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin
-                restante).</p>
+              <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Vendedor que saiu:
+                <strong>desative</strong> (bolinha ao lado do nome) — ele sai do app na hora e não entra mais, e os
+                pedidos dele continuam no histórico. Excluir só funciona pra quem não tem pedido gravado, não pode ser
+                desfeito, e não vale pra própria conta nem pro último admin ativo.</p>
               <p class="ap-hint" style="margin-bottom:10px;">O login agora é "Entrar com Google": cadastre o e-mail da
                 conta Google da pessoa — ela já consegue entrar assim que o e-mail estiver aqui, sem senha nenhuma.</p>
               <div id="manageUsersList"></div>
@@ -12625,19 +12626,44 @@
         wrap.innerHTML = '<div class="promoEmpty">Carregando…</div>';
         try {
           const usuarios = await apiFetch('/api/auth/usuarios');
-          wrap.innerHTML = usuarios.map(u => `
+          // Vendedor que saiu é DESATIVADO (não entra mais, a sessão cai na hora) - excluir
+          // só dá pra quem não tem pedido/importação gravado (o servidor responde 409).
+          const euEmail = (state.currentUser && state.currentUser.email) || '';
+          wrap.innerHTML = usuarios.map(u => {
+            const ativo = u.ativo !== false;
+            const souEu = !!euEmail && u.email === euEmail;
+            return `
       <div class="promoRuleItem">
         <div class="prTop">
           <div>
-            <div class="prName">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
-            <div class="prDetail">${escapeHtml(u.email || '')}</div>
+            <div class="prName${ativo ? '' : ' inactive'}">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
+            <div class="prDetail">${escapeHtml(u.email || '')}${ativo ? '' : ' · <strong>desativado</strong> (não entra no app)'}</div>
           </div>
           <div class="prBtns">
+            ${souEu ? '' : `<button data-ativo-user="${u.id}" data-ativo="${ativo ? '1' : '0'}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="${ativo ? 'prToggleOn' : ''}" aria-label="${ativo ? 'Desativar acesso' : 'Reativar acesso'}" title="${ativo ? 'Ativo — tocar pra desativar o acesso' : 'Desativado — tocar pra reativar o acesso'}">${ativo ? ICON_ATIVO : ICON_INATIVO}</button>`}
             <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+          }).join('');
+          wrap.querySelectorAll('[data-ativo-user]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const usuario = btn.dataset.nomeUser;
+              const desativar = btn.dataset.ativo === '1';
+              const pergunta = desativar
+                ? `Desativar o acesso de "${usuario}"? Ele sai do app na hora (em todos os aparelhos) e não consegue entrar de novo. Os pedidos dele continuam no histórico.`
+                : `Reativar o acesso de "${usuario}"? Ele volta a entrar com a conta Google.`;
+              if (!await askConfirm(pergunta, desativar ? 'Desativar' : 'Reativar', desativar ? { perigo: true } : undefined)) return;
+              try {
+                await apiFetch(`/api/auth/usuarios/${btn.dataset.ativoUser}`, { method: 'PATCH', body: JSON.stringify({ ativo: !desativar }) });
+                showToast((desativar ? 'Acesso desativado: ' : 'Acesso reativado: ') + usuario);
+                renderUsersList();
+              } catch (e) {
+                showToast(e.message, 'erro');
+              }
+            });
+          });
           wrap.querySelectorAll('[data-del-user]').forEach(btn => {
             btn.addEventListener('click', async () => {
               const usuario = btn.dataset.nomeUser;

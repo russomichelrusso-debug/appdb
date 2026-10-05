@@ -32,6 +32,15 @@ process.env.VAPID_PRIVATE_KEY = 'privada-de-teste';
 process.env.VAPID_SUBJECT = 'https://exemplo.test';
 process.env.IMPORTACAO_EMAIL_CHAVE = 'chave-de-teste-da-importacao-por-email-123456';
 
+// Login Google falso (routes/auth.js destrutura verificarGoogleIdToken ao carregar):
+// com googleFalso definido, o "id_token" vira a conta { sub, email, nome } dele.
+let googleFalso = null;
+{
+  const authUtils = require('../auth-utils');
+  const verificarDeVerdade = authUtils.verificarGoogleIdToken;
+  authUtils.verificarGoogleIdToken = async (idToken, clientId) => (googleFalso ? googleFalso(idToken) : verificarDeVerdade(idToken, clientId));
+}
+
 process.env.PORT = '4123';
 // não liga o preenchimento automático de fichas de CNPJ (timer) durante o teste
 process.env.NODE_ENV = 'test';
@@ -2440,6 +2449,83 @@ async function main() {
     const idDom = await nov.avisarImportacao('objetivos-trimestrais', 'domingo');
     const sab = mockDb.__getNovidades().find(x => x.id === idSab);
     assert(idSab !== idDom && sab.push_pendente === false, 'aviso: novidade nova do mesmo tipo tira da fila o push que ainda esperava o horário');
+  }
+
+  {
+    // Desativar vendedor em vez de excluir (routes/auth.js, middleware/auth.js):
+    // inativo não entra, a sessão de 90 dias que ele tinha deixa de valer, sessões e
+    // push dele são apagados; excluir quem tem pedido gravado responde 409.
+    const usuarios = mockDb.__getUsuarios();
+    const admin = usuarios.find(u => u.email === 'michel@example.com');
+    const criarComSessao = async (nome, email, sub, isAdmin) => {
+      const u = await mockDb.pool.query(`INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, ${isAdmin ? 'true' : 'false'}) RETURNING id, nome, email, is_admin`, [nome, email, sub]);
+      const token = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(token), u.rows[0].id, '90']);
+      return { id: u.rows[0].id, token };
+    };
+    const saiu = await criarComSessao('Vendedor Que Saiu', 'saiu@example.com', 'sub-saiu', false);
+    mockDb.__getPushInscricoes().push({ id: 9901, usuario_id: saiu.id, endpoint: 'https://fcm.googleapis.com/fcm/send/saiu', p256dh: 'x', auth: 'y' });
+    mockDb.__getPedidos().push({ id: 99901, cliente_id: null, usuario_id: saiu.id, origem: 'app', data_pedido: new Date().toISOString() });
+    const tokenAdmin = authToken;
+
+    authToken = saiu.token;
+    const antes = await req('GET', '/api/clientes');
+    // vendedor comum não desativa ninguém
+    const naoAdmin = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });
+    authToken = tokenAdmin;
+    const excluir = await req('DELETE', `/api/auth/usuarios/${saiu.id}`);
+    const semCampo = await req('PATCH', `/api/auth/usuarios/${saiu.id}`, { ativo: 'nao' });
+    const desativa = await req('PATCH', `/api/auth/usuarios/${saiu.id}`, { ativo: false });
+    const lista = await req('GET', '/api/auth/usuarios');
+    authToken = saiu.token;
+    const depois = await req('GET', '/api/clientes');
+    const me = await req('GET', '/api/auth/me');
+    authToken = '';
+    googleFalso = (t) => (t === 'tok-saiu' ? { sub: 'sub-saiu', email: 'saiu@example.com', nome: 'Vendedor Que Saiu' } : null);
+    const login = await req('POST', '/api/auth/google', { id_token: 'tok-saiu' });
+    authToken = tokenAdmin;
+    assert(antes.status === 200 && naoAdmin.status === 403
+      && excluir.status === 409 && /desative em vez de excluir/.test(excluir.body.erro) && usuarios.some(u => u.id === saiu.id)
+      && semCampo.status === 400 && desativa.status === 200 && desativa.body.ativo === false
+      && lista.body.find(u => u.id === saiu.id).ativo === false
+      && depois.status === 401 && me.status === 401
+      && login.status === 403 && /desativado/.test(login.body.erro) && !login.body.token
+      && !mockDb.__getSessoes().some(se => se.usuario_id === saiu.id)
+      && !mockDb.__getPushInscricoes().some(i => i.usuario_id === saiu.id),
+      `desativar usuário: excluir com pedido = 409, inativo não passa no requireAuth/me nem no login Google, sessões e push apagados: ${JSON.stringify([antes.status, naoAdmin.status, excluir.status, semCampo.status, desativa.status, depois.status, me.status, login.status, login.body])}`);
+
+    // reativar: entra de novo pelo Google
+    const reativa = await req('PATCH', `/api/auth/usuarios/${saiu.id}`, { ativo: true });
+    authToken = '';
+    const login2 = await req('POST', '/api/auth/google', { id_token: 'tok-saiu' });
+    authToken = login2.body && login2.body.token;
+    const comNovaSessao = await req('GET', '/api/clientes');
+    authToken = tokenAdmin;
+    assert(reativa.status === 200 && reativa.body.ativo === true && login2.status === 200 && comNovaSessao.status === 200,
+      `reativar usuário: volta a entrar pelo Google: ${JSON.stringify([reativa.status, login2.status, comNovaSessao.status])}`);
+
+    // travas: não desativa a si mesmo; outro admin desativa (e a sessão dele cai na hora).
+    // A trava do "último admin ativo" só pega corrida (quem pede é sempre outro admin ativo).
+    const proprio = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });
+    const outroAdmin = await criarComSessao('Outro Admin', 'admin2@example.com', 'sub-admin2', true);
+    authToken = outroAdmin.token;
+    const desativaPrimeiro = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });
+    authToken = tokenAdmin;
+    const adminDesativadoBarrado = await req('GET', '/api/clientes');
+    authToken = outroAdmin.token;
+    const reativaPrimeiro = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: true });
+    const excluiOutro = await req('DELETE', `/api/auth/usuarios/${saiu.id}`); // ainda tem pedido
+    authToken = tokenAdmin;
+    const sessaoNaoVolta = await req('GET', '/api/clientes');
+    assert(proprio.status === 400 && desativaPrimeiro.status === 200 && adminDesativadoBarrado.status === 401
+      && reativaPrimeiro.status === 200 && excluiOutro.status === 409 && sessaoNaoVolta.status === 401,
+      `desativar usuário: não desativa a si mesmo; desativado perde a sessão (reativar não a devolve): ${JSON.stringify([proprio.status, desativaPrimeiro.status, adminDesativadoBarrado.status, reativaPrimeiro.status, excluiOutro.status, sessaoNaoVolta.status])}`);
+    // admin 1 perdeu a sessão ao ser desativado: nova sessão pra ele seguir nos testes
+    authToken = generateToken();
+    await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(authToken), admin.id, '90']);
+    const excluiAdmin2 = await req('DELETE', `/api/auth/usuarios/${outroAdmin.id}`);
+    assert(excluiAdmin2.status === 200 && !mockDb.__getUsuarios().some(u => u.id === outroAdmin.id), 'excluir usuário sem pedido nem importação continua funcionando');
+    googleFalso = null;
   }
 
   {

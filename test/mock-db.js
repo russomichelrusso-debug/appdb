@@ -1394,6 +1394,7 @@ async function query(sql, params = []) {
       email,
       google_sub: ehVarianteGoogle ? params[2] : null,
       is_admin: isAdmin,
+      ativo: true,
     };
     usuarios.push(u);
     return { rows: [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin }] };
@@ -1411,11 +1412,61 @@ async function query(sql, params = []) {
     const sessao = sessoes.find(se => se.token === params[0] && new Date(se.expira_em) > new Date());
     if (!sessao) return { rows: [] };
     const u = usuarios.find(us => us.id === sessao.usuario_id);
+    // "AND u.ativo": usuário desativado pelo admin não passa (middleware/auth.js, /auth/me)
+    if (u && s.includes('AND U.ATIVO') && u.ativo === false) return { rows: [] };
     return { rows: u ? [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin }] : [] };
+  }
+  if (s.includes('DELETE FROM SESSOES WHERE USUARIO_ID')) {
+    const antes = sessoes.length;
+    sessoes = sessoes.filter(se => se.usuario_id != params[0]);
+    return { rows: [], rowCount: antes - sessoes.length };
   }
   if (s.includes('DELETE FROM SESSOES')) {
     sessoes = sessoes.filter(se => se.token !== params[0]);
     return { rows: [] };
+  }
+  if (s.includes('DELETE FROM PUSH_INSCRICOES WHERE USUARIO_ID')) {
+    const antes = pushInscricoes.length;
+    pushInscricoes = pushInscricoes.filter(i => i.usuario_id != params[0]);
+    return { rows: [], rowCount: antes - pushInscricoes.length };
+  }
+  // usuários - routes/auth.js (login Google, lista, desativar/excluir)
+  if (s.startsWith('LOCK TABLE USUARIOS')) return { rows: [] };
+  if (s.includes('FROM USUARIOS WHERE GOOGLE_SUB = $1')) {
+    return { rows: usuarios.filter(u => u.google_sub === params[0]).map(u => ({ ...u })) };
+  }
+  if (s.includes('FROM USUARIOS WHERE EMAIL = $1 AND GOOGLE_SUB IS NULL')) {
+    return { rows: usuarios.filter(u => u.email === params[0] && !u.google_sub).map(u => ({ ...u })) };
+  }
+  if (s.startsWith('UPDATE USUARIOS SET GOOGLE_SUB')) {
+    const u = usuarios.find(x => x.id == params[1]);
+    if (u) u.google_sub = params[0];
+    return { rows: [] };
+  }
+  if (s.includes('FROM USUARIOS WHERE IS_ADMIN = TRUE')) {
+    const soAtivos = s.includes('AND ATIVO = TRUE');
+    return { rows: usuarios.filter(u => u.is_admin && (!soAtivos || u.ativo !== false)).map(u => ({ id: u.id })) };
+  }
+  if (s.startsWith('SELECT') && s.includes('FROM USUARIOS WHERE ID = $1')) {
+    return { rows: usuarios.filter(u => u.id == params[0]).map(u => ({ ...u })) };
+  }
+  if (s.startsWith('UPDATE USUARIOS SET ATIVO')) {
+    const u = usuarios.find(x => x.id == params[0]);
+    if (!u) return { rows: [] };
+    u.ativo = params[1];
+    return { rows: [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo }] };
+  }
+  if (s.startsWith('SELECT ID, NOME, EMAIL, IS_ADMIN, ATIVO, CRIADO_EM FROM USUARIOS')) {
+    return { rows: usuarios.slice().sort((a, b) => (b.ativo !== false) - (a.ativo !== false) || String(a.nome).localeCompare(b.nome))
+      .map(u => ({ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo !== false })) };
+  }
+  if (s.startsWith('DELETE FROM USUARIOS WHERE ID')) {
+    // chave estrangeira sem ON DELETE: pedidos.usuario_id e import_log.usuario_id
+    if (pedidos.some(p => p.usuario_id == params[0])) { const err = new Error('violates foreign key constraint'); err.code = '23503'; throw err; }
+    const u = usuarios.find(x => x.id == params[0]);
+    usuarios = usuarios.filter(x => x.id != params[0]);
+    sessoes = sessoes.filter(se => se.usuario_id != params[0]);
+    return { rows: u ? [{ nome: u.nome, email: u.email }] : [] };
   }
 
   // rascunho de levantamento
@@ -1707,6 +1758,8 @@ module.exports = {
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
   __getPushInscricoes: () => pushInscricoes,
+  __getUsuarios: () => usuarios,
+  __getSessoes: () => sessoes,
   __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,
