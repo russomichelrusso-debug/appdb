@@ -10651,7 +10651,8 @@
         ` : '<div class="promoEmpty">Nada pendente nem recusado.</div>';
         const baixar = document.getElementById('apSyncQueueBaixar');
         if (baixar) baixar.addEventListener('click', () => {
-          const blob = new Blob([JSON.stringify({ geradoEm: new Date().toISOString(), fila, recusados }, null, 2)], { type: 'application/json' });
+          // relê: a fila pode ter mudado desde que a lista abriu
+          const blob = new Blob([JSON.stringify({ geradoEm: new Date().toISOString(), fila: loadSyncQueue(), recusados: loadFilaRecusados() }, null, 2)], { type: 'application/json' });
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           a.download = `pendencias-${new Date().toISOString().slice(0, 10)}.json`;
@@ -10661,7 +10662,10 @@
         const descartar = document.getElementById('apSyncQueueDescartar');
         if (descartar) descartar.addEventListener('click', async () => {
           if (!(await askConfirm('Descartar os envios recusados pelo servidor? Baixe o arquivo antes se precisar deles.', 'Descartar', { perigo: true }))) return;
-          try { localStorage.removeItem(FILA_RECUSADOS_LS_KEY); } catch (e) { }
+          // só os que estavam na tela: um recusado que chegou depois (envio em
+          // segundo plano) não foi visto nem baixado
+          const mostrados = new Set(recusados.map(r => r.id));
+          try { localStorage.setItem(FILA_RECUSADOS_LS_KEY, JSON.stringify(loadFilaRecusados().filter(r => !mostrados.has(r.id)))); } catch (e) { }
           refreshSyncQueueBadge();
           renderDetalheFila();
         });
@@ -10719,17 +10723,22 @@
             else erros.set(item.id, e.message);
           }
         }
-        // recusado só sai da fila se ficou guardado (localStorage cheio: continua na fila)
-        if (recusados.length && guardarFilaRecusados(recusados.map(r => ({ ...r.item, erro: r.erro, recusadoEm: Date.now() })))) {
-          recusados.forEach(r => tirar.add(r.item.id));
-        }
+        // recusado só sai da fila se ficou guardado (localStorage cheio: continua na
+        // fila, com o motivo da recusa à vista no Painel)
+        const recusadosGuardados = recusados.length > 0 && guardarFilaRecusados(recusados.map(r => ({ ...r.item, erro: r.erro, recusadoEm: Date.now() })));
+        if (recusadosGuardados) recusados.forEach(r => tirar.add(r.item.id));
+        else recusados.forEach(r => erros.set(r.item.id, `Recusado pelo servidor: ${r.erro} (sem espaço no aparelho pra guardar à parte)`));
         // relê a fila: o que entrou nela enquanto enviava (outra ação sem rede) fica
         saveSyncQueueList(loadSyncQueue().filter(it => !tirar.has(it.id))
           .map(it => (erros.has(it.id) ? { ...it, ultimoErro: erros.get(it.id), tentativas: (it.tentativas || 0) + 1 } : it)));
-        if (recusados.length) {
+        const detalhe = document.getElementById('apSyncQueueDetalhe');
+        if (detalhe && detalhe.innerHTML) renderDetalheFila();
+        if (recusadosGuardados) {
           const r = recusados[0];
           showToast(`O servidor recusou: ${r.item.descricao || 'envio pendente'} — ${String(r.erro).replace(/\.$/, '')}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}. Ficou guardado no aparelho (Painel › Ver pendências e recusados).`, 'erro');
           console.warn('Fila offline: itens recusados pelo servidor e retirados da fila', recusados);
+        } else if (recusados.length && !silencioso) {
+          showToast('O servidor recusou um envio pendente e não há espaço no aparelho pra guardá-lo à parte — veja no Painel › Ver pendências e recusados.', 'erro');
         } else if (enviados > 0 && !silencioso) {
           showToast(`${enviados} pendente(s) sincronizado(s) agora`);
         }
@@ -12337,14 +12346,16 @@
         const texto = (id) => (document.getElementById(id)?.textContent || '').trim();
         const servidor = texto('apSyncServidor');
         const catalogo = texto('apSyncCatalogo');
-        const pendencias = loadSyncQueue().length + loadFilaRecusados().length
+        const pendencias = loadSyncQueue().length
           + [texto('apDriveCsvQueueCount')].map(t => parseInt(t, 10)).filter(n => n > 0).reduce((a, b) => a + b, 0);
+        const recusados = loadFilaRecusados().length;
         const produtos = DB.products.length.toLocaleString('pt-BR');
         let resumo;
         if (servidor.startsWith('✗')) resumo = '⚠️ Sem conexão com o servidor';
         else if (servidor === 'Verificando…' || servidor === '—' || !servidor) resumo = 'Verificando…';
         else if (catalogo.startsWith('Desatualizado')) resumo = '⚠️ Catálogo desatualizado';
         else if (pendencias > 0) resumo = `⚠️ ${pendencias} pendência${pendencias === 1 ? '' : 's'} pra enviar`;
+        else if (recusados > 0) resumo = `⚠️ ${recusados} envio${recusados === 1 ? '' : 's'} recusado${recusados === 1 ? '' : 's'} — ver pendências`;
         else resumo = `✓ Tudo sincronizado · ${produtos} produtos`;
         el.textContent = resumo;
         el.classList.toggle('ap-statusAlerta', resumo.startsWith('⚠️'));
