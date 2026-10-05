@@ -14,7 +14,8 @@
 // corrigiu trocando o registro por um desregistro forçado). SE ESTE ARQUIVO
 // FOR REMOVIDO DE NOVO NO FUTURO, o registro em index.html TEM que virar
 // unregister() no mesmo commit - senão o mesmo problema se repete.
-const CACHE_VERSION = 'cortag-sw-v1';
+// v2 (10/2026): apaga o importadores.js guardado pela regra antiga (ver abaixo).
+const CACHE_VERSION = 'cortag-sw-v2';
 const STATIC_ASSETS = [
   './manifest.json',
   './icon-192.png',
@@ -49,10 +50,16 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) return;
 
   const isNavegacao = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
-  if (isNavegacao) {
-    // Páginas HTML (index.html, curva-abc.html etc.): sempre tenta a rede
-    // primeiro, pra nunca travar numa versão velha do app - só cai pro
-    // cache se estiver offline.
+  // Script do próprio app (importadores.js, carregado pelo index.html): é
+  // código, muda junto com o HTML. Antes caía na regra dos ícones (cache
+  // primeiro) e o Painel importava planilha com o leitor da versão anterior
+  // enquanto a importação por e-mail já usava o novo (achado do
+  // revisor-cortag, 10/2026).
+  const isScript = req.destination === 'script' || url.pathname.endsWith('.js');
+  if (isNavegacao || isScript) {
+    // Páginas HTML (index.html, curva-abc.html etc.) e scripts: sempre tenta
+    // a rede primeiro, pra nunca travar numa versão velha do app - só cai
+    // pro cache se estiver offline.
     event.respondWith(
       fetch(req)
         .then((resp) => {
