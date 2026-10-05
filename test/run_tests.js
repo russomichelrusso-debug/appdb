@@ -892,9 +892,31 @@ async function main() {
     const rr = ritmoLib.ritmoDasCompras(rajadas, hojeBr);
     // compra que se arrasta (pedido a cada 6 dias) para em 14 dias
     const arrastada = ritmoLib.juntarCompras([0, 6, 12, 18].map(n => ({ data: antesBr(60 - n), quantidade: 1 })));
-    assert(rajadas.length === 5 && rr.ritmo_dias === 30 && rr.ultima_compra === antesBr(24) && ritmoLib.situacaoDoRitmo(rr) === 'semana'
+    // previsão conta do 1º pedido da última compra (há 32 dias) + 30 = há 2 dias: atrasado 2
+    // (contando do último pedido, dava "faltam 6 dias" e ele só entrava na lista depois do dia)
+    assert(rajadas.length === 5 && rr.ritmo_dias === 30 && rr.ultima_compra === antesBr(24) && rr.previsao === antesBr(2)
+      && rr.atraso_dias === 2 && ritmoLib.situacaoDoRitmo(rr) === 'atrasado'
       && arrastada.length === 2 && arrastada[0].fim === antesBr(48) && arrastada[1].data === antesBr(42),
       `juntarCompras: complemento até 14 dias fica na mesma compra (mensal = ritmo 30): ${JSON.stringify([rajadas.length, rr, arrastada])}`);
+    // o cliente mensal com complementos entra na lista 7 dias antes do dia em que costuma
+    // comprar, como o sem complemento (achado da 3ª rodada do revisor-cortag)
+    const mensalCompl = ritmoLib.juntarCompras([143, 138, 135, 113, 108, 105, 83, 78, 75, 53, 48, 45, 23, 18, 15]
+      .map(n => ({ data: antesBr(n), quantidade: 1 })));
+    const rm = ritmoLib.ritmoDasCompras(mensalCompl, hojeBr);
+    // ritmo menor que a duração da compra: a previsão nunca cai antes do dia seguinte ao último pedido
+    const curto = ritmoLib.ritmoDasCompras([
+      { data: antesBr(40), fim: antesBr(40), quantidade: 1 }, { data: antesBr(30), fim: antesBr(30), quantidade: 1 },
+      { data: antesBr(20), fim: antesBr(7), quantidade: 1 }], hojeBr);
+    assert(rm.ritmo_dias === 30 && rm.previsao === ritmoLib.somarDias(hojeBr, 7) && ritmoLib.situacaoDoRitmo(rm) === 'semana'
+      && curto.ritmo_dias === 10 && curto.previsao === antesBr(6) && curto.ultima_compra === antesBr(7),
+      `ritmoDasCompras: previsão pelo 1º pedido da última compra (mensal com complemento entra 7 dias antes), nunca antes do dia seguinte ao último pedido: ${JSON.stringify([rm, curto])}`);
+    // proposta "frequente": produto que veio em 2 das 3 últimas compras do cliente conta 2,
+    // mesmo que as compras do produto (juntadas à parte) atravessem a quebra do cliente
+    const cliProp = [{ data: antesBr(80), fim: antesBr(80) }, { data: antesBr(40), fim: antesBr(28) }, { data: antesBr(24), fim: antesBr(24) }];
+    const propFreq = ritmoLib.itensDaProposta({ previsao: hojeBr }, cliProp,
+      new Map([['71009', [{ data: antesBr(28), fim: antesBr(24), quantidade: 4 }]]]), hojeBr);
+    assert(propFreq.length === 1 && propFreq[0].codigo_sku === '71009' && propFreq[0].origem === 'frequente',
+      `itensDaProposta: produto em 2 compras do cliente conta 2 mesmo com a compra do produto atravessando as duas: ${JSON.stringify(propFreq)}`);
     assert(ritmoLib.mediana([10, 30, 200]) === 30 && ritmoLib.quantidadeTipica([{ quantidade: 2 }, { quantidade: 10 }, { quantidade: 4 }, { quantidade: 3 }]) === 4,
       'mediana ignora a compra fora da curva; quantidade típica = mediana das 3 últimas');
     const sit = (atraso, ritmo) => ritmoLib.situacaoDoRitmo({ atraso_dias: atraso, ritmo_dias: ritmo });
