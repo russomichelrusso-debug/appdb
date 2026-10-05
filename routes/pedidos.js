@@ -38,6 +38,30 @@ function horaDoPedidoDoApp(valor, enviadoEm, agora = new Date()) {
 const versaoDoApp = (toque, enviadoEm) => horaDoPedidoDoApp(toque, enviadoEm);
 const versaoMaisVelha = (nova, gravada) => !!(nova && gravada && new Date(nova).getTime() <= new Date(gravada).getTime());
 
+// O que fazer com uma versão do app que chega pra um pedido já gravado:
+// - 'igual': mesmos itens = reenvio da mesma versão (resposta perdida com sinal
+//   fraco). É sucesso, sem regravar. Os itens são comparados ANTES da versão: a
+//   versão carrega a demora daquele envio, e o reenvio que chega mais rápido que
+//   o 1º saía "mais velho" e voltava como versão antiga - aviso falso, e a lista
+//   do aparelho ficava com os itens de antes (achado do revisor-cortag). A versão
+//   gravada só sobe (GREATEST): A -> B -> A com o B atrasado na fila não volta.
+// - 'antiga': mais velha que a gravada, ou sem hora confiável (relógio do
+//   aparelho mudou no meio, mais de 30 dias na fila) quando já há uma gravada -
+//   sem saber a hora, não passa por cima de uma alteração mais nova.
+// - 'aplicar': troca os itens.
+async function compararComGravado(client, pedido, itens, versao) {
+  if (!itensValidos(itens)) return 'igual'; // não troca por itens inválidos (devolve o gravado)
+  if (mesmosItens(await itensDoPedido(client, pedido.id), itens)) {
+    if (versao) await client.query('/* versao-app */ UPDATE pedidos SET versao_app = GREATEST(versao_app, $1::timestamptz) WHERE id = $2', [versao, pedido.id]);
+    return 'igual';
+  }
+  if (pedido.versao_app && !versao) {
+    console.warn(`Pedido #${pedido.id}: alteração sem hora confiável (enviado_em/alterado_em) não aplicada sobre a versão gravada.`);
+    return 'antiga';
+  }
+  return versaoMaisVelha(versao, pedido.versao_app) ? 'antiga' : 'aplicar';
+}
+
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
@@ -134,14 +158,10 @@ router.post('/', async (req, res) => {
       if (mesmo) {
         const versao = versaoDoApp(req.body.alterado_em || data_pedido, req.body.enviado_em);
         const resposta = { pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true };
-        if (versaoMaisVelha(versao, mesmo.versao_app)) {
-          await client.query('ROLLBACK');
-          return res.status(200).json({ ...resposta, versao_antiga: true });
-        }
-        if (!itensValidos(itens)
-          || mesmosItens(await itensDoPedido(client, mesmo.id), itens)) {
-          await client.query('ROLLBACK');
-          return res.status(200).json(resposta);
+        const decisao = await compararComGravado(client, mesmo, itens, versao);
+        if (decisao !== 'aplicar') {
+          await client.query(decisao === 'igual' ? 'COMMIT' : 'ROLLBACK');
+          return res.status(200).json(decisao === 'antiga' ? { ...resposta, versao_antiga: true } : resposta);
         }
         await trocarItensDoPedido(client, mesmo.id, itens);
         const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
@@ -250,16 +270,20 @@ router.post('/', async (req, res) => {
     }
     if (e.code === '23505' && e.constraint === 'idx_pedidos_id_envio') {
       // o mesmo envio duas vezes ao mesmo tempo (duas abas esvaziando a fila):
-      // o outro gravou - devolve ele
-      let mesmo;
+      // o outro gravou - devolve ele. Hoje a trava por id_envio não deixa chegar
+      // aqui; se chegar com itens diferentes (alteração), 503 faz a fila mandar de
+      // novo e cair na troca de itens - 200 aqui perdia a alteração
+      let mesmo, iguais = true;
       try {
         mesmo = await pedidoDoMesmoEnvio(pool, idEnvio, req.usuario.id);
+        if (mesmo && itensValidos(itens)) iguais = mesmosItens(await itensDoPedido(pool, mesmo.id), itens);
       } catch (e2) {
         // não deu pra confirmar agora: 503 deixa o pedido na fila do app e o
         // próximo envio acha o já gravado (409 o tirava da fila como recusado)
         console.error(e2);
         return res.status(503).json({ erro: 'Tente de novo em instantes.' });
       }
+      if (mesmo && !iguais) return res.status(503).json({ erro: 'Tente de novo em instantes.' });
       if (mesmo) return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
       return res.status(409).json({ erro: 'Identificador de envio já usado.' });
     }
@@ -286,7 +310,7 @@ const LIMITE_PEDIDOS_SALVOS = 150;
 router.get('/salvos', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT ped.id, ped.data_pedido, ped.atualizado_em, ped.contexto,
+      `SELECT ped.id, ped.data_pedido, ped.atualizado_em, ped.contexto, ped.id_envio,
               c.id AS cliente_id, c.nome AS cliente_nome, c.documento AS cliente_documento,
               c.classificatorio_tipo, c.classificatorio_desconto, c.codigo_oficial,
               json_agg(json_build_object('codigo_sku', pr.codigo_sku, 'quantidade', pi.quantidade,
@@ -377,10 +401,13 @@ router.patch('/:id', async (req, res) => {
 
     // alteração mais velha que a gravada (fila offline atrasada, outro aparelho):
     // não apaga a mais nova
+    // (e o reenvio da mesma alteração, com a resposta perdida, é sucesso sem regravar)
     const versao = versaoDoApp(alterado_em, enviado_em);
-    if (versaoMaisVelha(versao, atual.versao_app)) {
-      await client.query('ROLLBACK');
-      return res.json({ pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido, atualizado_em: atual.atualizado_em, atualizado: false, versao_antiga: true });
+    const decisao = await compararComGravado(client, atual, itens, versao);
+    if (decisao !== 'aplicar') {
+      await client.query(decisao === 'igual' ? 'COMMIT' : 'ROLLBACK');
+      return res.json({ pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido, atualizado_em: atual.atualizado_em,
+        ...(decisao === 'igual' ? { atualizado: true } : { atualizado: false, versao_antiga: true }) });
     }
     await trocarItensDoPedido(client, atual.id, itens);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);

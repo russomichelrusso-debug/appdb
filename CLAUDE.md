@@ -401,7 +401,13 @@ Supabase, sem PR — não é mudança de código.
   anterior só sai da fila depois que a nova é aceita ou entra nela. `pedidos.versao_app` (hora do toque já
   no relógio do servidor, `horaDoPedidoDoApp` — não o relógio do aparelho) impede que uma versão mais velha
   chegando atrasada (outro aparelho, envio em andamento) apague a mais nova; o app avisa quando a alteração
-  não foi aplicada por isso (`versao_antiga`). Envios com o mesmo `id_envio` passam um de cada vez
+  não foi aplicada por isso (`versao_antiga`). Os **itens são comparados antes da versão**
+  (`compararComGravado`): a versão carrega a demora daquele envio, e o reenvio da mesma versão que chegava
+  mais rápido que o 1º voltava como "versão antiga" (aviso falso, lista do aparelho com os itens de antes);
+  mesmos itens = sucesso sem regravar, e a versão gravada só sobe. Versão sem hora confiável (relógio do
+  aparelho mudou no meio, mais de 30 dias na fila) não passa por cima de uma gravada. O pedido gravado cuja
+  resposta se perdeu (POST ainda na fila) aparece na lista junto do pedido do servidor pelo `id_envio`
+  (`GET /salvos` devolve), com a versão da fila por cima, e alterar ele tira esse POST da fila. Envios com o mesmo `id_envio` passam um de cada vez
   (`pg_advisory_xact_lock`);
   limpar o orçamento, trocar/limpar o cliente ou "Pedido novo" desligam. O pedido grava o
   `contexto` do orçamento (estado, canal, classificatório, prazo, descontos e preço editado por

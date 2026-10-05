@@ -281,7 +281,7 @@ async function query(sql, params = []) {
       .map(p => {
         const c = clientes.find(x => String(x.id) === String(p.cliente_id)) || {};
         return {
-          id: p.id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em || null,
+          id: p.id, data_pedido: p.data_pedido, atualizado_em: p.atualizado_em || null, id_envio: p.id_envio || null,
           contexto: p.contexto ? JSON.parse(p.contexto) : null,
           cliente_id: c.id, cliente_nome: c.nome, cliente_documento: c.documento || null,
           classificatorio_tipo: c.classificatorio_tipo || null, classificatorio_desconto: c.classificatorio_desconto ?? null,
@@ -305,6 +305,12 @@ async function query(sql, params = []) {
       const prod = produtos.find(p => p.id === i.produto_id);
       return { codigo_sku: prod ? prod.codigo_sku : null, quantidade: i.quantidade, preco_unitario: i.preco_unitario };
     }) };
+  }
+  // reenvio com os mesmos itens: a versão gravada só sobe (GREATEST ignora NULL)
+  if (s.includes('/* VERSAO-APP */')) {
+    const p = pedidos.find(x => String(x.id) === String(params[1]));
+    if (p && (!p.versao_app || new Date(params[0]) > new Date(p.versao_app))) p.versao_app = new Date(params[0]).toISOString();
+    return { rows: [] };
   }
   // POST com o mesmo id_envio e itens novos: cabeçalho da alteração
   if (s.includes('UPDATE PEDIDOS SET CONTEXTO = $1::JSONB, ATUALIZADO_EM = COALESCE($2::TIMESTAMPTZ, NOW())')) {

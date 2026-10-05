@@ -967,7 +967,7 @@ async function main() {
     const r4 = await postar({ data_pedido: '2026-08-01', origem: 'pdf' });                      // PDF: a data dele
     const gravado = (r) => mockDb.__getPedidos().find(p => p.id === r.body.pedido_id);
     const perto = (iso, ms) => Math.abs(new Date(iso).getTime() - (Date.now() + ms)) < 5000;
-    const alt = await req('PATCH', `/api/pedidos/${r1.body.pedido_id}`, { itens: item, alterado_em: h(-5 * 3600000), enviado_em: h(0) });
+    const alt = await req('PATCH', `/api/pedidos/${r1.body.pedido_id}`, { itens: [{ ...item[0], quantidade: 2 }], alterado_em: h(-5 * 3600000), enviado_em: h(0) });
     assert(r1.status === 201 && perto(gravado(r1).data_pedido, -26 * 3600000) && perto(gravado(r2).data_pedido, 0)
       && perto(gravado(r3).data_pedido, 0) && gravado(r4).data_pedido === '2026-08-01T00:00:00.000Z'
       && alt.status === 200 && perto(gravado(r1).atualizado_em, -5 * 3600000),
@@ -1036,6 +1036,48 @@ async function main() {
       && patchVelho.body.versao_antiga === true && patchNovo.body.atualizado === true && JSON.stringify(itensDe(e1.body.pedido_id)) === '[7]'
       && mockDb.__getPedidos().length === nPedidos,
       `pedido do app: alteração pelo mesmo envio troca os itens; versão mais velha não sobrescreve (POST e PATCH): ${JSON.stringify([alt.body, depoisAlt, depoisVelho, patchVelho.body, itensDe(e1.body.pedido_id)])}`);
+
+    // Reenvio da MESMA versão (resposta perdida) como o app manda de verdade: com
+    // enviado_em novo. Se o reenvio chega mais rápido que o 1º, a versão calculada
+    // sai menor - antes voltava "versão antiga" (aviso falso e lista do aparelho com
+    // os itens de antes). Mesmos itens = sucesso, POST e PATCH.
+    const toqueR = new Date(Date.now() - 60000).toISOString();
+    const corpoR = { ...corpo, id_envio: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d', data_pedido: toqueR };
+    const r1 = await req('POST', '/api/pedidos', { ...corpoR, enviado_em: agoraIso() });
+    const maisDemorado = new Date(Date.now() + 2000).toISOString(); // espera maior = versão "mais velha"
+    const r2 = await req('POST', '/api/pedidos', { ...corpoR, enviado_em: maisDemorado });
+    const pid = r1.body.pedido_id;
+    const p7 = [{ codigo_sku: '70011', quantidade: 7, preco_unitario: 10 }];
+    const pa = await req('PATCH', `/api/pedidos/${pid}`, { itens: p7, alterado_em: agoraIso(), enviado_em: agoraIso() });
+    const ta = new Date().toISOString();
+    const pb = await req('PATCH', `/api/pedidos/${pid}`, { itens: p7, alterado_em: ta, enviado_em: new Date(Date.parse(ta) + 2000).toISOString() });
+    // sem hora confiável (relógio do aparelho voltou, sem enviado_em) com versão gravada: não passa por cima
+    const semHora = await req('PATCH', `/api/pedidos/${pid}`, { itens: [{ codigo_sku: '70011', quantidade: 9, preco_unitario: 10 }], alterado_em: agoraIso() });
+    assert(r1.status === 201 && r2.status === 200 && r2.body.pedido_id === pid && !r2.body.versao_antiga
+      && pa.body.atualizado === true && pb.status === 200 && pb.body.atualizado === true && !pb.body.versao_antiga
+      && semHora.body.versao_antiga === true && JSON.stringify(itensDe(pid)) === '[7]',
+      `pedido do app: reenvio da mesma versão (enviado_em novo, chegando mais rápido) não vira "versão antiga"; sem hora não sobrescreve: ${JSON.stringify([r2.body, pb.body, semHora.body, itensDe(pid)])}`);
+
+    // A -> B -> A: o vendedor volta ao que já estava gravado (A de novo, mesmos itens)
+    // enquanto B ainda espera na fila de outro aparelho. A versão gravada sobe com o
+    // reenvio igual, e o B atrasado não volta.
+    const corpoV = { ...corpo, id_envio: '1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d', data_pedido: new Date(Date.now() - 3 * 3600000).toISOString() };
+    const vA = await req('POST', '/api/pedidos', { ...corpoV, enviado_em: agoraIso() });
+    await req('POST', '/api/pedidos', { ...corpoV, alterado_em: new Date(Date.now() - 3600000).toISOString(), enviado_em: agoraIso() });
+    const vB = await req('POST', '/api/pedidos', { ...corpoV, itens: [{ codigo_sku: '70011', quantidade: 4, preco_unitario: 10 }],
+      alterado_em: new Date(Date.now() - 2 * 3600000).toISOString(), enviado_em: agoraIso() });
+    // corrida no INSERT (sem a trava) com itens diferentes dos gravados: 503 pra fila
+    // mandar de novo e cair na troca de itens (200 aqui perdia a alteração)
+    let buscas5 = 0;
+    const corrida = await comConsulta(async (sql, params, q0) => {
+      if (sql.includes('WHERE id_envio = $1') && buscas5++ === 0) return { rows: [] };
+      return q0(sql, params);
+    }, () => req('POST', '/api/pedidos', { ...corpoV, itens: [{ codigo_sku: '70011', quantidade: 6, preco_unitario: 10 }], alterado_em: agoraIso(), enviado_em: agoraIso() }));
+    const salvosV = await req('GET', '/api/pedidos/salvos');
+    assert(vB.body.versao_antiga === true && JSON.stringify(itensDe(vA.body.pedido_id)) === '[3]'
+      && corrida.status === 503 && buscas5 === 2
+      && (salvosV.body.pedidos.find(p => p.id === vA.body.pedido_id) || {}).id_envio === corpoV.id_envio,
+      `pedido do app: A -> B -> A não deixa o B atrasado voltar; corrida com itens novos = 503; lista traz o id_envio: ${JSON.stringify([vB.body, itensDe(vA.body.pedido_id), corrida.status, buscas5])}`);
   }
 
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
