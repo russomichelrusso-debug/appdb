@@ -14269,13 +14269,6 @@
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(clienteTabSelected, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
             }
-            content.querySelectorAll('[data-recuperar-add]').forEach(btn => {
-              btn.addEventListener('click', () => {
-                const cod = btn.dataset.recuperarAdd;
-                if (!productByCod(cod)) { showToast('Esse produto não está no catálogo carregado agora — sincronize e tente de novo.'); return; }
-                addToCart(cod);
-              });
-            });
           }
         } catch (e) {
           content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
@@ -14288,6 +14281,14 @@
           clienteTabDebounce = setTimeout(() => searchClienteTabList(term), 300);
         });
         document.getElementById('clienteDetailBackBtn').addEventListener('click', closeClienteDetail);
+        // "+ Orçamento" da aba Recuperar: delegação no conteúdo, que é refeito a cada aba
+        document.getElementById('clienteDetailContent').addEventListener('click', (e) => {
+          const btn = e.target.closest('[data-recuperar-add]');
+          if (!btn) return;
+          const cod = btn.dataset.recuperarAdd;
+          if (!productByCod(cod)) { showToast('Esse produto não está no catálogo carregado agora — sincronize e tente de novo.'); return; }
+          addToCart(cod);
+        });
         document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(b => {
           b.addEventListener('click', () => {
             document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
