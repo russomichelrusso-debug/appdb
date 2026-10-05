@@ -52,8 +52,19 @@ node test/run_tests.js       # suite de testes (mocka o banco em test/mock-db.js
 ```
 
 Não há lint nem build configurados — as páginas `.html` (`index.html`, `curva-abc.html`,
-`ficha-cnpj.html`, `calculadora-materiais.html`) são validadas manualmente (checagem de sintaxe
-dos blocos `<script>` inline antes de commitar) por não terem bundler.
+`ficha-cnpj.html`, `calculadora-materiais.html`) não têm bundler; a checagem de sintaxe dos
+blocos `<script>` inline (e do CRLF do `index.html`) é `node scripts/checar-html.js [arquivo]`.
+
+Automação do Claude Code (`.claude/`):
+- `settings.json` liga dois hooks: **SessionStart** (`hooks/session-start.sh`, só na nuvem, roda
+  `npm install`) e **PostToolUse** em Edit/Write (`hooks/pos-edicao.js`: `.html` →
+  `checar-html.js`; `.js` → `node --check`; `routes/`, `server.js`, `importadores.js`,
+  `schema.sql`, `test/`… → `node test/run_tests.js`). Falha volta como erro pro Claude corrigir.
+- Subagente **`revisor-cortag`** (`agents/revisor-cortag.md`): revisa o diff contra as regras
+  deste arquivo que já deram erro em produção (data sem hora, `sqlFaturadoDeFato`, compra em
+  dobro, `.hidden` × display inline, CRLF, tabelas da política). Rodar antes de abrir PR que
+  mexa em `routes/`, `schema.sql`, `importadores.js` ou nas `.html`; regra nova que entrar aqui
+  em "Pegadinhas"/"Fontes de dados" vale a pena copiar pra lá.
 
 Pegadinhas de ambiente:
 - `index.html` tem fim de linha **CRLF** — editar preservando (ex.: Python com `newline=''`).
