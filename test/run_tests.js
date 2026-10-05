@@ -1790,7 +1790,20 @@ async function main() {
     `importação por e-mail: Classificatório entra (sem precisar de admin): ${JSON.stringify(res.body)}`);
   res = await enviarArquivo('02.09.2026 - LISTA PADRÃO 2026 - NORTE NORDESTE Por Canal_REV 4.xlsx', xlsPrecos, CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
   assert(res.status === 422 && /SUL SUDESTE/.test(res.body.erro), `importação por e-mail: lista de preços de outra região é recusada: ${JSON.stringify(res.body)}`);
-  res = await enviarArquivo('02.09.2026 - LISTA PADRÃO 2026 - SUL SUDESTE Por Canal_REV 4.xlsx', Buffer.concat([xlsPrecos]), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+  {
+    // remetente falso: o nome de exibição diz "vendas@cortag.com", o endereço é outro
+    const catalogoAntes = JSON.stringify(mockDb.__getCatalogoPrecos());
+    res = await enviarArquivo('02.09.2026 - LISTA PADRÃO 2026 - SUL SUDESTE Por Canal_REV 4.xlsx', xlsPrecos, CHAVE_EMAIL,
+      { remetente: '"vendas@cortag.com" <golpe@outro-dominio.com>' });
+    const xlsRelatorio2 = planilha({ Carteira: [['Relatório de Carteira'], [],
+      ['Cliente', 'Cod.Cliente', 'Nr.Pedido', 'Item', 'Descrição', 'Qte.Pedida', 'Vlr.Pedido', 'Implantação', 'Classificatório'],
+      ['LOJA EMAIL', 'COD9501', '00676777', '60863', 'DISCO', 1, 99, dia(2026, 10, 2), 'Varejo Premium (17)']] });
+    const r2 = await enviarArquivo('Repres-22.xlsx', xlsRelatorio2, CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+    assert(res.status === 422 && /vendas@cortag\.com/.test(res.body.erro) && JSON.stringify(mockDb.__getCatalogoPrecos()) === catalogoAntes
+      && r2.status === 422 && /noreply@cortag\.com\.br/.test(r2.body.erro) && !mockDb.__getPedidosOficiaisItens().some(i => i.nr_pedido === '676777'),
+      `importação por e-mail: cada tipo só vale do remetente dele (endereço exato, não o nome de exibição): ${JSON.stringify([res.body, r2.body])}`);
+  }
+  res = await enviarArquivo('02.09.2026 - LISTA PADRÃO 2026 - SUL SUDESTE Por Canal_REV 4.xlsx', Buffer.concat([xlsPrecos]), CHAVE_EMAIL, { remetente: 'Vendas <vendas@cortag.com>' });
   {
     const p = mockDb.__getCatalogoPrecos().find(x => x.codigo_sku === '60863');
     assert(res.status === 200 && res.body.tipo === 'precos' && p && p.precos.VAREJO.SP === 10.5 && p.precos_sem_imposto.VAREJO.SP === 10,
@@ -1878,11 +1891,49 @@ async function main() {
     assert(res.status === 200 && res.body.resultado.ignorado && !mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === '677299'),
       `e-mail Cortag: à vista mais velho que o último relatório oficial é ignorado: ${JSON.stringify(res.body)}`);
 
+    res = await enviarMensagem('Pedido Bloqueado 00677998', textoBloqueado.replace('00677375', '00677998'), { remetente: 'Cortag <noreply@cortag.com.br.golpe.com>' });
+    assert(res.status === 422 && !mockDb.__getPedidosBloqueados().some(x => x.nr_pedido === '677998'),
+      `e-mail Cortag: pedido bloqueado de outro remetente é recusado (sem selo nem push): ${JSON.stringify(res.body)}`);
+
     res = await enviarMensagem('Pedido Bloqueado 00677999', 'texto sem o formato esperado');
     const res2 = await enviarMensagem('Relatório de Comissões', 'qualquer coisa');
     assert(res.status === 200 && res.body.resultado.nr_pedido === '677999' && res2.status === 422
       && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Relatório de Comissões'),
       `e-mail Cortag: número só no assunto ainda vale; e-mail não reconhecido é recusado (422): ${JSON.stringify([res.body, res2.body])}`);
+  }
+  {
+    // script do Gmail (scripts/gmail-importacao/Codigo.gs, roda no Google): só manda
+    // e-mail do endereço exato que o Gmail autenticou (DKIM/DMARC). Cabeçalhos no
+    // formato do e-mail real da vendas@cortag.com de 16/09/2026.
+    const codigoGs = require('fs').readFileSync(require('path').join(__dirname, '../scripts/gmail-importacao/Codigo.gs'), 'utf8');
+    const gs = require('vm').runInNewContext(codigoGs + '\n;({ enderecoDe_, cabecalhos_, autenticadoPeloGmail_ })', {});
+    const bruto = (autenticacao, resto = '') => ['Delivered-To: russo2055@gmail.com',
+      'Received: by 2002:a05:6000:118e with SMTP id g14;\r\n        Wed, 16 Sep 2026 07:11:09 -0700 (PDT)',
+      'ARC-Authentication-Results: i=2; mx.google.com;\r\n       dkim=pass header.i=@cortag.com',
+      ...(autenticacao ? ['Authentication-Results: mx.google.com;\r\n       ' + autenticacao.join(';\r\n       ')] : []),
+      'From: Vendas <vendas@cortag.com>', 'Subject: LISTA', resto].filter(Boolean).join('\r\n') + '\r\n\r\ncorpo\r\nAuthentication-Results: mx.google.com; dmarc=pass header.from=cortag.com';
+    const cab = (autenticacao, resto) => gs.cabecalhos_({ getRawContent: () => bruto(autenticacao, resto) });
+    const real = ['dkim=pass header.i=@cortag.com header.s=selector1 header.b=C49PC7Nx',
+      'arc=pass (i=1 spf=pass spfdomain=cortag.com dkim=pass dkdomain=cortag.com dmarc=pass fromdomain=cortag.com)',
+      'spf=pass (google.com: domain of vendas@cortag.com designates 2a01:111:f403:c111::5 as permitted sender) smtp.mailfrom=vendas@cortag.com',
+      'dmarc=pass (p=QUARANTINE sp=QUARANTINE dis=NONE) header.from=cortag.com'];
+    const internoDaCortag = 'authentication-results: dkim=none (message not signed)\r\n header.d=none;dmarc=none action=none header.from=cortag.com;';
+    const falsoAbaixo = 'Authentication-Results: mx.google.com; dkim=pass header.i=@cortag.com; dmarc=pass header.from=cortag.com';
+    const reprovado = ['dkim=none', 'spf=pass smtp.mailfrom=golpe@outro-dominio.com', 'dmarc=fail (p=QUARANTINE) header.from=cortag.com'];
+    assert(gs.enderecoDe_('Vendas <VENDAS@cortag.com>') === 'vendas@cortag.com' && gs.enderecoDe_('noreply@cortag.com.br') === 'noreply@cortag.com.br'
+      && gs.enderecoDe_('"vendas@cortag.com" <golpe@outro-dominio.com>') === 'golpe@outro-dominio.com',
+      'script do Gmail: o remetente é o endereço dentro de <...>, não o nome de exibição');
+    assert(gs.autenticadoPeloGmail_(cab(real, internoDaCortag), 'vendas@cortag.com') === true
+      && gs.autenticadoPeloGmail_(cab(['dkim=pass header.i=@cortag.com.br header.s=s1', 'spf=pass smtp.mailfrom=noreply@cortag.com.br']), 'noreply@cortag.com.br') === true
+      && gs.autenticadoPeloGmail_(cab(['dkim=pass header.d=cortag.com.br']), 'noreply@cortag.com.br') === true,
+      'script do Gmail: e-mail com DMARC ou DKIM "pass" do domínio do remetente vale');
+    assert(gs.autenticadoPeloGmail_(cab(reprovado, falsoAbaixo), 'vendas@cortag.com') === false
+      && gs.autenticadoPeloGmail_(cab(real), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(['dkim=pass header.d=cortag.com.golpe.com', 'dmarc=fail header.from=cortag.com']), 'vendas@cortag.com') === false
+      && gs.autenticadoPeloGmail_(cab(['dkim=pass header.i=@cortag.com']), 'noreply@cortag.com.br') === false
+      && gs.autenticadoPeloGmail_(cab(['spf=pass smtp.mailfrom=vendas@cortag.com', 'dmarc=none header.from=cortag.com']), 'vendas@cortag.com') === false
+      && gs.autenticadoPeloGmail_('From: vendas@cortag.com', 'vendas@cortag.com') === false,
+      'script do Gmail: não vale "pass" escrito por quem mandou (abaixo do do Gmail), de outro domínio/subdomínio, só SPF ou sem Authentication-Results');
   }
   {
     // relatório diário do fim de semana: na segunda sai um push só, o do mais novo
