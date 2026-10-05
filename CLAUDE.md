@@ -248,7 +248,9 @@ Supabase, sem PR — não é mudança de código.
     em vez de cortar o `data_pedido` (que vem em UTC). Pedido do app fechado (ou alterado) sem internet grava
     a hora do toque, não a hora em que a fila enviou: o app manda a hora do toque (`data_pedido`/
     `alterado_em`) e o `apiFetch` carimba `enviado_em` em cada envio; o servidor desconta essa espera do
-    relógio dele (`horaDoPedidoDoApp`) — relógio errado do celular não entra.
+    relógio dele (`horaDoPedidoDoApp`) — relógio errado do celular não entra. O pedido novo leva um `id_envio`
+    gerado no toque: com sinal fraco o servidor gravava, a resposta se perdia e o reenvio da fila criava outro
+    pedido — agora o reenvio com o mesmo id devolve o já gravado (`idx_pedidos_id_envio`, único).
   - **Entrada de Pedidos ≠ Faturamento**. O painel oficial conta a entrada pela **data de
     implantação** (`Implantação`/`Dt.Implant` → `data_implantacao`), **carteira + faturado**, e
     **sem a série de pedidos de 7 dígitos** (10xxxxx–13xxxxx: itens avulsos de valor baixo, fora

@@ -1243,8 +1243,14 @@ async function query(sql, params = []) {
     return { rows };
   }
   if (s.includes('INSERT INTO PEDIDOS')) {
-    // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto
+    // params: cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto, id_envio
     const numeroCotacao = params[3] ?? null;
+    if (params[9] && pedidos.some(p => p.id_envio === params[9])) {
+      // índice único parcial idx_pedidos_id_envio
+      const err = new Error('duplicate key value violates unique constraint "idx_pedidos_id_envio"');
+      err.code = '23505'; err.constraint = 'idx_pedidos_id_envio';
+      throw err;
+    }
     if (numeroCotacao && pedidos.some(p => p.numero_cotacao === numeroCotacao)) {
       // mesmo comportamento do índice único parcial idx_pedidos_numero_cotacao
       const err = new Error('duplicate key value violates unique constraint "idx_pedidos_numero_cotacao"');
@@ -1254,11 +1260,16 @@ async function query(sql, params = []) {
     const p = {
       id: nextId.pedidos++, cliente_id: params[0], vendedor_id: params[1], observacao: params[2],
       numero_cotacao: numeroCotacao, pdf_modificado_em: params[6] ?? null, usuario_id: params[7] ?? null,
-      origem: params[4] || 'app', contexto: params[8] ?? null,
+      origem: params[4] || 'app', contexto: params[8] ?? null, id_envio: params[9] ?? null,
       data_pedido: params[5] ? new Date(params[5]).toISOString() : new Date().toISOString(),
     };
     pedidos.push(p);
     return { rows: [{ id: p.id, data_pedido: p.data_pedido }] };
+  }
+  // POST /api/pedidos com id_envio: o reenvio do mesmo pedido devolve o gravado
+  if (s.includes('FROM PEDIDOS WHERE ID_ENVIO = $1')) {
+    return { rows: pedidos.filter(p => p.id_envio && p.id_envio === params[0])
+      .map(p => ({ id: p.id, cliente_id: p.cliente_id, data_pedido: p.data_pedido, usuario_id: p.usuario_id })) };
   }
   // POST /api/pedidos com numero_cotacao: busca (com lock) da cotação já gravada
   if (s.includes('FROM PEDIDOS WHERE NUMERO_COTACAO = $1')) {

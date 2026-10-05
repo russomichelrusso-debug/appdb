@@ -83,10 +83,19 @@ function contextoParaGravar(contexto) {
 //   pdf_modificado_em?: "...",    // data de modificação do ARQUIVO PDF (metadado), pra saber qual versão é mais nova
 //   origem?: "app" | "pdf",       // de onde veio esse registro
 //   contexto?: { uf, canal, ... }, // como o orçamento estava montado (só pedido do app, pra reabrir e editar)
+//   id_envio?: "uuid",            // gerado no toque em "Finalizar": o reenvio da fila offline não duplica
 //   itens: [{ codigo_sku, quantidade, preco_unitario, descricao? }, ...]
 // }
+const ID_ENVIO = /^[A-Za-z0-9-]{16,64}$/;
+async function pedidoDoMesmoEnvio(client, idEnvio, usuarioId) {
+  const r = await client.query('SELECT id, cliente_id, data_pedido, usuario_id FROM pedidos WHERE id_envio = $1', [idEnvio]);
+  const p = r.rows[0];
+  // de outro usuário (não acontece com UUID): não devolve o pedido dele
+  return p && p.usuario_id === usuarioId ? p : (p ? false : null);
+}
 router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, pdf_modificado_em, origem, contexto } = req.body;
+  const idEnvio = typeof req.body.id_envio === 'string' && ID_ENVIO.test(req.body.id_envio) ? req.body.id_envio : null;
   if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
   if (pdf_modificado_em && new Date(pdf_modificado_em) > new Date()) {
@@ -97,6 +106,20 @@ router.post('/', async (req, res) => {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+
+    // Reenvio do mesmo pedido (resposta perdida com sinal fraco -> fila offline
+    // -> reenvio): devolve o que já foi gravado, sem criar outro
+    if (idEnvio) {
+      const mesmo = await pedidoDoMesmoEnvio(client, idEnvio, req.usuario.id);
+      if (mesmo === false) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ erro: 'Identificador de envio já usado.' });
+      }
+      if (mesmo) {
+        await client.query('ROLLBACK');
+        return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
+      }
+    }
 
     // Duplicidade da cotação, checada DENTRO da transação com FOR UPDATE
     // (antes era antes do BEGIN: duas atualizações simultâneas da mesma
@@ -160,10 +183,10 @@ router.post('/', async (req, res) => {
       atualizado = true;
     } else {
       const pedidoResult = await client.query(
-        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto)
-         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb)
+        `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto, id_envio)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb, $10)
          RETURNING id, data_pedido`,
-        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origemFinal, dataPedidoGravar, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto)]
+        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origemFinal, dataPedidoGravar, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto), idEnvio]
       );
       pedidoId = pedidoResult.rows[0].id;
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
@@ -187,6 +210,15 @@ router.post('/', async (req, res) => {
     if (e.code === '23505' && e.constraint === 'idx_pedidos_numero_cotacao') {
       // corrida rara: dois envios da mesma cotação quase ao mesmo tempo
       return res.status(200).json({ ja_existia: true, erro_corrida: true });
+    }
+    if (e.code === '23505' && e.constraint === 'idx_pedidos_id_envio') {
+      // o mesmo envio duas vezes ao mesmo tempo (duas abas esvaziando a fila):
+      // o outro gravou - devolve ele
+      try {
+        const mesmo = await pedidoDoMesmoEnvio(pool, idEnvio, req.usuario.id);
+        if (mesmo) return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
+      } catch (e2) { console.error(e2); }
+      return res.status(409).json({ erro: 'Identificador de envio já usado.' });
     }
     console.error(e);
     // e.code só existe em erro vindo direto do driver do Postgres (ex: violação

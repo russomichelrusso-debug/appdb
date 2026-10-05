@@ -10908,6 +10908,11 @@
       async function apiTodosProdutosServidor() {
         return apiFetch('/api/produtos');
       }
+      function novoIdEnvio() {
+        try { if (crypto.randomUUID) return crypto.randomUUID(); } catch (e) { }
+        const b = crypto.getRandomValues(new Uint8Array(16));
+        return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+      }
       async function apiCriarPedido(payload) {
         return apiFetch('/api/pedidos', { method: 'POST', body: JSON.stringify(payload) }, { tipo: 'pedido', descricao: 'Pedido' });
       }
@@ -12451,6 +12456,9 @@
               // o pedido sai da fila depois, até no dia seguinte
               data_pedido: new Date().toISOString(),
               enviado_em: null,
+              // gerado no toque: se a resposta se perder (sinal fraco) e o pedido for
+              // reenviado pela fila, o servidor devolve o já gravado em vez de criar outro
+              id_envio: novoIdEnvio(),
             });
           const offline = !!(result && result.__filaOffline);
           // Cópia de segurança em CSV no Drive - independente do pedido em si já
