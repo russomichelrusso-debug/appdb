@@ -49,7 +49,14 @@ npm install
 export DATABASE_URL=postgres://usuario:senha@localhost:5432/cortag   # Supabase: usar o Session pooler
 npm start                    # sobe o servidor (roda schema.sql automaticamente)
 node test/run_tests.js       # suite de testes (mocka o banco em test/mock-db.js) — rodar antes de qualquer mudança em routes/
+node scripts/app-local.js    # app inteiro em http://localhost:8080/__entrar, já logado, banco em memória (sem Postgres/Google)
 ```
+
+`scripts/app-local.js` serve as páginas e a API no mesmo endereço (o CSP do `index.html` só deixa
+chamar `'self'`/https) e semeia 3 clientes com faturamento pra ver card, classificatório e busca.
+Consulta que o mock não conhece responde 500 — normal; se a tela testada depender dela, ensinar o
+`test/mock-db.js`. O CI (`.github/workflows/testes.yml`) roda os testes e `checar-html.js` em todo
+PR contra `main`.
 
 Não há lint nem build configurados — as páginas `.html` (`index.html`, `curva-abc.html`,
 `ficha-cnpj.html`, `calculadora-materiais.html`) não têm bundler; a checagem de sintaxe dos
@@ -65,6 +72,10 @@ Automação do Claude Code (`.claude/`):
   dobro, `.hidden` × display inline, CRLF, tabelas da política). Rodar antes de abrir PR que
   mexa em `routes/`, `schema.sql`, `importadores.js` ou nas `.html`; regra nova que entrar aqui
   em "Pegadinhas"/"Fontes de dados" vale a pena copiar pra lá.
+- MCP **Playwright** (`.mcp.json` → `.claude/mcp-playwright.js`): navegador com tela de celular
+  (Pixel 7) pra abrir o app e tirar print. Com `scripts/app-local.js` rodando, abrir
+  `http://localhost:8080/__entrar`. Na nuvem usa o Chromium de `/opt/pw-browsers` (sem janela,
+  sem sandbox). Mudança de tela que dá pra ver vale conferir assim antes do PR.
 
 Pegadinhas de ambiente:
 - `index.html` tem fim de linha **CRLF** — editar preservando (ex.: Python com `newline=''`).

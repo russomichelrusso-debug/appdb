@@ -1,0 +1,31 @@
+name: Testes
+
+# Roda em todo PR contra main e em cada push na main: a suíte de testes do
+# backend (banco simulado em test/mock-db.js, sem Postgres) e a checagem de
+# sintaxe dos <script> inline das páginas .html (+ CRLF do index.html).
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: testes-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  testes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Testes do backend
+        run: node test/run_tests.js
+      - name: Sintaxe das páginas .html
+        run: node scripts/checar-html.js
