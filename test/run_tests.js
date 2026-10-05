@@ -2295,6 +2295,11 @@ async function main() {
     const pv = Importadores.lerPrevisao(XLSXt, xlsPrevisao);
     assert(pv['60863'].previsao === '2026-10-20' && pv['60863'].qtCarteira === 5 && pv['61362'].previsao === null,
       `importadores: lê os itens em falta (previsão de estoque): ${JSON.stringify(pv)}`);
+    // data em texto é dia/mês (antes new Date() lia "05/11/2026" como 11 de maio e "15/10/2026" como inválida)
+    const pvTexto = Importadores.lerPrevisao(XLSXt, planilha({ Plan1: [['Item', 'Descrição', 'Qt. Disp.', 'Qt. Carteira', 'Qt. Compra', 'Previsão', 'Saldo'],
+      ['70001', 'A', 0, 1, 1, '05/11/2026', -1], ['70002', 'B', 0, 1, 1, '15/10/2026', -1], ['70003', 'C', 0, 1, 1, '2026-12-01', -1], ['70004', 'D', 0, 1, 1, 'Sem Previsão', -1]] }));
+    assert(pvTexto['70001'].previsao === '2026-11-05' && pvTexto['70002'].previsao === '2026-10-15' && pvTexto['70003'].previsao === '2026-12-01' && pvTexto['70004'].previsao === null,
+      `importadores: previsão de estoque com data em texto dd/mm/aaaa: ${JSON.stringify(pvTexto)}`);
   }
   const CHAVE_EMAIL = process.env.IMPORTACAO_EMAIL_CHAVE;
   const enviarArquivo = (nome, buf, chave = CHAVE_EMAIL, extra = {}) => req('POST', '/api/importacao-email/arquivo',
