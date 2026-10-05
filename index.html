@@ -7587,6 +7587,32 @@
           state.cart = raw ? (JSON.parse(raw) || []) : [];
         } catch (e) { state.cart = []; }
       }
+      // ...e como o orçamento estava montado (estado, canal, classificatório,
+      // desconto adicional, prazo, desconto e preço editado por item): só os itens
+      // voltavam, e o orçamento reaberto (depois da calculadora, ou com o iPhone
+      // fechando o app em segundo plano) saía com preço de PR e sem os descontos
+      // (achado do /review, 10/2026). Chave à parte porque a Curva ABC lê o
+      // cortagCart_v1 como lista de itens. Só grava depois de restaurar - antes
+      // disso a abertura do app desenha o carrinho com os valores padrão e
+      // apagaria o que estava guardado.
+      const CART_CTX_LS_KEY = 'cortagCartContexto_v1';
+      let contextoDoCarrinhoRestaurado = false;
+      function salvarContextoDoCarrinho() {
+        if (!contextoDoCarrinhoRestaurado) return;
+        try {
+          if (state.cart.length) localStorage.setItem(CART_CTX_LS_KEY, JSON.stringify(contextoDoOrcamento()));
+          else localStorage.removeItem(CART_CTX_LS_KEY);
+        } catch (e) { /* sem localStorage - segue sem persistir */ }
+      }
+      // Na abertura, depois de o cliente do rascunho voltar (setLevCliente põe o
+      // canal e o % dele) - o que estava no orçamento vale por cima.
+      function restaurarContextoDoCarrinho() {
+        let ctx = null;
+        try { ctx = JSON.parse(localStorage.getItem(CART_CTX_LS_KEY) || 'null'); } catch (e) { }
+        if (ctx && state.cart.length) aplicarContextoDoPedido(ctx);
+        contextoDoCarrinhoRestaurado = true;
+        salvarContextoDoCarrinho();
+      }
       // O evento 'storage' só dispara em OUTRAS abas, nunca na que escreveu -
       // cobre o caso de curva-abc.html (botão de carrinho na Curva ABC) aberto
       // numa aba separada enquanto esta continua com o Pedido em andamento.
@@ -7869,6 +7895,7 @@
         document.getElementById('cartTotalPreview').textContent = brl(total) + ' ▸';
       }
       function renderCart() {
+        salvarContextoDoCarrinho(); // estado/canal/descontos/prazo mudam e o carrinho é redesenhado
         const { rows, total, totalSemImpostos } = cartTotals();
         document.getElementById('cartTotalSemImpostos').textContent = brl(totalSemImpostos);
         const totalItensEl = document.getElementById('cartTotalItens');
@@ -7887,7 +7914,16 @@
             avisoEl.classList.add('hidden');
           }
         }
-        refreshPaymentTermOptions(totalSemImpostos);
+        // as parcelas disponíveis contam o total SEM o desconto do próprio prazo: com
+        // ele, "14 dias" (1,5%) num orçamento de R$ 600-609 derrubava o total abaixo
+        // do mínimo e a opção escolhida sumia sozinha (achado do /review, 10/2026)
+        let totalSemDescontoDePrazo = totalSemImpostos;
+        if (descontoPrazoAtual()) {
+          const desligado = state.descontoPrazoDesligado;
+          state.descontoPrazoDesligado = true;
+          try { totalSemDescontoDePrazo = cartTotals().totalSemImpostos; } finally { state.descontoPrazoDesligado = desligado; }
+        }
+        refreshPaymentTermOptions(totalSemDescontoDePrazo);
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
           body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>`;
@@ -16221,6 +16257,7 @@
         try { localStorage.removeItem(LEV_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PRICE_LIST_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(CART_LS_KEY); } catch (e) { }
+        try { localStorage.removeItem(CART_CTX_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PEDIDOS_SALVOS_LS_KEY); } catch (e) { }
         pedidosSalvos = null;
         setPedidoEditando(null);
@@ -16395,6 +16432,7 @@
           initTabs();
           initClienteFichaPeriodo();
           initLevantamento();
+          restaurarContextoDoCarrinho(); // depois do cliente do rascunho (initLevantamento)
           initLevSaveOpen();
           initPrecosCliente();
           initPedidosSalvos();
