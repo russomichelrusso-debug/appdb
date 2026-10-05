@@ -131,6 +131,11 @@ Pegadinhas de ambiente:
   `id_envio` (`idx_levantamentos_id_envio`): o reenvio devolve o já gravado. Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
   `PUT` e o nome do arquivo do cliente nunca chegava do app publicado; teste no `run_tests.js`). Biblioteca carregada sob demanda que falhou tenta de novo na próxima vez (o pdf.js com
   `?tentativa=N`, que o `sw.js` atende pela cópia sem parâmetro).
+- Nome de cliente passa por `limparNomeCliente` (`clientMatcher.js`): "\\" é o "/" escapado de exportação
+  ("MATS. P\\/ CONSTR.") e criou 15 clientes duplicados em 09/2026 (apagados em 10/2026). Filiais com o
+  mesmo nome (mesma razão social, CNPJs diferentes — COFEBRAL, GRACIOSA, GLASS POINT, PATRICIA TAJIMA em
+  10/2026) são clientes diferentes: o código oficial novo do relatório vai pra de mesmo nome ainda sem
+  código e nunca troca o de outra.
 - "Hoje" no SQL é `SQL_HOJE_BR`/`SQL_HOJE_BRASIL` (dia de Brasília), nunca `CURRENT_DATE` (UTC, vira o
   dia às 21h).
 - **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,
