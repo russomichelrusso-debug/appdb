@@ -214,10 +214,16 @@ router.post('/', async (req, res) => {
     if (e.code === '23505' && e.constraint === 'idx_pedidos_id_envio') {
       // o mesmo envio duas vezes ao mesmo tempo (duas abas esvaziando a fila):
       // o outro gravou - devolve ele
+      let mesmo;
       try {
-        const mesmo = await pedidoDoMesmoEnvio(pool, idEnvio, req.usuario.id);
-        if (mesmo) return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
-      } catch (e2) { console.error(e2); }
+        mesmo = await pedidoDoMesmoEnvio(pool, idEnvio, req.usuario.id);
+      } catch (e2) {
+        // não deu pra confirmar agora: 503 deixa o pedido na fila do app e o
+        // próximo envio acha o já gravado (409 o tirava da fila como recusado)
+        console.error(e2);
+        return res.status(503).json({ erro: 'Tente de novo em instantes.' });
+      }
+      if (mesmo) return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
       return res.status(409).json({ erro: 'Identificador de envio já usado.' });
     }
     console.error(e);

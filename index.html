@@ -6053,6 +6053,8 @@
             <div class="ap-status-row"><span class="k">Tema</span><span class="v" id="apThemeStatus">Claro</span></div>
             <button class="restoreBtn" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar pendências
               agora</button>
+            <button class="restoreBtn" id="apSyncQueueVerBtn" style="margin-top:8px;">Ver pendências e recusados</button>
+            <div id="apSyncQueueDetalhe"></div>
             <button class="restoreBtn" id="apCompareCatalogBtn" style="margin-top:8px;">Ver diferenças entre servidor e
               aparelho</button>
             <div id="apCompareCatalogResult" style="margin-top:10px;"></div>
@@ -9741,22 +9743,21 @@
       const JSPDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
       const JSPDF_AUTOTABLE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
       let jsPdfLoadPromise = null;
+      const jsPdfPronto = () => !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable);
       function loadJsPdfScripts() {
-        if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+        // as DUAS: com o jsPDF carregado e o autotable não (falhou sem internet),
+        // o PDF saía quebrado em doc.autoTable
+        if (jsPdfPronto()) return Promise.resolve();
         if (jsPdfLoadPromise) return jsPdfLoadPromise;
-        jsPdfLoadPromise = new Promise((resolve, reject) => {
-          const s1 = document.createElement('script');
-          s1.src = JSPDF_CDN;
-          s1.onload = () => {
-            const s2 = document.createElement('script');
-            s2.src = JSPDF_AUTOTABLE_CDN;
-            s2.onload = () => resolve();
-            s2.onerror = () => reject(new Error('load-error'));
-            document.head.appendChild(s2);
-          };
-          s1.onerror = () => reject(new Error('load-error'));
-          document.head.appendChild(s1);
-        }).catch(e => { jsPdfLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
+        const carregar = (src) => new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('load-error'));
+          document.head.appendChild(s);
+        });
+        jsPdfLoadPromise = (window.jspdf && window.jspdf.jsPDF ? Promise.resolve() : carregar(JSPDF_CDN))
+          .then(() => (jsPdfPronto() ? undefined : carregar(JSPDF_AUTOTABLE_CDN))).catch(e => { jsPdfLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return jsPdfLoadPromise;
       }
       // Converte o logo (colorido) já embutido no app pra escala de cinza, só na hora
@@ -10624,33 +10625,123 @@
         try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
         refreshSyncQueueBadge();
       }
+      // Envios que o servidor recusou (saem da fila, mas ficam guardados aqui -
+      // o pedido não tem outra cópia no aparelho)
+      const FILA_RECUSADOS_LS_KEY = 'cortagFilaRecusados_v1';
+      function loadFilaRecusados() {
+        try { return JSON.parse(localStorage.getItem(FILA_RECUSADOS_LS_KEY)) || []; } catch (e) { return []; }
+      }
+      function guardarFilaRecusados(novos) {
+        try { localStorage.setItem(FILA_RECUSADOS_LS_KEY, JSON.stringify(loadFilaRecusados().concat(novos).slice(-30))); return true; } catch (e) { return false; }
+      }
+      // Painel › "Ver pendências": o que está na fila (com o último erro) e o que o
+      // servidor recusou - pra baixar e mandar pro suporte, ou descartar
+      function renderDetalheFila() {
+        const wrap = document.getElementById('apSyncQueueDetalhe');
+        if (!wrap) return;
+        const fila = loadSyncQueue();
+        const recusados = loadFilaRecusados();
+        const quando = (t) => (t ? new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '');
+        const linha = (it, extra) => `<div class="promoRuleItem"><div><b>${escapeHtml(it.descricao || it.tipo || 'Envio')}</b> · ${escapeHtml(quando(it.criadoEm))}<br><span style="color:var(--gray);font-size:12px;">${escapeHtml(extra || '')}</span></div></div>`;
+        wrap.innerHTML = (fila.length || recusados.length) ? `
+          ${fila.length ? `<div class="hcCode" style="margin-top:8px;">Na fila (vai sozinho quando der)</div>${fila.map(it => linha(it, it.ultimoErro ? `Último erro (${it.tentativas || 1}x): ${it.ultimoErro}` : 'Aguardando conexão')).join('')}` : ''}
+          ${recusados.length ? `<div class="hcCode" style="margin-top:8px;">Recusados pelo servidor (não vão mais)</div>${recusados.map(it => linha(it, it.erro)).join('')}` : ''}
+          <button type="button" class="restoreBtn" id="apSyncQueueBaixar" style="margin-top:8px;">Baixar tudo (arquivo pro suporte)</button>
+          ${recusados.length ? '<button type="button" class="restoreBtn btnDanger" id="apSyncQueueDescartar" style="margin-top:8px;">Descartar recusados</button>' : ''}
+        ` : '<div class="promoEmpty">Nada pendente nem recusado.</div>';
+        const baixar = document.getElementById('apSyncQueueBaixar');
+        if (baixar) baixar.addEventListener('click', () => {
+          // relê: a fila pode ter mudado desde que a lista abriu
+          const blob = new Blob([JSON.stringify({ geradoEm: new Date().toISOString(), fila: loadSyncQueue(), recusados: loadFilaRecusados() }, null, 2)], { type: 'application/json' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = `pendencias-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+        });
+        const descartar = document.getElementById('apSyncQueueDescartar');
+        if (descartar) descartar.addEventListener('click', async () => {
+          if (!(await askConfirm('Descartar os envios recusados pelo servidor? Baixe o arquivo antes se precisar deles.', 'Descartar', { perigo: true }))) return;
+          // só os que estavam na tela: um recusado que chegou depois (envio em
+          // segundo plano) não foi visto nem baixado
+          const mostrados = new Set(recusados.map(r => r.id));
+          try { localStorage.setItem(FILA_RECUSADOS_LS_KEY, JSON.stringify(loadFilaRecusados().filter(r => !mostrados.has(r.id)))); } catch (e) { }
+          refreshSyncQueueBadge();
+          renderDetalheFila();
+        });
+      }
       function refreshSyncQueueBadge() {
         const badge = document.getElementById('syncQueueBadge');
         const n = loadSyncQueue().length;
         if (badge) { badge.textContent = n; badge.classList.toggle('hidden', n === 0); }
         const adminBtn = document.getElementById('apSyncQueueCount');
-        if (adminBtn) adminBtn.textContent = n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente';
+        const recusados = loadFilaRecusados().length;
+        if (adminBtn) adminBtn.textContent = (n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente')
+          + (recusados ? ` · ${recusados} recusado${recusados === 1 ? '' : 's'} pelo servidor` : '');
         atualizarResumoStatus();
       }
       let syncQueueDraining = false;
       async function drenarFilaSync(silencioso) {
         if (syncQueueDraining) return;
-        const fila = loadSyncQueue();
-        if (fila.length === 0) return;
+        if (loadSyncQueue().length === 0) return;
         syncQueueDraining = true;
+        try {
+          // uma aba por vez: o app instalado e uma aba do navegador dividem o
+          // localStorage e mandavam o mesmo item duas vezes (o pedido novo ainda
+          // tem o id_envio de reforço). Sem Web Locks (iPhone antigo), segue sem.
+          if (navigator.locks && navigator.locks.request) {
+            await navigator.locks.request('cortag-fila-sync', { ifAvailable: true }, async (lock) => {
+              if (lock) await drenarFilaSyncAgora(silencioso);
+            });
+          } else {
+            await drenarFilaSyncAgora(silencioso);
+          }
+        } finally {
+          syncQueueDraining = false;
+        }
+      }
+      async function drenarFilaSyncAgora(silencioso) {
+        const fila = loadSyncQueue();
+        const tirar = new Set();
+        const recusados = [];
+        const erros = new Map(); // id -> último erro (mostrado no Painel)
         let enviados = 0;
-        const restantes = [];
         for (const item of fila) {
           try {
+            // sem prazo de propósito: abortar não para o servidor, que terminava de
+            // gravar o levantamento/alteração e o reenvio gravava de novo (achado do
+            // revisor-cortag, 10/2026)
             await apiFetch(item.path, item.options);
             enviados++;
+            tirar.add(item.id);
           } catch (e) {
-            restantes.push(item); // continua sem rede, ou falhou de novo - mantém na fila
+            // o servidor recusou (ex.: alterar pedido que foi excluído): reenviar
+            // não muda nada - antes ficava na fila pra sempre, de 30 em 30 s
+            if (e.recusado) recusados.push({ item, erro: e.message });
+            // sem rede / servidor fora / 400 (pode ser passageiro): mantém na fila,
+            // com o erro guardado pra aparecer no Painel
+            else erros.set(item.id, e.message);
           }
         }
-        saveSyncQueueList(restantes);
-        syncQueueDraining = false;
-        if (enviados > 0 && !silencioso) showToast(`${enviados} pendente(s) sincronizado(s) agora`);
+        // recusado só sai da fila se ficou guardado (localStorage cheio: continua na
+        // fila, com o motivo da recusa à vista no Painel)
+        const recusadosGuardados = recusados.length > 0 && guardarFilaRecusados(recusados.map(r => ({ ...r.item, erro: r.erro, recusadoEm: Date.now() })));
+        if (recusadosGuardados) recusados.forEach(r => tirar.add(r.item.id));
+        else recusados.forEach(r => erros.set(r.item.id, `Recusado pelo servidor: ${r.erro} (sem espaço no aparelho pra guardar à parte)`));
+        // relê a fila: o que entrou nela enquanto enviava (outra ação sem rede) fica
+        saveSyncQueueList(loadSyncQueue().filter(it => !tirar.has(it.id))
+          .map(it => (erros.has(it.id) ? { ...it, ultimoErro: erros.get(it.id), tentativas: (it.tentativas || 0) + 1 } : it)));
+        const detalhe = document.getElementById('apSyncQueueDetalhe');
+        if (detalhe && detalhe.innerHTML) renderDetalheFila();
+        if (recusadosGuardados) {
+          const r = recusados[0];
+          showToast(`O servidor recusou: ${r.item.descricao || 'envio pendente'} — ${String(r.erro).replace(/\.$/, '')}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}. Ficou guardado no aparelho (Painel › Ver pendências e recusados).`, 'erro');
+          console.warn('Fila offline: itens recusados pelo servidor e retirados da fila', recusados);
+        } else if (recusados.length && !silencioso) {
+          showToast('O servidor recusou um envio pendente e não há espaço no aparelho pra guardá-lo à parte — veja no Painel › Ver pendências e recusados.', 'erro');
+        } else if (enviados > 0 && !silencioso) {
+          showToast(`${enviados} pendente(s) sincronizado(s) agora`);
+        }
       }
 
       // ---------------- Backup automático em CSV no Google Drive ao finalizar pedido ----------------
@@ -10778,7 +10869,14 @@
           showLoginScreen('Sessão expirada — entre de novo.');
         }
         if (!resp.ok) {
-          throw new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+          const erro = new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+          erro.status = resp.status;
+          // recusa de verdade (não adianta reenviar): só sem permissão, pedido que
+          // não existe mais, conflito ou dado inválido - E com a mensagem do app
+          // (404 do Render no meio de um deploy vem sem ela). 400 fica de fora: o
+          // servidor também responde 400 a falha passageira do banco.
+          erro.recusado = [403, 404, 409, 422].includes(resp.status) && !!(body && body.erro);
+          throw erro;
         }
         return body;
       }
@@ -12248,14 +12346,16 @@
         const texto = (id) => (document.getElementById(id)?.textContent || '').trim();
         const servidor = texto('apSyncServidor');
         const catalogo = texto('apSyncCatalogo');
-        const pendencias = [texto('apSyncQueueCount'), texto('apDriveCsvQueueCount')]
-          .map(t => parseInt(t, 10)).filter(n => n > 0).reduce((a, b) => a + b, 0);
+        const pendencias = loadSyncQueue().length
+          + [texto('apDriveCsvQueueCount')].map(t => parseInt(t, 10)).filter(n => n > 0).reduce((a, b) => a + b, 0);
+        const recusados = loadFilaRecusados().length;
         const produtos = DB.products.length.toLocaleString('pt-BR');
         let resumo;
         if (servidor.startsWith('✗')) resumo = '⚠️ Sem conexão com o servidor';
         else if (servidor === 'Verificando…' || servidor === '—' || !servidor) resumo = 'Verificando…';
         else if (catalogo.startsWith('Desatualizado')) resumo = '⚠️ Catálogo desatualizado';
         else if (pendencias > 0) resumo = `⚠️ ${pendencias} pendência${pendencias === 1 ? '' : 's'} pra enviar`;
+        else if (recusados > 0) resumo = `⚠️ ${recusados} envio${recusados === 1 ? '' : 's'} recusado${recusados === 1 ? '' : 's'} — ver pendências`;
         else resumo = `✓ Tudo sincronizado · ${produtos} produtos`;
         el.textContent = resumo;
         el.classList.toggle('ap-statusAlerta', resumo.startsWith('⚠️'));
@@ -14001,11 +14101,14 @@
       function loadPdfJs() {
         if (window.__pdfjsLib) return Promise.resolve(window.__pdfjsLib);
         if (pdfJsLoadPromise) return pdfJsLoadPromise;
-        pdfJsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs').then(lib => {
+        // nova tentativa com outro endereço: o navegador pode guardar a falha do
+        // import() até recarregar a página (o sw.js atende sem o parâmetro)
+        const tentativa = loadPdfJs.falhas ? `?tentativa=${loadPdfJs.falhas}` : '';
+        pdfJsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs' + tentativa).then(lib => {
           lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs';
           window.__pdfjsLib = lib;
           return lib;
-        }).catch(e => { pdfJsLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
+        }).catch(e => { pdfJsLoadPromise = null; loadPdfJs.falhas = (loadPdfJs.falhas || 0) + 1; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return pdfJsLoadPromise;
       }
 
@@ -16160,6 +16263,11 @@
             await drenarFilaSync(false);
             await drenarFilaDriveCsv(false);
             btn.disabled = false; btn.textContent = 'Tentar enviar pendências agora';
+            if (document.getElementById('apSyncQueueDetalhe').innerHTML) renderDetalheFila();
+          });
+          document.getElementById('apSyncQueueVerBtn').addEventListener('click', () => {
+            const wrap = document.getElementById('apSyncQueueDetalhe');
+            if (wrap.innerHTML) wrap.innerHTML = ''; else renderDetalheFila();
           });
           initTheme();
           initIntegrityCheck();
