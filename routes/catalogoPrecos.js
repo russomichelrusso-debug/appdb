@@ -261,6 +261,18 @@ async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
         produtos.map(() => new Date()),
       ]
     );
+    // Produto novo da lista entra também no cadastro de produtos (o que pedido e
+    // levantamento referenciam) - antes só o /api/produtos/sync (admin abrindo o
+    // Painel) fazia isso, e o pedido com o produto novo era recusado. Só os que
+    // ainda não existem: nome/categoria dos que já estão lá ficam como o sync pôs.
+    const produtosCriados = await client.query(
+      `/* catalogo-precos:produtos-novos */
+       INSERT INTO produtos (codigo_sku, nome, categoria)
+       SELECT codigo_sku, COALESCE(NULLIF(trim(nome), ''), codigo_sku), familia
+       FROM UNNEST($1::text[], $2::text[], $3::text[]) AS t(codigo_sku, nome, familia)
+       ON CONFLICT (codigo_sku) DO NOTHING`,
+      [produtos.map(p => p.codigo_sku), produtos.map(p => (p.nome == null ? null : String(p.nome))), produtos.map(p => p.familia)]
+    );
     // A planilha é a fonte completa do catálogo (não um lote parcial) - um
     // produto que saiu dela deve sair do catálogo também, senão fica com
     // preço desatualizado pra sempre (o comentário da rota já dizia
@@ -275,7 +287,7 @@ async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
     }
     await registrarImportacao(usuario?.id, 'catalogo-precos/importar', produtos.length);
     await avisarImportacao('catalogo-precos', quantos(produtos.length, 'produto', 'produtos'));
-    return { status: 200, json: { ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount } };
+    return { status: 200, json: { ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount, produtosNovos: produtosCriados.rowCount || 0 } };
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }

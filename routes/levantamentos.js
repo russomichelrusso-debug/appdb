@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { acharOuCriarProdutoPorSku, ErroPermanente } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 async function acharOuCriarVendedor(client, nomeVendedor) {
@@ -18,14 +19,6 @@ async function acharOuCriarVendedor(client, nomeVendedor) {
   const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
   return depois.rows[0].id;
 }
-async function acharProdutoPorSku(client, codigo_sku) {
-  const result = await client.query('SELECT id FROM produtos WHERE codigo_sku = $1', [codigo_sku]);
-  if (result.rows.length === 0) {
-    throw new Error(`Produto com código ${codigo_sku} não encontrado - rode /api/produtos/sync primeiro.`);
-  }
-  return result.rows[0].id;
-}
-
 // Localização da loja - só leitura de GPS boa o bastante (até 100 m) vira a
 // posição do cliente; a atual só é trocada por uma igual ou mais precisa, ou
 // se tiver mais de 180 dias (loja pode ter mudado de endereço).
@@ -47,6 +40,13 @@ function lerLocalizacao(loc) {
   return { latitude, longitude, precisao_m: precisao };
 }
 
+// Código + quantidade contada (0 vale: "acabou na loja", ver Comprados e não contados)
+function itensDoLevantamentoValidos(itens) {
+  return Array.isArray(itens) && itens.length > 0 && itens.every(it => it
+    && (typeof it.codigo_sku === 'string' || typeof it.codigo_sku === 'number') && String(it.codigo_sku).trim() !== ''
+    && Number.isFinite(Number(it.quantidade_contada)) && Number(it.quantidade_contada) >= 0);
+}
+
 // Grava um levantamento de estoque feito na visita ao cliente. Corpo esperado:
 // {
 //   cliente: { cliente_id?, nome, documento?, contato? },
@@ -58,8 +58,9 @@ function lerLocalizacao(loc) {
 router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, nome_levantamento, itens } = req.body;
   const localizacao = lerLocalizacao(req.body.localizacao);
-  if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
-  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
+  // erro do próprio envio: 422 (a fila offline do app tira como "recusado"; 400 ela reenvia)
+  if (!cliente || !cliente.nome) return res.status(422).json({ erro: 'Informe os dados do cliente (nome).' });
+  if (!itensDoLevantamentoValidos(itens)) return res.status(422).json({ erro: 'Informe ao menos um item, com código e quantidade contada.' });
 
   let client;
   try {
@@ -77,7 +78,8 @@ router.post('/', async (req, res) => {
     const levantamentoId = levResult.rows[0].id;
 
     for (const item of itens) {
-      const produtoId = await acharProdutoPorSku(client, item.codigo_sku);
+      // produto novo da Lista de Preços que ainda não está em produtos é criado do catálogo
+      const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku, null);
       await client.query(
         'INSERT INTO levantamento_itens (levantamento_id, produto_id, quantidade_contada) VALUES ($1, $2, $3)',
         [levantamentoId, produtoId, item.quantidade_contada]
@@ -112,6 +114,7 @@ router.post('/', async (req, res) => {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
+    if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
     console.error(e);
     res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar levantamento.' });
   } finally {

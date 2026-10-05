@@ -288,7 +288,56 @@ async function main() {
     cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
     itens: [ { codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 10 } ],
   });
-  assert(res.status === 400 && res.body.erro.includes('não encontrado'), 'rejeita pedido com produto inexistente, com mensagem clara');
+  assert(res.status === 422 && res.body.erro.includes('não encontrado'), 'rejeita pedido com produto inexistente, com mensagem clara (422: a fila offline tira como recusado)');
+
+  // 9b) produto novo da Lista de Preços (está em catalogo_precos, ainda não em
+  // produtos - o /api/produtos/sync só roda quando um admin abre o Painel): o
+  // pedido e o levantamento criam o produto a partir do catálogo em vez de
+  // recusar (antes: 400 "não encontrado", e a fila offline reenviava pra sempre)
+  {
+    const tamanhosAntes = [mockDb.__getPedidos(), mockDb.__getPedidoItens(), mockDb.__getLevantamentos(), mockDb.__getLevantamentoItens(), mockDb.__getProdutos()].map(l => [l, l.length]);
+    const linhaCat = (c, nome, familia) => ({ codigo_sku: c, nome, emb: 1, ipi: 0, familia, preco_fixo: false, canais_fx: [], precos: {}, precos_sem_imposto: {} });
+    mockDb.__seed({ catalogoPrecos: [linhaCat('NOVO77', 'ESPATULA NOVA 77', '05 - ESPATULAS'), linhaCat('NOVO78', '  ', null)] });
+    res = await req('POST', '/api/pedidos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      itens: [{ codigo_sku: 'NOVO77', quantidade: 2, preco_unitario: 15 }],
+    });
+    const p77 = mockDb.__getProdutos().find(p => p.codigo_sku === 'NOVO77');
+    assert(res.status === 201 && p77 && p77.nome === 'ESPATULA NOVA 77' && p77.categoria === '05 - ESPATULAS'
+      && mockDb.__getPedidoItens().some(i => i.pedido_id === res.body.pedido_id && i.produto_id === p77.id),
+      `pedido com produto novo da Lista de Preços cria o produto a partir do catálogo: ${JSON.stringify([res.body, p77])}`);
+    res = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      itens: [{ codigo_sku: 'NOVO78', quantidade_contada: 0 }],
+    });
+    const p78 = mockDb.__getProdutos().find(p => p.codigo_sku === 'NOVO78');
+    assert(res.status === 201 && p78 && p78.nome === 'NOVO78',
+      `levantamento com produto novo da Lista de Preços cria o produto (sem nome, fica o código): ${JSON.stringify([res.body, p78])}`);
+    res = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: 'NAO-EXISTE-1', quantidade_contada: 1 }] });
+    const rLevSemItens = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [] });
+    assert(res.status === 422 && res.body.erro.includes('não encontrado') && rLevSemItens.status === 422,
+      `levantamento com produto que não existe nem no catálogo, ou sem itens: 422 (recusado, sai da fila): ${JSON.stringify([res.body, rLevSemItens.body])}`);
+    // itens inválidos e origem desconhecida: 422 (antes quantidade 0/negativa entrava no histórico)
+    const pedidosAntes = mockDb.__getPedidos().length;
+    const rQtd0 = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: '60863', quantidade: 0, preco_unitario: 10 }] });
+    const rQtdNeg = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: '60863', quantidade: -3, preco_unitario: 10 }] });
+    const rOrigem = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, origem: 'faturamento', itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 10 }] });
+    const rSemCliente = await req('POST', '/api/pedidos', { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 10 }] });
+    assert([rQtd0, rQtdNeg, rOrigem, rSemCliente].every(r => r.status === 422 && r.body.erro) && mockDb.__getPedidos().length === pedidosAntes,
+      `pedido com quantidade 0/negativa, origem desconhecida ou sem cliente: 422 sem gravar: ${JSON.stringify([rQtd0.status, rQtdNeg.status, rOrigem.status, rSemCliente.status])}`);
+    // PDF: código que não está nem no catálogo é criado com a descrição, só no formato aceito
+    const rPdfRuim = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, origem: 'pdf',
+      itens: [{ codigo_sku: 'AB CD<script>', quantidade: 1, preco_unitario: 10, descricao: 'COISA' }] });
+    const rPdfOk = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, origem: 'pdf',
+      itens: [{ codigo_sku: 'PDF-901', quantidade: 1, preco_unitario: 10, descricao: 'ITEM DO PDF' }] });
+    assert(rPdfRuim.status === 422 && !mockDb.__getProdutos().some(p => p.codigo_sku === 'AB CD<script>')
+      && rPdfOk.status === 201 && mockDb.__getProdutos().some(p => p.codigo_sku === 'PDF-901' && p.nome === 'ITEM DO PDF'),
+      `pedido de PDF: código novo fora do formato aceito é recusado (422); no formato, criado com a descrição: ${JSON.stringify([rPdfRuim.body, rPdfOk.body])}`);
+    // não sujar o histórico do cliente usado nos testes seguintes (o mock não desfaz
+    // a transação: o pedido/levantamento recusado no meio também fica)
+    for (const [lista, n] of tamanhosAntes) lista.splice(n, Infinity);
+    mockDb.__getCatalogoPrecos().splice(0, Infinity);
+  }
 
   // 10) historico do cliente - deve mostrar 60863 com total 100 (40+60) e 2 pedidos
   res = await req('GET', `/api/clientes/${clienteId}/historico`);
@@ -1504,14 +1553,14 @@ async function main() {
   assert(salvo.length === 1 && salvo[0].itens.length === 2 && salvo[0].contexto.paymentTerm === '28 dias' && salvos.body.pedidos[0].id === pedidoEditavelId,
     'editar pedido: continua um pedido só, com os itens e o contexto novos, no topo da lista (editado por último)');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: '60863', quantidade: 0, preco_unitario: 28.59 }] });
-  assert(res.status === 400, 'editar pedido: recusa item com quantidade zero');
+  assert(res.status === 422, 'editar pedido: recusa item com quantidade zero');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [] });
-  assert(res.status === 400, 'editar pedido: recusa pedido sem itens');
+  assert(res.status === 422, 'editar pedido: recusa pedido sem itens');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 1 }] });
-  assert(res.status === 400 && res.body.erro.includes('não encontrado') && mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId).length === 2,
+  assert(res.status === 422 && res.body.erro.includes('não encontrado') && mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId).length === 2,
     'editar pedido: produto inexistente recusa sem perder os itens que já estavam gravados (rollback)');
   res = await req('PATCH', `/api/pedidos/${pedidoCotacaoId}`, { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
-  assert(res.status === 400, 'editar pedido: cotação importada do PDF não é editada por aqui');
+  assert(res.status === 422, 'editar pedido: cotação importada do PDF não é editada por aqui');
   res = await req('PATCH', '/api/pedidos/999999', { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
   assert(res.status === 404, 'editar pedido: pedido inexistente responde 404');
   authToken = tokenOutro;
@@ -2230,6 +2279,12 @@ async function main() {
     res = await enviarArquivo(nomeLista, listaPrecos(vinte.slice(1), 30), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
     assert(res.status === 200 && res.body.resultado.produtosRemovidos === 1 && mockDb.__getCatalogoPrecos().length === 19,
       `importação por e-mail: Lista de Preços que tira até 5% do catálogo entra: ${JSON.stringify(res.body)}`);
+    // e os produtos novos dela entram no cadastro de produtos (o que pedido/levantamento usam),
+    // sem mexer no nome/categoria dos que já estavam lá (o /api/produtos/sync é quem cuida deles)
+    const prods = mockDb.__getProdutos();
+    assert(res.body.resultado.produtosNovos === 19 && prods.some(p => p.codigo_sku === 'CAT07' && p.nome === 'PRODUTO CAT07')
+      && prods.find(p => p.codigo_sku === '60863').nome === 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm',
+      `importação da Lista de Preços cria em produtos só os códigos novos: ${JSON.stringify(res.body.resultado)}`);
     // Painel (manual): continua substituindo o catálogo inteiro, sem trava
     res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05'], 40).toString('base64') });
     assert(res.status === 200 && res.body.produtosRemovidos === 18 && mockDb.__getCatalogoPrecos().length === 1,

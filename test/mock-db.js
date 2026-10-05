@@ -175,6 +175,24 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   // catálogo de preços (routes/catalogoPrecos.js)
+  // produto novo da Lista de Preços entra em produtos (só os que não existem)
+  if (s.includes('/* CATALOGO-PRECOS:PRODUTOS-NOVOS */')) {
+    let n = 0;
+    params[0].forEach((c, i) => {
+      if (produtos.some(p => p.codigo_sku === c)) return;
+      produtos.push({ id: nextId.produtos++, codigo_sku: c, nome: (params[1][i] || '').trim() || c, categoria: params[2][i] ?? null });
+      n++;
+    });
+    return { rows: [], rowCount: n };
+  }
+  // pedido/levantamento com produto que ainda não está em produtos: cria do catálogo (routes/lib/produtoPorSku.js)
+  if (s.includes('/* PRODUTO:DO-CATALOGO */')) {
+    const cat = catalogoPrecos.find(p => p.codigo_sku === params[0]);
+    if (!cat || produtos.some(p => p.codigo_sku === params[0])) return { rows: [] };
+    const novo = { id: nextId.produtos++, codigo_sku: cat.codigo_sku, nome: (cat.nome || '').trim() || cat.codigo_sku, categoria: cat.familia ?? null };
+    produtos.push(novo);
+    return { rows: [{ id: novo.id }] };
+  }
   if (s.includes('/* CATALOGO-PRECOS:CONFERIR-REMOCAO */')) {
     return { rows: [{ total: catalogoPrecos.length, sairiam: catalogoPrecos.filter(p => !params[0].includes(p.codigo_sku)).length }] };
   }
@@ -1169,11 +1187,12 @@ async function query(sql, params = []) {
     }
     return { rows: [{ criados: String(criados), atualizados: String(atualizados) }] };
   }
-  if (s.includes('INSERT INTO PRODUTOS') && s.includes('ON CONFLICT')) {
-    const existing = produtos.find(p => p.codigo_sku === params[0]);
-    if (existing) { existing.nome = params[1]; existing.categoria = params[2]; return { rows: [{ inserted: false }] }; }
-    produtos.push({ id: nextId.produtos++, codigo_sku: params[0], nome: params[1], categoria: params[2] });
-    return { rows: [{ inserted: true }] };
+  // PDF com produto que não está nem no catálogo (routes/lib/produtoPorSku.js): ON CONFLICT DO NOTHING RETURNING id
+  if (s.includes('INSERT INTO PRODUTOS (CODIGO_SKU, NOME) VALUES ($1, $2) ON CONFLICT (CODIGO_SKU) DO NOTHING RETURNING ID')) {
+    if (produtos.some(p => p.codigo_sku === params[0])) return { rows: [] };
+    const novo = { id: nextId.produtos++, codigo_sku: params[0], nome: params[1], categoria: null };
+    produtos.push(novo);
+    return { rows: [{ id: novo.id }] };
   }
   if (s.includes('SELECT ID, CODIGO_SKU, NOME, CATEGORIA FROM PRODUTOS')) {
     return { rows: produtos };
@@ -1760,6 +1779,8 @@ module.exports = {
   __getPedidosBloqueados: () => pedidosBloqueados,
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
+  __getProdutos: () => produtos,
+  __getLevantamentoItens: () => levantamentoItens,
   __getPushInscricoes: () => pushInscricoes,
   __getUsuarios: () => usuarios,
   __getSessoes: () => sessoes,
