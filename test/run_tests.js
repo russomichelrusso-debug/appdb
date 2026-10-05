@@ -894,35 +894,42 @@ async function main() {
       `comprados-recentes usa o dia de Brasília do pedido do app: ${JSON.stringify(res.body)}`);
   }
 
-  // 18b1b) Pedido fechado sem internet: o app manda a hora do toque em
-  // "Finalizar pedido" e o servidor grava ela (não a hora em que a fila enviou),
-  // desde que seja hora completa dos últimos 30 dias até 10 min à frente.
+  // 18b1b) Pedido fechado/alterado sem internet: o app manda a hora do toque e a
+  // hora do envio (carimbada em cada envio, inclusive o da fila); o servidor
+  // desconta essa espera do relógio dele - o relógio errado do celular não entra.
   {
     const { horaDoPedidoDoApp } = require('../routes/pedidos');
     const agora = new Date('2026-10-05T15:00:00Z');
     const casos = [
-      horaDoPedidoDoApp('2026-10-04T23:40:00.000Z', agora),   // ontem à noite: vale
-      horaDoPedidoDoApp('2026-10-05T15:09:00.000Z', agora),   // relógio 9 min adiantado: vale
-      horaDoPedidoDoApp('2026-10-05T15:11:00.000Z', agora),   // futuro: não
-      horaDoPedidoDoApp('2026-09-01T12:00:00.000Z', agora),   // mais de 30 dias: não
-      horaDoPedidoDoApp('2026-10-04', agora),                 // só data (é do PDF): não
-      horaDoPedidoDoApp('lixo', agora), horaDoPedidoDoApp(12345, agora),
-      horaDoPedidoDoApp('2026-10-05T00:00:00.000Z', agora),   // meia-noite UTC exata: +1 ms
+      horaDoPedidoDoApp('2026-10-04T23:40:00.000Z', '2026-10-05T13:40:00.000Z', agora), // esperou 14h na fila
+      horaDoPedidoDoApp('2026-10-03T10:00:00.000Z', '2026-10-03T10:00:00.200Z', agora), // celular 2 dias atrasado, enviado na hora: agora
+      horaDoPedidoDoApp('2026-10-05T12:00:00-03:00', '2026-10-05T13:00:00-03:00', agora), // com offset
+      horaDoPedidoDoApp('2026-10-05T12:00', '2026-10-05T13:00', agora),                 // sem fuso: não
+      horaDoPedidoDoApp('2026-10-04T23:40:00.000Z', undefined, agora),                  // sem hora do envio: não
+      horaDoPedidoDoApp('2026-08-01T12:00:00.000Z', '2026-10-05T12:00:00.000Z', agora), // esperou mais de 30 dias: não
+      horaDoPedidoDoApp('2026-10-05T12:00:00.000Z', '2026-10-05T11:00:00.000Z', agora), // enviado "antes" do toque: não
+      horaDoPedidoDoApp('2026-10-04', '2026-10-05', agora), horaDoPedidoDoApp(12345, 'x', agora),
+      // cairia na meia-noite UTC exata ("só a data"): 1 ms antes
+      horaDoPedidoDoApp('2026-10-05T10:00:00.000Z', '2026-10-05T19:00:00.000Z', new Date('2026-10-06T09:00:00.000Z')),
     ];
-    assert(JSON.stringify(casos) === JSON.stringify(['2026-10-04T23:40:00.000Z', '2026-10-05T15:09:00.000Z', null, null, null, null, null, '2026-10-05T00:00:00.001Z']),
-      `horaDoPedidoDoApp aceita só hora completa e recente: ${JSON.stringify(casos)}`);
+    assert(JSON.stringify(casos) === JSON.stringify(['2026-10-05T01:00:00.000Z', '2026-10-05T14:59:59.800Z', '2026-10-05T14:00:00.000Z',
+      null, null, null, null, null, null, '2026-10-05T23:59:59.999Z']),
+      `horaDoPedidoDoApp desconta a espera do relógio do servidor: ${JSON.stringify(casos)}`);
 
-    const ontem = new Date(Date.now() - 86400000 + 3600000).toISOString();
-    const postar = (extra) => req('POST', '/api/pedidos', {
-      cliente: { cliente_id: 9121, nome: 'LOJA FUSO' }, itens: [{ codigo_sku: '70011', quantidade: 1, preco_unitario: 10 }], ...extra,
-    });
-    const r1 = await postar({ data_pedido: ontem });
-    const r2 = await postar({ data_pedido: '2020-01-01T12:00:00.000Z' });
-    const r3 = await postar({ data_pedido: '2026-08-01' });
-    const gravado = (r) => mockDb.__getPedidos().find(p => p.id === r.body.pedido_id)?.data_pedido;
-    const recente = (iso) => Math.abs(new Date(iso).getTime() - Date.now()) < 60000;
-    assert(r1.status === 201 && gravado(r1) === ontem && recente(gravado(r2)) && recente(gravado(r3)),
-      `pedido do app grava a hora do toque (fila offline); hora velha ou só data = agora: ${JSON.stringify([gravado(r1), gravado(r2), gravado(r3)])}`);
+    const h = (ms) => new Date(Date.now() + ms).toISOString();
+    const item = [{ codigo_sku: '70011', quantidade: 1, preco_unitario: 10 }];
+    const postar = (extra) => req('POST', '/api/pedidos', { cliente: { cliente_id: 9121, nome: 'LOJA FUSO' }, itens: item, ...extra });
+    const r1 = await postar({ data_pedido: h(-26 * 3600000), enviado_em: h(0) });              // 26h na fila
+    const r2 = await postar({ data_pedido: h(-2 * 86400000), enviado_em: h(-2 * 86400000 + 100) }); // relógio 2 dias atrás, na hora
+    const r3 = await postar({ data_pedido: h(-3600000) });                                     // sem hora do envio
+    const r4 = await postar({ data_pedido: '2026-08-01', origem: 'pdf' });                      // PDF: a data dele
+    const gravado = (r) => mockDb.__getPedidos().find(p => p.id === r.body.pedido_id);
+    const perto = (iso, ms) => Math.abs(new Date(iso).getTime() - (Date.now() + ms)) < 5000;
+    const alt = await req('PATCH', `/api/pedidos/${r1.body.pedido_id}`, { itens: item, alterado_em: h(-5 * 3600000), enviado_em: h(0) });
+    assert(r1.status === 201 && perto(gravado(r1).data_pedido, -26 * 3600000) && perto(gravado(r2).data_pedido, 0)
+      && perto(gravado(r3).data_pedido, 0) && gravado(r4).data_pedido === '2026-08-01T00:00:00.000Z'
+      && alt.status === 200 && perto(gravado(r1).atualizado_em, -5 * 3600000),
+      `pedido/alteração do app grava a hora do toque no relógio do servidor (fila offline): ${JSON.stringify([r1, r2, r3, r4].map(r => gravado(r)?.data_pedido).concat(alt.status, gravado(r1)?.atualizado_em))}`);
   }
 
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):

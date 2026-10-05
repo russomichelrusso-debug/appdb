@@ -7,21 +7,26 @@ const { sqlDiaDoPedido } = require('./lib/comprasApp');
 
 router.param('id', validarIdInteiro);
 
-// Hora em que o vendedor fechou o pedido do app. Sem internet, o pedido fica na
-// fila do aparelho e só chega aqui quando a rede volta - às vezes no dia
-// seguinte; gravar now() punha a compra no dia do envio (Histórico, Recompra,
-// Rotatividade). O app manda a hora do toque em "Finalizar pedido"; vale só
-// hora completa (data sem hora é coisa do PDF), dos últimos 30 dias até 10 min
-// à frente (relógio do celular adiantado). Fora disso: null = now().
+// Hora em que o vendedor fechou (ou alterou) o pedido do app. Sem internet, o
+// pedido fica na fila do aparelho e só chega aqui quando a rede volta - às vezes
+// no dia seguinte; gravar now() punha a compra no dia do envio (Histórico,
+// Recompra, Rotatividade). O app manda a hora do toque e, carimbada em cada
+// envio (inclusive o da fila, ver apiFetch), a hora do envio (enviado_em) - as
+// duas pelo relógio do celular. A diferença entre elas é quanto o pedido
+// esperou; descontada do now() do servidor, o relógio errado do celular (data
+// manual, bateria zerada) não entra: pedido enviado na hora fica com now().
+// Vale só hora completa com fuso (Z ou ±hh:mm), até 30 dias de espera. Sem o
+// enviado_em ou fora disso: null = now().
 const FILA_MAX_DIAS = 30;
-function horaDoPedidoDoApp(valor, agora = new Date()) {
-  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(valor)) return null;
-  const t = new Date(valor).getTime();
-  if (!Number.isFinite(t)) return null;
-  if (t < agora.getTime() - FILA_MAX_DIAS * 86400000 || t > agora.getTime() + 10 * 60000) return null;
-  // meia-noite UTC exata é lida como "só a data" (sqlDiaDoPedido); 1 ms a mais
+const HORA_COM_FUSO = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})$/i;
+function horaDoPedidoDoApp(valor, enviadoEm, agora = new Date()) {
+  if (typeof valor !== 'string' || typeof enviadoEm !== 'string' || !HORA_COM_FUSO.test(valor) || !HORA_COM_FUSO.test(enviadoEm)) return null;
+  const espera = new Date(enviadoEm).getTime() - new Date(valor).getTime();
+  if (!Number.isFinite(espera) || espera < -60000 || espera > FILA_MAX_DIAS * 86400000) return null;
+  const t = agora.getTime() - Math.max(espera, 0);
+  // meia-noite UTC exata é lida como "só a data" (sqlDiaDoPedido); 1 ms a menos
   // mantém a hora de verdade no dia de Brasília
-  return new Date(t % 86400000 === 0 ? t + 1 : t).toISOString();
+  return new Date(t % 86400000 === 0 ? t - 1 : t).toISOString();
 }
 
 async function acharOuCriarVendedor(client, nomeVendedor) {
@@ -135,7 +140,7 @@ router.post('/', async (req, res) => {
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
     const criarProdutosDesconhecidos = origem === 'pdf';
     const origemFinal = origem || 'app';
-    const dataPedidoGravar = origemFinal === 'app' ? horaDoPedidoDoApp(data_pedido) : (data_pedido || null);
+    const dataPedidoGravar = origemFinal === 'app' ? horaDoPedidoDoApp(data_pedido, req.body.enviado_em) : (data_pedido || null);
 
     let pedidoId, dataPedidoFinal, atualizado = false;
     if (pedidoParaAtualizar) {
@@ -243,7 +248,7 @@ function itensValidos(itens) {
 // cliente. Só o autor (ou um admin) e só pedido com origem 'app'. Corpo:
 // { itens: [{ codigo_sku, quantidade, preco_unitario }], contexto?, vendedor_nome?, observacao? }
 router.patch('/:id', async (req, res) => {
-  const { itens, contexto, vendedor_nome, observacao } = req.body || {};
+  const { itens, contexto, vendedor_nome, observacao, alterado_em, enviado_em } = req.body || {};
   if (!itensValidos(itens)) return res.status(400).json({ erro: 'Informe ao menos um item, com código, quantidade e preço.' });
 
   let client;
@@ -276,10 +281,10 @@ router.patch('/:id', async (req, res) => {
     for (const item of itens) produtoIds.push(await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), null));
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
     const upd = await client.query(
-      `UPDATE pedidos SET contexto = $1::jsonb, atualizado_em = now(),
+      `UPDATE pedidos SET contexto = $1::jsonb, atualizado_em = COALESCE($5::timestamptz, now()),
                           vendedor_id = COALESCE($2, vendedor_id), observacao = COALESCE($3, observacao)
        WHERE id = $4 RETURNING id, cliente_id, data_pedido, atualizado_em`,
-      [contextoParaGravar(contexto), vendedorId, observacao || null, atual.id]
+      [contextoParaGravar(contexto), vendedorId, observacao || null, atual.id, horaDoPedidoDoApp(alterado_em, enviado_em)]
     );
     await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [atual.id]);
     for (let i = 0; i < itens.length; i++) {
