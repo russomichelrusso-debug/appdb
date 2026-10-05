@@ -134,7 +134,7 @@ Não é usuário/senha. O fluxo:
 - `/api/clientes/:id/classificatorio/status`, `/grupo`, `/api/clientes/classificatorio/alertas` — classificatório (faixas pelos 12 meses móveis de faturado)
 - `/api/clientes/:id/levantamentos`, `/api/pedidos/exportar` — levantamentos do cliente e export de pedidos
 
-`GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade (usado pelo keep-alive).
+`GET /health` retorna `{ status: 'ok' }` para checagem de disponibilidade (usado pelo keep-alive). `GET /health/banco` faz também um `SELECT 1` (até 5 s) e responde 503 com o banco fora — usado pelo script do Gmail pra não contar tentativa durante queda do banco; o `/health` continua sem tocar no banco.
 
 ## Fontes de dados — o que cada tela soma
 

@@ -78,6 +78,26 @@ app.use((req, res, next) => {
 
 app.get('/', (req, res) => res.json({ status: 'ok', servico: 'Cortag - histórico e relatórios' }));
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
+// Servidor no ar E banco respondendo - usado pelo script do Gmail antes de
+// mandar arquivo: com o banco fora, a rodada acaba sem contar tentativa (senão
+// o script desistia de e-mails bons numa queda longa do banco). O /health
+// continua sem tocar no banco (keep-alive, e o Render pode usá-lo pra decidir
+// se reinicia o serviço).
+app.get('/health/banco', async (req, res) => {
+  let timer;
+  try {
+    await Promise.race([
+      pool.query('/* health:banco */ SELECT 1'),
+      new Promise((_, rejeitar) => { timer = setTimeout(() => rejeitar(new Error('tempo esgotado')), 5000); }),
+    ]);
+    res.json({ status: 'ok', banco: 'ok' });
+  } catch (e) {
+    console.error('Health do banco:', e.message);
+    res.status(503).json({ status: 'erro', banco: 'fora do ar' });
+  } finally {
+    clearTimeout(timer);
+  }
+});
 
 // Limite de tentativas na rota de login com Google - protege o endpoint que
 // chama a API do Google pra validar o id_token contra abuso/flood (mesmo sem
