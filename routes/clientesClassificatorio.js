@@ -891,17 +891,24 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
     let pulosRede = 0;
     const naoReconhecidos = [];
 
+    // classificatórios de cada matriz numa consulta só (antes uma por linha)
+    const matrizes = [...new Set(itens.map(it => String(it.matriz || '').trim()).filter(Boolean))];
+    const tiposResult = await pool.query(
+      `/* objetivos:matrizes */
+       SELECT COALESCE(matriz_grupo, nome) AS matriz, array_agg(DISTINCT classificatorio_tipo) AS tipos
+       FROM clientes WHERE COALESCE(matriz_grupo, nome) = ANY($1::text[]) GROUP BY 1`,
+      [matrizes]
+    );
+    const tiposDaMatriz = new Map(tiposResult.rows.map(r => [r.matriz, r.tipos || []]));
+
     for (const it of itens) {
       const matriz = String(it.matriz || '').trim();
       const objetivo = Number(it.objetivo);
       if (!matriz || !Number.isFinite(objetivo)) continue;
 
-      const r = await pool.query(
-        `SELECT DISTINCT classificatorio_tipo FROM clientes WHERE COALESCE(matriz_grupo, nome) = $1`,
-        [matriz]
-      );
-      if (r.rows.length === 0) { naoReconhecidos.push(matriz); continue; }
-      if (r.rows.some(row => row.classificatorio_tipo === 'Rede')) { pulosRede++; continue; }
+      const tipos = tiposDaMatriz.get(matriz);
+      if (!tipos) { naoReconhecidos.push(matriz); continue; }
+      if (tipos.includes('Rede')) { pulosRede++; continue; }
 
       objetivos[matriz] = objetivo;
       importados++;

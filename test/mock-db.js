@@ -1014,6 +1014,21 @@ async function query(sql, params = []) {
   // Fixup de num_pedidos pra grupos reconciliados por código base (evita
   // contar duas vezes um nr_pedido que tem código base + variante P na
   // mesma linha de pedido) - routes/relatorios.js, reconciliarProdutosPorCodigoBase.
+  // Curva ABC: pedidos distintos por grupo de códigos mesclados, em lote (routes/relatorios.js)
+  if (s.includes('/* CURVA-ABC:PEDIDOS-POR-GRUPO */')) {
+    const [gruposIdx, codigos] = params;
+    let idx = 2;
+    let itens = pedidosOficiaisItens.filter(it => faturadoDeFato(it));
+    if (s.includes('CLIENTE_CODIGO_OFICIAL = $')) { const cc = params[idx++]; itens = itens.filter(it => it.cliente_codigo_oficial === cc); }
+    if (s.includes('DATA_FATURAMENTO >=')) { const ini = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento >= ini); }
+    if (s.includes('DATA_FATURAMENTO <=')) { const fim = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim); }
+    const porGrupo = new Map();
+    codigos.forEach((cod, i) => itens.filter(it => it.codigo_sku === cod).forEach(it => {
+      if (!porGrupo.has(gruposIdx[i])) porGrupo.set(gruposIdx[i], new Set());
+      porGrupo.get(gruposIdx[i]).add(it.nr_pedido);
+    }));
+    return { rows: [...porGrupo].map(([grupo, nrs]) => ({ grupo, total: String(nrs.size) })) };
+  }
   if (s.startsWith('SELECT COUNT(DISTINCT NR_PEDIDO) AS TOTAL FROM PEDIDOS_OFICIAIS_ITENS') && s.includes('CODIGO_SKU = ANY(')) {
     const codigos = params[0];
     let idx = 1;
@@ -1575,6 +1590,16 @@ async function query(sql, params = []) {
   // POST /classificatorio/objetivos-trimestrais/importar). Checado ANTES do
   // catch-all de "FROM PEDIDOS_OFICIAIS_ITENS POI" da curva ABC logo abaixo,
   // que bateria com esse texto também (mesma tabela na consulta).
+  if (s.includes('/* OBJETIVOS:MATRIZES */')) {
+    const porMatriz = new Map();
+    for (const c of clientes) {
+      const m = c.matriz_grupo || c.nome;
+      if (!params[0].includes(m)) continue;
+      if (!porMatriz.has(m)) porMatriz.set(m, new Set());
+      porMatriz.get(m).add(c.classificatorio_tipo ?? null);
+    }
+    return { rows: [...porMatriz].map(([matriz, tipos]) => ({ matriz, tipos: [...tipos] })) };
+  }
   if (s === 'SELECT DISTINCT CLASSIFICATORIO_TIPO FROM CLIENTES WHERE COALESCE(MATRIZ_GRUPO, NOME) = $1') {
     const chave = params[0];
     const tipos = [...new Set(clientes.filter(c => (c.matriz_grupo || c.nome) === chave).map(c => c.classificatorio_tipo))];

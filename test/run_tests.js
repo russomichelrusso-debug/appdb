@@ -2851,6 +2851,27 @@ async function main() {
   }
 
   {
+    // objetivos trimestrais e Curva ABC: uma consulta no lugar de uma por matriz / por grupo de códigos
+    const pad = (i) => String(i).padStart(3, '0');
+    let antes = mockDb.__queryLog.length;
+    res = await req('POST', '/api/clientes/classificatorio/objetivos-trimestrais/importar', { periodoInicio: '2026-10-01', periodoFim: '2026-12-31',
+      itens: [...Array.from({ length: 60 }, (_, i) => ({ matriz: `LOTE ${pad(i)} LTDA`, objetivo: 1000 + i })), { matriz: 'NAO EXISTE LOTE', objetivo: 1 }] });
+    const consultasObj = mockDb.__queryLog.length - antes;
+    assert(res.status === 200 && res.body.importados === 59 && res.body.naoReconhecidos.join() === 'LOTE 004 LTDA,NAO EXISTE LOTE' && consultasObj <= 10,
+      `objetivos trimestrais: 61 matrizes em ${consultasObj} consultas (antes uma por matriz): ${JSON.stringify(res.body)}`);
+    mockDb.__seed({ clientes: [{ id: 30500, nome: 'LOJA ABC LOTE', codigo_oficial: 'QABC' }] });
+    mockDb.__seed({ pedidosOficiaisItens: ['60863', 'P60863', 'P160863', '61362', 'P61362'].flatMap((sku, k) => [1, 2].map(n => ({
+      nr_pedido: `AB${n}${k % 2}`, codigo_sku: sku, cliente_codigo_oficial: 'QABC', quantidade: 1, valor: 5, data_implantacao: '2026-09-01', data_faturamento: '2026-09-02', status: 'faturado' }))) });
+    antes = mockDb.__queryLog.length;
+    res = await req('GET', '/api/clientes/30500/produtos-abc');
+    const sqlsAbc = mockDb.__queryLog.slice(antes).map(q => q.sql);
+    const disco = (res.body || []).find(r => r.codigo_sku === '60863'), cortador = (res.body || []).find(r => r.codigo_sku === '61362');
+    assert(res.status === 200 && disco && disco.num_pedidos === 4 && cortador && cortador.num_pedidos === 4 && !sqlsAbc.some(q => q.startsWith("SELECT COUNT(DISTINCT nr_pedido)"))
+      && sqlsAbc.filter(q => q.includes('curva-abc:pedidos-por-grupo')).length === 1,
+      `Curva ABC: pedidos distintos dos códigos promocionais mesclados numa consulta só: ${JSON.stringify([res.body, sqlsAbc.length])}`);
+  }
+
+  {
     // Service Worker: toda biblioteca de CDN que as páginas carregam está na lista
     // do sw.js (senão quebra sem internet - imagem/PDF do orçamento, câmera no
     // iPhone); e página/script do app guardados sem os parâmetros (?cliente=…).
