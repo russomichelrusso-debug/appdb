@@ -14695,7 +14695,8 @@
           const valorUnitario = formato === 'completa' ? limparNumeroPdf(m[9]) : limparNumeroPdf(m[5]);
           let valorTotal = formato === 'completa' ? limparNumeroPdf(m[10]) : limparNumeroPdf(m[6]);
           if (valorTotal === 0 && quantidade > 0 && valorUnitario > 0) valorTotal = +(quantidade * valorUnitario).toFixed(2);
-          if (!(quantidade === 0 && valorTotal === 0)) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
+          // só item com quantidade: o servidor recusa o pedido inteiro com item de quantidade 0
+          if (quantidade > 0) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
         }
         return produtos;
       }

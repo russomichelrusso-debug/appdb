@@ -116,6 +116,8 @@ router.post('/tudo/limpar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode apagar o relatório oficial.' });
   try {
     const result = await pool.query('DELETE FROM pedidos_oficiais_itens');
+    // sem relatório nenhum, o próximo importado não pode sair "antigo"
+    await pool.query('/* relatorio-oficial:zerar-data */ DELETE FROM configuracoes WHERE chave = $1', [CHAVE_RELATORIO_MAIS_NOVO]);
     console.log(`Relatório oficial de faturamento apagado por completo: ${result.rowCount} linha(s) excluída(s), por ${req.usuario?.email}.`);
     res.json({ excluidos: result.rowCount });
   } catch (e) {
@@ -377,18 +379,20 @@ function normalizarTitulosAvista(linhas) {
   return Array.from(porChave.values());
 }
 
-// Data do relatório = a mais nova (implantação/faturamento) que ele traz. Data
-// depois de amanhã é erro de planilha e não conta (senão travava todo
-// relatório seguinte como "antigo").
-function dataDoRelatorio(itens, pendentes, agora = new Date()) {
-  const limite = new Date(agora.getTime() + 86400000).toISOString().slice(0, 10);
+// Data do relatório = a mais nova (implantação/faturamento) das linhas de
+// pedido. Os pendentes à vista NÃO contam: o pedido aguardando pagamento foi
+// implantado dias antes e a planilha só com essas abas saía sempre "antiga"
+// (a lista à vista não era trocada - achado do revisor-cortag). Data depois de
+// hoje (Brasília) é erro de planilha e não conta (senão travava o relatório do
+// dia seguinte como "antigo").
+function dataDoRelatorio(itens, _pendentes, agora = new Date()) {
+  const limite = agora.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
   let max = null;
   const ver = (d) => {
     const dia = String(d || '').slice(0, 10);
     if (/^\d{4}-\d{2}-\d{2}$/.test(dia) && dia <= limite && (!max || dia > max)) max = dia;
   };
   for (const it of itens) { ver(it.data_implantacao); ver(it.data_faturamento); }
-  for (const p of pendentes || []) ver(p.data_implantacao);
   return max;
 }
 // Normalização de nome do clientMatcher.js (acharClientePorNome): exata
@@ -654,8 +658,10 @@ async function importarRelatorioOficial(body, usuario) {
 
     // Saldo que deixou de existir (ver planejarCarteira) sai antes de gravar.
     // Relatório antigo: só as faturadas, sem apagar nem gravar carteira.
+    // O saldo de produto que aparece faturado sai em qualquer caso (apagar saldo já
+    // faturado é seguro com relatório de qualquer data).
     const plano = relatorioAntigo
-      ? { gravar: itens.filter(it => it.status === 'faturado'), pedidosConcluidos: [], paresSemSaldo: [] }
+      ? { gravar: itens.filter(it => it.status === 'faturado'), pedidosConcluidos: [], paresSemSaldo: planejarCarteira(itens).paresSemSaldo }
       : planejarCarteira(itens);
     const { gravar, pedidosConcluidos, paresSemSaldo } = plano;
     const carteiraIgnorada = relatorioAntigo ? itens.length - gravar.length : 0;

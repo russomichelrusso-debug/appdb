@@ -260,6 +260,19 @@ async function query(sql, params = []) {
     produtos.push(novo);
     return { rows: [{ id: novo.id }] };
   }
+  if (s.includes('/* PRODUTO:DO-PROMOCIONAL */')) {
+    const cfg = configuracoes.produtos_promocionais;
+    const lista = cfg && Array.isArray(cfg.valor) ? cfg.valor : [];
+    const promo = lista.find(p => p && p.c === params[0]);
+    if (!promo || produtos.some(p => p.codigo_sku === params[0])) return { rows: [] };
+    const novo = { id: nextId.produtos++, codigo_sku: promo.c, nome: (promo.n || '').trim() || promo.c, categoria: promo.familia ?? null };
+    produtos.push(novo);
+    return { rows: [{ id: novo.id }] };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:ZERAR-DATA */')) {
+    delete configuracoes[params[0]];
+    return { rows: [], rowCount: 1 };
+  }
   if (s.includes('/* CATALOGO-PRECOS:CONFERIR-REMOCAO */')) {
     return { rows: [{ total: catalogoPrecos.length, sairiam: catalogoPrecos.filter(p => !params[0].includes(p.codigo_sku)).length }] };
   }

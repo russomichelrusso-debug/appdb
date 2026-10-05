@@ -288,7 +288,16 @@ async function main() {
     cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
     itens: [ { codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 10 } ],
   });
-  assert(res.status === 422 && res.body.erro.includes('não encontrado'), 'rejeita pedido com produto inexistente, com mensagem clara (422: a fila offline tira como recusado)');
+  // 400, não 422: o produto pode chegar depois (sincronização, Lista de Preços nova) e a fila tenta de novo
+  assert(res.status === 400 && res.body.erro.includes('não encontrado'), 'rejeita pedido com produto inexistente, com mensagem clara (400: a fila offline tenta de novo)');
+  // produto promocional criado no Painel (só em configuracoes): entra no pedido, criado na hora
+  mockDb.__setConfiguracao('produtos_promocionais', [{ c: 'P960863', n: 'CORTADOR PROMOCIONAL', familia: 'CORTE' }]);
+  res = await req('POST', '/api/pedidos', {
+    cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+    itens: [ { codigo_sku: 'P960863', quantidade: 2, preco_unitario: 10 } ],
+  });
+  assert(res.status === 201 && mockDb.__getProdutos().some(p => p.codigo_sku === 'P960863' && p.nome === 'CORTADOR PROMOCIONAL'),
+    `pedido com produto promocional do Painel ainda não sincronizado cria o produto: ${JSON.stringify(res.body)}`);
 
   // 9b) produto novo da Lista de Preços (está em catalogo_precos, ainda não em
   // produtos - o /api/produtos/sync só roda quando um admin abre o Painel): o
@@ -315,8 +324,8 @@ async function main() {
       `levantamento com produto novo da Lista de Preços cria o produto (sem nome, fica o código): ${JSON.stringify([res.body, p78])}`);
     res = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: 'NAO-EXISTE-1', quantidade_contada: 1 }] });
     const rLevSemItens = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [] });
-    assert(res.status === 422 && res.body.erro.includes('não encontrado') && rLevSemItens.status === 422,
-      `levantamento com produto que não existe nem no catálogo, ou sem itens: 422 (recusado, sai da fila): ${JSON.stringify([res.body, rLevSemItens.body])}`);
+    assert(res.status === 400 && res.body.erro.includes('não encontrado') && rLevSemItens.status === 422,
+      `levantamento com produto que não existe nem no catálogo: 400 (a fila tenta de novo); sem itens: 422 (recusado): ${JSON.stringify([res.body, rLevSemItens.body])}`);
     // itens inválidos e origem desconhecida: 422 (antes quantidade 0/negativa entrava no histórico)
     const pedidosAntes = mockDb.__getPedidos().length;
     const rQtd0 = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: '60863', quantidade: 0, preco_unitario: 10 }] });
@@ -1613,7 +1622,7 @@ async function main() {
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [] });
   assert(res.status === 422, 'editar pedido: recusa pedido sem itens');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 1 }] });
-  assert(res.status === 422 && res.body.erro.includes('não encontrado') && mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId).length === 2,
+  assert(res.status === 400 && res.body.erro.includes('não encontrado') && mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId).length === 2,
     'editar pedido: produto inexistente recusa sem perder os itens que já estavam gravados (rollback)');
   res = await req('PATCH', `/api/pedidos/${pedidoCotacaoId}`, { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
   assert(res.status === 422, 'editar pedido: cotação importada do PDF não é editada por aqui');
@@ -2120,7 +2129,9 @@ async function main() {
   {
     const { dataDoRelatorio } = require('../routes/pedidosOficiais');
     assert(dataDoRelatorio([{ data_implantacao: '2026-09-15', data_faturamento: '2026-09-20' }, { data_implantacao: '2062-09-01' }], [{ data_implantacao: '2026-09-18' }], new Date('2026-10-05T12:00:00Z')) === '2026-09-20'
-      && dataDoRelatorio([], null) === null,
+      && dataDoRelatorio([], null) === null
+      // amanhã (Brasília) também é erro de planilha: senão o relatório do dia seguinte sairia "antigo"
+      && dataDoRelatorio([{ data_implantacao: '2026-10-06' }, { data_implantacao: '2026-10-04' }], [], new Date('2026-10-05T12:00:00Z')) === '2026-10-04',
       'relatório oficial: a data dele é a mais nova que ele traz (data no futuro é erro de planilha e não conta)');
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
     mockDb.__seed({ clientes: [{ id: 9408, nome: 'LOJA RELATORIO VELHO', codigo_oficial: 'COD9408' }] });
@@ -2158,7 +2169,14 @@ async function main() {
     });
     assert(rMesmoDia.status === 200 && !rMesmoDia.body.relatorioAntigo && linhas('PV49408').length === 1 && mockDb.__getTitulosAvistaPendentes().some(t => t.titulo === '6001'),
       `relatório do mesmo dia do mais novo grava a carteira e troca as listas à vista: ${JSON.stringify(rMesmoDia.body)}`);
-    await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [] });
+    // planilha só com as abas de pagamento (pedido implantado dias antes): não é "antiga",
+    // troca a lista à vista - antes a data dos pendentes a fazia sair antiga sempre
+    const rSoPagamento = await req('POST', '/api/pedidos-oficiais/importar', {
+      pendentes_pagamento: [{ nr_pedido: 'PV59408', cliente_codigo_oficial: 'COD9408', valor: 80, data_implantacao: '2026-09-12' }],
+    });
+    assert(rSoPagamento.status === 200 && !rSoPagamento.body.relatorioAntigo && mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === 'PV59408'),
+      `planilha só com as abas de pagamento troca a lista à vista: ${JSON.stringify(rSoPagamento.body)}`);
+    await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [], pendentes_pagamento: [] });
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
   }
 
