@@ -191,14 +191,18 @@ router.patch('/usuarios/:id', requireAuth, async (req, res) => {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+    // Ao desativar, trava os admins ativos ANTES do alvo e sempre na mesma ordem:
+    // duas desativações de admins diferentes ao mesmo tempo esperam uma pela
+    // outra em vez de travar cruzado (deadlock - achado do revisor-cortag), e
+    // não zeram os admins (ver exclusão abaixo)
+    const admins = ativo ? null
+      : await client.query('SELECT id FROM usuarios WHERE is_admin = true AND ativo = true FOR UPDATE');
     const alvo = await client.query('SELECT id, is_admin, ativo FROM usuarios WHERE id = $1 FOR UPDATE', [id]);
     if (alvo.rows.length === 0) {
       await client.query('ROLLBACK');
       return res.status(404).json({ erro: 'Usuário não encontrado.' });
     }
     if (!ativo && alvo.rows[0].is_admin && alvo.rows[0].ativo) {
-      // FOR UPDATE: duas desativações ao mesmo tempo não zeram os admins (ver exclusão abaixo)
-      const admins = await client.query('SELECT id FROM usuarios WHERE is_admin = true AND ativo = true FOR UPDATE');
       if (admins.rows.length <= 1) {
         await client.query('ROLLBACK');
         return res.status(400).json({ erro: 'Esse é o último administrador ativo do sistema — não é possível desativá-lo. Promova outro usuário a admin antes.' });
