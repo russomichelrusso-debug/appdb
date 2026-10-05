@@ -36,6 +36,9 @@ const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { avisarImportacao } = require('./lib/novidades');
 
 const TAMANHO_MAX_BYTES = 10 * 1024 * 1024;
+// Lista de Preços pelo e-mail que tiraria mais que isso dos códigos do catálogo
+// é recusada ("Cortag/Falhou") - decisão do usuário, 10/2026
+const MAX_FRACAO_CATALOGO_REMOVIDA = 0.05;
 const USUARIO_EMAIL = { id: null, email: 'importação por e-mail', is_admin: true };
 const ROTULO_TIPO = {
   relatorio: 'Relatório oficial',
@@ -88,7 +91,8 @@ async function importarPorTipo(tipo, buffer, nomeArquivo) {
   if (tipo === 'precos') {
     // só a lista da região do representante - outra região sobrescreveria o catálogo
     if (!/SUL\s*SUDESTE/i.test(nomeArquivo)) throw new Recusado('Lista de Preços que não é a SUL SUDESTE - não importada.');
-    return importarCatalogoPrecos(buffer, USUARIO_EMAIL);
+    // trava só deste caminho: lista que tiraria mais de 5% dos códigos é recusada
+    return importarCatalogoPrecos(buffer, USUARIO_EMAIL, { maxFracaoRemovida: MAX_FRACAO_CATALOGO_REMOVIDA });
   }
   if (tipo === 'classificatorio') {
     const itens = lendo(() => Importadores.lerClassificatorio(XLSX, buffer));

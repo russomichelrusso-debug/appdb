@@ -2207,6 +2207,34 @@ async function main() {
     assert(res.status === 200 && res.body.tipo === 'precos' && p && p.precos.VAREJO.SP === 10.5 && p.precos_sem_imposto.VAREJO.SP === 10,
       `importação por e-mail: Lista de Preços SUL SUDESTE substitui o catálogo: ${JSON.stringify([res.body, p && p.precos.VAREJO])}`);
   }
+  {
+    // Lista de Preços pelo e-mail que tiraria mais de 5% dos códigos do catálogo é
+    // recusada (422 = "Cortag/Falhou") sem mexer no catálogo; até 5% passa. A
+    // importação manual pelo Painel continua sem trava.
+    const listaPrecos = (codigos, base) => planilha({
+      'Referência Estados': [[], [], [], ...ufsExatas.map((uf, i) => [uf, null, null, null, null, null, null, 11 + i])],
+      'TRIBUTAÇÃO': [[], [], [], ...codigos.map(c => [c, 'PRODUTO ' + c, 10, null, '68042211', 0.05, null, null, null, null, 0.1, 0.1, 0.2, 0.1, 0.1])],
+      'PRECIFICAÇÃO': [[], [], [], ...codigos.map(c => [c, null, ...Array.from({ length: 18 }, (_, i) => base + i)])],
+    });
+    const nomeLista = '03.10.2026 - LISTA PADRÃO 2026 - SUL SUDESTE Por Canal_REV 5.xlsx';
+    const linhaCat = (c) => ({ codigo_sku: c, nome: 'X', emb: 1, ipi: 0, familia: null, preco_fixo: false, canais_fx: [], precos: {}, precos_sem_imposto: {} });
+    const vinte = Array.from({ length: 20 }, (_, i) => `CAT${String(i).padStart(2, '0')}`);
+    mockDb.__getCatalogoPrecos().splice(0, Infinity, ...vinte.map(linhaCat));
+    const antes = JSON.stringify(mockDb.__getCatalogoPrecos());
+    // tira 2 de 20 (10%): recusada
+    res = await enviarArquivo(nomeLista, listaPrecos(vinte.slice(2), 20), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+    assert(res.status === 422 && /2 de 20/.test(res.body.erro) && JSON.stringify(mockDb.__getCatalogoPrecos()) === antes
+      && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.tipo === 'precos' && /2 de 20/.test(i.erro)),
+      `importação por e-mail: Lista de Preços que tiraria mais de 5% do catálogo é recusada sem mexer nele: ${JSON.stringify(res.body)}`);
+    // tira 1 de 20 (5%): passa
+    res = await enviarArquivo(nomeLista, listaPrecos(vinte.slice(1), 30), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+    assert(res.status === 200 && res.body.resultado.produtosRemovidos === 1 && mockDb.__getCatalogoPrecos().length === 19,
+      `importação por e-mail: Lista de Preços que tira até 5% do catálogo entra: ${JSON.stringify(res.body)}`);
+    // Painel (manual): continua substituindo o catálogo inteiro, sem trava
+    res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05'], 40).toString('base64') });
+    assert(res.status === 200 && res.body.produtosRemovidos === 18 && mockDb.__getCatalogoPrecos().length === 1,
+      `importação manual da Lista de Preços pelo Painel continua sem a trava dos 5%: ${JSON.stringify(res.body)}`);
+  }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
   assert(res.status === 422 && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Repres-21.xlsx'),
     `importação por e-mail: planilha não reconhecida é recusada (422) e fica registrada: ${JSON.stringify(res.body)}`);

@@ -188,7 +188,11 @@ router.post('/importar', async (req, res) => {
 
 // Também chamada pela importação automática por e-mail (routes/importacaoEmail.js)
 // - devolve { status, json } em vez de responder direto.
-async function importarCatalogoPrecos(buffer, usuario) {
+// opcoes.maxFracaoRemovida (só o caminho do e-mail, decisão do usuário): recusa
+// (422) a planilha que tiraria do catálogo mais que essa fração dos códigos que
+// ele tem hoje - uma lista cortada/errada publicada sem ninguém olhar esvaziava
+// o catálogo de todos os aparelhos. A importação manual pelo Painel não tem trava.
+async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
   if (buffer.length > TAMANHO_MAX_PLANILHA_BYTES) return { status: 413, json: { erro: 'Arquivo muito grande. O limite é 10MB.' } };
   let produtos;
   try {
@@ -213,6 +217,24 @@ async function importarCatalogoPrecos(buffer, usuario) {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+    if (opcoes.maxFracaoRemovida != null) {
+      // dentro da transação, antes de gravar: conta contra o catálogo de agora
+      const conf = await client.query(
+        `/* catalogo-precos:conferir-remocao */
+         SELECT count(*)::int AS total, count(*) FILTER (WHERE codigo_sku <> ALL($1::text[]))::int AS sairiam FROM catalogo_precos`,
+        [produtos.map(p => p.codigo_sku)]
+      );
+      const { total, sairiam } = conf.rows[0];
+      if (total > 0 && sairiam / total > opcoes.maxFracaoRemovida) {
+        await client.query('ROLLBACK');
+        const pct = (n) => (n * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 });
+        return { status: 422, json: {
+          erro: `A planilha tiraria ${sairiam} de ${total} produtos do catálogo (${pct(sairiam / total)}%, o limite da importação automática é ${pct(opcoes.maxFracaoRemovida)}%). `
+            + 'Não foi importada - confira o arquivo e, se estiver certo, importe pelo Painel.',
+          produtosQueSairiam: sairiam, produtosNoCatalogo: total,
+        } };
+      }
+    }
     await client.query(
       `INSERT INTO catalogo_precos (codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto, atualizado_em)
        SELECT * FROM UNNEST(

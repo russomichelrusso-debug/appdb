@@ -175,6 +175,9 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   // catálogo de preços (routes/catalogoPrecos.js)
+  if (s.includes('/* CATALOGO-PRECOS:CONFERIR-REMOCAO */')) {
+    return { rows: [{ total: catalogoPrecos.length, sairiam: catalogoPrecos.filter(p => !params[0].includes(p.codigo_sku)).length }] };
+  }
   if (s.includes('INSERT INTO CATALOGO_PRECOS')) {
     const [cods, nomes, embs, ncms, ipis, familias, fixos, canaisFx, precos, semImposto] = params;
     cods.forEach((c, i) => {
