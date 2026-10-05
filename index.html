@@ -10643,7 +10643,9 @@
         try { return JSON.parse(localStorage.getItem(FILA_RECUSADOS_LS_KEY)) || []; } catch (e) { return []; }
       }
       function guardarFilaRecusados(novos) {
-        try { localStorage.setItem(FILA_RECUSADOS_LS_KEY, JSON.stringify(loadFilaRecusados().concat(novos).slice(-30))); return true; } catch (e) { return false; }
+        // sem corte: o mais antigo sumia sem ter sido baixado. Sem espaço, devolve
+        // false e o item continua na fila, com o motivo da recusa no Painel
+        try { localStorage.setItem(FILA_RECUSADOS_LS_KEY, JSON.stringify(loadFilaRecusados().concat(novos))); return true; } catch (e) { return false; }
       }
       // Painel › "Ver pendências": o que está na fila (com o último erro) e o que o
       // servidor recusou - pra baixar e mandar pro suporte, ou descartar
@@ -10720,6 +10722,10 @@
         const naoAplicadas = []; // alteração mais velha que a já gravada (outro aparelho)
         let enviados = 0;
         for (const item of fila) {
+          // já saiu da fila enquanto as anteriores iam (ex.: "Atualizar pedido" trocou
+          // a versão anterior): não manda - chegava como "versão antiga" e o aviso
+          // culpava outro aparelho (achado do revisor-cortag)
+          if (!loadSyncQueue().some(it => it.id === item.id)) continue;
           try {
             // sem prazo de propósito: abortar não para o servidor, que terminava de
             // gravar o levantamento/alteração e o reenvio gravava de novo (achado do
@@ -10759,7 +10765,7 @@
           showToast(`O servidor recusou: ${r.item.descricao || 'envio pendente'} — ${String(r.erro).replace(/\.$/, '')}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}. Ficou guardado no aparelho (Painel › Ver pendências e recusados).`, 'erro');
           console.warn('Fila offline: itens recusados pelo servidor e retirados da fila', recusados);
         } else if (naoAplicadas.length) {
-          showToast(`Alteração de pedido feita sem internet não aplicada (${[...new Set(naoAplicadas)].join(', ')}): já havia uma alteração mais nova, de outro aparelho. Reabra o pedido em 🧾 Pedidos pra ver como ficou.`, 'erro');
+          showToast(`Alteração de pedido feita sem internet não aplicada (${[...new Set(naoAplicadas)].join(', ')}): o servidor já tinha uma versão mais nova desse pedido (feita depois, possivelmente em outro aparelho). Reabra o pedido em 🧾 Pedidos pra ver como ficou.`, 'erro');
         } else if (recusados.length && !silencioso) {
           showToast('O servidor recusou um envio pendente e não há espaço no aparelho pra guardá-lo à parte — veja no Painel › Ver pendências e recusados.', 'erro');
         } else if (enviados > 0 && !silencioso) {
@@ -12574,7 +12580,10 @@
           // ou entrar na fila - se esta for recusada, a anterior continua lá
           let anteriores = new Set();
           if (editando && editando.id) {
-            anteriores = idsNaFila(it => it.path === `/api/pedidos/${editando.id}` && (it.options || {}).method === 'PATCH');
+            // ...e o pedido novo (POST) do mesmo envio ainda na fila: gravado, mas a
+            // resposta se perdeu - esta alteração já leva os itens todos
+            anteriores = idsNaFila(it => (it.path === `/api/pedidos/${editando.id}` && (it.options || {}).method === 'PATCH')
+              || (!!editando.idEnvio && it.path === '/api/pedidos' && corpoDaFila(it).id_envio === editando.idEnvio));
             result = await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto, alterado_em: agora, enviado_em: null });
           } else {
             // pedido novo, ou o feito sem internet que ainda não tem número no
@@ -12609,8 +12618,9 @@
           const driveResultado = await backupPedidoCsvNoGoogleDrive(csvText, csvFileName);
           let msg;
           if (result && result.versao_antiga) {
-            // outro aparelho já tinha gravado uma alteração mais nova deste pedido
-            msg = `O pedido de ${cliente.nome} já tinha uma alteração mais nova (feita em outro aparelho) — esta não foi aplicada. Reabra o pedido em 🧾 Pedidos pra ver como ficou`;
+            // o servidor já tinha uma versão mais nova (outro aparelho), ou a hora do
+            // aparelho mudou no meio do envio e não dá pra saber qual é a mais nova
+            msg = `O pedido de ${cliente.nome} já tinha uma versão mais nova no servidor (possivelmente de outro aparelho) — esta não foi aplicada. Reabra o pedido em 🧾 Pedidos pra ver como ficou`;
           } else if (editando) {
             msg = offline
               ? `Sem conexão agora — a alteração do pedido de ${cliente.nome} fica salva aqui e vai pro servidor sozinha quando a rede voltar`
@@ -12778,28 +12788,35 @@
       // Pedidos do servidor com a alteração que ainda está na fila por cima (sem
       // isso, reabrir mostrava a versão de antes e "Atualizar" apagava a
       // alteração pendente - achado do revisor-cortag)
+      // O pedido gravado cuja resposta se perdeu (POST ainda na fila, com o mesmo
+      // id_envio do pedido do servidor) também: antes aparecia duas vezes, e alterar
+      // a linha com número perdia a alteração da fila (achado do revisor-cortag).
+      // A última versão na fila (PATCH ou POST do mesmo envio) é a que vale.
       function todosPedidosSalvos() {
         const fila = loadSyncQueue();
-        const doServidor = ((pedidosSalvos && pedidosSalvos.pedidos) || []).map(p => {
-          const patch = fila.filter(it => it.path === `/api/pedidos/${p.id}` && (it.options || {}).method === 'PATCH').pop();
-          const b = patch && corpoDaFila(patch);
+        const servidor = (pedidosSalvos && pedidosSalvos.pedidos) || [];
+        const envios = new Set(servidor.map(p => p.id_envio).filter(Boolean));
+        const doServidor = servidor.map(p => {
+          const ultima = fila.filter(it => (it.path === `/api/pedidos/${p.id}` && (it.options || {}).method === 'PATCH')
+            || (!!p.id_envio && it.path === '/api/pedidos' && (it.options || {}).method === 'POST' && corpoDaFila(it).id_envio === p.id_envio)).pop();
+          const b = ultima && corpoDaFila(ultima);
           return b && Array.isArray(b.itens)
             ? { ...p, itens: b.itens, contexto: b.contexto || p.contexto, atualizado_em: b.alterado_em || p.atualizado_em, alteracaoPendente: true }
             : p;
         });
-        return pedidosPendentesDaFila().concat(doServidor);
+        return pedidosPendentesDaFila().filter(p => !envios.has(p.idEnvio)).concat(doServidor);
       }
       // A fila acabou de enviar um pedido/alteração: põe na cópia da lista do
       // aparelho na hora (senão o pedido sumia da lista até o próximo GET - e
       // abrir o CSV dele nesse meio-tempo, sem sinal, gravava outro)
       function registrarEnvioNaListaDePedidos(item, r) {
-        if (!r || !r.pedido_id || !pedidosSalvos || !Array.isArray(pedidosSalvos.pedidos)) return;
+        // versão recusada (mais velha que a gravada) não entra nem como pedido novo
+        if (!r || !r.pedido_id || r.versao_antiga || !pedidosSalvos || !Array.isArray(pedidosSalvos.pedidos)) return;
         const b = corpoDaFila(item);
         if (!Array.isArray(b.itens)) return;
         const lista = pedidosSalvos.pedidos;
         const atual = lista.find(p => String(p.id) === String(r.pedido_id));
         if (atual) {
-          if (r.versao_antiga) return;
           Object.assign(atual, { itens: b.itens, contexto: b.contexto || atual.contexto, atualizado_em: r.atualizado_em || b.alterado_em || atual.atualizado_em });
         } else if (item.path === '/api/pedidos' && b.cliente && b.cliente.cliente_id != null) {
           const c = loadClientesLocais().find(x => String(x.id) === String(b.cliente.cliente_id)) || {};
@@ -12807,6 +12824,7 @@
             id: r.pedido_id, cliente_id: b.cliente.cliente_id, cliente_nome: b.cliente.nome || c.nome, cliente_documento: c.documento,
             classificatorio_tipo: c.classificatorio_tipo, classificatorio_desconto: c.classificatorio_desconto, codigo_oficial: c.codigo_oficial,
             data_pedido: r.data_pedido || b.data_pedido, atualizado_em: b.alterado_em || null, contexto: b.contexto || null, itens: b.itens,
+            id_envio: b.id_envio || null,
           });
         } else return;
         try { localStorage.setItem(PEDIDOS_SALVOS_LS_KEY, JSON.stringify(pedidosSalvos)); } catch (e) { }
@@ -12904,7 +12922,7 @@
         setPedidoEditando(pedido.pendente
           // feito sem internet, ainda na fila: a alteração vai pelo mesmo id_envio
           ? { id: null, idEnvio: pedido.idEnvio, dataToque: pedido.dataToque, pendente: true, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido }
-          : { id: pedido.id, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido });
+          : { id: pedido.id, idEnvio: pedido.id_envio || undefined, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido });
         setLevCliente({
           id: pedido.cliente_id, nome: pedido.cliente_nome, documento: pedido.cliente_documento,
           classificatorio_tipo: pedido.classificatorio_tipo, classificatorio_desconto: pedido.classificatorio_desconto,
