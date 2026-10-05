@@ -83,20 +83,41 @@ app.get('/health', (req, res) => res.json({ status: 'ok' }));
 // o script desistia de e-mails bons numa queda longa do banco). O /health
 // continua sem tocar no banco (keep-alive, e o Render pode usá-lo pra decidir
 // se reinicia o serviço).
-app.get('/health/banco', async (req, res) => {
-  let timer;
-  try {
-    await Promise.race([
-      pool.query('/* health:banco */ SELECT 1'),
-      new Promise((_, rejeitar) => { timer = setTimeout(() => rejeitar(new Error('tempo esgotado')), 5000); }),
-    ]);
-    res.json({ status: 'ok', banco: 'ok' });
-  } catch (e) {
-    console.error('Health do banco:', e.message);
-    res.status(503).json({ status: 'erro', banco: 'fora do ar' });
-  } finally {
-    clearTimeout(timer);
+// Rota pública: a resposta fica guardada por 15 s e requisições ao mesmo tempo
+// esperam a mesma consulta - quem chamar em loop não ocupa conexões do banco
+// (no máximo 1 consulta a cada 15 s, qualquer que seja o volume).
+const HEALTH_BANCO_CACHE_MS = Number(process.env.HEALTH_BANCO_CACHE_MS) || 15000;
+const healthBanco = { ok: false, em: 0, emAndamento: null };
+function conferirBanco() {
+  if (Date.now() - healthBanco.em < HEALTH_BANCO_CACHE_MS) return Promise.resolve(healthBanco.ok);
+  if (!healthBanco.emAndamento) {
+    const consulta = (async () => {
+      let timer;
+      try {
+        await Promise.race([
+          pool.query('/* health:banco */ SELECT 1'),
+          new Promise((_, rejeitar) => { timer = setTimeout(() => rejeitar(new Error('tempo esgotado')), 5000); }),
+        ]);
+        healthBanco.ok = true;
+      } catch (e) {
+        console.error('Health do banco:', e.message);
+        healthBanco.ok = false;
+      } finally {
+        clearTimeout(timer);
+        healthBanco.em = Date.now();
+      }
+      return healthBanco.ok;
+    })();
+    // limpa por fora: se a consulta terminasse antes desta atribuição (erro
+    // síncrono), um "= null" lá dentro seria sobrescrito e nada consultaria mais
+    healthBanco.emAndamento = consulta;
+    consulta.finally(() => { if (healthBanco.emAndamento === consulta) healthBanco.emAndamento = null; });
   }
+  return healthBanco.emAndamento;
+}
+app.get('/health/banco', async (req, res) => {
+  if (await conferirBanco()) return res.json({ status: 'ok', banco: 'ok' });
+  res.status(503).json({ status: 'erro', banco: 'fora do ar' });
 });
 
 // Limite de tentativas na rota de login com Google - protege o endpoint que
