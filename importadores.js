@@ -197,7 +197,8 @@
 
     let gravadas = 0;
     for (const r of dados) {
-      const clienteNome = String(campo(r, 'cliente_nome') ?? '').trim();
+      // "\" no nome é o "/" escapado de exportação ("P\/ CONSTR."): duplicava o cliente
+      const clienteNome = String(campo(r, 'cliente_nome') ?? '').replace(/\\/g, '').replace(/\s+/g, ' ').trim();
       const clienteCodigo = String(campo(r, 'cliente_codigo_oficial') ?? '').trim();
       const nrPedido = normalizarNrPedido(campo(r, 'nr_pedido'));
       const codigoItem = String(campo(r, 'codigo_sku') ?? '').trim();

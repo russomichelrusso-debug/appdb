@@ -414,8 +414,9 @@ const ehSemClassificatorio = (tipo) => /^SEMCLASSIFICATORIO$/.test(String(tipo).
 //    engano faria o cliente "voltar" pra uma categoria que já mudou.
 //    "Sem Classificatório" grava NULL (antes virava um tipo com esse nome).
 //    Percentual pela Política Comercial, não o do relatório.
-//  - Código oficial: cliente ainda sem o código casado pelo nome, só na
-//    primeira vez que o código aparece.
+//  - Código oficial: cliente ainda sem código casado pelo nome, só na
+//    primeira vez que o código aparece; filial de mesmo nome que já tem
+//    outro código nunca perde o dela.
 async function classificarEVincularClientes(client, classificacoes, itens) {
   const classifs = classificacoes.filter(c => c.nome && c.tipo);
   const paresUnicos = new Map();
@@ -447,11 +448,15 @@ async function classificarEVincularClientes(client, classificacoes, itens) {
   // gravados por id, os criados agora depois deles)
   const chaveDoNome = new Map();
   const porCodigo = new Map();
+  // todos os clientes de cada nome, em ordem de id: filiais com o mesmo nome
+  // (mesma razão social, CNPJs diferentes) são clientes diferentes
   const porExato = new Map();
   const porTolerante = new Map();
   const indexar = (reg) => {
-    if (!porExato.has(reg.exato)) porExato.set(reg.exato, reg);
-    if (!porTolerante.has(reg.tolerante)) porTolerante.set(reg.tolerante, reg);
+    if (!porExato.has(reg.exato)) porExato.set(reg.exato, []);
+    porExato.get(reg.exato).push(reg);
+    if (!porTolerante.has(reg.tolerante)) porTolerante.set(reg.tolerante, []);
+    porTolerante.get(reg.tolerante).push(reg);
   };
   const existentes = [];
   for (const r of carga.rows) {
@@ -463,17 +468,26 @@ async function classificarEVincularClientes(client, classificacoes, itens) {
     indexar(reg);
     if (reg.codigo) porCodigo.set(reg.codigo, reg);
   }
-  const acharPorNome = (nome) => {
+  const candidatosPorNome = (nome) => {
     const k = chaveDoNome.get(String(nome));
-    return k ? (porExato.get(k.exato) || porTolerante.get(k.tolerante) || null) : null;
+    if (!k) return [];
+    const exatos = porExato.get(k.exato) || [];
+    return exatos.length ? exatos : (porTolerante.get(k.tolerante) || []);
   };
+  const acharPorNome = (nome) => candidatosPorNome(nome)[0] || null;
+  // pro código novo: o de mesmo nome que ainda não tem código (nunca o de uma
+  // filial que já tem outro - o código ficava trocando de dono a cada relatório,
+  // achado do revisor-cortag)
+  const acharPorNomeSemCodigo = (nome, codigo) =>
+    candidatosPorNome(nome).find(r => !r.codigo || r.codigo === codigo) || null;
   // acharOuCriarCliente (clientMatcher.js) com nome + código, sem CNPJ
   const novos = [];
   const acharOuCriar = (nome, codigo) => {
     if (codigo && porCodigo.has(codigo)) return porCodigo.get(codigo);
-    const porNome = acharPorNome(nome);
-    // mesmo nome com OUTRO código é outra empresa: cria
-    if (porNome && (!codigo || !porNome.codigo || porNome.codigo === codigo)) return porNome;
+    // mesmo nome com OUTRO código é outra empresa: cria (a menos que haja uma
+    // filial de mesmo nome ainda sem código)
+    const porNome = codigo ? acharPorNomeSemCodigo(nome, codigo) : acharPorNome(nome);
+    if (porNome) return porNome;
     const k = chaveDoNome.get(String(nome));
     const reg = { id: null, nome: String(nome), codigo: codigo || null, codigoNaCriacao: codigo || null, exato: k.exato, tolerante: k.tolerante };
     indexar(reg);
@@ -499,9 +513,8 @@ async function classificarEVincularClientes(client, classificacoes, itens) {
   const vinculos = [];
   for (const [codigo, nome] of paresUnicos) {
     if (porCodigo.has(String(codigo))) continue;
-    const reg = acharPorNome(nome);
+    const reg = acharPorNomeSemCodigo(nome, String(codigo));
     if (!reg) { resultado.clientesNaoEncontrados.push({ codigo, nome }); continue; }
-    if (reg.codigo && porCodigo.get(reg.codigo) === reg) porCodigo.delete(reg.codigo);
     reg.codigo = String(codigo);
     porCodigo.set(reg.codigo, reg);
     vinculos.push({ reg, codigo: String(codigo) });
