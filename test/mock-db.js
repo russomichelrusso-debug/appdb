@@ -174,6 +174,28 @@ async function query(sql, params = []) {
     cods.forEach((c, i) => previsaoEstoque.push({ codigo_sku: c, qt_disponivel: disp[i], qt_carteira: cart[i], qt_compra: compra[i], previsao: prev[i], saldo: saldo[i] }));
     return { rows: [] };
   }
+  // relatório oficial: data do mais novo já importado (routes/pedidosOficiais.js)
+  if (s.includes('/* RELATORIO-OFICIAL:DATA-MAIS-NOVA */')) {
+    if (!configuracoes[params[0]]) configuracoes[params[0]] = { valor: null, atualizado_em: new Date().toISOString() };
+    const v = configuracoes[params[0]].valor;
+    return { rows: [{ data: v == null ? null : String(v) }] };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:DATA-PELOS-ITENS */')) {
+    const limite = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const datas = pedidosOficiaisItens.flatMap(i => [i.data_implantacao, i.data_faturamento]).filter(Boolean).map(d => String(d).slice(0, 10)).filter(d => d <= limite).sort();
+    return { rows: [{ data: datas.length ? datas[datas.length - 1] : null }] };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:GRAVAR-DATA */')) {
+    configuracoes[params[0]] = { valor: params[1], atualizado_em: new Date().toISOString() };
+    return { rows: [], rowCount: 1 };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:DESCRICOES */')) {
+    let n = 0;
+    params[0].forEach((nr, i) => pedidosOficiaisItens.forEach(it => {
+      if (it.nr_pedido === nr && it.codigo_sku === params[1][i] && it.descricao == null) { it.descricao = params[2][i]; n++; }
+    }));
+    return { rows: [], rowCount: n };
+  }
   // catálogo de preços (routes/catalogoPrecos.js)
   // produto novo da Lista de Preços entra em produtos (só os que não existem)
   if (s.includes('/* CATALOGO-PRECOS:PRODUTOS-NOVOS */')) {
@@ -1789,11 +1811,14 @@ module.exports = {
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
   __getProdutos: () => produtos,
+  __getConfiguracao: (chave) => (configuracoes[chave] ? configuracoes[chave].valor : undefined),
+  __setConfiguracao: (chave, valor) => { configuracoes[chave] = { valor, atualizado_em: new Date().toISOString() }; },
   __getLevantamentoItens: () => levantamentoItens,
   __getPushInscricoes: () => pushInscricoes,
   __getUsuarios: () => usuarios,
   __getSessoes: () => sessoes,
   __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
+  __getTitulosAvistaPendentes: () => titulosAvistaPendentes,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,
 };

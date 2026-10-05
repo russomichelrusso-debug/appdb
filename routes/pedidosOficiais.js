@@ -378,6 +378,23 @@ function normalizarTitulosAvista(linhas) {
   return Array.from(porChave.values());
 }
 
+// Data do relatório = a mais nova (implantação/faturamento) que ele traz. Data
+// depois de amanhã é erro de planilha e não conta (senão travava todo
+// relatório seguinte como "antigo").
+function dataDoRelatorio(itens, pendentes, agora = new Date()) {
+  const limite = new Date(agora.getTime() + 86400000).toISOString().slice(0, 10);
+  let max = null;
+  const ver = (d) => {
+    const dia = String(d || '').slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dia) && dia <= limite && (!max || dia > max)) max = dia;
+  };
+  for (const it of itens) { ver(it.data_implantacao); ver(it.data_faturamento); }
+  for (const p of pendentes || []) ver(p.data_implantacao);
+  return max;
+}
+const CHAVE_RELATORIO_MAIS_NOVO = 'relatorio_oficial_mais_novo';
+const dataComAno = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+
 // Importa em lote as abas "Carteira" e "Faturamento" do relatório oficial -
 // ÚNICA porta de entrada de pedidos oficiais desde a unificação (antes havia
 // também um upload de JSON pré-preparado à mão pelo usuário, e uma planilha
@@ -422,6 +439,24 @@ async function importarRelatorioOficial(body, usuario) {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+
+    // Relatório mais antigo que o mais novo já importado (reimportado por
+    // engano, ou e-mail atrasado): a carteira e as listas à vista dele são uma
+    // foto velha - recriavam saldo já faturado (a linha de carteira e a
+    // faturada têm chaves diferentes desde a nota_chave) e voltavam os
+    // pendentes à vista. Ele grava só as linhas faturadas e as descrições.
+    // A linha da configuração fica travada até o COMMIT: duas importações ao
+    // mesmo tempo comparam uma depois da outra.
+    const dataArquivo = dataDoRelatorio(itens, pendentes);
+    const gravadaResult = await client.query(
+      `/* relatorio-oficial:data-mais-nova */
+       INSERT INTO configuracoes (chave, valor) VALUES ($1, 'null'::jsonb)
+       ON CONFLICT (chave) DO UPDATE SET chave = EXCLUDED.chave
+       RETURNING valor #>> '{}' AS data`,
+      [CHAVE_RELATORIO_MAIS_NOVO]
+    );
+    const dataMaisNova = gravadaResult.rows[0] ? gravadaResult.rows[0].data : null;
+    const relatorioAntigo = !!(dataArquivo && dataMaisNova && dataArquivo < dataMaisNova);
 
     // Classificatório do cliente (Varejo Master/Premium/Exclusive/Rede),
     // vindo de qualquer uma das abas que tiver a coluna preenchida. Só
@@ -475,7 +510,12 @@ async function importarRelatorioOficial(body, usuario) {
     }
 
     // Saldo que deixou de existir (ver planejarCarteira) sai antes de gravar.
-    const { gravar, pedidosConcluidos, paresSemSaldo } = planejarCarteira(itens);
+    // Relatório antigo: só as faturadas, sem apagar nem gravar carteira.
+    const plano = relatorioAntigo
+      ? { gravar: itens.filter(it => it.status === 'faturado'), pedidosConcluidos: [], paresSemSaldo: [] }
+      : planejarCarteira(itens);
+    const { gravar, pedidosConcluidos, paresSemSaldo } = plano;
+    const carteiraIgnorada = relatorioAntigo ? itens.length - gravar.length : 0;
     let carteiraRemovida = 0;
     if (pedidosConcluidos.length > 0) {
       const r = await client.query(
@@ -538,9 +578,26 @@ async function importarRelatorioOficial(body, usuario) {
       [nrPedidos, codigosSku, clientesCodigos, quantidades, valores, dataImplant, dataFat, notasFiscais, classificatorios, transportadoras, situacoesPedido, status, descricoes, notasChave]
     );
 
+    // Relatório antigo: a descrição da linha de carteira dele ainda completa o
+    // nome do produto que saiu da tabela de preços, sem criar a linha
+    if (relatorioAntigo) {
+      const comDescricao = itens.filter(it => it.status !== 'faturado' && it.descricao != null && String(it.descricao).trim());
+      if (comDescricao.length > 0) {
+        await client.query(
+          `/* relatorio-oficial:descricoes */
+           UPDATE pedidos_oficiais_itens poi SET descricao = d.descricao
+           FROM UNNEST($1::text[], $2::text[], $3::text[]) AS d(nr_pedido, codigo_sku, descricao)
+           WHERE poi.nr_pedido = d.nr_pedido AND poi.codigo_sku = d.codigo_sku AND poi.descricao IS NULL`,
+          [comDescricao.map(it => String(it.nr_pedido)), comDescricao.map(it => String(it.codigo_sku)),
+           comDescricao.map(it => String(it.descricao).trim().slice(0, 300))]
+        );
+      }
+    }
+
     // Pendentes à vista: a aba é a foto atual - troca a lista inteira (o
     // pedido que saiu da aba foi pago). Sem a aba no arquivo, não mexe.
-    if (pendentes) {
+    // Relatório antigo também não: a foto dele é velha.
+    if (pendentes && !relatorioAntigo) {
       await client.query('DELETE FROM pedidos_pendentes_pagamento');
       if (pendentes.length > 0) {
         await client.query(
@@ -552,7 +609,7 @@ async function importarRelatorioOficial(body, usuario) {
       }
     }
 
-    if (titulos) {
+    if (titulos && !relatorioAntigo) {
       await client.query('DELETE FROM titulos_avista_pendentes');
       if (titulos.length > 0) {
         await client.query(
@@ -564,14 +621,31 @@ async function importarRelatorioOficial(body, usuario) {
       }
     }
 
+    if (!relatorioAntigo && dataArquivo && (!dataMaisNova || dataArquivo > dataMaisNova)) {
+      await client.query(
+        `/* relatorio-oficial:gravar-data */ UPDATE configuracoes SET valor = to_jsonb($2::text), atualizado_em = now() WHERE chave = $1`,
+        [CHAVE_RELATORIO_MAIS_NOVO, dataArquivo]
+      );
+    }
+
     await client.query('COMMIT');
+    if (relatorioAntigo) console.log(`Pedidos oficiais: relatório de ${dataArquivo} mais antigo que o já importado (${dataMaisNova}) - só as linhas faturadas; ${carteiraIgnorada} linha(s) de carteira e as listas à vista ignoradas.`);
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${usuario?.email}.`);
     await registrarImportacao(usuario?.id, 'pedidos-oficiais/importar', itens.length);
-    const ultimoPedido = await pool.query('/* novidades:pedidos-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens');
-    const pedidosAte = formatarDataBr(ultimoPedido.rows[0] && ultimoPedido.rows[0].ate);
-    await avisarImportacao('relatorio-oficial', pedidosAte ? `Pedidos até ${pedidosAte}` : null);
+    if (!relatorioAntigo) {
+      // relatório antigo não traz nada novo pra avisar ("Pedidos até" não muda)
+      const ultimoPedido = await pool.query('/* novidades:pedidos-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens');
+      const pedidosAte = formatarDataBr(ultimoPedido.rows[0] && ultimoPedido.rows[0].ate);
+      await avisarImportacao('relatorio-oficial', pedidosAte ? `Pedidos até ${pedidosAte}` : null);
+    }
     return { status: 200, json: { ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
-               pendentesPagamento: pendentes ? pendentes.length : null, titulosAvista: titulos ? titulos.length : null } };
+               pendentesPagamento: pendentes && !relatorioAntigo ? pendentes.length : null, titulosAvista: titulos && !relatorioAntigo ? titulos.length : null,
+               dataRelatorio: dataArquivo,
+               ...(relatorioAntigo ? {
+                 relatorioAntigo: true, relatorioMaisNovo: dataMaisNova, carteiraIgnorada,
+                 aviso: `Relatório de ${dataComAno(dataArquivo)} é mais antigo que o já importado (${dataComAno(dataMaisNova)}): `
+                   + 'entraram só as linhas faturadas; carteira e pagamentos à vista não foram alterados',
+               } : {}) } };
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
@@ -596,6 +670,7 @@ module.exports = router;
 // export default usado pelo server.js).
 module.exports.deduplicarItensOficiais = deduplicarItensOficiais;
 module.exports.planejarCarteira = planejarCarteira;
+module.exports.dataDoRelatorio = dataDoRelatorio;
 module.exports.normalizarPendentesPagamento = normalizarPendentesPagamento;
 module.exports.normalizarTitulosAvista = normalizarTitulosAvista;
 module.exports.importarRelatorioOficial = importarRelatorioOficial;

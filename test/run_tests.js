@@ -2030,6 +2030,8 @@ async function main() {
     `planejarCarteira: saldo do faturado em parte fica, pedido Atendido Total não fica com carteira: ${JSON.stringify(plano)}`
   );
 
+  // cenário próprio: os relatórios daqui são de setembro, depois do de hoje do teste 27
+  mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
   mockDb.__seed({
     clientes: [{ id: 9407, nome: 'LOJA PARCIAL', codigo_oficial: 'COD9407' }],
     pedidosOficiaisItens: [
@@ -2085,6 +2087,55 @@ async function main() {
       && disco9407.media_dias_entre_pedidos === null && disco9407.primeira_compra === disco9407.ultima_compra,
     `histórico: entrega dividida em duas notas conta como uma compra: ${JSON.stringify(disco9407)}`
   );
+
+  // 28b) Relatório oficial mais antigo que o já importado (reimportado por engano,
+  // e-mail atrasado): grava só as linhas faturadas e as descrições - não recria
+  // saldo em carteira já faturado (carteira e faturada têm chaves diferentes) e
+  // não volta as listas à vista pra foto antiga.
+  {
+    const { dataDoRelatorio } = require('../routes/pedidosOficiais');
+    assert(dataDoRelatorio([{ data_implantacao: '2026-09-15', data_faturamento: '2026-09-20' }, { data_implantacao: '2062-09-01' }], [{ data_implantacao: '2026-09-18' }], new Date('2026-10-05T12:00:00Z')) === '2026-09-20'
+      && dataDoRelatorio([], null) === null,
+      'relatório oficial: a data dele é a mais nova que ele traz (data no futuro é erro de planilha e não conta)');
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+    mockDb.__seed({ clientes: [{ id: 9408, nome: 'LOJA RELATORIO VELHO', codigo_oficial: 'COD9408' }] });
+    const base = { cliente_codigo_oficial: 'COD9408', cliente_nome: 'LOJA RELATORIO VELHO' };
+    const linhas = (nr) => mockDb.__getPedidosOficiaisItens().filter(it => it.nr_pedido === nr);
+    // relatório de 30/09: o pedido já foi todo faturado; nada à vista pendente
+    const r30 = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [{ ...base, nr_pedido: 'PV19408', codigo_sku: '60863', status: 'faturado', quantidade: 5, valor: 50, data_implantacao: '2026-09-15', data_faturamento: '2026-09-30', nota_fiscal: '6001', situacao_pedido: 'Atendido Total' }],
+      pendentes_pagamento: [], titulos_avista: [],
+    });
+    // relatório de 20/09 reimportado depois: ainda trazia o saldo em carteira e as listas à vista daquele dia
+    const r20 = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [
+        { ...base, nr_pedido: 'PV19408', codigo_sku: '60863', status: 'carteira', quantidade: 5, valor: 50, data_implantacao: '2026-09-15', descricao: 'DISCO DO RELATORIO VELHO', situacao_pedido: 'Aberto' },
+        { ...base, nr_pedido: 'PV29408', codigo_sku: '61362', status: 'faturado', quantidade: 1, valor: 200, data_implantacao: '2026-09-10', data_faturamento: '2026-09-20', nota_fiscal: '5990', situacao_pedido: 'Atendido Total' },
+        { ...base, nr_pedido: 'PV39408', codigo_sku: '61362', status: 'carteira', quantidade: 2, valor: 400, data_implantacao: '2026-09-18', situacao_pedido: 'Aberto' },
+      ],
+      pendentes_pagamento: [{ nr_pedido: 'PV19408', cliente_codigo_oficial: 'COD9408', valor: 50 }],
+      titulos_avista: [{ titulo: '6001', parcela: 1, valor: 50 }],
+    });
+    assert(r30.status === 200 && !r30.body.relatorioAntigo && r30.body.dataRelatorio === '2026-09-30'
+      && r20.status === 200 && r20.body.relatorioAntigo === true && r20.body.carteiraIgnorada === 2 && /20\/09\/2026/.test(r20.body.aviso) && /30\/09\/2026/.test(r20.body.aviso)
+      && r20.body.pendentesPagamento === null && r20.body.titulosAvista === null,
+      `relatório antigo: a resposta diz que é antigo e o que ficou de fora: ${JSON.stringify(r20.body)}`);
+    assert(linhas('PV19408').length === 1 && linhas('PV19408')[0].status === 'faturado' && linhas('PV19408')[0].descricao === 'DISCO DO RELATORIO VELHO'
+      && linhas('PV39408').length === 0
+      && linhas('PV29408').length === 1 && linhas('PV29408')[0].status === 'faturado' && linhas('PV29408')[0].nota_fiscal === '5990'
+      && !mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === 'PV19408') && !mockDb.__getTitulosAvistaPendentes().some(t => t.titulo === '6001')
+      && mockDb.__getConfiguracao('relatorio_oficial_mais_novo') === '2026-09-30',
+      `relatório antigo: não recria o saldo já faturado nem grava carteira, grava o faturado e a descrição, não troca as listas à vista: ${JSON.stringify([linhas('PV19408'), linhas('PV29408'), linhas('PV39408')])}`);
+    // o do mesmo dia (ou mais novo) vale inteiro, como antes
+    const rMesmoDia = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [{ ...base, nr_pedido: 'PV49408', codigo_sku: '61362', status: 'carteira', quantidade: 1, valor: 200, data_implantacao: '2026-09-30', situacao_pedido: 'Aberto' }],
+      titulos_avista: [{ titulo: '6001', parcela: 1, valor: 50 }],
+    });
+    assert(rMesmoDia.status === 200 && !rMesmoDia.body.relatorioAntigo && linhas('PV49408').length === 1 && mockDb.__getTitulosAvistaPendentes().some(t => t.titulo === '6001'),
+      `relatório do mesmo dia do mais novo grava a carteira e troca as listas à vista: ${JSON.stringify(rMesmoDia.body)}`);
+    await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [] });
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+  }
 
   // 29) Saldo mínimo em carteira (política de cancelamento): R$ 300, R$ 600 no
   // Norte/Nordeste pela UF da ficha de CNPJ; sem ficha vale o padrão.
@@ -2259,6 +2310,7 @@ async function main() {
     `importação por e-mail: itens em falta entram, registram e geram a novidade: ${JSON.stringify(res.body)}`);
   res = await enviarArquivo('ESCE007-28092026060311.xlsx', xlsPrevisao);
   assert(res.status === 200 && res.body.duplicado === true, 'importação por e-mail: o mesmo arquivo de novo não é importado outra vez');
+  mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null); // cenário próprio (relatórios de 01/10)
   res = await enviarArquivo('Repres-20.xlsx', xlsRelatorio);
   assert(res.status === 200 && res.body.tipo === 'relatorio' && res.body.resultado.itens === 2
     && mockDb.__getPedidosOficiaisItens().some(i => i.nr_pedido === '676001' && i.status === 'carteira'),

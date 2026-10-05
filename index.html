@@ -14785,6 +14785,7 @@
         const result = await processarUmaPlanilhaOficial(file);
         carregarStatusRelatorioOficial();
         const partes = [`${result.itens} linha(s) importada(s)`, `${result.clientesVinculados} cliente(s) vinculado(s) agora`, `${result.clientesClassificados} classificado(s)`];
+        if (result.relatorioAntigo && result.aviso) partes.unshift(result.aviso);
         if (result.clientesClassifIgnorados) partes.push(`${result.clientesClassifIgnorados} classificação(ões) ignorada(s) (relatório mais antigo que o já registrado)`);
         if (result.clientesNaoEncontrados && result.clientesNaoEncontrados.length) partes.push(`${result.clientesNaoEncontrados.length} cliente(s) não encontrado(s) pelo nome`);
         if (result.pendentesPagamento != null) partes.push(`${result.pendentesPagamento} pedido(s) aguardando pagamento`);
