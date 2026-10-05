@@ -709,7 +709,8 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
 //
 // "Hoje" pelo relógio de Brasília: o banco roda em UTC, e CURRENT_DATE já
 // virava o mês às 21h do último dia (e ainda estava no mês anterior até as
-// 3h do dia 1º).
+// 3h do dia 1º). Vale também pro faturamento semanal/trimestral e o top
+// clientes do Dashboard (janelas de 10 semanas, 24 e 12 meses).
 const SQL_HOJE_BRASIL = `(now() AT TIME ZONE 'America/Sao_Paulo')::date`;
 const SQL_ENTRADA_PEDIDOS_MENSAL = `
   SELECT m.periodo, COALESCE(e.valor, 0) AS valor, COALESCE(e.pedidos, 0) AS pedidos, COALESCE(e.clientes, 0) AS clientes
@@ -770,18 +771,18 @@ router.get('/dashboard/resumo', async (req, res) => {
       pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
-         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
+         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '10 weeks'
          GROUP BY 1 ORDER BY 1`
       ),
       pool.query(
         `SELECT date_trunc('quarter', data_faturamento) AS periodo, SUM(valor) AS faturamento
-         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '24 months'
+         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '24 months'
          GROUP BY 1 ORDER BY 1`
       ),
       pool.query(
         `SELECT c.id, c.nome, SUM(poi.valor) AS faturamento
          FROM pedidos_oficiais_itens poi JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
-         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '12 months'
          GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
       ),
       // Canal + inatividade (cartões "Clientes Ativos por Canal" e "Contas

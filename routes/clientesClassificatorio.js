@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { SQL_HOJE_BR } = require('./lib/comprasApp');
 const { avisarImportacao, quantos } = require('./lib/novidades');
 
 router.param('id', validarIdInteiro);
@@ -258,9 +259,12 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
 // fechado que valia antes). Os limites do ano civil abaixo continuam só pro
 // comparativo "acumulado do ano corrente x mesmo período do ano anterior"
 // da ficha do cliente.
-const JANELA_12M_SQL = `CURRENT_DATE - INTERVAL '12 months'`;
-const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', CURRENT_DATE) - INTERVAL '1 year'`;
-const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // exclusivo
+// "Hoje" é o dia de Brasília (SQL_HOJE_BR): o banco roda em UTC e CURRENT_DATE
+// virava o dia às 21h - das 21h à meia-noite a janela, o ano e o trimestre
+// andavam um dia antes.
+const JANELA_12M_SQL = `${SQL_HOJE_BR} - INTERVAL '12 months'`;
+const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', ${SQL_HOJE_BR}) - INTERVAL '1 year'`;
+const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', ${SQL_HOJE_BR})`; // exclusivo
 
 // Monta a subconsulta que soma faturamento (do ano civil fechado mais
 // recente, ver comentário acima), com `agruparPorMatrizGrupo` decidindo se
@@ -297,7 +301,7 @@ function sqlFaturamentoClassificatorioPorCliente(agruparPorMatrizGrupo) {
          COALESCE(SUM(poi.valor) FILTER (
            WHERE ${sqlFaturadoDeFato('poi')}
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
-             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (CURRENT_DATE - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
+             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (${SQL_HOJE_BR} - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
          ), 0) AS faturamento_mesmo_periodo_ano_anterior,
          MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}) AS ultima_compra
   FROM clientes c
@@ -325,13 +329,13 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // O ano fechado (usado só pra rotular a resposta e fechar os 4 trimestres
     // em calcularRitmoTrimestral) vem do PRÓPRIO Postgres, na mesma consulta -
     // nunca de um "new Date()" separado no Node, que teria que só torcer pra
-    // concordar com o fuso do CURRENT_DATE do banco. Cliente Rede usa a
+    // concordar com o "hoje" do banco (SQL_HOJE_BR, dia de Brasília). Cliente Rede usa a
     // variante INDIVIDUAL (sem somar matriz_grupo) - ver comentário na
     // função sqlFaturamentoClassificatorioPorCliente.
     const fatResult = await pool.query(
       `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
-              EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual,
-              EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx
+              EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual,
+              EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx
        FROM (${ehRede ? SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
@@ -363,14 +367,14 @@ router.get('/:id/classificatorio/status', async (req, res) => {
            FROM pedidos_oficiais_itens poi
            JOIN clientes c ON c.id = $1
            WHERE poi.cliente_codigo_oficial = c.codigo_oficial
-             AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
            GROUP BY 1 ORDER BY 1`
         : `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
            FROM pedidos_oficiais_itens poi
            JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
            JOIN clientes c ON c.id = $1
            WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
-             AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
            GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
@@ -470,8 +474,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
            (($2::date + 1) - INTERVAL '12 months')::date::text AS inicio_erp,
            (${JANELA_12M_SQL})::date::text AS fim_fora_janela_app,
            (${JANELA_12M_SQL} + INTERVAL '1 day')::date::text AS inicio_app,
-           CURRENT_DATE::text AS hoje,
-           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM CURRENT_DATE) AS mesmo_ano
+           ${SQL_HOJE_BR}::text AS hoje,
+           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM ${SQL_HOJE_BR}) AS mesmo_ano
          FROM clientes c
          JOIN clientes c2 ON c2.id = c.id ${ehRede ? '' : 'OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)'}
          JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
@@ -616,7 +620,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
         `SELECT id, nome, documento, classificatorio_tipo, classificatorio_pic, classificatorio_vl_acordo, matriz_grupo
          FROM clientes WHERE classificatorio_tipo IS NOT NULL`
       ),
-      pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual, EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx`),
+      pool.query(`SELECT EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual, EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx`),
       // Mesma janela móvel de 4 trimestres do status individual, mas pra
       // TODOS os clientes classificados de uma vez só (não N+1) - usada pra
       // saber quem está com o ritmo "atrasado" (ver comentário em
@@ -628,7 +632,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
          JOIN clientes c2 ON (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
          JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
          WHERE c.classificatorio_tipo IS NOT NULL
-           AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+           AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
          GROUP BY c.id, 2 ORDER BY c.id, 2`
       ),
       // Foto oficial do ERP + quanto dos 12 meses da matriz vem de empresas

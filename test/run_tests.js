@@ -834,6 +834,20 @@ async function main() {
     `dashboard/resumo traz a lista de clientes de 3-5 meses sem comprar, com nome e dias: ${JSON.stringify(listaDe3a5)}`
   );
 
+  // 16a) "Hoje" é o dia de Brasília (o banco roda em UTC: das 21h à meia-noite
+  // CURRENT_DATE já é amanhã) - faturamento semanal/trimestral, top clientes do
+  // Dashboard e as janelas do classificatório (12 meses, ano, trimestre)
+  {
+    const inicioLog = mockDb.__queryLog.length;
+    await req('GET', '/api/dashboard/resumo');
+    await req('GET', '/api/clientes/9001/classificatorio/status');
+    await req('GET', '/api/clientes/classificatorio/alertas');
+    const sqls = mockDb.__queryLog.slice(inicioLog).map(q => q.sql);
+    const comHoje = sqls.filter(q => /date_trunc\('(week|quarter)', data_faturamento\)|GROUP BY c\.id, c\.nome|faturamento_12m|trimestre_atual_idx|date_trunc\('quarter', poi\.data_implantacao\)/.test(q));
+    assert(comHoje.length >= 6 && comHoje.every(q => q.includes("now() AT TIME ZONE 'America/Sao_Paulo'")) && !sqls.some(q => q.includes('CURRENT_DATE')),
+      `dashboard e classificatório contam "hoje" pelo dia de Brasília, não pelo CURRENT_DATE (UTC): ${sqls.filter(q => q.includes('CURRENT_DATE')).map(q => q.slice(0, 120)).join(' | ')}`);
+  }
+
   // 16b) GET /api/dashboard/resumo: "Valor Entrada de Pedidos" segue a regra
   // do painel oficial - mês pela data de implantação, carteira + faturado, e
   // sem a série de pedidos de 7 dígitos. Pedido implantado no mês passado e

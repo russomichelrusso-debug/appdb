@@ -846,7 +846,7 @@ async function query(sql, params = []) {
   // Ano/trimestre atual "de verdade" (não o ano fechado da faixa) - usado
   // pela rota de alertas em lote pra alimentar calcularRitmoTrimestral de
   // cada cliente com a mesma referência que a rota individual usa.
-  if (s === 'SELECT EXTRACT(YEAR FROM CURRENT_DATE)::INT AS ANO_ATUAL, EXTRACT(QUARTER FROM CURRENT_DATE)::INT - 1 AS TRIMESTRE_ATUAL_IDX') {
+  if (s.startsWith('SELECT EXTRACT(YEAR FROM (NOW() AT TIME ZONE ') && s.endsWith('AS TRIMESTRE_ATUAL_IDX')) {
     return { rows: [{ ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora() }] };
   }
   // Trimestres recentes de TODOS os clientes classificados de uma vez
