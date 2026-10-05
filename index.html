@@ -8454,7 +8454,8 @@
             ? `Sem conexão agora — "${cliente.nome}" fica salvo aqui e vai pro servidor sozinho quando a rede voltar`
             : `Levantamento salvo no histórico de ${cliente.nome}${result && result.localizacao_registrada ? ' · 📍 localização da loja registrada' : ''}`);
         } catch (e) {
-          showToast('Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
+          // sem espaço no aparelho pra pôr na fila: a mensagem já diz o que fazer
+          showToast(e.semEspacoNaFila ? e.message : 'Não foi possível salvar o levantamento: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalHtml;
@@ -10949,9 +10950,12 @@
       function loadDriveCsvQueue() {
         try { return JSON.parse(localStorage.getItem(DRIVE_CSV_QUEUE_LS_KEY)) || []; } catch (e) { return []; }
       }
+      // true = gravou (sem espaço no aparelho: false, quem chamou avisa)
       function saveDriveCsvQueue(queue) {
-        try { localStorage.setItem(DRIVE_CSV_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { }
+        let ok = true;
+        try { localStorage.setItem(DRIVE_CSV_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { ok = false; }
         refreshDriveCsvQueueBadge();
+        return ok;
       }
       function refreshDriveCsvQueueBadge() {
         const el = document.getElementById('apDriveCsvQueueCount');
@@ -11035,8 +11039,8 @@
         } catch (e) {
           const fila = loadDriveCsvQueue();
           fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), csvText, fileName, criadoEm: Date.now() });
-          saveDriveCsvQueue(fila);
-          return 'pendente';
+          // sem espaço pra guardar: não promete que vai sozinho depois
+          return saveDriveCsvQueue(fila) ? 'pendente' : 'sem-espaco';
         }
       }
 
@@ -12903,6 +12907,7 @@
           }
           if (driveResultado === 'enviado') msg += ' · cópia CSV salva no Drive';
           else if (driveResultado === 'pendente') msg += ' · CSV do pedido pendente de envio ao Drive';
+          else if (driveResultado === 'sem-espaco') msg += ' · cópia no Drive não foi feita (aparelho sem espaço) — mande o CSV agora';
           // Já oferece mandar o CSV do pedido (pedido do usuário, 10/2026) - a
           // mesma janela do CSV do orçamento, com o arquivo e o nome da cópia do
           // Drive (nome que o app reconhece ao abrir o CSV de volta).
@@ -12916,6 +12921,12 @@
             // o vínculo pra o próximo "Finalizar" gravar como pedido novo
             setPedidoEditando(null);
             showToast('Esse pedido não existe mais no servidor (pode ter sido excluído). Toque em "Finalizar pedido" de novo pra gravar como pedido novo.', 'erro');
+          } else if (e.semEspacoNaFila) {
+            // sem internet e sem espaço pra guardar o envio: o CSV é o jeito de mandar
+            // o pedido agora (a janela oferece o WhatsApp)
+            abrirEnvioCsv(new Blob(['\uFEFF' + buildPedidoCsvText(rows)], { type: 'text/csv;charset=utf-8;' }), pedidoCsvFileNameFor(cliente, !!editando),
+              'Pedido Cortag (CSV)', 'Baixado — verifique a pasta Downloads do celular',
+              { titulo: 'Pedido não gravado', mensagem: e.message + '\n\nMande o CSV do pedido agora pra não perder:', fecharLabel: 'Agora não' });
           } else {
             showToast('Não foi possível gravar o pedido: ' + e.message + '\n\nSe for produto não encontrado, sincronize o catálogo no Painel Administrativo primeiro.', 'erro');
           }
@@ -14383,6 +14394,13 @@
       }
       function initClientesTab() {
         document.getElementById('clienteTabSearch').addEventListener('input', (e) => {
+          // alertas abertos escondem a lista: digitar na busca volta pra lista
+          // (senão o resultado ia pra lista escondida - achado do revisor-cortag)
+          const alertas = document.getElementById('classificatorioAlertasWrap');
+          if (alertas && !alertas.classList.contains('hidden')) {
+            alertas.classList.add('hidden');
+            document.getElementById('clienteTabList').classList.remove('hidden');
+          }
           clearTimeout(clienteTabDebounce);
           const term = e.target.value;
           clienteTabDebounce = setTimeout(() => searchClienteTabList(term), 300);
@@ -16473,7 +16491,13 @@
           state.currentUser = { nome: result.nome, email: result.email, is_admin: !!result.is_admin };
           if (!state.seller) state.seller = result.nome;
           clearSessionData();
+          // Sessão que expirou com o app já aberto: init() de novo ligava cada
+          // listener duas vezes - um toque em "Finalizar pedido" gravava dois
+          // pedidos (achado do revisor-cortag). Recarrega a página limpa.
+          if (appIniciado) { window.location.reload(); return; }
           hideLoginScreen();
+          btn.classList.add('hidden');
+          btn.disabled = false;
           showLoadingScreen();
           await init();
         } catch (e) {
@@ -16585,7 +16609,11 @@
         renderClassiDiscountRulesList(); // mesmo problema, mesma causa (ver comentário acima)
       }
 
+      // init() liga os listeners da tela inteira: só uma vez por carga de página
+      let appIniciado = false;
       async function init() {
+        if (appIniciado) return;
+        appIniciado = true;
         try {
           // dispara o carregamento do catálogo em paralelo, sem esperar por ele -
           // é o que fazia a aba Clientes (que não precisa de catálogo nenhum) ficar

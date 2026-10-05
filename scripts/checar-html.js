@@ -138,12 +138,15 @@ function checarHidden(texto, nome) {
   let v;
   while ((v = reVar.exec(texto))) {
     const antes = texto.slice(Math.max(0, v.index - 6000), v.index);
-    const reDecl = new RegExp('(?:^|[^\\w$.])' + escapeRe(v[1]) +
-      '\\s*=\\s*(?:document\\.getElementById|\\$)\\(\\s*[\'"]([\\w-]+)[\'"]\\s*\\)', 'g');
+    // a ÚLTIMA atribuição da variável, de qualquer tipo: só conta se ela for o
+    // getElementById (uma `wrap = el.closest(...)` mais perto não pode herdar o id
+    // de outra função - falso positivo achado pelo revisor-cortag)
+    const reDecl = new RegExp('(?:^|[^\\w$.])' + escapeRe(v[1]) + '\\s*=(?!=)\\s*([^;\\n]*)', 'g');
     let ultimo = null;
     let x;
     while ((x = reDecl.exec(antes))) ultimo = x[1];
-    if (ultimo) anota(ultimo, v.index);
+    const id = ultimo && (ultimo.match(/^(?:document\.getElementById|\$)\(\s*['"]([\w-]+)['"]\s*\)/) || [])[1];
+    if (id) anota(id, v.index);
   }
   // 3) class="... hidden" já no HTML
   for (const [id, { tag, off }] of tags) {
