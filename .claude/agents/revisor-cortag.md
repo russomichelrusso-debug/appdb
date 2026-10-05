@@ -74,6 +74,11 @@ outro = achado. Leitura de planilha muda só em `importadores.js` (vale pro Pain
 - Alteração de pedido: só autor/admin, só `origem = 'app'`; busca dentro da transação com
   `FOR UPDATE` quando decide algo que outra requisição pode mudar.
 - Chamada externa com timeout. Importação: `avisarImportacao` nunca derruba a importação.
+- Link montado a partir de dado (planilha, configuração, cadastro) passa por `urlHttpsOuVazio`
+  (`index.html`) — `escapeHtml` não barra `href="javascript:..."`.
+- Tabela nova no `schema.sql` entra no bloco de `ENABLE ROW LEVEL SECURITY` do fim; nunca
+  `FORCE ROW LEVEL SECURITY` (o app conecta como dono). Rota de payload grande confere o login
+  antes de ler o corpo.
 
 **9. Offline.** Ação do vendedor feita na loja (salvar levantamento, alterar pedido, "Já falei",
 nome do arquivo) precisa funcionar sem internet: vai pela fila offline e/ou tem cópia em

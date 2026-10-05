@@ -140,6 +140,23 @@ Supabase, sem PR — não é mudança de código.
   24 itens estão feitos** — o último, B2 (cotação duplicada checada fora da transação), veio
   depois, em PR próprio: a busca da cotação em `POST /api/pedidos` roda dentro da transação com
   `SELECT ... FOR UPDATE`.
+- **Segunda revisão de segurança** (10/2026, achados do `/review` do agent-skills):
+  - **Vendedor que saiu é desativado, não excluído** (decisão do usuário): `usuarios.ativo`; inativo não
+    passa no `requireAuth` nem no `/auth/me` (401) e o login Google recusa ("acesso desativado").
+    `PATCH /api/auth/usuarios/:id {ativo}` (só admin, bolinha na lista de usuários do Painel) apaga as
+    sessões e o push dele; não desativa a si mesmo nem o último admin ativo. Excluir quem tem pedido ou
+    importação responde 409 (as FKs de `pedidos`/`import_log` não têm ON DELETE de propósito: o
+    histórico continua com o nome dele).
+  - **RLS ligado em toda tabela do `schema.sql`** (bloco no fim; tabela nova entra lá, o teste confere).
+    Nunca `FORCE ROW LEVEL SECURITY`: o app conecta como dono. As tabelas de backup avulsas do banco
+    também tiveram o RLS ligado direto no Supabase em 05/10/2026 (o verificador acusava 9 tabelas
+    abertas pra leitura/escrita anônima).
+  - **Rotas de payload grande** (`ROTAS_PAYLOAD_GRANDE`, 25 MB) conferem o login antes de ler o corpo.
+  - **SheetJS do navegador é o `@e965/xlsx@0.20.3` do jsdelivr** (o 0.18.5 do cdnjs tinha
+    CVE-2023-30533/CVE-2024-22363). Trocar a versão = trocar no `index.html` e na `LIBS` do `sw.js`.
+  - **Link vindo de dado** (planilha, configuração, cadastro) passa por `urlHttpsOuVazio` (`index.html`),
+    na importação e na exibição: `escapeHtml` não barra `href="javascript:..."`.
+  - **Push só pros hosts exatos dos serviços de push** (`HOSTS_PUSH` em `routes/lib/novidades.js`).
 - Atalhos de produtividade pro vendedor: botão "Produtos comprados" (pula direto pra Curva ABC já
   filtrada no cliente), botão de adicionar direto ao orçamento a partir da Curva ABC, correção da
   lista de campanhas que sumia no Painel Administrativo (race condition de render antes do dado
