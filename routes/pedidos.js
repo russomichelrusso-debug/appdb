@@ -7,6 +7,23 @@ const { sqlDiaDoPedido } = require('./lib/comprasApp');
 
 router.param('id', validarIdInteiro);
 
+// Hora em que o vendedor fechou o pedido do app. Sem internet, o pedido fica na
+// fila do aparelho e só chega aqui quando a rede volta - às vezes no dia
+// seguinte; gravar now() punha a compra no dia do envio (Histórico, Recompra,
+// Rotatividade). O app manda a hora do toque em "Finalizar pedido"; vale só
+// hora completa (data sem hora é coisa do PDF), dos últimos 30 dias até 10 min
+// à frente (relógio do celular adiantado). Fora disso: null = now().
+const FILA_MAX_DIAS = 30;
+function horaDoPedidoDoApp(valor, agora = new Date()) {
+  if (typeof valor !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(valor)) return null;
+  const t = new Date(valor).getTime();
+  if (!Number.isFinite(t)) return null;
+  if (t < agora.getTime() - FILA_MAX_DIAS * 86400000 || t > agora.getTime() + 10 * 60000) return null;
+  // meia-noite UTC exata é lida como "só a data" (sqlDiaDoPedido); 1 ms a mais
+  // mantém a hora de verdade no dia de Brasília
+  return new Date(t % 86400000 === 0 ? t + 1 : t).toISOString();
+}
+
 async function acharOuCriarVendedor(client, nomeVendedor) {
   if (!nomeVendedor) return null;
   const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
@@ -117,6 +134,8 @@ router.post('/', async (req, res) => {
     const clienteId = await acharOuCriarCliente(client, cliente);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
     const criarProdutosDesconhecidos = origem === 'pdf';
+    const origemFinal = origem || 'app';
+    const dataPedidoGravar = origemFinal === 'app' ? horaDoPedidoDoApp(data_pedido) : (data_pedido || null);
 
     let pedidoId, dataPedidoFinal, atualizado = false;
     if (pedidoParaAtualizar) {
@@ -128,7 +147,7 @@ router.post('/', async (req, res) => {
                             data_pedido = COALESCE($4::timestamptz, data_pedido),
                             pdf_modificado_em = $5
          WHERE id = $6 RETURNING id, data_pedido`,
-        [clienteId, vendedorId, observacao || null, data_pedido || null, pdf_modificado_em || null, pedidoParaAtualizar]
+        [clienteId, vendedorId, observacao || null, dataPedidoGravar, pdf_modificado_em || null, pedidoParaAtualizar]
       );
       pedidoId = upd.rows[0].id;
       dataPedidoFinal = upd.rows[0].data_pedido;
@@ -139,7 +158,7 @@ router.post('/', async (req, res) => {
         `INSERT INTO pedidos (cliente_id, vendedor_id, observacao, numero_cotacao, origem, data_pedido, pdf_modificado_em, usuario_id, contexto)
          VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb)
          RETURNING id, data_pedido`,
-        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origem || 'app', data_pedido || null, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto)]
+        [clienteId, vendedorId, observacao || null, numero_cotacao || null, origemFinal, dataPedidoGravar, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto)]
       );
       pedidoId = pedidoResult.rows[0].id;
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
@@ -304,8 +323,9 @@ router.get('/duplicados', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver pedidos duplicados.' });
   try {
     const result = await pool.query(`
+      /* pedidos:duplicados */
       SELECT ped.id AS pedido_id, ped.cliente_id, c.nome AS cliente_nome,
-             ped.data_pedido, ped.origem, ped.numero_cotacao,
+             ped.data_pedido, ${sqlDiaDoPedido()}::text AS dia, ped.origem, ped.numero_cotacao,
              json_agg(json_build_object('codigo_sku', pr.codigo_sku, 'produto', pr.nome, 'quantidade', pi.quantidade) ORDER BY pr.nome) AS itens
       FROM pedidos ped
       JOIN clientes c ON c.id = ped.cliente_id
@@ -325,7 +345,7 @@ router.get('/duplicados', async (req, res) => {
         )
       )
       GROUP BY ped.id, ped.cliente_id, c.nome, ped.data_pedido, ped.origem, ped.numero_cotacao
-      ORDER BY ped.cliente_id, ped.data_pedido DESC
+      ORDER BY ped.cliente_id, dia DESC, ped.data_pedido DESC
     `);
     res.json(result.rows);
   } catch (e) {
@@ -363,3 +383,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.horaDoPedidoDoApp = horaDoPedidoDoApp;

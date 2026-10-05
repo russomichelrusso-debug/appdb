@@ -850,9 +850,79 @@ async function main() {
     const fs = require('fs');
     const cortesDiretos = ['relatorios.js', 'recompra.js', 'pedidos.js']
       .filter(f => /data_pedido\)?::date(?!\s+(?:ELSE|END))|DATE\(\w+\.data_pedido\)/.test(fs.readFileSync(require('path').join(__dirname, '../routes', f), 'utf8')));
-    assert(/p3\.data_pedido::time = '00:00:00' THEN p3\.data_pedido::date ELSE \(p3\.data_pedido AT TIME ZONE 'America\/Sao_Paulo'\)::date/.test(expr)
+    // "meia-noite"/"dia gravado" lidos em UTC explícito, não no fuso da sessão do banco
+    assert(/\(p3\.data_pedido AT TIME ZONE 'UTC'\)::time = '00:00:00' THEN \(p3\.data_pedido AT TIME ZONE 'UTC'\)::date ELSE \(p3\.data_pedido AT TIME ZONE 'America\/Sao_Paulo'\)::date/.test(expr)
       && cortesDiretos.length === 0,
       `dia do pedido do app no fuso de Brasília (só-data à meia-noite UTC fica como está); nenhuma rota corta data_pedido em UTC: ${JSON.stringify([expr, cortesDiretos])}`);
+
+    // Pelas rotas: pedido fechado às 22h30 de Brasília (01:30 UTC do dia D) é do
+    // dia D-1; o de PDF gravado só com a data D (meia-noite UTC) fica em D.
+    const D = diasAtrasISO(20), D1 = diasAtrasISO(21);
+    mockDb.__seed({
+      produtos: [{ id: 851, codigo_sku: '70011', nome: 'DESEMPENADEIRA FUSO', categoria: '20' }],
+      clientes: [{ id: 9121, nome: 'LOJA FUSO', documento: '11122233000306', codigo_oficial: null }],
+      pedidos: [
+        { id: 9781, cliente_id: 9121, origem: 'app', data_pedido: `${D}T01:30:00.123Z` },
+        { id: 9782, cliente_id: 9121, origem: 'pdf', data_pedido: `${D}T00:00:00.000Z` },
+        { id: 9784, cliente_id: 9121, origem: 'app', data_pedido: `${D1}T15:00:00.000Z` },
+      ],
+      pedidoItens: [
+        { id: 9791, pedido_id: 9781, produto_id: 851, quantidade: 2, preco_unitario: 10 },
+        { id: 9792, pedido_id: 9782, produto_id: 851, quantidade: 3, preco_unitario: 10 },
+        { id: 9794, pedido_id: 9784, produto_id: 851, quantidade: 4, preco_unitario: 10 },
+      ],
+    });
+    // duplicados: 9781 e 9784 são do mesmo dia em Brasília (D-1); o PDF de D,
+    // que no dia UTC cairia junto com 9781, fica de fora
+    res = await req('GET', '/api/pedidos/duplicados');
+    const dupFuso = (res.body || []).filter(p => p.cliente_id === 9121).map(p => `${p.pedido_id}@${p.dia}`).sort();
+    assert(res.status === 200 && JSON.stringify(dupFuso) === JSON.stringify([`9781@${D1}`, `9784@${D1}`]),
+      `duplicados agrupa pelo dia de Brasília (campo dia vem do servidor): ${JSON.stringify(dupFuso)}`);
+    // exportar: período pelo dia de Brasília, mais novo primeiro pelo dia (o PDF
+    // de D vem antes do pedido das 22h30 de D-1, mesmo gravado "antes" em UTC)
+    res = await req('GET', `/api/pedidos/exportar?inicio=${D1}&fim=${D}`);
+    const expFuso = (res.body || []).filter(r => r.codigo_sku === '70011').map(r => `${r.quantidade}@${r.dia}`);
+    const expSoD1 = await req('GET', `/api/pedidos/exportar?inicio=${D1}&fim=${D1}`);
+    assert(res.status === 200 && JSON.stringify(expFuso) === JSON.stringify([`3@${D}`, `2@${D1}`, `4@${D1}`])
+      && JSON.stringify((expSoD1.body || []).filter(r => r.codigo_sku === '70011').map(r => r.quantidade)) === '[2,4]',
+      `exportar filtra e ordena pelo dia de Brasília: ${JSON.stringify([expFuso, expSoD1.body])}`);
+    // comprados-recentes: última compra é a do PDF (D, 3 un.), 2 compras em dias diferentes
+    // (no dia UTC, 9781 cairia em D junto com o PDF e a última compra seria 5)
+    res = await req('GET', '/api/clientes/9121/comprados-recentes');
+    const cr = (res.body || [])[0];
+    assert(res.status === 200 && cr && cr.qtd_ultima_compra === 3 && cr.num_pedidos === 3,
+      `comprados-recentes usa o dia de Brasília do pedido do app: ${JSON.stringify(res.body)}`);
+  }
+
+  // 18b1b) Pedido fechado sem internet: o app manda a hora do toque em
+  // "Finalizar pedido" e o servidor grava ela (não a hora em que a fila enviou),
+  // desde que seja hora completa dos últimos 30 dias até 10 min à frente.
+  {
+    const { horaDoPedidoDoApp } = require('../routes/pedidos');
+    const agora = new Date('2026-10-05T15:00:00Z');
+    const casos = [
+      horaDoPedidoDoApp('2026-10-04T23:40:00.000Z', agora),   // ontem à noite: vale
+      horaDoPedidoDoApp('2026-10-05T15:09:00.000Z', agora),   // relógio 9 min adiantado: vale
+      horaDoPedidoDoApp('2026-10-05T15:11:00.000Z', agora),   // futuro: não
+      horaDoPedidoDoApp('2026-09-01T12:00:00.000Z', agora),   // mais de 30 dias: não
+      horaDoPedidoDoApp('2026-10-04', agora),                 // só data (é do PDF): não
+      horaDoPedidoDoApp('lixo', agora), horaDoPedidoDoApp(12345, agora),
+      horaDoPedidoDoApp('2026-10-05T00:00:00.000Z', agora),   // meia-noite UTC exata: +1 ms
+    ];
+    assert(JSON.stringify(casos) === JSON.stringify(['2026-10-04T23:40:00.000Z', '2026-10-05T15:09:00.000Z', null, null, null, null, null, '2026-10-05T00:00:00.001Z']),
+      `horaDoPedidoDoApp aceita só hora completa e recente: ${JSON.stringify(casos)}`);
+
+    const ontem = new Date(Date.now() - 86400000 + 3600000).toISOString();
+    const postar = (extra) => req('POST', '/api/pedidos', {
+      cliente: { cliente_id: 9121, nome: 'LOJA FUSO' }, itens: [{ codigo_sku: '70011', quantidade: 1, preco_unitario: 10 }], ...extra,
+    });
+    const r1 = await postar({ data_pedido: ontem });
+    const r2 = await postar({ data_pedido: '2020-01-01T12:00:00.000Z' });
+    const r3 = await postar({ data_pedido: '2026-08-01' });
+    const gravado = (r) => mockDb.__getPedidos().find(p => p.id === r.body.pedido_id)?.data_pedido;
+    const recente = (iso) => Math.abs(new Date(iso).getTime() - Date.now()) < 60000;
+    assert(r1.status === 201 && gravado(r1) === ontem && recente(gravado(r2)) && recente(gravado(r3)),
+      `pedido do app grava a hora do toque (fila offline); hora velha ou só data = agora: ${JSON.stringify([gravado(r1), gravado(r2), gravado(r3)])}`);
   }
 
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
