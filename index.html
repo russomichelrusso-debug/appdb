@@ -6167,9 +6167,10 @@
           <div class="ap-groupBody">
             <div class="ap-card" id="manageUsersCard">
               <h3>Gerenciar usuários</h3>
-              <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Excluir um usuário não pode
-                ser desfeito, e algumas exclusões são bloqueadas de propósito (a própria conta, ou o último admin
-                restante).</p>
+              <p class="ap-hint" style="margin-bottom:10px;">Só administrador vê esta seção. Vendedor que saiu:
+                <strong>desative</strong> (bolinha ao lado do nome) — ele sai do app na hora e não entra mais, e os
+                pedidos dele continuam no histórico. Excluir só funciona pra quem não tem pedido gravado, não pode ser
+                desfeito, e não vale pra própria conta nem pro último admin ativo.</p>
               <p class="ap-hint" style="margin-bottom:10px;">O login agora é "Entrar com Google": cadastre o e-mail da
                 conta Google da pessoa — ela já consegue entrar assim que o e-mail estiver aqui, sem senha nenhuma.</p>
               <div id="manageUsersList"></div>
@@ -7170,7 +7171,7 @@
         document.getElementById('fichaTecnicaOverlay').classList.remove('hidden');
         document.getElementById('fichaTecnicaModal').classList.remove('hidden');
         const catalogBtn = document.getElementById('fichaTecnicaCatalogBtn');
-        const siteUrl = SITE_LINK_MAP[cod];
+        const siteUrl = urlHttpsOuVazio(SITE_LINK_MAP[cod]);
         if (siteUrl) {
           catalogBtn.href = siteUrl;
           catalogBtn.style.display = 'block';
@@ -7429,6 +7430,15 @@
       function escapeHtml(s) {
         return (s || '').toString().replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
       }
+      // Link vindo de planilha/configuração (vídeo, site do produto, transportadora):
+      // só https:// passa, o resto vira ''. escapeHtml não impede href="javascript:..."
+      // (o CSP tem 'unsafe-inline', então esse link rodaria código no app ao ser tocado).
+      // Devolve o texto original (sem normalizar) pra não estragar {cnpj}/{nf} do rastreio.
+      function urlHttpsOuVazio(valor) {
+        const texto = String(valor ?? '').trim();
+        if (!/^https:\/\//i.test(texto)) return '';
+        try { return new URL(texto).protocol === 'https:' ? texto : ''; } catch (e) { return ''; }
+      }
 
       // Texto do CNPJ/CPF que sempre acompanha o nome do cliente, exibido abaixo
       // dele nas barras de "cliente selecionado" (levantamento, ficha do cliente).
@@ -7460,8 +7470,10 @@
       function renderVideoLinks(cod) {
         const v = VIDEOS_MAP[cod];
         if (!v) return '';
-        return (v.youtube ? `<a class="fichaInfoBtn videoLinkBtn" href="${escapeHtml(v.youtube)}" target="_blank" rel="noopener" aria-label="Ver vídeo no YouTube" title="Ver vídeo no YouTube">${YOUTUBE_SVG}</a>` : '')
-          + (v.instagram ? `<a class="fichaInfoBtn videoLinkBtn" href="${escapeHtml(v.instagram)}" target="_blank" rel="noopener" aria-label="Ver Reels no Instagram" title="Ver Reels no Instagram">${INSTAGRAM_SVG}</a>` : '');
+        const youtube = urlHttpsOuVazio(v.youtube);
+        const instagram = urlHttpsOuVazio(v.instagram);
+        return (youtube ? `<a class="fichaInfoBtn videoLinkBtn" href="${escapeHtml(youtube)}" target="_blank" rel="noopener" aria-label="Ver vídeo no YouTube" title="Ver vídeo no YouTube">${YOUTUBE_SVG}</a>` : '')
+          + (instagram ? `<a class="fichaInfoBtn videoLinkBtn" href="${escapeHtml(instagram)}" target="_blank" rel="noopener" aria-label="Ver Reels no Instagram" title="Ver Reels no Instagram">${INSTAGRAM_SVG}</a>` : '');
       }
       let priceEditingCod = null;
 
@@ -10548,7 +10560,10 @@
         if (sheetJsLoadPromise) return sheetJsLoadPromise;
         sheetJsLoadPromise = new Promise((resolve, reject) => {
           const s = document.createElement('script');
-          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+          // SheetJS 0.20.3 (pacote @e965/xlsx, o mesmo do servidor): a 0.18.5 do cdnjs tinha
+          // falhas conhecidas ao abrir planilha maliciosa (CVE-2023-30533, CVE-2024-22363) e o
+          // SheetJS não publica mais versão nova no cdnjs. Trocar aqui = trocar na LIBS do sw.js.
+          s.src = 'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js';
           s.onload = () => resolve(window.XLSX);
           s.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s);
@@ -10569,35 +10584,44 @@
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const linhas = XLSX.utils.sheet_to_json(sheet, { defval: null });
         const mapa = {};
+        let ignorados = 0;
         linhas.forEach(r => {
           const codigo = String(r['Código'] ?? r['Codigo'] ?? '').trim();
           if (!codigo) return;
-          const youtube = String(r['YouTube'] ?? '').trim();
-          const instagram = String(r['Instagram'] ?? '').trim();
+          // só link https:// (javascript:/data:/etc. viraria código rodando no app)
+          const ytTexto = String(r['YouTube'] ?? '').trim();
+          const igTexto = String(r['Instagram'] ?? '').trim();
+          const youtube = urlHttpsOuVazio(ytTexto);
+          const instagram = urlHttpsOuVazio(igTexto);
+          if (ytTexto && !youtube) ignorados++;
+          if (igTexto && !instagram) ignorados++;
           if (!youtube && !instagram) return;
           const entrada = {};
           if (youtube) entrada.youtube = youtube;
           if (instagram) entrada.instagram = instagram;
           mapa[codigo] = entrada;
         });
-        return mapa;
+        return { mapa, ignorados };
       }
       // Lê a planilha de link do site oficial (Código/Link) e monta um mapa
-      // código → URL. Linha sem link é ignorada.
+      // código → URL. Linha sem link (ou com link que não é https://) é ignorada.
       async function parseLinksSiteXlsx(arrayBuffer) {
         const XLSX = await loadSheetJs();
         const wb = XLSX.read(arrayBuffer, { type: 'array' });
         const sheet = wb.Sheets[wb.SheetNames[0]];
         const linhas = XLSX.utils.sheet_to_json(sheet, { defval: null });
         const mapa = {};
+        let ignorados = 0;
         linhas.forEach(r => {
           const codigo = String(r['Código'] ?? r['Codigo'] ?? '').trim();
           if (!codigo) return;
-          const link = String(r['Link'] ?? '').trim();
-          if (!link) return;
+          const texto = String(r['Link'] ?? '').trim();
+          if (!texto) return;
+          const link = urlHttpsOuVazio(texto); // só https:// (ver urlHttpsOuVazio)
+          if (!link) { ignorados++; return; }
           mapa[codigo] = link;
         });
-        return mapa;
+        return { mapa, ignorados };
       }
 
       // Lê o relatório oficial de "Entrada Realizada" do ERP (aba "Export",
@@ -12298,26 +12322,28 @@
       // Vídeos e link do site: manda o lote mesclado com o que já existe no
       // servidor (evita reenviar tudo que já foi importado antes a cada planilha nova).
       async function importarVideosProduto(file) {
-        const novos = await parseVideosXlsx(await lerArquivoComoArrayBuffer(file));
+        const { mapa: novos, ignorados } = await parseVideosXlsx(await lerArquivoComoArrayBuffer(file));
         const total = Object.keys(novos).length;
-        if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código", "YouTube" e "Instagram".');
+        if (total === 0) throw new Error('Nenhuma linha com código e link válido (começando com https://) encontrada — confira as colunas "Código", "YouTube" e "Instagram".');
         const atual = (await apiFetch('/api/configuracoes/produtos_videos').catch(() => ({ valor: {} }))).valor || {};
         const mesclado = { ...atual, ...novos };
         await apiFetch('/api/configuracoes/produtos_videos', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
         Object.assign(VIDEOS_MAP, novos);
         renderResults();
-        return `${total} produto(s) com vídeo importado(s) — total agora: ${Object.keys(mesclado).length}.`;
+        return `${total} produto(s) com vídeo importado(s) — total agora: ${Object.keys(mesclado).length}.`
+          + (ignorados ? ` ${ignorados} link(s) ignorado(s) por não começar com https://.` : '');
       }
 
       async function importarLinksSite(file) {
-        const novos = await parseLinksSiteXlsx(await lerArquivoComoArrayBuffer(file));
+        const { mapa: novos, ignorados } = await parseLinksSiteXlsx(await lerArquivoComoArrayBuffer(file));
         const total = Object.keys(novos).length;
-        if (total === 0) throw new Error('Nenhuma linha com código e link válido encontrada — confira as colunas "Código" e "Link".');
+        if (total === 0) throw new Error('Nenhuma linha com código e link válido (começando com https://) encontrada — confira as colunas "Código" e "Link".');
         const atual = (await apiFetch('/api/configuracoes/produtos_link_site').catch(() => ({ valor: {} }))).valor || {};
         const mesclado = { ...atual, ...novos };
         await apiFetch('/api/configuracoes/produtos_link_site', { method: 'POST', body: JSON.stringify({ valor: mesclado }) });
         Object.assign(SITE_LINK_MAP, novos);
-        return `${total} produto(s) com link importado(s) — total agora: ${Object.keys(mesclado).length}.`;
+        return `${total} produto(s) com link importado(s) — total agora: ${Object.keys(mesclado).length}.`
+          + (ignorados ? ` ${ignorados} link(s) ignorado(s) por não começar com https://.` : '');
       }
 
       async function importarPlanilhaPrecos(file) {
@@ -12625,19 +12651,44 @@
         wrap.innerHTML = '<div class="promoEmpty">Carregando…</div>';
         try {
           const usuarios = await apiFetch('/api/auth/usuarios');
-          wrap.innerHTML = usuarios.map(u => `
+          // Vendedor que saiu é DESATIVADO (não entra mais, a sessão cai na hora) - excluir
+          // só dá pra quem não tem pedido/importação gravado (o servidor responde 409).
+          const euEmail = (state.currentUser && state.currentUser.email) || '';
+          wrap.innerHTML = usuarios.map(u => {
+            const ativo = u.ativo !== false;
+            const souEu = !!euEmail && u.email === euEmail;
+            return `
       <div class="promoRuleItem">
         <div class="prTop">
           <div>
-            <div class="prName">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
-            <div class="prDetail">${escapeHtml(u.email || '')}</div>
+            <div class="prName${ativo ? '' : ' inactive'}">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
+            <div class="prDetail">${escapeHtml(u.email || '')}${ativo ? '' : ' · <strong>desativado</strong> (não entra no app)'}</div>
           </div>
           <div class="prBtns">
+            ${souEu ? '' : `<button data-ativo-user="${u.id}" data-ativo="${ativo ? '1' : '0'}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="${ativo ? 'prToggleOn' : ''}" aria-label="${ativo ? 'Desativar acesso' : 'Reativar acesso'}" title="${ativo ? 'Ativo — tocar pra desativar o acesso' : 'Desativado — tocar pra reativar o acesso'}">${ativo ? ICON_ATIVO : ICON_INATIVO}</button>`}
             <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
           </div>
         </div>
       </div>
-    `).join('');
+    `;
+          }).join('');
+          wrap.querySelectorAll('[data-ativo-user]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const usuario = btn.dataset.nomeUser;
+              const desativar = btn.dataset.ativo === '1';
+              const pergunta = desativar
+                ? `Desativar o acesso de "${usuario}"? Ele sai do app na hora (em todos os aparelhos) e não consegue entrar de novo. Os pedidos dele continuam no histórico.`
+                : `Reativar o acesso de "${usuario}"? Ele volta a entrar com a conta Google.`;
+              if (!await askConfirm(pergunta, desativar ? 'Desativar' : 'Reativar', desativar ? { perigo: true } : undefined)) return;
+              try {
+                await apiFetch(`/api/auth/usuarios/${btn.dataset.ativoUser}`, { method: 'PATCH', body: JSON.stringify({ ativo: !desativar }) });
+                showToast((desativar ? 'Acesso desativado: ' : 'Acesso reativado: ') + usuario);
+                renderUsersList();
+              } catch (e) {
+                showToast(e.message, 'erro');
+              }
+            });
+          });
           wrap.querySelectorAll('[data-del-user]').forEach(btn => {
             btn.addEventListener('click', async () => {
               const usuario = btn.dataset.nomeUser;
@@ -13292,12 +13343,18 @@
         document.getElementById('rastreioNf').textContent = nf;
         document.getElementById('rastreioNf').dataset.valor = nf;
         const abrirBtn = document.getElementById('rastreioAbrirBtn');
-        if (transp && transp.url) {
-          abrirBtn.href = transp.url.replace(/\{cnpj\}/g, encodeURIComponent(cnpjDigitos)).replace(/\{nf\}/g, encodeURIComponent(nf));
+        const urlTransp = transp ? urlHttpsOuVazio(transp.url) : '';
+        const linkRastreio = urlTransp
+          ? urlHttpsOuVazio(urlTransp.replace(/\{cnpj\}/g, encodeURIComponent(cnpjDigitos)).replace(/\{nf\}/g, encodeURIComponent(nf)))
+          : '';
+        if (linkRastreio) {
+          abrirBtn.href = linkRastreio;
           abrirBtn.textContent = `Abrir site da ${transp.nome}`;
+        } else {
+          abrirBtn.href = '#';
         }
-        abrirBtn.classList.toggle('hidden', !(transp && transp.url));
-        document.getElementById('rastreioSemLink').classList.toggle('hidden', !!(transp && transp.url));
+        abrirBtn.classList.toggle('hidden', !linkRastreio);
+        document.getElementById('rastreioSemLink').classList.toggle('hidden', !!linkRastreio);
         document.getElementById('rastreioModal').classList.remove('hidden');
       }
       async function copiarTexto(texto, rotulo) {
@@ -13325,7 +13382,7 @@
           const nome = document.getElementById('transpNome').value.trim();
           const padrao = document.getElementById('transpPadrao').value.trim();
           const url = document.getElementById('transpUrl').value.trim();
-          if (!nome || !padrao || !/^https:\/\//i.test(url)) { showToast('Preencha nome, texto pra reconhecer e um link começando com https://', 'erro'); return; }
+          if (!nome || !padrao || !urlHttpsOuVazio(url)) { showToast('Preencha nome, texto pra reconhecer e um link começando com https://', 'erro'); return; }
           const nova = { nome, padrao, url };
           const lista = transpEditandoIdx != null
             ? TRANSPORTADORAS.map((t, i) => i === transpEditandoIdx ? nova : t)

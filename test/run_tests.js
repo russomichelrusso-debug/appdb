@@ -32,6 +32,15 @@ process.env.VAPID_PRIVATE_KEY = 'privada-de-teste';
 process.env.VAPID_SUBJECT = 'https://exemplo.test';
 process.env.IMPORTACAO_EMAIL_CHAVE = 'chave-de-teste-da-importacao-por-email-123456';
 
+// Login Google falso (routes/auth.js destrutura verificarGoogleIdToken ao carregar):
+// com googleFalso definido, o "id_token" vira a conta { sub, email, nome } dele.
+let googleFalso = null;
+{
+  const authUtils = require('../auth-utils');
+  const verificarDeVerdade = authUtils.verificarGoogleIdToken;
+  authUtils.verificarGoogleIdToken = async (idToken, clientId) => (googleFalso ? googleFalso(idToken) : verificarDeVerdade(idToken, clientId));
+}
+
 process.env.PORT = '4123';
 // não liga o preenchimento automático de fichas de CNPJ (timer) durante o teste
 process.env.NODE_ENV = 'test';
@@ -153,6 +162,28 @@ async function main() {
     'INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)',
     [hashToken(authToken), criado.rows[0].id, '90']
   );
+
+  // 2c) rota de payload grande (25 MB): sem token, responde 401 sem ler o corpo
+  // (antes o parse de até 25 MB rodava antes do login). O corpo anuncia 20 MB e só
+  // 1 KB é mandado: se o servidor esperasse o corpo, não haveria resposta.
+  {
+    const semToken = await new Promise((resolve) => {
+      const r = http.request({ hostname: 'localhost', port: 4123, path: '/api/fichas-tecnicas/importar', method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': 20 * 1024 * 1024 } }, (resp) => {
+        let b = ''; resp.on('data', c => b += c); resp.on('end', () => { clearTimeout(t); resolve({ status: resp.statusCode, body: b }); });
+      });
+      const t = setTimeout(() => { r.destroy(); resolve({ status: 'sem resposta' }); }, 2000);
+      r.on('error', () => {});
+      r.write('{"fichas":{"x":"' + 'a'.repeat(1024));
+    });
+    assert(semToken.status === 401, `payload grande sem token: 401 antes de ler o corpo: ${JSON.stringify(semToken)}`);
+    // com token: corpo acima de 1 MB continua passando (parser de 25 MB) e o login é conferido 1 vez só
+    const antesLog = mockDb.__queryLog.length;
+    const grande = await req('POST', '/api/fichas-tecnicas/importar', { fichas: {}, enchimento: 'a'.repeat(2 * 1024 * 1024) });
+    const consultasSessao = mockDb.__queryLog.slice(antesLog).filter(q => /FROM sessoes s/i.test(q.sql)).length;
+    assert(grande.status === 400 && /Nenhuma ficha/.test(grande.body.erro) && consultasSessao === 1,
+      `payload grande com token: corpo de 2 MB lido e sessão conferida 1 vez: ${JSON.stringify([grande.status, grande.body, consultasSessao])}`);
+  }
 
   // 3) criar cliente
   res = await req('POST', '/api/clientes', { nome: 'João Silva Materiais', documento: '12345678000199', contato: '11999998888' });
@@ -2006,8 +2037,27 @@ async function main() {
     assert(j('2026-10-12T02:00:00Z') === '2026-10-12T10:00:00.000Z', 'push: domingo 23h fica pra segunda 7h');
     assert(nov.endpointPushValido('https://fcm.googleapis.com/fcm/send/abc') && nov.endpointPushValido('https://web.push.apple.com/xyz')
       && !nov.endpointPushValido('http://fcm.googleapis.com/x') && !nov.endpointPushValido('https://exemplo.com/fcm.googleapis.com')
-      && !nov.endpointPushValido('https://googleapis.com.evil.test/x'),
+      && !nov.endpointPushValido('https://googleapis.com.evil.test/x')
+      // hosts exatos: outra API do Google (ou subdomínio inventado) não é servidor de push
+      && nov.endpointPushValido('https://updates.push.services.mozilla.com/wpush/v2/abc')
+      && nov.endpointPushValido('https://wns2-par02p.notify.windows.com/w/?token=abc')
+      && nov.endpointPushValido('https://FCM.googleapis.com/fcm/send/abc')
+      && !nov.endpointPushValido('https://storage.googleapis.com/bucket/x')
+      && !nov.endpointPushValido('https://www.googleapis.com/upload/x')
+      && !nov.endpointPushValido('https://x.fcm.googleapis.com/fcm/send/abc')
+      && !nov.endpointPushValido('https://evil.push.services.mozilla.com/x')
+      && !nov.endpointPushValido('https://api.push.apple.com/3/device/x')
+      && !nov.endpointPushValido('https://a.b.notify.windows.com/w/')
+      && !nov.endpointPushValido('https://notify.windows.com/w/')
+      && !nov.endpointPushValido('https://fcm.googleapis.com:8443/fcm/send/abc')
+      && !nov.endpointPushValido('https://user@fcm.googleapis.com/fcm/send/abc'),
       'push: só aceita endpoint https dos serviços de push dos navegadores');
+    // inscrição gravada antes da regra de hosts exatos: não recebe o POST e sai do banco
+    mockDb.__getPushInscricoes().push({ id: 9801, usuario_id: 1, endpoint: 'https://storage.googleapis.com/bucket/x', p256dh: 'a', auth: 'b' });
+    const enviadosAntes = webPushEnviados.length;
+    const foi = await nov.enviarPush({ id: 9801, endpoint: 'https://storage.googleapis.com/bucket/x', p256dh: 'a', auth: 'b' }, '{}', 'teste');
+    assert(foi === false && webPushEnviados.length === enviadosAntes && !mockDb.__getPushInscricoes().some(i => i.id === 9801),
+      'push: inscrição antiga com host que não é servidor de push não recebe o POST e é apagada');
   }
   // as importações feitas acima (classificatório, objetivos, relatório oficial
   // várias vezes) viraram novidades - reimportação em até 30 min = a mesma
@@ -2443,6 +2493,123 @@ async function main() {
   }
 
   {
+    // Desativar vendedor em vez de excluir (routes/auth.js, middleware/auth.js):
+    // inativo não entra, a sessão de 90 dias que ele tinha deixa de valer, sessões e
+    // push dele são apagados; excluir quem tem pedido gravado responde 409.
+    const usuarios = mockDb.__getUsuarios();
+    const admin = usuarios.find(u => u.email === 'michel@example.com');
+    const criarComSessao = async (nome, email, sub, isAdmin) => {
+      const u = await mockDb.pool.query(`INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, ${isAdmin ? 'true' : 'false'}) RETURNING id, nome, email, is_admin`, [nome, email, sub]);
+      const token = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(token), u.rows[0].id, '90']);
+      return { id: u.rows[0].id, token };
+    };
+    const saiu = await criarComSessao('Vendedor Que Saiu', 'saiu@example.com', 'sub-saiu', false);
+    mockDb.__getPushInscricoes().push({ id: 9901, usuario_id: saiu.id, endpoint: 'https://fcm.googleapis.com/fcm/send/saiu', p256dh: 'x', auth: 'y' });
+    mockDb.__getPedidos().push({ id: 99901, cliente_id: null, usuario_id: saiu.id, origem: 'app', data_pedido: new Date().toISOString() });
+    const tokenAdmin = authToken;
+
+    authToken = saiu.token;
+    const antes = await req('GET', '/api/clientes');
+    // vendedor comum não desativa ninguém
+    const naoAdmin = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });
+    authToken = tokenAdmin;
+    const excluir = await req('DELETE', `/api/auth/usuarios/${saiu.id}`);
+    const semCampo = await req('PATCH', `/api/auth/usuarios/${saiu.id}`, { ativo: 'nao' });
+    const desativa = await req('PATCH', `/api/auth/usuarios/${saiu.id}`, { ativo: false });
+    const lista = await req('GET', '/api/auth/usuarios');
+    authToken = saiu.token;
+    const depois = await req('GET', '/api/clientes');
+    const me = await req('GET', '/api/auth/me');
+    authToken = '';
+    googleFalso = (t) => (t === 'tok-saiu' ? { sub: 'sub-saiu', email: 'saiu@example.com', nome: 'Vendedor Que Saiu' } : null);
+    const login = await req('POST', '/api/auth/google', { id_token: 'tok-saiu' });
+    authToken = tokenAdmin;
+    assert(antes.status === 200 && naoAdmin.status === 403
+      && excluir.status === 409 && /desative em vez de excluir/.test(excluir.body.erro) && usuarios.some(u => u.id === saiu.id)
+      && semCampo.status === 400 && desativa.status === 200 && desativa.body.ativo === false
+      && lista.body.find(u => u.id === saiu.id).ativo === false
+      && depois.status === 401 && me.status === 401
+      && login.status === 403 && /desativado/.test(login.body.erro) && !login.body.token
+      && !mockDb.__getSessoes().some(se => se.usuario_id === saiu.id)
+      && !mockDb.__getPushInscricoes().some(i => i.usuario_id === saiu.id),
+      `desativar usuário: excluir com pedido = 409, inativo não passa no requireAuth/me nem no login Google, sessões e push apagados: ${JSON.stringify([antes.status, naoAdmin.status, excluir.status, semCampo.status, desativa.status, depois.status, me.status, login.status, login.body])}`);
+
+    // reativar: entra de novo pelo Google
+    const reativa = await req('PATCH', `/api/auth/usuarios/${saiu.id}`, { ativo: true });
+    authToken = '';
+    const login2 = await req('POST', '/api/auth/google', { id_token: 'tok-saiu' });
+    authToken = login2.body && login2.body.token;
+    const comNovaSessao = await req('GET', '/api/clientes');
+    authToken = tokenAdmin;
+    assert(reativa.status === 200 && reativa.body.ativo === true && login2.status === 200 && comNovaSessao.status === 200,
+      `reativar usuário: volta a entrar pelo Google: ${JSON.stringify([reativa.status, login2.status, comNovaSessao.status])}`);
+
+    // travas: não desativa a si mesmo; outro admin desativa (e a sessão dele cai na hora).
+    // A trava do "último admin ativo" só pega corrida (quem pede é sempre outro admin ativo).
+    const proprio = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });
+    const outroAdmin = await criarComSessao('Outro Admin', 'admin2@example.com', 'sub-admin2', true);
+    authToken = outroAdmin.token;
+    const desativaPrimeiro = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });
+    authToken = tokenAdmin;
+    const adminDesativadoBarrado = await req('GET', '/api/clientes');
+    authToken = outroAdmin.token;
+    const reativaPrimeiro = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: true });
+    const excluiOutro = await req('DELETE', `/api/auth/usuarios/${saiu.id}`); // ainda tem pedido
+    authToken = tokenAdmin;
+    const sessaoNaoVolta = await req('GET', '/api/clientes');
+    assert(proprio.status === 400 && desativaPrimeiro.status === 200 && adminDesativadoBarrado.status === 401
+      && reativaPrimeiro.status === 200 && excluiOutro.status === 409 && sessaoNaoVolta.status === 401,
+      `desativar usuário: não desativa a si mesmo; desativado perde a sessão (reativar não a devolve): ${JSON.stringify([proprio.status, desativaPrimeiro.status, adminDesativadoBarrado.status, reativaPrimeiro.status, excluiOutro.status, sessaoNaoVolta.status])}`);
+    // admin 1 perdeu a sessão ao ser desativado: nova sessão pra ele seguir nos testes
+    authToken = generateToken();
+    await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(authToken), admin.id, '90']);
+    const excluiAdmin2 = await req('DELETE', `/api/auth/usuarios/${outroAdmin.id}`);
+    assert(excluiAdmin2.status === 200 && !mockDb.__getUsuarios().some(u => u.id === outroAdmin.id), 'excluir usuário sem pedido nem importação continua funcionando');
+    googleFalso = null;
+  }
+
+  {
+    // Links de planilha/configuração (vídeo, site do produto, transportadora) só com
+    // https:// (index.html urlHttpsOuVazio): escapeHtml não barra href="javascript:..."
+    const fs = require('fs');
+    const vm = require('vm');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const fonte = html.match(/function urlHttpsOuVazio\(valor\) \{[\s\S]*?\r?\n      \}/);
+    const ctx = { URL };
+    vm.createContext(ctx);
+    vm.runInContext(fonte ? fonte[0] : '', ctx);
+    const f = ctx.urlHttpsOuVazio;
+    const ruins = ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'data:text/html,<script>alert(1)</script>',
+      'vbscript:x', 'http://exemplo.com', '//exemplo.com', 'www.youtube.com/x', '\x01javascript:alert(1)', 'https:/x', '', null, undefined];
+    const bons = ['https://youtu.be/abc', ' https://www.instagram.com/reel/x ', 'HTTPS://cortag.com.br/p?x=1',
+      'https://portal.transp.com.br/rastreio?cnpj={cnpj}&nf={nf}'];
+    const passouRuim = f ? ruins.filter(u => f(u) !== '') : ['sem função'];
+    const recusouBom = f ? bons.filter(u => f(u) !== u.trim()) : ['sem função'];
+    // e quem monta link a partir desses dados usa a função
+    const usos = ['const youtube = urlHttpsOuVazio(v.youtube)', 'urlHttpsOuVazio(SITE_LINK_MAP[cod])', 'urlHttpsOuVazio(transp.url)',
+      'const youtube = urlHttpsOuVazio(ytTexto)', 'const link = urlHttpsOuVazio(texto)', '!urlHttpsOuVazio(url)'].filter(u => !html.includes(u));
+    assert(passouRuim.length === 0 && recusouBom.length === 0 && usos.length === 0,
+      `links de vídeo/site/transportadora só aceitam https://: ${JSON.stringify({ passouRuim, recusouBom, usos })}`);
+  }
+
+  {
+    // RLS ligado em toda tabela do schema.sql (verificador do Supabase acusa
+    // rls_disabled_in_public), depois de ela existir num banco novo, e nunca FORCE
+    // (o app conecta como dono das tabelas e seria barrado junto).
+    const fs = require('fs');
+    const schema = fs.readFileSync(path.join(__dirname, '..', 'schema.sql'), 'utf8').replace(/--.*$/gm, '');
+    const tabelas = [...schema.matchAll(/CREATE TABLE IF NOT EXISTS\s+(\w+)/gi)].map(m => m[1].toLowerCase());
+    const semRls = tabelas.filter(t => {
+      const criada = schema.search(new RegExp(`CREATE TABLE IF NOT EXISTS\\s+${t}\\b`, 'i'));
+      const rls = schema.search(new RegExp(`ALTER TABLE\\s+${t}\\s+ENABLE ROW LEVEL SECURITY`, 'i'));
+      return rls < 0 || rls < criada;
+    });
+    assert(tabelas.length >= 27 && semRls.length === 0 && !/FORCE\s+ROW\s+LEVEL/i.test(schema),
+      `schema.sql: RLS ligado (sem FORCE) em todas as ${tabelas.length} tabelas: ${JSON.stringify(semRls)}`);
+  }
+
+  {
     // Service Worker: toda biblioteca de CDN que as páginas carregam está na lista
     // do sw.js (senão quebra sem internet - imagem/PDF do orçamento, câmera no
     // iPhone); e página/script do app guardados sem os parâmetros (?cliente=…).
@@ -2454,6 +2621,9 @@ async function main() {
       for (const m of fs.readFileSync(path.join(raiz, f), 'utf8').matchAll(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"`\s)]+/g)) usadas.add(m[0]);
     }
     const faltando = [...usadas].filter(u => !sw.includes(`'${u}'`));
+    // SheetJS do cdnjs parou na 0.18.5 (CVE-2023-30533, CVE-2024-22363): só a do pacote @e965/xlsx
+    const xlsxVelho = [...usadas].filter(u => /\/xlsx\/0\.1\d\./.test(u) || (/xlsx/.test(u) && !/@e965\/xlsx@0\.2/.test(u)));
+    assert(xlsxVelho.length === 0 && [...usadas].some(u => u.includes('@e965/xlsx@0.20.3')), `páginas carregam o SheetJS 0.20.3 (@e965/xlsx), não o 0.18.5 vulnerável: ${JSON.stringify(xlsxVelho)}`);
     // versão fixa no endereço: o SW guarda pelo endereço e não busca de novo (@latest ficaria preso)
     assert(usadas.size >= 5 && faltando.length === 0 && ![...usadas].some(u => u.includes('@latest')) && /cache\.put\(chave,/.test(sw) && !/ignoreSearch:\s*true/.test(sw),
       `service worker guarda offline todas as bibliotecas de CDN das páginas e as páginas sem parâmetro: ${JSON.stringify(faltando)}`);

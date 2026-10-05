@@ -40,8 +40,11 @@ const FUSO_BRASILIA_MS = -3 * 3600000;
 const INTERVALO_ENVIO_MS = 60000;
 // Só serviços de push dos navegadores (Chrome/Android, Firefox, Safari/iPhone,
 // Edge) - o servidor faz POST no endpoint da inscrição, então não pode
-// aceitar um endereço qualquer.
-const HOSTS_PUSH = ['.googleapis.com', '.push.services.mozilla.com', '.push.apple.com', '.notify.windows.com'];
+// aceitar um endereço qualquer. Hosts EXATOS: antes era "termina em
+// .googleapis.com", que aceitava qualquer API do Google (storage, etc.) como
+// destino do POST. Só o Windows (WNS) tem servidor por região, daí o sufixo.
+const HOSTS_PUSH = ['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com'];
+const SUFIXOS_HOSTS_PUSH = ['.notify.windows.com'];
 
 // Quando o push pode sair: agora, se for dia útil entre 7h e 20h de Brasília;
 // senão o próximo dia útil às 7h (hoje mesmo, se for dia útil antes das 7h).
@@ -81,7 +84,10 @@ function endpointPushValido(endpoint) {
   if (typeof endpoint !== 'string' || endpoint.length > 1000) return false;
   let url;
   try { url = new URL(endpoint); } catch (e) { return false; }
-  return url.protocol === 'https:' && HOSTS_PUSH.some(h => url.hostname.endsWith(h));
+  if (url.protocol !== 'https:' || url.port || url.username || url.password) return false;
+  const host = url.hostname.toLowerCase();
+  return HOSTS_PUSH.includes(host)
+    || SUFIXOS_HOSTS_PUSH.some(s => host.endsWith(s) && /^[a-z0-9-]+$/.test(host.slice(0, -s.length)));
 }
 
 function dadosDaNovidade(n) {
@@ -99,8 +105,13 @@ function payloadPush(n) {
   });
 }
 
-// Manda um push pra uma inscrição. Inscrição morta (404/410) sai do banco.
+// Manda um push pra uma inscrição. Inscrição morta (404/410) sai do banco - e a
+// gravada antes da regra de hosts exatos que não passa nela também (nem é chamada).
 async function enviarPush(inscricao, payload, topico) {
+  if (!endpointPushValido(inscricao.endpoint)) {
+    await pool.query('/* push:apagar */ DELETE FROM push_inscricoes WHERE id = $1', [inscricao.id]);
+    return false;
+  }
   try {
     await webpush.sendNotification(
       { endpoint: inscricao.endpoint, keys: { p256dh: inscricao.p256dh, auth: inscricao.auth } },
