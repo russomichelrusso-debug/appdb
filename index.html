@@ -9741,22 +9741,21 @@
       const JSPDF_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
       const JSPDF_AUTOTABLE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
       let jsPdfLoadPromise = null;
+      const jsPdfPronto = () => !!(window.jspdf && window.jspdf.jsPDF && window.jspdf.jsPDF.API && window.jspdf.jsPDF.API.autoTable);
       function loadJsPdfScripts() {
-        if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+        // as DUAS: com o jsPDF carregado e o autotable não (falhou sem internet),
+        // o PDF saía quebrado em doc.autoTable
+        if (jsPdfPronto()) return Promise.resolve();
         if (jsPdfLoadPromise) return jsPdfLoadPromise;
-        jsPdfLoadPromise = new Promise((resolve, reject) => {
-          const s1 = document.createElement('script');
-          s1.src = JSPDF_CDN;
-          s1.onload = () => {
-            const s2 = document.createElement('script');
-            s2.src = JSPDF_AUTOTABLE_CDN;
-            s2.onload = () => resolve();
-            s2.onerror = () => reject(new Error('load-error'));
-            document.head.appendChild(s2);
-          };
-          s1.onerror = () => reject(new Error('load-error'));
-          document.head.appendChild(s1);
-        }).catch(e => { jsPdfLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
+        const carregar = (src) => new Promise((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = src;
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('load-error'));
+          document.head.appendChild(s);
+        });
+        jsPdfLoadPromise = (window.jspdf && window.jspdf.jsPDF ? Promise.resolve() : carregar(JSPDF_CDN))
+          .then(() => (jsPdfPronto() ? undefined : carregar(JSPDF_AUTOTABLE_CDN))).catch(e => { jsPdfLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return jsPdfLoadPromise;
       }
       // Converte o logo (colorido) já embutido no app pra escala de cinza, só na hora
@@ -10635,22 +10634,49 @@
       let syncQueueDraining = false;
       async function drenarFilaSync(silencioso) {
         if (syncQueueDraining) return;
-        const fila = loadSyncQueue();
-        if (fila.length === 0) return;
+        if (loadSyncQueue().length === 0) return;
         syncQueueDraining = true;
+        try {
+          // uma aba por vez: o app instalado e uma aba do navegador dividem o
+          // localStorage e mandavam o mesmo item duas vezes (o pedido novo ainda
+          // tem o id_envio de reforço). Sem Web Locks (iPhone antigo), segue sem.
+          if (navigator.locks && navigator.locks.request) {
+            await navigator.locks.request('cortag-fila-sync', { ifAvailable: true }, async (lock) => {
+              if (lock) await drenarFilaSyncAgora(silencioso);
+            });
+          } else {
+            await drenarFilaSyncAgora(silencioso);
+          }
+        } finally {
+          syncQueueDraining = false;
+        }
+      }
+      async function drenarFilaSyncAgora(silencioso) {
+        const fila = loadSyncQueue();
+        const tirar = new Set();
+        const recusados = [];
         let enviados = 0;
-        const restantes = [];
         for (const item of fila) {
           try {
             await apiFetch(item.path, item.options);
             enviados++;
+            tirar.add(item.id);
           } catch (e) {
-            restantes.push(item); // continua sem rede, ou falhou de novo - mantém na fila
+            // o servidor recusou (ex.: alterar pedido que foi excluído): reenviar
+            // não muda nada - antes ficava na fila pra sempre, de 30 em 30 s
+            if (e.recusado) { tirar.add(item.id); recusados.push({ item, erro: e.message }); }
+            // sem rede / servidor fora: mantém na fila
           }
         }
-        saveSyncQueueList(restantes);
-        syncQueueDraining = false;
-        if (enviados > 0 && !silencioso) showToast(`${enviados} pendente(s) sincronizado(s) agora`);
+        // relê a fila: o que entrou nela enquanto enviava (outra ação sem rede) fica
+        saveSyncQueueList(loadSyncQueue().filter(it => !tirar.has(it.id)));
+        if (recusados.length) {
+          const r = recusados[0];
+          showToast(`O servidor recusou e tirou da fila: ${r.item.descricao || 'envio pendente'} — ${r.erro}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}`, 'erro');
+          console.warn('Fila offline: itens recusados pelo servidor e retirados da fila', recusados);
+        } else if (enviados > 0 && !silencioso) {
+          showToast(`${enviados} pendente(s) sincronizado(s) agora`);
+        }
       }
 
       // ---------------- Backup automático em CSV no Google Drive ao finalizar pedido ----------------
@@ -10778,7 +10804,12 @@
           showLoginScreen('Sessão expirada — entre de novo.');
         }
         if (!resp.ok) {
-          throw new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+          const erro = new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+          erro.status = resp.status;
+          // 4xx = o servidor recusou o pedido em si (não adianta reenviar); menos
+          // sessão expirada (401, reenvia depois de entrar), tempo esgotado e limite de uso
+          erro.recusado = resp.status >= 400 && resp.status < 500 && ![401, 408, 429].includes(resp.status);
+          throw erro;
         }
         return body;
       }
@@ -14001,11 +14032,14 @@
       function loadPdfJs() {
         if (window.__pdfjsLib) return Promise.resolve(window.__pdfjsLib);
         if (pdfJsLoadPromise) return pdfJsLoadPromise;
-        pdfJsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs').then(lib => {
+        // nova tentativa com outro endereço: o navegador pode guardar a falha do
+        // import() até recarregar a página (o sw.js atende sem o parâmetro)
+        const tentativa = loadPdfJs.falhas ? `?tentativa=${loadPdfJs.falhas}` : '';
+        pdfJsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs' + tentativa).then(lib => {
           lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs';
           window.__pdfjsLib = lib;
           return lib;
-        }).catch(e => { pdfJsLoadPromise = null; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
+        }).catch(e => { pdfJsLoadPromise = null; loadPdfJs.falhas = (loadPdfJs.falhas || 0) + 1; throw e; }); // falhou (sem internet): tenta de novo na próxima vez
         return pdfJsLoadPromise;
       }
 

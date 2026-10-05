@@ -93,6 +93,11 @@ Pegadinhas de ambiente:
   `LIBS` do `sw.js` — é ela que deixa imagem/PDF do orçamento e a câmera do iPhone funcionarem sem
   internet (o teste do `run_tests.js` acusa a que faltar). O SW guarda página/script do app pelo
   endereço sem parâmetros (`chaveDaPagina`).
+- Fila offline (`drenarFilaSync`, `index.html`): uma aba por vez (Web Locks — o app instalado e uma aba
+  do navegador dividem o `localStorage`); item que o servidor recusa (4xx, menos 401/408/429) sai da fila
+  com aviso em vez de ser reenviado pra sempre; a fila é relida no fim pra não perder o que entrou durante
+  o envio. Biblioteca carregada sob demanda que falhou tenta de novo na próxima vez (o pdf.js com
+  `?tentativa=N`, que o `sw.js` atende pela cópia sem parâmetro).
 - **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,
   `data_implantacao`) e `date_trunc(...)` chegam no JSON como meia-noite UTC
   (`2026-09-11T00:00:00.000Z`); no fuso do Brasil isso vira o dia (ou o mês/trimestre) anterior.

@@ -106,14 +106,17 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
   // Biblioteca da lista: do cache primeiro (o endereço tem a versão, o conteúdo
-  // não muda); sem cópia, da rede, guardando pra próxima.
-  if (LIBS.has(req.url)) {
+  // não muda); sem cópia, da rede, guardando pra próxima. Pelo endereço sem
+  // parâmetros: a nova tentativa do pdf.js depois de uma falha vem com
+  // "?tentativa=N" (o navegador pode guardar a falha do import() do endereço puro).
+  const urlLib = url.origin + url.pathname;
+  if (LIBS.has(urlLib)) {
     event.respondWith(
-      caches.open(CACHE_LIBS).then((cache) => cache.match(req.url).then((cached) => cached
+      caches.open(CACHE_LIBS).then((cache) => cache.match(urlLib).then((cached) => cached
         // busca em modo CORS mesmo pro <script> sem crossorigin: resposta opaca
         // ocupa ~7 MB da cota do aparelho no Chrome, e não dá pra saber se é erro
-        || fetch(req.url, { mode: 'cors', credentials: 'omit' }).then((resp) => {
-          if (resp.ok) cache.put(req.url, resp.clone());
+        || fetch(urlLib, { mode: 'cors', credentials: 'omit' }).then((resp) => {
+          if (resp.ok) cache.put(urlLib, resp.clone());
           return resp;
         }, () => fetch(req))))
     );
