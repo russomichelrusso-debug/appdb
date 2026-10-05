@@ -2551,6 +2551,30 @@ async function main() {
   }
 
   {
+    // Links de planilha/configuração (vídeo, site do produto, transportadora) só com
+    // https:// (index.html urlHttpsOuVazio): escapeHtml não barra href="javascript:..."
+    const fs = require('fs');
+    const vm = require('vm');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const fonte = html.match(/function urlHttpsOuVazio\(valor\) \{[\s\S]*?\r?\n      \}/);
+    const ctx = { URL };
+    vm.createContext(ctx);
+    vm.runInContext(fonte ? fonte[0] : '', ctx);
+    const f = ctx.urlHttpsOuVazio;
+    const ruins = ['javascript:alert(1)', ' JaVaScRiPt:alert(1)', 'java\tscript:alert(1)', 'data:text/html,<script>alert(1)</script>',
+      'vbscript:x', 'http://exemplo.com', '//exemplo.com', 'www.youtube.com/x', '\x01javascript:alert(1)', 'https:/x', '', null, undefined];
+    const bons = ['https://youtu.be/abc', ' https://www.instagram.com/reel/x ', 'HTTPS://cortag.com.br/p?x=1',
+      'https://portal.transp.com.br/rastreio?cnpj={cnpj}&nf={nf}'];
+    const passouRuim = f ? ruins.filter(u => f(u) !== '') : ['sem função'];
+    const recusouBom = f ? bons.filter(u => f(u) !== u.trim()) : ['sem função'];
+    // e quem monta link a partir desses dados usa a função
+    const usos = ['const youtube = urlHttpsOuVazio(v.youtube)', 'urlHttpsOuVazio(SITE_LINK_MAP[cod])', 'urlHttpsOuVazio(transp.url)',
+      'const youtube = urlHttpsOuVazio(ytTexto)', 'const link = urlHttpsOuVazio(texto)', '!urlHttpsOuVazio(url)'].filter(u => !html.includes(u));
+    assert(passouRuim.length === 0 && recusouBom.length === 0 && usos.length === 0,
+      `links de vídeo/site/transportadora só aceitam https://: ${JSON.stringify({ passouRuim, recusouBom, usos })}`);
+  }
+
+  {
     // RLS ligado em toda tabela do schema.sql (verificador do Supabase acusa
     // rls_disabled_in_public), depois de ela existir num banco novo, e nunca FORCE
     // (o app conecta como dono das tabelas e seria barrado junto).
