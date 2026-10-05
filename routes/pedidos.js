@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlDiaDoPedido } = require('./lib/comprasApp');
+const { acharOuCriarProdutoPorSku, ErroPermanente } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 
@@ -86,26 +87,6 @@ async function acharOuCriarVendedor(client, nomeVendedor) {
   const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
   return depois.rows[0].id;
 }
-// Acha o produto pelo código. Se não existir e vier uma descrição (caso do
-// PDF oficial, que já traz o nome do item), cria na hora em vez de recusar -
-// diferente do "Finalizar pedido" manual, que exige sincronizar o catálogo
-// antes (lá o código vem só de digitação/scanner, sem descrição junto).
-async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
-  const result = await client.query('SELECT id FROM produtos WHERE codigo_sku = $1', [codigo_sku]);
-  if (result.rows.length > 0) return result.rows[0].id;
-  if (!descricaoSeNovo) {
-    throw new Error(`Produto com código ${codigo_sku} não encontrado - rode /api/produtos/sync primeiro.`);
-  }
-  const criado = await client.query(
-    'INSERT INTO produtos (codigo_sku, nome) VALUES ($1, $2) ON CONFLICT (codigo_sku) DO NOTHING RETURNING id',
-    [codigo_sku, descricaoSeNovo]
-  );
-  if (criado.rows.length > 0) return criado.rows[0].id;
-  // corrida: outro pedido criou o mesmo produto entre o SELECT e o INSERT.
-  const depois = await client.query('SELECT id FROM produtos WHERE codigo_sku = $1', [codigo_sku]);
-  return depois.rows[0].id;
-}
-
 // "Como o orçamento estava montado" (estado, canal, descontos, preços
 // editados - ver contextoDoOrcamento no index.html), guardado junto do pedido
 // do app pra ele reabrir com os mesmos preços. Só objeto simples e pequeno;
@@ -140,10 +121,14 @@ async function pedidoDoMesmoEnvio(client, idEnvio, usuarioId, travar = false) {
 router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, observacao, itens, numero_cotacao, data_pedido, pdf_modificado_em, origem, contexto } = req.body;
   const idEnvio = typeof req.body.id_envio === 'string' && ID_ENVIO.test(req.body.id_envio) ? req.body.id_envio : null;
-  if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
-  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
+  // erro do próprio envio (não muda reenviando): 422 - a fila offline do app tira
+  // como "recusado" (400 ela reenvia pra sempre, é o que o servidor responde a
+  // falha passageira do banco)
+  if (!cliente || !cliente.nome) return res.status(422).json({ erro: 'Informe os dados do cliente (nome).' });
+  if (!itensValidos(itens)) return res.status(422).json({ erro: 'Informe ao menos um item, com código, quantidade maior que zero e preço.' });
+  if (origem != null && origem !== 'app' && origem !== 'pdf') return res.status(422).json({ erro: 'Origem do pedido inválida.' });
   if (pdf_modificado_em && new Date(pdf_modificado_em) > new Date()) {
-    return res.status(400).json({ erro: 'pdf_modificado_em não pode ser uma data futura.' });
+    return res.status(422).json({ erro: 'pdf_modificado_em não pode ser uma data futura.' });
   }
 
   let client;
@@ -298,11 +283,12 @@ router.post('/', async (req, res) => {
       if (mesmo) return res.status(200).json({ pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true });
       return res.status(409).json({ erro: 'Identificador de envio já usado.' });
     }
+    // produto que não existe nem no catálogo, código inválido: não adianta reenviar
+    if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
     console.error(e);
     // e.code só existe em erro vindo direto do driver do Postgres (ex: violação
     // de constraint) - esse detalhe não vai pro cliente. Erro lançado por nós
-    // mesmos (ex: "Produto com código X não encontrado") não tem .code e é uma
-    // mensagem pensada pra quem está usando o app ler.
+    // mesmos não tem .code e é uma mensagem pensada pra quem está usando o app ler.
     res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar pedido.' });
   } finally {
     if (client) client.release();
@@ -384,7 +370,7 @@ function itensValidos(itens) {
 // { itens: [{ codigo_sku, quantidade, preco_unitario }], contexto?, vendedor_nome?, observacao? }
 router.patch('/:id', async (req, res) => {
   const { itens, contexto, vendedor_nome, observacao, alterado_em, enviado_em } = req.body || {};
-  if (!itensValidos(itens)) return res.status(400).json({ erro: 'Informe ao menos um item, com código, quantidade e preço.' });
+  if (!itensValidos(itens)) return res.status(422).json({ erro: 'Informe ao menos um item, com código, quantidade maior que zero e preço.' });
 
   let client;
   try {
@@ -403,7 +389,7 @@ router.patch('/:id', async (req, res) => {
     }
     if (atual.origem !== 'app') {
       await client.query('ROLLBACK');
-      return res.status(400).json({ erro: 'Só pedido fechado no app pode ser editado por aqui.' });
+      return res.status(422).json({ erro: 'Só pedido fechado no app pode ser editado por aqui.' });
     }
     if (atual.usuario_id !== req.usuario.id && !req.usuario.is_admin) {
       await client.query('ROLLBACK');
@@ -438,6 +424,7 @@ router.patch('/:id', async (req, res) => {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
+    if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
     console.error(e);
     res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao atualizar pedido.' });
   } finally {

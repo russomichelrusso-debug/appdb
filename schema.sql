@@ -245,6 +245,12 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS latitude NUMERIC;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS longitude NUMERIC;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_precisao_m NUMERIC;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_atualizada_em TIMESTAMPTZ;
+-- Identificador que o app gera no toque em salvar o levantamento (mesmo padrão
+-- de pedidos.id_envio): com sinal fraco o servidor gravava, a resposta se
+-- perdia, o levantamento ia pra fila offline e o reenvio gravava outro. O
+-- reenvio com o mesmo id_envio devolve o já gravado. NULL nos antigos.
+ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS id_envio TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_levantamentos_id_envio ON levantamentos(id_envio) WHERE id_envio IS NOT NULL;
 
 -- Nome que o vendedor escolheu pro arquivo CSV do cliente (orçamento e cópia
 -- do pedido no Drive) - "DEPOSITO", "COMERCIAL"... são comuns no ramo e a 1ª

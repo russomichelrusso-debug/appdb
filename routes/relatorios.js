@@ -16,26 +16,32 @@ router.param('produtoId', validarIdInteiro);
 // literal, e corrige num_pedidos pros grupos que mescharam 2+ códigos
 // (soma ingênua de COUNT DISTINCT pode contar duas vezes um nr_pedido
 // que por acaso tem o código base E a variante na mesma linha de
-// pedido - raro, mas a query extra é barata já que só acontece pra
-// grupos que de fato mescIaram).
+// pedido - raro; uma consulta só pra todos os grupos que de fato mesclaram).
 async function reconciliarProdutosPorCodigoBase(linhas, { inicio, fim, clienteCodigo } = {}) {
   const produtosResult = await pool.query('SELECT codigo_sku, nome, categoria FROM produtos');
   const produtosPorCodigo = {};
   for (const p of produtosResult.rows) produtosPorCodigo[p.codigo_sku] = p;
   const mescladas = mesclarPorCodigoBase(linhas, produtosPorCodigo);
-  for (const grupo of mescladas) {
-    if (grupo._codigosOriginais.length < 2) continue;
-    const fixupParams = [grupo._codigosOriginais];
-    let fixupFiltro = '';
-    if (clienteCodigo) { fixupParams.push(clienteCodigo); fixupFiltro += ` AND cliente_codigo_oficial = $${fixupParams.length}`; }
-    if (inicio) { fixupParams.push(inicio); fixupFiltro += ` AND data_faturamento >= $${fixupParams.length}::date`; }
-    if (fim) { fixupParams.push(fim); fixupFiltro += ` AND data_faturamento <= $${fixupParams.length}::date`; }
-    const fixup = await pool.query(
-      `SELECT COUNT(DISTINCT nr_pedido) AS total FROM pedidos_oficiais_itens
-       WHERE ${sqlFaturadoDeFato()} AND codigo_sku = ANY($1::text[])${fixupFiltro}`,
-      fixupParams
+  // pedidos distintos de todos os grupos mesclados numa consulta só (antes uma
+  // por grupo)
+  const grupos = mescladas.filter(g => g._codigosOriginais.length >= 2);
+  if (grupos.length > 0) {
+    const params = [grupos.flatMap((g, i) => g._codigosOriginais.map(() => i)), grupos.flatMap(g => g._codigosOriginais)];
+    let filtro = '';
+    if (clienteCodigo) { params.push(clienteCodigo); filtro += ` AND poi.cliente_codigo_oficial = $${params.length}`; }
+    if (inicio) { params.push(inicio); filtro += ` AND poi.data_faturamento >= $${params.length}::date`; }
+    if (fim) { params.push(fim); filtro += ` AND poi.data_faturamento <= $${params.length}::date`; }
+    const r = await pool.query(
+      `/* curva-abc:pedidos-por-grupo */
+       SELECT g.grupo, COUNT(DISTINCT poi.nr_pedido) AS total
+       FROM UNNEST($1::int[], $2::text[]) AS g(grupo, codigo_sku)
+       JOIN pedidos_oficiais_itens poi ON poi.codigo_sku = g.codigo_sku
+       WHERE ${sqlFaturadoDeFato('poi')}${filtro}
+       GROUP BY g.grupo`,
+      params
     );
-    grupo.num_pedidos = Number(fixup.rows[0].total);
+    const totalDoGrupo = new Map(r.rows.map(x => [Number(x.grupo), Number(x.total)]));
+    grupos.forEach((g, i) => { g.num_pedidos = totalDoGrupo.get(i) || 0; });
   }
   for (const grupo of mescladas) delete grupo._codigosOriginais;
   return mescladas;
@@ -709,7 +715,8 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
 //
 // "Hoje" pelo relógio de Brasília: o banco roda em UTC, e CURRENT_DATE já
 // virava o mês às 21h do último dia (e ainda estava no mês anterior até as
-// 3h do dia 1º).
+// 3h do dia 1º). Vale também pro faturamento semanal/trimestral e o top
+// clientes do Dashboard (janelas de 10 semanas, 24 e 12 meses).
 const SQL_HOJE_BRASIL = `(now() AT TIME ZONE 'America/Sao_Paulo')::date`;
 const SQL_ENTRADA_PEDIDOS_MENSAL = `
   SELECT m.periodo, COALESCE(e.valor, 0) AS valor, COALESCE(e.pedidos, 0) AS pedidos, COALESCE(e.clientes, 0) AS clientes
@@ -770,18 +777,18 @@ router.get('/dashboard/resumo', async (req, res) => {
       pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
       pool.query(
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
-         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '10 weeks'
+         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '10 weeks'
          GROUP BY 1 ORDER BY 1`
       ),
       pool.query(
         `SELECT date_trunc('quarter', data_faturamento) AS periodo, SUM(valor) AS faturamento
-         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= CURRENT_DATE - INTERVAL '24 months'
+         FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '24 months'
          GROUP BY 1 ORDER BY 1`
       ),
       pool.query(
         `SELECT c.id, c.nome, SUM(poi.valor) AS faturamento
          FROM pedidos_oficiais_itens poi JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
-         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= CURRENT_DATE - INTERVAL '12 months'
+         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '12 months'
          GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
       ),
       // Canal + inatividade (cartões "Clientes Ativos por Canal" e "Contas

@@ -288,7 +288,65 @@ async function main() {
     cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
     itens: [ { codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 10 } ],
   });
-  assert(res.status === 400 && res.body.erro.includes('não encontrado'), 'rejeita pedido com produto inexistente, com mensagem clara');
+  // 400, não 422: o produto pode chegar depois (sincronização, Lista de Preços nova) e a fila tenta de novo
+  assert(res.status === 400 && res.body.erro.includes('não encontrado'), 'rejeita pedido com produto inexistente, com mensagem clara (400: a fila offline tenta de novo)');
+  // produto promocional criado no Painel (só em configuracoes): entra no pedido, criado na hora
+  mockDb.__setConfiguracao('produtos_promocionais', [{ c: 'P960863', n: 'CORTADOR PROMOCIONAL', familia: 'CORTE' }]);
+  res = await req('POST', '/api/pedidos', {
+    cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+    itens: [ { codigo_sku: 'P960863', quantidade: 2, preco_unitario: 10 } ],
+  });
+  assert(res.status === 201 && mockDb.__getProdutos().some(p => p.codigo_sku === 'P960863' && p.nome === 'CORTADOR PROMOCIONAL'),
+    `pedido com produto promocional do Painel ainda não sincronizado cria o produto: ${JSON.stringify(res.body)}`);
+
+  // 9b) produto novo da Lista de Preços (está em catalogo_precos, ainda não em
+  // produtos - o /api/produtos/sync só roda quando um admin abre o Painel): o
+  // pedido e o levantamento criam o produto a partir do catálogo em vez de
+  // recusar (antes: 400 "não encontrado", e a fila offline reenviava pra sempre)
+  {
+    const tamanhosAntes = [mockDb.__getPedidos(), mockDb.__getPedidoItens(), mockDb.__getLevantamentos(), mockDb.__getLevantamentoItens(), mockDb.__getProdutos()].map(l => [l, l.length]);
+    const linhaCat = (c, nome, familia) => ({ codigo_sku: c, nome, emb: 1, ipi: 0, familia, preco_fixo: false, canais_fx: [], precos: {}, precos_sem_imposto: {} });
+    mockDb.__seed({ catalogoPrecos: [linhaCat('NOVO77', 'ESPATULA NOVA 77', '05 - ESPATULAS'), linhaCat('NOVO78', '  ', null)] });
+    res = await req('POST', '/api/pedidos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      itens: [{ codigo_sku: 'NOVO77', quantidade: 2, preco_unitario: 15 }],
+    });
+    const p77 = mockDb.__getProdutos().find(p => p.codigo_sku === 'NOVO77');
+    assert(res.status === 201 && p77 && p77.nome === 'ESPATULA NOVA 77' && p77.categoria === '05 - ESPATULAS'
+      && mockDb.__getPedidoItens().some(i => i.pedido_id === res.body.pedido_id && i.produto_id === p77.id),
+      `pedido com produto novo da Lista de Preços cria o produto a partir do catálogo: ${JSON.stringify([res.body, p77])}`);
+    res = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      itens: [{ codigo_sku: 'NOVO78', quantidade_contada: 0 }],
+    });
+    const p78 = mockDb.__getProdutos().find(p => p.codigo_sku === 'NOVO78');
+    assert(res.status === 201 && p78 && p78.nome === 'NOVO78',
+      `levantamento com produto novo da Lista de Preços cria o produto (sem nome, fica o código): ${JSON.stringify([res.body, p78])}`);
+    res = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: 'NAO-EXISTE-1', quantidade_contada: 1 }] });
+    const rLevSemItens = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [] });
+    assert(res.status === 400 && res.body.erro.includes('não encontrado') && rLevSemItens.status === 422,
+      `levantamento com produto que não existe nem no catálogo: 400 (a fila tenta de novo); sem itens: 422 (recusado): ${JSON.stringify([res.body, rLevSemItens.body])}`);
+    // itens inválidos e origem desconhecida: 422 (antes quantidade 0/negativa entrava no histórico)
+    const pedidosAntes = mockDb.__getPedidos().length;
+    const rQtd0 = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: '60863', quantidade: 0, preco_unitario: 10 }] });
+    const rQtdNeg = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: '60863', quantidade: -3, preco_unitario: 10 }] });
+    const rOrigem = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, origem: 'faturamento', itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 10 }] });
+    const rSemCliente = await req('POST', '/api/pedidos', { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 10 }] });
+    assert([rQtd0, rQtdNeg, rOrigem, rSemCliente].every(r => r.status === 422 && r.body.erro) && mockDb.__getPedidos().length === pedidosAntes,
+      `pedido com quantidade 0/negativa, origem desconhecida ou sem cliente: 422 sem gravar: ${JSON.stringify([rQtd0.status, rQtdNeg.status, rOrigem.status, rSemCliente.status])}`);
+    // PDF: código que não está nem no catálogo é criado com a descrição, só no formato aceito
+    const rPdfRuim = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, origem: 'pdf',
+      itens: [{ codigo_sku: 'AB CD<script>', quantidade: 1, preco_unitario: 10, descricao: 'COISA' }] });
+    const rPdfOk = await req('POST', '/api/pedidos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, origem: 'pdf',
+      itens: [{ codigo_sku: 'PDF-901', quantidade: 1, preco_unitario: 10, descricao: 'ITEM DO PDF' }] });
+    assert(rPdfRuim.status === 422 && !mockDb.__getProdutos().some(p => p.codigo_sku === 'AB CD<script>')
+      && rPdfOk.status === 201 && mockDb.__getProdutos().some(p => p.codigo_sku === 'PDF-901' && p.nome === 'ITEM DO PDF'),
+      `pedido de PDF: código novo fora do formato aceito é recusado (422); no formato, criado com a descrição: ${JSON.stringify([rPdfRuim.body, rPdfOk.body])}`);
+    // não sujar o histórico do cliente usado nos testes seguintes (o mock não desfaz
+    // a transação: o pedido/levantamento recusado no meio também fica)
+    for (const [lista, n] of tamanhosAntes) lista.splice(n, Infinity);
+    mockDb.__getCatalogoPrecos().splice(0, Infinity);
+  }
 
   // 10) historico do cliente - deve mostrar 60863 com total 100 (40+60) e 2 pedidos
   res = await req('GET', `/api/clientes/${clienteId}/historico`);
@@ -314,6 +372,37 @@ async function main() {
   res = await req('GET', `/api/levantamentos/${levantamentoIdSalvo}/itens`);
   assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
   assert(typeof res.body[0].quantidade_contada === 'string', 'quantidade_contada vem como string (NUMERIC do Postgres) - front precisa converter com Number(), nunca somar direto');
+
+  // 12c) levantamento com id_envio (gerado no toque em salvar): com sinal fraco o
+  // servidor gravava, a resposta se perdia e o reenvio da fila gravava outro. O
+  // reenvio com o mesmo id devolve o já gravado (200), sem gravar de novo.
+  {
+    mockDb.__seed({ clientes: [{ id: 9701, nome: 'LOJA LEVANTAMENTO DUPLO', documento: '97010000000197' }] });
+    const corpo = { cliente: { cliente_id: 9701, nome: 'LOJA LEVANTAMENTO DUPLO' }, itens: [{ codigo_sku: '60863', quantidade_contada: 4 }], id_envio: 'lev-envio-0001-abcdef' };
+    const r1 = await req('POST', '/api/levantamentos', corpo);
+    const r2 = await req('POST', '/api/levantamentos', corpo);
+    const daLoja = () => mockDb.__getLevantamentos().filter(l => l.cliente_id === 9701);
+    const itensDaLoja = () => mockDb.__getLevantamentoItens().filter(i => daLoja().some(l => l.id === i.levantamento_id));
+    assert(r1.status === 201 && r2.status === 200 && r2.body.levantamento_id === r1.body.levantamento_id && r2.body.mesmo_envio === true
+      && daLoja().length === 1 && itensDaLoja().length === 1,
+      `levantamento: reenvio com o mesmo id_envio devolve o já gravado, sem gravar outro: ${JSON.stringify([r1.body, r2.body])}`);
+    // dois envios ao mesmo tempo (a busca não achou e o INSERT bateu no índice único): devolve o gravado
+    const connectOriginal = mockDb.pool.connect;
+    let escondeu = 0;
+    mockDb.pool.connect = async () => {
+      const c = await connectOriginal();
+      return { ...c, query: async (sql, params) => (sql.includes('levantamento:mesmo-envio') ? (escondeu++, { rows: [] }) : c.query(sql, params)) };
+    };
+    let r3;
+    try { r3 = await req('POST', '/api/levantamentos', corpo); } finally { mockDb.pool.connect = connectOriginal; }
+    const r4 = await req('POST', '/api/levantamentos', { ...corpo, id_envio: 'lev-envio-0002-abcdef' });
+    assert(escondeu === 1 && r3.status === 200 && r3.body.levantamento_id === r1.body.levantamento_id && r4.status === 201 && daLoja().length === 2,
+      `levantamento: corrida no índice único devolve o já gravado; outro id_envio grava outro: ${JSON.stringify([r3.body, r4.status])}`);
+    const html = require('fs').readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+    const salvar = html.slice(html.indexOf('async function saveLevantamento()'), html.indexOf('function openLevOpenModal()'));
+    assert(/id_envio: novoIdEnvio\(\)/.test(salvar) && salvar.indexOf('id_envio') < salvar.indexOf('apiCriarLevantamento(payload)'),
+      'app: o levantamento leva um id_envio gerado no toque em salvar (vai junto pela fila offline)');
+  }
 
   // 13) classificatório: calcula sobre os ÚLTIMOS 12 MESES (régua móvel da
   // Política Comercial rev. 06 - ver routes/clientesClassificatorio.js) -
@@ -627,16 +716,27 @@ async function main() {
       && erp.fat12mOutrasEmpresas === 23445.15,
     `status devolve a foto oficial da planilha (números iguais aos dela): ${JSON.stringify(erp)}`
   );
-  // relatório mais antigo não desfaz nem a faixa nem a foto
+  // relatório mais antigo não desfaz nem a faixa nem a foto - nem matriz, PIC e valor de acordo
   res = await req('POST', '/api/clientes/classificatorio/importar', {
     dataRelatorio: '2026-09-01', apuradoAte: '2026-07-31',
-    itens: [{ ...linhaPlanilhaErp, classificatorioTipo: 'Varejo Exclusive', classificatorioDesconto: 15, fat12mCliente: 1 }],
+    itens: [{ ...linhaPlanilhaErp, classificatorioTipo: 'Varejo Exclusive', classificatorioDesconto: 15, fat12mCliente: 1, pic: true, vlAcordo: 99999, matrizGrupo: 'MATRIZ ANTIGA' }],
   });
   res = await req('GET', '/api/clientes/9060/classificatorio/status');
+  const c9060 = mockDb.__getClientes().find(c => c.id === 9060);
   assert(
     res.body.tipo === 'Varejo Premium' && res.body.erp?.fat12mCliente === 15677.37 && res.body.erp?.dataRelatorio === '2026-10-02',
     'planilha Classificatório mais antiga não volta a faixa nem a foto financeira'
   );
+  assert(c9060.classificatorio_pic === false && c9060.classificatorio_vl_acordo == null && c9060.matriz_grupo === 'ROTTA MATERIAIS DE CONSTRUCAO LTDA',
+    `planilha Classificatório mais antiga não volta PIC, valor de acordo nem matriz: ${JSON.stringify(c9060)}`);
+  // a do mesmo dia (ou mais nova) troca
+  res = await req('POST', '/api/clientes/classificatorio/importar', {
+    dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: [{ ...linhaPlanilhaErp, pic: true, vlAcordo: 5000 }],
+  });
+  assert(c9060.classificatorio_pic === true && Number(c9060.classificatorio_vl_acordo) === 5000,
+    `planilha Classificatório do mesmo dia troca PIC e valor de acordo: ${JSON.stringify(c9060)}`);
+  await req('POST', '/api/clientes/classificatorio/importar', { dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: [linhaPlanilhaErp] });
+  c9060.classificatorio_vl_acordo = null;
   // sem data (formato antigo do import): não troca faixa existente nem grava foto
   mockDb.__seed({
     clientes: [{ id: 9061, nome: 'CLIENTE SEM DATA', documento: '11222333000262', codigo_oficial: 'COD9061', classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_pic: false }],
@@ -742,6 +842,20 @@ async function main() {
       && achado && achado.nome === 'CLIENTE SUMIDO 150 DIAS' && achado.diasSemComprar === 150,
     `dashboard/resumo traz a lista de clientes de 3-5 meses sem comprar, com nome e dias: ${JSON.stringify(listaDe3a5)}`
   );
+
+  // 16a) "Hoje" é o dia de Brasília (o banco roda em UTC: das 21h à meia-noite
+  // CURRENT_DATE já é amanhã) - faturamento semanal/trimestral, top clientes do
+  // Dashboard e as janelas do classificatório (12 meses, ano, trimestre)
+  {
+    const inicioLog = mockDb.__queryLog.length;
+    await req('GET', '/api/dashboard/resumo');
+    await req('GET', '/api/clientes/9001/classificatorio/status');
+    await req('GET', '/api/clientes/classificatorio/alertas');
+    const sqls = mockDb.__queryLog.slice(inicioLog).map(q => q.sql);
+    const comHoje = sqls.filter(q => /date_trunc\('(week|quarter)', data_faturamento\)|GROUP BY c\.id, c\.nome|faturamento_12m|trimestre_atual_idx|date_trunc\('quarter', poi\.data_implantacao\)/.test(q));
+    assert(comHoje.length >= 6 && comHoje.every(q => q.includes("now() AT TIME ZONE 'America/Sao_Paulo'")) && !sqls.some(q => q.includes('CURRENT_DATE')),
+      `dashboard e classificatório contam "hoje" pelo dia de Brasília, não pelo CURRENT_DATE (UTC): ${sqls.filter(q => q.includes('CURRENT_DATE')).map(q => q.slice(0, 120)).join(' | ')}`);
+  }
 
   // 16b) GET /api/dashboard/resumo: "Valor Entrada de Pedidos" segue a regra
   // do painel oficial - mês pela data de implantação, carteira + faturado, e
@@ -1504,14 +1618,14 @@ async function main() {
   assert(salvo.length === 1 && salvo[0].itens.length === 2 && salvo[0].contexto.paymentTerm === '28 dias' && salvos.body.pedidos[0].id === pedidoEditavelId,
     'editar pedido: continua um pedido só, com os itens e o contexto novos, no topo da lista (editado por último)');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: '60863', quantidade: 0, preco_unitario: 28.59 }] });
-  assert(res.status === 400, 'editar pedido: recusa item com quantidade zero');
+  assert(res.status === 422, 'editar pedido: recusa item com quantidade zero');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [] });
-  assert(res.status === 400, 'editar pedido: recusa pedido sem itens');
+  assert(res.status === 422, 'editar pedido: recusa pedido sem itens');
   res = await req('PATCH', `/api/pedidos/${pedidoEditavelId}`, { itens: [{ codigo_sku: 'CODIGO-INEXISTENTE', quantidade: 1, preco_unitario: 1 }] });
   assert(res.status === 400 && res.body.erro.includes('não encontrado') && mockDb.__getPedidoItens().filter(i => i.pedido_id === pedidoEditavelId).length === 2,
     'editar pedido: produto inexistente recusa sem perder os itens que já estavam gravados (rollback)');
   res = await req('PATCH', `/api/pedidos/${pedidoCotacaoId}`, { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
-  assert(res.status === 400, 'editar pedido: cotação importada do PDF não é editada por aqui');
+  assert(res.status === 422, 'editar pedido: cotação importada do PDF não é editada por aqui');
   res = await req('PATCH', '/api/pedidos/999999', { itens: [{ codigo_sku: '60863', quantidade: 1, preco_unitario: 28.59 }] });
   assert(res.status === 404, 'editar pedido: pedido inexistente responde 404');
   authToken = tokenOutro;
@@ -1950,6 +2064,8 @@ async function main() {
     `planejarCarteira: saldo do faturado em parte fica, pedido Atendido Total não fica com carteira: ${JSON.stringify(plano)}`
   );
 
+  // cenário próprio: os relatórios daqui são de setembro, depois do de hoje do teste 27
+  mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
   mockDb.__seed({
     clientes: [{ id: 9407, nome: 'LOJA PARCIAL', codigo_oficial: 'COD9407' }],
     pedidosOficiaisItens: [
@@ -2005,6 +2121,64 @@ async function main() {
       && disco9407.media_dias_entre_pedidos === null && disco9407.primeira_compra === disco9407.ultima_compra,
     `histórico: entrega dividida em duas notas conta como uma compra: ${JSON.stringify(disco9407)}`
   );
+
+  // 28b) Relatório oficial mais antigo que o já importado (reimportado por engano,
+  // e-mail atrasado): grava só as linhas faturadas e as descrições - não recria
+  // saldo em carteira já faturado (carteira e faturada têm chaves diferentes) e
+  // não volta as listas à vista pra foto antiga.
+  {
+    const { dataDoRelatorio } = require('../routes/pedidosOficiais');
+    assert(dataDoRelatorio([{ data_implantacao: '2026-09-15', data_faturamento: '2026-09-20' }, { data_implantacao: '2062-09-01' }], [{ data_implantacao: '2026-09-18' }], new Date('2026-10-05T12:00:00Z')) === '2026-09-20'
+      && dataDoRelatorio([], null) === null
+      // amanhã (Brasília) também é erro de planilha: senão o relatório do dia seguinte sairia "antigo"
+      && dataDoRelatorio([{ data_implantacao: '2026-10-06' }, { data_implantacao: '2026-10-04' }], [], new Date('2026-10-05T12:00:00Z')) === '2026-10-04',
+      'relatório oficial: a data dele é a mais nova que ele traz (data no futuro é erro de planilha e não conta)');
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+    mockDb.__seed({ clientes: [{ id: 9408, nome: 'LOJA RELATORIO VELHO', codigo_oficial: 'COD9408' }] });
+    const base = { cliente_codigo_oficial: 'COD9408', cliente_nome: 'LOJA RELATORIO VELHO' };
+    const linhas = (nr) => mockDb.__getPedidosOficiaisItens().filter(it => it.nr_pedido === nr);
+    // relatório de 30/09: o pedido já foi todo faturado; nada à vista pendente
+    const r30 = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [{ ...base, nr_pedido: 'PV19408', codigo_sku: '60863', status: 'faturado', quantidade: 5, valor: 50, data_implantacao: '2026-09-15', data_faturamento: '2026-09-30', nota_fiscal: '6001', situacao_pedido: 'Atendido Total' }],
+      pendentes_pagamento: [], titulos_avista: [],
+    });
+    // relatório de 20/09 reimportado depois: ainda trazia o saldo em carteira e as listas à vista daquele dia
+    const r20 = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [
+        { ...base, nr_pedido: 'PV19408', codigo_sku: '60863', status: 'carteira', quantidade: 5, valor: 50, data_implantacao: '2026-09-15', descricao: 'DISCO DO RELATORIO VELHO', situacao_pedido: 'Aberto' },
+        { ...base, nr_pedido: 'PV29408', codigo_sku: '61362', status: 'faturado', quantidade: 1, valor: 200, data_implantacao: '2026-09-10', data_faturamento: '2026-09-20', nota_fiscal: '5990', situacao_pedido: 'Atendido Total' },
+        { ...base, nr_pedido: 'PV39408', codigo_sku: '61362', status: 'carteira', quantidade: 2, valor: 400, data_implantacao: '2026-09-18', situacao_pedido: 'Aberto' },
+      ],
+      pendentes_pagamento: [{ nr_pedido: 'PV19408', cliente_codigo_oficial: 'COD9408', valor: 50 }],
+      titulos_avista: [{ titulo: '6001', parcela: 1, valor: 50 }],
+    });
+    assert(r30.status === 200 && !r30.body.relatorioAntigo && r30.body.dataRelatorio === '2026-09-30'
+      && r20.status === 200 && r20.body.relatorioAntigo === true && r20.body.carteiraIgnorada === 2 && /20\/09\/2026/.test(r20.body.aviso) && /30\/09\/2026/.test(r20.body.aviso)
+      && r20.body.pendentesPagamento === null && r20.body.titulosAvista === null,
+      `relatório antigo: a resposta diz que é antigo e o que ficou de fora: ${JSON.stringify(r20.body)}`);
+    assert(linhas('PV19408').length === 1 && linhas('PV19408')[0].status === 'faturado' && linhas('PV19408')[0].descricao === 'DISCO DO RELATORIO VELHO'
+      && linhas('PV39408').length === 0
+      && linhas('PV29408').length === 1 && linhas('PV29408')[0].status === 'faturado' && linhas('PV29408')[0].nota_fiscal === '5990'
+      && !mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === 'PV19408') && !mockDb.__getTitulosAvistaPendentes().some(t => t.titulo === '6001')
+      && mockDb.__getConfiguracao('relatorio_oficial_mais_novo') === '2026-09-30',
+      `relatório antigo: não recria o saldo já faturado nem grava carteira, grava o faturado e a descrição, não troca as listas à vista: ${JSON.stringify([linhas('PV19408'), linhas('PV29408'), linhas('PV39408')])}`);
+    // o do mesmo dia (ou mais novo) vale inteiro, como antes
+    const rMesmoDia = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [{ ...base, nr_pedido: 'PV49408', codigo_sku: '61362', status: 'carteira', quantidade: 1, valor: 200, data_implantacao: '2026-09-30', situacao_pedido: 'Aberto' }],
+      titulos_avista: [{ titulo: '6001', parcela: 1, valor: 50 }],
+    });
+    assert(rMesmoDia.status === 200 && !rMesmoDia.body.relatorioAntigo && linhas('PV49408').length === 1 && mockDb.__getTitulosAvistaPendentes().some(t => t.titulo === '6001'),
+      `relatório do mesmo dia do mais novo grava a carteira e troca as listas à vista: ${JSON.stringify(rMesmoDia.body)}`);
+    // planilha só com as abas de pagamento (pedido implantado dias antes): não é "antiga",
+    // troca a lista à vista - antes a data dos pendentes a fazia sair antiga sempre
+    const rSoPagamento = await req('POST', '/api/pedidos-oficiais/importar', {
+      pendentes_pagamento: [{ nr_pedido: 'PV59408', cliente_codigo_oficial: 'COD9408', valor: 80, data_implantacao: '2026-09-12' }],
+    });
+    assert(rSoPagamento.status === 200 && !rSoPagamento.body.relatorioAntigo && mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === 'PV59408'),
+      `planilha só com as abas de pagamento troca a lista à vista: ${JSON.stringify(rSoPagamento.body)}`);
+    await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [], pendentes_pagamento: [] });
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+  }
 
   // 29) Saldo mínimo em carteira (política de cancelamento): R$ 300, R$ 600 no
   // Norte/Nordeste pela UF da ficha de CNPJ; sem ficha vale o padrão.
@@ -2164,6 +2338,11 @@ async function main() {
     const pv = Importadores.lerPrevisao(XLSXt, xlsPrevisao);
     assert(pv['60863'].previsao === '2026-10-20' && pv['60863'].qtCarteira === 5 && pv['61362'].previsao === null,
       `importadores: lê os itens em falta (previsão de estoque): ${JSON.stringify(pv)}`);
+    // data em texto é dia/mês (antes new Date() lia "05/11/2026" como 11 de maio e "15/10/2026" como inválida)
+    const pvTexto = Importadores.lerPrevisao(XLSXt, planilha({ Plan1: [['Item', 'Descrição', 'Qt. Disp.', 'Qt. Carteira', 'Qt. Compra', 'Previsão', 'Saldo'],
+      ['70001', 'A', 0, 1, 1, '05/11/2026', -1], ['70002', 'B', 0, 1, 1, '15/10/2026', -1], ['70003', 'C', 0, 1, 1, '2026-12-01', -1], ['70004', 'D', 0, 1, 1, 'Sem Previsão', -1]] }));
+    assert(pvTexto['70001'].previsao === '2026-11-05' && pvTexto['70002'].previsao === '2026-10-15' && pvTexto['70003'].previsao === '2026-12-01' && pvTexto['70004'].previsao === null,
+      `importadores: previsão de estoque com data em texto dd/mm/aaaa: ${JSON.stringify(pvTexto)}`);
   }
   const CHAVE_EMAIL = process.env.IMPORTACAO_EMAIL_CHAVE;
   const enviarArquivo = (nome, buf, chave = CHAVE_EMAIL, extra = {}) => req('POST', '/api/importacao-email/arquivo',
@@ -2179,6 +2358,7 @@ async function main() {
     `importação por e-mail: itens em falta entram, registram e geram a novidade: ${JSON.stringify(res.body)}`);
   res = await enviarArquivo('ESCE007-28092026060311.xlsx', xlsPrevisao);
   assert(res.status === 200 && res.body.duplicado === true, 'importação por e-mail: o mesmo arquivo de novo não é importado outra vez');
+  mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null); // cenário próprio (relatórios de 01/10)
   res = await enviarArquivo('Repres-20.xlsx', xlsRelatorio);
   assert(res.status === 200 && res.body.tipo === 'relatorio' && res.body.resultado.itens === 2
     && mockDb.__getPedidosOficiaisItens().some(i => i.nr_pedido === '676001' && i.status === 'carteira'),
@@ -2206,6 +2386,40 @@ async function main() {
     const p = mockDb.__getCatalogoPrecos().find(x => x.codigo_sku === '60863');
     assert(res.status === 200 && res.body.tipo === 'precos' && p && p.precos.VAREJO.SP === 10.5 && p.precos_sem_imposto.VAREJO.SP === 10,
       `importação por e-mail: Lista de Preços SUL SUDESTE substitui o catálogo: ${JSON.stringify([res.body, p && p.precos.VAREJO])}`);
+  }
+  {
+    // Lista de Preços pelo e-mail que tiraria mais de 5% dos códigos do catálogo é
+    // recusada (422 = "Cortag/Falhou") sem mexer no catálogo; até 5% passa. A
+    // importação manual pelo Painel continua sem trava.
+    const listaPrecos = (codigos, base) => planilha({
+      'Referência Estados': [[], [], [], ...ufsExatas.map((uf, i) => [uf, null, null, null, null, null, null, 11 + i])],
+      'TRIBUTAÇÃO': [[], [], [], ...codigos.map(c => [c, 'PRODUTO ' + c, 10, null, '68042211', 0.05, null, null, null, null, 0.1, 0.1, 0.2, 0.1, 0.1])],
+      'PRECIFICAÇÃO': [[], [], [], ...codigos.map(c => [c, null, ...Array.from({ length: 18 }, (_, i) => base + i)])],
+    });
+    const nomeLista = '03.10.2026 - LISTA PADRÃO 2026 - SUL SUDESTE Por Canal_REV 5.xlsx';
+    const linhaCat = (c) => ({ codigo_sku: c, nome: 'X', emb: 1, ipi: 0, familia: null, preco_fixo: false, canais_fx: [], precos: {}, precos_sem_imposto: {} });
+    const vinte = Array.from({ length: 20 }, (_, i) => `CAT${String(i).padStart(2, '0')}`);
+    mockDb.__getCatalogoPrecos().splice(0, Infinity, ...vinte.map(linhaCat));
+    const antes = JSON.stringify(mockDb.__getCatalogoPrecos());
+    // tira 2 de 20 (10%): recusada
+    res = await enviarArquivo(nomeLista, listaPrecos(vinte.slice(2), 20), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+    assert(res.status === 422 && /2 de 20/.test(res.body.erro) && JSON.stringify(mockDb.__getCatalogoPrecos()) === antes
+      && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.tipo === 'precos' && /2 de 20/.test(i.erro)),
+      `importação por e-mail: Lista de Preços que tiraria mais de 5% do catálogo é recusada sem mexer nele: ${JSON.stringify(res.body)}`);
+    // tira 1 de 20 (5%): passa
+    res = await enviarArquivo(nomeLista, listaPrecos(vinte.slice(1), 30), CHAVE_EMAIL, { remetente: 'vendas@cortag.com' });
+    assert(res.status === 200 && res.body.resultado.produtosRemovidos === 1 && mockDb.__getCatalogoPrecos().length === 19,
+      `importação por e-mail: Lista de Preços que tira até 5% do catálogo entra: ${JSON.stringify(res.body)}`);
+    // e os produtos novos dela entram no cadastro de produtos (o que pedido/levantamento usam),
+    // sem mexer no nome/categoria dos que já estavam lá (o /api/produtos/sync é quem cuida deles)
+    const prods = mockDb.__getProdutos();
+    assert(res.body.resultado.produtosNovos === 19 && prods.some(p => p.codigo_sku === 'CAT07' && p.nome === 'PRODUTO CAT07')
+      && prods.find(p => p.codigo_sku === '60863').nome === 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm',
+      `importação da Lista de Preços cria em produtos só os códigos novos: ${JSON.stringify(res.body.resultado)}`);
+    // Painel (manual): continua substituindo o catálogo inteiro, sem trava
+    res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05'], 40).toString('base64') });
+    assert(res.status === 200 && res.body.produtosRemovidos === 18 && mockDb.__getCatalogoPrecos().length === 1,
+      `importação manual da Lista de Preços pelo Painel continua sem a trava dos 5%: ${JSON.stringify(res.body)}`);
   }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
   assert(res.status === 422 && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Repres-21.xlsx'),
@@ -2607,6 +2821,72 @@ async function main() {
     });
     assert(tabelas.length >= 27 && semRls.length === 0 && !/FORCE\s+ROW\s+LEVEL/i.test(schema),
       `schema.sql: RLS ligado (sem FORCE) em todas as ${tabelas.length} tabelas: ${JSON.stringify(semRls)}`);
+    // Importação em lote: o relatório oficial fazia ~3 consultas por cliente (ida de
+    // Oregon a São Paulo cada uma) - ~860 pra 250 clientes. Agora é um número fixo.
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+    const pad = (i) => String(i).padStart(3, '0');
+    mockDb.__seed({ clientes: [
+      ...Array.from({ length: 200 }, (_, i) => ({ id: 30001 + i, nome: `LOTE ${pad(i)} LTDA`, codigo_oficial: `QL${pad(i)}`, classificatorio_atualizado_em: i % 2 ? '2027-01-01' : null })),
+      ...Array.from({ length: 30 }, (_, i) => ({ id: 30301 + i, nome: i % 2 ? `LOTE SEM CODIGO ${pad(i)}, LTDA` : `LOTE  SEM CODIGO  ${pad(i)} LTDA`, codigo_oficial: null })),
+    ] });
+    const itens = [], classificacoes = [];
+    const cods = [...Array.from({ length: 200 }, (_, i) => [`QL${pad(i)}`, `LOTE ${pad(i)} LTDA`]),
+      ...Array.from({ length: 30 }, (_, i) => [`QN${pad(i)}`, `LOTE SEM CODIGO ${pad(i)} LTDA`]),
+      ...Array.from({ length: 20 }, (_, i) => [`QX${pad(i)}`, `LOTE NOVO ${pad(i)}`])];
+    cods.forEach(([cod, nome], k) => {
+      itens.push({ nr_pedido: String(690000 + k), codigo_sku: '60863', cliente_codigo_oficial: cod, cliente_nome: nome, status: 'faturado', quantidade: 1, valor: 10,
+        data_implantacao: '2026-09-20', data_faturamento: '2026-09-25', nota_fiscal: String(990000 + k), situacao_pedido: 'Atendido Total' });
+      if (k < 200 || k >= 240) classificacoes.push({ nome, codigo_oficial: cod, tipo: 'Varejo Premium', desconto: 15, data_referencia: '2026-09-20' });
+    });
+    const antes = mockDb.__queryLog.length;
+    res = await req('POST', '/api/pedidos-oficiais/importar', { itens, classificacoes });
+    const consultas = mockDb.__queryLog.length - antes;
+    const cli = mockDb.__getClientes();
+    assert(res.status === 200 && res.body.clientesClassificados === 110 && res.body.clientesClassifIgnorados === 100 && res.body.clientesVinculados === 30
+      && res.body.clientesNaoEncontrados.length === 10 && res.body.clientesNaoEncontrados[0].codigo === 'QX000'
+      && cli.find(c => c.id === 30301).codigo_oficial === 'QN000' && cli.find(c => c.id === 30002).classificatorio_tipo == null
+      && cli.find(c => c.id === 30001).classificatorio_tipo === 'Varejo Premium' && Number(cli.find(c => c.id === 30001).classificatorio_desconto) === 17
+      && cli.some(c => c.codigo_oficial === 'QX015' && c.classificatorio_tipo === 'Varejo Premium') && !cli.some(c => c.codigo_oficial === 'QX005')
+      && consultas <= 25,
+      `importação do relatório oficial em lote: 250 clientes em ${consultas} consultas (antes ~860), mesmas regras: ${JSON.stringify({ ...res.body, clientesNaoEncontrados: res.body.clientesNaoEncontrados.length })}`);
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
+  }
+  {
+    // planilha Classificatório em lote: antes ~3 consultas por linha (~730 pra 244 linhas)
+    const pad = (i) => String(i).padStart(3, '0');
+    const linhas = Array.from({ length: 200 }, (_, i) => ({ codigoOficial: `QL${pad(i)}`, classificatorioTipo: 'Varejo Master', classificatorioDesconto: 20,
+      pic: i === 2, vlAcordo: i === 2 ? 7000 : null, matrizGrupo: i === 4 ? 'MATRIZ LOTE' : null, fat12mCliente: 100 + i, gestor: 'G' }));
+    linhas.push({ codigoOficial: 'NAO-EXISTE-LOTE', fat12mCliente: 1 }, { codigoOficial: 'QL002', classificatorioTipo: 'Varejo Premium', classificatorioDesconto: 17, fat12mCliente: 999 });
+    const antes = mockDb.__queryLog.length;
+    res = await req('POST', '/api/clientes/classificatorio/importar', { dataRelatorio: '2026-10-02', apuradoAte: '2026-08-31', itens: linhas });
+    const consultas = mockDb.__queryLog.length - antes;
+    const c3 = mockDb.__getClientes().find(c => c.id === 30003);
+    assert(res.status === 200 && res.body.atualizados === 201 && res.body.naoEncontrados === 1 && c3.classificatorio_pic === false && Number(c3.classificatorio_vl_acordo) === 7000
+      && c3.classificatorio_tipo === 'Varejo Premium' && mockDb.__getClientes().find(c => c.id === 30005).matriz_grupo === 'MATRIZ LOTE' && consultas <= 20,
+      `importação do Classificatório em lote: 202 linhas em ${consultas} consultas, o mesmo cliente duas vezes vale a 2ª: ${JSON.stringify([res.body, c3, mockDb.__getClientes().find(c => c.id === 30005)])}`);
+    res = await req('GET', '/api/clientes/30003/classificatorio/status');
+    assert(res.body.erp && res.body.erp.fat12mCliente === 999, `importação do Classificatório em lote: a foto do cliente repetido é a da 2ª linha: ${JSON.stringify(res.body.erp)}`);
+  }
+
+  {
+    // objetivos trimestrais e Curva ABC: uma consulta no lugar de uma por matriz / por grupo de códigos
+    const pad = (i) => String(i).padStart(3, '0');
+    let antes = mockDb.__queryLog.length;
+    res = await req('POST', '/api/clientes/classificatorio/objetivos-trimestrais/importar', { periodoInicio: '2026-10-01', periodoFim: '2026-12-31',
+      itens: [...Array.from({ length: 60 }, (_, i) => ({ matriz: `LOTE ${pad(i)} LTDA`, objetivo: 1000 + i })), { matriz: 'NAO EXISTE LOTE', objetivo: 1 }] });
+    const consultasObj = mockDb.__queryLog.length - antes;
+    assert(res.status === 200 && res.body.importados === 59 && res.body.naoReconhecidos.join() === 'LOTE 004 LTDA,NAO EXISTE LOTE' && consultasObj <= 10,
+      `objetivos trimestrais: 61 matrizes em ${consultasObj} consultas (antes uma por matriz): ${JSON.stringify(res.body)}`);
+    mockDb.__seed({ clientes: [{ id: 30500, nome: 'LOJA ABC LOTE', codigo_oficial: 'QABC' }] });
+    mockDb.__seed({ pedidosOficiaisItens: ['60863', 'P60863', 'P160863', '61362', 'P61362'].flatMap((sku, k) => [1, 2].map(n => ({
+      nr_pedido: `AB${n}${k % 2}`, codigo_sku: sku, cliente_codigo_oficial: 'QABC', quantidade: 1, valor: 5, data_implantacao: '2026-09-01', data_faturamento: '2026-09-02', status: 'faturado' }))) });
+    antes = mockDb.__queryLog.length;
+    res = await req('GET', '/api/clientes/30500/produtos-abc');
+    const sqlsAbc = mockDb.__queryLog.slice(antes).map(q => q.sql);
+    const disco = (res.body || []).find(r => r.codigo_sku === '60863'), cortador = (res.body || []).find(r => r.codigo_sku === '61362');
+    assert(res.status === 200 && disco && disco.num_pedidos === 4 && cortador && cortador.num_pedidos === 4 && !sqlsAbc.some(q => q.startsWith("SELECT COUNT(DISTINCT nr_pedido)"))
+      && sqlsAbc.filter(q => q.includes('curva-abc:pedidos-por-grupo')).length === 1,
+      `Curva ABC: pedidos distintos dos códigos promocionais mesclados numa consulta só: ${JSON.stringify([res.body, sqlsAbc.length])}`);
   }
 
   {

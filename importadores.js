@@ -471,8 +471,10 @@
       let previsaoISO = null;
       const previsaoRaw = r['Previsão'];
       if (previsaoRaw && previsaoRaw !== 'Sem Previsão') {
-        const d = previsaoRaw instanceof Date ? previsaoRaw : new Date(previsaoRaw);
-        if (!isNaN(d.getTime())) previsaoISO = d.toISOString().slice(0, 10);
+        // texto "05/11/2026" é dia/mês (new Date lia como americano: 11 de maio;
+        // "15/10/2026" virava data inválida) - mesma leitura das outras planilhas
+        const texto = typeof previsaoRaw === 'string' ? previsaoRaw.trim() : '';
+        previsaoISO = /^\d{4}-\d{2}-\d{2}/.test(texto) ? texto.slice(0, 10) : paraDataISO(previsaoRaw);
       }
       mapa[codigo] = {
         qtDisponivel: Number(r['Qt. Disp.']) || 0,

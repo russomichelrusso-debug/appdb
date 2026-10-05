@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { acharOuCriarProdutoPorSku, ErroPermanente } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 async function acharOuCriarVendedor(client, nomeVendedor) {
@@ -18,14 +19,6 @@ async function acharOuCriarVendedor(client, nomeVendedor) {
   const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
   return depois.rows[0].id;
 }
-async function acharProdutoPorSku(client, codigo_sku) {
-  const result = await client.query('SELECT id FROM produtos WHERE codigo_sku = $1', [codigo_sku]);
-  if (result.rows.length === 0) {
-    throw new Error(`Produto com código ${codigo_sku} não encontrado - rode /api/produtos/sync primeiro.`);
-  }
-  return result.rows[0].id;
-}
-
 // Localização da loja - só leitura de GPS boa o bastante (até 100 m) vira a
 // posição do cliente; a atual só é trocada por uma igual ou mais precisa, ou
 // se tiver mais de 180 dias (loja pode ter mudado de endereço).
@@ -47,37 +40,65 @@ function lerLocalizacao(loc) {
   return { latitude, longitude, precisao_m: precisao };
 }
 
+// Código + quantidade contada (0 vale: "acabou na loja", ver Comprados e não contados)
+function itensDoLevantamentoValidos(itens) {
+  return Array.isArray(itens) && itens.length > 0 && itens.every(it => it
+    && (typeof it.codigo_sku === 'string' || typeof it.codigo_sku === 'number') && String(it.codigo_sku).trim() !== ''
+    && Number.isFinite(Number(it.quantidade_contada)) && Number(it.quantidade_contada) >= 0);
+}
+
 // Grava um levantamento de estoque feito na visita ao cliente. Corpo esperado:
 // {
 //   cliente: { cliente_id?, nome, documento?, contato? },
 //   vendedor_nome?: "...",
 //   nome_levantamento?: "...",
 //   itens: [{ codigo_sku, quantidade_contada }, ...],
-//   localizacao?: { latitude, longitude, precisao_m }  // GPS no momento de salvar
+//   localizacao?: { latitude, longitude, precisao_m },  // GPS no momento de salvar
+//   id_envio?: "uuid"  // gerado no toque em salvar: o reenvio da fila offline não grava outro
 // }
+const ID_ENVIO = /^[A-Za-z0-9-]{16,64}$/;
+async function levantamentoDoMesmoEnvio(client, idEnvio) {
+  const r = await client.query('/* levantamento:mesmo-envio */ SELECT id, cliente_id, data_visita FROM levantamentos WHERE id_envio = $1', [idEnvio]);
+  const l = r.rows[0];
+  return l ? { levantamento_id: l.id, cliente_id: l.cliente_id, data_visita: l.data_visita, localizacao_registrada: false, mesmo_envio: true } : null;
+}
 router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, nome_levantamento, itens } = req.body;
   const localizacao = lerLocalizacao(req.body.localizacao);
-  if (!cliente || !cliente.nome) return res.status(400).json({ erro: 'Informe os dados do cliente (nome).' });
-  if (!Array.isArray(itens) || itens.length === 0) return res.status(400).json({ erro: 'Informe ao menos um item.' });
+  const idEnvio = typeof req.body.id_envio === 'string' && ID_ENVIO.test(req.body.id_envio) ? req.body.id_envio : null;
+  // erro do próprio envio: 422 (a fila offline do app tira como "recusado"; 400 ela reenvia)
+  if (!cliente || !cliente.nome) return res.status(422).json({ erro: 'Informe os dados do cliente (nome).' });
+  if (!itensDoLevantamentoValidos(itens)) return res.status(422).json({ erro: 'Informe ao menos um item, com código e quantidade contada.' });
 
   let client;
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+    // Reenvio do mesmo levantamento (resposta perdida com sinal fraco -> fila
+    // offline -> reenvio): devolve o já gravado, sem gravar outro. Um envio de
+    // cada vez por id_envio (duas abas esvaziando a fila ao mesmo tempo).
+    if (idEnvio) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [idEnvio]);
+      const mesmo = await levantamentoDoMesmoEnvio(client, idEnvio);
+      if (mesmo) {
+        await client.query('COMMIT');
+        return res.status(200).json(mesmo);
+      }
+    }
     const clienteId = await acharOuCriarCliente(client, cliente);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
 
     const levResult = await client.query(
-      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, data_visita`,
+      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m, id_envio)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, data_visita`,
       [clienteId, vendedorId, nome_levantamento || null,
-        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null]
+        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null, idEnvio]
     );
     const levantamentoId = levResult.rows[0].id;
 
     for (const item of itens) {
-      const produtoId = await acharProdutoPorSku(client, item.codigo_sku);
+      // produto novo da Lista de Preços que ainda não está em produtos é criado do catálogo
+      const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku, null);
       await client.query(
         'INSERT INTO levantamento_itens (levantamento_id, produto_id, quantidade_contada) VALUES ($1, $2, $3)',
         [levantamentoId, produtoId, item.quantidade_contada]
@@ -111,6 +132,16 @@ router.post('/', async (req, res) => {
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
+    }
+    if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
+    if (e.code === '23505' && e.constraint === 'idx_levantamentos_id_envio') {
+      // o mesmo envio gravado por outra requisição (a trava acima não deixa chegar
+      // aqui): devolve ele; sem conseguir confirmar, 503 deixa na fila do app
+      try {
+        const mesmo = await levantamentoDoMesmoEnvio(pool, idEnvio);
+        if (mesmo) return res.status(200).json(mesmo);
+      } catch (e2) { console.error(e2); }
+      return res.status(503).json({ erro: 'Tente de novo em instantes.' });
     }
     console.error(e);
     res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar levantamento.' });

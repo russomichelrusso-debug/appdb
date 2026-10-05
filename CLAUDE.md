@@ -123,9 +123,16 @@ Pegadinhas de ambiente:
   fila é relida no fim pra não perder o que entrou durante o envio. `saveSyncQueueList` devolve se
   gravou; sem espaço, o `apiFetch` lança erro (`semEspacoNaFila`) em vez de dizer "fica salvo" (o pedido
   oferece o CSV na hora). A fila do Drive (`drenarFilaDriveCsv`) segue o mesmo padrão: Web Lock, relê
-  a fila no fim, e sem espaço não diz "pendente". Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
+  a fila no fim, e sem espaço não diz "pendente". Erro permanente das rotas de pedido/levantamento
+  (itens inválidos, origem desconhecida, código em formato inválido) responde **422** (`ErroPermanente`,
+  `routes/lib/produtoPorSku.js`); produto que está na Lista de Preços ou nos promocionais do Painel e ainda
+  não em `produtos` é criado na hora (e a importação da lista já cria os novos); produto que não está em
+  lugar nenhum responde 400 (a fila tenta de novo — o catálogo pode chegar depois). O levantamento também leva
+  `id_envio` (`idx_levantamentos_id_envio`): o reenvio devolve o já gravado. Rota nova com método novo: conferir o `Access-Control-Allow-Methods` do `server.js` (faltava
   `PUT` e o nome do arquivo do cliente nunca chegava do app publicado; teste no `run_tests.js`). Biblioteca carregada sob demanda que falhou tenta de novo na próxima vez (o pdf.js com
   `?tentativa=N`, que o `sw.js` atende pela cópia sem parâmetro).
+- "Hoje" no SQL é `SQL_HOJE_BR`/`SQL_HOJE_BRASIL` (dia de Brasília), nunca `CURRENT_DATE` (UTC, vira o
+  dia às 21h).
 - **Data sem hora nunca passa por `new Date()` pra exibir.** Coluna `DATE` (`data_faturamento`,
   `data_implantacao`) e `date_trunc(...)` chegam no JSON como meia-noite UTC
   (`2026-09-11T00:00:00.000Z`); no fuso do Brasil isso vira o dia (ou o mês/trimestre) anterior.
@@ -401,6 +408,8 @@ Supabase, sem PR — não é mudança de código.
   - A importação da planilha agora **troca** a faixa gravada quando o relatório é tão ou mais novo
     (antes só preenchia quem não tinha — 22 clientes estavam com faixa de 2023–2025, corrigidos via
     SQL em 02/10/2026; backup em `backup_clientes_classif_20261002`).
+  - Matriz, PIC e valor de acordo só mudam com planilha tão ou mais nova que a última foto do cliente
+    (`cliente_classificatorio_erp.data_relatorio`).
   - Série de 7 dígitos: o ERP **conta** no classificatório na maioria dos casos (8 clientes), mas não
     em 2 (5569, 21650) — não aplicar o filtro `length(nr_pedido) <= 6` no classificatório.
 
@@ -564,8 +573,18 @@ Supabase, sem PR — não é mudança de código.
   (04/10/2026, 7 dias de atraso) cada relatório levou ~1 min e o Classificatório ~2,5 min no servidor
   (as importações fazem uma consulta por cliente, e o Render fica em Oregon e o Supabase em São Paulo)
   e o Google cortou a execução nos 6 min — por isso o script salva o progresso a cada e-mail e não
-  começa arquivo novo depois de 3 min. Se as importações ficarem lentas demais, o ganho está em
-  juntar as consultas por cliente de `importarRelatorioOficial`/`importarClassificatorioErp`.
+  começa arquivo novo depois de 3 min. **Importações em lote (10/2026):** o relatório oficial (863 → 16
+  consultas pra 250 clientes), a planilha Classificatório (734 → 11), objetivos trimestrais e a Curva ABC
+  carregam os clientes/matrizes numa consulta (nome normalizado no próprio Postgres, mesma expressão do
+  `clientMatcher`), refazem as decisões em memória na ordem do arquivo e gravam com `UNNEST` — uma rodada
+  por vez que o mesmo cliente aparece. Conferido contra o código antigo num Postgres local: estado
+  idêntico (só o desempate entre clientes com o mesmo nome, antes ao acaso do `LIMIT 1`, agora é o de
+  menor id). **Lista de Preços pelo e-mail** que tiraria mais de 5% dos códigos do catálogo é recusada
+  ("Cortag/Falhou"); pelo Painel continua sem trava. **Relatório oficial mais antigo que o já importado**
+  (`configuracoes.relatorio_oficial_mais_novo` = maior implantação/faturamento das linhas de pedido, até
+  hoje; os pendentes à vista não contam) grava só as linhas faturadas e as descrições e apaga o saldo do
+  que aparece faturado: não grava carteira nem troca as listas à vista e não gera novidade; a resposta
+  traz `relatorioAntigo`/`aviso`. Planilha só com as abas de pagamento nunca é "antiga".
 
 - **Pedido bloqueado e à vista pelo e-mail** (10/2026): dois e-mails da noreply@cortag.com.br **sem
   planilha** — o script do Gmail manda assunto + texto (`POST /api/importacao-email/mensagem`, mesma

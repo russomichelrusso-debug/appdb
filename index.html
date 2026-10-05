@@ -8425,6 +8425,9 @@
             vendedor_nome: state.seller || undefined,
             itens: state.survey.map(it => ({ codigo_sku: it.cod, quantidade_contada: it.qty })),
             localizacao: localizacao || undefined,
+            // gerado no toque: se a resposta se perder e o envio for pela fila, o
+            // reenvio devolve o levantamento já gravado em vez de gravar outro
+            id_envio: novoIdEnvio(),
           };
           const result = await apiCriarLevantamento(payload);
 
@@ -14692,7 +14695,8 @@
           const valorUnitario = formato === 'completa' ? limparNumeroPdf(m[9]) : limparNumeroPdf(m[5]);
           let valorTotal = formato === 'completa' ? limparNumeroPdf(m[10]) : limparNumeroPdf(m[6]);
           if (valorTotal === 0 && quantidade > 0 && valorUnitario > 0) valorTotal = +(quantidade * valorUnitario).toFixed(2);
-          if (!(quantidade === 0 && valorTotal === 0)) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
+          // só item com quantidade: o servidor recusa o pedido inteiro com item de quantidade 0
+          if (quantidade > 0) produtos.push({ codigo, descricao, quantidade, unidade, valorUnitario, valorTotal });
         }
         return produtos;
       }
@@ -14782,6 +14786,7 @@
         const result = await processarUmaPlanilhaOficial(file);
         carregarStatusRelatorioOficial();
         const partes = [`${result.itens} linha(s) importada(s)`, `${result.clientesVinculados} cliente(s) vinculado(s) agora`, `${result.clientesClassificados} classificado(s)`];
+        if (result.relatorioAntigo && result.aviso) partes.unshift(result.aviso);
         if (result.clientesClassifIgnorados) partes.push(`${result.clientesClassifIgnorados} classificação(ões) ignorada(s) (relatório mais antigo que o já registrado)`);
         if (result.clientesNaoEncontrados && result.clientesNaoEncontrados.length) partes.push(`${result.clientesNaoEncontrados.length} cliente(s) não encontrado(s) pelo nome`);
         if (result.pendentesPagamento != null) partes.push(`${result.pendentesPagamento} pedido(s) aguardando pagamento`);

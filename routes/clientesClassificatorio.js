@@ -4,6 +4,7 @@ const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { SQL_HOJE_BR } = require('./lib/comprasApp');
 const { avisarImportacao, quantos } = require('./lib/novidades');
 
 router.param('id', validarIdInteiro);
@@ -258,9 +259,12 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
 // fechado que valia antes). Os limites do ano civil abaixo continuam só pro
 // comparativo "acumulado do ano corrente x mesmo período do ano anterior"
 // da ficha do cliente.
-const JANELA_12M_SQL = `CURRENT_DATE - INTERVAL '12 months'`;
-const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', CURRENT_DATE) - INTERVAL '1 year'`;
-const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', CURRENT_DATE)`; // exclusivo
+// "Hoje" é o dia de Brasília (SQL_HOJE_BR): o banco roda em UTC e CURRENT_DATE
+// virava o dia às 21h - das 21h à meia-noite a janela, o ano e o trimestre
+// andavam um dia antes.
+const JANELA_12M_SQL = `${SQL_HOJE_BR} - INTERVAL '12 months'`;
+const PERIODO_CLASSIFICATORIO_INICIO_SQL = `date_trunc('year', ${SQL_HOJE_BR}) - INTERVAL '1 year'`;
+const PERIODO_CLASSIFICATORIO_FIM_SQL = `date_trunc('year', ${SQL_HOJE_BR})`; // exclusivo
 
 // Monta a subconsulta que soma faturamento (do ano civil fechado mais
 // recente, ver comentário acima), com `agruparPorMatrizGrupo` decidindo se
@@ -297,7 +301,7 @@ function sqlFaturamentoClassificatorioPorCliente(agruparPorMatrizGrupo) {
          COALESCE(SUM(poi.valor) FILTER (
            WHERE ${sqlFaturadoDeFato('poi')}
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
-             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (CURRENT_DATE - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
+             AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (${SQL_HOJE_BR} - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
          ), 0) AS faturamento_mesmo_periodo_ano_anterior,
          MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}) AS ultima_compra
   FROM clientes c
@@ -325,13 +329,13 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // O ano fechado (usado só pra rotular a resposta e fechar os 4 trimestres
     // em calcularRitmoTrimestral) vem do PRÓPRIO Postgres, na mesma consulta -
     // nunca de um "new Date()" separado no Node, que teria que só torcer pra
-    // concordar com o fuso do CURRENT_DATE do banco. Cliente Rede usa a
+    // concordar com o "hoje" do banco (SQL_HOJE_BR, dia de Brasília). Cliente Rede usa a
     // variante INDIVIDUAL (sem somar matriz_grupo) - ver comentário na
     // função sqlFaturamentoClassificatorioPorCliente.
     const fatResult = await pool.query(
       `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
-              EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual,
-              EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx
+              EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual,
+              EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx
        FROM (${ehRede ? SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
@@ -363,14 +367,14 @@ router.get('/:id/classificatorio/status', async (req, res) => {
            FROM pedidos_oficiais_itens poi
            JOIN clientes c ON c.id = $1
            WHERE poi.cliente_codigo_oficial = c.codigo_oficial
-             AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
            GROUP BY 1 ORDER BY 1`
         : `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
            FROM pedidos_oficiais_itens poi
            JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
            JOIN clientes c ON c.id = $1
            WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
-             AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
            GROUP BY 1 ORDER BY 1`,
       [req.params.id]
     );
@@ -470,8 +474,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
            (($2::date + 1) - INTERVAL '12 months')::date::text AS inicio_erp,
            (${JANELA_12M_SQL})::date::text AS fim_fora_janela_app,
            (${JANELA_12M_SQL} + INTERVAL '1 day')::date::text AS inicio_app,
-           CURRENT_DATE::text AS hoje,
-           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM CURRENT_DATE) AS mesmo_ano
+           ${SQL_HOJE_BR}::text AS hoje,
+           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM ${SQL_HOJE_BR}) AS mesmo_ano
          FROM clientes c
          JOIN clientes c2 ON c2.id = c.id ${ehRede ? '' : 'OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)'}
          JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
@@ -616,7 +620,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
         `SELECT id, nome, documento, classificatorio_tipo, classificatorio_pic, classificatorio_vl_acordo, matriz_grupo
          FROM clientes WHERE classificatorio_tipo IS NOT NULL`
       ),
-      pool.query(`SELECT EXTRACT(YEAR FROM CURRENT_DATE)::int AS ano_atual, EXTRACT(QUARTER FROM CURRENT_DATE)::int - 1 AS trimestre_atual_idx`),
+      pool.query(`SELECT EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual, EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx`),
       // Mesma janela móvel de 4 trimestres do status individual, mas pra
       // TODOS os clientes classificados de uma vez só (não N+1) - usada pra
       // saber quem está com o ritmo "atrasado" (ver comentário em
@@ -628,7 +632,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
          JOIN clientes c2 ON (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
          JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
          WHERE c.classificatorio_tipo IS NOT NULL
-           AND poi.data_implantacao >= date_trunc('quarter', CURRENT_DATE) - INTERVAL '9 months'
+           AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
          GROUP BY c.id, 2 ORDER BY c.id, 2`
       ),
       // Foto oficial do ERP + quanto dos 12 meses da matriz vem de empresas
@@ -748,59 +752,92 @@ async function importarClassificatorioErp(body) {
     let atualizados = 0;
     let naoEncontrados = 0;
 
+    // Em lote (antes eram ~3 consultas por linha da planilha, cada uma uma ida
+    // de Oregon a São Paulo): os clientes que podem casar vêm numa consulta, o
+    // casamento é feito em memória na ordem da planilha e a gravação sai num
+    // UPDATE + um INSERT da foto por rodada. Cliente que aparece duas vezes
+    // (pelo código e pelo CNPJ) vai na rodada seguinte, comparando com o que a
+    // 1ª gravou - como no laço antigo.
+    const codigosEntrada = [...new Set(itens.map(it => (it.codigoOficial != null ? String(it.codigoOficial) : null)).filter(Boolean))];
+    const docsEntrada = [...new Set(itens.map(it => (it.cnpj ? normalizarDoc(it.cnpj) : null)).filter(Boolean))];
+    const carga = await client.query(
+      `/* classificatorio:clientes */
+       SELECT id, codigo_oficial, regexp_replace(documento, '\\D', '', 'g') AS doc FROM clientes
+       WHERE codigo_oficial = ANY($1::text[]) OR regexp_replace(documento, '\\D', '', 'g') = ANY($2::text[])
+       ORDER BY id`,
+      [codigosEntrada, docsEntrada]
+    );
+    const porCodigo = new Map();
+    const porDoc = new Map();
+    for (const r of carga.rows) {
+      const reg = { id: r.id, codigo: r.codigo_oficial || null };
+      if (reg.codigo) porCodigo.set(reg.codigo, reg);
+      if (r.doc && !porDoc.has(r.doc)) porDoc.set(r.doc, reg);
+    }
+    const rodadas = [];
+    const vezes = new Map();
     for (const it of itens) {
       const codigoOficial = it.codigoOficial != null ? String(it.codigoOficial) : null;
       const documento = it.cnpj ? normalizarDoc(it.cnpj) : null;
       if (!codigoOficial && !documento) { naoEncontrados++; continue; }
-
-      let cliente = null;
-      if (codigoOficial) {
-        const r = await client.query('SELECT id, codigo_oficial FROM clientes WHERE codigo_oficial = $1', [codigoOficial]);
-        if (r.rows.length > 0) cliente = r.rows[0];
-      }
-      if (!cliente && documento) {
-        const r = await client.query(
-          `SELECT id, codigo_oficial FROM clientes WHERE regexp_replace(documento, '\\D', '', 'g') = $1`,
-          [documento]
-        );
-        if (r.rows.length > 0) cliente = r.rows[0];
-      }
+      let cliente = (codigoOficial && porCodigo.get(codigoOficial)) || null;
+      if (!cliente && documento) cliente = porDoc.get(documento) || null;
       if (!cliente) { naoEncontrados++; continue; }
+      // codigo_oficial = COALESCE(codigo_oficial, código da planilha): a linha
+      // seguinte com esse código já acha o cliente
+      if (!cliente.codigo && codigoOficial) { cliente.codigo = codigoOficial; porCodigo.set(codigoOficial, cliente); }
+      const n = vezes.get(cliente) || 0;
+      vezes.set(cliente, n + 1);
+      (rodadas[n] = rodadas[n] || []).push({ id: cliente.id, codigoOficial, it });
+      atualizados++;
+    }
 
-      // Classificatório: a planilha é a classificação oficial do ERP, então
-      // troca o que estiver gravado quando o relatório é tão ou mais novo que
-      // o que definiu o atual (mesma regra da importação do relatório de
-      // faturamento, routes/pedidosOficiais.js). Antes só preenchia quem não
-      // tinha nenhum - em 10/2026, 22 clientes estavam com faixa parada desde
-      // 2023-2025 por isso. Sem data do relatório, mantém o comportamento antigo.
+    // Classificatório: a planilha é a classificação oficial do ERP, então
+    // troca o que estiver gravado quando o relatório é tão ou mais novo que
+    // o que definiu o atual (mesma regra da importação do relatório de
+    // faturamento, routes/pedidosOficiais.js). Antes só preenchia quem não
+    // tinha nenhum - em 10/2026, 22 clientes estavam com faixa parada desde
+    // 2023-2025 por isso. Sem data do relatório, mantém o comportamento antigo.
+    // Matriz, PIC e valor de acordo: só da planilha tão ou mais nova que a
+    // última Classificatório gravada pro cliente (data da foto em
+    // cliente_classificatorio_erp, que só esta importação grava) - antes uma
+    // planilha antiga reimportada voltava os três. A data da faixa
+    // (classificatorio_atualizado_em) não serve aqui: o relatório oficial
+    // diário também a avança, e aí o PIC não seria mais atualizado.
+    const planilhaMaisNova = `($1::date IS NULL OR NOT EXISTS (SELECT 1 FROM cliente_classificatorio_erp e
+                               WHERE e.cliente_id = c.id AND e.data_relatorio > $1::date))`;
+    const trocaFaixa = `u.tipo IS NOT NULL AND $1::date IS NOT NULL
+              AND (c.classificatorio_atualizado_em IS NULL OR c.classificatorio_atualizado_em <= $1::date)`;
+    for (const rodada of rodadas) {
       await client.query(
-        `UPDATE clientes SET
-           codigo_oficial = COALESCE(codigo_oficial, $1),
-           matriz_grupo = COALESCE($2, matriz_grupo),
-           classificatorio_pic = $3,
-           classificatorio_vl_acordo = COALESCE($4, classificatorio_vl_acordo),
-           classificatorio_tipo = CASE
-             WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
-              AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $5::text
-             ELSE COALESCE(classificatorio_tipo, $5::text) END,
-           classificatorio_desconto = CASE
-             WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
-              AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $6::numeric
-             ELSE COALESCE(classificatorio_desconto, $6::numeric) END,
-           classificatorio_atualizado_em = CASE
-             WHEN $5::text IS NOT NULL AND $8::date IS NOT NULL
-              AND (classificatorio_atualizado_em IS NULL OR classificatorio_atualizado_em <= $8::date) THEN $8::date
-             ELSE classificatorio_atualizado_em END
-         WHERE id = $7`,
-        [codigoOficial, it.matrizGrupo || null, !!it.pic, it.vlAcordo ?? null, it.classificatorioTipo || null, it.classificatorioTipo ? descontoPelaPolitica(it.classificatorioTipo, it.classificatorioDesconto ?? null) : null, cliente.id, dataRelatorio]
+        `/* classificatorio:atualizar */
+         UPDATE clientes c SET
+           codigo_oficial = COALESCE(c.codigo_oficial, u.codigo),
+           matriz_grupo = CASE WHEN ${planilhaMaisNova} THEN COALESCE(u.matriz, c.matriz_grupo) ELSE c.matriz_grupo END,
+           classificatorio_pic = CASE WHEN ${planilhaMaisNova} THEN u.pic ELSE c.classificatorio_pic END,
+           classificatorio_vl_acordo = CASE WHEN ${planilhaMaisNova} THEN COALESCE(u.vl_acordo, c.classificatorio_vl_acordo) ELSE c.classificatorio_vl_acordo END,
+           classificatorio_tipo = CASE WHEN ${trocaFaixa} THEN u.tipo ELSE COALESCE(c.classificatorio_tipo, u.tipo) END,
+           classificatorio_desconto = CASE WHEN ${trocaFaixa} THEN u.desconto ELSE COALESCE(c.classificatorio_desconto, u.desconto) END,
+           classificatorio_atualizado_em = CASE WHEN ${trocaFaixa} THEN $1::date ELSE c.classificatorio_atualizado_em END
+         FROM UNNEST($2::int[], $3::text[], $4::text[], $5::boolean[], $6::numeric[], $7::text[], $8::numeric[])
+           AS u(id, codigo, matriz, pic, vl_acordo, tipo, desconto)
+         WHERE c.id = u.id`,
+        [dataRelatorio, rodada.map(r => r.id), rodada.map(r => r.codigoOficial), rodada.map(r => r.it.matrizGrupo || null), rodada.map(r => !!r.it.pic),
+          rodada.map(r => r.it.vlAcordo ?? null), rodada.map(r => r.it.classificatorioTipo || null),
+          rodada.map(r => (r.it.classificatorioTipo ? descontoPelaPolitica(r.it.classificatorioTipo, r.it.classificatorioDesconto ?? null) : null))]
       );
       if (dataRelatorio) {
         // Foto financeira oficial - um relatório mais antigo não sobrescreve um mais novo.
         await client.query(
-          `INSERT INTO cliente_classificatorio_erp
+          `/* classificatorio:foto */
+           INSERT INTO cliente_classificatorio_erp
              (cliente_id, data_relatorio, apurado_ate, fat_ano_anterior, fat_acumulado, fat_12m_cliente, fat_12m_matriz,
               diferenca, gestor, situacao, cidade, uf, cliente_desde, ultima_compra, atualizado_em)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, now())
+           SELECT u.cliente_id, $1::date, $2::date, u.fat_ano_anterior, u.fat_acumulado, u.fat_12m_cliente, u.fat_12m_matriz,
+                  u.diferenca, u.gestor, u.situacao, u.cidade, u.uf, u.cliente_desde, u.ultima_compra, now()
+           FROM UNNEST($3::int[], $4::numeric[], $5::numeric[], $6::numeric[], $7::numeric[], $8::numeric[], $9::text[], $10::text[],
+                       $11::text[], $12::text[], $13::date[], $14::date[])
+             AS u(cliente_id, fat_ano_anterior, fat_acumulado, fat_12m_cliente, fat_12m_matriz, diferenca, gestor, situacao, cidade, uf, cliente_desde, ultima_compra)
            ON CONFLICT (cliente_id) DO UPDATE SET
              data_relatorio = EXCLUDED.data_relatorio, apurado_ate = EXCLUDED.apurado_ate,
              fat_ano_anterior = EXCLUDED.fat_ano_anterior, fat_acumulado = EXCLUDED.fat_acumulado,
@@ -809,13 +846,13 @@ async function importarClassificatorioErp(body) {
              cidade = EXCLUDED.cidade, uf = EXCLUDED.uf, cliente_desde = EXCLUDED.cliente_desde,
              ultima_compra = EXCLUDED.ultima_compra, atualizado_em = now()
            WHERE cliente_classificatorio_erp.data_relatorio <= EXCLUDED.data_relatorio`,
-          [cliente.id, dataRelatorio, apuradoAte, numeroOuNull(it.fatAnoAnterior), numeroOuNull(it.fatAcumulado),
-            numeroOuNull(it.fat12mCliente), numeroOuNull(it.fat12mMatriz), numeroOuNull(it.diferenca),
-            textoOuNull(it.gestor), textoOuNull(it.situacao), textoOuNull(it.cidade), textoOuNull(it.uf),
-            dataIsoOuNull(it.clienteDesde), dataIsoOuNull(it.ultimaCompra)]
+          [dataRelatorio, apuradoAte, rodada.map(r => r.id),
+            rodada.map(r => numeroOuNull(r.it.fatAnoAnterior)), rodada.map(r => numeroOuNull(r.it.fatAcumulado)),
+            rodada.map(r => numeroOuNull(r.it.fat12mCliente)), rodada.map(r => numeroOuNull(r.it.fat12mMatriz)), rodada.map(r => numeroOuNull(r.it.diferenca)),
+            rodada.map(r => textoOuNull(r.it.gestor)), rodada.map(r => textoOuNull(r.it.situacao)), rodada.map(r => textoOuNull(r.it.cidade)), rodada.map(r => textoOuNull(r.it.uf)),
+            rodada.map(r => dataIsoOuNull(r.it.clienteDesde)), rodada.map(r => dataIsoOuNull(r.it.ultimaCompra))]
         );
       }
-      atualizados++;
     }
 
     await client.query('COMMIT');
@@ -854,17 +891,24 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
     let pulosRede = 0;
     const naoReconhecidos = [];
 
+    // classificatórios de cada matriz numa consulta só (antes uma por linha)
+    const matrizes = [...new Set(itens.map(it => String(it.matriz || '').trim()).filter(Boolean))];
+    const tiposResult = await pool.query(
+      `/* objetivos:matrizes */
+       SELECT COALESCE(matriz_grupo, nome) AS matriz, array_agg(DISTINCT classificatorio_tipo) AS tipos
+       FROM clientes WHERE COALESCE(matriz_grupo, nome) = ANY($1::text[]) GROUP BY 1`,
+      [matrizes]
+    );
+    const tiposDaMatriz = new Map(tiposResult.rows.map(r => [r.matriz, r.tipos || []]));
+
     for (const it of itens) {
       const matriz = String(it.matriz || '').trim();
       const objetivo = Number(it.objetivo);
       if (!matriz || !Number.isFinite(objetivo)) continue;
 
-      const r = await pool.query(
-        `SELECT DISTINCT classificatorio_tipo FROM clientes WHERE COALESCE(matriz_grupo, nome) = $1`,
-        [matriz]
-      );
-      if (r.rows.length === 0) { naoReconhecidos.push(matriz); continue; }
-      if (r.rows.some(row => row.classificatorio_tipo === 'Rede')) { pulosRede++; continue; }
+      const tipos = tiposDaMatriz.get(matriz);
+      if (!tipos) { naoReconhecidos.push(matriz); continue; }
+      if (tipos.includes('Rede')) { pulosRede++; continue; }
 
       objetivos[matriz] = objetivo;
       importados++;

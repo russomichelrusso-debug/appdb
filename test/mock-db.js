@@ -174,7 +174,108 @@ async function query(sql, params = []) {
     cods.forEach((c, i) => previsaoEstoque.push({ codigo_sku: c, qt_disponivel: disp[i], qt_carteira: cart[i], qt_compra: compra[i], previsao: prev[i], saldo: saldo[i] }));
     return { rows: [] };
   }
+  // relatório oficial: clientes que podem casar pelo código ou pelo nome, em lote
+  // (classificarEVincularClientes, routes/pedidosOficiais.js) - mesma
+  // normalização dos handlers de acharClientePorNome abaixo
+  if (s.includes('/* RELATORIO-OFICIAL:CLIENTES */')) {
+    const exato = (n) => String(n || '').trim().toUpperCase().replace(/\s+/g, ' ');
+    const tolerante = (n) => String(n || '').trim().toUpperCase().replace(/[.,\s]+/g, ' ');
+    const [codigos, nomes] = params;
+    const ex = new Set(nomes.map(exato)), tol = new Set(nomes.map(tolerante));
+    const rows = clientes.filter(c => (c.codigo_oficial && codigos.includes(c.codigo_oficial)) || ex.has(exato(c.nome)) || tol.has(tolerante(c.nome)))
+      .map(c => ({ fonte: 'cliente', id: c.id, nome: null, codigo_oficial: c.codigo_oficial || null, exato: exato(c.nome), tolerante: tolerante(c.nome) }));
+    nomes.forEach(n => rows.push({ fonte: 'entrada', id: null, nome: n, codigo_oficial: null, exato: exato(n), tolerante: tolerante(n) }));
+    return { rows };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:CRIAR-CLIENTES */')) {
+    const rows = [];
+    params[0].forEach((nome, i) => {
+      if (clientes.some(c => c.codigo_oficial === params[1][i])) return; // ON CONFLICT DO NOTHING
+      const c = { id: nextId.clientes++, nome, documento: null, codigo_oficial: params[1][i], contato: null, classificatorio_tipo: null, classificatorio_desconto: null };
+      clientes.push(c);
+      rows.push({ id: c.id, codigo_oficial: c.codigo_oficial });
+    });
+    return { rows, rowCount: rows.length };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:CLIENTES-POR-CODIGO */')) {
+    return { rows: clientes.filter(c => c.codigo_oficial && params[0].includes(c.codigo_oficial)).map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:CLASSIFICAR */')) {
+    const [ids, tipos, descontos, datas] = params;
+    const rows = [];
+    ids.forEach((id, i) => {
+      const c = clientes.find(x => Number(x.id) === Number(id));
+      const dataRef = datas[i];
+      if (c && (!c.classificatorio_atualizado_em || !dataRef || c.classificatorio_atualizado_em <= dataRef)) {
+        c.classificatorio_tipo = tipos[i];
+        c.classificatorio_desconto = descontos[i];
+        c.classificatorio_atualizado_em = dataRef || c.classificatorio_atualizado_em || new Date().toISOString().slice(0, 10);
+        rows.push({ id: c.id });
+      }
+    });
+    return { rows, rowCount: rows.length };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:VINCULAR-CODIGOS */')) {
+    params[0].forEach((id, i) => { const c = clientes.find(x => Number(x.id) === Number(id)); if (c) c.codigo_oficial = params[1][i]; });
+    return { rows: [], rowCount: params[0].length };
+  }
+  // relatório oficial: data do mais novo já importado (routes/pedidosOficiais.js)
+  if (s.includes('/* RELATORIO-OFICIAL:DATA-MAIS-NOVA */')) {
+    if (!configuracoes[params[0]]) configuracoes[params[0]] = { valor: null, atualizado_em: new Date().toISOString() };
+    const v = configuracoes[params[0]].valor;
+    return { rows: [{ data: v == null ? null : String(v) }] };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:DATA-PELOS-ITENS */')) {
+    const limite = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+    const datas = pedidosOficiaisItens.flatMap(i => [i.data_implantacao, i.data_faturamento]).filter(Boolean).map(d => String(d).slice(0, 10)).filter(d => d <= limite).sort();
+    return { rows: [{ data: datas.length ? datas[datas.length - 1] : null }] };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:GRAVAR-DATA */')) {
+    configuracoes[params[0]] = { valor: params[1], atualizado_em: new Date().toISOString() };
+    return { rows: [], rowCount: 1 };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:DESCRICOES */')) {
+    let n = 0;
+    params[0].forEach((nr, i) => pedidosOficiaisItens.forEach(it => {
+      if (it.nr_pedido === nr && it.codigo_sku === params[1][i] && it.descricao == null) { it.descricao = params[2][i]; n++; }
+    }));
+    return { rows: [], rowCount: n };
+  }
   // catálogo de preços (routes/catalogoPrecos.js)
+  // produto novo da Lista de Preços entra em produtos (só os que não existem)
+  if (s.includes('/* CATALOGO-PRECOS:PRODUTOS-NOVOS */')) {
+    let n = 0;
+    params[0].forEach((c, i) => {
+      if (produtos.some(p => p.codigo_sku === c)) return;
+      produtos.push({ id: nextId.produtos++, codigo_sku: c, nome: (params[1][i] || '').trim() || c, categoria: params[2][i] ?? null });
+      n++;
+    });
+    return { rows: [], rowCount: n };
+  }
+  // pedido/levantamento com produto que ainda não está em produtos: cria do catálogo (routes/lib/produtoPorSku.js)
+  if (s.includes('/* PRODUTO:DO-CATALOGO */')) {
+    const cat = catalogoPrecos.find(p => p.codigo_sku === params[0]);
+    if (!cat || produtos.some(p => p.codigo_sku === params[0])) return { rows: [] };
+    const novo = { id: nextId.produtos++, codigo_sku: cat.codigo_sku, nome: (cat.nome || '').trim() || cat.codigo_sku, categoria: cat.familia ?? null };
+    produtos.push(novo);
+    return { rows: [{ id: novo.id }] };
+  }
+  if (s.includes('/* PRODUTO:DO-PROMOCIONAL */')) {
+    const cfg = configuracoes.produtos_promocionais;
+    const lista = cfg && Array.isArray(cfg.valor) ? cfg.valor : [];
+    const promo = lista.find(p => p && p.c === params[0]);
+    if (!promo || produtos.some(p => p.codigo_sku === params[0])) return { rows: [] };
+    const novo = { id: nextId.produtos++, codigo_sku: promo.c, nome: (promo.n || '').trim() || promo.c, categoria: promo.familia ?? null };
+    produtos.push(novo);
+    return { rows: [{ id: novo.id }] };
+  }
+  if (s.includes('/* RELATORIO-OFICIAL:ZERAR-DATA */')) {
+    delete configuracoes[params[0]];
+    return { rows: [], rowCount: 1 };
+  }
+  if (s.includes('/* CATALOGO-PRECOS:CONFERIR-REMOCAO */')) {
+    return { rows: [{ total: catalogoPrecos.length, sairiam: catalogoPrecos.filter(p => !params[0].includes(p.codigo_sku)).length }] };
+  }
   if (s.includes('INSERT INTO CATALOGO_PRECOS')) {
     const [cods, nomes, embs, ncms, ipis, familias, fixos, canaisFx, precos, semImposto] = params;
     cods.forEach((c, i) => {
@@ -690,39 +791,27 @@ async function query(sql, params = []) {
     return { rows: found.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
   }
   if (s.startsWith('UPDATE CLIENTES SET') && s.includes('CODIGO_OFICIAL = COALESCE')) {
-    const [codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id, dataRelatorio] = params;
-    const c = clientes.find(x => Number(x.id) === Number(id));
-    if (c) {
-      if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
-      if (matrizGrupo) c.matriz_grupo = matrizGrupo;
-      c.classificatorio_pic = pic;
-      if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
-      // Relatório datado tão ou mais novo que o classificatório atual troca a
-      // faixa; sem data, só preenche quem não tem (comportamento antigo).
-      const trocar = classifTipo && dataRelatorio
-        && (!c.classificatorio_atualizado_em || String(c.classificatorio_atualizado_em) <= dataRelatorio);
-      if (trocar) {
-        c.classificatorio_tipo = classifTipo;
-        c.classificatorio_desconto = classifDesconto;
-        c.classificatorio_atualizado_em = dataRelatorio;
-      } else {
-        if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
-        if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
-      }
-    }
+    aplicarLinhaClassificatorio(...params);
+    return { rows: [] };
+  }
+  // importação da planilha Classificatório em lote (routes/clientesClassificatorio.js)
+  if (s.includes('/* CLASSIFICATORIO:CLIENTES */')) {
+    const [codigos, docs] = params;
+    return { rows: clientes.filter(c => (c.codigo_oficial && codigos.includes(c.codigo_oficial)) || (c.documento && docs.includes(String(c.documento).replace(/\D/g, ''))))
+      .sort((a, b) => a.id - b.id).map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial || null, doc: c.documento == null ? null : String(c.documento).replace(/\D/g, '') })) };
+  }
+  if (s.includes('/* CLASSIFICATORIO:ATUALIZAR */')) {
+    const [dataRelatorio, ids, codigos, matrizes, pics, vls, tipos, descontos] = params;
+    ids.forEach((id, i) => aplicarLinhaClassificatorio(codigos[i], matrizes[i], pics[i], vls[i], tipos[i], descontos[i], id, dataRelatorio));
+    return { rows: [], rowCount: ids.length };
+  }
+  if (s.includes('/* CLASSIFICATORIO:FOTO */')) {
+    const [dataRelatorio, apuradoAte, ids, ...cols] = params;
+    ids.forEach((id, i) => fotoClassificatorio([id, dataRelatorio, apuradoAte, ...cols.map(col => col[i])]));
     return { rows: [] };
   }
   if (s.startsWith('INSERT INTO CLIENTE_CLASSIFICATORIO_ERP')) {
-    const [clienteId, dataRelatorio, apuradoAte, fatAnoAnterior, fatAcumulado, fat12mCliente, fat12mMatriz,
-      diferenca, gestor, situacao, cidade, uf, clienteDesde, ultimaCompra] = params;
-    const atual = classificatorioErp[clienteId];
-    if (!atual || atual.data_relatorio <= dataRelatorio) {
-      classificatorioErp[clienteId] = {
-        data_relatorio: dataRelatorio, apurado_ate: apuradoAte, fat_ano_anterior: fatAnoAnterior, fat_acumulado: fatAcumulado,
-        fat_12m_cliente: fat12mCliente, fat_12m_matriz: fat12mMatriz, diferenca, gestor, situacao, cidade, uf,
-        cliente_desde: clienteDesde, ultima_compra: ultimaCompra,
-      };
-    }
+    fotoClassificatorio(params);
     return { rows: [] };
   }
   // Conciliação ERP × app do status individual (vendas depois da apuração /
@@ -798,7 +887,7 @@ async function query(sql, params = []) {
   // Ano/trimestre atual "de verdade" (não o ano fechado da faixa) - usado
   // pela rota de alertas em lote pra alimentar calcularRitmoTrimestral de
   // cada cliente com a mesma referência que a rota individual usa.
-  if (s === 'SELECT EXTRACT(YEAR FROM CURRENT_DATE)::INT AS ANO_ATUAL, EXTRACT(QUARTER FROM CURRENT_DATE)::INT - 1 AS TRIMESTRE_ATUAL_IDX') {
+  if (s.startsWith('SELECT EXTRACT(YEAR FROM (NOW() AT TIME ZONE ') && s.endsWith('AS TRIMESTRE_ATUAL_IDX')) {
     return { rows: [{ ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora() }] };
   }
   // Trimestres recentes de TODOS os clientes classificados de uma vez
@@ -938,6 +1027,21 @@ async function query(sql, params = []) {
   // Fixup de num_pedidos pra grupos reconciliados por código base (evita
   // contar duas vezes um nr_pedido que tem código base + variante P na
   // mesma linha de pedido) - routes/relatorios.js, reconciliarProdutosPorCodigoBase.
+  // Curva ABC: pedidos distintos por grupo de códigos mesclados, em lote (routes/relatorios.js)
+  if (s.includes('/* CURVA-ABC:PEDIDOS-POR-GRUPO */')) {
+    const [gruposIdx, codigos] = params;
+    let idx = 2;
+    let itens = pedidosOficiaisItens.filter(it => faturadoDeFato(it));
+    if (s.includes('CLIENTE_CODIGO_OFICIAL = $')) { const cc = params[idx++]; itens = itens.filter(it => it.cliente_codigo_oficial === cc); }
+    if (s.includes('DATA_FATURAMENTO >=')) { const ini = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento >= ini); }
+    if (s.includes('DATA_FATURAMENTO <=')) { const fim = params[idx++]; itens = itens.filter(it => it.data_faturamento && it.data_faturamento <= fim); }
+    const porGrupo = new Map();
+    codigos.forEach((cod, i) => itens.filter(it => it.codigo_sku === cod).forEach(it => {
+      if (!porGrupo.has(gruposIdx[i])) porGrupo.set(gruposIdx[i], new Set());
+      porGrupo.get(gruposIdx[i]).add(it.nr_pedido);
+    }));
+    return { rows: [...porGrupo].map(([grupo, nrs]) => ({ grupo, total: String(nrs.size) })) };
+  }
   if (s.startsWith('SELECT COUNT(DISTINCT NR_PEDIDO) AS TOTAL FROM PEDIDOS_OFICIAIS_ITENS') && s.includes('CODIGO_SKU = ANY(')) {
     const codigos = params[0];
     let idx = 1;
@@ -1166,11 +1270,12 @@ async function query(sql, params = []) {
     }
     return { rows: [{ criados: String(criados), atualizados: String(atualizados) }] };
   }
-  if (s.includes('INSERT INTO PRODUTOS') && s.includes('ON CONFLICT')) {
-    const existing = produtos.find(p => p.codigo_sku === params[0]);
-    if (existing) { existing.nome = params[1]; existing.categoria = params[2]; return { rows: [{ inserted: false }] }; }
-    produtos.push({ id: nextId.produtos++, codigo_sku: params[0], nome: params[1], categoria: params[2] });
-    return { rows: [{ inserted: true }] };
+  // PDF com produto que não está nem no catálogo (routes/lib/produtoPorSku.js): ON CONFLICT DO NOTHING RETURNING id
+  if (s.includes('INSERT INTO PRODUTOS (CODIGO_SKU, NOME) VALUES ($1, $2) ON CONFLICT (CODIGO_SKU) DO NOTHING RETURNING ID')) {
+    if (produtos.some(p => p.codigo_sku === params[0])) return { rows: [] };
+    const novo = { id: nextId.produtos++, codigo_sku: params[0], nome: params[1], categoria: null };
+    produtos.push(novo);
+    return { rows: [{ id: novo.id }] };
   }
   if (s.includes('SELECT ID, CODIGO_SKU, NOME, CATEGORIA FROM PRODUTOS')) {
     return { rows: produtos };
@@ -1320,10 +1425,19 @@ async function query(sql, params = []) {
   }
 
   // levantamentos
+  if (s.includes('/* LEVANTAMENTO:MESMO-ENVIO */')) {
+    return { rows: levantamentos.filter(l => l.id_envio && l.id_envio === params[0]).map(l => ({ id: l.id, cliente_id: l.cliente_id, data_visita: l.data_visita })) };
+  }
   if (s.includes('INSERT INTO LEVANTAMENTOS')) {
+    if (params[6] && levantamentos.some(l => l.id_envio === params[6])) {
+      // índice único parcial idx_levantamentos_id_envio
+      const err = new Error('duplicate key value violates unique constraint "idx_levantamentos_id_envio"');
+      err.code = '23505'; err.constraint = 'idx_levantamentos_id_envio';
+      throw err;
+    }
     const l = {
       id: nextId.levantamentos++, cliente_id: params[0], vendedor_id: params[1], nome: params[2], data_visita: new Date().toISOString(),
-      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null,
+      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null, id_envio: params[6] ?? null,
     };
     levantamentos.push(l);
     return { rows: [{ id: l.id, data_visita: l.data_visita }] };
@@ -1489,6 +1603,16 @@ async function query(sql, params = []) {
   // POST /classificatorio/objetivos-trimestrais/importar). Checado ANTES do
   // catch-all de "FROM PEDIDOS_OFICIAIS_ITENS POI" da curva ABC logo abaixo,
   // que bateria com esse texto também (mesma tabela na consulta).
+  if (s.includes('/* OBJETIVOS:MATRIZES */')) {
+    const porMatriz = new Map();
+    for (const c of clientes) {
+      const m = c.matriz_grupo || c.nome;
+      if (!params[0].includes(m)) continue;
+      if (!porMatriz.has(m)) porMatriz.set(m, new Set());
+      porMatriz.get(m).add(c.classificatorio_tipo ?? null);
+    }
+    return { rows: [...porMatriz].map(([matriz, tipos]) => ({ matriz, tipos: [...tipos] })) };
+  }
   if (s === 'SELECT DISTINCT CLASSIFICATORIO_TIPO FROM CLIENTES WHERE COALESCE(MATRIZ_GRUPO, NOME) = $1') {
     const chave = params[0];
     const tipos = [...new Set(clientes.filter(c => (c.matriz_grupo || c.nome) === chave).map(c => c.classificatorio_tipo))];
@@ -1640,6 +1764,45 @@ async function query(sql, params = []) {
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 
+function aplicarLinhaClassificatorio(codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, id, dataRelatorio) {
+  const c = clientes.find(x => Number(x.id) === Number(id));
+  if (c) {
+    if (!c.codigo_oficial) c.codigo_oficial = codigoOficial;
+    // matriz/PIC/acordo: só planilha tão ou mais nova que a última foto do cliente
+    const foto = classificatorioErp[c.id];
+    const planilhaMaisNova = !dataRelatorio || !foto || foto.data_relatorio <= dataRelatorio;
+    if (planilhaMaisNova) {
+      if (matrizGrupo) c.matriz_grupo = matrizGrupo;
+      c.classificatorio_pic = pic;
+      if (vlAcordo != null) c.classificatorio_vl_acordo = vlAcordo;
+    }
+    // Relatório datado tão ou mais novo que o classificatório atual troca a
+    // faixa; sem data, só preenche quem não tem (comportamento antigo).
+    const trocar = classifTipo && dataRelatorio
+      && (!c.classificatorio_atualizado_em || String(c.classificatorio_atualizado_em) <= dataRelatorio);
+    if (trocar) {
+      c.classificatorio_tipo = classifTipo;
+      c.classificatorio_desconto = classifDesconto;
+      c.classificatorio_atualizado_em = dataRelatorio;
+    } else {
+      if (!c.classificatorio_tipo) c.classificatorio_tipo = classifTipo;
+      if (!c.classificatorio_desconto) c.classificatorio_desconto = classifDesconto;
+    }
+  }
+}
+function fotoClassificatorio(params) {
+  const [clienteId, dataRelatorio, apuradoAte, fatAnoAnterior, fatAcumulado, fat12mCliente, fat12mMatriz,
+    diferenca, gestor, situacao, cidade, uf, clienteDesde, ultimaCompra] = params;
+  const atual = classificatorioErp[clienteId];
+  if (!atual || atual.data_relatorio <= dataRelatorio) {
+    classificatorioErp[clienteId] = {
+      data_relatorio: dataRelatorio, apurado_ate: apuradoAte, fat_ano_anterior: fatAnoAnterior, fat_acumulado: fatAcumulado,
+      fat_12m_cliente: fat12mCliente, fat_12m_matriz: fat12mMatriz, diferenca, gestor, situacao, cidade, uf,
+      cliente_desde: clienteDesde, ultima_compra: ultimaCompra,
+    };
+  }
+}
+
 // Ano civil fechado usado pela revisão do classificatório (ver
 // PERIODO_CLASSIFICATORIO_*/comentário em routes/clientesClassificatorio.js):
 // o ano anterior ao atual, inteiro (não uma janela móvel de 12 meses).
@@ -1757,10 +1920,15 @@ module.exports = {
   __getPedidosBloqueados: () => pedidosBloqueados,
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
+  __getProdutos: () => produtos,
+  __getConfiguracao: (chave) => (configuracoes[chave] ? configuracoes[chave].valor : undefined),
+  __setConfiguracao: (chave, valor) => { configuracoes[chave] = { valor, atualizado_em: new Date().toISOString() }; },
+  __getLevantamentoItens: () => levantamentoItens,
   __getPushInscricoes: () => pushInscricoes,
   __getUsuarios: () => usuarios,
   __getSessoes: () => sessoes,
   __getPedidosPendentesPagamento: () => pedidosPendentesPagamento,
+  __getTitulosAvistaPendentes: () => titulosAvistaPendentes,
   __anoClassificatorioFechado: anoClassificatorioFechado,
   __inicioJanela12m: inicioJanela12m,
 };
