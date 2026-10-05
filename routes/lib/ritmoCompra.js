@@ -74,16 +74,24 @@ function juntarCompras(eventos) {
 }
 
 // compras (de juntarCompras) -> ritmo, ou null com menos de MIN_COMPRAS.
-// Intervalos entre o 1º dia de cada compra; última compra = o último pedido
-// dela (`fim`) e a previsão conta dele.
+// Intervalos entre o 1º dia de cada compra, e a previsão conta do 1º dia da
+// última compra (a mesma régua do ritmo) - contando do último pedido dela, a
+// previsão atrasava o tanto que a compra durou (até 14 dias) e o cliente mensal
+// com complemento só entrava na lista depois do dia em que costuma comprar
+// (achado do revisor-cortag, 10/2026). Trava: nunca antes do dia seguinte ao
+// último pedido (quem acabou de comprar não aparece atrasado). A última compra
+// mostrada é o último pedido (`fim`).
 // atraso_dias > 0 = passou da data prevista; negativo = faltam N dias.
 function ritmoDasCompras(compras, hoje) {
   if (!compras || compras.length < MIN_COMPRAS) return null;
   const intervalos = [];
   for (let i = 1; i < compras.length; i++) intervalos.push(diasEntre(compras[i - 1].data, compras[i].data));
   const ritmo = Math.round(mediana(intervalos));
-  const ultima = compras[compras.length - 1].fim;
-  const previsao = somarDias(ultima, ritmo);
+  const ultimaCompra = compras[compras.length - 1];
+  const ultima = ultimaCompra.fim;
+  const pelaRegua = somarDias(ultimaCompra.data, ritmo);
+  const diaSeguinte = somarDias(ultima, 1);
+  const previsao = pelaRegua > diaSeguinte ? pelaRegua : diaSeguinte;
   return {
     num_compras: compras.length,
     ritmo_dias: ritmo,
@@ -131,8 +139,11 @@ function itensDaProposta(ritmoCliente, comprasCliente, comprasPorSku, hoje) {
   const ultimas = comprasCliente.slice(-FREQUENTE_ULTIMAS);
   const frequentes = [];
   for (const [sku, compras] of comprasPorSku) {
+    const tocaEm = (u) => compras.some(c => c.data <= u.fim && c.fim >= u.data);
+    // conta as compras do CLIENTE que tiveram o produto: as compras do produto
+    // são juntadas à parte e uma delas pode atravessar duas do cliente (contava 1)
+    if (ultimas.filter(tocaEm).length < FREQUENTE_MIN) continue;
     const nas = compras.filter(c => ultimas.some(u => c.data <= u.fim && c.fim >= u.data));
-    if (nas.length < FREQUENTE_MIN) continue;
     frequentes.push({
       codigo_sku: sku, quantidade: quantidadeTipica(nas), origem: 'frequente',
       ritmo_dias: null, ultima_compra: compras[compras.length - 1].fim, previsao: null,
