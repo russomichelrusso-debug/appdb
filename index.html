@@ -8425,6 +8425,9 @@
             vendedor_nome: state.seller || undefined,
             itens: state.survey.map(it => ({ codigo_sku: it.cod, quantidade_contada: it.qty })),
             localizacao: localizacao || undefined,
+            // gerado no toque: se a resposta se perder e o envio for pela fila, o
+            // reenvio devolve o levantamento já gravado em vez de gravar outro
+            id_envio: novoIdEnvio(),
           };
           const result = await apiCriarLevantamento(payload);
 

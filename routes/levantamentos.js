@@ -53,11 +53,19 @@ function itensDoLevantamentoValidos(itens) {
 //   vendedor_nome?: "...",
 //   nome_levantamento?: "...",
 //   itens: [{ codigo_sku, quantidade_contada }, ...],
-//   localizacao?: { latitude, longitude, precisao_m }  // GPS no momento de salvar
+//   localizacao?: { latitude, longitude, precisao_m },  // GPS no momento de salvar
+//   id_envio?: "uuid"  // gerado no toque em salvar: o reenvio da fila offline não grava outro
 // }
+const ID_ENVIO = /^[A-Za-z0-9-]{16,64}$/;
+async function levantamentoDoMesmoEnvio(client, idEnvio) {
+  const r = await client.query('/* levantamento:mesmo-envio */ SELECT id, cliente_id, data_visita FROM levantamentos WHERE id_envio = $1', [idEnvio]);
+  const l = r.rows[0];
+  return l ? { levantamento_id: l.id, cliente_id: l.cliente_id, data_visita: l.data_visita, localizacao_registrada: false, mesmo_envio: true } : null;
+}
 router.post('/', async (req, res) => {
   const { cliente, vendedor_nome, nome_levantamento, itens } = req.body;
   const localizacao = lerLocalizacao(req.body.localizacao);
+  const idEnvio = typeof req.body.id_envio === 'string' && ID_ENVIO.test(req.body.id_envio) ? req.body.id_envio : null;
   // erro do próprio envio: 422 (a fila offline do app tira como "recusado"; 400 ela reenvia)
   if (!cliente || !cliente.nome) return res.status(422).json({ erro: 'Informe os dados do cliente (nome).' });
   if (!itensDoLevantamentoValidos(itens)) return res.status(422).json({ erro: 'Informe ao menos um item, com código e quantidade contada.' });
@@ -66,14 +74,25 @@ router.post('/', async (req, res) => {
   try {
     client = await pool.connect();
     await client.query('BEGIN');
+    // Reenvio do mesmo levantamento (resposta perdida com sinal fraco -> fila
+    // offline -> reenvio): devolve o já gravado, sem gravar outro. Um envio de
+    // cada vez por id_envio (duas abas esvaziando a fila ao mesmo tempo).
+    if (idEnvio) {
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [idEnvio]);
+      const mesmo = await levantamentoDoMesmoEnvio(client, idEnvio);
+      if (mesmo) {
+        await client.query('COMMIT');
+        return res.status(200).json(mesmo);
+      }
+    }
     const clienteId = await acharOuCriarCliente(client, cliente);
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
 
     const levResult = await client.query(
-      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, data_visita`,
+      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m, id_envio)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, data_visita`,
       [clienteId, vendedorId, nome_levantamento || null,
-        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null]
+        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null, idEnvio]
     );
     const levantamentoId = levResult.rows[0].id;
 
@@ -115,6 +134,15 @@ router.post('/', async (req, res) => {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
+    if (e.code === '23505' && e.constraint === 'idx_levantamentos_id_envio') {
+      // o mesmo envio gravado por outra requisição (a trava acima não deixa chegar
+      // aqui): devolve ele; sem conseguir confirmar, 503 deixa na fila do app
+      try {
+        const mesmo = await levantamentoDoMesmoEnvio(pool, idEnvio);
+        if (mesmo) return res.status(200).json(mesmo);
+      } catch (e2) { console.error(e2); }
+      return res.status(503).json({ erro: 'Tente de novo em instantes.' });
+    }
     console.error(e);
     res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar levantamento.' });
   } finally {

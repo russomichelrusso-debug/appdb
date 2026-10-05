@@ -1342,10 +1342,19 @@ async function query(sql, params = []) {
   }
 
   // levantamentos
+  if (s.includes('/* LEVANTAMENTO:MESMO-ENVIO */')) {
+    return { rows: levantamentos.filter(l => l.id_envio && l.id_envio === params[0]).map(l => ({ id: l.id, cliente_id: l.cliente_id, data_visita: l.data_visita })) };
+  }
   if (s.includes('INSERT INTO LEVANTAMENTOS')) {
+    if (params[6] && levantamentos.some(l => l.id_envio === params[6])) {
+      // índice único parcial idx_levantamentos_id_envio
+      const err = new Error('duplicate key value violates unique constraint "idx_levantamentos_id_envio"');
+      err.code = '23505'; err.constraint = 'idx_levantamentos_id_envio';
+      throw err;
+    }
     const l = {
       id: nextId.levantamentos++, cliente_id: params[0], vendedor_id: params[1], nome: params[2], data_visita: new Date().toISOString(),
-      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null,
+      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null, id_envio: params[6] ?? null,
     };
     levantamentos.push(l);
     return { rows: [{ id: l.id, data_visita: l.data_visita }] };

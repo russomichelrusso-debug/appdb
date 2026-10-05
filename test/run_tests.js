@@ -364,6 +364,37 @@ async function main() {
   assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
   assert(typeof res.body[0].quantidade_contada === 'string', 'quantidade_contada vem como string (NUMERIC do Postgres) - front precisa converter com Number(), nunca somar direto');
 
+  // 12c) levantamento com id_envio (gerado no toque em salvar): com sinal fraco o
+  // servidor gravava, a resposta se perdia e o reenvio da fila gravava outro. O
+  // reenvio com o mesmo id devolve o já gravado (200), sem gravar de novo.
+  {
+    mockDb.__seed({ clientes: [{ id: 9701, nome: 'LOJA LEVANTAMENTO DUPLO', documento: '97010000000197' }] });
+    const corpo = { cliente: { cliente_id: 9701, nome: 'LOJA LEVANTAMENTO DUPLO' }, itens: [{ codigo_sku: '60863', quantidade_contada: 4 }], id_envio: 'lev-envio-0001-abcdef' };
+    const r1 = await req('POST', '/api/levantamentos', corpo);
+    const r2 = await req('POST', '/api/levantamentos', corpo);
+    const daLoja = () => mockDb.__getLevantamentos().filter(l => l.cliente_id === 9701);
+    const itensDaLoja = () => mockDb.__getLevantamentoItens().filter(i => daLoja().some(l => l.id === i.levantamento_id));
+    assert(r1.status === 201 && r2.status === 200 && r2.body.levantamento_id === r1.body.levantamento_id && r2.body.mesmo_envio === true
+      && daLoja().length === 1 && itensDaLoja().length === 1,
+      `levantamento: reenvio com o mesmo id_envio devolve o já gravado, sem gravar outro: ${JSON.stringify([r1.body, r2.body])}`);
+    // dois envios ao mesmo tempo (a busca não achou e o INSERT bateu no índice único): devolve o gravado
+    const connectOriginal = mockDb.pool.connect;
+    let escondeu = 0;
+    mockDb.pool.connect = async () => {
+      const c = await connectOriginal();
+      return { ...c, query: async (sql, params) => (sql.includes('levantamento:mesmo-envio') ? (escondeu++, { rows: [] }) : c.query(sql, params)) };
+    };
+    let r3;
+    try { r3 = await req('POST', '/api/levantamentos', corpo); } finally { mockDb.pool.connect = connectOriginal; }
+    const r4 = await req('POST', '/api/levantamentos', { ...corpo, id_envio: 'lev-envio-0002-abcdef' });
+    assert(escondeu === 1 && r3.status === 200 && r3.body.levantamento_id === r1.body.levantamento_id && r4.status === 201 && daLoja().length === 2,
+      `levantamento: corrida no índice único devolve o já gravado; outro id_envio grava outro: ${JSON.stringify([r3.body, r4.status])}`);
+    const html = require('fs').readFileSync(path.join(__dirname, '../index.html'), 'utf8');
+    const salvar = html.slice(html.indexOf('async function saveLevantamento()'), html.indexOf('function openLevOpenModal()'));
+    assert(/id_envio: novoIdEnvio\(\)/.test(salvar) && salvar.indexOf('id_envio') < salvar.indexOf('apiCriarLevantamento(payload)'),
+      'app: o levantamento leva um id_envio gerado no toque em salvar (vai junto pela fila offline)');
+  }
+
   // 13) classificatório: calcula sobre os ÚLTIMOS 12 MESES (régua móvel da
   // Política Comercial rev. 06 - ver routes/clientesClassificatorio.js) -
   // venda de 400 dias atrás não conta, de 200 dias atrás conta. Datas
