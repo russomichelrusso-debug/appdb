@@ -222,15 +222,28 @@ function esquecerTentativas_(props, id) {
 }
 
 // O Render gratuito dorme sem uso: chama /health e espera acordar (até ~1,5 min).
+// Depois confere o banco (/health/banco): com o banco fora, a rodada acaba sem
+// mandar nada - os 503 de uma queda longa do banco não contam como tentativa e
+// o script não desiste de e-mails bons. Servidor sem a rota (404, versão
+// anterior) conta como banco no ar.
 function acordarServidor_() {
   for (let i = 0; i < 4; i++) {
     try {
       const r = UrlFetchApp.fetch(CONFIG.urlServidor + '/health', { muteHttpExceptions: true });
-      if (r.getResponseCode() === 200) return true;
+      if (r.getResponseCode() === 200) return bancoNoAr_();
     } catch (e) { /* ainda acordando */ }
     Utilities.sleep(20000);
   }
   Logger.log('Servidor não respondeu - tento de novo na próxima rodada.');
+  return false;
+}
+
+function bancoNoAr_() {
+  try {
+    const r = UrlFetchApp.fetch(CONFIG.urlServidor + '/health/banco', { muteHttpExceptions: true });
+    if (r.getResponseCode() === 200 || r.getResponseCode() === 404) return true;
+  } catch (e) { /* sem resposta */ }
+  Logger.log('Banco de dados do app fora do ar - tento de novo na próxima rodada (sem contar tentativa).');
   return false;
 }
 

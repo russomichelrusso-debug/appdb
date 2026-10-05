@@ -98,6 +98,7 @@ async function query(sql, params = []) {
   // template literals multi-linha, então um substring de match precisa ficar
   // igual independente de indentação/quebra de linha.
   const s = sql.replace(/\s+/g, ' ').toUpperCase();
+  if (s.includes('HEALTH:BANCO')) return { rows: [{ '?column?': 1 }], rowCount: 1 };
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };

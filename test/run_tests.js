@@ -73,6 +73,22 @@ async function main() {
   let res = await req('GET', '/health');
   assert(res.status === 200 && res.body.status === 'ok', 'health check responde OK');
 
+  // 1b) /health/banco: servidor no ar E banco respondendo (o script do Gmail usa antes de
+  // mandar arquivo); banco com erro = 503 genérico, sem a mensagem do banco
+  res = await req('GET', '/health/banco');
+  assert(res.status === 200 && res.body.banco === 'ok', `health do banco responde OK: ${JSON.stringify(res.body)}`);
+  {
+    const queryOriginal = mockDb.pool.query;
+    mockDb.pool.query = async (sql, params) => {
+      if (sql.includes('health:banco')) throw new Error('connection terminated SEGREDO');
+      return queryOriginal(sql, params);
+    };
+    try { res = await req('GET', '/health/banco'); } finally { mockDb.pool.query = queryOriginal; }
+    const r2 = await req('GET', '/health');
+    assert(res.status === 503 && !JSON.stringify(res.body).includes('SEGREDO') && r2.status === 200,
+      `health do banco: banco fora = 503 sem detalhe, e o /health continua 200: ${JSON.stringify(res.body)}`);
+  }
+
   // 2) endpoint protegido sem token -> 401
   res = await req('GET', '/api/clientes');
   assert(res.status === 401, 'endpoint protegido rejeita sem token de sessão');
@@ -2021,6 +2037,7 @@ async function main() {
       return thread;
     };
     const agora = Date.now();
+    let bancoFora = false;
     const threads = [
       emailFalso('velho-503', 'noreply@cortag.com.br', 'Repres-1.xlsx', new Date(agora - 3 * 3600000), autenticado),
       emailFalso('novo-ok', 'noreply@cortag.com.br', 'Repres-2.xlsx', new Date(agora - 3600000), autenticado),
@@ -2036,6 +2053,7 @@ async function main() {
       GmailApp: { search: () => threads, getUserLabelByName: n => ({ nome: n }), createLabel: n => ({ nome: n }) },
       UrlFetchApp: { fetch: (url, opts) => {
         if (url.endsWith('/health')) return { getResponseCode: () => 200 };
+        if (url.endsWith('/health/banco')) return { getResponseCode: () => (bancoFora ? 503 : 200) };
         const corpo = JSON.parse(opts.payload);
         enviados.push(corpo.nome);
         const codigo = corpo.nome === 'Repres-1.xlsx' ? 503 : 200;
@@ -2043,6 +2061,13 @@ async function main() {
       } },
     };
     require('vm').runInNewContext(codigoGs, ctx);
+    // banco do app fora do ar por 5 rodadas (/health no ar, /health/banco 503): nada é
+    // mandado nem conta tentativa - senão uma queda longa do banco fazia desistir de e-mail bom
+    bancoFora = true;
+    for (let i = 0; i < 5; i++) ctx.verificarEmails();
+    const comBancoFora = { enviados: enviados.splice(0).length, marcadores: Object.keys(marcadores).filter(k => k !== 'golpe-endereco').length,
+      tentativas: props.TENTATIVAS || '{}' };
+    bancoFora = false;
     const rodadas = [];
     for (let i = 0; i < 4; i++) {
       ctx.verificarEmails();
@@ -2051,8 +2076,9 @@ async function main() {
     assert(rodadas.slice(0, 3).every(r => !r.velho && !r.novo && r.enviados === 'Repres-1.xlsx')
       && rodadas[3].velho === 'Cortag/Falhou' && rodadas[3].novo === 'Cortag/Importado' && rodadas[3].enviados === 'Repres-1.xlsx,Repres-2.xlsx'
       && !marcadores['golpe-nome'] && marcadores['golpe-endereco'] === 'Cortag/Nao autenticado'
-      && !('velho-503' in JSON.parse(props.TENTATIVAS || '{}')),
-      `script do Gmail: erro do servidor tenta 4 rodadas e desiste sem travar a fila; remetente falso não é mandado: ${JSON.stringify([rodadas, marcadores])}`);
+      && !('velho-503' in JSON.parse(props.TENTATIVAS || '{}'))
+      && comBancoFora.enviados === 0 && comBancoFora.marcadores === 0 && comBancoFora.tentativas === '{}',
+      `script do Gmail: erro do servidor tenta 4 rodadas e desiste sem travar a fila; banco fora não conta tentativa; remetente falso não é mandado: ${JSON.stringify([comBancoFora, rodadas, marcadores])}`);
   }
   {
     // relatório diário do fim de semana: na segunda sai um push só, o do mais novo
