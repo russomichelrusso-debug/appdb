@@ -1013,21 +1013,26 @@ async function main() {
       && mockDb.__getPedidos().length === antes + 2,
       `pedido do app: reenvio com o mesmo id_envio devolve o gravado (também na corrida): ${JSON.stringify([e1.body, e2.body, e3.body, semId.status])}`);
 
+    // (o app carimba enviado_em em cada envio - a versão é a hora do toque no relógio do servidor)
+    const agoraIso = () => new Date().toISOString();
     // Pedido feito sem internet e ALTERADO antes de o 1º envio sair: o app manda o mesmo
     // id_envio com os itens novos (e a hora do toque da alteração) - troca os itens do
     // mesmo pedido. A versão velha que chegar depois (fila de outro aparelho) não volta.
     const itensDe = (id) => mockDb.__getPedidoItens().filter(i => i.pedido_id === id).map(i => i.quantidade);
     const toque1 = new Date(Date.now() - 2 * 3600000).toISOString();
     const nPedidos = mockDb.__getPedidos().length;
-    const alt = await req('POST', '/api/pedidos', { ...corpo, itens: [{ codigo_sku: '70011', quantidade: 5, preco_unitario: 10 }], alterado_em: toque1 });
+    const alt = await req('POST', '/api/pedidos', { ...corpo, itens: [{ codigo_sku: '70011', quantidade: 5, preco_unitario: 10 }], alterado_em: toque1, enviado_em: agoraIso() });
     const depoisAlt = itensDe(e1.body.pedido_id);
-    const velho = await req('POST', '/api/pedidos', corpo); // a versão de antes chegando atrasada
+    const velho = await req('POST', '/api/pedidos', { ...corpo, enviado_em: agoraIso() }); // a versão de antes chegando atrasada
     const depoisVelho = itensDe(e1.body.pedido_id);
     // PATCH (pedido já com número): alteração mais velha que a gravada também não volta
-    const patchVelho = await req('PATCH', `/api/pedidos/${e1.body.pedido_id}`, { itens: [{ codigo_sku: '70011', quantidade: 1, preco_unitario: 10 }], alterado_em: toque0 });
-    const patchNovo = await req('PATCH', `/api/pedidos/${e1.body.pedido_id}`, { itens: [{ codigo_sku: '70011', quantidade: 7, preco_unitario: 10 }], alterado_em: new Date().toISOString() });
+    const patchVelho = await req('PATCH', `/api/pedidos/${e1.body.pedido_id}`, { itens: [{ codigo_sku: '70011', quantidade: 1, preco_unitario: 10 }], alterado_em: toque0, enviado_em: agoraIso() });
+    // outro aparelho com o relógio 2 h ATRASADO alterando agora: vale (a versão é a hora do
+    // servidor; pelo relógio do aparelho, "hora 2 h atrás" perderia pra versão gravada)
+    const atrasado = new Date(Date.now() - 2 * 3600000 - 60000).toISOString();
+    const patchNovo = await req('PATCH', `/api/pedidos/${e1.body.pedido_id}`, { itens: [{ codigo_sku: '70011', quantidade: 7, preco_unitario: 10 }], alterado_em: atrasado, enviado_em: atrasado });
     assert(alt.status === 200 && alt.body.atualizado === true && alt.body.pedido_id === e1.body.pedido_id && JSON.stringify(depoisAlt) === '[5]'
-      && velho.status === 200 && JSON.stringify(depoisVelho) === '[5]'
+      && velho.status === 200 && velho.body.versao_antiga === true && JSON.stringify(depoisVelho) === '[5]'
       && patchVelho.body.versao_antiga === true && patchNovo.body.atualizado === true && JSON.stringify(itensDe(e1.body.pedido_id)) === '[7]'
       && mockDb.__getPedidos().length === nPedidos,
       `pedido do app: alteração pelo mesmo envio troca os itens; versão mais velha não sobrescreve (POST e PATCH): ${JSON.stringify([alt.body, depoisAlt, depoisVelho, patchVelho.body, itensDe(e1.body.pedido_id)])}`);

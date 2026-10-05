@@ -29,13 +29,13 @@ function horaDoPedidoDoApp(valor, enviadoEm, agora = new Date()) {
   return new Date(t % 86400000 === 0 ? t - 1 : t).toISOString();
 }
 
-// Versão do pedido do app = hora do toque em Finalizar/Atualizar, pelo relógio
-// do aparelho (só hora completa com fuso). Serve só pra comparar versões do
-// mesmo pedido: a mais velha que chegar depois não sobrescreve a mais nova.
-function versaoDoApp(valor) {
-  return typeof valor === 'string' && HORA_COM_FUSO.test(valor) && Number.isFinite(new Date(valor).getTime())
-    ? new Date(valor).toISOString() : null;
-}
+// Versão do pedido do app = hora do toque em Finalizar/Atualizar, JÁ no relógio
+// do servidor (horaDoPedidoDoApp: só a espera, medida no mesmo aparelho) - o
+// relógio de cada aparelho não entra, então a alteração feita no tablet com a
+// hora certa não perde pra do celular adiantado (achado do revisor-cortag).
+// Serve pra comparar versões do mesmo pedido: a mais velha que chegar depois
+// (fila atrasada, outro aparelho) não sobrescreve a mais nova.
+const versaoDoApp = (toque, enviadoEm) => horaDoPedidoDoApp(toque, enviadoEm);
 const versaoMaisVelha = (nova, gravada) => !!(nova && gravada && new Date(nova).getTime() <= new Date(gravada).getTime());
 
 async function acharOuCriarVendedor(client, nomeVendedor) {
@@ -122,15 +122,23 @@ router.post('/', async (req, res) => {
     // vendedor tocou em "Atualizar pedido" antes de o 1º envio sair): se os itens
     // mudaram e a versão é mais nova, troca os itens do mesmo pedido.
     if (idEnvio) {
+      // um envio de cada vez por id_envio: a alteração tocada enquanto o 1º envio
+      // ainda grava espera ele terminar e cai na troca de itens (sem a trava, o
+      // INSERT dela batia no índice único e os itens novos se perdiam)
+      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [idEnvio]);
       const mesmo = await pedidoDoMesmoEnvio(client, idEnvio, req.usuario.id, true);
       if (mesmo === false) {
         await client.query('ROLLBACK');
         return res.status(409).json({ erro: 'Identificador de envio já usado.' });
       }
       if (mesmo) {
-        const versao = versaoDoApp(req.body.alterado_em) || versaoDoApp(data_pedido);
+        const versao = versaoDoApp(req.body.alterado_em || data_pedido, req.body.enviado_em);
         const resposta = { pedido_id: mesmo.id, cliente_id: mesmo.cliente_id, data_pedido: mesmo.data_pedido, mesmo_envio: true };
-        if (versaoMaisVelha(versao, mesmo.versao_app) || !itensValidos(itens)
+        if (versaoMaisVelha(versao, mesmo.versao_app)) {
+          await client.query('ROLLBACK');
+          return res.status(200).json({ ...resposta, versao_antiga: true });
+        }
+        if (!itensValidos(itens)
           || mesmosItens(await itensDoPedido(client, mesmo.id), itens)) {
           await client.query('ROLLBACK');
           return res.status(200).json(resposta);
@@ -215,7 +223,7 @@ router.post('/', async (req, res) => {
          VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, now()), $7, $8, $9::jsonb, $10, $11::timestamptz)
          RETURNING id, data_pedido`,
         [clienteId, vendedorId, observacao || null, numero_cotacao || null, origemFinal, dataPedidoGravar, pdf_modificado_em || null, req.usuario.id, contextoParaGravar(contexto), idEnvio,
-          origemFinal === 'app' ? (versaoDoApp(req.body.alterado_em) || versaoDoApp(data_pedido)) : null]
+          origemFinal === 'app' ? versaoDoApp(req.body.alterado_em || data_pedido, req.body.enviado_em) : null]
       );
       pedidoId = pedidoResult.rows[0].id;
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
@@ -369,7 +377,7 @@ router.patch('/:id', async (req, res) => {
 
     // alteração mais velha que a gravada (fila offline atrasada, outro aparelho):
     // não apaga a mais nova
-    const versao = versaoDoApp(alterado_em);
+    const versao = versaoDoApp(alterado_em, enviado_em);
     if (versaoMaisVelha(versao, atual.versao_app)) {
       await client.query('ROLLBACK');
       return res.json({ pedido_id: atual.id, cliente_id: atual.cliente_id, data_pedido: atual.data_pedido, atualizado_em: atual.atualizado_em, atualizado: false, versao_antiga: true });

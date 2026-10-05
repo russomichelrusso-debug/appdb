@@ -1284,6 +1284,8 @@ async function query(sql, params = []) {
     pedidos.push(p);
     return { rows: [{ id: p.id, data_pedido: p.data_pedido }] };
   }
+  // trava por id_envio (pg_advisory_xact_lock): no mock as consultas não se intercalam
+  if (s.includes('PG_ADVISORY_XACT_LOCK')) return { rows: [{}] };
   // POST /api/pedidos com id_envio: o reenvio do mesmo pedido devolve o gravado
   if (s.includes('FROM PEDIDOS WHERE ID_ENVIO = $1')) {
     return { rows: pedidos.filter(p => p.id_envio && p.id_envio === params[0])

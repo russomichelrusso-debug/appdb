@@ -10624,6 +10624,9 @@
       function corpoDaFila(item) {
         try { return JSON.parse((item.options && item.options.body) || '{}') || {}; } catch (e) { return {}; }
       }
+      function idsNaFila(condicao) {
+        return new Set(loadSyncQueue().filter(condicao).map(it => it.id));
+      }
       function removerDaFila(condicao) {
         const fila = loadSyncQueue();
         const resto = fila.filter(it => !condicao(it));
@@ -10686,6 +10689,7 @@
         const recusados = loadFilaRecusados().length;
         if (adminBtn) adminBtn.textContent = (n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente')
           + (recusados ? ` · ${recusados} recusado${recusados === 1 ? '' : 's'} pelo servidor` : '');
+        atualizarBotaoPedidosSalvos(); // pedido feito sem internet entra/sai da lista 🧾 Pedidos
         atualizarResumoStatus();
       }
       let syncQueueDraining = false;
@@ -12560,9 +12564,11 @@
           const contexto = contextoDoOrcamento();
           const agora = new Date().toISOString();
           let result, idEnvio = null, dataToque = null;
+          // a versão anterior ainda na fila (sem internet) sai DEPOIS que esta for aceita
+          // ou entrar na fila - se esta for recusada, a anterior continua lá
+          let anteriores = new Set();
           if (editando && editando.id) {
-            // a alteração anterior ainda na fila (sem internet) sai: esta a substitui
-            removerDaFila(it => it.path === `/api/pedidos/${editando.id}` && (it.options || {}).method === 'PATCH');
+            anteriores = idsNaFila(it => it.path === `/api/pedidos/${editando.id}` && (it.options || {}).method === 'PATCH');
             result = await apiAtualizarPedido(editando.id, { vendedor_nome: state.seller || undefined, itens, contexto, alterado_em: agora, enviado_em: null });
           } else {
             // pedido novo, ou o feito sem internet que ainda não tem número no
@@ -12570,7 +12576,7 @@
             // (antes um 2º "Finalizar" sem internet gravava outro pedido)
             idEnvio = (editando && editando.idEnvio) || novoIdEnvio();
             dataToque = (editando && editando.dataToque) || agora;
-            if (editando) removerDaFila(it => it.path === '/api/pedidos' && corpoDaFila(it).id_envio === idEnvio);
+            if (editando) anteriores = idsNaFila(it => it.path === '/api/pedidos' && corpoDaFila(it).id_envio === idEnvio);
             result = await apiCriarPedido({
               cliente: { cliente_id: cliente.id, nome: cliente.nome },
               vendedor_nome: state.seller || undefined,
@@ -12586,6 +12592,7 @@
               id_envio: idEnvio,
             });
           }
+          if (anteriores.size) removerDaFila(it => anteriores.has(it.id));
           const offline = !!(result && result.__filaOffline);
           // Cópia de segurança em CSV no Drive - independente do pedido em si já
           // ter ido pro servidor ou ter ficado pendente na fila acima; sem
@@ -12595,7 +12602,10 @@
           const csvFileName = pedidoCsvFileNameFor(cliente, !!editando);
           const driveResultado = await backupPedidoCsvNoGoogleDrive(csvText, csvFileName);
           let msg;
-          if (editando) {
+          if (result && result.versao_antiga) {
+            // outro aparelho já tinha gravado uma alteração mais nova deste pedido
+            msg = `O pedido de ${cliente.nome} já tinha uma alteração mais nova (feita em outro aparelho) — esta não foi aplicada. Reabra o pedido em 🧾 Pedidos pra ver como ficou`;
+          } else if (editando) {
             msg = offline
               ? `Sem conexão agora — a alteração do pedido de ${cliente.nome} fica salva aqui e vai pro servidor sozinha quando a rede voltar`
               : `Pedido de ${cliente.nome} atualizado — o mesmo pedido, sem criar outro`;
@@ -12737,8 +12747,32 @@
         if (label) label.textContent = pedidoEditando ? 'Atualizar pedido' : 'Finalizar pedido';
       }
 
+      // Pedidos feitos sem internet que ainda estão na fila (sem número no
+      // servidor): entram na lista "🧾 Pedidos" e no reconhecimento do CSV, pra
+      // alteração ir pro mesmo pedido (pelo id_envio) em vez de criar outro
+      function pedidosPendentesDaFila() {
+        const locais = loadClientesLocais();
+        return loadSyncQueue()
+          .filter(it => it.path === '/api/pedidos' && (it.options || {}).method === 'POST')
+          .map(it => {
+            const b = corpoDaFila(it);
+            if (!b.id_envio || !b.cliente || b.cliente.cliente_id == null || !Array.isArray(b.itens)) return null;
+            const c = locais.find(x => String(x.id) === String(b.cliente.cliente_id)) || {};
+            return {
+              id: `envio:${b.id_envio}`, idEnvio: b.id_envio, pendente: true, dataToque: b.data_pedido,
+              data_pedido: b.data_pedido, atualizado_em: b.alterado_em || null,
+              cliente_id: b.cliente.cliente_id, cliente_nome: b.cliente.nome || c.nome, cliente_documento: c.documento,
+              classificatorio_tipo: c.classificatorio_tipo, classificatorio_desconto: c.classificatorio_desconto,
+              codigo_oficial: c.codigo_oficial, contexto: b.contexto || null, itens: b.itens,
+            };
+          })
+          .filter(Boolean);
+      }
+      function todosPedidosSalvos() {
+        return pedidosPendentesDaFila().concat((pedidosSalvos && pedidosSalvos.pedidos) || []);
+      }
       function pedidosSalvosDoCliente(clienteId) {
-        return ((pedidosSalvos && pedidosSalvos.pedidos) || []).filter(p => String(p.cliente_id) === String(clienteId));
+        return todosPedidosSalvos().filter(p => String(p.cliente_id) === String(clienteId));
       }
       function atualizarBotaoPedidosSalvos() {
         const btn = document.getElementById('precosPedidosSalvosBtn');
@@ -12770,7 +12804,7 @@
       function renderListaPedidosSalvos(estado) {
         const cliente = pedidosSalvosCliente;
         const dias = (pedidosSalvos && pedidosSalvos.dias) || 120;
-        const lista = cliente ? pedidosSalvosDoCliente(cliente.id) : ((pedidosSalvos && pedidosSalvos.pedidos) || []);
+        const lista = cliente ? pedidosSalvosDoCliente(cliente.id) : todosPedidosSalvos();
         document.getElementById('pedidosSalvosSubtitulo').textContent = cliente
           ? `Pedidos que você fechou pra ${cliente.nome} nos últimos ${dias} dias. Abra pra mudar quantidade ou incluir produto — fica o mesmo pedido.`
           : `Pedidos que você fechou nos últimos ${dias} dias. Abra pra mudar quantidade ou incluir produto — fica o mesmo pedido.`;
@@ -12786,11 +12820,11 @@
             : 'Sem conexão e sem cópia da lista neste aparelho. O arquivo CSV abre mesmo assim.'}</div>`;
         }
         const itensHtml = lista.map(p => {
-          const aberto = pedidoEditando && String(pedidoEditando.id) === String(p.id);
+          const aberto = pedidoEditando && (String(pedidoEditando.id) === String(p.id) || (p.pendente && pedidoEditando.idEnvio === p.idEnvio));
           const nItens = p.itens.length;
           return `<div class="pedidoSalvoItem">
             <div>
-              <b>${cliente ? '' : escapeHtml(p.cliente_nome) + ' · '}${escapeHtml(dataHoraCurta(p.data_pedido))}${aberto ? ' · aberto' : ''}</b>
+              <b>${cliente ? '' : escapeHtml(p.cliente_nome) + ' · '}${escapeHtml(dataHoraCurta(p.data_pedido))}${p.pendente ? ' · ainda não enviado' : ''}${aberto ? ' · aberto' : ''}</b>
               <span>${nItens} ${nItens === 1 ? 'produto' : 'produtos'} · ${brl(totalDoPedidoSalvo(p))}${p.atualizado_em ? ' · alterado ' + escapeHtml(dataHoraCurta(p.atualizado_em)) : ''}</span>
             </div>
             <button type="button" data-abrir-pedido="${escapeHtml(String(p.id))}">${aberto ? 'Reabrir' : 'Abrir'}</button>
@@ -12827,7 +12861,10 @@
         state.cart = itens.map(it => ({ cod: it.cod, qty: it.qty }));
         // marca a edição antes de selecionar o cliente: setLevCliente desliga
         // a edição quando o cliente não é o do pedido
-        setPedidoEditando({ id: pedido.id, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido });
+        setPedidoEditando(pedido.pendente
+          // feito sem internet, ainda na fila: a alteração vai pelo mesmo id_envio
+          ? { id: null, idEnvio: pedido.idEnvio, dataToque: pedido.dataToque, pendente: true, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido }
+          : { id: pedido.id, clienteId: pedido.cliente_id, clienteNome: pedido.cliente_nome, dataPedido: pedido.data_pedido });
         setLevCliente({
           id: pedido.cliente_id, nome: pedido.cliente_nome, documento: pedido.cliente_documento,
           classificatorio_tipo: pedido.classificatorio_tipo, classificatorio_desconto: pedido.classificatorio_desconto,
@@ -12919,7 +12956,7 @@
           return;
         }
         const online = await atualizarPedidosSalvos();
-        const todos = (pedidosSalvos && pedidosSalvos.pedidos) || [];
+        const todos = todosPedidosSalvos(); // inclui os feitos sem internet ainda na fila
         const doClienteAtual = (p) => state.levCliente && String(p.cliente_id) === String(state.levCliente.id);
         // 1) mesmos produtos e quantidades de um pedido salvo: é ele
         const iguais = todos.filter(p => mesmosItens(itensCsv, p));
@@ -12994,7 +13031,7 @@
           }
           const btn = e.target.closest('[data-abrir-pedido]');
           if (!btn) return;
-          const pedido = ((pedidosSalvos && pedidosSalvos.pedidos) || []).find(p => String(p.id) === btn.dataset.abrirPedido);
+          const pedido = todosPedidosSalvos().find(p => String(p.id) === btn.dataset.abrirPedido);
           if (pedido) abrirPedidoSalvoNoOrcamento(pedido);
         });
         const input = document.getElementById('pedidoCsvInput');
