@@ -10717,6 +10717,7 @@
         const tirar = new Set();
         const recusados = [];
         const erros = new Map(); // id -> último erro (mostrado no Painel)
+        const naoAplicadas = []; // alteração mais velha que a já gravada (outro aparelho)
         let enviados = 0;
         for (const item of fila) {
           try {
@@ -10726,6 +10727,9 @@
             const r = await apiFetch(item.path, item.options);
             enviados++;
             tirar.add(item.id);
+            if (r && r.versao_antiga) naoAplicadas.push(corpoDaFila(item).cliente?.nome
+              || (((pedidosSalvos && pedidosSalvos.pedidos) || []).find(p => item.path === `/api/pedidos/${p.id}`) || {}).cliente_nome || 'cliente');
+            if (item.path.startsWith('/api/pedidos')) registrarEnvioNaListaDePedidos(item, r);
             // o pedido aberto pra alteração era o feito sem internet: agora tem número
             if (r && r.pedido_id && pedidoEditando && !pedidoEditando.id && item.path === '/api/pedidos'
               && corpoDaFila(item).id_envio === pedidoEditando.idEnvio) {
@@ -10754,6 +10758,8 @@
           const r = recusados[0];
           showToast(`O servidor recusou: ${r.item.descricao || 'envio pendente'} — ${String(r.erro).replace(/\.$/, '')}${recusados.length > 1 ? ` (e mais ${recusados.length - 1})` : ''}. Ficou guardado no aparelho (Painel › Ver pendências e recusados).`, 'erro');
           console.warn('Fila offline: itens recusados pelo servidor e retirados da fila', recusados);
+        } else if (naoAplicadas.length) {
+          showToast(`Alteração de pedido feita sem internet não aplicada (${[...new Set(naoAplicadas)].join(', ')}): já havia uma alteração mais nova, de outro aparelho. Reabra o pedido em 🧾 Pedidos pra ver como ficou.`, 'erro');
         } else if (recusados.length && !silencioso) {
           showToast('O servidor recusou um envio pendente e não há espaço no aparelho pra guardá-lo à parte — veja no Painel › Ver pendências e recusados.', 'erro');
         } else if (enviados > 0 && !silencioso) {
@@ -12757,7 +12763,8 @@
           .map(it => {
             const b = corpoDaFila(it);
             if (!b.id_envio || !b.cliente || b.cliente.cliente_id == null || !Array.isArray(b.itens)) return null;
-            const c = locais.find(x => String(x.id) === String(b.cliente.cliente_id)) || {};
+            const c = locais.find(x => String(x.id) === String(b.cliente.cliente_id))
+              || (state.levCliente && String(state.levCliente.id) === String(b.cliente.cliente_id) ? state.levCliente : {});
             return {
               id: `envio:${b.id_envio}`, idEnvio: b.id_envio, pendente: true, dataToque: b.data_pedido,
               data_pedido: b.data_pedido, atualizado_em: b.alterado_em || null,
@@ -12768,8 +12775,41 @@
           })
           .filter(Boolean);
       }
+      // Pedidos do servidor com a alteração que ainda está na fila por cima (sem
+      // isso, reabrir mostrava a versão de antes e "Atualizar" apagava a
+      // alteração pendente - achado do revisor-cortag)
       function todosPedidosSalvos() {
-        return pedidosPendentesDaFila().concat((pedidosSalvos && pedidosSalvos.pedidos) || []);
+        const fila = loadSyncQueue();
+        const doServidor = ((pedidosSalvos && pedidosSalvos.pedidos) || []).map(p => {
+          const patch = fila.filter(it => it.path === `/api/pedidos/${p.id}` && (it.options || {}).method === 'PATCH').pop();
+          const b = patch && corpoDaFila(patch);
+          return b && Array.isArray(b.itens)
+            ? { ...p, itens: b.itens, contexto: b.contexto || p.contexto, atualizado_em: b.alterado_em || p.atualizado_em, alteracaoPendente: true }
+            : p;
+        });
+        return pedidosPendentesDaFila().concat(doServidor);
+      }
+      // A fila acabou de enviar um pedido/alteração: põe na cópia da lista do
+      // aparelho na hora (senão o pedido sumia da lista até o próximo GET - e
+      // abrir o CSV dele nesse meio-tempo, sem sinal, gravava outro)
+      function registrarEnvioNaListaDePedidos(item, r) {
+        if (!r || !r.pedido_id || !pedidosSalvos || !Array.isArray(pedidosSalvos.pedidos)) return;
+        const b = corpoDaFila(item);
+        if (!Array.isArray(b.itens)) return;
+        const lista = pedidosSalvos.pedidos;
+        const atual = lista.find(p => String(p.id) === String(r.pedido_id));
+        if (atual) {
+          if (r.versao_antiga) return;
+          Object.assign(atual, { itens: b.itens, contexto: b.contexto || atual.contexto, atualizado_em: r.atualizado_em || b.alterado_em || atual.atualizado_em });
+        } else if (item.path === '/api/pedidos' && b.cliente && b.cliente.cliente_id != null) {
+          const c = loadClientesLocais().find(x => String(x.id) === String(b.cliente.cliente_id)) || {};
+          lista.unshift({
+            id: r.pedido_id, cliente_id: b.cliente.cliente_id, cliente_nome: b.cliente.nome || c.nome, cliente_documento: c.documento,
+            classificatorio_tipo: c.classificatorio_tipo, classificatorio_desconto: c.classificatorio_desconto, codigo_oficial: c.codigo_oficial,
+            data_pedido: r.data_pedido || b.data_pedido, atualizado_em: b.alterado_em || null, contexto: b.contexto || null, itens: b.itens,
+          });
+        } else return;
+        try { localStorage.setItem(PEDIDOS_SALVOS_LS_KEY, JSON.stringify(pedidosSalvos)); } catch (e) { }
       }
       function pedidosSalvosDoCliente(clienteId) {
         return todosPedidosSalvos().filter(p => String(p.cliente_id) === String(clienteId));
@@ -12824,7 +12864,7 @@
           const nItens = p.itens.length;
           return `<div class="pedidoSalvoItem">
             <div>
-              <b>${cliente ? '' : escapeHtml(p.cliente_nome) + ' · '}${escapeHtml(dataHoraCurta(p.data_pedido))}${p.pendente ? ' · ainda não enviado' : ''}${aberto ? ' · aberto' : ''}</b>
+              <b>${cliente ? '' : escapeHtml(p.cliente_nome) + ' · '}${escapeHtml(dataHoraCurta(p.data_pedido))}${p.pendente ? ' · ainda não enviado' : ''}${p.alteracaoPendente ? ' · alteração ainda não enviada' : ''}${aberto ? ' · aberto' : ''}</b>
               <span>${nItens} ${nItens === 1 ? 'produto' : 'produtos'} · ${brl(totalDoPedidoSalvo(p))}${p.atualizado_em ? ' · alterado ' + escapeHtml(dataHoraCurta(p.atualizado_em)) : ''}</span>
             </div>
             <button type="button" data-abrir-pedido="${escapeHtml(String(p.id))}">${aberto ? 'Reabrir' : 'Abrir'}</button>

@@ -394,7 +394,10 @@ Supabase, sem PR — não é mudança de código.
   `id_envio` e "Atualizar pedido" manda o mesmo `id_envio` com os itens novos (o servidor troca os itens do
   mesmo pedido); a versão anterior ainda na fila sai dela (vale também pro PATCH); quando a fila envia, o
   pedido aberto ganha o número. O pedido ainda na fila aparece na lista 🧾 Pedidos ("ainda não enviado") e é
-  reconhecido ao abrir o CSV dele (`pedidosPendentesDaFila`), mesmo depois de "Pedido novo". A versão
+  reconhecido ao abrir o CSV dele (`pedidosPendentesDaFila`), mesmo depois de "Pedido novo"; a alteração
+  de pedido já numerado ainda na fila aparece por cima dele ("alteração ainda não enviada",
+  `todosPedidosSalvos`), e o que a fila envia entra na lista do aparelho na hora
+  (`registrarEnvioNaListaDePedidos`); alteração descartada por ser mais velha avisa na fila. A versão
   anterior só sai da fila depois que a nova é aceita ou entra nela. `pedidos.versao_app` (hora do toque já
   no relógio do servidor, `horaDoPedidoDoApp` — não o relógio do aparelho) impede que uma versão mais velha
   chegando atrasada (outro aparelho, envio em andamento) apague a mais nova; o app avisa quando a alteração
