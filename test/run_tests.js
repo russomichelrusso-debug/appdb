@@ -840,6 +840,21 @@ async function main() {
   res = await req('GET', '/api/clientes/999999/comprados-recentes');
   assert(res.status === 404, 'comprados-recentes de cliente inexistente responde 404');
 
+  // 18b1) Dia do pedido do app no fuso de Brasília (routes/lib/comprasApp.js
+  // sqlDiaDoPedido): pedido com hora real vai pro dia de Brasília; o de PDF/faturamento,
+  // gravado só com a data (meia-noite UTC), fica no dia gravado. Nenhuma rota corta
+  // data_pedido direto no fuso do banco (UTC).
+  {
+    const { sqlDiaDoPedido } = require('../routes/lib/comprasApp');
+    const expr = sqlDiaDoPedido('p3');
+    const fs = require('fs');
+    const cortesDiretos = ['relatorios.js', 'recompra.js', 'pedidos.js']
+      .filter(f => /data_pedido\)?::date(?!\s+(?:ELSE|END))|DATE\(\w+\.data_pedido\)/.test(fs.readFileSync(require('path').join(__dirname, '../routes', f), 'utf8')));
+    assert(/p3\.data_pedido::time = '00:00:00' THEN p3\.data_pedido::date ELSE \(p3\.data_pedido AT TIME ZONE 'America\/Sao_Paulo'\)::date/.test(expr)
+      && cortesDiretos.length === 0,
+      `dia do pedido do app no fuso de Brasília (só-data à meia-noite UTC fica como está); nenhuma rota corta data_pedido em UTC: ${JSON.stringify([expr, cortesDiretos])}`);
+  }
+
   // 18b2) Recompra da semana (routes/recompra.js + routes/lib/ritmoCompra.js):
   // ritmo = mediana dos intervalos entre compras dos últimos 12 meses (mín. 3),
   // pedido a menos de 7 dias do anterior entra na mesma compra (até 14 dias de

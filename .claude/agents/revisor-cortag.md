@@ -29,6 +29,10 @@ como meia-noite UTC; no fuso do Brasil viram o dia/mês anterior. Exibir com `fo
 (`index.html`), `partesDoPeriodo` (`curva-abc.html`) ou `String(d).slice(0, 10)`. Procure
 `new Date(` aplicado a esses campos seguido de `toLocaleDateString`, `getDate`, `getMonth`,
 `toISOString().slice`, `Intl.DateTimeFormat`. (PRs #134 e #135.)
+No SQL, o dia de `data_pedido` (TIMESTAMPTZ, banco em UTC) sai **só** por `sqlDiaDoPedido`
+(`routes/lib/comprasApp.js`): `data_pedido::date`/`DATE(data_pedido)` põe o pedido das 21h+ no
+dia seguinte, e converter direto pro fuso estraga o pedido de PDF (gravado só com a data, à
+meia-noite UTC). Período de pedidos do app filtra pela mesma expressão.
 
 **2. Soma de faturamento usa `sqlFaturadoDeFato`** (`routes/lib/faturadoDeFato.js`), não
 `status = 'faturado'`: pedido com título à vista pendente não conta enquanto não pago. Vale pra

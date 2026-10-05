@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { sqlDiaDoPedido } = require('./lib/comprasApp');
 
 router.param('id', validarIdInteiro);
 
@@ -319,7 +320,7 @@ router.get('/duplicados', async (req, res) => {
           JOIN pedido_itens pi3 ON pi3.pedido_id = p3.id
           WHERE p3.id <> p2.id
             AND p3.cliente_id = p2.cliente_id
-            AND DATE(p3.data_pedido) = DATE(p2.data_pedido)
+            AND ${sqlDiaDoPedido('p3')} = ${sqlDiaDoPedido('p2')}
             AND pi3.produto_id = pi2.produto_id
         )
       )
