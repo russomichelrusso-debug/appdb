@@ -2037,8 +2037,27 @@ async function main() {
     assert(j('2026-10-12T02:00:00Z') === '2026-10-12T10:00:00.000Z', 'push: domingo 23h fica pra segunda 7h');
     assert(nov.endpointPushValido('https://fcm.googleapis.com/fcm/send/abc') && nov.endpointPushValido('https://web.push.apple.com/xyz')
       && !nov.endpointPushValido('http://fcm.googleapis.com/x') && !nov.endpointPushValido('https://exemplo.com/fcm.googleapis.com')
-      && !nov.endpointPushValido('https://googleapis.com.evil.test/x'),
+      && !nov.endpointPushValido('https://googleapis.com.evil.test/x')
+      // hosts exatos: outra API do Google (ou subdomínio inventado) não é servidor de push
+      && nov.endpointPushValido('https://updates.push.services.mozilla.com/wpush/v2/abc')
+      && nov.endpointPushValido('https://wns2-par02p.notify.windows.com/w/?token=abc')
+      && nov.endpointPushValido('https://FCM.googleapis.com/fcm/send/abc')
+      && !nov.endpointPushValido('https://storage.googleapis.com/bucket/x')
+      && !nov.endpointPushValido('https://www.googleapis.com/upload/x')
+      && !nov.endpointPushValido('https://x.fcm.googleapis.com/fcm/send/abc')
+      && !nov.endpointPushValido('https://evil.push.services.mozilla.com/x')
+      && !nov.endpointPushValido('https://api.push.apple.com/3/device/x')
+      && !nov.endpointPushValido('https://a.b.notify.windows.com/w/')
+      && !nov.endpointPushValido('https://notify.windows.com/w/')
+      && !nov.endpointPushValido('https://fcm.googleapis.com:8443/fcm/send/abc')
+      && !nov.endpointPushValido('https://user@fcm.googleapis.com/fcm/send/abc'),
       'push: só aceita endpoint https dos serviços de push dos navegadores');
+    // inscrição gravada antes da regra de hosts exatos: não recebe o POST e sai do banco
+    mockDb.__getPushInscricoes().push({ id: 9801, usuario_id: 1, endpoint: 'https://storage.googleapis.com/bucket/x', p256dh: 'a', auth: 'b' });
+    const enviadosAntes = webPushEnviados.length;
+    const foi = await nov.enviarPush({ id: 9801, endpoint: 'https://storage.googleapis.com/bucket/x', p256dh: 'a', auth: 'b' }, '{}', 'teste');
+    assert(foi === false && webPushEnviados.length === enviadosAntes && !mockDb.__getPushInscricoes().some(i => i.id === 9801),
+      'push: inscrição antiga com host que não é servidor de push não recebe o POST e é apagada');
   }
   // as importações feitas acima (classificatório, objetivos, relatório oficial
   // várias vezes) viraram novidades - reimportação em até 30 min = a mesma
