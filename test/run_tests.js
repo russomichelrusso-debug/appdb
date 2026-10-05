@@ -2273,6 +2273,23 @@ async function main() {
     assert(idSab !== idDom && sab.push_pendente === false, 'aviso: novidade nova do mesmo tipo tira da fila o push que ainda esperava o horário');
   }
 
+  {
+    // Service Worker: toda biblioteca de CDN que as páginas carregam está na lista
+    // do sw.js (senão quebra sem internet - imagem/PDF do orçamento, câmera no
+    // iPhone); e página/script do app guardados sem os parâmetros (?cliente=…).
+    const fs = require('fs');
+    const raiz = path.join(__dirname, '..');
+    const sw = fs.readFileSync(path.join(raiz, 'sw.js'), 'utf8');
+    const usadas = new Set();
+    for (const f of ['index.html', 'curva-abc.html', 'calculadora-materiais.html', 'ficha-cnpj.html', 'importadores.js']) {
+      for (const m of fs.readFileSync(path.join(raiz, f), 'utf8').matchAll(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"`\s)]+/g)) usadas.add(m[0]);
+    }
+    const faltando = [...usadas].filter(u => !sw.includes(`'${u}'`));
+    // versão fixa no endereço: o SW guarda pelo endereço e não busca de novo (@latest ficaria preso)
+    assert(usadas.size >= 5 && faltando.length === 0 && ![...usadas].some(u => u.includes('@latest')) && /cache\.put\(chave,/.test(sw) && !/ignoreSearch:\s*true/.test(sw),
+      `service worker guarda offline todas as bibliotecas de CDN das páginas e as páginas sem parâmetro: ${JSON.stringify(faltando)}`);
+  }
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);
