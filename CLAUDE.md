@@ -662,6 +662,21 @@ Supabase, sem PR — não é mudança de código.
     gratuito de geocodificação), marcada como aproximada.
   - Descartado por agora: prospecção de lojas que ainda não são clientes — depende de base
     externa de empresas por região, normalmente paga ou limitada.
+- **Vendedor cadastrado vê só os clientes dele — etapa futura, sem data** (pedido do usuário, 10/2026).
+  Hoje todo vendedor logado vê a carteira inteira; a base de clientes compartilhada é decisão assumida.
+  A ideia é o app reconhecer o vendedor e mostrar só os clientes dele. As planilhas oficiais trazem o
+  vendedor como "Nome (código)" — ex.: "Sergio Luiz Russo (20)", sendo 20 o código dele no ERP — e esse
+  código é o elo previsto entre `usuarios` e a carteira. Hoje o importador do relatório oficial **não lê**
+  esse campo (só a planilha Classificatório lê "Gestor", que aparece no card do cliente). Em aberto, a
+  decidir quando a etapa for puxada: onde guardar o código (coluna em `usuarios`), como o admin/gerente vê
+  tudo, cliente sem vendedor e cliente atendido por mais de um. Ligação com a revisão de segurança de
+  10/2026: hoje qualquer vendedor logado importa o relatório oficial, inclusive o classificatório do
+  cliente (decisão explícita em `routes/pedidosOficiais.js`); **com o escopo por vendedor essa abertura
+  passa a cruzar uma fronteira real** (um vendedor alterando cliente de outro). Junto com a etapa, entram:
+  `classificacoes[].data_referencia` não pode ser futura e o tipo/desconto de classificatório tem de
+  seguir a tabela de `routes/lib/politicaComercial.js` — ou o import do classificatório volta a ser só
+  de admin/e-mail; e as rotas de leitura sem filtro por vendedor (`routes/relatorios.js`, `levantamentos`
+  que não têm dono) precisam ganhar o filtro.
 - Continuar tratando pedido de UI ("botão colado na margem", "ícone fora de centro") como sinal
   de um padrão visual quebrado, não só o pixel específico apontado — vale checar se o mesmo
   padrão (`.clientClearBtn`, `.gearBtn`, paddings de 16px) se repete em outro lugar da mesma tela
