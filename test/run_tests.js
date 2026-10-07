@@ -2953,6 +2953,169 @@ async function main() {
       `service worker abre a página guardada se a rede não responder em ${prazo} ms (e guarda a nova em segundo plano)`);
   }
 
+  // Rotas destrutivas ou de administração que não tinham teste (auditoria de
+  // 10/2026): mesclar clientes, corrigir documento, apagar carteira antiga e o
+  // relatório inteiro, rascunho do levantamento, logout e gerar promocionais.
+  // Fica no fim da suíte porque /tudo/limpar apaga o relatório oficial inteiro.
+  {
+    const tokenAntes = authToken;
+    const novoUsuario = async (nome, email, admin) => {
+      const u = await mockDb.pool.query(
+        `INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, ${admin ? 'true' : 'false'}) RETURNING id, nome, email, is_admin`,
+        [nome, email, 'sub-' + email]
+      );
+      const tok = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tok), u.rows[0].id, '90']);
+      return { id: u.rows[0].id, tok };
+    };
+    const admin = await novoUsuario('Admin Destrutivas', 'admin.destrutivas@example.com', true);
+    const vend = await novoUsuario('Vendedor Destrutivas', 'vend.destrutivas@example.com', false);
+    const diasAtrasISO = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+    mockDb.__seed({
+      clientes: [
+        { id: 99701, nome: 'MESCLA MANTER LTDA', documento: null, contato: null, codigo_oficial: 'COD99701' },
+        { id: 99702, nome: 'MESCLA REMOVER LTDA', documento: '22.333.444/0001-55', contato: 'Fulano', codigo_oficial: 'COD99702',
+          classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 20, classificatorio_atualizado_em: '2026-09-01' },
+        { id: 99703, nome: 'DOCUMENTO ERRADO LTDA', documento: '00.000.000/0001-00', contato: null, codigo_oficial: null },
+      ],
+      pedidos: [{ id: 99801, cliente_id: 99702, vendedor_id: null, usuario_id: null, origem: 'app', data_pedido: new Date().toISOString() }],
+      levantamentos: [{ id: 99911, cliente_id: 99702, vendedor_id: null, data_visita: new Date().toISOString() }],
+      pedidosOficiaisItens: [
+        { nr_pedido: 'CARANT1', codigo_sku: '60863', cliente_codigo_oficial: 'COD99701', quantidade: 1, valor: 10, data_implantacao: diasAtrasISO(70), status: 'carteira', nota_chave: '' },
+        { nr_pedido: 'CARANT2', codigo_sku: '60863', cliente_codigo_oficial: 'COD99701', quantidade: 1, valor: 10, data_implantacao: diasAtrasISO(10), status: 'carteira', nota_chave: '' },
+        { nr_pedido: 'CARANT3', codigo_sku: '60863', cliente_codigo_oficial: 'COD99701', quantidade: 1, valor: 10, data_implantacao: diasAtrasISO(100), data_faturamento: diasAtrasISO(95), status: 'faturado', nota_chave: '1' },
+      ],
+      catalogoPrecos: [{ codigo_sku: '97001', nome: 'BASE TESTE PROMO', emb: 1, ipi: 0, familia: 'TESTE', precos_sem_imposto: { VAREJO: { SP: 100, RJ: 110, BA: 120 } } }],
+    });
+    const oficiais = () => mockDb.__getPedidosOficiaisItens();
+    const cliente = (id) => mockDb.__getClientes().find(c => Number(c.id) === id);
+
+    // vendedor comum: tudo isso é só de admin, e nada muda
+    authToken = vend.tok;
+    const antesOficiais = oficiais().length;
+    const negadas = [
+      ['POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99702, confirmar_codigo_oficial_diferente: true }],
+      ['PATCH', '/api/clientes/99703/documento', { documento: '33.444.555/0001-66' }],
+      ['GET', '/api/pedidos-oficiais/carteira-antiga/contagem'],
+      ['POST', '/api/pedidos-oficiais/carteira-antiga/limpar'],
+      ['GET', '/api/pedidos-oficiais/tudo/contagem'],
+      ['POST', '/api/pedidos-oficiais/tudo/limpar'],
+      ['POST', '/api/produtos-promocionais/gerar-por-desconto', { itens: [{ baseCode: '97001', novoCodigo: 'PV97001', descontoPct: 5 }] }],
+    ];
+    for (const [m, p, b] of negadas) {
+      res = await req(m, p, b);
+      assert(res.status === 403, `vendedor comum recebe 403 em ${m} ${p}: ${res.status}`);
+    }
+    assert(oficiais().length === antesOficiais && cliente(99702) && cliente(99703).documento === '00.000.000/0001-00',
+      'chamadas negadas ao vendedor não mexeram em cliente nem no relatório oficial');
+
+    authToken = admin.tok;
+    // corrigir documento
+    res = await req('PATCH', '/api/clientes/99703/documento', {});
+    assert(res.status === 400, `corrigir documento sem documento: 400: ${res.status}`);
+    res = await req('PATCH', '/api/clientes/999999/documento', { documento: '33444555000166' });
+    assert(res.status === 404, `corrigir documento de cliente que não existe: 404: ${res.status}`);
+    res = await req('PATCH', '/api/clientes/99703/documento', { documento: '33444555000166' });
+    assert(res.status === 200 && cliente(99703).documento === '33.444.555/0001-66',
+      `admin corrige o documento (formatado): ${res.status} ${cliente(99703) && cliente(99703).documento}`);
+
+    // mesclar clientes
+    res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701 });
+    assert(res.status === 400, `mesclar sem os dois ids: 400: ${res.status}`);
+    res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99701 });
+    assert(res.status === 400, `mesclar o cliente com ele mesmo: 400: ${res.status}`);
+    res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 999999 });
+    assert(res.status === 404, `mesclar com cliente que não existe: 404: ${res.status}`);
+    res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99702 });
+    assert(res.status === 409 && res.body && res.body.codigoOficialRemover === 'COD99702' && cliente(99702),
+      `códigos oficiais diferentes pedem confirmação (409) e não mesclam: ${res.status}`);
+    res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99702, confirmar_codigo_oficial_diferente: true });
+    const mantido = cliente(99701);
+    assert(res.status === 200 && !cliente(99702), `mescla confirmada remove o duplicado: ${res.status}`);
+    assert(mockDb.__getPedidos().find(p => p.id === 99801).cliente_id === 99701 && mockDb.__getLevantamentos().find(l => l.id === 99911).cliente_id === 99701,
+      'pedido e levantamento do duplicado passam pro cliente mantido');
+    assert(mantido.codigo_oficial === 'COD99701' && mantido.documento === '22.333.444/0001-55' && mantido.contato === 'Fulano'
+      && mantido.classificatorio_tipo === 'Varejo Master' && Number(mantido.classificatorio_desconto) === 20,
+      `mescla mantém o código do mantido e completa só os campos vazios (CNPJ, contato, classificatório): ${JSON.stringify(mantido)}`);
+    assert(Array.isArray(res.body.camposCompletados) && ['CNPJ/CPF', 'contato', 'classificatório'].every(c => res.body.camposCompletados.includes(c)),
+      `mescla informa os campos completados: ${JSON.stringify(res.body && res.body.camposCompletados)}`);
+
+    // carteira antiga (60+ dias, nunca faturado)
+    const corte = diasAtrasISO(60);
+    const esperadoAntiga = oficiais().filter(i => i.status === 'carteira' && i.data_implantacao && i.data_implantacao < corte).length;
+    res = await req('GET', '/api/pedidos-oficiais/carteira-antiga/contagem');
+    assert(res.status === 200 && res.body.total === esperadoAntiga && esperadoAntiga >= 1, `contagem da carteira antiga: ${JSON.stringify(res.body)} (esperado ${esperadoAntiga})`);
+    res = await req('POST', '/api/pedidos-oficiais/carteira-antiga/limpar');
+    const nrs = oficiais().map(i => i.nr_pedido);
+    assert(res.status === 200 && !nrs.includes('CARANT1') && nrs.includes('CARANT2') && nrs.includes('CARANT3'),
+      `limpar carteira antiga apaga só o item em carteira com mais de 60 dias (faturado antigo e carteira recente ficam): ${res.status}`);
+
+    // apagar o relatório oficial inteiro
+    mockDb.__setConfiguracao('relatorio_oficial_mais_novo', diasAtrasISO(1));
+    const total = oficiais().length;
+    res = await req('GET', '/api/pedidos-oficiais/tudo/contagem');
+    assert(res.status === 200 && res.body.total === total, `contagem do relatório inteiro: ${JSON.stringify(res.body)} (esperado ${total})`);
+    res = await req('POST', '/api/pedidos-oficiais/tudo/limpar');
+    assert(res.status === 200 && res.body.excluidos === total && oficiais().length === 0,
+      `apagar o relatório inteiro remove todas as linhas: ${JSON.stringify(res.body)}`);
+    assert(mockDb.__getConfiguracao('relatorio_oficial_mais_novo') === undefined,
+      'apagar o relatório zera a data do mais novo (o próximo importado não sai "antigo")');
+
+    // gerar produtos promocionais por desconto
+    res = await req('POST', '/api/produtos-promocionais/gerar-por-desconto', { itens: [] });
+    assert(res.status === 400, `gerar promocionais sem itens: 400: ${res.status}`);
+    res = await req('POST', '/api/produtos-promocionais/gerar-por-desconto', { itens: [
+      { baseCode: '97001', novoCodigo: 'P97001', descontoPct: 10 },
+      { baseCode: '97001', novoCodigo: 'P97001', descontoPct: 5 },
+      { baseCode: 'NAOEXISTE', novoCodigo: 'PNAOEXISTE', descontoPct: 5 },
+      { baseCode: '97001', novoCodigo: 'P297001', descontoPct: 100 },
+    ] });
+    const promo = (mockDb.__getConfiguracao('produtos_promocionais') || []).find(p => p.c === 'P97001');
+    assert(res.status === 200 && JSON.stringify(res.body.criados) === '["P97001"]' && res.body.erros.length === 3,
+      `gera só o válido e recusa repetido no lote, base inexistente e desconto de 100%: ${JSON.stringify(res.body)}`);
+    assert(promo && promo.lsp === 90 && promo.lss === 99 && promo.lnc === 108 && promo.fx === 1 && promo.origemCodigo === '97001',
+      `promocional gerado com 10% sobre o preço líquido do Varejo: ${JSON.stringify(promo)}`);
+    res = await req('POST', '/api/produtos-promocionais/gerar-por-desconto', { itens: [{ baseCode: '97001', novoCodigo: 'P97001', descontoPct: 20 }] });
+    assert(res.status === 200 && res.body.criados.length === 0 && (mockDb.__getConfiguracao('produtos_promocionais') || []).filter(p => p.c === 'P97001').length === 1,
+      'código promocional que já existe não é sobrescrito');
+
+    // rascunho do levantamento: de cada usuário
+    authToken = vend.tok;
+    res = await req('GET', '/api/levantamentos/rascunho');
+    assert(res.status === 404, `sem rascunho salvo: 404: ${res.status}`);
+    res = await req('POST', '/api/levantamentos/rascunho', {});
+    assert(res.status === 400, `rascunho sem valor: 400: ${res.status}`);
+    res = await req('POST', '/api/levantamentos/rascunho', { valor: { cliente: 'X', itens: [{ cod: '60863', qtd: 2 }] } });
+    assert(res.status === 200, `salva o rascunho: ${res.status}`);
+    res = await req('GET', '/api/levantamentos/rascunho');
+    const rasc = res.body && (typeof res.body.rascunho === 'string' ? JSON.parse(res.body.rascunho) : res.body.rascunho);
+    assert(res.status === 200 && rasc && rasc.itens && rasc.itens[0].qtd === 2, `devolve o rascunho salvo: ${JSON.stringify(res.body)}`);
+    authToken = admin.tok;
+    res = await req('GET', '/api/levantamentos/rascunho');
+    assert(res.status === 404, `rascunho de um usuário não aparece pra outro: ${res.status}`);
+    authToken = vend.tok;
+    res = await req('DELETE', '/api/levantamentos/rascunho');
+    assert(res.status === 200, `apaga o rascunho: ${res.status}`);
+    res = await req('GET', '/api/levantamentos/rascunho');
+    assert(res.status === 404, `depois de apagar não há rascunho: ${res.status}`);
+
+    // logout: encerra só a sessão usada
+    const outraSessao = generateToken();
+    await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(outraSessao), vend.id, '90']);
+    res = await req('POST', '/api/auth/logout');
+    assert(res.status === 200, `logout: ${res.status}`);
+    res = await req('GET', '/api/auth/me');
+    assert(res.status === 401, `token usado no logout deixa de valer: ${res.status}`);
+    authToken = outraSessao;
+    res = await req('GET', '/api/auth/me');
+    assert(res.status === 200, `outra sessão do mesmo usuário continua valendo: ${res.status}`);
+    authToken = '';
+    res = await req('POST', '/api/auth/logout');
+    assert(res.status === 200, `logout sem token não quebra: ${res.status}`);
+
+    authToken = tokenAntes;
+  }
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

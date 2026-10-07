@@ -1,2 +1,5 @@
 node_modules/
 .playwright-mcp/
+
+# Saída de ferramentas de relatório (não publicar no GitHub Pages)
+brag-output*/

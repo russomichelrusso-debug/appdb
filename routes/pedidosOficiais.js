@@ -7,6 +7,9 @@ const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { saldoMinimoDaUf } = require('./lib/saldoMinimo');
+// "Hoje" é o dia de Brasília: o banco roda em UTC e CURRENT_DATE/now()::date
+// viram o dia seguinte depois das 21h.
+const { SQL_HOJE_BR } = require('./lib/comprasApp');
 
 // Status geral da importação oficial - pro painel admin mostrar de cara
 // quando foi o último relatório importado, sem precisar abrir cliente por
@@ -48,7 +51,7 @@ router.get('/carteira-antiga/contagem', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT COUNT(*) AS total FROM pedidos_oficiais_itens
-       WHERE status = 'carteira' AND data_implantacao < CURRENT_DATE - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
+       WHERE status = 'carteira' AND data_implantacao < ${SQL_HOJE_BR} - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
     );
     res.json({ total: Number(result.rows[0].total), dias: CARTEIRA_ANTIGA_DIAS });
   } catch (e) {
@@ -71,7 +74,7 @@ router.post('/carteira-antiga/limpar', async (req, res) => {
     await client.query('BEGIN');
     const excluidos = await client.query(
       `DELETE FROM pedidos_oficiais_itens
-       WHERE status = 'carteira' AND data_implantacao < CURRENT_DATE - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
+       WHERE status = 'carteira' AND data_implantacao < ${SQL_HOJE_BR} - INTERVAL '${CARTEIRA_ANTIGA_DIAS} days'`
     );
     // Pedido que só ficou "Parcial" por causa do item em carteira que acabou
     // de sumir (nunca ia ser atendido mesmo) passa a valer como totalmente
@@ -566,7 +569,7 @@ async function classificarEVincularClientes(client, classificacoes, itens) {
       `/* relatorio-oficial:classificar */
        UPDATE clientes c
        SET classificatorio_tipo = u.tipo, classificatorio_desconto = u.desconto,
-           classificatorio_atualizado_em = COALESCE(u.data_ref, c.classificatorio_atualizado_em, now()::date)
+           classificatorio_atualizado_em = COALESCE(u.data_ref, c.classificatorio_atualizado_em, ${SQL_HOJE_BR})
        FROM UNNEST($1::int[], $2::text[], $3::numeric[], $4::date[]) AS u(id, tipo, desconto, data_ref)
        WHERE c.id = u.id
          AND (c.classificatorio_atualizado_em IS NULL OR u.data_ref IS NULL OR c.classificatorio_atualizado_em <= u.data_ref)

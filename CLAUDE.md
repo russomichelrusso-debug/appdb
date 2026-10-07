@@ -87,9 +87,11 @@ Pegadinhas de ambiente:
 - `index.html` tem fim de linha **CRLF** — editar preservando (ex.: Python com `newline=''`).
 - Pra testar SQL num Postgres local: `db.js` liga SSL sempre que `DATABASE_URL` existe, então usar
   `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE` sem `DATABASE_URL`.
-- Num banco **novo**, a 1ª execução do `schema.sql` falha (um `ALTER TABLE pedidos … REFERENCES
-  usuarios` vem antes do `CREATE TABLE usuarios`); rodar de novo resolve. O Supabase não é
-  afetado (as tabelas já existem).
+- `schema.sql` roda inteiro em toda subida: tabela nova vem **antes** da primeira referência a ela
+  (até 10/2026 o `CREATE TABLE usuarios` vinha depois de um `REFERENCES usuarios` e um banco novo
+  só subia na 2ª execução). O pool (`db.js`) tem `max` 10 (`PG_POOL_MAX`), espera de conexão de
+  20 s e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
+  andamento (até 25 s) e fecha o pool.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
@@ -684,8 +686,6 @@ Supabase, sem PR — não é mudança de código.
 - `produtos_sem_ean13.csv` indica um backfill de EAN pendente; se o usuário pedir mais correções
   de código de barras, vale perguntar se essa lista ainda reflete o estado atual do catálogo antes
   de usá-la como referência.
-- Correção pequena pendente: mover o `CREATE TABLE usuarios` do `schema.sql` pra antes da
-  primeira referência a ele, pra um banco novo subir na primeira execução.
 - **Pendências de dado** (não é código — o usuário importa pelo Painel Administrativo):
   - **Novembro/2025 — resolvido em 27/09/2026** (era R$ 1 mil faturado; ficou R$ 434 mil). Não
     faltava: o relatório de 30/11/2025 tinha sido **aberto e salvo num Excel em inglês** e importado

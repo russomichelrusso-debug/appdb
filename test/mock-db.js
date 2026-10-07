@@ -727,6 +727,17 @@ async function query(sql, params = []) {
     const c = clientes.find(x => x.id == params[0]);
     return { rows: c ? [{ matriz_grupo: c.matriz_grupo || null }] : [] };
   }
+  // correção do documento pelo admin (routes/clientes.js PATCH /:id/documento)
+  if (s.startsWith('UPDATE CLIENTES SET DOCUMENTO = $1 WHERE ID = $2')) {
+    const [documento, id] = params;
+    if (clientes.some(c => c.documento === documento && Number(c.id) !== Number(id))) {
+      const err = new Error('duplicate key value violates unique constraint'); err.code = '23505'; throw err;
+    }
+    const c = clientes.find(x => Number(x.id) === Number(id));
+    if (!c) return { rows: [] };
+    c.documento = documento;
+    return { rows: [{ nome: c.nome }] };
+  }
   if (s.startsWith('UPDATE CLIENTES SET MATRIZ_GRUPO')) {
     const [matrizGrupo, id] = params;
     const c = clientes.find(x => Number(x.id) === Number(id));
@@ -772,10 +783,11 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.startsWith('UPDATE CLIENTES SET') && s.includes('DOCUMENTO = $2')) {
-    const [manterId, documento, contato, codigoOficial, classifTipo, classifDesconto, classifAtualizado] = params;
+    const [manterId, documento, contato, codigoOficial, matrizGrupo, pic, vlAcordo, classifTipo, classifDesconto, classifAtualizado] = params;
     const c = clientes.find(x => Number(x.id) === Number(manterId));
     if (c) {
       c.documento = documento; c.contato = contato; c.codigo_oficial = codigoOficial;
+      c.matriz_grupo = matrizGrupo; c.classificatorio_pic = pic; c.classificatorio_vl_acordo = vlAcordo;
       c.classificatorio_tipo = classifTipo; c.classificatorio_desconto = classifDesconto; c.classificatorio_atualizado_em = classifAtualizado;
     }
     return { rows: [] };
@@ -1748,6 +1760,16 @@ async function query(sql, params = []) {
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE')) {
     const registro = configuracoes[params[0]];
     return { rows: registro ? [{ valor: registro.valor, atualizado_em: registro.atualizado_em }] : [] };
+  }
+  // produtos promocionais (routes/produtosPromocionais.js): garante a linha com
+  // '[]' fixo no SQL (só a chave como parâmetro) antes do SELECT ... FOR UPDATE
+  if (s.startsWith('INSERT INTO CONFIGURACOES') && s.includes('DO NOTHING') && params.length === 1) {
+    if (!configuracoes[params[0]]) configuracoes[params[0]] = { valor: [], atualizado_em: new Date().toISOString() };
+    return { rows: [] };
+  }
+  if (s.startsWith('UPDATE CONFIGURACOES SET VALOR = $2')) {
+    configuracoes[params[0]] = { valor: JSON.parse(params[1]), atualizado_em: new Date().toISOString() };
+    return { rows: [], rowCount: 1 };
   }
   if (s.startsWith('INSERT INTO CONFIGURACOES')) {
     const [chave, valorJson] = params;

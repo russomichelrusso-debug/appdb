@@ -75,6 +75,18 @@ ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS numero_cotacao TEXT;
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS origem TEXT NOT NULL DEFAULT 'app';
 ALTER TABLE pedidos ADD COLUMN IF NOT EXISTS pdf_modificado_em TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pedidos_numero_cotacao ON pedidos(numero_cotacao) WHERE numero_cotacao IS NOT NULL;
+-- usuarios vem antes da primeira referência a ela (o ALTER TABLE pedidos logo
+-- abaixo): num banco novo, criar depois fazia a 1ª execução do schema falhar.
+CREATE TABLE IF NOT EXISTS usuarios (
+  id SERIAL PRIMARY KEY,
+  nome TEXT NOT NULL,
+  usuario TEXT UNIQUE,             -- sistema antigo (usuário/senha) - mantido só pra não perder histórico, não é mais usado pra login
+  senha_hash TEXT,                 -- idem - login hoje é só via Google (id_token), não por senha
+  email TEXT UNIQUE,               -- e-mail da conta Google - é isso que identifica o login agora
+  google_sub TEXT UNIQUE,          -- "sub" (id único da conta) devolvido pelo Google, gravado no primeiro login de fato
+  is_admin BOOLEAN NOT NULL DEFAULT false,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 -- Quem gravou o pedido - usado pra só deixar o autor (ou um admin) sobrescrever
 -- uma cotação já existente reenviando o mesmo numero_cotacao. NULL em pedidos
 -- antigos e nos importados do relatório oficial (não têm um usuário "dono").
@@ -121,16 +133,6 @@ CREATE TABLE IF NOT EXISTS levantamento_itens (
   quantidade_pedido NUMERIC NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS usuarios (
-  id SERIAL PRIMARY KEY,
-  nome TEXT NOT NULL,
-  usuario TEXT UNIQUE,             -- sistema antigo (usuário/senha) - mantido só pra não perder histórico, não é mais usado pra login
-  senha_hash TEXT,                 -- idem - login hoje é só via Google (id_token), não por senha
-  email TEXT UNIQUE,               -- e-mail da conta Google - é isso que identifica o login agora
-  google_sub TEXT UNIQUE,          -- "sub" (id único da conta) devolvido pelo Google, gravado no primeiro login de fato
-  is_admin BOOLEAN NOT NULL DEFAULT false,
-  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
-);
 -- Garante as colunas também em bancos que já tinham a tabela criada antes
 -- delas existirem (sem isso, "CREATE TABLE IF NOT EXISTS" não adicionaria
 -- coluna nova em quem já tinha rodado uma versão anterior do schema).
