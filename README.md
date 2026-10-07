@@ -69,6 +69,7 @@ Variáveis de ambiente:
 |---|---|---|
 | `DATABASE_URL` | Sim (produção) | String de conexão do PostgreSQL (Supabase, connection pooler). Sem ela, a conexão roda sem SSL (uso local). |
 | `DB_SSL_INSECURE` | Não | `true` desativa a validação do certificado SSL do banco (`rejectUnauthorized: false`). Use só como contorno temporário. |
+| `PG_POOL_MAX` | Não | Máximo de conexões do pool do Postgres (padrão `10`). Cada consulta tem limite de 60 s (`statement_timeout`) e quem espera conexão livre desiste em 20 s (`db.js`). |
 | `PORT` | Não | Porta HTTP do servidor. Padrão `10000`. |
 | `PREENCHIMENTO_CNPJ_DESLIGADO` | Não | `1` desliga o preenchimento automático das fichas de CNPJ que faltam (ver rota `/api/cnpj-preenchimento/status`). |
 | `GOOGLE_CLIENT_ID` | Não | Client ID do Google usado no login (há um valor fixo no código como padrão). |

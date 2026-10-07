@@ -175,9 +175,11 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 10000;
 
+let servidor = null;
+
 runMigrations()
   .then(() => {
-    app.listen(PORT, () => {
+    servidor = app.listen(PORT, () => {
       console.log(`Servidor rodando na porta ${PORT}`);
       // completa sozinho, de madrugada, as fichas de CNPJ que faltam
       iniciarPreenchimentoAutomatico(pool, radarCnpjRoutes.obterFicha);
@@ -189,3 +191,35 @@ runMigrations()
     console.error('Erro ao rodar migrações do banco:', err);
     process.exit(1);
   });
+
+// Desligamento organizado. O Render manda SIGTERM a cada deploy/reinício e mata
+// o processo uns 30 s depois. Sem isso a requisição em andamento (importação,
+// pedido) era cortada no meio - o Postgres desfaz a transação, mas o app recebia
+// erro. Agora: para de aceitar conexão nova, deixa as em andamento terminarem,
+// fecha o pool e sai; se passar de PRAZO_DESLIGAMENTO_MS, sai assim mesmo.
+const PRAZO_DESLIGAMENTO_MS = 25000;
+let desligando = false;
+function desligar(sinal) {
+  if (desligando) return;
+  desligando = true;
+  console.log(`${sinal} recebido: encerrando (esperando as requisições em andamento)...`);
+  const forcar = setTimeout(() => {
+    console.error('Desligamento passou do prazo; saindo assim mesmo.');
+    process.exit(1);
+  }, PRAZO_DESLIGAMENTO_MS);
+  forcar.unref();
+  const fecharPool = () => Promise.resolve()
+    .then(() => pool.end && pool.end())
+    .catch((e) => console.error('Erro ao fechar o pool do banco:', e))
+    .then(() => process.exit(0));
+  if (!servidor) return fecharPool();
+  servidor.close(fecharPool);
+  // conexões keep-alive paradas não seguram o close (repetido porque a conexão
+  // de uma requisição em andamento só fica parada depois que a resposta sai)
+  if (servidor.closeIdleConnections) {
+    servidor.closeIdleConnections();
+    setInterval(() => servidor.closeIdleConnections(), 250).unref();
+  }
+}
+process.on('SIGTERM', () => desligar('SIGTERM'));
+process.on('SIGINT', () => desligar('SIGINT'));
