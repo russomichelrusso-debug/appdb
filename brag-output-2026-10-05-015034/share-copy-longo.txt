@@ -1,1 +1,0 @@
-Fiz o Cortag Revolution Tools: o app que o vendedor da Cortag leva pra loja do cliente. Preço com imposto embutido, levantamento sem internet, recompra pelo ritmo de cada cliente, alerta de pedido bloqueado, dashboard do mês e calculadora de espaçadores — tudo terminando num orçamento no WhatsApp.
