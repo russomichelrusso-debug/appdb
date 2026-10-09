@@ -16490,6 +16490,7 @@
         if (exclFam.length) rule.excluirFamilias = exclFam;
         if (document.getElementById('promoExcluirOutraCampanha').checked) rule.excluirOutraCampanha = true;
         const exigePct = parseFloat(val('promoExigePct'));
+        if ((isNaN(exigePct) || exigePct <= 0) && (val('promoExigeCodigos') || val('promoExigeFamilias'))) return 'Informe o % mínimo da exigência de lançamentos/família foco.';
         if (!isNaN(exigePct) && exigePct > 0) {
           if (exigePct > 100) return 'A exigência de lançamentos/família foco vai até 100%.';
           const codigos = listaDaRegra(val('promoExigeCodigos'));
