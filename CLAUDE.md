@@ -274,6 +274,18 @@ Supabase, sem PR — não é mudança de código.
   - **Campanhas por canal** (10/2026, pedido do usuário: "as promoções são diferentes por canal"): cada
     regra de campanha do Painel (Promoções › quantidade/valor/cesta, chave `promocoes`) tem `canais`; as
     criadas antes, sem o campo, valem **só no Varejo** (`canaisDaRegra`) — antes toda regra valia em todos.
+  - **Campanhas do Trade News** (10/2026): a regra ganhou campos **opcionais** ("Mais condições" no
+    formulário; sem eles vale exatamente como antes, o teste confere): `classificatorios` (o do botão do
+    orçamento, `classiTiposDoOrcamento`, sem acento/maiúscula — limite diferente por grupo = uma regra
+    por grupo), `ufs`/`ufsExcluidas` (estado do orçamento), `validoAte` (texto `AAAA-MM-DD` × dia de
+    Brasília, `hojeBrasiliaISO`), `maxPctDoPedido` (protetor de piso: alvo até X% do pedido e com outro
+    produto; senão aviso "Campanha … não aplicada" no orçamento), alvo **"Pedido todo"** + `selfMetric:
+    "skus"` (itens diferentes — "Mais Cortag + Desconto"), `excluirCodigos`/`excluirFamilias`/
+    `excluirOutraCampanha` (contam na quantidade, não ganham o desconto) e `exigeItens` (% mínimo dos
+    itens em lançamentos/família foco). **O catálogo não diz o que é lançamento 2026/família foco** (o
+    "Produtos foco" do Painel é só do gráfico do Dashboard): a lista é digitada na própria regra. Motor
+    puro entre `<motor-campanhas>` no `index.html` (`avaliarCampanhas`), rodado isolado pelo teste; o
+    servidor grava `promocoes` sem validar campo. Preço Fixo continua sem bônus (`bonusDaCampanhaNoItem`).
   - **Preço fixo é por canal**: o item "PREÇO FIXO" da Lista de Preços só é fixo em Varejo/Atacado/
     E-commerce (`canaisFx`); tudo que trava desconto (campo por item, `setItemDiscount`, campanha) usa
     `isPrecoFixoParaCanal`, nunca o `p.fx` puro (que diz "fixo em algum canal").
