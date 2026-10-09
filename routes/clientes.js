@@ -4,6 +4,7 @@ const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
+const { sqlChaveEndereco } = require('./lib/geocodificacao');
 
 router.param('id', validarIdInteiro);
 
@@ -53,6 +54,9 @@ router.get('/', async (req, res) => {
 // no card do cliente - na rua, sem internet, o app abre a rota com eles. O
 // tipo do logradouro ("AVENIDA") só existe em dados_brutos: a coluna
 // logradouro guarda o nome sem ele, e "COLOMBO, MARINGA" o Waze não acha.
+// latitude_aprox/longitude_aprox/localizacao_nivel: posição aproximada pelo
+// endereço da ficha (routes/lib/geocodificacao.js), só enquanto a ficha tiver
+// o mesmo endereço consultado - "Clientes perto de mim" usa quando não há GPS.
 router.get('/sync', async (req, res) => {
   try {
     const result = await pool.query(
@@ -67,12 +71,14 @@ router.get('/sync', async (req, res) => {
                 'tipo', f.dados_brutos->'endereco'->>'tipoLogradouro', 'logradouro', f.logradouro,
                 'numero', f.numero, 'municipio', f.municipio, 'uf', f.uf
               ) END AS endereco,
+              g.latitude AS latitude_aprox, g.longitude AS longitude_aprox, g.nivel AS localizacao_nivel,
               -- pedidos bloqueados ainda valendo (selo no card do cliente, sem internet)
               (SELECT json_agg(json_build_object('nr_pedido', pb.nr_pedido, 'motivo', pb.motivo, 'recebido_em', pb.recebido_em) ORDER BY pb.recebido_em DESC)
                FROM pedidos_bloqueados pb
                WHERE c.codigo_oficial IS NOT NULL AND pb.cliente_codigo_oficial = c.codigo_oficial AND ${sqlBloqueioAtivo('pb')}) AS bloqueados
        FROM clientes c
        LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id
+       LEFT JOIN cliente_geocodificacao g ON g.cliente_id = c.id AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}
        ORDER BY c.nome`
     );
     res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });

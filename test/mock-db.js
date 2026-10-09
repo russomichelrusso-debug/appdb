@@ -17,6 +17,7 @@ let sessoes = [];
 let rascunhos = {}; // usuario_id -> { rascunho, atualizado_em }
 let codigosProduto = {}; // codigo_sku -> { ean13, dun14 }
 let clienteCnpjFicha = {}; // cliente_id -> linha de cliente_cnpj_ficha
+let clienteGeocodificacao = {}; // cliente_id -> linha de cliente_geocodificacao (posição pelo endereço)
 let titulosAvistaPendentes = []; // aba Pendentes à Vista (títulos em aberto)
 let classificatorioErp = {}; // cliente_id -> foto financeira da planilha Classificatório (cliente_classificatorio_erp)
 let pedidosPendentesPagamento = []; // aba de pedidos à vista aguardando pagamento
@@ -46,6 +47,7 @@ function reset() {
   rascunhos = {};
   codigosProduto = {};
   clienteCnpjFicha = {};
+  clienteGeocodificacao = {};
   pedidosOficiaisItens = [];
   pedidosPendentesPagamento = [];
   titulosAvistaPendentes = [];
@@ -76,6 +78,14 @@ function seed(partial) {
   if (partial.levantamentos) levantamentos.push(...partial.levantamentos);
   if (partial.levantamentoItens) levantamentoItens.push(...partial.levantamentoItens);
   if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
+  if (partial.geocodificacao) Object.assign(clienteGeocodificacao, partial.geocodificacao);
+}
+
+// Reproduz sqlChaveEndereco (routes/lib/geocodificacao.js)
+function chaveEnderecoFicha(f) {
+  const t = (v) => String(v == null ? '' : v).trim().toUpperCase();
+  const bruto = (f.dados_brutos && f.dados_brutos.endereco) || {};
+  return [t(bruto.tipoLogradouro), t(f.logradouro), t(f.numero), t(f.municipio), t(f.uf)].join('|');
 }
 
 // Reproduz sqlBloqueioAtivo (routes/lib/pedidosBloqueados.js): menos de 30
@@ -765,6 +775,16 @@ async function query(sql, params = []) {
         return {
           tipo: bruto.tipoLogradouro || null, logradouro: f.logradouro || null, numero: f.numero || null,
           municipio: f.municipio || null, uf: f.uf || null,
+        };
+      })(),
+      // posição pelo endereço só vale com o mesmo endereço da ficha (chave de
+      // sqlChaveEndereco, routes/lib/geocodificacao.js)
+      ...(() => {
+        const g = clienteGeocodificacao[c.id], f = clienteCnpjFicha[c.id];
+        const vale = g && f && g.latitude != null && g.endereco === chaveEnderecoFicha(f);
+        return {
+          latitude_aprox: vale ? String(g.latitude) : null, longitude_aprox: vale ? String(g.longitude) : null,
+          localizacao_nivel: vale ? g.nivel : null,
         };
       })(),
       bloqueados: (() => {
@@ -1768,6 +1788,20 @@ async function query(sql, params = []) {
   // Configurações genéricas chave/valor (routes/configuracoes.js) - usado
   // hoje por produtos_promocionais/promocoes e pela meta mensal/produtos
   // foco do Dashboard.
+  // status da posição das lojas (statusGeocodificacao, routes/lib/geocodificacao.js)
+  if (s.includes('AS COM_GPS') && s.includes('CLIENTE_GEOCODIFICACAO')) {
+    const max = params[0];
+    let comGps = 0, peloEndereco = 0, comEndereco = 0, naoEncontrados = 0;
+    for (const c of clientes) {
+      if (c.latitude != null) { comGps++; continue; }
+      const f = clienteCnpjFicha[c.id], g = clienteGeocodificacao[c.id];
+      if (f && String(f.logradouro || '').trim() && String(f.municipio || '').trim()) comEndereco++;
+      const mesmo = g && f && g.endereco === chaveEnderecoFicha(f);
+      if (mesmo && g.latitude != null) peloEndereco++;
+      if (mesmo && g.latitude == null && g.tentativas >= max) naoEncontrados++;
+    }
+    return { rows: [{ com_gps: String(comGps), pelo_endereco: String(peloEndereco), com_endereco_sem_gps: String(comEndereco), nao_encontrados: String(naoEncontrados) }] };
+  }
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE')) {
     const registro = configuracoes[params[0]];
     return { rows: registro ? [{ valor: registro.valor, atualizado_em: registro.atualizado_em }] : [] };
