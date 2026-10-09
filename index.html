@@ -3030,7 +3030,8 @@
     }
 
     /* Ações do card: ícone de traço (como os do topo) com o nome embaixo,
-       colunas iguais - 4 nomes inteiros numa linha. Contagem (sugestões,
+       colunas iguais - até 5 nomes inteiros numa linha (Pedido com Sugestões, Ficha,
+       Waze, Pedidos e Histórico cabe em 360px). Contagem (sugestões,
        pedidos salvos) vai na bolinha do ícone; botão escondido libera o
        espaço pros outros. */
     .clienteAcoes {
@@ -5388,6 +5389,9 @@
             <button type="button" class="clienteAcao hidden" id="precosFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
               title="Abrir a ficha cadastral (CNPJ) desse cliente">
               <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h5" /></svg></span>Ficha</button>
+            <button type="button" class="clienteAcao hidden" id="precosWazeClienteBtn" aria-label="Abrir a rota até esse cliente no Waze"
+              title="Abrir a rota até esse cliente no Waze">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg></span>Waze</button>
             <button type="button" class="clienteAcao" id="precosPedidosSalvosBtn" aria-label="Pedidos salvos desse cliente: reabrir pra alterar"
               title="Pedidos que você já fechou pra esse cliente — reabrir pra alterar">
               <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2z" /><path d="M9 7h6" /><path d="M9 11h6" /><path d="M9 15h4" /></svg><span class="clienteAcaoNum"></span></span>Pedidos</button>
@@ -5515,6 +5519,9 @@
             <button type="button" class="clienteAcao hidden" id="levFichaClienteBtn" aria-label="Abrir a ficha cadastral (CNPJ) desse cliente"
               title="Abrir a ficha cadastral (CNPJ) desse cliente">
               <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" /><path d="M14 2v6h6" /><path d="M8 13h8" /><path d="M8 17h5" /></svg></span>Ficha</button>
+            <button type="button" class="clienteAcao hidden" id="levWazeClienteBtn" aria-label="Abrir a rota até esse cliente no Waze"
+              title="Abrir a rota até esse cliente no Waze">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg></span>Waze</button>
             <button type="button" class="clienteAcao" id="levProdutosClienteBtn" aria-label="Histórico: produtos que esse cliente já comprou (Curva ABC)"
               title="Produtos que esse cliente já comprou (Curva ABC)">
               <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg></span>Histórico</button>
@@ -8802,6 +8809,7 @@
         carregarSugestoesRecompra(cliente);
         carregarCompradosRecentes(cliente);
         carregarAtalhoFichaCnpj(cliente);
+        atualizarBotaoWaze(cliente);
         atualizarBotaoPedidosSalvos();
         // Orçamento aberto como o pedido de outro cliente: trocar (ou limpar)
         // o cliente desliga a edição - o próximo "Finalizar" grava um pedido
@@ -8853,6 +8861,53 @@
       function abrirFichaCnpjCliente(cliente) {
         if (!cliente) return;
         window.open(urlFichaCnpj(cliente), '_blank');
+      }
+
+      // ---------------- Rota no Waze ----------------
+      // Botão "Waze" no card do cliente: abre a rota até a loja. Destino, em
+      // ordem: a posição gravada ao salvar o levantamento dentro da loja (exata)
+      // ou o endereço da ficha de CNPJ. Os dois vêm na cópia local de clientes
+      // (/api/clientes/sync), então o botão aparece mesmo sem internet - quem
+      // precisa de rede pra traçar a rota é o Waze. Sem ficha e sem posição, o
+      // botão não aparece.
+      function enderecoParaNavegacao(e) {
+        if (!e) return '';
+        const limpo = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+        const tipo = limpo(e.tipo), nomeRua = limpo(e.logradouro);
+        const municipio = limpo(e.municipio), uf = limpo(e.uf);
+        if (!nomeRua || !municipio) return ''; // só a cidade levaria pro centro dela, não pra loja
+        // a coluna logradouro vem sem o tipo ("COLOMBO"); a BrasilAPI às vezes já traz junto
+        const rua = tipo && !normalize(nomeRua).startsWith(normalize(tipo) + ' ') ? `${tipo} ${nomeRua}` : nomeRua;
+        const numero = limpo(e.numero);
+        const temNumero = numero && !/^(s\.?\/?\s*n\.?|0+)$/i.test(numero); // "S/N", "SN", "0"
+        return [rua, temNumero ? numero : '', uf ? `${municipio} - ${uf}` : municipio].filter(Boolean).join(', ');
+      }
+      function urlWazeDoCliente(cliente) {
+        if (!cliente || !cliente.id) return null;
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id)) || {};
+        const coord = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+        // a cópia local é refeita a cada /sync; o cliente selecionado pode ter
+        // vindo do rascunho com posição/endereço de antes
+        const lat = coord(local.latitude ?? cliente.latitude);
+        const lng = coord(local.longitude ?? cliente.longitude);
+        if (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0)) {
+          return `https://waze.com/ul?ll=${lat},${lng}&navigate=yes`;
+        }
+        const endereco = enderecoParaNavegacao(local.endereco || cliente.endereco);
+        return endereco ? `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes` : null;
+      }
+      function atualizarBotaoWaze(cliente) {
+        const visivel = !!urlWazeDoCliente(cliente);
+        ['precos', 'lev'].forEach(p => {
+          document.getElementById(p + 'WazeClienteBtn')?.classList.toggle('hidden', !visivel);
+        });
+      }
+      // Aba nova, como a ficha: o pedido/levantamento em andamento fica aqui.
+      // No celular o link waze.com/ul abre o app do Waze (sem ele, o site).
+      function abrirWazeCliente(cliente) {
+        const url = urlWazeDoCliente(cliente);
+        if (!url) { showToast('Esse cliente ainda não tem endereço nem localização registrada'); return; }
+        window.open(url, '_blank', 'noopener');
       }
 
       // ---------------- Comprados e não contados (Levantamento) ----------------
@@ -9156,6 +9211,7 @@
         document.getElementById('levTrocarClientBtn').addEventListener('click', () => selectLevClient('lev'));
         document.getElementById('levProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('levFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
+        document.getElementById('levWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
         refreshLevSaveInfo();
       }
@@ -9169,6 +9225,7 @@
         document.getElementById('precosTrocarClientBtn').addEventListener('click', () => selectLevClient('precos'));
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
+        document.getElementById('precosWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));
         document.getElementById('precosPedidosSalvosBtn').addEventListener('click', () => abrirPedidosSalvos(state.levCliente));
       }
 
@@ -11163,7 +11220,7 @@
             saveClientesLocais(result.clientes);
             podarNomesArquivoPendentes(result.clientes);
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
-            if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); }
+            if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); }
           }
           return true;
         } catch (e) { return false; /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }

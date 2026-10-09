@@ -242,6 +242,8 @@
       font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 9px; cursor: pointer; white-space: nowrap;
     }
     .fileBtnLike:active { opacity: .7; }
+    a.fileBtnLike { display: inline-block; text-decoration: none; }
+    .fichaHeadAcoes { display: flex; gap: 8px; flex-wrap: wrap; }
 
     /* Layout em caixas/linhas evocando o Comprovante de Inscrição e de
        Situação Cadastral oficial (CNPJ.gov) - mesma distribuição espacial
@@ -476,6 +478,24 @@
       return `<div class="fichaField"><span class="lbl">${escapeHtml(lbl)}</span><span class="val">${val}</span></div>`;
     }
 
+    // Rota até a loja no Waze, pelo endereço da ficha - mesma montagem do
+    // botão "Waze" do card do cliente (enderecoParaNavegacao no index.html).
+    // A coluna logradouro vem sem o tipo ("COLOMBO"); o tipo ("AVENIDA") só
+    // está nos dados brutos, e sem ele o Waze não acha a rua.
+    function urlWazeDaFicha(ficha) {
+      const limpo = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim();
+      const semAcento = (v) => limpo(v).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase();
+      const bruto = (ficha.dados_brutos && ficha.dados_brutos.endereco) || {};
+      const tipo = limpo(bruto.tipoLogradouro), nomeRua = limpo(ficha.logradouro);
+      const municipio = limpo(ficha.municipio), uf = limpo(ficha.uf);
+      if (!nomeRua || !municipio) return null; // só a cidade levaria pro centro dela, não pra loja
+      const rua = tipo && !semAcento(nomeRua).startsWith(semAcento(tipo) + ' ') ? `${tipo} ${nomeRua}` : nomeRua;
+      const numero = limpo(ficha.numero);
+      const temNumero = numero && !/^(s\.?\/?\s*n\.?|0+)$/i.test(numero); // "S/N", "SN", "0"
+      const endereco = [rua, temNumero ? numero : '', uf ? `${municipio} - ${uf}` : municipio].filter(Boolean).join(', ');
+      return `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`;
+    }
+
     function renderFicha(ficha, fonte, aviso) {
       const host = document.getElementById('fichaHost');
       const situacao = (ficha.situacao_cadastral || '').toUpperCase();
@@ -531,13 +551,17 @@
       linhas.push([campo('Capital social', escapeHtml(formatMoedaBr(ficha.capital_social)))]);
 
       const formTableHtml = linhas.map(cols => `<div class="formRow">${cols.join('')}</div>`).join('');
+      const urlWaze = urlWazeDaFicha(ficha);
 
       host.innerHTML = `
         <div class="card">
           ${aviso ? `<div class="avisoCache">Não consegui atualizar agora — mostrando o último dado salvo. (${escapeHtml(aviso)})</div>` : ''}
           <div class="fichaHead">
             <h2>Dados cadastrais</h2>
-            <button type="button" class="fileBtnLike" id="atualizarFichaBtn">Atualizar agora</button>
+            <div class="fichaHeadAcoes">
+              ${urlWaze ? `<a class="fileBtnLike" href="${escapeHtml(urlWaze)}" target="_blank" rel="noopener" aria-label="Abrir a rota até esse endereço no Waze">Abrir no Waze</a>` : ''}
+              <button type="button" class="fileBtnLike" id="atualizarFichaBtn">Atualizar agora</button>
+            </div>
           </div>
           <div class="formTable">${formTableHtml}</div>
           ${Array.isArray(ficha.socios) && ficha.socios.length ? `

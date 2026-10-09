@@ -756,6 +756,17 @@ async function query(sql, params = []) {
       id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null,
       nome_arquivo: c.nome_arquivo || null, nome_arquivo_em: c.nome_arquivo_em || null,
       regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
+      latitude: c.latitude == null ? null : String(c.latitude),
+      longitude: c.longitude == null ? null : String(c.longitude),
+      endereco: (() => {
+        const f = clienteCnpjFicha[c.id];
+        if (!f) return null;
+        const bruto = (f.dados_brutos && f.dados_brutos.endereco) || {};
+        return {
+          tipo: bruto.tipoLogradouro || null, logradouro: f.logradouro || null, numero: f.numero || null,
+          municipio: f.municipio || null, uf: f.uf || null,
+        };
+      })(),
       bloqueados: (() => {
         const l = bloqueiosAtivos().filter(b => c.codigo_oficial && b.cliente_codigo_oficial === c.codigo_oficial)
           .map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em }));
