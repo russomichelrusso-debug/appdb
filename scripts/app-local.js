@@ -42,10 +42,20 @@ async function semear() {
       { id: 101, nome: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO', documento: '11222333000181', codigo_oficial: '3663',
         classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 15, matriz_grupo: null },
       { id: 102, nome: 'CASA DAS FERRAMENTAS LTDA', documento: '44555666000192', codigo_oficial: '5569',
-        classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 18, matriz_grupo: null },
+        classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 18, matriz_grupo: null,
+        latitude: -23.4205, longitude: -51.9331 }, // posição gravada por levantamento: botão "Waze" vai pela coordenada
       { id: 103, nome: 'COMERCIAL PISO E ACABAMENTO', documento: '77888999000103', codigo_oficial: null,
         classificatorio_tipo: null, classificatorio_desconto: null, matriz_grupo: null },
     ],
+    // ficha de CNPJ com endereço: card com "Ficha" e "Waze" (pelo endereço); 103 fica sem os dois
+    fichasCnpj: {
+      101: {
+        razao_social: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO LTDA', situacao_cadastral: 'ATIVA',
+        logradouro: 'COLOMBO', numero: '7266', bairro: 'ZONA 07', municipio: 'MARINGA', uf: 'PR', cep: '87020001',
+        dados_brutos: { endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' } },
+        atualizado_em: hoje.toISOString(),
+      },
+    },
     pedidosOficiaisItens: [
       { nr_pedido: '676001', codigo_sku: '60863', cliente_codigo_oficial: '3663', quantidade: 10, valor: 1850,
         data_faturamento: dia(40), data_implantacao: dia(45), status: 'faturado', nota_fiscal: '900001' },

@@ -277,6 +277,32 @@ async function main() {
     `/sync traz o regime da ficha (simples/normal/mei): ${regimeDe(9011)}/${regimeDe(9012)}/${regimeDe(9013)}`
   );
 
+  // 5d) destino do botão "Waze" no card do cliente: endereço da ficha (com o
+  // tipo do logradouro, que só existe em dados_brutos) e a posição da loja
+  // gravada pelo levantamento - vão no /sync pra funcionar sem internet
+  mockDb.__seed({
+    clientes: [
+      { id: 9014, nome: 'COM FICHA E GPS', documento: '11122233000487', codigo_oficial: null, latitude: -23.4205, longitude: -51.9331 },
+      { id: 9015, nome: 'SEM FICHA', documento: null, codigo_oficial: null },
+    ],
+    fichasCnpj: {
+      9014: {
+        logradouro: 'COLOMBO', numero: '7266', bairro: 'ZONA 07', municipio: 'MARINGA', uf: 'PR',
+        dados_brutos: { endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO' } },
+      },
+    },
+  });
+  res = await req('GET', '/api/clientes/sync');
+  const comDestino = res.body.clientes.find(c => c.id === 9014);
+  const semDestino = res.body.clientes.find(c => c.id === 9015);
+  assert(
+    comDestino && comDestino.endereco && comDestino.endereco.tipo === 'AVENIDA' && comDestino.endereco.logradouro === 'COLOMBO'
+      && comDestino.endereco.municipio === 'MARINGA' && Number(comDestino.latitude) === -23.4205 && Number(comDestino.longitude) === -51.9331,
+    `/sync traz endereço da ficha (com o tipo do logradouro) e a posição da loja: ${JSON.stringify(comDestino)}`
+  );
+  assert(semDestino && semDestino.endereco === null && semDestino.latitude === null,
+    `cliente sem ficha nem GPS vai pro /sync sem destino: ${JSON.stringify(semDestino)}`);
+
   // 6) sincronizar produtos (simulando o precos.json)
   res = await req('POST', '/api/produtos/sync', { produtos: [
     { codigo_sku: '60863', nome: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm', categoria: '09 - CORTE DIAMANTADO' },

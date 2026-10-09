@@ -48,6 +48,11 @@ router.get('/', async (req, res) => {
 // ficha de CNPJ e ajusta o recado de ICMS-ST do orçamento, que é gerado offline.
 // nome_arquivo/nome_arquivo_em: nome escolhido pro CSV do cliente (ver
 // PUT /:id/nome-arquivo), pra valer em todos os aparelhos e sem internet.
+// latitude/longitude (posição da loja gravada ao salvar o levantamento) e
+// endereco (da ficha de CNPJ, null sem ficha) são o destino do botão "Waze"
+// no card do cliente - na rua, sem internet, o app abre a rota com eles. O
+// tipo do logradouro ("AVENIDA") só existe em dados_brutos: a coluna
+// logradouro guarda o nome sem ele, e "COLOMBO, MARINGA" o Waze não acha.
 router.get('/sync', async (req, res) => {
   try {
     const result = await pool.query(
@@ -57,6 +62,11 @@ router.get('/sync', async (req, res) => {
                 WHEN f.dados_brutos->'simples'->>'optante' = 'true' THEN 'simples'
                 WHEN f.dados_brutos->'simples'->>'optante' = 'false' THEN 'normal'
               END AS regime_tributario,
+              c.latitude, c.longitude,
+              CASE WHEN f.cliente_id IS NOT NULL THEN json_build_object(
+                'tipo', f.dados_brutos->'endereco'->>'tipoLogradouro', 'logradouro', f.logradouro,
+                'numero', f.numero, 'municipio', f.municipio, 'uf', f.uf
+              ) END AS endereco,
               -- pedidos bloqueados ainda valendo (selo no card do cliente, sem internet)
               (SELECT json_agg(json_build_object('nr_pedido', pb.nr_pedido, 'motivo', pb.motivo, 'recebido_em', pb.recebido_em) ORDER BY pb.recebido_em DESC)
                FROM pedidos_bloqueados pb

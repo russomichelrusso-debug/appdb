@@ -611,6 +611,16 @@ Supabase, sem PR — não é mudança de código.
   - Cada pedido é um aviso próprio (`porPedido` em `routes/lib/novidades.js`: não junta nem substitui o
     anterior do mesmo tipo). E-mail com mais de 2 dias grava o selo sem push (1ª rodada do script).
 
+- **Botão "Waze" no card do cliente** (10/2026, pedido do usuário): no Pedido e no Levantamento, entre
+  Ficha e Pedidos, abre a rota até a loja (`abrirWazeCliente`, `index.html`; link `waze.com/ul`, que no
+  celular abre o app). Destino: a posição gravada ao salvar o levantamento (`clientes.latitude`/
+  `longitude`, exata) ou, sem ela, o endereço da ficha de CNPJ. Os dois vêm no `/api/clientes/sync`, então
+  o botão funciona sem internet (o Waze é que precisa de rede pra rota). Sem ficha e sem posição, o botão
+  não aparece. **A coluna `logradouro` da ficha vem sem o tipo** ("COLOMBO"); o tipo ("AVENIDA") só está
+  em `dados_brutos->'endereco'->>'tipoLogradouro'` (radar-cnpj e BrasilAPI), e sem ele o Waze não acha a
+  rua — o endereço montado é "AVENIDA COLOMBO, 7266, MARINGA - PR" (número "S/N"/"0" fica fora). A tela
+  da Ficha cadastral ganhou "Abrir no Waze" pelo endereço. Em 10/2026: 291 clientes com ficha, 6 com GPS.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -656,7 +666,8 @@ Supabase, sem PR — não é mudança de código.
   3. **Registro de visita** a partir de `levantamentos` (lat/lng + `data_visita`): "última visita
      há N dias" e cruzamento visita × compra (visitado que não compra / compra e não é visitado).
   4. **Rota da semana por cidade** usando o município da ficha de CNPJ (`cliente_cnpj_ficha`,
-     sem GPS), com link pra abrir no Google Maps/Waze.
+     sem GPS). O link pra abrir **um** cliente no Waze já existe (botão "Waze" do card, 10/2026);
+     falta a rota com vários clientes da cidade.
   5. **Estado do preço pela UF do cliente** (ficha de CNPJ) em vez do GPS do vendedor — o botão
      "usar GPS" pega a UF de onde o vendedor está, que erra quando ele atende cliente de outro
      estado.
