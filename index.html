@@ -4860,6 +4860,60 @@
       cursor: default;
     }
 
+    .pertoLinha {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      min-height: 32px;
+    }
+
+    .pertoLinha input {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      accent-color: var(--red);
+    }
+
+    .pertoNome {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .pertoDist {
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .pertoBarra {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 8px 0 4px;
+    }
+
+    .pertoBarra .segmented {
+      flex: 1;
+      margin: 0;
+    }
+
+    .recompraBtn.pertoAtualizar {
+      flex: 0 0 44px;
+      font-size: 16px;
+    }
+
+    .pertoRota {
+      position: sticky;
+      bottom: 8px;
+      padding-top: 8px;
+      background: var(--white);
+    }
+
     .levitem.zero {
       box-shadow: 0 0 0 1.5px rgba(204, 9, 53, .25), var(--shadow-1);
       background: rgba(204, 9, 53, .03);
@@ -5640,6 +5694,7 @@
 
     <div id="tabClientes" class="hidden">
       <div class="recompra hidden" id="recompraWrap"></div>
+      <div class="recompra hidden" id="pertoWrap"></div>
       <div class="lev-inputWrap" style="padding-top:12px;">
         <div class="searchBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -6101,6 +6156,7 @@
                 id="apImportacaoEmail">—</span></div>
             <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
             <div class="ap-status-row"><span class="k">Fichas de CNPJ</span><span class="v" id="apFichasCnpj">—</span></div>
+            <div class="ap-status-row"><span class="k">Posição das lojas</span><span class="v" id="apPosicaoLojas">—</span></div>
             <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
             <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v"
                 id="apSyncQueueCount">Nada pendente</span></div>
@@ -9468,7 +9524,7 @@
           // aqui e não no clique do botão da aba: também se chega na aba Clientes
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
-          if (tab === 'clientes') carregarRecompra(false);
+          if (tab === 'clientes') { carregarRecompra(false); renderPerto(); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -11219,6 +11275,7 @@
           if (result && Array.isArray(result.clientes)) {
             saveClientesLocais(result.clientes);
             podarNomesArquivoPendentes(result.clientes);
+            if (pertoAberto()) renderPerto();
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
             if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); }
           }
@@ -12086,6 +12143,7 @@
         if (elPrevisao) elPrevisao.textContent = (PREVISAO_SOURCE === 'Nenhuma previsão carregada') ? 'Não carregada' : PREVISAO_SOURCE;
         if (elPromo) elPromo.textContent = PROMO_SOURCE;
         carregarStatusFichasCnpj();
+        carregarStatusPosicaoLojas();
 
         elServidor.textContent = 'Verificando…';
         elCatalogo.textContent = 'Verificando…';
@@ -12406,6 +12464,21 @@
           el.textContent = st.faltam > st.desistidos
             ? `${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)} · completando de madrugada (${st.hoje.limite}/noite)`
             : `${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)} ✓${st.desistidos ? ` · ${fmt(st.desistidos)} CNPJ não encontrado(s)` : ''}`;
+        } catch (e) {
+          el.textContent = '—';
+        }
+      }
+      // Quantos clientes têm posição pro "Perto de mim": GPS do levantamento ou
+      // pelo endereço da ficha (completada de madrugada, routes/lib/geocodificacao.js).
+      async function carregarStatusPosicaoLojas() {
+        const el = document.getElementById('apPosicaoLojas');
+        if (!el) return;
+        try {
+          const st = await apiFetch('/api/geocodificacao/status');
+          const fmt = (n) => Number(n).toLocaleString('pt-BR');
+          el.textContent = `${fmt(st.com_gps)} GPS · ${fmt(st.pelo_endereco)} pelo endereço`
+            + (st.faltam ? ` · ${fmt(st.faltam)} na fila (${st.limite}/noite)` : '')
+            + (st.nao_encontrados ? ` · ${fmt(st.nao_encontrados)} endereço(s) não encontrado(s)` : '');
         } catch (e) {
           el.textContent = '—';
         }
@@ -13923,6 +13996,229 @@
       function initClassificatorioAlertas() {
         document.getElementById('classificatorioAlertasBtn').addEventListener('click', toggleClassificatorioAlertas);
       }
+      // ---- Clientes perto de mim (aba Clientes, abaixo da Recompra) ----
+      // Lista por distância em linha reta da posição do celular, pra encaixar
+      // uma visita no tempo vago. Posição da loja: o GPS gravado ao salvar o
+      // levantamento ou, sem ele, a aproximada pelo endereço da ficha
+      // (latitude_aprox, routes/lib/geocodificacao.js - costuma ser um ponto da
+      // rua, marcada "aprox."). Tudo vem na cópia local do /sync, então funciona
+      // sem internet. "Montar rota" abre o Google Maps com as lojas marcadas na
+      // ordem do vizinho mais próximo (o Waze não aceita várias paradas por link);
+      // cada parada vai pelo endereço por extenso quando não há GPS - o Google
+      // acha o número, a posição aproximada não.
+      const PERTO_ABERTO_LS_KEY = 'cortagPertoAberto_v1';
+      const PERTO_RAIO_LS_KEY = 'cortagPertoRaio_v1';
+      const PERTO_RAIOS = [500, 2000, 10000];
+      const PERTO_POR_PAGINA = 20;
+      const ROTA_MAX_PARADAS = 10; // link do Google Maps: destino + até 9 paradas
+      let pertoPosicao = null; // { lat, lng, em }
+      let pertoBuscando = false;
+      let pertoErro = '';
+      let pertoVerTodos = false;
+      const pertoSelecionados = new Set();
+
+      function coordValida(lat, lng) {
+        return Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180 && (lat !== 0 || lng !== 0);
+      }
+      function posicaoDoCliente(c) {
+        const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
+        const lat = num(c.latitude), lng = num(c.longitude);
+        if (coordValida(lat, lng)) return { lat, lng, aprox: false };
+        const alat = num(c.latitude_aprox), alng = num(c.longitude_aprox);
+        if (coordValida(alat, alng)) return { lat: alat, lng: alng, aprox: c.localizacao_nivel !== 'numero' };
+        return null;
+      }
+      function distanciaM(a, b) {
+        const rad = (g) => g * Math.PI / 180;
+        const dLat = rad(b.lat - a.lat), dLng = rad(b.lng - a.lng);
+        const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.lat)) * Math.cos(rad(b.lat)) * Math.sin(dLng / 2) ** 2;
+        return 2 * 6371000 * Math.asin(Math.min(1, Math.sqrt(h)));
+      }
+      function formatarDistancia(m) {
+        if (m < 1000) return `${Math.max(10, Math.round(m / 10) * 10)} m`;
+        const km = m / 1000;
+        return `${(Number.isInteger(km) || km >= 10 ? Math.round(km) : km.toFixed(1).replace('.', ','))} km`;
+      }
+      function pertoRaio() {
+        let v = 2000;
+        try { v = Number(localStorage.getItem(PERTO_RAIO_LS_KEY)) || 2000; } catch (e) { }
+        return PERTO_RAIOS.includes(v) ? v : 2000;
+      }
+      function pertoAberto() {
+        try { return localStorage.getItem(PERTO_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      // Todos os clientes com posição, do mais perto pro mais longe.
+      function clientesComDistancia() {
+        if (!pertoPosicao) return [];
+        return loadClientesLocais().map(c => {
+          const pos = posicaoDoCliente(c);
+          return pos ? { c, pos, dist: distanciaM(pertoPosicao, pos) } : null;
+        }).filter(Boolean).sort((a, b) => a.dist - b.dist);
+      }
+      function buscarPosicaoPerto() {
+        if (!('geolocation' in navigator)) { pertoErro = 'Este aparelho não informa a localização.'; renderPerto(); return; }
+        if (pertoBuscando) return;
+        pertoBuscando = true;
+        pertoErro = '';
+        renderPerto();
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            pertoBuscando = false;
+            pertoPosicao = { lat: p.coords.latitude, lng: p.coords.longitude, em: Date.now() };
+            renderPerto();
+          },
+          (err) => {
+            pertoBuscando = false;
+            pertoErro = err && err.code === 1 ? 'Permissão de localização negada — libere nas configurações do navegador.'
+              : 'Não foi possível pegar sua localização — tente de novo.';
+            renderPerto();
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
+      }
+      // Vizinho mais próximo a partir da posição do vendedor + 2-opt (até 10
+      // paradas - sobra na conta). Linha reta: na mesma cidade, basta pra ordem.
+      function ordenarParadas(origem, paradas) {
+        const resto = paradas.slice();
+        const ordem = [];
+        let atual = origem;
+        while (resto.length) {
+          let iMelhor = 0;
+          resto.forEach((p, i) => { if (distanciaM(atual, p.pos) < distanciaM(atual, resto[iMelhor].pos)) iMelhor = i; });
+          atual = resto[iMelhor].pos;
+          ordem.push(resto.splice(iMelhor, 1)[0]);
+        }
+        const ponto = (i) => (i < 0 ? origem : ordem[i].pos);
+        let melhorou = true;
+        while (melhorou) {
+          melhorou = false;
+          for (let i = 0; i < ordem.length - 1; i++) {
+            for (let k = i + 1; k < ordem.length; k++) {
+              const antes = distanciaM(ponto(i - 1), ponto(i)) + (k + 1 < ordem.length ? distanciaM(ponto(k), ponto(k + 1)) : 0);
+              const depois = distanciaM(ponto(i - 1), ponto(k)) + (k + 1 < ordem.length ? distanciaM(ponto(i), ponto(k + 1)) : 0);
+              if (depois + 1 < antes) {
+                ordem.splice(i, k - i + 1, ...ordem.slice(i, k + 1).reverse());
+                melhorou = true;
+              }
+            }
+          }
+        }
+        return ordem;
+      }
+      function destinoDaParada({ c, pos }) {
+        if (!pos.aprox) return `${pos.lat},${pos.lng}`;
+        return enderecoParaNavegacao(c.endereco) || `${pos.lat},${pos.lng}`;
+      }
+      function montarRotaPerto() {
+        if (!pertoPosicao) { buscarPosicaoPerto(); return; }
+        const paradas = clientesComDistancia().filter(x => pertoSelecionados.has(String(x.c.id)));
+        if (!paradas.length) return;
+        const ordem = ordenarParadas(pertoPosicao, paradas);
+        const destinos = ordem.map(destinoDaParada);
+        // sem origin: o Google Maps sai da posição atual do celular
+        let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(destinos[destinos.length - 1])}`;
+        if (destinos.length > 1) url += `&waypoints=${encodeURIComponent(destinos.slice(0, -1).join('|'))}`;
+        window.open(url, '_blank', 'noopener');
+        showToast(`Rota: ${ordem.map(x => x.c.nome).join(' → ')}`, 'longo');
+      }
+      function renderPertoItem({ c, pos, dist }, recompraPorId, ultimaPorId) {
+        const id = String(c.id);
+        const meta = [];
+        if (c.endereco && c.endereco.municipio) meta.push(escapeHtml(c.endereco.municipio));
+        if (pos.aprox) meta.push('<span title="Posição pelo endereço da ficha — pode errar em avenida longa">aprox.</span>');
+        const ultima = ultimaPorId.get(id);
+        if (ultima) meta.push(`última compra ${escapeHtml(dataCurtaISO(ultima))}`);
+        const rec = recompraPorId.get(id);
+        const marcado = pertoSelecionados.has(id);
+        return `<div class="recompraItem">
+          <label class="pertoLinha">
+            <input type="checkbox" data-perto-sel="${escapeHtml(id)}"${marcado ? ' checked' : ''} aria-label="Incluir ${escapeHtml(c.nome)} na rota">
+            <span class="pertoNome">${escapeHtml(c.nome)}</span>
+            <span class="pertoDist">${formatarDistancia(dist)}</span>
+          </label>
+          <div class="recompraMeta">${meta.join(' · ')}${rec ? ' ' + seloRecompra(rec) : ''}</div>
+          <div class="recompraAcoes">
+            <button type="button" class="recompraBtn" data-perto-abrir="${escapeHtml(id)}">Abrir cliente</button>
+            <button type="button" class="recompraBtn" data-perto-waze="${escapeHtml(id)}">Waze</button>
+          </div>
+        </div>`;
+      }
+      function renderPerto() {
+        const el = document.getElementById('pertoWrap');
+        if (!el) return;
+        el.classList.toggle('hidden', !!clienteTabSelected);
+        const aberta = pertoAberto();
+        // aberto (lembrado de outra vez) sem posição: pega agora - só com a aba
+        // Clientes na tela, pra não pedir localização ao abrir o app
+        if (aberta && !pertoPosicao && !pertoBuscando && !pertoErro && !clienteTabSelected
+          && !document.getElementById('tabClientes').classList.contains('hidden')) { buscarPosicaoPerto(); return; }
+        const raio = pertoRaio();
+        const todos = clientesComDistancia();
+        const noRaio = todos.filter(x => x.dist <= raio);
+        const semPosicao = loadClientesLocais().filter(c => !posicaoDoCliente(c)).length;
+        const resumo = pertoBuscando ? 'pegando sua localização…'
+          : pertoErro ? pertoErro
+          : pertoPosicao ? `${noRaio.length} cliente${noRaio.length === 1 ? '' : 's'} em até ${formatarDistancia(raio)}`
+          : 'toque pra ver quem está perto de você';
+        let corpo = '';
+        if (aberta) {
+          const recompraPorId = new Map(recompraVisiveis().map(r => [String(r.cliente_id), r]));
+          const ultimaPorId = new Map(((recompraDados && recompraDados.clientes) || []).map(r => [String(r.cliente_id), r.ultima_compra]));
+          const mostrar = pertoVerTodos ? noRaio : noRaio.slice(0, PERTO_POR_PAGINA);
+          const resto = noRaio.length - mostrar.length;
+          const lista = !pertoPosicao ? ''
+            : noRaio.length ? mostrar.map(x => renderPertoItem(x, recompraPorId, ultimaPorId)).join('')
+              + (resto > 0 ? `<button type="button" class="recompraMais" id="pertoMais">Ver mais ${resto}</button>` : '')
+            : `<div class="lev-empty">Nenhum cliente com posição registrada em até ${formatarDistancia(raio)}.${todos.length ? ` O mais perto fica a ${formatarDistancia(todos[0].dist)}.` : ''}</div>`;
+          const marcados = [...pertoSelecionados].length;
+          corpo = `<p class="recompraHint">Distância em linha reta. "aprox." = posição pelo endereço da ficha (© OpenStreetMap), pode errar em avenida longa; o GPS gravado ao salvar um levantamento corrige.${semPosicao ? ` ${semPosicao} cliente${semPosicao === 1 ? ' ainda sem posição fica' : 's ainda sem posição ficam'} de fora.` : ''}</p>
+            <div class="pertoBarra">
+              <div class="segmented" id="pertoRaioSeg">${PERTO_RAIOS.map(r => `<button type="button" data-v="${r}" class="${r === raio ? 'active' : ''}">${formatarDistancia(r)}</button>`).join('')}</div>
+              <button type="button" class="recompraBtn pertoAtualizar" id="pertoAtualizarBtn"${pertoBuscando ? ' disabled' : ''} aria-label="Atualizar minha localização">↻</button>
+            </div>
+            ${lista}
+            ${marcados ? `<div class="recompraAcoes pertoRota">
+              <button type="button" class="recompraBtn recompraBtn--principal" id="pertoRotaBtn">Montar rota no Google Maps · ${marcados} parada${marcados === 1 ? '' : 's'}</button>
+              <button type="button" class="recompraBtn" id="pertoLimparBtn">Limpar</button>
+            </div>${marcados > 4 ? '<p class="recompraHint">Com mais de 4 lojas, abra no app Google Maps: no navegador do celular o Google pode cortar paradas.</p>' : ''}` : (pertoPosicao && noRaio.length ? '<p class="recompraHint">Marque as lojas pra montar a rota (até 10).</p>' : '')}`;
+        }
+        el.innerHTML = `<button type="button" class="recompraToggle" id="pertoToggle" aria-expanded="${aberta}">
+            <b>${aberta ? '▾' : '▸'} 📍 Clientes perto de mim</b>
+            <span class="recompraResumo">${escapeHtml(resumo)}</span>
+          </button>${corpo}`;
+        document.getElementById('pertoToggle').addEventListener('click', () => {
+          try { localStorage.setItem(PERTO_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
+          // posição de mais de 5 min (o vendedor andou) é pega de novo ao abrir
+          if (!aberta && (!pertoPosicao || Date.now() - pertoPosicao.em > 5 * 60000)) buscarPosicaoPerto();
+          else renderPerto();
+        });
+        if (!aberta) return;
+        el.querySelectorAll('#pertoRaioSeg button').forEach(b => b.addEventListener('click', () => {
+          try { localStorage.setItem(PERTO_RAIO_LS_KEY, b.dataset.v); } catch (e) { }
+          pertoVerTodos = false;
+          // loja marcada que saiu do raio sumiria da tela e entraria na rota mesmo assim
+          const novoRaio = Number(b.dataset.v);
+          todos.forEach(x => { if (x.dist > novoRaio) pertoSelecionados.delete(String(x.c.id)); });
+          renderPerto();
+        }));
+        document.getElementById('pertoAtualizarBtn').addEventListener('click', buscarPosicaoPerto);
+        document.getElementById('pertoMais')?.addEventListener('click', () => { pertoVerTodos = true; renderPerto(); });
+        document.getElementById('pertoRotaBtn')?.addEventListener('click', montarRotaPerto);
+        document.getElementById('pertoLimparBtn')?.addEventListener('click', () => { pertoSelecionados.clear(); renderPerto(); });
+        const porId = new Map(todos.map(x => [String(x.c.id), x.c]));
+        el.querySelectorAll('[data-perto-sel]').forEach(cb => cb.addEventListener('change', () => {
+          const id = cb.dataset.pertoSel;
+          if (cb.checked && pertoSelecionados.size >= ROTA_MAX_PARADAS) {
+            cb.checked = false;
+            showToast(`Até ${ROTA_MAX_PARADAS} paradas por rota no Google Maps`);
+            return;
+          }
+          if (cb.checked) pertoSelecionados.add(id); else pertoSelecionados.delete(id);
+          renderPerto();
+        }));
+        el.querySelectorAll('[data-perto-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.pertoAbrir })));
+        el.querySelectorAll('[data-perto-waze]').forEach(b => b.addEventListener('click', () => abrirWazeCliente(porId.get(b.dataset.pertoWaze))));
+      }
       // ---- Recompra da semana (topo da aba Clientes) ----
       // Clientes cuja próxima compra, pelo ritmo dos últimos 12 meses, está
       // atrasada ou cai nos próximos 7 dias (cálculo no servidor, GET
@@ -14073,6 +14369,7 @@
         } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
         recompraCarregando = false;
         renderRecompra();
+        renderPerto();
       }
       async function abrirClienteDaRecompra(c) {
         if (!c) return;
@@ -14362,6 +14659,7 @@
         document.getElementById('clienteTabListWrap').classList.add('hidden');
         document.getElementById('clienteTabDetail').classList.remove('hidden');
         renderRecompra();
+        renderPerto();
         document.getElementById('clienteFichaDataInicio').value = '';
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
@@ -14377,6 +14675,7 @@
         document.getElementById('classificatorioAlertasWrap').classList.add('hidden');
         document.getElementById('clienteTabList').classList.remove('hidden');
         renderRecompra();
+        renderPerto();
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');

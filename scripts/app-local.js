@@ -56,6 +56,11 @@ async function semear() {
         atualizado_em: hoje.toISOString(),
       },
     },
+    // posição aproximada pelo endereço da ficha (geocodificação noturna): 101
+    // aparece em "Clientes perto de mim" marcado "aprox."
+    geocodificacao: {
+      101: { endereco: 'AVENIDA|COLOMBO|7266|MARINGA|PR', latitude: -23.4176, longitude: -51.9775, nivel: 'rua', tentativas: 0 },
+    },
     pedidosOficiaisItens: [
       { nr_pedido: '676001', codigo_sku: '60863', cliente_codigo_oficial: '3663', quantidade: 10, valor: 1850,
         data_faturamento: dia(40), data_implantacao: dia(45), status: 'faturado', nota_fiscal: '900001' },

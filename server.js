@@ -27,6 +27,7 @@ const recompraRoutes = require('./routes/recompra');
 const novidadesRoutes = require('./routes/novidades');
 const importacaoEmailRoutes = require('./routes/importacaoEmail');
 const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
+const { iniciarGeocodificacaoAutomatica } = require('./routes/lib/geocodificacao');
 const { iniciarEnvioAgendado } = require('./routes/lib/novidades');
 
 const app = express();
@@ -183,6 +184,8 @@ runMigrations()
       console.log(`Servidor rodando na porta ${PORT}`);
       // completa sozinho, de madrugada, as fichas de CNPJ que faltam
       iniciarPreenchimentoAutomatico(pool, radarCnpjRoutes.obterFicha);
+      // e a posição aproximada das lojas pelo endereço da ficha ("Perto de mim")
+      iniciarGeocodificacaoAutomatica(pool);
       // avisos no celular de importação feita fora do horário (dia útil, 7h-20h)
       iniciarEnvioAgendado();
     });

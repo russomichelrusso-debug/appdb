@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { buscarNaBrasilApi } = require('./lib/cnpjBrasilApi');
 const { statusPreenchimento } = require('./lib/preenchimentoCnpj');
+const { statusGeocodificacao } = require('./lib/geocodificacao');
 
 router.param('id', validarIdInteiro);
 
@@ -246,6 +247,16 @@ router.get('/clientes/:id/ficha-cnpj/existe', async (req, res) => {
 router.get('/cnpj-preenchimento/status', async (req, res) => {
   try {
     res.json(await statusPreenchimento(pool));
+  } catch (e) {
+    respostaDeErro(res, e);
+  }
+});
+
+// Posição das lojas (GPS do levantamento ou pelo endereço da ficha, ver
+// routes/lib/geocodificacao.js), mostrada no Painel Administrativo.
+router.get('/geocodificacao/status', async (req, res) => {
+  try {
+    res.json(await statusGeocodificacao(pool));
   } catch (e) {
     respostaDeErro(res, e);
   }

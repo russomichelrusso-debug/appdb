@@ -303,6 +303,29 @@ async function main() {
   assert(semDestino && semDestino.endereco === null && semDestino.latitude === null,
     `cliente sem ficha nem GPS vai pro /sync sem destino: ${JSON.stringify(semDestino)}`);
 
+  // 5e) posição aproximada pelo endereço da ficha (routes/lib/geocodificacao.js)
+  // no /sync - só enquanto a ficha tiver o mesmo endereço que foi consultado
+  mockDb.__seed({
+    clientes: [
+      { id: 9016, nome: 'POSICAO PELO ENDERECO', documento: '11122233000568', codigo_oficial: null },
+      { id: 9017, nome: 'ENDERECO MUDOU', documento: '11122233000649', codigo_oficial: null },
+    ],
+    fichasCnpj: {
+      9016: { logradouro: 'BRASIL', numero: '100', municipio: 'MARINGA', uf: 'PR', dados_brutos: { endereco: { tipoLogradouro: 'AVENIDA' } } },
+      9017: { logradouro: 'XV DE NOVEMBRO', numero: '5', municipio: 'CURITIBA', uf: 'PR', dados_brutos: {} },
+    },
+    geocodificacao: {
+      9016: { endereco: 'AVENIDA|BRASIL|100|MARINGA|PR', latitude: -23.42, longitude: -51.93, nivel: 'rua', tentativas: 0 },
+      9017: { endereco: '|XV DE NOVEMBRO|9|CURITIBA|PR', latitude: -25.43, longitude: -49.27, nivel: 'rua', tentativas: 0 },
+    },
+  });
+  res = await req('GET', '/api/clientes/sync');
+  const aprox = res.body.clientes.find(c => c.id === 9016);
+  const mudou = res.body.clientes.find(c => c.id === 9017);
+  assert(aprox && Number(aprox.latitude_aprox) === -23.42 && Number(aprox.longitude_aprox) === -51.93 && aprox.localizacao_nivel === 'rua'
+    && aprox.latitude === null && mudou && mudou.latitude_aprox === null,
+    `/sync traz a posição pelo endereço só com o endereço igual ao consultado: ${JSON.stringify({ aprox, mudou })}`);
+
   // 6) sincronizar produtos (simulando o precos.json)
   res = await req('POST', '/api/produtos/sync', { produtos: [
     { codigo_sku: '60863', nome: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm', categoria: '09 - CORTE DIAMANTADO' },
@@ -1942,6 +1965,96 @@ async function main() {
   assert(res.status === 200 && res.body.com_cnpj >= 2 && res.body.faltam === res.body.com_cnpj - res.body.com_ficha
     && res.body.hoje.limite === 40 && res.body.janela === '01h–06h',
     'status do preenchimento devolve progresso, limite e janela');
+
+  // 21b) posição das lojas pelo endereço da ficha (routes/lib/geocodificacao.js)
+  {
+    const geo = require('../routes/lib/geocodificacao');
+    assert(geo.ruaENumero({ tipo: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266' }).rua === 'AVENIDA COLOMBO'
+      && geo.ruaENumero({ tipo: 'AVENIDA', logradouro: 'AVENIDA COLOMBO', numero: 'S/N' }).rua === 'AVENIDA COLOMBO'
+      && geo.ruaENumero({ tipo: 'RUA', logradouro: 'X', numero: 'S/N' }).numero === ''
+      && geo.ruaENumero({ logradouro: 'X', numero: '0' }).numero === '',
+      'rua com o tipo (sem repetir) e número sem "S/N"/"0", como no botão Waze');
+    const respostaNominatim = (lista, status = 200) => async (url, opts) => {
+      respostaNominatim.ultima = { url, opts };
+      return { ok: status === 200, status, json: async () => lista };
+    };
+    const end = { tipo: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' };
+    let pos = await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-23.4176', lon: '-51.9775', place_rank: 26, display_name: 'Avenida Colombo, Maringá, Paraná, Brasil' }]));
+    const consultada = new URL(respostaNominatim.ultima.url);
+    assert(pos && pos.latitude === -23.4176 && pos.longitude === -51.9775 && pos.nivel === 'rua'
+      && consultada.searchParams.get('street') === '7266 AVENIDA COLOMBO' && consultada.searchParams.get('city') === 'MARINGA'
+      && consultada.searchParams.get('countrycodes') === 'br' && /CortagRevolutionTools/.test(respostaNominatim.ultima.opts.headers['User-Agent']),
+      `consulta o Nominatim pela rua + número + cidade, com User-Agent do app: ${respostaNominatim.ultima.url}`);
+    pos = await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-23.41', lon: '-51.97', place_rank: 30, display_name: '7266, Avenida Colombo, Maringá' }]));
+    assert(pos && pos.nivel === 'numero', 'achou o prédio: nível "numero"');
+    pos = await geo.geocodificarEndereco({ logradouro: 'RUA X', numero: '1', municipio: 'SAO JOAO DEL REI', uf: 'MG' },
+      respostaNominatim([{ lat: '-21.13', lon: '-44.26', place_rank: 26, display_name: "Rua X, São João del-Rei, Minas Gerais" }]));
+    assert(pos && pos.nivel === 'rua', 'município com hífen no OSM ("del-Rei") bate com o da ficha ("DEL REI")');
+    assert(await geo.geocodificarEndereco(end, respostaNominatim([])) === null
+      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-23.42', lon: '-51.93', place_rank: 16, display_name: 'Maringá, Paraná' }])) === null
+      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-25.4', lon: '-49.2', place_rank: 26, display_name: 'Avenida Colombo, Curitiba, Paraná' }])) === null
+      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '38.7', lon: '-9.1', place_rank: 26, display_name: 'Avenida Colombo, Maringa, Portugal' }])) === null
+      && await geo.geocodificarEndereco({ ...end, logradouro: '' }, respostaNominatim([])) === null,
+      'sem resultado, só a cidade, outro município ou fora do Brasil = não encontrado');
+    let erroOrigem = null;
+    try { await geo.geocodificarEndereco(end, respostaNominatim([], 429)); } catch (e) { erroOrigem = e; }
+    assert(erroOrigem && erroOrigem.origem === true, 'Nominatim no limite (429) é erro da origem, não do cliente');
+
+    const fakeGeo = ({ estado = null, pendentes = [], resultados = {}, agora = '2026-09-25T05:00:00Z' } = {}) => {
+      const d = {
+        estadoSalvo: estado, gravados: [], falhas: [], esperas: 0,
+        agora: () => new Date(agora),
+        esperar: async () => { d.esperas++; },
+        lerEstado: async () => d.estadoSalvo,
+        salvarEstado: async (e) => { d.estadoSalvo = { ...e }; },
+        listarPendentes: async (limite) => pendentes.slice(0, limite),
+        geocodificar: async (c) => {
+          const r = resultados[c.id];
+          if (r === 'origem') { const e = new Error('Nominatim respondeu 503'); e.origem = true; throw e; }
+          return r === undefined ? { latitude: -23, longitude: -51, nivel: 'rua' } : r;
+        },
+        gravarPosicao: async (c) => { d.gravados.push(c.id); },
+        registrarFalha: async (c) => { d.falhas.push(c.id); },
+      };
+      return d;
+    };
+    const clientesGeo = Array.from({ length: 200 }, (_, i) => ({ id: i + 1 }));
+    let g = fakeGeo({ pendentes: clientesGeo });
+    let rg = await geo.rodarRodada(g);
+    assert(rg.consultas === geo.LIMITE_DIARIO && g.gravados.length === geo.LIMITE_DIARIO && g.esperas === geo.LIMITE_DIARIO - 1,
+      `geocodificação para no limite da noite (${geo.LIMITE_DIARIO}), com espera entre consultas`);
+    g = fakeGeo({ pendentes: [{ id: 1 }, { id: 2 }, { id: 3 }], resultados: { 2: null } });
+    rg = await geo.rodarRodada(g);
+    assert(g.gravados.join() === '1,3' && g.falhas.join() === '2', 'endereço não encontrado registra falha e segue');
+    g = fakeGeo({ pendentes: [{ id: 1 }, { id: 2 }, { id: 3 }], resultados: { 2: 'origem' } });
+    rg = await geo.rodarRodada(g);
+    assert(rg.motivo === 'origem_indisponivel' && g.gravados.join() === '1' && g.falhas.length === 0 && g.estadoSalvo.pausado_no_dia === '2026-09-25',
+      'Nominatim fora do ar para a noite sem culpar o cliente');
+    rg = await geo.rodarRodada(fakeGeo({ pendentes: clientesGeo, agora: '2026-09-25T15:00:00Z' }));
+    assert(rg.consultas === 0 && rg.motivo === 'fora_da_janela', 'geocodificação só de madrugada');
+
+    mockDb.__seed({
+      clientes: [
+        { id: 9861, nome: 'GEO COM GPS', latitude: -23.1, longitude: -51.1 },
+        { id: 9862, nome: 'GEO PELO ENDERECO' },
+        { id: 9863, nome: 'GEO FALTA' },
+        { id: 9864, nome: 'GEO NAO ACHOU' },
+      ],
+      fichasCnpj: {
+        9862: { logradouro: 'A', numero: '1', municipio: 'MARINGA', uf: 'PR' },
+        9863: { logradouro: 'B', numero: '2', municipio: 'MARINGA', uf: 'PR' },
+        9864: { logradouro: 'C', numero: '3', municipio: 'MARINGA', uf: 'PR' },
+      },
+      geocodificacao: {
+        9862: { endereco: '|A|1|MARINGA|PR', latitude: -23.4, longitude: -51.9, nivel: 'rua', tentativas: 0 },
+        9864: { endereco: '|C|3|MARINGA|PR', latitude: null, longitude: null, nivel: null, tentativas: 3 },
+      },
+    });
+    res = await req('GET', '/api/geocodificacao/status');
+    assert(res.status === 200 && res.body.com_gps >= 1 && res.body.pelo_endereco >= 1 && res.body.nao_encontrados >= 1
+      && res.body.faltam >= 1 && res.body.limite === geo.LIMITE_DIARIO,
+      `status da posição das lojas pro Painel: ${JSON.stringify(res.body)}`);
+  }
 
   // 22) Política Comercial: o percentual do classificatório vem do NOME
   // (routes/lib/politicaComercial.js), não do número do relatório do ERP -

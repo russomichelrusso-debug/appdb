@@ -457,6 +457,26 @@ CREATE TABLE IF NOT EXISTS cnpj_preenchimento_falhas (
 );
 ALTER TABLE cnpj_preenchimento_falhas ENABLE ROW LEVEL SECURITY;
 
+-- Posição APROXIMADA da loja tirada do endereço da ficha de CNPJ
+-- (routes/lib/geocodificacao.js, de madrugada, pelo Nominatim/OpenStreetMap) -
+-- pra "Clientes perto de mim" funcionar com quem nunca teve levantamento com
+-- GPS. A posição do GPS (clientes.latitude/longitude) sempre vale mais.
+-- endereco = o endereço consultado (mesma chave de SQL_CHAVE_ENDERECO): ficha
+-- com endereço diferente = consulta de novo. latitude NULL = não achou
+-- (tentativas conta, desiste em 3). nivel: 'numero' (achou o prédio) ou
+-- 'rua' (ponto da rua - em avenida longa pode ficar a quilômetros da loja).
+CREATE TABLE IF NOT EXISTS cliente_geocodificacao (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  endereco TEXT NOT NULL,
+  latitude NUMERIC,
+  longitude NUMERIC,
+  nivel TEXT,
+  tentativas INTEGER NOT NULL DEFAULT 0,
+  consultado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  erro TEXT
+);
+ALTER TABLE cliente_geocodificacao ENABLE ROW LEVEL SECURITY;
+
 -- "Já falei" da Recompra da semana (routes/recompra.js): o vendedor já
 -- contatou o cliente atrasado/com compra prevista e ele some da lista até
 -- `ate` (7 dias). Um por cliente; vale em todos os aparelhos.

@@ -621,6 +621,27 @@ Supabase, sem PR — não é mudança de código.
   rua — o endereço montado é "AVENIDA COLOMBO, 7266, MARINGA - PR" (número "S/N"/"0" fica fora). A tela
   da Ficha cadastral ganhou "Abrir no Waze" pelo endereço. Em 10/2026: 291 clientes com ficha, 6 com GPS.
 
+- **Clientes perto de mim + rota no Google Maps** (10/2026, itens 1 e 2 da conversa sobre "camada no
+  Google Maps com os clientes"): só 6 clientes tinham GPS, então primeiro a **posição aproximada pelo
+  endereço da ficha de CNPJ** — o servidor consulta sozinho o **Nominatim/OpenStreetMap** de madrugada
+  (`routes/lib/geocodificacao.js`, mesmo molde do preenchimento de fichas: 01h–06h, máx. 150/noite, 1 a
+  cada 2 s, User-Agent do app; `GEOCODIFICACAO_DESLIGADA=1` desliga). Escolhido no lugar do geocodificador
+  do Google porque deixa guardar o resultado e usar fora de mapa do Google, sem chave nem cartão. Só
+  clientes **sem GPS** com rua e município na ficha; resultado em `cliente_geocodificacao`, que guarda o
+  endereço consultado (`sqlChaveEndereco`): ficha com endereço novo consulta de novo e a posição velha
+  some do `/sync`. Aceita só rua ou prédio (`place_rank` ≥ 26) do mesmo município, dentro do Brasil. **No
+  Brasil o OSM quase nunca tem o número**: a posição costuma ser um ponto da rua (`nivel = 'rua'`), que em
+  avenida longa fica a quilômetros da loja — por isso aparece "aprox." e serve pra "quem está perto", não
+  pra navegar. O GPS do levantamento sempre vale mais. Linha "Posição das lojas" no card de status do
+  Painel. Na tela: bloco recolhível **"📍 Clientes perto de mim"** na aba Clientes, abaixo da Recompra da
+  semana — distância em linha reta da posição do celular (500 m / 2 km / 10 km), cidade, "aprox.",
+  última compra e selo de recompra (da lista da Recompra guardada no aparelho), Abrir cliente e Waze;
+  funciona sem internet (tudo vem no `/sync`). Marcar lojas (até 10) e **"Montar rota no Google Maps"**:
+  link `google.com/maps/dir/?api=1` sem `origin` (sai da posição atual), paradas na ordem do vizinho mais
+  próximo + 2-opt, cada uma pelo GPS ou, sem ele, pelo **endereço por extenso** (o Google acha o número;
+  a posição aproximada não). O Waze não aceita várias paradas por link. No navegador do celular sem o
+  app Google Maps o link pode aceitar menos paradas.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -658,6 +679,8 @@ Supabase, sem PR — não é mudança de código.
 - **Localização do cliente — próximos passos** (plano combinado com o usuário; a base é a
   posição gravada ao salvar o levantamento, que precisa de algumas semanas de uso pra cobrir a
   carteira). Em ordem de prioridade:
+  0. Feito em 10/2026: posição aproximada pelo endereço da ficha e "Clientes perto de mim" com rota no
+     Google Maps (ver acima) — cobre o item 2 abaixo, menos dias sem visita e objetivo em risco.
   1. **Cliente sugerido pela proximidade**: ao abrir Levantamento/Pedido dentro da loja, "Você
      está na LOJA X? Selecionar" — tira o passo de buscar o cliente toda visita.
   2. **"Clientes perto de mim"**: lista por distância (500 m / 2 km / 10 km) com dias sem visita,
@@ -671,8 +694,6 @@ Supabase, sem PR — não é mudança de código.
   5. **Estado do preço pela UF do cliente** (ficha de CNPJ) em vez do GPS do vendedor — o botão
      "usar GPS" pega a UF de onde o vendedor está, que erra quando ele atende cliente de outro
      estado.
-  - Complemento: posição aproximada pelo CEP da ficha pra cliente nunca visitado (serviço
-    gratuito de geocodificação), marcada como aproximada.
   - Descartado por agora: prospecção de lojas que ainda não são clientes — depende de base
     externa de empresas por região, normalmente paga ou limitada.
 - **Vendedor cadastrado vê só os clientes dele — etapa futura, sem data** (pedido do usuário, 10/2026).
