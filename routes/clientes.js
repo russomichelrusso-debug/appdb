@@ -27,12 +27,12 @@ router.get('/', async (req, res) => {
   try {
     const result = busca
       ? await pool.query(
-          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em FROM clientes
+          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em, whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em FROM clientes
            WHERE nome ILIKE $1 OR documento ILIKE $1
            ORDER BY nome LIMIT 20`,
           [`%${busca}%`]
         )
-      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em FROM clientes ORDER BY nome LIMIT 50');
+      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em, whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em FROM clientes ORDER BY nome LIMIT 50');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -49,6 +49,9 @@ router.get('/', async (req, res) => {
 // ficha de CNPJ e ajusta o recado de ICMS-ST do orçamento, que é gerado offline.
 // nome_arquivo/nome_arquivo_em: nome escolhido pro CSV do cliente (ver
 // PUT /:id/nome-arquivo), pra valer em todos os aparelhos e sem internet.
+// whatsapp_comprador(_nome/_em): WhatsApp do comprador (PUT /:id/whatsapp),
+// destino direto do texto do orçamento; telefone_ficha (da ficha de CNPJ) é
+// só sugestão na hora de escolher o número.
 // latitude/longitude (posição da loja gravada ao salvar o levantamento) e
 // endereco (da ficha de CNPJ, null sem ficha) são o destino do botão "Waze"
 // no card do cliente - na rua, sem internet, o app abre a rota com eles. O
@@ -61,6 +64,7 @@ router.get('/sync', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
+              c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em, f.telefone AS telefone_ficha,
               CASE
                 WHEN f.dados_brutos->'mei'->>'optante' = 'true' THEN 'mei'
                 WHEN f.dados_brutos->'simples'->>'optante' = 'true' THEN 'simples'
@@ -242,6 +246,35 @@ router.put('/:id/nome-arquivo', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao salvar o nome do arquivo.' });
+  }
+});
+
+// WhatsApp do comprador da loja, escolhido no card do cliente (digitado ou dos
+// contatos do celular): com ele, o texto do orçamento abre direto na conversa.
+// Vale pra todos os aparelhos (vem no /sync). Qualquer usuário logado, como o
+// nome do arquivo: não mexe em preço nem histórico. Número vazio apaga os dois
+// campos. O app manda o número já com o 55; aqui só confere o formato
+// (55 + DDD + 8 ou 9 dígitos).
+router.put('/:id/whatsapp', async (req, res) => {
+  const bruto = String(req.body.numero ?? '').trim();
+  const numero = bruto.replace(/\D/g, '');
+  const nome = String(req.body.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  if (bruto && !/^55[1-9]{2}\d{8,9}$/.test(numero)) {
+    return res.status(400).json({ erro: 'Número de WhatsApp inválido — use DDD + número (ex: 43 99999-8888).' });
+  }
+  try {
+    const result = await pool.query(
+      `UPDATE clientes SET whatsapp_comprador = $1, whatsapp_comprador_nome = $2, whatsapp_comprador_em = now()
+       WHERE id = $3 RETURNING id, nome, whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em`,
+      [numero || null, numero && nome ? nome : null, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const c = result.rows[0];
+    console.log(`WhatsApp do comprador: ${c.nome} (id ${c.id}) ${c.whatsapp_comprador ? 'definido' : 'apagado'}, por ${req.usuario?.email}.`);
+    res.json({ id: c.id, whatsapp_comprador: c.whatsapp_comprador, whatsapp_comprador_nome: c.whatsapp_comprador_nome, whatsapp_comprador_em: c.whatsapp_comprador_em });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao salvar o WhatsApp do comprador.' });
   }
 });
 

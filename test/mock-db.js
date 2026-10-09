@@ -765,6 +765,9 @@ async function query(sql, params = []) {
     return { rows: clientes.map(c => ({
       id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null,
       nome_arquivo: c.nome_arquivo || null, nome_arquivo_em: c.nome_arquivo_em || null,
+      whatsapp_comprador: c.whatsapp_comprador || null, whatsapp_comprador_nome: c.whatsapp_comprador_nome || null,
+      whatsapp_comprador_em: c.whatsapp_comprador_em || null,
+      telefone_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].telefone) || null,
       regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
       latitude: c.latitude == null ? null : String(c.latitude),
       longitude: c.longitude == null ? null : String(c.longitude),
@@ -960,6 +963,15 @@ async function query(sql, params = []) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
     const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));
     return { rows };
+  }
+  // PUT /api/clientes/:id/whatsapp
+  if (s.startsWith('UPDATE CLIENTES SET WHATSAPP_COMPRADOR = $1')) {
+    const c = clientes.find(x => String(x.id) === String(params[2]));
+    if (!c) return { rows: [] };
+    c.whatsapp_comprador = params[0];
+    c.whatsapp_comprador_nome = params[1];
+    c.whatsapp_comprador_em = new Date().toISOString();
+    return { rows: [{ id: c.id, nome: c.nome, whatsapp_comprador: c.whatsapp_comprador, whatsapp_comprador_nome: c.whatsapp_comprador_nome, whatsapp_comprador_em: c.whatsapp_comprador_em }] };
   }
   // PUT /api/clientes/:id/nome-arquivo
   if (s.startsWith('UPDATE CLIENTES SET NOME_ARQUIVO = $1, NOME_ARQUIVO_EM = NOW() WHERE ID = $2')) {

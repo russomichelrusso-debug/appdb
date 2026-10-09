@@ -499,6 +499,20 @@ Supabase, sem PR — não é mudança de código.
   a do servidor. O nome vale também pra cópia do pedido no Drive e é reconhecido ao abrir o CSV de
   volta (`pedidoPeloNomeDoArquivo`).
 
+- **WhatsApp do comprador** (10/2026, 1º passo das ideias de WhatsApp — cards de promoção e combos ficaram
+  pra depois): linha no card do cliente (Pedido e Levantamento) "＋ WhatsApp do comprador" abre uma janela pra
+  digitar/colar o número ou **escolher dos contatos do celular** (Contact Picker, `navigator.contacts.select` —
+  só Chrome do Android; no iPhone o navegador não tem, a janela explica copiar/colar). Contatos do Google pela
+  API People foram descartados: escopo sensível (verificação do Google, tela de "app não verificado") e no
+  Android os contatos do Google já aparecem no seletor. O telefone da ficha de CNPJ entra só como sugestão
+  (costuma ser fixo/contador). Grava em `clientes.whatsapp_comprador` (55+DDD+número)/`_nome`/`_em`
+  (`PUT /api/clientes/:id/whatsapp`, qualquer usuário logado), vem no `/sync` junto com `telefone_ficha` e
+  segue o padrão do nome do arquivo (pendência em `cortagWhatsComprador_v1`, fila offline, vale a mais nova).
+  Com número, **"Texto" do compartilhar do orçamento abre direto a conversa** (`wa.me/<num>?text=`), com
+  "mandar pra outro contato" na folha; sem internet (`navigator.onLine`) cai no compartilhar normal (o wa.me no
+  iPhone abre uma página antes do app). **Imagem/PDF/CSV não dá pra mandar direto**: o navegador só compartilha
+  arquivo pelo compartilhar do celular, que sempre pede o contato — o wa.me só leva texto.
+
 - **CSV vai direto pro WhatsApp** (10/2026): relato de vendedor — o CSV "só salvava no aparelho" e depois
   ele tinha que procurar o arquivo pra mandar. Causas: com Google Drive conectado o CSV ia só pro Drive, sem
   oferecer o compartilhar; se o Drive falhava (loja sem internet), o compartilhar saía tarde demais (o

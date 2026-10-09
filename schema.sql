@@ -262,6 +262,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_levantamentos_id_envio ON levantamentos(id
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_arquivo TEXT;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_arquivo_em TIMESTAMPTZ;
 
+-- WhatsApp do comprador da loja (quem recebe o orçamento), escolhido pelo
+-- vendedor no card do cliente: com ele o texto do orçamento abre direto na
+-- conversa (wa.me). Só dígitos com o 55 na frente (ex: 5543999998888); NULL =
+-- sem número (compartilhar normal). whatsapp_comprador_em decide, no aparelho,
+-- entre o valor do servidor e uma troca feita offline ainda na fila.
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_comprador TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_comprador_nome TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_comprador_em TIMESTAMPTZ;
+
 -- Situação de pedidos no sistema OFICIAL da empresa (relatório de Carteira +
 -- Faturamento), guardada separada da tabela "pedidos" (que é só o que o
 -- vendedor bate no próprio app). As duas fontes não têm número em comum,
