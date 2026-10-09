@@ -2985,6 +2985,36 @@
       display: none;
     }
 
+    /* WhatsApp do comprador: com número, o texto do orçamento abre direto
+       na conversa dele (wa.me). Tracejado = ainda sem número. */
+    .clienteWhats {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      min-height: 40px;
+      padding: 8px 10px;
+      border: 1px dashed var(--hairline);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--gray);
+      font-size: 13px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .clienteWhats.definido {
+      border-style: solid;
+      background: var(--fill);
+      color: var(--ink);
+    }
+
+    .clienteWhats b {
+      color: var(--success);
+    }
+
     .clienteObjetivo {
       display: flex;
       justify-content: space-between;
@@ -3983,14 +4013,16 @@
 
     /* Nome do arquivo do CSV do orçamento: sugestões em pílulas, prévia do
        nome final e "usar sempre pra este cliente". */
-    .csvNomeSugestoes {
+    .csvNomeSugestoes,
+    .whatsSugestoes {
       display: flex;
       flex-wrap: wrap;
       gap: 6px;
       margin: -10px 0 12px;
     }
 
-    .csvNomeSugestoes button {
+    .csvNomeSugestoes button,
+    .whatsSugestoes button {
       border: 1px solid var(--hairline);
       background: transparent;
       color: var(--ink);
@@ -4004,7 +4036,8 @@
       white-space: nowrap;
     }
 
-    .csvNomeSugestoes button.ativo {
+    .csvNomeSugestoes button.ativo,
+    .whatsSugestoes button.ativo {
       border-color: var(--red);
       color: var(--red);
       font-weight: 600;
@@ -4033,6 +4066,58 @@
       width: auto;
       margin: 0;
       padding: 0;
+    }
+
+    /* WhatsApp do comprador (janela aberta pelo card do cliente) */
+    .whatsSugestoes:empty,
+    #whatsContatosBtn.hidden,
+    #whatsSemContatos.hidden,
+    #whatsCompradorRemover.hidden {
+      display: none;
+    }
+
+    #whatsContatosBtn {
+      width: 100%;
+      min-height: 44px;
+      margin-bottom: 14px;
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+      background: var(--fill);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .minimodal-card p#whatsSemContatos,
+    .minimodal-card p#whatsCompradorPrevia {
+      font-size: 12px;
+    }
+
+    .minimodal-card p#whatsCompradorPrevia.erro {
+      color: var(--danger);
+    }
+
+    /* folha de compartilhar: pra quem vai o texto */
+    .shareSheetPara {
+      margin: -4px 0 12px;
+      font-size: 13px;
+      color: var(--gray);
+      text-align: center;
+    }
+
+    .shareSheetPara.hidden {
+      display: none;
+    }
+
+    .shareSheetPara button {
+      border: none;
+      background: none;
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 4px;
+      cursor: pointer;
     }
 
     /* ---------- Comparação de clientes ao mesclar ---------- */
@@ -5435,6 +5520,8 @@
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
+          <button type="button" class="clienteWhats" id="precosClientWhats"
+            aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="precosSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
@@ -5565,6 +5652,8 @@
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
+          <button type="button" class="clienteWhats" id="levClientWhats"
+            aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="levSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
@@ -5881,6 +5970,7 @@
     <div class="shareSheet hidden" id="shareSheet">
       <div class="shareSheet-handle"></div>
       <h3>Como você quer enviar?</h3>
+      <p class="shareSheetPara hidden" id="shareSheetPara"></p>
       <div class="shareSheetGrid">
         <button type="button" data-share="text">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -5888,7 +5978,7 @@
             <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
           </svg>
           <span>Texto</span>
-          <small>WhatsApp, direto</small>
+          <small id="shareTextoSub">WhatsApp, direto</small>
         </button>
         <button type="button" data-share="image">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -6000,6 +6090,27 @@
         <div class="minimodal-btnrow">
           <button id="csvNameCancel">Cancelar</button>
           <button id="csvNameConfirm">Continuar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="whatsCompradorOverlay"></div>
+    <div class="minimodal hidden" id="whatsCompradorModal">
+      <div class="minimodal-card">
+        <h3>WhatsApp do comprador</h3>
+        <p id="whatsCompradorCliente"></p>
+        <button type="button" id="whatsContatosBtn" class="hidden">📇 Escolher dos contatos do celular</button>
+        <label for="whatsCompradorNumero">Número com DDD</label>
+        <input type="tel" id="whatsCompradorNumero" inputmode="tel" autocomplete="off" placeholder="Ex: 43 99999-8888">
+        <div class="whatsSugestoes" id="whatsSugestoes"></div>
+        <p id="whatsCompradorPrevia"></p>
+        <label for="whatsCompradorNome">Nome do comprador (opcional)</label>
+        <input type="text" id="whatsCompradorNome" maxlength="60" autocomplete="off" placeholder="Ex: João">
+        <p id="whatsSemContatos" class="hidden">Este navegador não abre a lista de contatos. No iPhone: no app Contatos, toque e segure o número pra copiar e cole aqui.</p>
+        <div class="minimodal-btnrow">
+          <button type="button" id="whatsCompradorRemover" class="hidden">Remover</button>
+          <button type="button" id="whatsCompradorCancel">Cancelar</button>
+          <button type="button" id="whatsCompradorSalvar">Salvar</button>
         </div>
       </div>
     </div>
@@ -8669,6 +8780,7 @@
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
         atualizarBloqueioClienteBar(prefixo, cliente);
+        atualizarWhatsClienteBar(prefixo, cliente);
       }
       function atualizarBloqueioClienteBar(prefixo, cliente) {
         const bloqueioEl = document.getElementById(prefixo + 'ClientBloqueio');
@@ -8917,6 +9029,203 @@
       function abrirFichaCnpjCliente(cliente) {
         if (!cliente) return;
         window.open(urlFichaCnpj(cliente), '_blank');
+      }
+
+      // ---------------- WhatsApp do comprador ----------------
+      // Número de quem recebe o orçamento na loja, escolhido no card do
+      // cliente (digitado/colado ou pelos contatos do celular - Contact Picker,
+      // só no Chrome do Android; no iPhone não existe). Com ele, "Texto" no
+      // compartilhar do orçamento abre direto a conversa dele (wa.me). Fica no
+      // servidor (clientes.whatsapp_comprador*, vem no /sync - vale em todos os
+      // aparelhos e sem internet); a troca feita aqui fica também em
+      // WHATS_COMPRADOR_LS_KEY ({numero, nome, em}) até o servidor confirmar,
+      // mesmo padrão do nome do arquivo (vale a mais nova).
+      const WHATS_COMPRADOR_LS_KEY = 'cortagWhatsComprador_v1';
+      function whatsPendentes() {
+        try { return JSON.parse(localStorage.getItem(WHATS_COMPRADOR_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function gravarWhatsPendentes(v) {
+        try { localStorage.setItem(WHATS_COMPRADOR_LS_KEY, JSON.stringify(v)); } catch (e) { }
+      }
+      function whatsDoServidor(c) {
+        return c && c.whatsapp_comprador_em
+          ? { numero: c.whatsapp_comprador || '', nome: c.whatsapp_comprador_nome || '', em: Date.parse(c.whatsapp_comprador_em) || 0 }
+          : null;
+      }
+      // {numero, nome} do comprador, ou null sem número
+      function whatsCompradorDoCliente(cliente) {
+        if (!cliente || cliente.id == null) return null;
+        const id = String(cliente.id);
+        const local = loadClientesLocais().find(c => String(c.id) === id);
+        let melhor = null;
+        for (const v of [whatsPendentes()[id], whatsDoServidor(cliente), whatsDoServidor(local)]) {
+          if (v && (!melhor || v.em > melhor.em)) melhor = v;
+        }
+        return melhor && melhor.numero ? { numero: melhor.numero, nome: melhor.nome || '' } : null;
+      }
+      // Texto livre/contato -> "55" + DDD + número, ou null. Aceita "+55 (43)
+      // 99999-8888", "043 99999 8888", "0 41 43 99999-8888" (com operadora).
+      function normalizarWhatsBr(texto) {
+        let d = String(texto || '').replace(/\D/g, '').replace(/^0+/, '');
+        if ((d.length === 12 || d.length === 13) && !d.startsWith('55')) d = d.slice(2); // código da operadora
+        if (d.length === 10 || d.length === 11) d = '55' + d;
+        if (!/^55[1-9]{2}\d{8,9}$/.test(d)) return null;
+        if (d.length === 13 && d[4] !== '9') return null; // celular de 9 dígitos começa com 9
+        return d;
+      }
+      function formatarWhatsBr(numero) {
+        const d = String(numero || '').replace(/^55/, '');
+        const ddd = d.slice(0, 2), resto = d.slice(2);
+        return `(${ddd}) ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
+      }
+      function urlWhatsComTexto(numero, texto) {
+        return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+      }
+      function atualizarWhatsClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientWhats');
+        if (!el) return;
+        const w = whatsCompradorDoCliente(cliente);
+        el.classList.toggle('definido', !!w);
+        el.innerHTML = w
+          ? `<b>WhatsApp</b> · ${escapeHtml(w.nome ? w.nome + ' · ' : '')}${escapeHtml(formatarWhatsBr(w.numero))}`
+          : '＋ WhatsApp do comprador';
+      }
+      function salvarWhatsComprador(cliente, numero, nome) {
+        if (!cliente || cliente.id == null) return;
+        const id = String(cliente.id);
+        const pend = whatsPendentes();
+        pend[id] = { numero, nome: numero ? nome : '', em: Date.now() };
+        gravarWhatsPendentes(pend);
+        apiFetch(`/api/clientes/${encodeURIComponent(id)}/whatsapp`,
+          { method: 'PUT', body: JSON.stringify({ numero, nome }) },
+          { tipo: 'whatsapp-comprador', descricao: 'WhatsApp do comprador' })
+          .then(r => { if (r && !r.__filaOffline) confirmarWhatsDoServidor(r); })
+          .catch(e => console.warn('WhatsApp do comprador não foi pro servidor (fica só neste aparelho por enquanto):', e));
+      }
+      function confirmarWhatsDoServidor(r) {
+        if (!r || r.id == null) return;
+        const id = String(r.id);
+        // resposta de uma troca anterior chegando depois de outra mais nova
+        // neste aparelho: não apaga a pendência nem volta o número antigo
+        const pend = whatsPendentes();
+        const p = pend[id];
+        if (p && (p.numero !== (r.whatsapp_comprador || '') || p.nome !== (r.whatsapp_comprador_nome || ''))) return;
+        const campos = { whatsapp_comprador: r.whatsapp_comprador, whatsapp_comprador_nome: r.whatsapp_comprador_nome, whatsapp_comprador_em: r.whatsapp_comprador_em };
+        const locais = loadClientesLocais();
+        const local = locais.find(c => String(c.id) === id);
+        if (local) { Object.assign(local, campos); saveClientesLocais(locais); }
+        if (state.levCliente && String(state.levCliente.id) === id) Object.assign(state.levCliente, campos);
+        delete pend[id];
+        gravarWhatsPendentes(pend);
+      }
+      // depois do /sync: tira a pendência que o servidor já tem (a fila
+      // offline já mandou) ou que outro aparelho trocou depois
+      function podarWhatsPendentes(clientes) {
+        const pend = whatsPendentes();
+        let mudou = false;
+        for (const c of clientes) {
+          const id = String(c.id);
+          const servidor = whatsDoServidor(c);
+          if (!pend[id] || !servidor) continue;
+          if ((servidor.numero === pend[id].numero && servidor.nome === pend[id].nome) || servidor.em >= pend[id].em) { delete pend[id]; mudou = true; }
+        }
+        if (mudou) gravarWhatsPendentes(pend);
+      }
+
+      let whatsEditando = null; // cliente da janela aberta
+      function temSeletorDeContatos() {
+        return !!(navigator.contacts && typeof navigator.contacts.select === 'function');
+      }
+      function atualizarPreviaWhats() {
+        const input = document.getElementById('whatsCompradorNumero');
+        const previa = document.getElementById('whatsCompradorPrevia');
+        const valor = input.value.trim();
+        const num = normalizarWhatsBr(valor);
+        previa.classList.toggle('erro', !!valor && !num);
+        previa.textContent = !valor ? 'Sem número: o orçamento abre o compartilhar normal.'
+          : num ? `Conversa: +55 ${formatarWhatsBr(num)}` : 'Confira o número: DDD + número (ex: 43 99999-8888).';
+        document.querySelectorAll('#whatsSugestoes button').forEach(b => b.classList.toggle('ativo', b.dataset.numero === num));
+      }
+      // sugestões em pílulas: telefones do contato escolhido e o da ficha de
+      // CNPJ (às vezes é o do contador ou fixo - por isso só sugestão)
+      function renderSugestoesWhats(lista) {
+        const vistos = new Set();
+        document.getElementById('whatsSugestoes').innerHTML = lista
+          .filter(s => s.numero && !vistos.has(s.numero) && vistos.add(s.numero))
+          .map(s => `<button type="button" data-numero="${s.numero}">${escapeHtml(s.rotulo)}${formatarWhatsBr(s.numero)}</button>`).join('');
+      }
+      function sugestaoDaFicha(cliente) {
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id)) || {};
+        const num = normalizarWhatsBr(local.telefone_ficha || cliente.telefone_ficha);
+        return num ? [{ numero: num, rotulo: 'Ficha: ' }] : [];
+      }
+      function abrirWhatsComprador(cliente) {
+        if (!cliente) return;
+        whatsEditando = cliente;
+        const atual = whatsCompradorDoCliente(cliente);
+        document.getElementById('whatsCompradorCliente').textContent = cliente.nome || '';
+        document.getElementById('whatsCompradorNumero').value = atual ? formatarWhatsBr(atual.numero) : '';
+        document.getElementById('whatsCompradorNome').value = atual ? atual.nome : '';
+        document.getElementById('whatsContatosBtn').classList.toggle('hidden', !temSeletorDeContatos());
+        document.getElementById('whatsSemContatos').classList.toggle('hidden', temSeletorDeContatos());
+        document.getElementById('whatsCompradorRemover').classList.toggle('hidden', !atual);
+        renderSugestoesWhats(sugestaoDaFicha(cliente));
+        atualizarPreviaWhats();
+        document.getElementById('whatsCompradorOverlay').classList.remove('hidden');
+        document.getElementById('whatsCompradorModal').classList.remove('hidden');
+      }
+      function fecharWhatsComprador() {
+        whatsEditando = null;
+        document.getElementById('whatsCompradorOverlay').classList.add('hidden');
+        document.getElementById('whatsCompradorModal').classList.add('hidden');
+      }
+      async function escolherWhatsDosContatos() {
+        let escolhidos;
+        try { escolhidos = await navigator.contacts.select(['name', 'tel'], { multiple: false }); }
+        catch (e) { showToast('Não deu pra abrir os contatos — digite ou cole o número', 'erro'); return; }
+        const contato = escolhidos && escolhidos[0];
+        if (!contato) return; // fechou sem escolher
+        const nums = (contato.tel || []).map(normalizarWhatsBr).filter(Boolean);
+        if (nums.length === 0) { showToast('Esse contato não tem número de celular com DDD', 'erro'); return; }
+        const nome = String((contato.name && contato.name[0]) || '').trim();
+        if (nome) document.getElementById('whatsCompradorNome').value = nome.slice(0, 60);
+        // celular (9 dígitos) primeiro; vários números ficam como pílulas
+        const celular = nums.find(n => n.length === 13) || nums[0];
+        document.getElementById('whatsCompradorNumero').value = formatarWhatsBr(celular);
+        renderSugestoesWhats([...(nums.length > 1 ? nums.map(n => ({ numero: n, rotulo: '' })) : []), ...sugestaoDaFicha(whatsEditando)]);
+        atualizarPreviaWhats();
+      }
+      function confirmarWhatsComprador(remover) {
+        const cliente = whatsEditando;
+        if (!cliente) return;
+        const valor = document.getElementById('whatsCompradorNumero').value.trim();
+        const numero = remover ? '' : (valor ? normalizarWhatsBr(valor) : '');
+        if (numero === null) { atualizarPreviaWhats(); document.getElementById('whatsCompradorNumero').focus(); return; }
+        const nome = document.getElementById('whatsCompradorNome').value.replace(/\s+/g, ' ').trim().slice(0, 60);
+        const atual = whatsCompradorDoCliente(cliente);
+        fecharWhatsComprador();
+        if (!numero && !atual) return;
+        if (atual && atual.numero === numero && atual.nome === nome) return;
+        salvarWhatsComprador(cliente, numero, nome);
+        if (state.levCliente && String(state.levCliente.id) === String(cliente.id)) {
+          atualizarWhatsClienteBar('lev', state.levCliente);
+          atualizarWhatsClienteBar('precos', state.levCliente);
+        }
+        showToast(numero ? 'WhatsApp do comprador salvo — o orçamento em texto vai direto pra ele' : 'WhatsApp do comprador removido');
+      }
+      function initWhatsComprador() {
+        document.getElementById('whatsCompradorNumero').addEventListener('input', atualizarPreviaWhats);
+        document.getElementById('whatsSugestoes').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-numero]');
+          if (!b) return;
+          document.getElementById('whatsCompradorNumero').value = formatarWhatsBr(b.dataset.numero);
+          atualizarPreviaWhats();
+        });
+        document.getElementById('whatsContatosBtn').addEventListener('click', escolherWhatsDosContatos);
+        document.getElementById('whatsCompradorSalvar').addEventListener('click', () => confirmarWhatsComprador(false));
+        document.getElementById('whatsCompradorRemover').addEventListener('click', () => confirmarWhatsComprador(true));
+        document.getElementById('whatsCompradorCancel').addEventListener('click', fecharWhatsComprador);
+        document.getElementById('whatsCompradorOverlay').addEventListener('click', fecharWhatsComprador);
       }
 
       // ---------------- Rota no Waze ----------------
@@ -9268,6 +9577,7 @@
         document.getElementById('levProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('levFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('levWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));
+        document.getElementById('levClientWhats').addEventListener('click', () => abrirWhatsComprador(state.levCliente));
         document.getElementById('levOpenSearch').addEventListener('input', (e) => renderSavedSurveysList(e.target.value));
         refreshLevSaveInfo();
       }
@@ -9282,6 +9592,7 @@
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('precosWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));
+        document.getElementById('precosClientWhats').addEventListener('click', () => abrirWhatsComprador(state.levCliente));
         document.getElementById('precosPedidosSalvosBtn').addEventListener('click', () => abrirPedidosSalvos(state.levCliente));
       }
 
@@ -9982,10 +10293,20 @@
         ];
         return partes.join('\n');
       }
-      async function shareCartAsText() {
+      async function shareCartAsText(opcoes = {}) {
         const { rows } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
         const text = buildCartShareText();
+        // cliente com WhatsApp do comprador: abre a conversa dele já com o
+        // texto (wa.me abre o app do WhatsApp no celular) - ainda dentro do
+        // toque, senão o navegador bloqueia a janela nova. Sem internet o wa.me
+        // pode parar numa página de erro (iPhone abre a página antes do app):
+        // aí fica o compartilhar do celular, que funciona offline.
+        const w = !opcoes.outroContato && navigator.onLine !== false && whatsCompradorDoCliente(state.levCliente);
+        if (w) {
+          window.open(urlWhatsComTexto(w.numero, text), '_blank', 'noopener');
+          return;
+        }
         if (navigator.share) {
           try {
             await navigator.share({ text, title: 'Orçamento Cortag' });
@@ -10488,6 +10809,14 @@
       function openShareSheet() {
         const { rows } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
+        // com o WhatsApp do comprador, o texto abre direto na conversa dele;
+        // imagem/PDF/CSV o navegador não consegue mandar pra um contato certo
+        // (o compartilhar do celular sempre pede pra escolher)
+        const w = whatsCompradorDoCliente(state.levCliente);
+        const para = document.getElementById('shareSheetPara');
+        para.classList.toggle('hidden', !w);
+        para.innerHTML = w ? `Texto direto pra <b>${escapeHtml(w.nome || formatarWhatsBr(w.numero))}</b> · <button type="button" id="shareSheetOutroBtn">mandar pra outro contato</button>` : '';
+        document.getElementById('shareTextoSub').textContent = w ? 'Direto na conversa' : 'WhatsApp, direto';
         document.getElementById('shareSheetOverlay').classList.remove('hidden');
         document.getElementById('shareSheet').classList.remove('hidden');
       }
@@ -10499,6 +10828,11 @@
         document.getElementById('openShareSheetBtn').addEventListener('click', openShareSheet);
         document.getElementById('shareSheetCancel').addEventListener('click', closeShareSheet);
         document.getElementById('shareSheetOverlay').addEventListener('click', closeShareSheet);
+        document.getElementById('shareSheetPara').addEventListener('click', (e) => {
+          if (!e.target.closest('#shareSheetOutroBtn')) return;
+          closeShareSheet();
+          shareCartAsText({ outroContato: true });
+        });
         document.querySelectorAll('#shareSheet [data-share]').forEach(btn => {
           btn.addEventListener('click', () => {
             const type = btn.dataset.share;
@@ -11275,9 +11609,10 @@
           if (result && Array.isArray(result.clientes)) {
             saveClientesLocais(result.clientes);
             podarNomesArquivoPendentes(result.clientes);
+            podarWhatsPendentes(result.clientes);
             if (pertoAberto()) renderPerto();
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
-            if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); }
+            if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); atualizarWhatsClienteBar('lev', state.levCliente); atualizarWhatsClienteBar('precos', state.levCliente); }
           }
           return true;
         } catch (e) { return false; /* sem rede agora - mantém a cópia local que já tinha, tenta de novo no próximo boot/intervalo */ }
@@ -17025,6 +17360,7 @@
           initPedidosSalvos();
           initLevShare();
           initCsvNamePrompt();
+          initWhatsComprador();
           initCsvDestino();
           initPriceEdit();
           initFichaTecnicaModal();

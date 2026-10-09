@@ -256,6 +256,25 @@ async function main() {
   res = await req('PUT', '/api/clientes/99999/nome-arquivo', { nome_arquivo: 'Xyz' });
   assert(res.status === 404, 'cliente inexistente: 404');
 
+  // 5b3) WhatsApp do comprador - destino direto do texto do orçamento, vale
+  // em todos os aparelhos e volta no /sync (usado offline)
+  res = await req('PUT', '/api/clientes/9010/whatsapp', { numero: '5543999998888', nome: '  João\n Compras ' });
+  assert(res.status === 200 && res.body.whatsapp_comprador === '5543999998888' && res.body.whatsapp_comprador_nome === 'João Compras' && res.body.whatsapp_comprador_em,
+    `grava o WhatsApp do comprador (nome sem quebra de linha): ${JSON.stringify(res.body)}`);
+  res = await req('GET', '/api/clientes/sync');
+  const comWhats = res.body.clientes.find(c => c.id === 9010);
+  assert(comWhats.whatsapp_comprador === '5543999998888' && comWhats.whatsapp_comprador_nome === 'João Compras' && comWhats.whatsapp_comprador_em
+    && 'telefone_ficha' in comWhats, '/sync traz o WhatsApp do comprador, quando foi trocado e o telefone da ficha');
+  for (const ruim of ['43999998888', '550099998888', '55439999988881', 'abc']) {
+    res = await req('PUT', '/api/clientes/9010/whatsapp', { numero: ruim });
+    assert(res.status === 400, `número fora do formato 55+DDD+número é recusado: ${ruim}`);
+  }
+  res = await req('PUT', '/api/clientes/9010/whatsapp', { numero: '', nome: 'Sobra' });
+  assert(res.status === 200 && res.body.whatsapp_comprador === null && res.body.whatsapp_comprador_nome === null,
+    'número vazio apaga o WhatsApp e o nome do comprador');
+  res = await req('PUT', '/api/clientes/99999/whatsapp', { numero: '5543999998888' });
+  assert(res.status === 404, 'WhatsApp de cliente inexistente: 404');
+
   // 5c) regime tributário da ficha de CNPJ no /sync - o recado de ICMS-ST do
   // orçamento (gerado offline) muda o texto pra Simples/MEI x regime normal
   mockDb.__seed({
