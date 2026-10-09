@@ -6658,6 +6658,10 @@
             <label for="promoExcluirFamilias">…e categorias</label>
             <input type="text" id="promoExcluirFamilias" placeholder="Ex: Nivelamento (separe por vírgula)">
             <label class="promoCheckLinha">
+              <input type="checkbox" id="promoSoNoPrecoFixo">
+              Desconto sobre o preço fixo (vale só em item de Preço Fixo, sem somar outro desconto)
+            </label>
+            <label class="promoCheckLinha">
               <input type="checkbox" id="promoExcluirOutraCampanha">
               Item que já ganha outra campanha não ganha esta
             </label>
@@ -8039,6 +8043,7 @@
       //   maxPctDoPedido: 50,        // alvo até 50% do valor do pedido e com outros produtos junto
       //   excluirCodigos: ["60863"], excluirFamilias: ["Nivelamento"], // contam na quantidade, não ganham o desconto
       //   excluirOutraCampanha: true, // item que já ganha outra campanha não ganha esta
+      //   soNoPrecoFixo: true, // desconto SOBRE o preço fixo (só item de Preço Fixo no canal; não soma com nada)
       //   exigeItens: { pct: 10, codigos: [...], familias: [...] }, // % mínimo dos itens do alvo nessa lista
       // }
       // A campanha é de um canal: a mesma promoção não vale sozinha nos outros
@@ -8191,8 +8196,8 @@
           if (motivo) { avisos.push({ regra: rule.name, motivo }); continue; }
           const excluirCodigos = listaDaRegra(rule.excluirCodigos);
           const excluirFamilias = listaDaRegra(rule.excluirFamilias);
-          const porRegra = rule.targetType === 'all' || excluirCodigos.length || excluirFamilias.length || rule.excluirOutraCampanha;
-          const bonus = { pct, stacks: rule.stacks !== false, ruleName: rule.name };
+          const porRegra = rule.targetType === 'all' || excluirCodigos.length || excluirFamilias.length || rule.excluirOutraCampanha || rule.soNoPrecoFixo;
+          const bonus = { pct, stacks: rule.stacks !== false, ruleName: rule.name, soNoPrecoFixo: !!rule.soNoPrecoFixo };
           if (porRegra) {
             // alvo e exclusões próprios: não se junta com outra regra do mesmo alvo
             Object.assign(bonus, {
@@ -8238,9 +8243,15 @@
       // Campanha que o item recebe: nenhuma quando ele é Preço Fixo no canal
       // (desconto de campanha "já aplicado no preço" da Lista de Preços), igual
       // aos outros descontos.
+      // Exceção: regra com "soNoPrecoFixo" (Black Friday, cortadores: "15% no preço
+      // fixo") é o inverso - vale só no item de Preço Fixo, sobre o preço fixo, e
+      // nunca no item que não é fixo no canal.
       function bonusDaCampanhaNoItem(bonuses, p, precoFixo) {
-        if (precoFixo) return null;
-        return bestBonusForProduct(bonuses, p);
+        const validos = {};
+        for (const k in bonuses) {
+          if (!!bonuses[k].soNoPrecoFixo === !!precoFixo) validos[k] = bonuses[k];
+        }
+        return bestBonusForProduct(validos, p);
       }
       // </motor-campanhas>
 
@@ -8293,7 +8304,7 @@
           if (bonus) {
             campaignPct = bonus.pct;
             campaignName = bonus.ruleName;
-            if (bonus.stacks) {
+            if (bonus.stacks || bonus.soNoPrecoFixo) {
               cp = r.cp * (1 - bonus.pct / 100);
               cpSemImposto = r.cpSemImposto * (1 - bonus.pct / 100);
             } else {
@@ -16200,6 +16211,7 @@
         const excl = listaDaRegra(r.excluirCodigos).concat(listaDaRegra(r.excluirFamilias));
         if (excl.length) partes.push('Sem desconto em: ' + excl.join(', '));
         if (r.excluirOutraCampanha) partes.push('Não soma com outra campanha no item');
+        if (r.soNoPrecoFixo) partes.push('Desconto sobre o preço fixo');
         if (r.exigeItens && Number(r.exigeItens.pct) > 0) {
           const lista = listaDaRegra(r.exigeItens.codigos).concat(listaDaRegra(r.exigeItens.familias));
           partes.push(`Exige ${r.exigeItens.pct}% dos itens em: ${lista.join(', ') || '(lista vazia)'}`);
@@ -16430,6 +16442,7 @@
         extra('promoExcluirCodigos', rule ? listaDaRegra(rule.excluirCodigos).join(', ') : '');
         extra('promoExcluirFamilias', rule ? listaDaRegra(rule.excluirFamilias).join(', ') : '');
         document.getElementById('promoExcluirOutraCampanha').checked = !!(rule && rule.excluirOutraCampanha);
+        document.getElementById('promoSoNoPrecoFixo').checked = !!(rule && rule.soNoPrecoFixo);
         const exige = rule && rule.exigeItens ? rule.exigeItens : null;
         extra('promoExigePct', exige && Number(exige.pct) > 0 ? exige.pct : '');
         extra('promoExigeCodigos', exige ? listaDaRegra(exige.codigos).join(', ') : '');
@@ -16489,6 +16502,7 @@
         if (exclCod.length) rule.excluirCodigos = exclCod;
         if (exclFam.length) rule.excluirFamilias = exclFam;
         if (document.getElementById('promoExcluirOutraCampanha').checked) rule.excluirOutraCampanha = true;
+        if (document.getElementById('promoSoNoPrecoFixo').checked) rule.soNoPrecoFixo = true;
         const exigePct = parseFloat(val('promoExigePct'));
         if ((isNaN(exigePct) || exigePct <= 0) && (val('promoExigeCodigos') || val('promoExigeFamilias'))) return 'Informe o % mínimo da exigência de lançamentos/família foco.';
         if (!isNaN(exigePct) && exigePct > 0) {
