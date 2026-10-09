@@ -2462,7 +2462,9 @@
       color: var(--warning);
     }
 
-    /* canais em que a campanha vale (formulário da regra) */
+    /* canais/classificatórios em que a campanha vale (formulário da regra) -
+       com .minimodal-card na frente: senão o label/input genérico do modal,
+       declarado depois, ganhava e cada caixinha ia pra uma linha */
     .promoCanais {
       display: flex;
       flex-wrap: wrap;
@@ -2470,7 +2472,7 @@
       margin-bottom: 16px;
     }
 
-    .promoCanais label {
+    .minimodal-card .promoCanais label {
       display: flex;
       align-items: center;
       gap: 6px;
@@ -2481,7 +2483,23 @@
       color: var(--ink);
     }
 
-    .promoCanais input {
+    .minimodal-card .promoCanais input {
+      width: auto;
+      margin: 0;
+    }
+
+    /* caixinha + texto numa linha (formulário da regra de campanha) */
+    .minimodal-card label.promoCheckLinha {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 400;
+      color: var(--ink);
+      margin-bottom: 16px;
+    }
+
+    .minimodal-card label.promoCheckLinha input {
       width: auto;
       margin: 0;
     }
@@ -5875,6 +5893,7 @@
       <div class="drawer-body" id="cartItems"></div>
       <div class="drawer-footer">
         <div class="pedidoMinimoAviso hidden" id="pedidoMinimoAviso"></div>
+        <div class="pedidoMinimoAviso hidden" id="campanhaAviso" style="white-space:pre-line;"></div>
         <div class="subtotalrow">
           <span class="lbl">Total S/ Impostos</span>
           <span class="val" id="cartTotalSemImpostos">R$ 0,00</span>
@@ -6547,6 +6566,7 @@
           <button type="button" data-v="category" class="active">Categoria</button>
           <button type="button" data-v="product">Produto</button>
           <button type="button" data-v="skuList">Grupo de produtos</button>
+          <button type="button" data-v="all">Pedido todo</button>
         </div>
         <div id="targetCatWrap">
           <select id="promoTargetCat" style="margin-bottom:16px;"></select>
@@ -6575,6 +6595,7 @@
           <select id="promoSelfMetric" style="margin-bottom:16px;">
             <option value="qty">Quantidade comprada</option>
             <option value="value">Valor bruto comprado (R$)</option>
+            <option value="skus">Itens diferentes no pedido (SKUs)</option>
           </select>
           <label>Degraus (mínimo → desconto)</label>
           <div id="promoTiersList"></div>
@@ -6614,8 +6635,43 @@
           <label><input type="checkbox" value="INSTITUCIONAL"> Institucional</label>
         </div>
 
-        <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink);margin-bottom:16px;">
-          <input type="checkbox" id="promoStacks" checked style="width:auto;margin:0;">
+        <label>Classificatório do cliente</label>
+        <div class="promoCanais" id="promoClassis"></div>
+        <p class="ap-hint" style="margin:-8px 0 16px;">Nenhum marcado = vale pra todos. Marcando, vale só com esse
+          classificatório escolhido no orçamento (cadastre uma regra por grupo quando o limite muda).</p>
+
+        <details class="ap-subsecao" id="promoExtras" style="margin:0 0 16px;">
+          <summary>Mais condições (opcional)</summary>
+          <div style="padding-top:12px;">
+            <label for="promoUfs">Só nos estados</label>
+            <input type="text" id="promoUfs" placeholder="Ex: PR, SC (vazio = todos)" autocapitalize="characters">
+            <label for="promoUfsExcluidas">Exceto nos estados</label>
+            <input type="text" id="promoUfsExcluidas" placeholder="Ex: SP" autocapitalize="characters">
+            <label for="promoValidoAte">Válida até (inclusive)</label>
+            <input type="date" id="promoValidoAte">
+            <label for="promoMaxPctPedido">Alvo no máximo (% do valor do pedido)</label>
+            <input type="number" id="promoMaxPctPedido" min="0" max="100" step="1" placeholder="sem limite" inputmode="decimal">
+            <p class="ap-hint" style="margin:-10px 0 16px;">Com limite, o desconto só vale se o pedido tiver outros produtos e
+              o alvo não passar desse % (ex: protetor de piso, 50%).</p>
+            <label for="promoExcluirCodigos">Contam na quantidade, mas não ganham o desconto: códigos</label>
+            <input type="text" id="promoExcluirCodigos" placeholder="Ex: 60863">
+            <label for="promoExcluirFamilias">…e categorias</label>
+            <input type="text" id="promoExcluirFamilias" placeholder="Ex: Nivelamento (separe por vírgula)">
+            <label class="promoCheckLinha">
+              <input type="checkbox" id="promoExcluirOutraCampanha">
+              Item que já ganha outra campanha não ganha esta
+            </label>
+            <label for="promoExigePct">Exige no mínimo (% dos itens do alvo) em lançamentos/família foco</label>
+            <input type="number" id="promoExigePct" min="0" max="100" step="1" placeholder="sem exigência" inputmode="decimal">
+            <label for="promoExigeCodigos">Códigos dos lançamentos</label>
+            <input type="text" id="promoExigeCodigos" placeholder="Separe por vírgula">
+            <label for="promoExigeFamilias">Categorias foco</label>
+            <input type="text" id="promoExigeFamilias" placeholder="Separe por vírgula" style="margin-bottom:0;">
+          </div>
+        </details>
+
+        <label class="promoCheckLinha">
+          <input type="checkbox" id="promoStacks" checked>
           Soma com o desconto individual do item (se desligado, usa o maior dos dois)
         </label>
 
@@ -7966,41 +8022,99 @@
       // Formato de cada regra (salva em state.promoRules):
       // {
       //   id, name, active,
-      //   targetType: "category" | "product",
-      //   targetValue: "nome da categoria" ou "código do produto",
+      //   targetType: "category" | "product" | "skuList" | "all",  // "all" = todos os itens do pedido
+      //   targetValue: "nome da categoria", "código do produto", "cód1,cód2" ou "" (all),
       //   basis: "self" | "combo",
-      //   selfMetric: "qty" | "value",           // usado só quando basis === "self"
+      //   selfMetric: "qty" | "value" | "skus",  // usado só quando basis === "self"; "skus" = nº de itens diferentes
       //   tiers: [{min:40, pct:5}, ...],          // usado só quando basis === "self"
       //   basketItems: [{type:"category"|"product", value:"...", minQty:1}, ...], // usado só quando basis === "combo"
       //   comboPct: 15,                           // usado só quando basis === "combo"
       //   stacks: true, // true = soma com desconto manual do item; false = usa o maior dos dois
       //   canais: ["VAREJO", ...], // canais em que vale; regra sem o campo (as criadas antes) = só Varejo
+      //   --- campos opcionais (10/2026, Trade News); sem eles a regra vale como antes ---
+      //   classificatorios: ["Varejo Exclusive", ...], // tipos do CLASSI_POR_CANAL; vazio/ausente = todos
+      //   ufs: ["PR", ...],          // só nesses estados do orçamento
+      //   ufsExcluidas: ["SP"],      // não vale nesses estados
+      //   validoAte: "2026-10-31",   // último dia (Brasília, inclusive)
+      //   maxPctDoPedido: 50,        // alvo até 50% do valor do pedido e com outros produtos junto
+      //   excluirCodigos: ["60863"], excluirFamilias: ["Nivelamento"], // contam na quantidade, não ganham o desconto
+      //   excluirOutraCampanha: true, // item que já ganha outra campanha não ganha esta
+      //   exigeItens: { pct: 10, codigos: [...], familias: [...] }, // % mínimo dos itens do alvo nessa lista
       // }
       // A campanha é de um canal: a mesma promoção não vale sozinha nos outros
       // (pedido do usuário, 10/2026 - antes toda regra valia em todos os canais).
+      // <motor-campanhas> - trecho sem DOM, rodado isolado pelo test/run_tests.js
+      // (depende só de state.canal e DB.categories).
       function canaisDaRegra(rule) {
         return Array.isArray(rule.canais) && rule.canais.length ? rule.canais : ['VAREJO'];
       }
       function regraValeNoCanal(rule, canal) {
         return canaisDaRegra(rule).includes(canal || state.canal || 'VAREJO');
       }
+      // Comparação de nomes (classificatório, categoria) ignorando acento,
+      // maiúscula e espaço sobrando - como faixaDoTipo no servidor.
+      function textoCampanha(s) {
+        return (s == null ? '' : String(s)).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+      }
+      // Lista da regra: aceita array ou texto separado por vírgula.
+      function listaDaRegra(v) {
+        if (Array.isArray(v)) return v.map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+        if (typeof v === 'string') return v.split(',').map(s => s.trim()).filter(Boolean);
+        return [];
+      }
+      // Código promocional (P/P1/P2 + base) bate com o código base da lista.
+      function codigoNaListaDaRegra(cod, lista) {
+        const c = String(cod || '');
+        if (lista.includes(c)) return true;
+        const promo = /^P[12]?(.+)$/.exec(c);
+        return !!(promo && lista.includes(promo[1]));
+      }
+      function produtoNaListaDaRegra(p, codigos, familias) {
+        if (codigos.length && codigoNaListaDaRegra(p.c, codigos)) return true;
+        if (!familias.length) return false;
+        const f = textoCampanha(productFamilia(p));
+        return familias.some(x => textoCampanha(x) === f);
+      }
+      // Condições que não dependem dos itens: canal, classificatório, estado e
+      // validade. ctx = { canal, uf, classiTipos: [...], hoje: 'AAAA-MM-DD' (Brasília) }.
+      function regraValeNoContexto(rule, ctx) {
+        if (!regraValeNoCanal(rule, ctx.canal)) return false;
+        const classis = listaDaRegra(rule.classificatorios).map(textoCampanha);
+        if (classis.length) {
+          const doOrcamento = (ctx.classiTipos || []).map(textoCampanha);
+          if (!classis.some(c => doOrcamento.includes(c))) return false;
+        }
+        const uf = String(ctx.uf || '').toUpperCase();
+        const ufs = listaDaRegra(rule.ufs).map(u => u.toUpperCase());
+        if (ufs.length && !ufs.includes(uf)) return false;
+        if (listaDaRegra(rule.ufsExcluidas).map(u => u.toUpperCase()).includes(uf)) return false;
+        // data sem hora: compara o texto AAAA-MM-DD, nunca new Date() (fuso)
+        if (typeof rule.validoAte === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rule.validoAte) && String(ctx.hoje || '') > rule.validoAte) return false;
+        return true;
+      }
 
       function productFamilia(p) {
         return p.familia || (p.cat != null ? DB.categories[p.cat] : null) || '';
       }
       function scopeMatchesProduct(type, value, p) {
+        if (type === 'all') return true;
         if (type === 'product') return p.c === value;
         if (type === 'skuList') return value.split(',').map(s => s.trim()).includes(p.c);
         return productFamilia(p) === value;
       }
       function scopeTotals(rows, type, value) {
         let qty = 0, gross = 0;
+        const skus = new Set();
         for (const r of rows) {
-          if (scopeMatchesProduct(type, value, r.p)) { qty += r.it.qty; gross += r.lineTotal; }
+          if (scopeMatchesProduct(type, value, r.p)) {
+            qty += r.it.qty; gross += r.lineTotal;
+            if (r.it.qty > 0) skus.add(r.p.c);
+          }
         }
-        return { qty, gross };
+        return { qty, gross, skus: skus.size };
       }
       function scopeLabel(type, value) {
+        if (type === 'all') return 'todo o pedido';
         if (type === 'product') {
           const p = productByCod(value);
           return p ? `${p.n} (cód. ${value})` : `produto ${value}`;
@@ -8011,11 +8125,48 @@
         }
         return value;
       }
+      // Regra que atingiu o degrau mas não pode valer por uma condição do
+      // próprio pedido (teto do alvo, % mínimo de lançamentos) - devolve o
+      // motivo pra mostrar no orçamento; null = pode valer.
+      function motivoCampanhaBloqueada(rule, rows) {
+        const noAlvo = r => scopeMatchesProduct(rule.targetType, rule.targetValue, r.p);
+        const maxPct = Number(rule.maxPctDoPedido) || 0;
+        if (maxPct > 0) {
+          let total = 0, doAlvo = 0, outros = 0;
+          for (const r of rows) {
+            total += r.lineTotal;
+            if (noAlvo(r)) doAlvo += r.lineTotal; else outros++;
+          }
+          if (outros === 0) return 'precisa ter outros produtos no pedido';
+          if (total > 0 && doAlvo > total * maxPct / 100 + 0.005) {
+            return `o item da campanha é ${Math.round(doAlvo / total * 100)}% do valor do pedido (máximo ${maxPct}%)`;
+          }
+        }
+        const exige = rule.exigeItens;
+        const exigePct = exige ? Number(exige.pct) || 0 : 0;
+        if (exigePct > 0) {
+          const codigos = listaDaRegra(exige.codigos), familias = listaDaRegra(exige.familias);
+          const doAlvo = rows.filter(r => noAlvo(r) && r.it.qty > 0);
+          const itens = new Set(doAlvo.map(r => r.p.c)).size;
+          const naLista = new Set(doAlvo.filter(r => produtoNaListaDaRegra(r.p, codigos, familias)).map(r => r.p.c)).size;
+          const precisa = Math.ceil(itens * exigePct / 100 - 1e-9);
+          if (naLista < precisa) {
+            const falta = precisa - naLista;
+            return `falta${falta > 1 ? 'm' : ''} ${falta} ${falta > 1 ? 'itens' : 'item'} de lançamento/família foco (mínimo ${exigePct}% dos itens)`;
+          }
+        }
+        return null;
+      }
 
-      function computeCampaignBonuses(rows) {
-        const bonusByTarget = {}; // chave "type|value" -> {pct, stacks, ruleName}
-        for (const rule of (state.promoRules || [])) {
-          if (!rule.active || !regraValeNoCanal(rule)) continue;
+      // Calcula as campanhas do orçamento. Devolve { bonuses, avisos }:
+      // bonuses = chave "type|value" (regra antiga) ou "regra|id" (regra com
+      // "all"/exclusões) -> {pct, stacks, ruleName, ...}; avisos = regras que
+      // chegaram no degrau mas não valeram, com o motivo.
+      function avaliarCampanhas(rules, rows, ctx) {
+        const bonusByTarget = {};
+        const avisos = [];
+        for (const rule of (rules || [])) {
+          if (!rule || !rule.active || !regraValeNoContexto(rule, ctx)) continue;
           let pct = 0;
 
           if (rule.basis === 'combo') {
@@ -8029,20 +8180,33 @@
             if (conditionMet) pct = rule.comboPct || 0;
           } else {
             const t = scopeTotals(rows, rule.targetType, rule.targetValue);
-            const basisValue = rule.selfMetric === 'value' ? t.gross : t.qty;
+            const basisValue = rule.selfMetric === 'value' ? t.gross : rule.selfMetric === 'skus' ? t.skus : t.qty;
             for (const tier of (rule.tiers || [])) {
               if (basisValue >= tier.min && tier.pct > pct) pct = tier.pct;
             }
           }
 
           if (pct <= 0) continue;
+          const motivo = motivoCampanhaBloqueada(rule, rows);
+          if (motivo) { avisos.push({ regra: rule.name, motivo }); continue; }
+          const excluirCodigos = listaDaRegra(rule.excluirCodigos);
+          const excluirFamilias = listaDaRegra(rule.excluirFamilias);
+          const porRegra = rule.targetType === 'all' || excluirCodigos.length || excluirFamilias.length || rule.excluirOutraCampanha;
+          const bonus = { pct, stacks: rule.stacks !== false, ruleName: rule.name };
+          if (porRegra) {
+            // alvo e exclusões próprios: não se junta com outra regra do mesmo alvo
+            Object.assign(bonus, {
+              targetType: rule.targetType, targetValue: rule.targetValue,
+              excluirCodigos, excluirFamilias, excluirOutraCampanha: !!rule.excluirOutraCampanha,
+            });
+            bonusByTarget['regra|' + rule.id] = bonus;
+            continue;
+          }
           const key = rule.targetType + '|' + rule.targetValue;
           const existing = bonusByTarget[key];
-          if (!existing || pct > existing.pct) {
-            bonusByTarget[key] = { pct, stacks: rule.stacks !== false, ruleName: rule.name };
-          }
+          if (!existing || pct > existing.pct) bonusByTarget[key] = bonus;
         }
-        return bonusByTarget;
+        return { bonuses: bonusByTarget, avisos };
       }
 
       function bestBonusForProduct(bonuses, p) {
@@ -8057,7 +8221,46 @@
             if (!best || b.pct > best.pct) best = b;
           }
         }
+        // regras com alvo/exclusões próprios: primeiro as que somam com outra
+        // campanha; as "excluirOutraCampanha" só entram se nenhuma outra valeu
+        const porRegra = Object.keys(bonuses).filter(k => k.startsWith('regra|')).map(k => bonuses[k])
+          .filter(b => scopeMatchesProduct(b.targetType, b.targetValue, p) && !produtoNaListaDaRegra(p, b.excluirCodigos, b.excluirFamilias));
+        for (const b of porRegra) {
+          if (!b.excluirOutraCampanha && (!best || b.pct > best.pct)) best = b;
+        }
+        if (!best) {
+          for (const b of porRegra) {
+            if (b.excluirOutraCampanha && (!best || b.pct > best.pct)) best = b;
+          }
+        }
         return best;
+      }
+      // Campanha que o item recebe: nenhuma quando ele é Preço Fixo no canal
+      // (desconto de campanha "já aplicado no preço" da Lista de Preços), igual
+      // aos outros descontos.
+      function bonusDaCampanhaNoItem(bonuses, p, precoFixo) {
+        if (precoFixo) return null;
+        return bestBonusForProduct(bonuses, p);
+      }
+      // </motor-campanhas>
+
+      // Contexto do orçamento pra regraValeNoContexto.
+      function classiTiposDoOrcamento() {
+        const op = (CLASSI_POR_CANAL[state.canal] || []).find(o => o.v === state.channelDiscount);
+        return op && Array.isArray(op.tipos) ? op.tipos.slice() : [];
+      }
+      // "Hoje" em Brasília (AAAA-MM-DD), mesmo com o celular em outro fuso.
+      function hojeBrasiliaISO() {
+        try {
+          const partes = {};
+          new Intl.DateTimeFormat('en-US', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' })
+            .formatToParts(new Date()).forEach(x => { partes[x.type] = x.value; });
+          if (partes.year && partes.month && partes.day) return `${partes.year}-${partes.month}-${partes.day}`;
+        } catch (e) { /* navegador sem fuso: usa o do aparelho */ }
+        return todayStr();
+      }
+      function contextoCampanhas() {
+        return { canal: state.canal || 'VAREJO', uf: state.uf, classiTipos: classiTiposDoOrcamento(), hoje: hojeBrasiliaISO() };
       }
 
       function cartTotals() {
@@ -8080,13 +8283,14 @@
           return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal };
         }).filter(Boolean);
 
-        const bonuses = computeCampaignBonuses(baseRows);
+        const { bonuses, avisos } = avaliarCampanhas(state.promoRules, baseRows, contextoCampanhas());
 
         const rows = baseRows.map(r => {
-          const bonus = bestBonusForProduct(bonuses, r.p);
+          // Preço Fixo (no canal atual) bloqueia bônus de campanha, igual aos outros descontos
+          const bonus = bonusDaCampanhaNoItem(bonuses, r.p, isPrecoFixoParaCanal(r.p));
           let cp = r.cp, cpSemImposto = r.cpSemImposto;
           let campaignPct = 0, campaignName = null;
-          if (bonus && !isPrecoFixoParaCanal(r.p)) { // Preço Fixo (no canal atual) bloqueia bônus de campanha, igual aos outros descontos
+          if (bonus) {
             campaignPct = bonus.pct;
             campaignName = bonus.ruleName;
             if (bonus.stacks) {
@@ -8106,7 +8310,7 @@
           return { p: r.p, it: r.it, lp: r.lp, cp, lineTotal, cpSemImposto, lineTotalSemImpostos, campaignPct, campaignName };
         });
 
-        return { rows, total, totalSemImpostos };
+        return { rows, total, totalSemImpostos, avisosCampanha: avisos };
       }
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
@@ -8122,8 +8326,14 @@
       }
       function renderCart() {
         salvarContextoDoCarrinho(); // estado/canal/descontos/prazo mudam e o carrinho é redesenhado
-        const { rows, total, totalSemImpostos } = cartTotals();
+        const { rows, total, totalSemImpostos, avisosCampanha } = cartTotals();
         document.getElementById('cartTotalSemImpostos').textContent = brl(totalSemImpostos);
+        // campanha que chegou no degrau mas não valeu (teto do pedido, % de lançamentos)
+        const campanhaAvisoEl = document.getElementById('campanhaAviso');
+        if (campanhaAvisoEl) {
+          campanhaAvisoEl.textContent = avisosCampanha.map(a => `⚠️ Campanha "${a.regra}" não aplicada: ${a.motivo}.`).join('\n');
+          campanhaAvisoEl.classList.toggle('hidden', rows.length === 0 || avisosCampanha.length === 0);
+        }
         const totalItensEl = document.getElementById('cartTotalItens');
         if (totalItensEl) totalItensEl.textContent = rows.length > 0 ? totalItensLabel(rows.length) : '';
         const avisoEl = document.getElementById('pedidoMinimoAviso');
@@ -15972,8 +16182,29 @@
           const modeLabel = r.basketMode === 'atLeast' ? `pelo menos ${r.basketMinCount} de: ` : 'todos: ';
           return `Cesta (${modeLabel}${itemsLabel}) → ${r.comboPct}% em "${targetLabel}"`;
         }
-        const metricLabel = r.selfMetric === 'value' ? 'Valor bruto' : 'Quantidade';
+        const metricLabel = r.selfMetric === 'value' ? 'Valor bruto' : r.selfMetric === 'skus' ? 'Itens diferentes' : 'Quantidade';
         return `${metricLabel} de "${targetLabel}". Degraus: ${describeTiers(r.tiers)}`;
+      }
+      // Campos opcionais da regra (classificatório, estado, validade, teto,
+      // exclusões, exigência) numa linha só - vazio quando a regra não tem nenhum.
+      function condicoesExtrasTexto(r) {
+        const partes = [];
+        const classis = listaDaRegra(r.classificatorios);
+        if (classis.length) partes.push('Classificatório: ' + classis.join(', '));
+        const ufs = listaDaRegra(r.ufs);
+        if (ufs.length) partes.push('Só em ' + ufs.join(', '));
+        const fora = listaDaRegra(r.ufsExcluidas);
+        if (fora.length) partes.push('Exceto ' + fora.join(', '));
+        if (r.validoAte) partes.push('Até ' + formatDateBr(r.validoAte));
+        if (Number(r.maxPctDoPedido) > 0) partes.push(`Alvo até ${r.maxPctDoPedido}% do pedido, com outros produtos`);
+        const excl = listaDaRegra(r.excluirCodigos).concat(listaDaRegra(r.excluirFamilias));
+        if (excl.length) partes.push('Sem desconto em: ' + excl.join(', '));
+        if (r.excluirOutraCampanha) partes.push('Não soma com outra campanha no item');
+        if (r.exigeItens && Number(r.exigeItens.pct) > 0) {
+          const lista = listaDaRegra(r.exigeItens.codigos).concat(listaDaRegra(r.exigeItens.familias));
+          partes.push(`Exige ${r.exigeItens.pct}% dos itens em: ${lista.join(', ') || '(lista vazia)'}`);
+        }
+        return partes.join(' · ');
       }
 
       function refreshPromoStatus() {
@@ -15998,6 +16229,7 @@
           <div class="prDetail">${escapeHtml(ruleSummaryText(r))}</div>
           <div class="prDetail">${r.stacks !== false ? 'Soma com desconto individual do item' : 'Usa o maior entre esse bônus e o desconto individual'}</div>
           <div class="prDetail">Canais: ${escapeHtml(canaisDaRegra(r).map(c => NOME_CANAL[c] || c).join(', '))}</div>
+          ${condicoesExtrasTexto(r) ? `<div class="prDetail">${escapeHtml(condicoesExtrasTexto(r))}</div>` : ''}
         </div>
         <div class="prBtns">
           <button data-toggle-rule="${r.id}" class="${r.active ? 'prToggleOn' : ''}" aria-label="Ativar/desativar" title="Ativar/desativar">${r.active ? ICON_ATIVO : ICON_INATIVO}</button>
@@ -16189,19 +16421,94 @@
         document.getElementById('promoStacks').checked = rule ? rule.stacks !== false : true;
         const canais = rule ? canaisDaRegra(rule) : ['VAREJO'];
         document.querySelectorAll('#promoCanais input').forEach(inp => { inp.checked = canais.includes(inp.value); });
+        renderPromoClassis(rule ? listaDaRegra(rule.classificatorios) : []);
+        const extra = (id, v) => { document.getElementById(id).value = v == null ? '' : v; };
+        extra('promoUfs', rule ? listaDaRegra(rule.ufs).join(', ') : '');
+        extra('promoUfsExcluidas', rule ? listaDaRegra(rule.ufsExcluidas).join(', ') : '');
+        extra('promoValidoAte', rule && rule.validoAte ? rule.validoAte : '');
+        extra('promoMaxPctPedido', rule && Number(rule.maxPctDoPedido) > 0 ? rule.maxPctDoPedido : '');
+        extra('promoExcluirCodigos', rule ? listaDaRegra(rule.excluirCodigos).join(', ') : '');
+        extra('promoExcluirFamilias', rule ? listaDaRegra(rule.excluirFamilias).join(', ') : '');
+        document.getElementById('promoExcluirOutraCampanha').checked = !!(rule && rule.excluirOutraCampanha);
+        const exige = rule && rule.exigeItens ? rule.exigeItens : null;
+        extra('promoExigePct', exige && Number(exige.pct) > 0 ? exige.pct : '');
+        extra('promoExigeCodigos', exige ? listaDaRegra(exige.codigos).join(', ') : '');
+        extra('promoExigeFamilias', exige ? listaDaRegra(exige.familias).join(', ') : '');
+        // abre "Mais condições" quando a regra já usa alguma
+        document.getElementById('promoExtras').open = !!(rule && condicoesExtrasTexto({ ...rule, classificatorios: [] }));
         document.getElementById('promoFormMsg').innerHTML = '';
         document.getElementById('promoRuleModal').classList.remove('hidden');
+      }
+      // Caixinhas de classificatório dos canais marcados (tipos do CLASSI_POR_CANAL).
+      function renderPromoClassis(selecionados) {
+        const marcados = new Set((selecionados || []).map(textoCampanha));
+        const canais = [...document.querySelectorAll('#promoCanais input:checked')].map(inp => inp.value);
+        const tipos = [];
+        canais.forEach(c => (CLASSI_POR_CANAL[c] || []).forEach(o => (o.tipos || []).forEach(t => { if (!tipos.includes(t)) tipos.push(t); })));
+        document.getElementById('promoClassis').innerHTML = tipos.map(t =>
+          `<label><input type="checkbox" value="${escapeHtml(t)}"${marcados.has(textoCampanha(t)) ? ' checked' : ''}> ${escapeHtml(t)}</label>`).join('');
+      }
+      function lerPromoClassis() {
+        return [...document.querySelectorAll('#promoClassis input:checked')].map(inp => inp.value);
       }
       function closePromoRuleForm() {
         document.getElementById('promoRuleModal').classList.add('hidden');
         promoEditingId = null;
       }
 
+      // Lê os campos opcionais pra dentro da regra (só grava o que foi
+      // preenchido - regra sem nenhum continua no formato antigo). Devolve a
+      // mensagem de erro, ou null.
+      function lerCondicoesExtrasDoForm(rule) {
+        const val = id => document.getElementById(id).value.trim();
+        const classis = lerPromoClassis();
+        if (classis.length) rule.classificatorios = classis;
+        const ufsDe = id => listaDaRegra(val(id).replace(/[;\s]+/g, ',')).map(u => u.toUpperCase());
+        const ufs = ufsDe('promoUfs'), fora = ufsDe('promoUfsExcluidas');
+        const ufRuim = ufs.concat(fora).find(u => !STATES.some(s => s.uf === u));
+        if (ufRuim) return `Estado "${ufRuim}" não existe — use a sigla (ex: SP, PR).`;
+        if (ufs.length) rule.ufs = ufs;
+        if (fora.length) rule.ufsExcluidas = fora;
+        const validoAte = val('promoValidoAte');
+        if (validoAte) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(validoAte)) return 'Data de validade inválida.';
+          rule.validoAte = validoAte;
+        }
+        const maxPct = parseFloat(val('promoMaxPctPedido'));
+        if (!isNaN(maxPct) && maxPct > 0) {
+          if (maxPct >= 100) return 'O máximo do alvo no pedido tem de ser menor que 100%.';
+          if (rule.targetType === 'all') return 'O máximo do alvo no pedido não vale pra "Pedido todo".';
+          rule.maxPctDoPedido = maxPct;
+        }
+        const codigosNaoAchados = lista => lista.filter(c => !productByCod(c));
+        const familiaNaoAchada = lista => lista.find(f => !DB.familias.some(x => textoCampanha(x) === textoCampanha(f)));
+        const exclCod = listaDaRegra(val('promoExcluirCodigos'));
+        const exclFam = listaDaRegra(val('promoExcluirFamilias'));
+        if (codigosNaoAchados(exclCod).length) return `Código(s) não encontrado(s) em "não ganham o desconto": ${codigosNaoAchados(exclCod).join(', ')}`;
+        if (familiaNaoAchada(exclFam)) return `Categoria "${familiaNaoAchada(exclFam)}" não existe no catálogo.`;
+        if (exclCod.length) rule.excluirCodigos = exclCod;
+        if (exclFam.length) rule.excluirFamilias = exclFam;
+        if (document.getElementById('promoExcluirOutraCampanha').checked) rule.excluirOutraCampanha = true;
+        const exigePct = parseFloat(val('promoExigePct'));
+        if ((isNaN(exigePct) || exigePct <= 0) && (val('promoExigeCodigos') || val('promoExigeFamilias'))) return 'Informe o % mínimo da exigência de lançamentos/família foco.';
+        if (!isNaN(exigePct) && exigePct > 0) {
+          if (exigePct > 100) return 'A exigência de lançamentos/família foco vai até 100%.';
+          const codigos = listaDaRegra(val('promoExigeCodigos'));
+          const familias = listaDaRegra(val('promoExigeFamilias'));
+          if (!codigos.length && !familias.length) return 'Informe os códigos dos lançamentos e/ou as categorias foco da exigência.';
+          if (codigosNaoAchados(codigos).length) return `Código(s) de lançamento não encontrado(s): ${codigosNaoAchados(codigos).join(', ')}`;
+          if (familiaNaoAchada(familias)) return `Categoria foco "${familiaNaoAchada(familias)}" não existe no catálogo.`;
+          rule.exigeItens = { pct: exigePct, codigos, familias };
+        }
+        return null;
+      }
+
       async function savePromoRuleFromForm() {
         const name = document.getElementById('promoName').value.trim();
         const targetType = document.getElementById('targetTypeSeg').querySelector('button.active').dataset.v;
         let targetValue;
-        if (targetType === 'category') targetValue = document.getElementById('promoTargetCat').value;
+        if (targetType === 'all') targetValue = '';
+        else if (targetType === 'category') targetValue = document.getElementById('promoTargetCat').value;
         else if (targetType === 'skuList') targetValue = document.getElementById('promoTargetSkuList').value.trim();
         else targetValue = document.getElementById('promoTargetProd').value.trim();
         const basis = document.getElementById('basisSeg').querySelector('button.active').dataset.v;
@@ -16210,7 +16517,7 @@
         const msg = document.getElementById('promoFormMsg');
 
         if (!name) { msg.innerHTML = '<div class="ap-msg error">Dê um nome pra essa regra.</div>'; return; }
-        if (!targetValue) { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, produto ou grupo que recebe o desconto.</div>'; return; }
+        if (!targetValue && targetType !== 'all') { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, produto ou grupo que recebe o desconto.</div>'; return; }
         if (!canais.length) { msg.innerHTML = '<div class="ap-msg error">Marque ao menos um canal em que a campanha vale.</div>'; return; }
         if (targetType === 'product' && !productByCod(targetValue)) {
           msg.innerHTML = '<div class="ap-msg error">Código de produto não encontrado — confira o código.</div>';
@@ -16227,6 +16534,8 @@
         }
 
         const rule = { id: promoEditingId || ('r' + Date.now()), name, active: true, targetType, targetValue, basis, stacks, canais };
+        const erroExtras = lerCondicoesExtrasDoForm(rule);
+        if (erroExtras) { msg.innerHTML = `<div class="ap-msg error">${escapeHtml(erroExtras)}</div>`; return; }
 
         if (basis === 'self') {
           rule.selfMetric = document.getElementById('promoSelfMetric').value;
@@ -16563,6 +16872,7 @@
         document.getElementById('targetTypeSeg').querySelectorAll('button').forEach(b => {
           b.addEventListener('click', () => setTargetType(b.dataset.v));
         });
+        document.getElementById('promoCanais').addEventListener('change', () => renderPromoClassis(lerPromoClassis()));
         document.getElementById('basisSeg').querySelectorAll('button').forEach(b => {
           b.addEventListener('click', () => setBasis(b.dataset.v));
         });

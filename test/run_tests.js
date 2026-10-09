@@ -3005,6 +3005,114 @@ async function main() {
   }
 
   {
+    // Motor de campanhas do Painel (index.html, trecho <motor-campanhas>): campos
+    // opcionais do Trade News de 10/2026 (classificatório, estado, validade, teto do
+    // alvo no pedido, itens diferentes com exclusões, exigência de lançamentos) e
+    // regra antiga, sem eles, valendo exatamente como antes.
+    const fs = require('fs');
+    const vm = require('vm');
+    const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+    const ini = html.indexOf('// <motor-campanhas>');
+    const fim = html.indexOf('// </motor-campanhas>');
+    const ctxVm = { DB: { categories: [] }, state: { canal: 'VAREJO' }, productByCod: () => null };
+    vm.createContext(ctxVm);
+    vm.runInContext(ini >= 0 && fim > ini ? html.slice(ini, fim) : '', ctxVm);
+    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem } = ctxVm;
+    if (!avaliarCampanhas || !bestBonusForProduct || !bonusDaCampanhaNoItem) {
+      assert(false, 'motor de campanhas: trecho <motor-campanhas> não encontrado no index.html');
+    } else {
+      const linha = (c, familia, qty, lineTotal) => ({ p: { c, n: c, familia }, it: { qty }, lineTotal });
+      const ctx = (extra) => Object.assign({ canal: 'VAREJO', uf: 'PR', classiTipos: ['Varejo Exclusive'], hoje: '2026-10-09' }, extra || {});
+      const avaliar = (regras, rows, extra) => avaliarCampanhas(regras, rows, ctx(extra));
+      const discos = [linha('60001', 'Discos', 40, 400), linha('70001', 'Brocas', 1, 100)];
+
+      // 1) regra antiga: mesma chave, mesmo %, em qualquer estado/classificatório/data; só Varejo
+      const antiga = { id: 'r1', name: 'Discos', active: true, targetType: 'category', targetValue: 'Discos', basis: 'self', selfMetric: 'qty', tiers: [{ min: 20, pct: 3 }, { min: 40, pct: 5 }], stacks: false };
+      const contextos = [{}, { uf: 'SP' }, { classiTipos: [] }, { classiTipos: ['Varejo Master'] }, { hoje: '2030-01-01' }];
+      const iguais = contextos.every(c => {
+        const r = avaliar([antiga], discos, c);
+        return Object.keys(r.bonuses).join() === 'category|Discos' && r.bonuses['category|Discos'].pct === 5
+          && r.bonuses['category|Discos'].stacks === false && r.avisos.length === 0;
+      });
+      const r19 = avaliar([antiga], [linha('60001', 'Discos', 19, 190)]);
+      const atacado = avaliar([antiga], discos, { canal: 'ATACADO' });
+      const b = avaliar([antiga], discos).bonuses;
+      assert(iguais && Object.keys(r19.bonuses).length === 0 && Object.keys(atacado.bonuses).length === 0
+        && bestBonusForProduct(b, discos[0].p).pct === 5 && bestBonusForProduct(b, discos[1].p) === null,
+        'campanha: regra antiga (sem os campos novos) vale como antes - mesma chave e %, ignora estado/classificatório/data, só no Varejo');
+
+      // 2) classificatório (ignora acento/maiúscula); sem classificatório no orçamento não vale
+      const porClassi = { ...antiga, classificatorios: ['Varejo Exclusive', 'varejo PREMIUM'] };
+      const vale = c => Object.keys(avaliar([porClassi], discos, c).bonuses).length === 1;
+      assert(vale({ classiTipos: ['Varejo Exclusive'] }) && vale({ classiTipos: ['Varejo Prêmium'] })
+        && !vale({ classiTipos: ['Varejo Master'] }) && !vale({ classiTipos: [] }),
+        'campanha: filtro por classificatório do orçamento');
+      // mesma promoção com limites por grupo: Exclusive 20 un. x Master 40 un.
+      const exclusive = { ...antiga, id: 'e', classificatorios: ['Varejo Exclusive'], tiers: [{ min: 20, pct: 10 }] };
+      const master = { ...antiga, id: 'm', classificatorios: ['Varejo Master'], tiers: [{ min: 40, pct: 10 }] };
+      const trinta = [linha('60001', 'Discos', 30, 300)];
+      assert(Object.keys(avaliar([exclusive, master], trinta).bonuses).length === 1
+        && Object.keys(avaliar([exclusive, master], trinta, { classiTipos: ['Varejo Master'] }).bonuses).length === 0,
+        'campanha: limite diferente por classificatório (Exclusive 20 un. vale com 30; Master 40 un. não)');
+
+      // 3) estado e validade (texto AAAA-MM-DD, dia de Brasília inclusive)
+      const tradeNews = { ...antiga, ufsExcluidas: ['SP'], validoAte: '2026-10-31' };
+      const valeTn = c => Object.keys(avaliar([tradeNews], discos, c).bonuses).length === 1;
+      const soPr = { ...antiga, ufs: 'PR, SC' };
+      assert(valeTn({}) && !valeTn({ uf: 'SP' }) && valeTn({ hoje: '2026-10-31' }) && !valeTn({ hoje: '2026-11-01' })
+        && Object.keys(avaliar([soPr], discos, { uf: 'SC' }).bonuses).length === 1
+        && Object.keys(avaliar([soPr], discos, { uf: 'RS' }).bonuses).length === 0,
+        'campanha: filtro por estado (só/exceto) e validade até o último dia');
+
+      // 4) teto do alvo no pedido (protetor de piso: até 50% e com outros produtos)
+      const protetor = { id: 'pp', name: 'Protetor', active: true, targetType: 'product', targetValue: '50001', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 12 }], maxPctDoPedido: 50 };
+      const so = avaliar([protetor], [linha('50001', 'Protetores', 10, 500)]);
+      const muito = avaliar([protetor], [linha('50001', 'Protetores', 10, 600), linha('70001', 'Brocas', 1, 400)]);
+      const ok = avaliar([protetor], [linha('50001', 'Protetores', 10, 500), linha('70001', 'Brocas', 1, 500)]);
+      assert(Object.keys(so.bonuses).length === 0 && /outros produtos/.test(so.avisos[0]?.motivo || '')
+        && Object.keys(muito.bonuses).length === 0 && /60% do valor do pedido \(máximo 50%\)/.test(muito.avisos[0]?.motivo || '')
+        && ok.bonuses['product|50001']?.pct === 12 && ok.avisos.length === 0,
+        `campanha: teto do alvo no pedido bloqueia com motivo: ${JSON.stringify([so.avisos, muito.avisos, ok.avisos])}`);
+
+      // 5) "Mais Cortag": itens diferentes no pedido; Nivelamento, 60863 e item com
+      // outra campanha contam na quantidade mas não ganham o desconto
+      const maisCortag = { id: 'mc', name: 'Mais Cortag', active: true, targetType: 'all', targetValue: '', basis: 'self', selfMetric: 'skus', tiers: [{ min: 30, pct: 5 }],
+        excluirFamilias: ['nivelamento'], excluirCodigos: ['60863'], excluirOutraCampanha: true, stacks: true };
+      const outra = { id: 'o', name: 'Trade News discos', active: true, targetType: 'product', targetValue: '61000', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 8 }] };
+      const itens = n => {
+        const rows = [linha('80000', 'Nivelamento', 5, 50), linha('P60863', 'Discos', 5, 50), linha('61000', 'Discos', 1, 10)];
+        for (let i = 0; rows.length < n; i++) rows.push(linha(String(90000 + i), 'Brocas', 1, 10));
+        return rows;
+      };
+      const r30 = avaliar([maisCortag, outra], itens(30));
+      const comum = bestBonusForProduct(r30.bonuses, { c: '90000', familia: 'Brocas' });
+      const r29 = avaliar([maisCortag, outra], itens(29));
+      assert(comum?.pct === 5 && comum.ruleName === 'Mais Cortag'
+        && bestBonusForProduct(r30.bonuses, { c: '80000', familia: 'Nivelamento' }) === null
+        && bestBonusForProduct(r30.bonuses, { c: 'P60863', familia: 'Discos' }) === null
+        && bestBonusForProduct(r30.bonuses, { c: '61000', familia: 'Discos' })?.ruleName === 'Trade News discos'
+        && bestBonusForProduct(r29.bonuses, { c: '90000', familia: 'Brocas' }) === null,
+        'campanha: itens diferentes no pedido, com exclusões que contam mas não ganham o desconto');
+
+      // 6) exigência de 10% dos itens em lançamentos/família foco
+      const comExige = { ...maisCortag, exigeItens: { pct: 10, codigos: ['90000', '90001', '90002'], familias: [] } };
+      const doisLanc = itens(30).filter(r => r.p.c !== '90002');
+      doisLanc.push(linha('99999', 'Brocas', 1, 10));
+      const falta = avaliar([comExige], doisLanc);
+      const basta = avaliar([comExige], itens(30));
+      assert(Object.keys(falta.bonuses).length === 0 && /falta 1 item de lançamento/.test(falta.avisos[0]?.motivo || '')
+        && Object.keys(basta.bonuses).length === 1 && basta.avisos.length === 0,
+        `campanha: exige 10% dos itens em lançamentos/família foco: ${JSON.stringify(falta.avisos)}`);
+
+      // 7) Preço Fixo (campanha "já aplicada no preço") não ganha bônus nenhum
+      assert(bonusDaCampanhaNoItem(b, discos[0].p, true) === null && bonusDaCampanhaNoItem(b, discos[0].p, false)?.pct === 5
+        && bonusDaCampanhaNoItem(r30.bonuses, { c: '90000', familia: 'Brocas' }, true) === null
+        && /bonusDaCampanhaNoItem\(bonuses, r\.p, isPrecoFixoParaCanal\(r\.p\)\)/.test(html),
+        'campanha: item de Preço Fixo no canal não recebe desconto de campanha (cartTotals usa bonusDaCampanhaNoItem)');
+    }
+  }
+
+  {
     // RLS ligado em toda tabela do schema.sql (verificador do Supabase acusa
     // rls_disabled_in_public), depois de ela existir num banco novo, e nunca FORCE
     // (o app conecta como dono das tabelas e seria barrado junto).
