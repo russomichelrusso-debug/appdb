@@ -9181,8 +9181,24 @@
       }
       async function escolherWhatsDosContatos() {
         let escolhidos;
-        try { escolhidos = await navigator.contacts.select(['name', 'tel'], { multiple: false }); }
-        catch (e) { showToast('Não deu pra abrir os contatos — digite ou cole o número', 'erro'); return; }
+        try {
+          // só pede o que o navegador oferece: pedir um campo que ele não
+          // tem faz o select() falhar inteiro (o nome é opcional)
+          let campos = ['name', 'tel'];
+          if (typeof navigator.contacts.getProperties === 'function') {
+            const tem = await navigator.contacts.getProperties().catch(() => campos);
+            campos = campos.filter(c => tem.includes(c));
+            if (!campos.includes('tel')) throw Object.assign(new Error('sem tel'), { name: 'SemTelefone' });
+          }
+          escolhidos = await navigator.contacts.select(campos, { multiple: false });
+        } catch (e) {
+          console.warn('Seletor de contatos falhou:', e);
+          const motivo = e && e.name === 'SemTelefone' ? 'este navegador não entrega o telefone dos contatos'
+            : e && e.name === 'InvalidStateError' ? 'a lista de contatos já está aberta'
+            : 'confira se o navegador tem permissão de Contatos (Configurações › Apps › navegador › Permissões)';
+          showToast(`Não deu pra abrir os contatos: ${motivo}. Ou digite/cole o número. [${(e && e.name) || 'erro'}]`, 'erro');
+          return;
+        }
         const contato = escolhidos && escolhidos[0];
         if (!contato) return; // fechou sem escolher
         const nums = (contato.tel || []).map(normalizarWhatsBr).filter(Boolean);
