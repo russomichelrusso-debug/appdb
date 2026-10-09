@@ -286,6 +286,11 @@ Supabase, sem PR — não é mudança de código.
     "Produtos foco" do Painel é só do gráfico do Dashboard): a lista é digitada na própria regra. Motor
     puro entre `<motor-campanhas>` no `index.html` (`avaliarCampanhas`), rodado isolado pelo teste; o
     servidor grava `promocoes` sem validar campo. Preço Fixo continua sem bônus (`bonusDaCampanhaNoItem`).
+    **Black Friday 10/2026, cortadores "15% de desconto no preço fixo, não acumulativo"** (decisão do usuário:
+    o desconto sai **do preço fixo**, não está embutido nele): regra com `soNoPrecoFixo: true` — vale só em item
+    de Preço Fixo no canal, sobre o preço fixo (sem classificatório nem desconto do item), e nunca em item não
+    fixo; as demais regras seguem sem bônus em item fixo. As ventosas/máquinas MAC ("20% + classificatório, já
+    no preço") são regra comum. Caixas e bolsas (preço em reais) são da Lista de Preços, não de campanha.
   - **Preço fixo é por canal**: o item "PREÇO FIXO" da Lista de Preços só é fixo em Varejo/Atacado/
     E-commerce (`canaisFx`); tudo que trava desconto (campo por item, `setItemDiscount`, campanha) usa
     `isPrecoFixoParaCanal`, nunca o `p.fx` puro (que diz "fixo em algum canal").

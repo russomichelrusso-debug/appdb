@@ -3109,6 +3109,24 @@ async function main() {
         && bonusDaCampanhaNoItem(r30.bonuses, { c: '90000', familia: 'Brocas' }, true) === null
         && /bonusDaCampanhaNoItem\(bonuses, r\.p, isPrecoFixoParaCanal\(r\.p\)\)/.test(html),
         'campanha: item de Preço Fixo no canal não recebe desconto de campanha (cartTotals usa bonusDaCampanhaNoItem)');
+
+      // 8) "soNoPrecoFixo" (Black Friday, cortadores 15% no preço fixo): vale só no item de Preço Fixo
+      {
+        const regraFixo = { id: 'bf', name: 'BF cortadores', active: true, stacks: true, basis: 'self', selfMetric: 'qty',
+          targetType: 'skuList', targetValue: '61366,61539', tiers: [{ min: 1, pct: 15 }], soNoPrecoFixo: true, validoAte: '2026-10-31' };
+        const regraComum = { id: 'v', name: 'Ventosas', active: true, stacks: true, basis: 'self', selfMetric: 'qty',
+          targetType: 'skuList', targetValue: '61366,63085', tiers: [{ min: 1, pct: 20 }] };
+        const rowsBf = [linha('61366', 'Cortadores', 1, 100), linha('63085', 'Ventosas', 1, 100)];
+        const rbf = avaliar([regraFixo, regraComum], rowsBf);
+        const cortador = rowsBf[0].p, ventosa = rowsBf[1].p;
+        assert(bonusDaCampanhaNoItem(rbf.bonuses, cortador, true)?.pct === 15
+          && bonusDaCampanhaNoItem(rbf.bonuses, cortador, true)?.soNoPrecoFixo === true
+          && bonusDaCampanhaNoItem(rbf.bonuses, cortador, false)?.pct === 20
+          && bonusDaCampanhaNoItem(rbf.bonuses, ventosa, true) === null
+          && bonusDaCampanhaNoItem(avaliar([regraFixo], rowsBf).bonuses, cortador, false) === null
+          && /bonus\.stacks \|\| bonus\.soNoPrecoFixo/.test(html),
+          'campanha: soNoPrecoFixo vale só no item de Preço Fixo, sem mexer nas regras comuns');
+      }
     }
   }
 
