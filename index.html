@@ -10498,7 +10498,8 @@
         const { rows } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
         const header = 'Código do Item;Quantidade;Preço';
-        const lines = rows.map(({ p, it, cp }) => `${p.c};${it.qty};${cp.toFixed(2).replace('.', ',')}`);
+        // preço sem imposto (IPI/ST fora), já com classificatório, prazo e campanhas
+        const lines = rows.map(({ p, it, cpSemImposto }) => `${p.c};${it.qty};${cpSemImposto.toFixed(2).replace('.', ',')}`);
         const csvBody = [header, ...lines].join('\r\n');
         const BOM = '\uFEFF';
         const blob = new Blob([BOM + csvBody], { type: 'text/csv;charset=utf-8;' });
@@ -11665,7 +11666,8 @@
       }
       function buildPedidoCsvText(rows) {
         const header = 'Código do Item;Quantidade;Preço';
-        const linhas = rows.map(({ p, it, cp }) => `${p.c};${it.qty};${cp.toFixed(2).replace('.', ',')}`);
+        // preço sem imposto (IPI/ST fora), já com classificatório, prazo e campanhas
+        const linhas = rows.map(({ p, it, cpSemImposto }) => `${p.c};${it.qty};${cpSemImposto.toFixed(2).replace('.', ',')}`);
         return [header, ...linhas].join('\r\n');
       }
       let driveCsvQueueDraining = false;
