@@ -2753,6 +2753,139 @@ async function main() {
       && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Relatório de Comissões'),
       `e-mail Cortag: número só no assunto ainda vale; e-mail não reconhecido é recusado (422): ${JSON.stringify([res.body, res2.body])}`);
   }
+  // 31b) "Para reativar" (routes/reativacao.js): Relatório de Clientes Sem
+  // Compra do ERP (todo dia 2, anexo de nome cortado - o script do Gmail
+  // reconhece pelo assunto). Layout do arquivo real de 02/10/2026: 3 linhas de
+  // título, cabeçalho, clientes e linhas de total no fim.
+  {
+    const [hA, hM] = hojeBr.split('-').map(Number);
+    const mesAtras = (n) => { const t = hA * 12 + (hM - 1) - n; return { a: Math.floor(t / 12), m: (t % 12) + 1 }; };
+    const mesISO = (n) => { const { a, m } = mesAtras(n); return `${a}-${String(m).padStart(2, '0')}`; };
+    const mesData = (n) => { const { a, m } = mesAtras(n); return new Date(Date.UTC(a, m - 1, 1)); };
+    const br = (iso) => iso.split('-').reverse().join('/');
+    const inicioPeriodo = `${mesISO(12)}-01`;
+    const cab = ['Matriz', 'Cod', 'Razao Social', 'Grupo Cliente', 'Meses sem Compra', 'Mes Ultima Compra', '12 Meses - Faturamento Cliente',
+      'CNPJ/CPF', 'Situacao', 'Tipo Negocio', 'Endereco', 'Bairro', 'Cidade', 'UF', 'Telefone', 'Gestor', 'Cadastro Cliente', 'Cod Repres', 'Representante', null];
+    const linha = (cod, nome, meses, fat, cnpj, cidade) => ['MATRIZ ' + nome, Number(cod), nome, 'Varejo Master (20)', meses, mesData(meses), fat,
+      cnpj, 'Ativo', 'Mercado interno', 'R TESTE, 1', 'CENTRO', cidade, 'PR', '44 3333.4444', 'GESTOR', null, 20, 'RUSSO', null];
+    const xlsSemCompra = (dataIso) => planilha({ Clientes: [
+      ["Listagem de Clientes - Representante RUSSO'S REPRESENTACOES COMERCIAIS LTDA"],
+      [`Data: ${br(dataIso)}    Clientes: 7    Periodo Analisado: ${br(inicioPeriodo)} a ${br(hojeBr)}`],
+      [],
+      cab,
+      linha(9601, 'LOJA AMARELA', 4, 5000, '96.010.000/0001-01', 'Maringa'),
+      linha(9602, 'LOJA VERMELHA', 8, 9000, '96.020.000/0001-02', 'Londrina'),
+      linha(9603, 'LOJA EM DIA', 1, 7000, '96.030.000/0001-03', 'Maringa'),
+      linha(9604, 'LOJA QUE VOLTOU', 5, 3000, '96.040.000/0001-04', 'Maringa'),
+      linha(9607, 'LOJA SEM CODIGO', 3, 100, '96.070.000/0001-07', 'Cambe'),
+      linha(9608, 'LOJA NOVA NO APP', 6, 200, '96.080.000/0001-08', 'Cambe'),
+      [],
+      ['Total de Clientes Processados', 6],
+      ['Clientes com Compra ate 2 meses (Verde)', 1, 0.17],
+    ] });
+    const buf = xlsSemCompra(hojeBr);
+    assert(Importadores.detectarTipoPlanilha(XLSXt, buf) === 'semcompra', 'importadores: reconhece o Relatório de Clientes Sem Compra');
+    const lido = Importadores.lerClientesSemCompra(XLSXt, buf);
+    assert(lido.dataRelatorio === hojeBr && lido.periodoInicio === inicioPeriodo && lido.itens.length === 6
+      && lido.itens[0].codigo_oficial === '9601' && lido.itens[0].mes_ultima_compra === mesISO(4) && lido.itens[0].meses_sem_compra === 4
+      && lido.itens[0].fat_12m === 5000 && lido.itens[0].cidade === 'Maringa' && lido.itens[0].documento === '96.010.000/0001-01',
+      `importadores: lê o Relatório de Clientes Sem Compra (título, mês da última compra, sem as linhas de total): ${JSON.stringify(lido).slice(0, 600)}`);
+    assert(Importadores.mesAnoISO(XLSXt, 'Sep-26') === '2026-09' && Importadores.mesAnoISO(XLSXt, 'set/26') === '2026-09'
+      && Importadores.mesAnoISO(XLSXt, '09/2026') === '2026-09' && Importadores.mesAnoISO(XLSXt, 'xyz') === null,
+      'importadores: "Mes Ultima Compra" em texto também é lido');
+
+    const { faixaDosMeses } = require('../routes/reativacao');
+    assert(faixaDosMeses(2) === null && faixaDosMeses(3) === 'amarelo' && faixaDosMeses(5) === 'amarelo' && faixaDosMeses(6) === 'vermelho'
+      && faixaDosMeses(12) === 'vermelho' && faixaDosMeses(13) === 'perdido', 'reativação: faixas pelas cores do ERP (3-5 amarelo, 6-12 vermelho)');
+
+    mockDb.__seed({
+      clientes: [
+        { id: 9601, nome: 'LOJA AMARELA', documento: '96010000000101', codigo_oficial: '9601' },
+        { id: 9602, nome: 'LOJA VERMELHA', documento: '96020000000102', codigo_oficial: '9602' },
+        { id: 9603, nome: 'LOJA EM DIA', documento: '96030000000103', codigo_oficial: '9603' },
+        { id: 9604, nome: 'LOJA QUE VOLTOU', documento: '96040000000104', codigo_oficial: '9604' },
+        { id: 9605, nome: 'LOJA SUMIDA', documento: '96050000000105', codigo_oficial: '9605' },
+        { id: 9606, nome: 'LOJA SEM HISTORICO', documento: '96060000000106', codigo_oficial: '9606' },
+        { id: 9607, nome: 'LOJA SEM CODIGO', documento: '96.070.000/0001-07' },
+      ],
+      pedidosOficiaisItens: [
+        // 9604 pediu depois do relatório (carteira, pela implantação): sai da lista
+        { nr_pedido: '696041', codigo_sku: '60863', cliente_codigo_oficial: '9604', quantidade: 1, valor: 100, data_implantacao: hojeBr, data_faturamento: null, status: 'carteira' },
+        // 9601: item avulso da série de 7 dígitos não conta como compra
+        { nr_pedido: '1096011', codigo_sku: '60863', cliente_codigo_oficial: '9601', quantidade: 1, valor: 5, data_implantacao: hojeBr, data_faturamento: null, status: 'carteira' },
+        // 9605: fora do relatório, última compra há ~20 meses - "mais de 12 meses"
+        { nr_pedido: '696051', codigo_sku: '60863', cliente_codigo_oficial: '9605', quantidade: 1, valor: 700, data_implantacao: `${mesISO(20)}-05`, data_faturamento: `${mesISO(20)}-10`, status: 'faturado', nota_fiscal: '9605001' },
+        { nr_pedido: '696052', codigo_sku: '60863', cliente_codigo_oficial: '9605', quantidade: 1, valor: 500, data_implantacao: `${mesISO(24)}-05`, data_faturamento: `${mesISO(24)}-10`, status: 'faturado', nota_fiscal: '9605002' },
+        { nr_pedido: '696053', codigo_sku: '60863', cliente_codigo_oficial: '9605', quantidade: 1, valor: 999, data_implantacao: `${mesISO(40)}-05`, data_faturamento: `${mesISO(40)}-10`, status: 'faturado', nota_fiscal: '9605003' },
+      ],
+    });
+    res = await req('GET', '/api/reativacao');
+    assert(res.status === 200 && res.body.relatorio === null && res.body.clientes.length === 0, `reativação: sem relatório importado, lista vazia: ${JSON.stringify(res.body)}`);
+
+    res = await enviarArquivo(`ClientesSemCompra_${hojeBr}.xlsx`, buf, CHAVE_EMAIL, { assunto: 'Relatório de Clientes Sem Compra', mensagemId: 'msc1' });
+    assert(res.status === 200 && res.body.tipo === 'semcompra' && res.body.resultado.total === 6 && res.body.resultado.amarelo === 3
+      && res.body.resultado.vermelho === 2 && res.body.resultado.semCliente === 1 && res.body.resultado.codigosNovos === 1
+      && !mockDb.__getClientes().some(c => c.codigo_oficial === '9608') && mockDb.__getClientes().find(c => c.id === 9607).codigo_oficial === '9607'
+      && mockDb.__getNovidades().some(n => n.tipo === 'clientes-sem-compra' && n.texto === '5 para reativar · 3 de 3 a 5 meses, 2 de 6 a 12'),
+      `reativação: relatório pelo e-mail entra, acha cliente pelo CNPJ, não cria cliente (evita duplicado) e gera a novidade: ${JSON.stringify(res.body)}`);
+
+    res = await req('GET', '/api/reativacao');
+    {
+      const lista = res.body.clientes || [];
+      const por = (id) => lista.find(c => c.cliente_id === id);
+      const ids = lista.map(c => c.cliente_id);
+      assert(res.status === 200 && res.body.relatorio.data === hojeBr && !por(9603) && !por(9604) && !por(9606)
+        && por(9601) && por(9601).mes_ultima_compra === mesISO(4) && por(9601).fat === 5000 && por(9601).fat_origem === 'erp_12m' && por(9601).cidade === 'Maringa'
+        && por(9602) && por(9605) && por(9605).no_relatorio === false && por(9605).mes_ultima_compra === mesISO(20)
+        && por(9605).fat === 1200 && por(9605).fat_origem === 'ultimo_ano' && por(9605).ultima_compra === `${mesISO(20)}-05`,
+        `reativação: lista 3+ meses, tira quem pediu depois, inclui quem saiu do relatório com compra antiga: ${JSON.stringify(lista)}`);
+      // amarelo (por valor) -> vermelho -> mais de 12 meses
+      assert(ids.length === 4 && ids.indexOf(9601) < ids.indexOf(9607) && ids.indexOf(9607) < ids.indexOf(9602) && ids.indexOf(9602) < ids.indexOf(9605),
+        `reativação: ordem por faixa e, dentro dela, quem comprava mais: ${JSON.stringify(ids)}`);
+    }
+
+    // relatório mais antigo (ex.: o "Base de Clientes x Compra" de julho) não troca a foto
+    res = await req('POST', '/api/reativacao/importar', { ...Importadores.lerClientesSemCompra(XLSXt, xlsSemCompra(antesBr(90))) });
+    assert(res.status === 200 && res.body.ignorado === true && mockDb.__getConfiguracao('clientes_sem_compra_relatorio').data === hojeBr,
+      `reativação: relatório mais antigo que o importado não muda nada: ${JSON.stringify(res.body)}`);
+    {
+      // vendedor (não admin) não importa pelo Painel
+      const tokenAdmin = authToken;
+      authToken = tokenOutro;
+      res = await req('POST', '/api/reativacao/importar', { ...lido });
+      authToken = tokenAdmin;
+      assert(res.status === 403, `reativação: só admin importa pelo Painel: ${res.status}`);
+    }
+    res = await req('POST', '/api/reativacao/importar', { dataRelatorio: 'ontem', itens: [] });
+    assert(res.status === 400, 'reativação: importação sem data/itens responde 400');
+
+    res = await req('POST', '/api/reativacao/9601/adiar', { tipo: 'ja_falei', em: hojeBr });
+    assert(res.status === 200 && res.body.tipo === 'ja_falei' && res.body.adiado_ate === ritmoLib.somarDias(hojeBr, 30), `reativação: "Já falei" tira por 30 dias: ${JSON.stringify(res.body)}`);
+    res = await req('POST', '/api/reativacao/9602/adiar', { tipo: 'nao_reativar' });
+    assert(res.status === 200 && res.body.tipo === 'nao_reativar' && res.body.adiado_ate === null, `reativação: "Não reativar": ${JSON.stringify(res.body)}`);
+    res = await req('POST', '/api/reativacao/9602/adiar', { tipo: 'ja_falei' });
+    assert(res.status === 200 && res.body.tipo === 'nao_reativar', '"Já falei" depois de "Não reativar" não traz o cliente de volta');
+    res = await req('GET', '/api/reativacao');
+    {
+      const lista = res.body.clientes || [];
+      const a = lista.find(c => c.cliente_id === 9601);
+      assert(a && a.adiado_ate === ritmoLib.somarDias(hojeBr, 30) && !lista.some(c => c.cliente_id === 9602),
+        `reativação: devolve o "Já falei" e esconde o "Não reativar": ${JSON.stringify(lista.map(c => [c.cliente_id, c.adiado_ate]))}`);
+    }
+    res = await req('POST', '/api/reativacao/999999/adiar', { tipo: 'ja_falei' });
+    assert(res.status === 404, 'reativação: adiar cliente inexistente responde 404');
+
+    // script do Gmail: o anexo vem como "02_10_2026_RUSSO"'S_..._Clientes_s" (sem extensão) - vale o assunto
+    const codigoGs = require('fs').readFileSync(require('path').join(__dirname, '../scripts/gmail-importacao/Codigo.gs'), 'utf8');
+    const gs = require('vm').runInNewContext(codigoGs + '\n;({ CONFIG, nomePeloAssunto_ })',
+      { Utilities: { formatDate: (d, tz, fmt) => d.toISOString().slice(0, 10) } });
+    const regra = gs.CONFIG.porAssunto[0];
+    const msg = { getDate: () => new Date('2026-10-02T06:04:24Z') };
+    assert(regra.assunto.test('Relatório de Clientes Sem Compra') && regra.assunto.test("Cortag - Base de Clientes x Compra - Representante RUSSO'S")
+      && !regra.assunto.test('Pedido Bloqueado 00677375') && regra.remetente === 'noreply@cortag.com.br'
+      && gs.nomePeloAssunto_(regra, msg, 0, 1) === 'ClientesSemCompra_2026-10-02.xlsx' && gs.nomePeloAssunto_(regra, msg, 1, 2) === 'ClientesSemCompra_2026-10-02_2.xlsx',
+      'script do Gmail: reconhece o relatório de clientes sem compra pelo assunto e manda com nome .xlsx');
+  }
   {
     // script do Gmail (scripts/gmail-importacao/Codigo.gs, roda no Google): só manda
     // e-mail do endereço exato que o Gmail autenticou (DKIM/DMARC). Cabeçalhos no

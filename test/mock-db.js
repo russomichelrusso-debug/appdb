@@ -31,6 +31,8 @@ let nextNovidadeId = 1;
 let pushInscricoes = []; // push_inscricoes
 let nextPushId = 1;
 let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
+let clientesSemCompra = []; // routes/reativacao.js (foto do Relatório de Clientes Sem Compra)
+let reativacaoAdiamentos = []; // routes/reativacao.js ("Já falei"/"Não reativar")
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -55,6 +57,8 @@ function reset() {
   configuracoes = {};
   catalogoPrecos = [];
   recompraAdiamentos = [];
+  clientesSemCompra = [];
+  reativacaoAdiamentos = [];
   novidades = [];
   importacoesEmail = [];
   pedidosBloqueados = [];
@@ -565,6 +569,90 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT CODIGO_SKU FROM PRODUTOS WHERE ID = $1')) {
     return { rows: produtos.filter(p => String(p.id) === String(params[0])).map(p => ({ codigo_sku: p.codigo_sku })) };
+  }
+
+  // Para reativar - routes/reativacao.js
+  if (s.includes('/* REATIVACAO:META */')) {
+    const c = configuracoes[params[0]];
+    return { rows: c ? [{ valor: c.valor }] : [] };
+  }
+  if (s.includes('/* REATIVACAO:GRAVAR-META */')) {
+    configuracoes[params[0]] = { valor: JSON.parse(params[1]), atualizado_em: new Date().toISOString() };
+    return { rows: [] };
+  }
+  if (s.includes('/* REATIVACAO:CLIENTES-IMPORT */')) {
+    return { rows: clientes.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial || null, doc: String(c.documento || '').replace(/\D/g, '') })) };
+  }
+  if (s.includes('/* REATIVACAO:CODIGO-PELO-CNPJ */')) {
+    const c = clientes.find(x => String(x.id) === String(params[1]) && !x.codigo_oficial);
+    if (c) c.codigo_oficial = params[0];
+    return { rows: [], rowCount: c ? 1 : 0 };
+  }
+  if (s.includes('/* REATIVACAO:TRAVA */')) return { rows: [] };
+  if (s.includes('/* REATIVACAO:LIMPAR */')) { clientesSemCompra = []; return { rows: [] }; }
+  if (s.includes('/* REATIVACAO:GRAVAR */')) {
+    const [data, codigos, ids, meses, mes, fat, grupo, matriz, telefone, cidade, uf, gestor] = params;
+    codigos.forEach((codigo, i) => clientesSemCompra.push({
+      codigo_oficial: codigo, cliente_id: ids[i], data_relatorio: data, meses_sem_compra: meses[i], mes_ultima_compra: mes[i],
+      fat_12m: fat[i], grupo: grupo[i], matriz: matriz[i], telefone: telefone[i], cidade: cidade[i], uf: uf[i], gestor: gestor[i],
+    }));
+    return { rows: [] };
+  }
+  if (s.includes('/* REATIVACAO:CLIENTES */')) {
+    return { rows: clientes.map(c => {
+      const f = clienteCnpjFicha[c.id] || {};
+      return { id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null, classificatorio_tipo: c.classificatorio_tipo || null, municipio: f.municipio || null, uf: f.uf || null };
+    }) };
+  }
+  if (s.includes('/* REATIVACAO:FOTO */')) {
+    return { rows: clientesSemCompra.filter(l => l.cliente_id != null).map(l => ({ ...l, mes: String(l.mes_ultima_compra).slice(0, 7) })) };
+  }
+  if (s.includes('/* REATIVACAO:ULTIMA-OFICIAL */')) {
+    const ultima = new Map();
+    for (const it of pedidosOficiaisItens.filter(i => String(i.nr_pedido).length <= 6)) {
+      const d = String(it.data_implantacao || it.data_faturamento || '').slice(0, 10);
+      if (d && (!ultima.has(it.cliente_codigo_oficial) || d > ultima.get(it.cliente_codigo_oficial))) ultima.set(it.cliente_codigo_oficial, d);
+    }
+    return { rows: [...ultima].map(([codigo, u]) => ({ codigo, ultima: u })) };
+  }
+  if (s.includes('/* REATIVACAO:ULTIMA-APP */')) {
+    const ultima = new Map();
+    for (const ped of pedidos.filter(p => p.cliente_id != null && p.origem !== 'faturamento')) {
+      const d = diaDoPedidoBr(ped.data_pedido);
+      if (!ultima.has(ped.cliente_id) || d > ultima.get(ped.cliente_id)) ultima.set(ped.cliente_id, d);
+    }
+    return { rows: [...ultima].map(([cliente_id, u]) => ({ cliente_id, ultima: u })) };
+  }
+  if (s.includes('/* REATIVACAO:FAT-ULTIMO-ANO */')) {
+    const fat = pedidosOficiaisItens.filter(it => faturadoDeFato(it) && it.data_faturamento);
+    const ultima = new Map();
+    for (const it of fat) { const d = String(it.data_faturamento).slice(0, 10); if (!ultima.has(it.cliente_codigo_oficial) || d > ultima.get(it.cliente_codigo_oficial)) ultima.set(it.cliente_codigo_oficial, d); }
+    const total = new Map();
+    for (const it of fat) {
+      if (String(it.data_faturamento).slice(0, 10) > diasAntes(ultima.get(it.cliente_codigo_oficial), 365)) {
+        total.set(it.cliente_codigo_oficial, (total.get(it.cliente_codigo_oficial) || 0) + Number(it.valor || 0));
+      }
+    }
+    return { rows: [...total].map(([codigo, t]) => ({ codigo, total: t })) };
+  }
+  if (s.includes('/* REATIVACAO:ADIAMENTOS */')) {
+    return { rows: reativacaoAdiamentos.map(a => ({ ...a })) };
+  }
+  if (s.includes('/* REATIVACAO:CLIENTE-EXISTE */')) {
+    return { rows: clientes.filter(c => String(c.id) === String(params[0])).map(c => ({ id: c.id })) };
+  }
+  if (s.includes('/* REATIVACAO:ADIAR */')) {
+    const [clienteId, tipo, desde, ate, usuarioId] = params;
+    const atual = reativacaoAdiamentos.find(a => String(a.cliente_id) === String(clienteId));
+    if (!atual) {
+      reativacaoAdiamentos.push({ cliente_id: Number(clienteId), tipo, desde, ate, usuario_id: usuarioId });
+      return { rows: [{ tipo, ate }] };
+    }
+    if (atual.tipo === 'nao_reativar' && tipo === 'ja_falei' && desde <= atual.desde) { /* mantém */ }
+    else if (tipo === 'nao_reativar') Object.assign(atual, { tipo, desde, ate: null });
+    else Object.assign(atual, { tipo, desde, ate: atual.ate && atual.ate > ate ? atual.ate : ate });
+    atual.usuario_id = usuarioId;
+    return { rows: [{ tipo: atual.tipo, ate: atual.ate }] };
   }
 
   // Recompra da semana - routes/recompra.js
