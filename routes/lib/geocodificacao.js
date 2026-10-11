@@ -23,6 +23,7 @@ const { agoraBrasilia, dentroDaJanela } = require('./preenchimentoCnpj');
 
 const LIMITE_DIARIO = 150;
 const INTERVALO_MS = 2000;
+const ESPERA_ENTRE_BUSCAS_MS = 1100;
 const MAX_TENTATIVAS = 3;
 const CHAVE_ESTADO = 'geocodificacao_auto';
 const TICK_MS = 15 * 60 * 1000;
@@ -57,16 +58,60 @@ function erroDaOrigem(msg) {
   return e;
 }
 
-// Devolve { latitude, longitude, nivel } ou null (endereço não encontrado).
-// Lança erro com .origem = true quando o problema é do serviço.
-async function geocodificarEndereco(e, fetchFn = fetch) {
+// Abreviações da ficha de CNPJ que o OpenStreetMap escreve por extenso
+// ("AV PRES CASTELO BRANCO" = "Avenida Presidente Castelo Branco"). Só a
+// palavra inteira; o ponto depois dela sai junto ("GOV. PAULO" -> "GOVERNADOR PAULO").
+const ABREVIACOES = {
+  AV: 'AVENIDA', R: 'RUA', PCA: 'PRACA', ROD: 'RODOVIA', AL: 'ALAMEDA', TV: 'TRAVESSA', EST: 'ESTRADA',
+  PRES: 'PRESIDENTE', GOV: 'GOVERNADOR', DR: 'DOUTOR', DRA: 'DOUTORA', DES: 'DESEMBARGADOR',
+  PROF: 'PROFESSOR', PROFA: 'PROFESSORA', VER: 'VEREADOR', PREF: 'PREFEITO', SEN: 'SENADOR', DEP: 'DEPUTADO',
+  ENG: 'ENGENHEIRO', CEL: 'CORONEL', CAP: 'CAPITAO', TEN: 'TENENTE', SGT: 'SARGENTO', MAL: 'MARECHAL',
+  GAL: 'GENERAL', GEN: 'GENERAL', BRIG: 'BRIGADEIRO', ALM: 'ALMIRANTE', MONS: 'MONSENHOR', PE: 'PADRE',
+  FR: 'FREI', D: 'DOM', STO: 'SANTO', STA: 'SANTA', NSA: 'NOSSA SENHORA', PION: 'PIONEIRO',
+  JORN: 'JORNALISTA', COM: 'COMENDADOR', INT: 'INTERVENTOR',
+};
+
+function expandirAbreviacoes(rua) {
+  return String(rua || '').split(/\s+/).filter(Boolean).map((p, i) => {
+    const chave = normalizar(p.replace(/\.$/, ''));
+    // letra sozinha ("R", "D") só no começo: no meio costuma ser inicial ("DIDIO B BELLO")
+    if (chave.length === 1 && i > 0) return p;
+    return ABREVIACOES[chave] || p;
+  }).join(' ');
+}
+
+// Buscas tentadas em ordem, até uma dar certo (sem repetir a mesma):
+// 1) como está na ficha, com número; 2) abreviações por extenso; 3) sem o
+// número (o número que não existe no OSM às vezes derruba a busca da rua);
+// 4) busca livre "rua, cidade, UF" (acha rua que a busca por campos não acha).
+function buscasDoEndereco(e) {
   const { rua, numero } = ruaENumero(e);
-  if (!rua || !String(e.municipio || '').trim()) return null;
-  const params = new URLSearchParams({
-    format: 'jsonv2', limit: '1', countrycodes: 'br',
-    street: numero ? `${numero} ${rua}` : rua, city: String(e.municipio).trim(),
+  const cidade = String(e.municipio || '').trim();
+  const uf = String(e.uf || '').trim();
+  const ruaLonga = expandirAbreviacoes(rua);
+  const campos = (street) => {
+    const p = { street, city: cidade };
+    if (uf) p.state = uf;
+    return p;
+  };
+  const buscas = [
+    campos(numero ? `${numero} ${rua}` : rua),
+    campos(numero ? `${numero} ${ruaLonga}` : ruaLonga),
+    campos(ruaLonga),
+    { q: [ruaLonga, cidade, uf].filter(Boolean).join(', ') },
+  ];
+  const vistas = new Set();
+  return buscas.filter((b) => {
+    const k = JSON.stringify(b);
+    if (vistas.has(k)) return false;
+    vistas.add(k);
+    return true;
   });
-  if (e.uf) params.set('state', String(e.uf).trim());
+}
+
+// Uma consulta ao Nominatim: { latitude, longitude, nivel } ou null.
+async function consultarNominatim(busca, municipio, fetchFn) {
+  const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', ...busca });
   let resp;
   try {
     resp = await fetchFn(`${NOMINATIM_URL}?${params}`, {
@@ -85,8 +130,24 @@ async function geocodificarEndereco(e, fetchFn = fetch) {
   // "perto de mim"); fora do Brasil ou de outro município = homônimo, descarta
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Number(r.place_rank) < 26) return null;
   if (latitude < -34 || latitude > 6 || longitude < -74 || longitude > -34) return null;
-  if (!normalizar(r.display_name).includes(normalizar(e.municipio))) return null;
+  if (!normalizar(r.display_name).includes(normalizar(municipio))) return null;
   return { latitude, longitude, nivel: Number(r.place_rank) >= 28 ? 'numero' : 'rua' };
+}
+
+// Devolve { latitude, longitude, nivel } ou null (endereço não encontrado em
+// nenhuma das buscas). Lança erro com .origem = true quando o problema é do
+// serviço. Entre uma busca e outra do mesmo cliente espera ESPERA_ENTRE_BUSCAS_MS
+// (política do Nominatim: no máximo 1 por segundo).
+async function geocodificarEndereco(e, fetchFn = fetch, esperar = (ms) => new Promise((r) => setTimeout(r, ms))) {
+  const { rua } = ruaENumero(e);
+  if (!rua || !String(e.municipio || '').trim()) return null;
+  const buscas = buscasDoEndereco(e);
+  for (let i = 0; i < buscas.length; i++) {
+    if (i > 0) await esperar(ESPERA_ENTRE_BUSCAS_MS);
+    const pos = await consultarNominatim(buscas[i], String(e.municipio).trim(), fetchFn);
+    if (pos) return pos;
+  }
+  return null;
 }
 
 // Uma rodada: consulta os pendentes até acabar o saldo do dia, a lista ou a
@@ -244,5 +305,5 @@ function iniciarGeocodificacaoAutomatica(pool) {
 
 module.exports = {
   geocodificarEndereco, rodarRodada, statusGeocodificacao, iniciarGeocodificacaoAutomatica, dependenciasReais,
-  sqlChaveEndereco, ruaENumero, SQL_PENDENTES, LIMITE_DIARIO, MAX_TENTATIVAS,
+  sqlChaveEndereco, ruaENumero, expandirAbreviacoes, buscasDoEndereco, SQL_PENDENTES, LIMITE_DIARIO, MAX_TENTATIVAS,
 };
