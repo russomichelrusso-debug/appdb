@@ -3003,6 +3003,22 @@
       display: none;
     }
 
+    /* cliente há 3+ meses sem compra (Relatório de Clientes Sem Compra do ERP) */
+    .clienteReativar {
+      margin-top: 10px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--fill);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .clienteReativar.hidden {
+      display: none;
+    }
+
     /* WhatsApp do comprador: com número, o texto do orçamento abre direto
        na conversa dele (wa.me). Tracejado = ainda sem número. */
     .clienteWhats {
@@ -4916,6 +4932,42 @@
       color: var(--success);
     }
 
+    /* "Para reativar": cores do próprio relatório do ERP */
+    .reativarSelo--amarelo {
+      color: var(--warning);
+    }
+
+    .reativarSelo--vermelho {
+      color: var(--danger);
+    }
+
+    .reativarSelo--perdido {
+      color: var(--gray);
+    }
+
+    .reativarFiltro {
+      display: block;
+      width: 100%;
+      min-height: 40px;
+      margin: 6px 0 2px;
+      padding: 8px 10px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .reativarNao {
+      background: none;
+      border: none;
+      padding: 8px 0 0;
+      color: var(--gray);
+      font-size: 12px;
+      text-decoration: underline;
+      cursor: pointer;
+    }
+
     .recompraMeta {
       font-size: 12px;
       color: var(--gray);
@@ -5538,6 +5590,7 @@
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
+          <div class="clienteReativar hidden" id="precosClientReativar"></div>
           <button type="button" class="clienteWhats" id="precosClientWhats"
             aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
           <div class="clienteAcoes">
@@ -5670,6 +5723,7 @@
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
+          <div class="clienteReativar hidden" id="levClientReativar"></div>
           <button type="button" class="clienteWhats" id="levClientWhats"
             aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
           <div class="clienteAcoes">
@@ -5802,6 +5856,7 @@
     <div id="tabClientes" class="hidden">
       <div class="recompra hidden" id="recompraWrap"></div>
       <div class="recompra hidden" id="pertoWrap"></div>
+      <div class="recompra hidden" id="reativarWrap"></div>
       <div class="lev-inputWrap" style="padding-top:12px;">
         <div class="searchBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -9001,6 +9056,7 @@
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
         atualizarBloqueioClienteBar(prefixo, cliente);
+        atualizarReativarClienteBar(prefixo, cliente);
         atualizarWhatsClienteBar(prefixo, cliente);
       }
       function atualizarBloqueioClienteBar(prefixo, cliente) {
@@ -10072,7 +10128,7 @@
           // aqui e não no clique do botão da aba: também se chega na aba Clientes
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
-          if (tab === 'clientes') { carregarRecompra(false); renderPerto(); }
+          if (tab === 'clientes') { carregarRecompra(false); renderPerto(); carregarReativar(false); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -11385,6 +11441,17 @@
         const apuradoAte = itens.reduce((max, it) => (it.ultimaCompra && it.ultimaCompra > (max || '') ? it.ultimaCompra : max), null);
         const result = await apiImportarClassificatorio(itens, dataRelatorio, apuradoAte);
         return `${result.atualizados} cliente(s) atualizado(s) · relatório de ${formatDateBr(dataRelatorio)}${apuradoAte ? `, apuração até ${formatDateBr(apuradoAte)}` : ''}${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ que bata com um cliente cadastrado)` : ''}.`;
+      }
+
+      // Relatório de Clientes Sem Compra do ERP (todo dia 2 - normalmente chega
+      // sozinho pela importação por e-mail): leitura em importadores.js.
+      async function importarClientesSemCompraArquivo(file) {
+        const dados = CortagImportadores.lerClientesSemCompra(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
+        const r = await apiFetch('/api/reativacao/importar', { method: 'POST', body: JSON.stringify(dados) });
+        if (r && r.ignorado) return r.aviso;
+        carregarReativar(true);
+        return `${r.total} cliente(s) · relatório de ${formatDateBr(dados.dataRelatorio)} · ${r.amarelo} de 3 a 5 meses e ${r.vermelho} de 6 a 12 meses sem compra`
+          + `${r.criados ? ` · ${r.criados} cliente(s) novo(s)` : ''}.`;
       }
 
       async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {
@@ -13193,6 +13260,7 @@
         relatorio: { rotulo: 'Relatório oficial (Carteira/Faturamento)', importar: (f) => importarRelatorioOficial(f) },
         objetivos: { rotulo: 'Objetivo trimestral', importar: (f, extra) => importarObjetivosTrimestrais(f, extra), pedePeriodo: true },
         classificatorio: { rotulo: 'Classificatório do ERP', importar: (f) => importarClassificatorioErp(f) },
+        semcompra: { rotulo: 'Clientes sem compra (ERP)', importar: (f) => importarClientesSemCompraArquivo(f) },
         previsao: { rotulo: 'Previsão de estoque', importar: (f) => importarPrevisaoEstoque(f) },
         videos: { rotulo: 'Vídeos de produto', importar: (f) => importarVideosProduto(f) },
         linkSite: { rotulo: 'Link do site oficial', importar: (f) => importarLinksSite(f) },
@@ -14695,7 +14763,7 @@
         window.open(url, '_blank', 'noopener');
         showToast(`Rota: ${ordem.map(x => x.c.nome).join(' → ')}`, 'longo');
       }
-      function renderPertoItem({ c, pos, dist }, recompraPorId, ultimaPorId) {
+      function renderPertoItem({ c, pos, dist }, recompraPorId, ultimaPorId, reativarPorId) {
         const id = String(c.id);
         const meta = [];
         if (c.endereco && c.endereco.municipio) meta.push(escapeHtml(c.endereco.municipio));
@@ -14703,6 +14771,7 @@
         const ultima = ultimaPorId.get(id);
         if (ultima) meta.push(`última compra ${escapeHtml(dataCurtaISO(ultima))}`);
         const rec = recompraPorId.get(id);
+        const reat = !rec && reativarPorId.get(id);
         const marcado = pertoSelecionados.has(id);
         return `<div class="recompraItem">
           <label class="pertoLinha">
@@ -14710,7 +14779,7 @@
             <span class="pertoNome">${escapeHtml(c.nome)}</span>
             <span class="pertoDist">${formatarDistancia(dist)}</span>
           </label>
-          <div class="recompraMeta">${meta.join(' · ')}${rec ? ' ' + seloRecompra(rec) : ''}</div>
+          <div class="recompraMeta">${meta.join(' · ')}${rec ? ' ' + seloRecompra(rec) : ''}${reat ? ' ' + seloReativar(reat) : ''}</div>
           <div class="recompraAcoes">
             <button type="button" class="recompraBtn" data-perto-abrir="${escapeHtml(id)}">Abrir cliente</button>
             <button type="button" class="recompraBtn" data-perto-waze="${escapeHtml(id)}">Waze</button>
@@ -14730,9 +14799,12 @@
         const todos = clientesComDistancia();
         const noRaio = todos.filter(x => x.dist <= raio);
         const semPosicao = loadClientesLocais().filter(c => !posicaoDoCliente(c)).length;
+        const reativarPorId = new Map(reativarVisiveis().map(r => [String(r.cliente_id), r]));
+        const exClientes = noRaio.filter(x => reativarPorId.has(String(x.c.id))).length;
         const resumo = pertoBuscando ? 'pegando sua localização…'
           : pertoErro ? pertoErro
           : pertoPosicao ? `${noRaio.length} cliente${noRaio.length === 1 ? '' : 's'} em até ${formatarDistancia(raio)}`
+            + (exClientes ? ` · 💤 ${exClientes} sem comprar há 3+ meses` : '')
           : 'toque pra ver quem está perto de você';
         let corpo = '';
         if (aberta) {
@@ -14741,7 +14813,7 @@
           const mostrar = pertoVerTodos ? noRaio : noRaio.slice(0, PERTO_POR_PAGINA);
           const resto = noRaio.length - mostrar.length;
           const lista = !pertoPosicao ? ''
-            : noRaio.length ? mostrar.map(x => renderPertoItem(x, recompraPorId, ultimaPorId)).join('')
+            : noRaio.length ? mostrar.map(x => renderPertoItem(x, recompraPorId, ultimaPorId, reativarPorId)).join('')
               + (resto > 0 ? `<button type="button" class="recompraMais" id="pertoMais">Ver mais ${resto}</button>` : '')
             : `<div class="lev-empty">Nenhum cliente com posição registrada em até ${formatarDistancia(raio)}.${todos.length ? ` O mais perto fica a ${formatarDistancia(todos[0].dist)}.` : ''}</div>`;
           const marcados = [...pertoSelecionados].length;
@@ -14998,13 +15070,240 @@
           })
           .catch(e => console.warn('"Já falei" não foi pro servidor (fica só neste aparelho por enquanto):', e));
       }
+      // ---- Para reativar (aba Clientes, abaixo de "Perto de mim") ----
+      // Clientes há 3 meses ou mais sem compra, pelo Relatório de Clientes Sem
+      // Compra do ERP (todo dia 2, pela importação por e-mail) - GET
+      // /api/reativacao (routes/reativacao.js). Cores do próprio ERP: 🟡 3 a 5
+      // meses, 🔴 6 a 12; 💤 mais de 12 = cliente que saiu do relatório. Quem
+      // comprava mais vem primeiro. "Já falei" tira por 30 dias; "Não reativar"
+      // até ele comprar de novo (todos os aparelhos; sem internet vai pela
+      // fila). Lista guardada no aparelho; sem internet, os meses são
+      // recontados pelo mês de hoje. Também dá a faixa "💤" no card do cliente
+      // e o selo em "Perto de mim".
+      const REATIVAR_LS_KEY = 'cortagReativar_v1';
+      const REATIVAR_OCULTOS_LS_KEY = 'cortagReativarOcultos_v1'; // id -> { tipo, ate } ainda não confirmado
+      const REATIVAR_ABERTO_LS_KEY = 'cortagReativarAberto_v1';
+      const REATIVAR_ATUALIZAR_MS = 30 * 60000;
+      const REATIVAR_POR_SECAO = 8;
+      const REATIVAR_ADIAR_DIAS = 30; // igual a routes/reativacao.js
+      const REATIVAR_FAIXAS = {
+        amarelo: { emoji: '🟡', titulo: '3 a 5 meses sem compra', cor: 'var(--warning)' },
+        vermelho: { emoji: '🔴', titulo: '6 a 12 meses sem compra', cor: 'var(--danger)' },
+        perdido: { emoji: '💤', titulo: 'Mais de 12 meses sem compra', cor: 'var(--gray)' },
+      };
+      const MESES_ABREV_BR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+      let reativarDados = null; // { hoje, relatorio, clientes, carregadoEm }
+      let reativarCarregando = false;
+      let reativarVerTodas = {};
+      let reativarCidade = '';
+
+      function lerReativarOcultos() {
+        try { return JSON.parse(localStorage.getItem(REATIVAR_OCULTOS_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function gravarReativarOcultos(ocultos) {
+        try { localStorage.setItem(REATIVAR_OCULTOS_LS_KEY, JSON.stringify(ocultos)); } catch (e) { }
+      }
+      function reativarAberto() {
+        try { return localStorage.getItem(REATIVAR_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      // 'AAAA-MM' -> meses até o mês de hoje (mesma conta do relatório do ERP:
+      // no de 02/10, quem comprou em setembro tem "1")
+      function mesesDesdeMes(mes, hoje) {
+        const [a, m] = String(mes).split('-').map(Number);
+        const [ha, hm] = String(hoje).split('-').map(Number);
+        return (ha * 12 + hm) - (a * 12 + m);
+      }
+      function faixaReativar(meses) {
+        if (!(meses >= 3)) return null;
+        return meses <= 5 ? 'amarelo' : meses <= 12 ? 'vermelho' : 'perdido';
+      }
+      function mesAnoBr(mes) {
+        const [a, m] = String(mes).split('-');
+        return `${MESES_ABREV_BR[Number(m) - 1] || m}/${String(a).slice(2)}`;
+      }
+      // Todos da lista com meses/faixa de hoje (inclusive os de "Já falei") -
+      // é o que o card do cliente mostra
+      function reativarTodos() {
+        if (!reativarDados || !Array.isArray(reativarDados.clientes)) return [];
+        const hoje = hojeLocalISO();
+        return reativarDados.clientes.map(c => {
+          const meses = mesesDesdeMes(c.mes_ultima_compra, hoje);
+          return { ...c, meses, faixa: faixaReativar(meses) };
+        }).filter(c => c.faixa);
+      }
+      function reativarVisiveis() {
+        const hoje = hojeLocalISO();
+        const ocultos = lerReativarOcultos();
+        return reativarTodos().filter(c => {
+          const o = ocultos[c.cliente_id];
+          if (o && (o.tipo === 'nao_reativar' || o.ate >= hoje)) return false;
+          return !c.adiado_ate || c.adiado_ate < hoje;
+        });
+      }
+      function seloReativar(c) {
+        const f = REATIVAR_FAIXAS[c.faixa];
+        return `<span class="recompraSelo reativarSelo--${c.faixa}">${f.emoji} ${c.meses} meses sem compra</span>`;
+      }
+      function textoValorReativar(c) {
+        if (!(c.fat > 0)) return '';
+        return c.fat_origem === 'erp_12m' ? `${brlCurto(c.fat)} em 12 meses` : `comprava ${brlCurto(c.fat)}/ano`;
+      }
+      function telefoneParaLigar(c) {
+        const d = String(c.telefone || '').replace(/\D/g, '');
+        return d.length >= 10 && d.length <= 11 ? d : null;
+      }
+      function renderReativarItem(c) {
+        const meta = [];
+        if (c.cidade) meta.push(escapeHtml(c.cidade));
+        const valor = textoValorReativar(c);
+        if (valor) meta.push(escapeHtml(valor));
+        meta.push(`última compra ${escapeHtml(c.ultima_compra ? dataCurtaISO(c.ultima_compra) : mesAnoBr(c.mes_ultima_compra))}`);
+        const tel = telefoneParaLigar(c);
+        return `<div class="recompraItem">
+          <button type="button" class="recompraNome" data-reativar-abrir="${c.cliente_id}"><span>${escapeHtml(c.nome)}</span>${seloReativar(c)}</button>
+          <div class="recompraMeta">${meta.join(' · ')}</div>
+          <div class="recompraAcoes">
+            <button type="button" class="recompraBtn recompraBtn--principal" data-reativar-abrir="${c.cliente_id}">Abrir cliente</button>
+            ${tel ? `<a class="recompraBtn" href="tel:+55${tel}" style="display:flex;align-items:center;justify-content:center;text-decoration:none;" aria-label="Ligar para ${escapeHtml(c.nome)}">Ligar</a>` : ''}
+            <button type="button" class="recompraBtn" data-reativar-adiar="${c.cliente_id}">Já falei</button>
+          </div>
+          <button type="button" class="reativarNao" data-reativar-nao="${c.cliente_id}">Não reativar (fechou, mudou de ramo…)</button>
+        </div>`;
+      }
+      function renderReativar() {
+        const el = document.getElementById('reativarWrap');
+        if (!el) return;
+        const temRelatorio = !!(reativarDados && reativarDados.relatorio);
+        el.classList.toggle('hidden', !!clienteTabSelected || !temRelatorio);
+        if (!temRelatorio) { el.innerHTML = ''; return; }
+        const visiveis = reativarVisiveis();
+        const cidades = [...new Set(visiveis.map(c => c.cidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+        if (reativarCidade && !cidades.includes(reativarCidade)) reativarCidade = '';
+        const filtrados = reativarCidade ? visiveis.filter(c => c.cidade === reativarCidade) : visiveis;
+        const aberta = reativarAberto();
+        const porFaixa = (f) => filtrados.filter(c => c.faixa === f);
+        const resumo = visiveis.length
+          ? Object.keys(REATIVAR_FAIXAS).map(f => [f, visiveis.filter(c => c.faixa === f).length]).filter(([, n]) => n)
+            .map(([f, n]) => `${REATIVAR_FAIXAS[f].emoji} ${n}`).join(' · ') + ` · ${visiveis.length} cliente${visiveis.length === 1 ? '' : 's'}`
+          : 'ninguém há 3 meses ou mais sem compra';
+        let corpo = '';
+        if (aberta) {
+          const secao = (faixa) => {
+            const lista = porFaixa(faixa);
+            if (!lista.length) return '';
+            const f = REATIVAR_FAIXAS[faixa];
+            const mostrar = reativarVerTodas[faixa] ? lista : lista.slice(0, REATIVAR_POR_SECAO);
+            const resto = lista.length - mostrar.length;
+            return `<h3 class="recompraSecao" style="color:${f.cor};">${f.emoji} ${f.titulo} (${lista.length})</h3>`
+              + mostrar.map(renderReativarItem).join('')
+              + (resto > 0 ? `<button type="button" class="recompraMais" data-reativar-mais="${faixa}">Ver mais ${resto}</button>` : '');
+          };
+          const rel = reativarDados.relatorio;
+          corpo = `<p class="recompraHint">Relatório de clientes sem compra do ERP de ${escapeHtml(formatDateBr(rel.data))}, atualizado com os pedidos que entraram depois. Quem comprava mais vem primeiro.</p>`
+            + (cidades.length > 1 ? `<select class="reativarFiltro" id="reativarCidade" aria-label="Filtrar por cidade">
+                <option value="">Todas as cidades</option>
+                ${cidades.map(c => `<option value="${escapeHtml(c)}"${c === reativarCidade ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+              </select>` : '')
+            + Object.keys(REATIVAR_FAIXAS).map(secao).join('')
+            + (filtrados.length ? '' : '<div class="lev-empty">Nenhum cliente há 3 meses ou mais sem compra.</div>');
+        }
+        el.innerHTML = `<button type="button" class="recompraToggle" id="reativarToggle" aria-expanded="${aberta}">
+            <b>${aberta ? '▾' : '▸'} 💤 Para reativar</b>
+            <span class="recompraResumo">${escapeHtml(resumo)}</span>
+          </button>${corpo}`;
+        const porId = new Map(visiveis.map(c => [String(c.cliente_id), c]));
+        document.getElementById('reativarToggle').addEventListener('click', () => {
+          try { localStorage.setItem(REATIVAR_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
+          renderReativar();
+        });
+        document.getElementById('reativarCidade')?.addEventListener('change', (e) => { reativarCidade = e.target.value; reativarVerTodas = {}; renderReativar(); });
+        el.querySelectorAll('[data-reativar-mais]').forEach(b => b.addEventListener('click', () => {
+          reativarVerTodas[b.dataset.reativarMais] = true;
+          renderReativar();
+        }));
+        el.querySelectorAll('[data-reativar-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra(porId.get(b.dataset.reativarAbrir))));
+        el.querySelectorAll('[data-reativar-adiar]').forEach(b => b.addEventListener('click', () => adiarReativar(porId.get(b.dataset.reativarAdiar), 'ja_falei')));
+        el.querySelectorAll('[data-reativar-nao]').forEach(b => b.addEventListener('click', () => adiarReativar(porId.get(b.dataset.reativarNao), 'nao_reativar')));
+      }
+      async function carregarReativar(forcar) {
+        if (!reativarDados) {
+          try { reativarDados = JSON.parse(localStorage.getItem(REATIVAR_LS_KEY)) || null; } catch (e) { reativarDados = null; }
+          renderReativar();
+          atualizarReativarCards();
+        }
+        if (reativarCarregando) return;
+        if (!forcar && reativarDados && Date.now() - (reativarDados.carregadoEm || 0) < REATIVAR_ATUALIZAR_MS) return;
+        reativarCarregando = true;
+        try {
+          const r = await apiFetch('/api/reativacao');
+          if (r && Array.isArray(r.clientes)) {
+            reativarDados = { ...r, carregadoEm: Date.now() };
+            try { localStorage.setItem(REATIVAR_LS_KEY, JSON.stringify(reativarDados)); } catch (e) { }
+            // o que o servidor já tem (ou que já venceu) não precisa mais ficar no aparelho
+            const ocultos = lerReativarOcultos();
+            const hoje = hojeLocalISO();
+            for (const id of Object.keys(ocultos)) {
+              const doServidor = r.clientes.find(c => String(c.cliente_id) === id);
+              const o = ocultos[id];
+              if (o.tipo === 'nao_reativar' ? !doServidor : (o.ate < hoje || (doServidor && doServidor.adiado_ate && doServidor.adiado_ate >= o.ate))) delete ocultos[id];
+            }
+            gravarReativarOcultos(ocultos);
+          }
+        } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
+        reativarCarregando = false;
+        renderReativar();
+        renderPerto();
+        atualizarReativarCards();
+      }
+      function atualizarReativarCards() {
+        if (!state.levCliente) return;
+        atualizarReativarClienteBar('lev', state.levCliente);
+        atualizarReativarClienteBar('precos', state.levCliente);
+      }
+      // Faixa no card do cliente (Pedido e Levantamento): aparece mesmo depois
+      // do "Já falei" - é informação, não lembrete
+      function atualizarReativarClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientReativar');
+        if (!el) return;
+        const c = cliente && reativarTodos().find(x => String(x.cliente_id) === String(cliente.id));
+        el.classList.toggle('hidden', !c);
+        if (!c) { el.innerHTML = ''; return; }
+        const valor = textoValorReativar(c);
+        el.innerHTML = `${REATIVAR_FAIXAS[c.faixa].emoji} Sem comprar há ${c.meses} meses · última compra ${escapeHtml(c.ultima_compra ? dataCurtaISO(c.ultima_compra) : mesAnoBr(c.mes_ultima_compra))}${valor ? ' · ' + escapeHtml(valor) : ''}`;
+      }
+      async function adiarReativar(c, tipo) {
+        if (!c) return;
+        if (tipo === 'nao_reativar'
+          && !await askConfirm(`Tirar ${c.nome} da lista "Para reativar"? Volta sozinho se ele comprar de novo.`, 'Tirar da lista')) return;
+        const hoje = hojeLocalISO();
+        const ocultos = lerReativarOcultos();
+        ocultos[c.cliente_id] = { tipo, ate: tipo === 'ja_falei' ? somarDiasISO(hoje, REATIVAR_ADIAR_DIAS) : null };
+        gravarReativarOcultos(ocultos);
+        renderReativar();
+        renderPerto();
+        showToast(tipo === 'ja_falei' ? `${c.nome} sai da lista por ${REATIVAR_ADIAR_DIAS} dias` : `${c.nome} saiu da lista`);
+        apiFetch(`/api/reativacao/${encodeURIComponent(c.cliente_id)}/adiar`,
+          { method: 'POST', body: JSON.stringify({ tipo, em: hoje }) },
+          { tipo: 'reativar-adiar', descricao: tipo === 'ja_falei' ? 'Reativar: já falei' : 'Reativar: não reativar' })
+          .then(r => {
+            if (!r || r.__filaOffline || !reativarDados) return;
+            if (r.tipo === 'nao_reativar') {
+              reativarDados.clientes = reativarDados.clientes.filter(x => String(x.cliente_id) !== String(r.cliente_id));
+            } else {
+              const item = reativarDados.clientes.find(x => String(x.cliente_id) === String(r.cliente_id));
+              if (item) item.adiado_ate = r.adiado_ate;
+            }
+            try { localStorage.setItem(REATIVAR_LS_KEY, JSON.stringify(reativarDados)); } catch (e) { }
+          })
+          .catch(e => console.warn('"Para reativar" não foi pro servidor (fica só neste aparelho por enquanto):', e));
+      }
       // ---------------- Importação automática por e-mail ----------------
       // Script do Google no Gmail manda os relatórios da Cortag pro servidor
       // (routes/importacaoEmail.js, scripts/gmail-importacao/Codigo.gs). O
       // Painel mostra o último arquivo de cada tipo; recusado = "⚠ falhou"
       // (o e-mail fica com o marcador "Cortag/Falhou" pra importar na mão).
       const NOME_CURTO_IMPORTACAO_EMAIL = {
-        relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta',
+        relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta', semcompra: 'Sem compra',
         bloqueado: 'Pedido bloqueado', avista: 'Pedido à vista',
       };
       async function carregarStatusImportacaoEmail() {
@@ -15234,6 +15533,7 @@
         document.getElementById('clienteTabDetail').classList.remove('hidden');
         renderRecompra();
         renderPerto();
+        renderReativar();
         document.getElementById('clienteFichaDataInicio').value = '';
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
@@ -15250,6 +15550,7 @@
         document.getElementById('clienteTabList').classList.remove('hidden');
         renderRecompra();
         renderPerto();
+        renderReativar();
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
@@ -17769,6 +18070,7 @@
           initClientesTab();
           initClassificatorioAlertas();
           initNovidades();
+          carregarReativar(false); // faixa "sem compra" no card do cliente, mesmo sem abrir a aba Clientes
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();

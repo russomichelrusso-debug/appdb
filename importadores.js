@@ -458,6 +458,124 @@
     return `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(hoje.getDate()).padStart(2, '0')}`;
   }
 
+  // ---- Relatório de Clientes Sem Compra (noreply@cortag.com.br, todo dia 2) ----
+  // Aba "Clientes": 3 linhas de título ("Listagem de Clientes - Representante
+  // ...", "Data: 02/10/2026    Clientes: 296    Periodo Analisado: 01/10/2025 a
+  // 30/09/2026", vazia), cabeçalho na 4ª e, no fim, linhas de total por cor
+  // ("Clientes com Compra ate 2 meses (Verde)" etc.). Traz TODO cliente do
+  // representante que comprou nos 12 meses do período, com "Meses sem Compra"
+  // (1 = comprou no mês passado) e "Mes Ultima Compra" (data do dia 1º do mês,
+  // formato "Sep-26"). Quem não compra há mais de 12 meses NÃO vem. Conferido
+  // com os arquivos reais de 02/10/2026 e de 08/07/2026 (o "Base de Clientes x
+  // Compra", mesmo layout + Classificacao/Segmento).
+  const COLUNAS_SEM_COMPRA = {
+    matriz: ['Matriz'],
+    codigo: ['Cod', 'Cod.Cliente', 'Cod. Cliente', 'Codigo'],
+    nome: ['Razao Social', 'Razão Social'],
+    grupo: ['Grupo Cliente'],
+    meses: ['Meses sem Compra'],
+    mesUltimaCompra: ['Mes Ultima Compra', 'Mês Última Compra'],
+    fat12m: ['12 Meses - Faturamento Cliente', 'Faturamento 12 Meses'],
+    documento: ['CNPJ/CPF', 'CNPJ'],
+    situacao: ['Situacao', 'Situação'],
+    endereco: ['Endereco', 'Endereço'],
+    bairro: ['Bairro'],
+    cidade: ['Cidade'],
+    uf: ['UF'],
+    telefone: ['Telefone'],
+    gestor: ['Gestor'],
+  };
+  const MESES_ABREV = {
+    JAN: 1, FEB: 2, FEV: 2, MAR: 3, APR: 4, ABR: 4, MAY: 5, MAI: 5, JUN: 6, JUL: 7,
+    AUG: 8, AGO: 8, SEP: 9, SET: 9, OCT: 10, OUT: 10, NOV: 11, DEC: 12, DEZ: 12,
+  };
+  // "Mes Ultima Compra" -> 'AAAA-MM'. Vem como data do Excel (número de série,
+  // dia 1º do mês) ou, se a planilha passar por outro programa, como texto
+  // "Sep-26"/"set/26"/"09/2026".
+  function mesAnoISO(XLSX, valor) {
+    if (valor == null || valor === '') return null;
+    const doisDigitos = (n) => String(n).padStart(2, '0');
+    if (typeof valor === 'number' && valor > 0) {
+      const d = XLSX.SSF.parse_date_code(valor);
+      return d && d.y ? `${d.y}-${doisDigitos(d.m)}` : null;
+    }
+    const t = normalizarRotuloImport(valor);
+    let m = /^([A-Z]{3})[A-Z]*[\s\-/.]*(\d{2}|\d{4})$/.exec(t);
+    if (m && MESES_ABREV[m[1]]) return `${m[2].length === 2 ? '20' + m[2] : m[2]}-${doisDigitos(MESES_ABREV[m[1]])}`;
+    m = /^(\d{1,2})[\-/.](\d{4})$/.exec(t);
+    if (m && Number(m[1]) >= 1 && Number(m[1]) <= 12) return `${m[2]}-${doisDigitos(m[1])}`;
+    return null;
+  }
+  function lerClientesSemCompra(XLSX, dados) {
+    const wb = XLSX.read(dados, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    const linhas = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(linhas.length, 12); i++) {
+      if ((linhas[i] || []).some(c => normalizarRotuloImport(c) === 'MESES SEM COMPRA')) { headerIdx = i; break; }
+    }
+    if (headerIdx === -1) throw new Error('Não encontrei a coluna "Meses sem Compra" — confira se é o Relatório de Clientes Sem Compra.');
+    const cabecalhos = linhas[headerIdx];
+    const idx = {};
+    for (const campo of Object.keys(COLUNAS_SEM_COMPRA)) idx[campo] = acharIndiceColuna(cabecalhos, COLUNAS_SEM_COMPRA[campo]);
+    const faltando = ['codigo', 'nome', 'meses', 'mesUltimaCompra'].filter(c => idx[c] === -1);
+    if (faltando.length) {
+      throw new Error(`Relatório de Clientes Sem Compra sem a(s) coluna(s) ${faltando.map(c => COLUNAS_SEM_COMPRA[c][0]).join(', ')}. `
+        + `Colunas nesta planilha: ${cabecalhos.filter(Boolean).join(', ')}.`);
+    }
+    // "Data: 02/10/2026    Clientes: 296    Periodo Analisado: 01/10/2025 a 30/09/2026"
+    const titulo = linhas.slice(0, headerIdx).flat().filter(c => c != null).map(String).join(' ');
+    const dataBr = (s) => { const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(s || ''); return m ? `${m[3]}-${m[2]}-${m[1]}` : null; };
+    const dataRelatorio = dataBr((/Data:\s*(\d{2}\/\d{2}\/\d{4})/i.exec(titulo) || [])[1]);
+    const periodo = /Periodo\s+Analisado:\s*(\d{2}\/\d{2}\/\d{4})\s*a\s*(\d{2}\/\d{2}\/\d{4})/i.exec(titulo);
+    const totalDeclarado = Number((/Clientes:\s*(\d+)/i.exec(titulo) || [])[1]) || null;
+    if (!dataRelatorio) throw new Error('Não encontrei a data do relatório ("Data: DD/MM/AAAA") no título da planilha.');
+
+    const texto = (r, campo) => {
+      const v = idx[campo] !== -1 ? r[idx[campo]] : null;
+      return v == null || String(v).trim() === '' || String(v).trim() === '?' ? null : String(v).trim();
+    };
+    const itens = [];
+    const vistos = new Set();
+    for (let i = headerIdx + 1; i < linhas.length; i++) {
+      const r = linhas[i] || [];
+      const codigo = texto(r, 'codigo');
+      // linhas de total ("Total de Clientes Processados", 296) têm texto na 1ª
+      // coluna e número na de código - só vale linha com Razão Social e mês
+      if (!codigo || !/^\d+$/.test(codigo) || !texto(r, 'nome')) continue;
+      const mes = mesAnoISO(XLSX, r[idx.mesUltimaCompra]);
+      const meses = Number(r[idx.meses]);
+      if (!mes || !Number.isFinite(meses)) continue;
+      if (vistos.has(codigo)) continue;
+      vistos.add(codigo);
+      itens.push({
+        codigo_oficial: codigo,
+        nome: texto(r, 'nome'),
+        matriz: texto(r, 'matriz'),
+        grupo: texto(r, 'grupo'),
+        meses_sem_compra: meses,
+        mes_ultima_compra: mes,
+        fat_12m: idx.fat12m !== -1 ? valorParaNumero(r[idx.fat12m]) : null,
+        documento: texto(r, 'documento'),
+        situacao: texto(r, 'situacao'),
+        endereco: texto(r, 'endereco'),
+        bairro: texto(r, 'bairro'),
+        cidade: texto(r, 'cidade'),
+        uf: texto(r, 'uf'),
+        telefone: texto(r, 'telefone'),
+        gestor: texto(r, 'gestor'),
+      });
+    }
+    if (itens.length === 0) throw new Error('Nenhum cliente reconhecido no Relatório de Clientes Sem Compra.');
+    return {
+      dataRelatorio,
+      periodoInicio: periodo ? dataBr(periodo[1]) : null,
+      periodoFim: periodo ? dataBr(periodo[2]) : null,
+      totalDeclarado,
+      itens,
+    };
+  }
+
   // Lê a planilha de previsão de estoque (relatório tipo ESCE007) e monta um
   // mapa código → dados de previsão. Aceita qualquer nome de arquivo, só
   // espera as colunas: Item, Qt. Disp., Qt. Carteira, Qt. Compra, Previsão, Saldo.
@@ -491,7 +609,7 @@
   // ---- Reconhecimento do tipo de planilha ----
   // Pelas abas e colunas (as mesmas marcas que cada leitor exige), do mais
   // específico pro mais genérico. Devolve 'precos' | 'relatorio' |
-  // 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
+  // 'semcompra' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
   function normalizarRotuloImport(v) {
     return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
   }
@@ -508,6 +626,8 @@
     const celulas = new Set(linhas.slice(0, 10).flat().filter(c => c != null).map(normalizarRotuloImport));
     const tem = (rotulo) => celulas.has(rotulo);
 
+    // antes do Classificatório: o "Base de Clientes x Compra" tem "Classificacao"
+    if (tem('MESES SEM COMPRA') && tem('MES ULTIMA COMPRA')) return 'semcompra';
     if (tem('MATRIZ') && [...celulas].some(c => c.startsWith('OBJETIVO'))) return 'objetivos';
     if (tem('CLASSIFICATORIO')) return 'classificatorio';
     if (tem('ITEM') && tem('QT. DISP.')) return 'previsao';
@@ -518,6 +638,7 @@
 
   return {
     detectarTipoPlanilha, lerRelatorioOficial, lerClassificatorio, lerPrevisao, dataRelatorioClassificatorio,
+    lerClientesSemCompra, mesAnoISO,
     interpretarClassificatorio, paraDataISO, valorParaNumero, normalizarNrPedido,
   };
 });

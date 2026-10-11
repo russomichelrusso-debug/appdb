@@ -8,7 +8,9 @@
 // o e-mail com "Cortag/Falhou" e o admin importa na mão. Chegam por e-mail:
 //  - noreply@cortag.com.br: Carteira/Faturamento (Repres-*.xlsx, todo dia de
 //    madrugada), Classificatório (DD.MM.AAAA_..._Classificatorio.xlsx) e
-//    itens em falta (ESCE007-*.xlsx = previsão de estoque);
+//    itens em falta (ESCE007-*.xlsx = previsão de estoque) e, todo dia 2, o
+//    "Relatório de Clientes Sem Compra" (anexo com nome cortado e sem
+//    extensão - o script reconhece pelo assunto e manda com nome .xlsx);
 //  - vendas@cortag.com: LISTA PADRÃO ... SUL SUDESTE ... .xlsx (catálogo).
 //
 // Remetente: o script só manda e-mail que o Gmail autenticou como da Cortag
@@ -30,6 +32,7 @@ const { importarRelatorioOficial } = require('./pedidosOficiais');
 const { importarCatalogoPrecos } = require('./catalogoPrecos');
 const { importarPrevisaoEstoque } = require('./previsaoEstoque');
 const { importarClassificatorioErp } = require('./clientesClassificatorio');
+const { importarClientesSemCompra } = require('./reativacao');
 const { acharClientePorNome } = require('../clientMatcher');
 const { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista, remetenteValido, REMETENTE_DO_TIPO } = require('./lib/emailCortag');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
@@ -45,6 +48,7 @@ const ROTULO_TIPO = {
   precos: 'Lista de Preços',
   classificatorio: 'Classificatório',
   previsao: 'Itens em falta (previsão de estoque)',
+  semcompra: 'Clientes sem compra',
   bloqueado: 'Pedido bloqueado',
   avista: 'Pedido à vista',
 };
@@ -108,6 +112,9 @@ async function importarPorTipo(tipo, buffer, nomeArquivo) {
     }));
     if (itens.length === 0) throw new Recusado('Nenhuma linha reconhecida — confira se a coluna "Item" existe na planilha.');
     return importarPrevisaoEstoque(itens, USUARIO_EMAIL);
+  }
+  if (tipo === 'semcompra') {
+    return importarClientesSemCompra(lendo(() => Importadores.lerClientesSemCompra(XLSX, buffer)), USUARIO_EMAIL);
   }
   throw new Recusado('Tipo de planilha não importado por e-mail.');
 }

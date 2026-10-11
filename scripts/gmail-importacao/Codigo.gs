@@ -4,6 +4,8 @@
 // a cada 15 minutos: procura os e-mails da Cortag com planilha anexa e manda
 // cada anexo pro servidor do app (POST /api/importacao-email/arquivo), que lê
 // a planilha e publica sozinho - mesmo efeito de importar pelo Painel (⚙).
+// O "Relatório de Clientes Sem Compra" (todo dia 2) vem com o anexo de nome
+// cortado e sem extensão: é reconhecido pelo assunto (CONFIG.porAssunto).
 // Os avisos sem planilha (Pedido Bloqueado, Pedido de Venda à Vista) vão só
 // com assunto + texto (POST /api/importacao-email/mensagem).
 // O servidor NÃO recebe acesso à caixa de e-mail: só os anexos e textos que
@@ -50,6 +52,14 @@ const CONFIG = {
     { remetente: 'noreply@cortag.com.br', anexo: /^ESCE007-.*\.xlsx$/i }, // itens em falta = previsão de estoque
     { remetente: 'vendas@cortag.com', anexo: /LISTA PADR\S{1,2}O.*SUL SUDESTE.*\.xlsx$/i }, // Lista de Preços
   ],
+  // relatórios cujo anexo vem com o nome cortado e SEM extensão
+  // ("02_10_2026_RUSSO"'S_REPRESENTACOES_COMERCIAIS_LTDA_Clientes_s"): vale o
+  // assunto, e o anexo vai pro servidor com o nome `${nome}_AAAA-MM-DD.xlsx`
+  // (data do e-mail). O servidor confere de novo o tipo pelas colunas.
+  porAssunto: [
+    { remetente: 'noreply@cortag.com.br', assunto: /Clientes Sem Compra|Base de Clientes x Compra/i,
+      busca: '(subject:"Clientes Sem Compra" OR subject:"Base de Clientes")', nome: 'ClientesSemCompra' }, // todo dia 2
+  ],
   // e-mails sem planilha: vai o texto (o servidor lê pedido, cliente, motivo/valor)
   mensagens: [
     { remetente: 'noreply@cortag.com.br', assunto: /^\s*Pedido Bloqueado\b/i, busca: 'subject:"Pedido Bloqueado"' },
@@ -85,9 +95,11 @@ function verificarEmails() {
   const processados = JSON.parse(props.getProperty('PROCESSADOS') || '[]');
   const jaFeito = new Set(processados);
   const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente)));
-  const remetentesTodos = Array.from(new Set(remetentes.concat(CONFIG.mensagens.map(m => m.remetente))));
+  const remetentesTodos = Array.from(new Set(remetentes
+    .concat(CONFIG.mensagens.map(m => m.remetente), CONFIG.porAssunto.map(r => r.remetente))));
   const periodo = `newer_than:${CONFIG.diasParaTras}d`;
   const consultas = [`from:(${remetentes.join(' OR ')}) has:attachment filename:xlsx ${periodo}`]
+    .concat(CONFIG.porAssunto.map(r => `from:${r.remetente} has:attachment ${r.busca} ${periodo}`))
     .concat(CONFIG.mensagens.map(m => `from:${m.remetente} ${m.busca} ${periodo}`));
   const limite = new Date(Date.now() - CONFIG.diasParaTras * 86400000);
 
@@ -100,8 +112,12 @@ function verificarEmails() {
       const id = msg.getId();
       if (jaFeito.has(id) || naFila.has(id) || msg.getDate() < limite) return;
       const de = enderecoDe_(msg.getFrom());
-      const anexos = msg.getAttachments({ includeInlineImages: false })
-        .filter(a => CONFIG.regras.some(r => de === r.remetente && r.anexo.test(a.getName())));
+      const todosAnexos = msg.getAttachments({ includeInlineImages: false });
+      const peloAssunto = CONFIG.porAssunto.find(r => de === r.remetente && r.assunto.test(msg.getSubject()));
+      const anexos = peloAssunto
+        ? todosAnexos.map((a, i) => ({ anexo: a, nome: nomePeloAssunto_(peloAssunto, msg, i, todosAnexos.length) }))
+        : todosAnexos.filter(a => CONFIG.regras.some(r => de === r.remetente && r.anexo.test(a.getName())))
+          .map(a => ({ anexo: a, nome: a.getName() }));
       const ehMensagem = CONFIG.mensagens.some(m => de === m.remetente && m.assunto.test(msg.getSubject()));
       if (anexos.length === 0 && !ehMensagem) {
         // "De:" que cita um remetente da Cortag mas não é exatamente ele: fica de
@@ -140,7 +156,7 @@ function verificarEmails() {
     let erroServidor = false;
     let algumOk = false;
     const resultados = item.anexos.length
-      ? item.anexos.map(anexo => enviar_(chave, anexo, item.msg))
+      ? item.anexos.map(a => enviar_(chave, a.anexo, a.nome, item.msg))
       : [enviarMensagem_(chave, item.msg)];
     for (const r of resultados) {
       if (r === 'tentar-de-novo') tentarDeNovo = true;
@@ -173,15 +189,21 @@ function verificarEmails() {
 // 'ok' | 'falhou' (planilha recusada - não adianta repetir) | 'erro-servidor'
 // (o servidor respondeu com erro - tenta de novo, até um limite) |
 // 'tentar-de-novo' (sem resposta, limite de uso - tenta de novo, sem limite)
-function enviar_(chave, anexo, msg) {
-  return postar_(chave, '/api/importacao-email/arquivo', anexo.getName(), {
-    nome: anexo.getName(),
+function enviar_(chave, anexo, nome, msg) {
+  return postar_(chave, '/api/importacao-email/arquivo', nome, {
+    nome,
     arquivoBase64: Utilities.base64Encode(anexo.getBytes()),
     remetente: msg.getFrom(),
     assunto: msg.getSubject(),
     recebidoEm: msg.getDate().toISOString(),
     mensagemId: msg.getId(),
   });
+}
+
+// "ClientesSemCompra_2026-10-02.xlsx" (com _2, _3... se o e-mail tiver mais de um anexo)
+function nomePeloAssunto_(regra, msg, i, total) {
+  const dia = Utilities.formatDate(msg.getDate(), 'America/Sao_Paulo', 'yyyy-MM-dd');
+  return `${regra.nome}_${dia}${total > 1 ? '_' + (i + 1) : ''}.xlsx`;
 }
 
 // E-mail sem planilha (Pedido Bloqueado, Pedido de Venda à Vista): só o texto.
@@ -366,7 +388,8 @@ function resultadosAutenticacao_(limpa) {
 // jeito de mandar e-mail): lista os e-mails dos últimos 30 dias de cada
 // remetente e diz se passariam na checagem. Não manda nada pro app.
 function conferirAutenticacao() {
-  const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente).concat(CONFIG.mensagens.map(m => m.remetente))));
+  const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente)
+    .concat(CONFIG.mensagens.map(m => m.remetente), CONFIG.porAssunto.map(r => r.remetente))));
   remetentes.forEach(remetente => {
     const threads = GmailApp.search(`from:${remetente} newer_than:30d`, 0, 10);
     let ok = 0;

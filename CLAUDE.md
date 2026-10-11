@@ -673,6 +673,29 @@ Supabase, sem PR — não é mudança de código.
   a posição aproximada não). O Waze não aceita várias paradas por link. No navegador do celular sem o
   app Google Maps o link pode aceitar menos paradas.
 
+- **"💤 Para reativar" pelo Relatório de Clientes Sem Compra** (10/2026, pedido do usuário: "tenho um arquivo de
+  clientes inativos, quero buscar vendas"). O ERP manda **todo dia 2** (noreply@cortag.com.br, assunto "Relatório de
+  Clientes Sem Compra"; uma vez em 07/2026 veio como "Base de Clientes x Compra", mesmo layout + 2 colunas) uma planilha
+  (aba "Clientes", 3 linhas de título com "Data:"/"Periodo Analisado:", cabeçalho, linhas de total no fim — conferida
+  nos arquivos reais de 02/10 e 08/07/2026) com **todo cliente do representante que comprou nos 12 meses**: código,
+  CNPJ, "Meses sem Compra", "Mes Ultima Compra" (data do dia 1º, "Sep-26"), faturamento 12 meses, cidade, telefone.
+  **Quem não compra há mais de 12 meses não vem**. O anexo chega com **nome cortado e sem extensão** — o script do
+  Gmail reconhece pelo **assunto** (`CONFIG.porAssunto`) e manda como `ClientesSemCompra_AAAA-MM-DD.xlsx`. Leitura em
+  `lerClientesSemCompra` (`importadores.js`, Painel e e-mail); gravação/lista em `routes/reativacao.js` (foto do
+  último relatório em `clientes_sem_compra`; relatório mais antigo que o importado é ignorado). Em 02/10/2026: 296
+  clientes, todos já no app pelo código (cliente que faltar é criado; pelo CNPJ ganha o código), 88 de 3–5 meses e 53
+  de 6–12 (bate com o rodapé do relatório); ~105 clientes com código fora dele = mais de 12 meses. Faixas pelas
+  **cores do ERP**: 🟡 3–5, 🔴 6–12, 💤 mais de 12 (com código, fora do relatório, última compra conhecida antes do
+  período — valor = o que faturou no último ano em que comprou). Meses **recontados pelo mês de hoje** (mesma conta do
+  ERP: relatório de 02/10, compra em setembro = 1) e pela **compra mais nova que o app conhece** (entrada pela
+  implantação + pedido do app): quem pede sai da lista na hora. Tela: bloco recolhível **"💤 Para reativar"** na aba
+  Clientes, abaixo de "Perto de mim" (quem comprava mais primeiro, filtro de cidade, Abrir cliente / Ligar / **Já
+  falei** 30 dias / **Não reativar** até comprar de novo — `reativacao_adiamentos`, fila offline); **faixa** "🟡 Sem
+  comprar há N meses · última compra · valor" no card do cliente (Pedido/Levantamento, `clienteReativar`) e selo em
+  "Perto de mim" ("💤 N sem comprar há 3+ meses" no resumo). Lista guardada no aparelho (`cortagReativar_v1`). Aviso:
+  uma novidade/push por relatório ("N para reativar"), nenhum por cliente. **O script do Gmail precisa ser colado de
+  novo no Apps Script** pra pegar esse e-mail.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -768,10 +791,9 @@ Supabase, sem PR — não é mudança de código.
     relatório) só saem por SQL ou pela limpeza. Provável causa de a Entrada de Pedidos de set/2026
     ter ficado R$ 8,2 mil / 2 clientes acima do oficial — conferir de novo depois da limpeza.
 - **Outros e-mails automáticos da Cortag** (entrevista de 10/2026): **Pedido Bloqueado** e **Pedido à
-  Vista** já entram (ver "Pedido bloqueado e à vista pelo e-mail" acima). Combinado pra depois, quando
-  o usuário mandar planilhas de exemplo: **Inadimplência** ("Prévia Relatório de Inadimplência", anexo
-  `20.xlsx`) e **Clientes Sem Compra / Base de Clientes x Compra** (anexos com nome truncado, sem
-  extensão — o script vai precisar reconhecer pelo assunto). **Comissões** (PDF): fora do app, decisão
+  Vista** já entram (ver "Pedido bloqueado e à vista pelo e-mail" acima). **Clientes Sem Compra** já entra
+  (ver "💤 Para reativar" acima). Combinado pra depois, quando o usuário mandar planilha de exemplo:
+  **Inadimplência** ("Prévia Relatório de Inadimplência", anexo `20.xlsx`). **Comissões** (PDF): fora do app, decisão
   do usuário. "Cancelamento saldo em carteira DD.MM.AAAA" (assistente comercial, tabela no corpo) ainda
   sem decisão.
 - Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma

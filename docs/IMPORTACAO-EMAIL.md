@@ -9,6 +9,14 @@ sem abrir o Painel:
 | Classificatório | noreply@cortag.com.br | `DD.MM.AAAA_..._Classificatorio.xlsx` | ~1 vez por mês |
 | Itens em falta (previsão de estoque) | noreply@cortag.com.br | `ESCE007-*.xlsx` | ~1 vez por semana |
 | Lista de Preços | vendas@cortag.com | `... LISTA PADRÃO ... SUL SUDESTE ... .xlsx` | quando muda |
+| Clientes sem compra (assunto "Relatório de Clientes Sem Compra" ou "Base de Clientes x Compra") | noreply@cortag.com.br | qualquer (vem cortado e sem extensão: `02_10_2026_RUSSO"'S_..._Clientes_s`) | todo dia 2, de madrugada |
+
+O "Clientes sem compra" é o único reconhecido **pelo assunto** (`CONFIG.porAssunto` no script): o
+anexo vem com o nome cortado e sem `.xlsx`, então o script o manda como
+`ClientesSemCompra_AAAA-MM-DD.xlsx` (data do e-mail) e o servidor confere o tipo pelas colunas
+("Meses sem Compra", "Mes Ultima Compra"). Vira a lista **"💤 Para reativar"** da aba Clientes
+(`routes/reativacao.js`). **Depois desta mudança (10/2026) o script precisa ser colado de novo** no
+projeto do Apps Script (passos 1 e 3 de "Instalação" - a CHAVE continua a mesma).
 
 E dois avisos **sem planilha** (o script manda só o assunto e o texto do e-mail, pra
 `POST /api/importacao-email/mensagem`):

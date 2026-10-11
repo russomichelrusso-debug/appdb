@@ -497,6 +497,43 @@ CREATE TABLE IF NOT EXISTS recompra_adiamentos (
 );
 ALTER TABLE recompra_adiamentos ENABLE ROW LEVEL SECURITY;
 
+-- Relatório de Clientes Sem Compra (noreply@cortag.com.br, todo dia 2 -
+-- routes/reativacao.js): foto do ÚLTIMO relatório, trocada inteira a cada
+-- importação (relatório mais antigo que o importado é ignorado). Traz todo
+-- cliente que comprou nos 12 meses do período, com o mês da última compra pelo
+-- ERP; quem não está nele não compra há mais de 12 meses. Dados do relatório
+-- (data, período) ficam em configuracoes, chave 'clientes_sem_compra_relatorio'.
+CREATE TABLE IF NOT EXISTS clientes_sem_compra (
+  codigo_oficial TEXT PRIMARY KEY,
+  cliente_id INTEGER REFERENCES clientes(id) ON DELETE CASCADE,
+  data_relatorio DATE NOT NULL,
+  meses_sem_compra INTEGER,
+  mes_ultima_compra DATE,          -- dia 1º do mês da última compra (ERP)
+  fat_12m NUMERIC,                 -- "12 Meses - Faturamento Cliente"
+  grupo TEXT,
+  matriz TEXT,
+  telefone TEXT,
+  cidade TEXT,
+  uf TEXT,
+  gestor TEXT,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_clientes_sem_compra_cliente ON clientes_sem_compra (cliente_id);
+ALTER TABLE clientes_sem_compra ENABLE ROW LEVEL SECURITY;
+
+-- "Para reativar" (routes/reativacao.js): "Já falei" tira o cliente da lista
+-- até `ate` (30 dias); "Não reativar" (ate NULL) tira até ele comprar de novo
+-- depois de `desde`. Um por cliente; vale em todos os aparelhos.
+CREATE TABLE IF NOT EXISTS reativacao_adiamentos (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  tipo TEXT NOT NULL,              -- 'ja_falei' | 'nao_reativar'
+  desde DATE NOT NULL,
+  ate DATE,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
+
 -- Avisos de importação (routes/lib/novidades.js): cada importação de relatório
 -- oficial, catálogo de preços, previsão de estoque, Classificatório ou objetivos
 -- trimestrais vira uma novidade - faixa "🔔 N novidades" no app e push no
@@ -598,3 +635,5 @@ ALTER TABLE pedidos_oficiais_itens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pedidos_pendentes_pagamento ENABLE ROW LEVEL SECURITY;
 ALTER TABLE titulos_avista_pendentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalogo_precos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clientes_sem_compra ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
