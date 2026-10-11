@@ -21,6 +21,9 @@ const RE_DIA = /^\d{4}-\d{2}-\d{2}$/;
 // cabe no corpo de 1 MB do Painel (~250 bytes por título); o real de 08/2026 tinha 42
 const MAX_TITULOS = 3000;
 
+// a planilha do ERP traz 1908.2599999999998: grava em centavos
+const centavos = (v) => Math.round(v * 100) / 100;
+
 function brl(v) {
   return 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
@@ -46,7 +49,7 @@ async function importarInadimplencia(dados, usuario) {
     const titulo = texto(t && t.titulo, 30);
     const parcela = texto(t && t.parcela, 10) || '';
     const codigo = String((t && t.codigo_oficial) || '').trim();
-    const saldo = Number(t && t.saldo);
+    const saldo = centavos(Number(t && t.saldo));
     if (!titulo || !/^\d{1,12}$/.test(codigo) || !RE_DIA.test(String(t.vencimento || '')) || !Number.isFinite(saldo)) continue;
     const chave = `${titulo}::${parcela}`;
     if (vistos.has(chave)) continue;
@@ -57,7 +60,7 @@ async function importarInadimplencia(dados, usuario) {
       nome: texto(t.cliente_nome), cidade: texto(t.cidade, 100), uf: texto(t.uf, 2),
       emissao: RE_DIA.test(String(t.emissao || '')) ? t.emissao : null,
       vencimento: t.vencimento,
-      liquido: Number.isFinite(liquido) ? liquido : null,
+      liquido: Number.isFinite(liquido) ? centavos(liquido) : null,
       terceirizada: !!t.cobranca_terceirizada,
     });
   }

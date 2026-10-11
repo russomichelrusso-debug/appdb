@@ -82,7 +82,7 @@ async function importarClientesSemCompra(dados, usuario) {
     validos.push({
       codigo, mes: `${mes}-01`,
       meses: Number.isInteger(meses) && meses >= 0 && meses < 1000 ? meses : null,
-      fat: Number.isFinite(fat) ? fat : null,
+      fat: Number.isFinite(fat) ? Math.round(fat * 100) / 100 : null, // a planilha traz 1908.2599999999998
       nome: limparNomeCliente(texto(it.nome)) || texto(it.nome),
       documento: texto(it.documento, 30),
       grupo: texto(it.grupo, 100), matriz: texto(it.matriz), telefone: texto(it.telefone, 100),
