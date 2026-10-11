@@ -716,6 +716,15 @@ Supabase, sem PR — não é mudança de código.
   de 15 dias, "pode já ter sido pago" — o relatório não chega em dia fixo. Lista guardada no aparelho
   (`cortagInadimplencia_v1`).
 
+- **Aba Clientes redesenhada** (10/2026, opção "A" escolhida pelo usuário a partir de mockups): **busca no topo**;
+  abaixo dela "Recentes" (últimos 8 clientes abertos neste aparelho, `cortagClientesRecentes_v1`) e "Oportunidades de
+  hoje" (`#clientesPainel`, some com cliente aberto ou texto na busca — o resultado fica logo abaixo dela). Os blocos
+  Recompra, Inadimplência, Para reativar, **Classificatório** (era o link vermelho "Ver alertas de classificatório";
+  agora mostra o número sem abrir, cópia em `cortagClassifAlertas_v1`) e Perto de mim usam o mesmo cabeçalho
+  (`cabecalhoBloco`: ícone de traço, número em destaque, seta) com a cor de gravidade na borda (`data-cor`) e
+  **um aberto por vez** (`alternarBlocoCliente`). Inadimplência com relatório de mais de 15 dias fica cinza e vai pro
+  fim. Perto de mim sem localização mostra "Permitir"/"Tentar de novo" e o passo a passo Android/iPhone.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

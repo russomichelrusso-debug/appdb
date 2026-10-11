@@ -62,6 +62,10 @@
       --accent-bg: #FCE9EC;
       --info-bg: #E8F0FE;
       --neutral-2: #E8E8ED;
+      /* texto/ícone azul e amarelo (amarelo do ERP no "Para reativar") */
+      --info: #0062C4;
+      --gold: #8A6A00;
+      --gold-bg: #FFF6D6;
       /* versões sólidas das cores de status, pra FUNDO com texto branco
          (botão Finalizar, badges, pontos de status) - iguais nos dois temas. */
       --success-strong: #1E8E3E;
@@ -94,6 +98,9 @@
       --accent-bg: rgba(204, 9, 53, .22);
       --info-bg: rgba(10, 132, 255, .18);
       --neutral-2: #3A3A3C;
+      --info: #64A8FF;
+      --gold: #E6C04D;
+      --gold-bg: rgba(255, 204, 0, .16);
       color-scheme: dark;
     }
 
@@ -4434,7 +4441,8 @@
     #appConfirmInput.hidden,
     #promocoesVazia.hidden,
     #exportPedidosCard.hidden,
-    #classificatorioAlertasWrap.hidden,
+    #clientesPainel.hidden,
+    #clientesRecentes.hidden,
     #clienteTabList.hidden,
     #targetCatWrap.hidden,
     #selfWrap.hidden,
@@ -4875,13 +4883,185 @@
       padding: 10px 12px;
     }
 
-    /* Recompra da semana (aba Clientes) */
+    /* Blocos da aba Clientes (Recompra, Inadimplência, Para reativar,
+       Classificatório, Perto de mim) - cor de gravidade na borda esquerda
+       (data-cor), número em destaque à direita, um aberto por vez */
     .recompra {
-      margin: 12px 16px 0;
-      padding: 12px 14px;
+      margin: 8px 16px 0;
+      padding: 10px 12px;
       background: var(--white);
       border: 0.75px solid var(--hairline);
+      border-left: 4px solid var(--bloco, var(--hairline));
       border-radius: var(--r-md);
+    }
+
+    .recompra[data-cor="laranja"] {
+      --bloco: var(--warning);
+      --bloco-bg: var(--warning-bg);
+    }
+
+    .recompra[data-cor="vermelho"] {
+      --bloco: var(--danger);
+      --bloco-bg: var(--danger-bg);
+    }
+
+    .recompra[data-cor="amarelo"] {
+      --bloco: var(--gold);
+      --bloco-bg: var(--gold-bg);
+    }
+
+    .recompra[data-cor="azul"] {
+      --bloco: var(--info);
+      --bloco-bg: var(--info-bg);
+    }
+
+    .recompra[data-cor="cinza"] {
+      --bloco: var(--gray);
+      --bloco-bg: var(--neutral-2);
+      border-left-color: var(--hairline);
+    }
+
+    /* relatório velho (inadimplência de mais de 15 dias) vai pro fim */
+    .recompra.blocoVelho {
+      order: 10;
+    }
+
+    #clientesPainel {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .clientesSecao {
+      margin: 16px 16px 2px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .clientesRecentes {
+      display: flex;
+      gap: 8px;
+      padding: 2px 16px 4px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .clientesRecentes::-webkit-scrollbar {
+      display: none;
+    }
+
+    .clienteRecenteChip {
+      flex: none;
+      max-width: 220px;
+      min-height: 36px;
+      padding: 7px 14px;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .blocoCab {
+      display: flex !important;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+    }
+
+    .blocoIcone {
+      flex: none;
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bloco-bg, var(--neutral-2));
+      color: var(--bloco, var(--gray));
+    }
+
+    .blocoIcone svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .blocoTexto {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .blocoTexto b {
+      display: block;
+      font-size: 15px !important;
+      font-weight: 600 !important;
+    }
+
+    .blocoNumero {
+      flex: none;
+      text-align: right;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--bloco, var(--ink));
+    }
+
+    .blocoNumero small {
+      display: block;
+      margin-top: 3px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gray);
+    }
+
+    .blocoAcao {
+      flex: none;
+      padding: 6px 12px;
+      border: 1px solid var(--red);
+      border-radius: 999px;
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .blocoSeta {
+      flex: none;
+      width: 18px;
+      height: 18px;
+      color: var(--gray);
+      transition: transform .15s;
+    }
+
+    .blocoCab[aria-expanded="true"] .blocoSeta {
+      transform: rotate(90deg);
+    }
+
+    .reativarLegenda {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-right: 8px;
+      white-space: nowrap;
+    }
+
+    .reativarLegenda strong {
+      color: var(--ink);
+      font-weight: 700;
+    }
+
+    .reativarLegenda i {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
     }
 
     .recompra.hidden {
@@ -5889,10 +6069,6 @@
     </div>
 
     <div id="tabClientes" class="hidden">
-      <div class="recompra hidden" id="recompraWrap"></div>
-      <div class="recompra hidden" id="pertoWrap"></div>
-      <div class="recompra hidden" id="inadimplenciaWrap"></div>
-      <div class="recompra hidden" id="reativarWrap"></div>
       <div class="lev-inputWrap" style="padding-top:12px;">
         <div class="searchBox">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -5901,17 +6077,22 @@
           </svg>
           <input type="text" id="clienteTabSearch" placeholder="Buscar cliente por nome ou CNPJ" autocomplete="off">
         </div>
-        <button type="button" class="restoreBtn" id="classificatorioAlertasBtn"
-          style="width:auto;margin:10px 16px 0;padding:8px 14px;font-size:13px;">Ver alertas de
-          classificatório</button>
+      </div>
+      <!-- some com cliente aberto ou com texto na busca (o resultado fica logo abaixo dela) -->
+      <div id="clientesPainel">
+        <div id="clientesRecentes" class="hidden">
+          <div class="clientesSecao">Recentes</div>
+          <div class="clientesRecentes" id="clientesRecentesLista"></div>
+        </div>
+        <div class="clientesSecao">Oportunidades de hoje</div>
+        <div class="recompra hidden" id="recompraWrap"></div>
+        <div class="recompra hidden" id="inadimplenciaWrap"></div>
+        <div class="recompra hidden" id="reativarWrap"></div>
+        <div class="recompra hidden" id="classifAlertasWrap"></div>
+        <div class="recompra hidden" id="pertoWrap"></div>
       </div>
       <div id="clienteTabListWrap">
-        <div id="classificatorioAlertasWrap" class="hidden" style="padding:0 16px 12px;">
-          <div id="classificatorioAlertasContent"></div>
-        </div>
-        <div class="hist-content" id="clienteTabList">
-          <div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>
-        </div>
+        <div class="hist-content" id="clienteTabList"></div>
       </div>
       <div id="clienteTabDetail" class="hidden">
         <div class="hist-clientBar">
@@ -10165,7 +10346,7 @@
           // aqui e não no clique do botão da aba: também se chega na aba Clientes
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
-          if (tab === 'clientes') { carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); }
+          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -11477,6 +11658,7 @@
         // até quando os números vão (no relatório de 02/10/2026, até 31/08).
         const apuradoAte = itens.reduce((max, it) => (it.ultimaCompra && it.ultimaCompra > (max || '') ? it.ultimaCompra : max), null);
         const result = await apiImportarClassificatorio(itens, dataRelatorio, apuradoAte);
+        carregarClassifAlertas(true);
         return `${result.atualizados} cliente(s) atualizado(s) · relatório de ${formatDateBr(dataRelatorio)}${apuradoAte ? `, apuração até ${formatDateBr(apuradoAte)}` : ''}${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ que bata com um cliente cadastrado)` : ''}.`;
       }
 
@@ -14605,13 +14787,15 @@
 
       // ---- Aba Clientes ----
       let clienteTabSelected = null;
+      let abrirClienteReq = 0; // abrir/fechar cliente na aba: descarta resposta velha de abrirClienteDaRecompra
       let clienteTabView = 'pedidosoficiais';
       let clienteTabDebounce;
 
       async function searchClienteTabList(term) {
         const wrap = document.getElementById('clienteTabList');
         const velha = novaBuscaCliente('clienteTabSearch', term);
-        if (!term || term.trim().length < 2) { wrap.innerHTML = '<div class="lev-empty">Digite pra buscar um cliente cadastrado.</div>'; return; }
+        if (!term || !term.trim()) { wrap.innerHTML = ''; return; }
+        if (term.trim().length < 2) { wrap.innerHTML = '<div class="lev-empty">Digite pelo menos 2 letras.</div>'; return; }
         wrap.innerHTML = '<div class="lev-empty">Buscando…</div>';
         try {
           const clientes = await apiBuscarClientes(term);
@@ -14651,41 +14835,157 @@
         <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento'} · ${detalhe}</div>
       </button>`;
       }
-      async function toggleClassificatorioAlertas() {
-        const wrap = document.getElementById('classificatorioAlertasWrap');
-        const listWrap = document.getElementById('clienteTabList');
-        const content = document.getElementById('classificatorioAlertasContent');
-        const abrindo = wrap.classList.contains('hidden');
-        if (!abrindo) { wrap.classList.add('hidden'); listWrap.classList.remove('hidden'); return; }
-
-        wrap.classList.remove('hidden');
-        listWrap.classList.add('hidden');
-        content.innerHTML = '<div class="lev-empty">Carregando alertas…</div>';
-        try {
-          const { pertoDeSubir, riscoDeQueda, semComprarRecente } = await apiClassificatorioAlertas();
-          const secoes = [];
-          if (riscoDeQueda.length) secoes.push(`<h3 style="font-size:13px;color:var(--danger);margin:12px 0 6px;">⚠️ Em risco de cair de faixa (${riscoDeQueda.length})</h3>` +
-            riscoDeQueda.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}${seloFonteErp(c)}`)).join(''));
-          if (pertoDeSubir.length) secoes.push(`<h3 style="font-size:13px;color:var(--success);margin:12px 0 6px;">📈 Perto de subir de faixa (${pertoDeSubir.length})</h3>` +
-            pertoDeSubir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}${seloFonteErp(c)}`)).join(''));
-          if (semComprarRecente.length) secoes.push(`<h3 style="font-size:13px;color:var(--warning);margin:12px 0 6px;">🕒 Sem comprar há mais de 60 dias (${semComprarRecente.length})</h3>` +
-            semComprarRecente.map(c => renderClassificatorioAlertaItem(c, `${c.diasSemComprar} dias sem comprar`)).join(''));
-          content.innerHTML = secoes.length ? secoes.join('') : '<div class="lev-empty">Nenhum alerta no momento — todos os clientes classificados estão em dia.</div>';
-          content.querySelectorAll('[data-alerta-cliente-id]').forEach(btn => {
-            btn.addEventListener('click', async () => {
-              const id = btn.dataset.alertaClienteId;
-              try {
-                const cliente = await apiFetch(`/api/clientes/${id}`);
-                openClienteDetail(cliente);
-              } catch (e) { showToast('Não foi possível abrir esse cliente.'); }
-            });
-          });
-        } catch (e) {
-          content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
-        }
+      // ---- Blocos da aba Clientes: cabeçalho comum e um aberto por vez ----
+      // Ícone de traço, título, resumo, número em destaque (ou um "botão" de
+      // ação, ex.: Permitir localização) e seta. A cor de gravidade vai no
+      // data-cor do bloco (borda esquerda, ícone e número).
+      const ICONES_BLOCO = {
+        recompra: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+        perto: '<path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.5"/>',
+        dinheiro: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/>',
+        reativar: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
+        classificatorio: '<path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
+      };
+      function cabecalhoBloco({ id, aberta, icone, titulo, resumo, numero, rotulo, acao }) {
+        const lado = acao ? `<span class="blocoAcao">${escapeHtml(acao)}</span>`
+          : numero != null ? `<span class="blocoNumero">${escapeHtml(String(numero))}${rotulo ? `<small>${escapeHtml(rotulo)}</small>` : ''}</span>` : '';
+        return `<button type="button" class="recompraToggle blocoCab" id="${id}" aria-expanded="${aberta}">
+            <span class="blocoIcone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONES_BLOCO[icone]}</svg></span>
+            <span class="blocoTexto"><b>${escapeHtml(titulo)}</b><span class="recompraResumo">${resumo}</span></span>
+            ${lado}
+            <svg class="blocoSeta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+          </button>`;
       }
-      function initClassificatorioAlertas() {
-        document.getElementById('classificatorioAlertasBtn').addEventListener('click', toggleClassificatorioAlertas);
+      // Abrir um bloco fecha os outros (com Recompra e Para reativar abertos
+      // juntos a aba virava uma rolagem sem fim). Cada um lembra o seu estado.
+      function alternarBlocoCliente(chave) {
+        const chaves = [RECOMPRA_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY];
+        let aberta = false;
+        try { aberta = localStorage.getItem(chave) === '1'; } catch (e) { }
+        for (const k of chaves) {
+          try { localStorage.setItem(k, !aberta && k === chave ? '1' : '0'); } catch (e) { }
+        }
+        renderRecompra();
+        renderInadimplencia();
+        renderReativar();
+        renderClassifAlertas();
+        renderPerto();
+      }
+      // Painel (Recentes + blocos) some com cliente aberto ou com texto na
+      // busca: o resultado da busca aparece logo abaixo dela.
+      function atualizarPainelClientes() {
+        const busca = document.getElementById('clienteTabSearch');
+        const temBusca = !!(busca && busca.value.trim());
+        document.getElementById('clientesPainel').classList.toggle('hidden', !!clienteTabSelected || temBusca);
+      }
+
+      // ---- Recentes (aba Clientes) ----
+      // Últimos clientes abertos neste aparelho - na maioria das visitas é um
+      // deles, sem precisar digitar.
+      const CLIENTES_RECENTES_LS_KEY = 'cortagClientesRecentes_v1';
+      const CLIENTES_RECENTES_MAX = 8;
+      function lerClientesRecentes() {
+        try {
+          const l = JSON.parse(localStorage.getItem(CLIENTES_RECENTES_LS_KEY));
+          return Array.isArray(l) ? l.filter(c => c && c.id != null && c.nome) : [];
+        } catch (e) { return []; }
+      }
+      function guardarClienteRecente(cliente) {
+        if (!cliente || cliente.id == null) return;
+        const lista = [{ id: cliente.id, nome: cliente.nome }]
+          .concat(lerClientesRecentes().filter(c => String(c.id) !== String(cliente.id)))
+          .slice(0, CLIENTES_RECENTES_MAX);
+        try { localStorage.setItem(CLIENTES_RECENTES_LS_KEY, JSON.stringify(lista)); } catch (e) { }
+      }
+      function renderClientesRecentes() {
+        const wrap = document.getElementById('clientesRecentes');
+        const el = document.getElementById('clientesRecentesLista');
+        if (!wrap || !el) return;
+        const lista = lerClientesRecentes();
+        wrap.classList.toggle('hidden', !lista.length);
+        el.innerHTML = lista.map(c => `<button type="button" class="clienteRecenteChip" data-recente-id="${escapeHtml(String(c.id))}">${escapeHtml(c.nome)}</button>`).join('');
+        el.querySelectorAll('[data-recente-id]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.recenteId })));
+      }
+
+      // ---- Alertas de classificatório (bloco da aba Clientes) ----
+      // Em risco de cair, perto de subir e sem comprar há 60+ dias - GET
+      // /api/clientes/classificatorio/alertas. Antes era um link solto embaixo
+      // da busca; agora o número aparece sem abrir. Última lista guardada no
+      // aparelho pra mostrar sem internet.
+      const CLASSIF_ALERTAS_LS_KEY = 'cortagClassifAlertas_v1';
+      const CLASSIF_ABERTO_LS_KEY = 'cortagClassifAlertasAberto_v1';
+      const CLASSIF_ATUALIZAR_MS = 30 * 60000;
+      let classifAlertas = null; // { pertoDeSubir, riscoDeQueda, semComprarRecente, carregadoEm }
+      let classifCarregando = false;
+      let classifErro = false;
+      function classifAberto() {
+        try { return localStorage.getItem(CLASSIF_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      function renderClassifAlertas() {
+        const el = document.getElementById('classifAlertasWrap');
+        if (!el) return;
+        el.classList.toggle('hidden', !!clienteTabSelected || (!classifAlertas && !classifErro));
+        if (!classifAlertas) {
+          // nunca carregou (aparelho novo sem internet, erro no servidor): mostra onde tentar de novo
+          if (!classifErro) { el.innerHTML = ''; return; }
+          el.dataset.cor = 'cinza';
+          el.innerHTML = cabecalhoBloco({
+            id: 'classifToggle', aberta: false, icone: 'classificatorio', titulo: 'Classificatório',
+            resumo: escapeHtml(classifCarregando ? 'carregando…' : 'não foi possível carregar os alertas'), acao: classifCarregando ? '' : 'Tentar de novo',
+          });
+          document.getElementById('classifToggle').addEventListener('click', () => carregarClassifAlertas(true));
+          return;
+        }
+        const risco = classifAlertas.riscoDeQueda || [];
+        const subir = classifAlertas.pertoDeSubir || [];
+        // lista guardada de outro dia (sem internet): soma os dias desde que foi baixada
+        const desde = classifAlertas.carregadoEm ? Math.max(0, diasEntreISO(hojeLocalISO(new Date(classifAlertas.carregadoEm)), hojeLocalISO())) : 0;
+        const sem = (classifAlertas.semComprarRecente || []).map(c => ({ ...c, diasSemComprar: (Number(c.diasSemComprar) || 0) + desde }));
+        const total = risco.length + subir.length + sem.length;
+        const aberta = classifAberto();
+        const partes = [];
+        if (risco.length) partes.push(`${risco.length} em risco de cair`);
+        if (subir.length) partes.push(`${subir.length} perto de subir`);
+        if (sem.length) partes.push(`${sem.length} sem comprar há 60+ dias`);
+        el.dataset.cor = total ? 'azul' : 'cinza';
+        let corpo = '';
+        if (aberta) {
+          const secoes = [];
+          if (risco.length) secoes.push(`<h3 class="recompraSecao" style="color:var(--danger);">Em risco de cair de faixa (${risco.length})</h3>` +
+            risco.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}${seloFonteErp(c)}`)).join(''));
+          if (subir.length) secoes.push(`<h3 class="recompraSecao" style="color:var(--success);">Perto de subir de faixa (${subir.length})</h3>` +
+            subir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}${seloFonteErp(c)}`)).join(''));
+          if (sem.length) secoes.push(`<h3 class="recompraSecao" style="color:var(--warning);">Sem comprar há mais de 60 dias (${sem.length})</h3>` +
+            sem.map(c => renderClassificatorioAlertaItem(c, `${c.diasSemComprar} dias sem comprar`)).join(''));
+          corpo = secoes.length ? secoes.join('') : '<div class="lev-empty">Nenhum alerta no momento — todos os clientes classificados estão em dia.</div>';
+        }
+        el.innerHTML = cabecalhoBloco({
+          id: 'classifToggle', aberta, icone: 'classificatorio', titulo: 'Classificatório',
+          resumo: escapeHtml(partes.length ? partes.join(' · ') : 'nenhum alerta agora'),
+          numero: total || null, rotulo: total === 1 ? 'alerta' : 'alertas',
+        }) + corpo;
+        document.getElementById('classifToggle').addEventListener('click', () => alternarBlocoCliente(CLASSIF_ABERTO_LS_KEY));
+        el.querySelectorAll('[data-alerta-cliente-id]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.alertaClienteId })));
+      }
+      async function carregarClassifAlertas(forcar) {
+        if (!classifAlertas) {
+          try { classifAlertas = JSON.parse(localStorage.getItem(CLASSIF_ALERTAS_LS_KEY)) || null; } catch (e) { classifAlertas = null; }
+          renderClassifAlertas();
+        }
+        if (classifCarregando) return;
+        if (!forcar && classifAlertas && Date.now() - (classifAlertas.carregadoEm || 0) < CLASSIF_ATUALIZAR_MS) return;
+        classifCarregando = true;
+        if (!classifAlertas) renderClassifAlertas();
+        try {
+          const r = await apiClassificatorioAlertas();
+          if (r && Array.isArray(r.riscoDeQueda)) {
+            classifAlertas = { ...r, carregadoEm: Date.now() };
+            classifErro = false;
+            try { localStorage.setItem(CLASSIF_ALERTAS_LS_KEY, JSON.stringify(classifAlertas)); } catch (e) { }
+          }
+        } catch (e) { classifErro = true; /* sem internet: fica com a lista guardada (se houver) */ }
+        classifCarregando = false;
+        renderClassifAlertas();
       }
       // ---- Clientes perto de mim (aba Clientes, abaixo da Recompra) ----
       // Lista por distância em linha reta da posição do celular, pra encaixar
@@ -14760,8 +15060,8 @@
           },
           (err) => {
             pertoBuscando = false;
-            pertoErro = err && err.code === 1 ? 'Permissão de localização negada — libere nas configurações do navegador.'
-              : 'Não foi possível pegar sua localização — tente de novo.';
+            pertoErro = err && err.code === 1 ? 'Localização bloqueada — veja como liberar'
+              : 'Não foi possível pegar sua localização';
             renderPerto();
           },
           { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
@@ -14852,11 +15152,15 @@
         const exClientes = noRaio.filter(x => reativarPorId.has(String(x.c.id))).length;
         const resumo = pertoBuscando ? 'pegando sua localização…'
           : pertoErro ? pertoErro
-          : pertoPosicao ? `${noRaio.length} cliente${noRaio.length === 1 ? '' : 's'} em até ${formatarDistancia(raio)}`
-            + (exClientes ? ` · 💤 ${exClientes} sem comprar há 3+ meses` : '')
-          : 'toque pra ver quem está perto de você';
+          : pertoPosicao ? (exClientes ? `${exClientes} sem comprar há 3+ meses` : 'distância da sua posição')
+          : 'Precisa da sua localização';
+        const acao = pertoBuscando || pertoPosicao || (aberta && pertoErro) ? '' : pertoErro ? 'Tentar de novo' : 'Permitir';
         let corpo = '';
-        if (aberta) {
+        if (aberta && pertoErro && !pertoBuscando) {
+          corpo = `<p class="recompraHint"><b>Android (Chrome):</b> toque no ícone à esquerda do endereço › Permissões › Localização › Permitir. No app instalado: Configurações do Android › Apps › Chrome › Permissões › Localização.<br>
+            <b>iPhone:</b> Ajustes › Privacidade e Segurança › Serviços de Localização › Safari (Durante o Uso).</p>
+            <div class="recompraAcoes"><button type="button" class="recompraBtn recompraBtn--principal" id="pertoTentarBtn">Tentar de novo</button></div>`;
+        } else if (aberta) {
           const recompraPorId = new Map(recompraVisiveis().map(r => [String(r.cliente_id), r]));
           const ultimaPorId = new Map(((recompraDados && recompraDados.clientes) || []).map(r => [String(r.cliente_id), r.ultima_compra]));
           const mostrar = pertoVerTodos ? noRaio : noRaio.slice(0, PERTO_POR_PAGINA);
@@ -14877,16 +15181,17 @@
               <button type="button" class="recompraBtn" id="pertoLimparBtn">Limpar</button>
             </div>${marcados > 4 ? '<p class="recompraHint">Com mais de 4 lojas, abra no app Google Maps: no navegador do celular o Google pode cortar paradas.</p>' : ''}` : (pertoPosicao && noRaio.length ? '<p class="recompraHint">Marque as lojas pra montar a rota (até 10).</p>' : '')}`;
         }
-        el.innerHTML = `<button type="button" class="recompraToggle" id="pertoToggle" aria-expanded="${aberta}">
-            <b>${aberta ? '▾' : '▸'} 📍 Clientes perto de mim</b>
-            <span class="recompraResumo">${escapeHtml(resumo)}</span>
-          </button>${corpo}`;
+        el.dataset.cor = 'cinza';
+        el.innerHTML = cabecalhoBloco({
+          id: 'pertoToggle', aberta, icone: 'perto', titulo: 'Clientes perto de mim', resumo: escapeHtml(resumo), acao,
+          numero: pertoPosicao && !pertoBuscando && !pertoErro ? noRaio.length : null, rotulo: `em ${formatarDistancia(raio)}`,
+        }) + corpo;
         document.getElementById('pertoToggle').addEventListener('click', () => {
-          try { localStorage.setItem(PERTO_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
+          alternarBlocoCliente(PERTO_ABERTO_LS_KEY);
           // posição de mais de 5 min (o vendedor andou) é pega de novo ao abrir
-          if (!aberta && (!pertoPosicao || Date.now() - pertoPosicao.em > 5 * 60000)) buscarPosicaoPerto();
-          else renderPerto();
+          if (pertoAberto() && (pertoErro || !pertoPosicao || Date.now() - pertoPosicao.em > 5 * 60000)) buscarPosicaoPerto();
         });
+        document.getElementById('pertoTentarBtn')?.addEventListener('click', buscarPosicaoPerto);
         if (!aberta) return;
         el.querySelectorAll('#pertoRaioSeg button').forEach(b => b.addEventListener('click', () => {
           try { localStorage.setItem(PERTO_RAIO_LS_KEY, b.dataset.v); } catch (e) { }
@@ -14933,8 +15238,8 @@
       let recompraCarregando = false;
       let recompraVerTodas = { atrasados: false, semana: false };
 
-      function hojeLocalISO() {
-        const d = new Date();
+      function hojeLocalISO(data) {
+        const d = data || new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       }
       function somarDiasISO(iso, n) {
@@ -15002,10 +15307,9 @@
         const atrasados = visiveis.filter(c => c.situacao !== 'semana');
         const semana = visiveis.filter(c => c.situacao === 'semana');
         const aberta = recompraAberta();
-        const partes = [];
-        if (atrasados.length) partes.push(`${atrasados.length} atrasado${atrasados.length === 1 ? '' : 's'}`);
-        if (semana.length) partes.push(`${semana.length} esta semana`);
-        const resumo = partes.length ? partes.join(' · ') : 'ninguém com compra prevista agora';
+        const resumo = atrasados.length && semana.length ? `+${semana.length} prevista${semana.length === 1 ? '' : 's'} esta semana`
+          : visiveis.length ? 'pelo ritmo de compra de cada cliente' : 'ninguém com compra prevista agora';
+        el.dataset.cor = visiveis.length ? 'laranja' : 'cinza';
         let corpo = '';
         if (aberta) {
           const secao = (chave, titulo, cor, lista) => {
@@ -15022,15 +15326,13 @@
             + secao('semana', 'Compra prevista nos próximos 7 dias', 'var(--success)', semana)
             + (visiveis.length ? '' : '<div class="lev-empty">Nenhum cliente com compra atrasada ou prevista pros próximos 7 dias.</div>');
         }
-        el.innerHTML = `<button type="button" class="recompraToggle" id="recompraToggle" aria-expanded="${aberta}">
-            <b>${aberta ? '▾' : '▸'} Recompra da semana</b>
-            <span class="recompraResumo">${escapeHtml(resumo)}</span>
-          </button>${corpo}`;
+        el.innerHTML = cabecalhoBloco({
+          id: 'recompraToggle', aberta, icone: 'recompra', titulo: 'Recompra da semana', resumo: escapeHtml(resumo),
+          numero: atrasados.length || semana.length || null,
+          rotulo: atrasados.length ? (atrasados.length === 1 ? 'atrasado' : 'atrasados') : 'esta semana',
+        }) + corpo;
         const porId = new Map(visiveis.map(c => [String(c.cliente_id), c]));
-        document.getElementById('recompraToggle').addEventListener('click', () => {
-          try { localStorage.setItem(RECOMPRA_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
-          renderRecompra();
-        });
+        document.getElementById('recompraToggle').addEventListener('click', () => alternarBlocoCliente(RECOMPRA_ABERTO_LS_KEY));
         el.querySelectorAll('[data-recompra-mais]').forEach(b => b.addEventListener('click', () => {
           recompraVerTodas[b.dataset.recompraMais] = true;
           renderRecompra();
@@ -15068,12 +15370,24 @@
       }
       async function abrirClienteDaRecompra(c) {
         if (!c) return;
+        // servidor lento: o vendedor toca em outro atalho ou começa a digitar
+        // enquanto espera - a resposta de A não abre por cima do que ele pediu depois
+        const req = ++abrirClienteReq;
+        const velha = () => req !== abrirClienteReq || !!document.getElementById('clienteTabSearch').value.trim();
         try {
-          openClienteDetail(await apiFetch(`/api/clientes/${c.cliente_id}`));
+          const cliente = await apiFetch(`/api/clientes/${c.cliente_id}`);
+          if (velha()) return;
+          openClienteDetail(cliente);
         } catch (e) {
+          if (velha()) return;
           const local = loadClientesLocais().find(x => String(x.id) === String(c.cliente_id));
-          if (local) openClienteDetail(local);
-          else showToast('Não foi possível abrir esse cliente.');
+          if (local) { openClienteDetail(local); return; }
+          showToast('Não foi possível abrir esse cliente.');
+          // apagado ou juntado a um duplicado: não fica nos Recentes pra sempre
+          if (e && e.status === 404) {
+            try { localStorage.setItem(CLIENTES_RECENTES_LS_KEY, JSON.stringify(lerClientesRecentes().filter(x => String(x.id) !== String(c.cliente_id)))); } catch (e2) { }
+            renderClientesRecentes();
+          }
         }
       }
       // Mesmo caminho de abrir um pedido salvo: troca o orçamento (pergunta se
@@ -15180,9 +15494,12 @@
         const lista = inadDados.clientes || [];
         const total = lista.reduce((s, c) => s + (Number(c.total) || 0), 0);
         const aberta = inadAberto();
-        const resumo = lista.length
-          ? `${lista.length} cliente${lista.length === 1 ? '' : 's'} · ${brl(total)} em atraso · ${inadPosicao()}`
-          : `ninguém em atraso · ${inadPosicao()}`;
+        const resumo = lista.length ? `${brl(total)} em atraso · ${inadPosicao()}` : `ninguém em atraso · ${inadPosicao()}`;
+        // relatório velho (pode já ter sido pago): cinza e vai pro fim da lista
+        const fim = inadDados.relatorio.periodo_fim;
+        const velho = !!fim && diasEntreISO(fim, hojeLocalISO()) > INAD_VELHO_DIAS;
+        el.dataset.cor = lista.length && !velho ? 'vermelho' : 'cinza';
+        el.classList.toggle('blocoVelho', velho);
         let corpo = '';
         if (aberta) {
           const mostrar = inadVerTodos ? lista : lista.slice(0, INAD_POR_PAGINA);
@@ -15192,14 +15509,11 @@
             + (resto > 0 ? `<button type="button" class="recompraMais" id="inadMais">Ver mais ${resto}</button>` : '')
             + (lista.length ? '' : '<div class="lev-empty">Nenhum título em atraso no último relatório.</div>');
         }
-        el.innerHTML = `<button type="button" class="recompraToggle" id="inadToggle" aria-expanded="${aberta}">
-            <b>${aberta ? '▾' : '▸'} 💰 Inadimplência</b>
-            <span class="recompraResumo">${escapeHtml(resumo)}</span>
-          </button>${corpo}`;
-        document.getElementById('inadToggle').addEventListener('click', () => {
-          try { localStorage.setItem(INAD_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
-          renderInadimplencia();
-        });
+        el.innerHTML = cabecalhoBloco({
+          id: 'inadToggle', aberta, icone: 'dinheiro', titulo: 'Inadimplência', resumo: escapeHtml(resumo),
+          numero: lista.length || null, rotulo: lista.length === 1 ? 'cliente' : 'clientes',
+        }) + corpo;
+        document.getElementById('inadToggle').addEventListener('click', () => alternarBlocoCliente(INAD_ABERTO_LS_KEY));
         document.getElementById('inadMais')?.addEventListener('click', () => { inadVerTodos = true; renderInadimplencia(); });
         el.querySelectorAll('[data-inad-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.inadAbrir })));
       }
@@ -15255,9 +15569,9 @@
       const REATIVAR_POR_SECAO = 8;
       const REATIVAR_ADIAR_DIAS = 30; // igual a routes/reativacao.js
       const REATIVAR_FAIXAS = {
-        amarelo: { emoji: '🟡', titulo: '3 a 5 meses sem compra', cor: 'var(--warning)' },
-        vermelho: { emoji: '🔴', titulo: '6 a 12 meses sem compra', cor: 'var(--danger)' },
-        perdido: { emoji: '💤', titulo: 'Mais de 12 meses sem compra', cor: 'var(--gray)' },
+        amarelo: { emoji: '🟡', titulo: '3 a 5 meses sem compra', cor: 'var(--warning)', ponto: 'var(--gold)', curto: '3–5m' },
+        vermelho: { emoji: '🔴', titulo: '6 a 12 meses sem compra', cor: 'var(--danger)', ponto: 'var(--danger)', curto: '6–12m' },
+        perdido: { emoji: '💤', titulo: 'Mais de 12 meses sem compra', cor: 'var(--gray)', ponto: 'var(--gray)', curto: '+1 ano' },
       };
       const MESES_ABREV_BR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
       let reativarDados = null; // { hoje, relatorio, clientes, carregadoEm }
@@ -15370,10 +15684,12 @@
         const filtrados = reativarCidade ? visiveis.filter(c => c.cidadeChave === reativarCidade) : visiveis;
         const aberta = reativarAberto();
         const porFaixa = (f) => filtrados.filter(c => c.faixa === f);
+        // legenda das cores do ERP no lugar dos emojis soltos ("🟡 80 · 🔴 51")
         const resumo = visiveis.length
           ? Object.keys(REATIVAR_FAIXAS).map(f => [f, visiveis.filter(c => c.faixa === f).length]).filter(([, n]) => n)
-            .map(([f, n]) => `${REATIVAR_FAIXAS[f].emoji} ${n}`).join(' · ') + ` · ${visiveis.length} cliente${visiveis.length === 1 ? '' : 's'}`
+            .map(([f, n]) => `<span class="reativarLegenda"><i style="background:${REATIVAR_FAIXAS[f].ponto};"></i><strong>${n}</strong> ${REATIVAR_FAIXAS[f].curto}</span>`).join('')
           : 'ninguém há 3 meses ou mais sem compra';
+        el.dataset.cor = visiveis.length ? 'amarelo' : 'cinza';
         let corpo = '';
         if (aberta) {
           const secao = (faixa) => {
@@ -15395,15 +15711,12 @@
             + Object.keys(REATIVAR_FAIXAS).map(secao).join('')
             + (filtrados.length ? '' : '<div class="lev-empty">Nenhum cliente há 3 meses ou mais sem compra.</div>');
         }
-        el.innerHTML = `<button type="button" class="recompraToggle" id="reativarToggle" aria-expanded="${aberta}">
-            <b>${aberta ? '▾' : '▸'} 💤 Para reativar</b>
-            <span class="recompraResumo">${escapeHtml(resumo)}</span>
-          </button>${corpo}`;
+        el.innerHTML = cabecalhoBloco({
+          id: 'reativarToggle', aberta, icone: 'reativar', titulo: 'Para reativar', resumo,
+          numero: visiveis.length || null, rotulo: visiveis.length === 1 ? 'cliente' : 'clientes',
+        }) + corpo;
         const porId = new Map(visiveis.map(c => [String(c.cliente_id), c]));
-        document.getElementById('reativarToggle').addEventListener('click', () => {
-          try { localStorage.setItem(REATIVAR_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
-          renderReativar();
-        });
+        document.getElementById('reativarToggle').addEventListener('click', () => alternarBlocoCliente(REATIVAR_ABERTO_LS_KEY));
         document.getElementById('reativarCidade')?.addEventListener('change', (e) => { reativarCidade = e.target.value; reativarVerTodas = {}; renderReativar(); });
         el.querySelectorAll('[data-reativar-mais]').forEach(b => b.addEventListener('click', () => {
           reativarVerTodas[b.dataset.reativarMais] = true;
@@ -15714,15 +16027,14 @@
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregarNovidades(); });
       }
       function openClienteDetail(cliente) {
+        abrirClienteReq++;
         clienteTabSelected = cliente;
+        guardarClienteRecente(cliente);
         document.getElementById('clienteDetailName').textContent = cliente.nome;
         document.getElementById('clienteDetailDoc').textContent = clienteDocText(cliente);
         document.getElementById('clienteTabListWrap').classList.add('hidden');
         document.getElementById('clienteTabDetail').classList.remove('hidden');
-        renderRecompra();
-        renderPerto();
-        renderReativar();
-        renderInadimplencia();
+        atualizarPainelClientes();
         document.getElementById('clienteFichaDataInicio').value = '';
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
@@ -15732,15 +16044,17 @@
         loadClienteDetailView();
       }
       function closeClienteDetail() {
+        abrirClienteReq++;
         clienteTabSelected = null;
         document.getElementById('clienteTabDetail').classList.add('hidden');
         document.getElementById('clienteTabListWrap').classList.remove('hidden');
-        document.getElementById('classificatorioAlertasWrap').classList.add('hidden');
-        document.getElementById('clienteTabList').classList.remove('hidden');
+        renderClientesRecentes();
         renderRecompra();
         renderPerto();
         renderReativar();
         renderInadimplencia();
+        renderClassifAlertas();
+        atualizarPainelClientes();
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
@@ -15818,13 +16132,7 @@
       }
       function initClientesTab() {
         document.getElementById('clienteTabSearch').addEventListener('input', (e) => {
-          // alertas abertos escondem a lista: digitar na busca volta pra lista
-          // (senão o resultado ia pra lista escondida - achado do revisor-cortag)
-          const alertas = document.getElementById('classificatorioAlertasWrap');
-          if (alertas && !alertas.classList.contains('hidden')) {
-            alertas.classList.add('hidden');
-            document.getElementById('clienteTabList').classList.remove('hidden');
-          }
+          atualizarPainelClientes();
           clearTimeout(clienteTabDebounce);
           const term = e.target.value;
           clienteTabDebounce = setTimeout(() => searchClienteTabList(term), 300);
@@ -18258,7 +18566,6 @@
           document.getElementById('finalizeOrderBtn').addEventListener('click', finalizeOrder);
           initProdutosTab();
           initClientesTab();
-          initClassificatorioAlertas();
           initNovidades();
           carregarReativar(false); // faixa "sem compra" no card do cliente, mesmo sem abrir a aba Clientes
           carregarInadimplencia(false); // faixa "💰 em atraso" no card do cliente
