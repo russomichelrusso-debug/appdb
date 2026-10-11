@@ -11658,6 +11658,7 @@
         // até quando os números vão (no relatório de 02/10/2026, até 31/08).
         const apuradoAte = itens.reduce((max, it) => (it.ultimaCompra && it.ultimaCompra > (max || '') ? it.ultimaCompra : max), null);
         const result = await apiImportarClassificatorio(itens, dataRelatorio, apuradoAte);
+        carregarClassifAlertas(true);
         return `${result.atualizados} cliente(s) atualizado(s) · relatório de ${formatDateBr(dataRelatorio)}${apuradoAte ? `, apuração até ${formatDateBr(apuradoAte)}` : ''}${result.naoEncontrados ? ` · ${result.naoEncontrados} não encontrado(s) (sem código ou CNPJ que bata com um cliente cadastrado)` : ''}.`;
       }
 
@@ -14786,6 +14787,7 @@
 
       // ---- Aba Clientes ----
       let clienteTabSelected = null;
+      let abrirClienteReq = 0; // abrir/fechar cliente na aba: descarta resposta velha de abrirClienteDaRecompra
       let clienteTabView = 'pedidosoficiais';
       let clienteTabDebounce;
 
@@ -14915,17 +14917,30 @@
       const CLASSIF_ATUALIZAR_MS = 30 * 60000;
       let classifAlertas = null; // { pertoDeSubir, riscoDeQueda, semComprarRecente, carregadoEm }
       let classifCarregando = false;
+      let classifErro = false;
       function classifAberto() {
         try { return localStorage.getItem(CLASSIF_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
       }
       function renderClassifAlertas() {
         const el = document.getElementById('classifAlertasWrap');
         if (!el) return;
-        el.classList.toggle('hidden', !!clienteTabSelected || !classifAlertas);
-        if (!classifAlertas) { el.innerHTML = ''; return; }
+        el.classList.toggle('hidden', !!clienteTabSelected || (!classifAlertas && !classifErro));
+        if (!classifAlertas) {
+          // nunca carregou (aparelho novo sem internet, erro no servidor): mostra onde tentar de novo
+          if (!classifErro) { el.innerHTML = ''; return; }
+          el.dataset.cor = 'cinza';
+          el.innerHTML = cabecalhoBloco({
+            id: 'classifToggle', aberta: false, icone: 'classificatorio', titulo: 'Classificatório',
+            resumo: escapeHtml(classifCarregando ? 'carregando…' : 'não foi possível carregar os alertas'), acao: classifCarregando ? '' : 'Tentar de novo',
+          });
+          document.getElementById('classifToggle').addEventListener('click', () => carregarClassifAlertas(true));
+          return;
+        }
         const risco = classifAlertas.riscoDeQueda || [];
         const subir = classifAlertas.pertoDeSubir || [];
-        const sem = classifAlertas.semComprarRecente || [];
+        // lista guardada de outro dia (sem internet): soma os dias desde que foi baixada
+        const desde = classifAlertas.carregadoEm ? Math.max(0, diasEntreISO(hojeLocalISO(new Date(classifAlertas.carregadoEm)), hojeLocalISO())) : 0;
+        const sem = (classifAlertas.semComprarRecente || []).map(c => ({ ...c, diasSemComprar: (Number(c.diasSemComprar) || 0) + desde }));
         const total = risco.length + subir.length + sem.length;
         const aberta = classifAberto();
         const partes = [];
@@ -14960,13 +14975,15 @@
         if (classifCarregando) return;
         if (!forcar && classifAlertas && Date.now() - (classifAlertas.carregadoEm || 0) < CLASSIF_ATUALIZAR_MS) return;
         classifCarregando = true;
+        if (!classifAlertas) renderClassifAlertas();
         try {
           const r = await apiClassificatorioAlertas();
           if (r && Array.isArray(r.riscoDeQueda)) {
             classifAlertas = { ...r, carregadoEm: Date.now() };
+            classifErro = false;
             try { localStorage.setItem(CLASSIF_ALERTAS_LS_KEY, JSON.stringify(classifAlertas)); } catch (e) { }
           }
-        } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
+        } catch (e) { classifErro = true; /* sem internet: fica com a lista guardada (se houver) */ }
         classifCarregando = false;
         renderClassifAlertas();
       }
@@ -15137,11 +15154,12 @@
           : pertoErro ? pertoErro
           : pertoPosicao ? (exClientes ? `${exClientes} sem comprar há 3+ meses` : 'distância da sua posição')
           : 'Precisa da sua localização';
-        const acao = pertoBuscando || pertoPosicao ? '' : pertoErro ? 'Tentar de novo' : 'Permitir';
+        const acao = pertoBuscando || pertoPosicao || (aberta && pertoErro) ? '' : pertoErro ? 'Tentar de novo' : 'Permitir';
         let corpo = '';
         if (aberta && pertoErro && !pertoBuscando) {
           corpo = `<p class="recompraHint"><b>Android (Chrome):</b> toque no ícone à esquerda do endereço › Permissões › Localização › Permitir. No app instalado: Configurações do Android › Apps › Chrome › Permissões › Localização.<br>
-            <b>iPhone:</b> Ajustes › Privacidade e Segurança › Serviços de Localização › Safari (Durante o Uso). Depois toque em "Tentar de novo".</p>`;
+            <b>iPhone:</b> Ajustes › Privacidade e Segurança › Serviços de Localização › Safari (Durante o Uso).</p>
+            <div class="recompraAcoes"><button type="button" class="recompraBtn recompraBtn--principal" id="pertoTentarBtn">Tentar de novo</button></div>`;
         } else if (aberta) {
           const recompraPorId = new Map(recompraVisiveis().map(r => [String(r.cliente_id), r]));
           const ultimaPorId = new Map(((recompraDados && recompraDados.clientes) || []).map(r => [String(r.cliente_id), r.ultima_compra]));
@@ -15169,12 +15187,11 @@
           numero: pertoPosicao && !pertoBuscando && !pertoErro ? noRaio.length : null, rotulo: `em ${formatarDistancia(raio)}`,
         }) + corpo;
         document.getElementById('pertoToggle').addEventListener('click', () => {
-          // com erro, o toque tenta de novo sem fechar (abre com o passo a passo)
-          if (aberta && pertoErro) { buscarPosicaoPerto(); return; }
           alternarBlocoCliente(PERTO_ABERTO_LS_KEY);
           // posição de mais de 5 min (o vendedor andou) é pega de novo ao abrir
           if (pertoAberto() && (pertoErro || !pertoPosicao || Date.now() - pertoPosicao.em > 5 * 60000)) buscarPosicaoPerto();
         });
+        document.getElementById('pertoTentarBtn')?.addEventListener('click', buscarPosicaoPerto);
         if (!aberta) return;
         el.querySelectorAll('#pertoRaioSeg button').forEach(b => b.addEventListener('click', () => {
           try { localStorage.setItem(PERTO_RAIO_LS_KEY, b.dataset.v); } catch (e) { }
@@ -15221,8 +15238,8 @@
       let recompraCarregando = false;
       let recompraVerTodas = { atrasados: false, semana: false };
 
-      function hojeLocalISO() {
-        const d = new Date();
+      function hojeLocalISO(data) {
+        const d = data || new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       }
       function somarDiasISO(iso, n) {
@@ -15353,12 +15370,24 @@
       }
       async function abrirClienteDaRecompra(c) {
         if (!c) return;
+        // servidor lento: o vendedor toca em outro atalho ou começa a digitar
+        // enquanto espera - a resposta de A não abre por cima do que ele pediu depois
+        const req = ++abrirClienteReq;
+        const velha = () => req !== abrirClienteReq || !!document.getElementById('clienteTabSearch').value.trim();
         try {
-          openClienteDetail(await apiFetch(`/api/clientes/${c.cliente_id}`));
+          const cliente = await apiFetch(`/api/clientes/${c.cliente_id}`);
+          if (velha()) return;
+          openClienteDetail(cliente);
         } catch (e) {
+          if (velha()) return;
           const local = loadClientesLocais().find(x => String(x.id) === String(c.cliente_id));
-          if (local) openClienteDetail(local);
-          else showToast('Não foi possível abrir esse cliente.');
+          if (local) { openClienteDetail(local); return; }
+          showToast('Não foi possível abrir esse cliente.');
+          // apagado ou juntado a um duplicado: não fica nos Recentes pra sempre
+          if (e && e.status === 404) {
+            try { localStorage.setItem(CLIENTES_RECENTES_LS_KEY, JSON.stringify(lerClientesRecentes().filter(x => String(x.id) !== String(c.cliente_id)))); } catch (e2) { }
+            renderClientesRecentes();
+          }
         }
       }
       // Mesmo caminho de abrir um pedido salvo: troca o orçamento (pergunta se
@@ -15998,6 +16027,7 @@
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') carregarNovidades(); });
       }
       function openClienteDetail(cliente) {
+        abrirClienteReq++;
         clienteTabSelected = cliente;
         guardarClienteRecente(cliente);
         document.getElementById('clienteDetailName').textContent = cliente.nome;
@@ -16014,6 +16044,7 @@
         loadClienteDetailView();
       }
       function closeClienteDetail() {
+        abrirClienteReq++;
         clienteTabSelected = null;
         document.getElementById('clienteTabDetail').classList.add('hidden');
         document.getElementById('clienteTabListWrap').classList.remove('hidden');
