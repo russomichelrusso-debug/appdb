@@ -2888,7 +2888,7 @@ async function main() {
       ] });
       const lin = (tit, parc, cli, venc, saldo, terc) => [tit, parc, cli, 'PR', 'Maringa', dia(2026, 6, 1), venc, saldo, saldo, 5, 1, dia(2026, 7, 27), terc ? 'COBR.TERCZ' : null];
       const bufInad = xlsInad(antesBr(5), [
-        lin('0807943', '05', '9601 LOJA AMARELA', dia(2026, 3, 11), 1346.6, true),
+        lin('0807943', '05', '9601 LOJA AMARELA', dia(2026, 3, 11), 1346.6000000000001, true),
         lin('RN807943', '04', '9601 LOJA AMARELA', dia(2026, 3, 21), 969.3, true),
         lin('0900294', '01', '777777 CLIENTE FORA DO APP', dia(2026, 8, 28), 5330.56, false),
       ]);
@@ -2896,7 +2896,7 @@ async function main() {
       const li = Importadores.lerInadimplencia(XLSXt, bufInad);
       assert(li.periodoInicio === '2026-01-01' && li.periodoFim === antesBr(5) && li.titulos.length === 3
         && li.titulos[0].codigo_oficial === '9601' && li.titulos[0].cliente_nome === 'LOJA AMARELA' && li.titulos[0].vencimento === '2026-03-11'
-        && li.titulos[0].saldo === 1346.6 && li.titulos[0].cobranca_terceirizada === true && li.titulos[2].cobranca_terceirizada === false,
+        && Math.abs(li.titulos[0].saldo - 1346.6) < 1e-9 && li.titulos[0].cobranca_terceirizada === true && li.titulos[2].cobranca_terceirizada === false,
         `importadores: lê o Relatório de Inadimplência (período, código do cliente, sem a linha Total): ${JSON.stringify(li).slice(0, 500)}`);
 
       res = await enviarArquivo(`Inadimplencia_${hojeBr}.xlsx`, bufInad, CHAVE_EMAIL, { assunto: 'Previa Relatório de Inadimplência Período', mensagemId: 'minad1' });
@@ -2910,9 +2910,9 @@ async function main() {
         const fora = (res.body.clientes || []).find(c => c.codigo_oficial === '777777');
         assert(res.status === 200 && res.body.relatorio.periodo_fim === antesBr(5) && res.body.clientes.length === 2
           && res.body.clientes[0].codigo_oficial === '777777'
-          && a && a.total === 2315.9 && a.mais_antigo === '2026-03-11' && a.cobranca_terceirizada === true && a.titulos.length === 2
+          && a && a.total === 2315.9 && a.titulos.some(t => t.saldo === 1346.6) && a.mais_antigo === '2026-03-11' && a.cobranca_terceirizada === true && a.titulos.length === 2
           && fora && fora.cliente_id === null && fora.nome === 'CLIENTE FORA DO APP',
-          `inadimplência: lista por cliente, maior valor primeiro, com os títulos: ${JSON.stringify(res.body).slice(0, 700)}`);
+          `inadimplência: lista por cliente, maior valor primeiro, com os títulos (saldo gravado em centavos): ${JSON.stringify(res.body).slice(0, 700)}`);
       }
       // o mesmo relatório de novo (e-mail repetido, arquivo regerado) não avisa outra vez
       {
