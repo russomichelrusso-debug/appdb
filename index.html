@@ -17066,8 +17066,10 @@
           return;
         }
         content.innerHTML = prodDetailView === 'compradores'
-          ? lista.map(c => {
-            const local = loadClientesLocais().find(x => String(x.id) === String(c.id));
+          ? (() => {
+            const carteira = new Map(loadClientesLocais().map(x => [String(x.id), x]));
+            return lista.map(c => {
+            const local = carteira.get(String(c.id)) || { id: c.id };
             const w = whatsCompradorDoCliente(local);
             return `
         <div class="histCard">
@@ -17078,10 +17080,11 @@
             <div class="hcStat">Última compra<b>${formatDateBr(c.ultima_compra)}</b></div>
             ${c.nota_fiscal ? `<div class="hcStat">Nota Fiscal<b>${escapeHtml(String(c.nota_fiscal))}</b></div>` : ''}
           </div>
-          ${w ? `<button type="button" class="whatsComprador" data-whats-oferta="${escapeHtml(String(c.id))}">WhatsApp · mandar oferta${w.nome ? ' pra ' + escapeHtml(w.nome) : ''}</button>`
+          ${w ? `<button type="button" class="whatsComprador" data-whats-oferta="${escapeHtml(String(c.id))}" data-whats-cod="${escapeHtml(String(prodDetailData.codigo || ''))}">WhatsApp · mandar oferta${w.nome ? ' pra ' + escapeHtml(w.nome) : ''}</button>`
             : '<span class="whatsComprador whatsComprador--sem">sem WhatsApp do comprador</span>'}
         </div>`;
-          }).join('')
+          }).join('');
+          })()
           : lista.map(l => `
         <div class="histCard">
           <div class="hcName">${escapeHtml(l.nome)}</div>
@@ -17096,7 +17099,7 @@
         // botão de WhatsApp de cada comprador (lista refeita a cada troca de aba)
         document.getElementById('prodDetailContent').addEventListener('click', (e) => {
           const b = e.target.closest('[data-whats-oferta]');
-          if (b) enviarOfertaAoComprador(b.dataset.whatsOferta);
+          if (b) enviarOfertaAoComprador(b.dataset.whatsOferta, b.dataset.whatsCod);
         });
         const seg = document.getElementById('prodDetailSeg');
         const btns = [...seg.querySelectorAll('button')];
@@ -17121,7 +17124,9 @@
         [...seg.querySelectorAll('button')].forEach(b => b.classList.toggle('active', b.dataset.v === 'compradores'));
         try {
           const data = await apiClientesDoProduto(codigo);
-          prodDetailData = data;
+          // abriu outro produto enquanto esperava: a lista (e o WhatsApp dela) é do outro
+          if (prodTabSelected !== codigo) return;
+          prodDetailData = { ...data, codigo };
           const segBtns = seg.querySelectorAll('button');
           segBtns[0].textContent = `Já compraram (${data.compradores.length})`;
           segBtns[1].textContent = `Levantamento (${data.levantamentos.length})`;
@@ -17240,21 +17245,26 @@
         if (!c) return null;
         const memo = `${c}@${FOTOS_PRODUTO[c]}`;
         if (fotoUrlsMemo.has(memo)) {
-          const url = fotoUrlsMemo.get(memo);
-          fotoUrlsMemo.delete(memo); fotoUrlsMemo.set(memo, url); // usada agora: vai pro fim da fila
-          return url;
+          const promessa = fotoUrlsMemo.get(memo);
+          fotoUrlsMemo.delete(memo); fotoUrlsMemo.set(memo, promessa); // usada agora: vai pro fim da fila
+          return promessa;
         }
-        try {
-          const blob = await blobDaFoto(c);
-          if (!blob) return null;
-          const url = URL.createObjectURL(blob);
-          // versão anterior da mesma foto e as menos usadas liberam a memória
-          for (const k of [...fotoUrlsMemo.keys()]) {
-            if (k.startsWith(c + '@') || fotoUrlsMemo.size >= FOTO_URLS_MAX) { URL.revokeObjectURL(fotoUrlsMemo.get(k)); fotoUrlsMemo.delete(k); }
+        // a promessa vai pro memo antes do download: chamadas ao mesmo tempo (miniatura
+        // + grade + card) usam a mesma URL em vez de uma revogar a da outra
+        const promessa = blobDaFoto(c).then(blob => (blob ? URL.createObjectURL(blob) : null), () => null);
+        // versão anterior da mesma foto e as menos usadas saem; a URL só é revogada
+        // depois de um tempo (a tela pode estar acabando de usar)
+        for (const k of [...fotoUrlsMemo.keys()]) {
+          if (k.startsWith(c + '@') || fotoUrlsMemo.size >= FOTO_URLS_MAX) {
+            const velha = fotoUrlsMemo.get(k);
+            fotoUrlsMemo.delete(k);
+            velha.then(u => { if (u) setTimeout(() => URL.revokeObjectURL(u), 60000); });
           }
-          fotoUrlsMemo.set(memo, url);
-          return url;
-        } catch (e) { return null; } // sem internet e sem cópia no aparelho
+        }
+        fotoUrlsMemo.set(memo, promessa);
+        const url = await promessa;
+        if (!url) fotoUrlsMemo.delete(memo); // sem internet e sem cópia: tenta de novo da próxima vez
+        return url;
       }
       // Códigos das campanhas ativas (lista de produtos ou produto único).
       function codigosEmCampanha() {
@@ -17283,7 +17293,9 @@
       // na menor quantidade que já ganha desconto. O card é de um produto só:
       // campanha de cesta/"pedido todo" fica fora, e teto do pedido/% de
       // lançamentos viram condição escrita em vez de travar.
-      function ofertaDoProduto(p) {
+      // soRegra: só essa campanha (grade da campanha aberta e encarte dela) - sem
+      // ela, a melhor entre todas (ficha do produto, igual ao orçamento).
+      function ofertaDoProduto(p, soRegra) {
         const fixo = isPrecoFixoParaCanal(p);
         const lp = listPrice(p, state.uf);
         const manualPct = qtyDiscountFor(p.c); // desconto do item no orçamento, como em cartTotals
@@ -17291,7 +17303,7 @@
         const semOferta = { de, por: de, regra: null };
         if (!(de > 0)) return semOferta;
         const ctx = contextoCampanhas();
-        const regras = (state.promoRules || []).filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
+        const regras = (soRegra ? [soRegra] : (state.promoRules || [])).filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
           && r.selfMetric !== 'skus' && !!r.soNoPrecoFixo === !!fixo && regraValeNoContexto(r, ctx)
           && scopeMatchesProduct(r.targetType, String(r.targetValue || ''), p)
           && !produtoNaListaDaRegra(p, listaDaRegra(r.excluirCodigos), listaDaRegra(r.excluirFamilias)));
@@ -17576,7 +17588,7 @@
         for (const p of produtos) {
           const fotoUrl = await urlDaFoto(p.c);
           await carregarImagem(fotoUrl);
-          itens.push({ p, of: ofertaDoProduto(p), fotoUrl });
+          itens.push({ p, of: ofertaDoProduto(p, cardProduto.campanha || undefined), fotoUrl });
         }
         if (geracao !== cardProduto.geracao) return;
         const tpl = document.getElementById('cardOfertaTemplate');
@@ -17631,9 +17643,13 @@
         };
         try {
           const politica = cliente && cliente.classificatorio_tipo ? classificatorioDaPolitica(cliente.classificatorio_tipo) : null;
-          // sem classificatório: o padrão do canal, como o orçamento faria pra esse cliente
-          state.canal = politica ? politica.canal : 'VAREJO';
-          state.channelDiscount = politica ? politica.v : classiPadraoDoCanal(state.canal);
+          const descontoErp = cliente && cliente.classificatorio_desconto != null && cliente.classificatorio_desconto !== ''
+            ? Number(cliente.classificatorio_desconto) : NaN;
+          // como setLevCliente: tipo da política troca canal e %; nome fora da tabela
+          // ("Home Center Master", nome antigo) usa o % do ERP no canal atual; sem
+          // classificatório nenhum, o padrão do canal
+          if (politica) state.canal = politica.canal;
+          state.channelDiscount = politica ? politica.v : Number.isFinite(descontoErp) ? descontoErp : classiPadraoDoCanal(state.canal);
           const uf = cliente && cliente.endereco ? String(cliente.endereco.uf || '').toUpperCase() : '';
           if (uf && STATE_BY_UF[uf]) state.uf = uf;
           state.promoDiscount = 0;
@@ -17645,23 +17661,24 @@
           Object.assign(state, salvo);
         }
       }
-      function textoOfertaWhats(p, of) {
+      function textoOfertaWhats(p, of, uf) {
         const { nome, tel } = vendedorDoCard();
         const linhas = [`*${p.n}* (cód. ${p.c})`];
-        linhas.push(of.regra ? `de ${brl(of.de)} por *${brl(of.por)}* /un.` : `*${brl(of.por)}* /un.`);
+        // o estado vai escrito: cliente sem ficha de CNPJ fica com o do orçamento aberto
+        linhas.push((of.regra ? `de ${brl(of.de)} por *${brl(of.por)}* /un.` : `*${brl(of.por)}* /un.`) + (uf ? ` (preço p/ ${uf})` : ''));
         const cond = of.regra ? condicoesDaOferta(of, false) : '';
         if (cond) linhas.push(cond);
         if (nome || tel) linhas.push('', [nome, tel].filter(Boolean).join(' · '));
         return linhas.join('\n');
       }
-      function enviarOfertaAoComprador(clienteId) {
-        const p = productByCod(prodTabSelected);
+      function enviarOfertaAoComprador(clienteId, cod) {
+        const p = productByCod(cod);
         const cliente = loadClientesLocais().find(c => String(c.id) === String(clienteId));
         const w = whatsCompradorDoCliente(cliente);
         if (!p || !w) return;
-        const of = comContextoDoCliente(cliente, () => ofertaDoProduto(p));
+        const { of, uf } = comContextoDoCliente(cliente, () => ({ of: ofertaDoProduto(p), uf: state.uf }));
         // ainda dentro do toque (senão o navegador bloqueia a janela nova)
-        window.open(urlWhatsComTexto(w.numero, textoOfertaWhats(p, of)), '_blank', 'noopener');
+        window.open(urlWhatsComTexto(w.numero, textoOfertaWhats(p, of, uf)), '_blank', 'noopener');
       }
 
       // ---- Início da aba Produtos: campanhas ativas e produtos recentes ----
@@ -17690,7 +17707,8 @@
       function campanhasDaAba() {
         const ctx = contextoCampanhas();
         return (state.promoRules || [])
-          .filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
+          .filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all' && r.selfMetric !== 'skus'
+            && String(r.targetValue || '').trim() && (r.tiers || []).some(t => Number(t.pct) > 0)
             && regraValeNoContexto(r, { ...ctx, classiTipos: listaDaRegra(r.classificatorios) }))
           .map(r => ({ regra: r, produtos: produtosDaCampanha(r) }))
           .filter(x => x.produtos.length);
@@ -17767,7 +17785,7 @@
         const mostrar = campanhaVerTodos ? produtos : produtos.slice(0, CAMPANHA_POR_PAGINA);
         const resto = produtos.length - mostrar.length;
         const itens = mostrar.map(p => {
-          const of = ofertaDoProduto(p);
+          const of = ofertaDoProduto(p, regra);
           const marcado = campanhaSelecionados.includes(p.c);
           return `<div class="campItem${marcado ? ' selecionado' : ''}">
             <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
@@ -17793,24 +17811,41 @@
           <div class="campGrade">${itens}</div>
           ${resto > 0 ? `<button type="button" class="recompraMais" id="campMaisBtn">Ver mais ${resto}</button>` : ''}
           <div id="campBarra"${n ? '' : ' class="hidden"'}>
-            <span class="txt"><b>${n}</b> selecionado${n === 1 ? '' : 's'}</span>
+            <span class="txt" id="campBarraTxt"></span>
             <button type="button" class="recompraBtn" id="campLimparBtn">Limpar</button>
-            <button type="button" class="recompraBtn recompraBtn--principal" id="campEnviarBtn">${n > 1 ? `Encarte com ${n}` : 'Card'}</button>
+            <button type="button" class="recompraBtn recompraBtn--principal" id="campEnviarBtn"></button>
           </div>`;
+        const atualizarBarra = () => {
+          const k = campanhaSelecionados.length;
+          document.getElementById('campBarra').classList.toggle('hidden', !k);
+          document.getElementById('campBarraTxt').innerHTML = `<b>${k}</b> selecionado${k === 1 ? '' : 's'}`;
+          document.getElementById('campEnviarBtn').textContent = k > 1 ? `Encarte com ${k}` : 'Card';
+        };
+        atualizarBarra();
         document.getElementById('campVoltarBtn').addEventListener('click', () => { campanhaAberta = null; atualizarProdutosInicio(); });
         document.getElementById('campMaisBtn')?.addEventListener('click', () => { campanhaVerTodos = true; renderCampanhaAberta(); });
-        document.getElementById('campLimparBtn').addEventListener('click', () => { campanhaSelecionados = []; renderCampanhaAberta(); });
+        document.getElementById('campLimparBtn').addEventListener('click', () => {
+          campanhaSelecionados = [];
+          el.querySelectorAll('.campItem.selecionado').forEach(x => x.classList.remove('selecionado'));
+          el.querySelectorAll('[data-marcar-prod]').forEach(b => { b.setAttribute('aria-pressed', 'false'); b.querySelector('span').textContent = ''; });
+          atualizarBarra();
+        });
         document.getElementById('campEnviarBtn').addEventListener('click', () => abrirCardProduto(campanhaSelecionados.slice(), regra));
         el.querySelectorAll('[data-abrir-prod]').forEach(b => b.addEventListener('click', () => {
           const p = productByCod(b.dataset.abrirProd);
           if (p) openProdutoDetail(p.c, p.n);
         }));
+        // marcar só mexe no item e na barra (refazer a grade recarregava todas as fotos)
         el.querySelectorAll('[data-marcar-prod]').forEach(b => b.addEventListener('click', () => {
           const c = b.dataset.marcarProd;
           if (campanhaSelecionados.includes(c)) campanhaSelecionados = campanhaSelecionados.filter(x => x !== c);
           else if (campanhaSelecionados.length >= ENCARTE_MAX) { showToast(`Até ${ENCARTE_MAX} produtos por encarte`); return; }
           else campanhaSelecionados.push(c);
-          renderCampanhaAberta();
+          const marcado = campanhaSelecionados.includes(c);
+          b.closest('.campItem').classList.toggle('selecionado', marcado);
+          b.setAttribute('aria-pressed', String(marcado));
+          b.querySelector('span').textContent = marcado ? '✓' : '';
+          atualizarBarra();
         }));
         preencherFotosDe(el);
       }
