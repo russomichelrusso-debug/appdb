@@ -62,7 +62,7 @@ function lerPedidoAvista(assunto, corpo) {
 // outro remetente (script desatualizado, chave vazada), recusa.
 const NOREPLY = 'noreply@cortag.com.br';
 const REMETENTE_DO_TIPO = {
-  relatorio: NOREPLY, classificatorio: NOREPLY, previsao: NOREPLY, bloqueado: NOREPLY, avista: NOREPLY, semcompra: NOREPLY,
+  relatorio: NOREPLY, classificatorio: NOREPLY, previsao: NOREPLY, bloqueado: NOREPLY, avista: NOREPLY, semcompra: NOREPLY, inadimplencia: NOREPLY,
   precos: 'vendas@cortag.com',
 };
 

@@ -2875,6 +2875,84 @@ async function main() {
     res = await req('POST', '/api/reativacao/999999/adiar', { tipo: 'ja_falei' });
     assert(res.status === 404, 'reativação: adiar cliente inexistente responde 404');
 
+    // 31c) Inadimplência (routes/inadimplencia.js): "Previa Relatório de
+    // Inadimplência", aba "Resumo" no layout do arquivo real de 31/08/2026
+    {
+      const cabInad = ['Título', 'Parc', 'Cliente', 'UF', 'Cidade', 'Dt Emissão', 'Vencimento', 'Saldo Título', 'Vl Líquido', '% Comissão', 'Vr.Abat.Comissão', null, null];
+      const xlsInad = (fim, linhas) => planilha({ Resumo: [
+        [null, null, 'Cortag Industria e Comercio LTDA'], [], [null, null, 'Relatório de Inadimplência '], [], [],
+        ['Periodo:', `01/01/2026 a ${br(fim)}`], [], ['Representante: ', null, "20 - RUSSO'S REPRESENTACOES COMERCIAIS LTDA"], [],
+        cabInad, [],
+        ...linhas,
+        [], [null, null, null, null, 'Total:', null, null, 999, 999],
+      ] });
+      const lin = (tit, parc, cli, venc, saldo, terc) => [tit, parc, cli, 'PR', 'Maringa', dia(2026, 6, 1), venc, saldo, saldo, 5, 1, dia(2026, 7, 27), terc ? 'COBR.TERCZ' : null];
+      const bufInad = xlsInad(antesBr(5), [
+        lin('0807943', '05', '9601 LOJA AMARELA', dia(2026, 3, 11), 1346.6, true),
+        lin('RN807943', '04', '9601 LOJA AMARELA', dia(2026, 3, 21), 969.3, true),
+        lin('0900294', '01', '777777 CLIENTE FORA DO APP', dia(2026, 8, 28), 5330.56, false),
+      ]);
+      assert(Importadores.detectarTipoPlanilha(XLSXt, bufInad) === 'inadimplencia', 'importadores: reconhece o Relatório de Inadimplência');
+      const li = Importadores.lerInadimplencia(XLSXt, bufInad);
+      assert(li.periodoInicio === '2026-01-01' && li.periodoFim === antesBr(5) && li.titulos.length === 3
+        && li.titulos[0].codigo_oficial === '9601' && li.titulos[0].cliente_nome === 'LOJA AMARELA' && li.titulos[0].vencimento === '2026-03-11'
+        && li.titulos[0].saldo === 1346.6 && li.titulos[0].cobranca_terceirizada === true && li.titulos[2].cobranca_terceirizada === false,
+        `importadores: lê o Relatório de Inadimplência (período, código do cliente, sem a linha Total): ${JSON.stringify(li).slice(0, 500)}`);
+
+      res = await enviarArquivo(`Inadimplencia_${hojeBr}.xlsx`, bufInad, CHAVE_EMAIL, { assunto: 'Previa Relatório de Inadimplência Período', mensagemId: 'minad1' });
+      assert(res.status === 200 && res.body.tipo === 'inadimplencia' && res.body.resultado.titulos === 3 && res.body.resultado.clientes === 2
+        && res.body.resultado.semCliente === 1 && res.body.resultado.total === 7646.46
+        && mockDb.__getNovidades().some(n => n.tipo === 'inadimplencia' && n.texto === '2 clientes · R$ 7.646,46 em atraso'),
+        `inadimplência: relatório pelo e-mail entra e gera a novidade: ${JSON.stringify(res.body)}`);
+      res = await req('GET', '/api/inadimplencia');
+      {
+        const a = (res.body.clientes || []).find(c => c.cliente_id === 9601);
+        const fora = (res.body.clientes || []).find(c => c.codigo_oficial === '777777');
+        assert(res.status === 200 && res.body.relatorio.periodo_fim === antesBr(5) && res.body.clientes.length === 2
+          && res.body.clientes[0].codigo_oficial === '777777'
+          && a && a.total === 2315.9 && a.mais_antigo === '2026-03-11' && a.cobranca_terceirizada === true && a.titulos.length === 2
+          && fora && fora.cliente_id === null && fora.nome === 'CLIENTE FORA DO APP',
+          `inadimplência: lista por cliente, maior valor primeiro, com os títulos: ${JSON.stringify(res.body).slice(0, 700)}`);
+      }
+      // o mesmo relatório de novo (e-mail repetido, arquivo regerado) não avisa outra vez
+      {
+        const antes = mockDb.__getNovidades().filter(n => n.tipo === 'inadimplencia').length;
+        res = await req('POST', '/api/inadimplencia/importar', li);
+        assert(res.status === 200 && res.body.titulos === 3
+          && mockDb.__getNovidades().filter(n => n.tipo === 'inadimplencia').length === antes
+          && mockDb.__getNovidades().filter(n => n.tipo === 'inadimplencia').slice(-1)[0].texto === '2 clientes · R$ 7.646,46 em atraso',
+          `inadimplência: relatório repetido não gera outro aviso: ${JSON.stringify(res.body)}`);
+      }
+      // cliente que ganha o código depois da importação passa a abrir
+      mockDb.__seed({ clientes: [{ id: 9777, nome: 'CLIENTE NOVO NO APP', documento: '97770000000177', codigo_oficial: '777777' }] });
+      res = await req('GET', '/api/inadimplencia');
+      assert((res.body.clientes || []).some(c => c.codigo_oficial === '777777' && c.cliente_id === 9777 && c.nome === 'CLIENTE NOVO NO APP'),
+        `inadimplência: cliente com o código gravado depois aparece no app: ${JSON.stringify(res.body.clientes)}`);
+      // aba "Resumo" depois de outra aba também é reconhecida
+      {
+        const wb = XLSXt.read(bufInad, { type: 'buffer' });
+        const novo = XLSXt.utils.book_new();
+        XLSXt.utils.book_append_sheet(novo, XLSXt.utils.aoa_to_sheet([['Capa']]), 'Capa');
+        XLSXt.utils.book_append_sheet(novo, wb.Sheets.Resumo, 'Resumo');
+        assert(Importadores.detectarTipoPlanilha(XLSXt, XLSXt.write(novo, { type: 'buffer', bookType: 'xlsx' })) === 'inadimplencia',
+          'importadores: inadimplência reconhecida mesmo com a aba Resumo depois de outra');
+      }
+      // relatório mais antigo não troca a foto; mais novo sem ninguém em atraso esvazia
+      res = await req('POST', '/api/inadimplencia/importar', Importadores.lerInadimplencia(XLSXt, xlsInad(antesBr(40), [lin('1', '01', '9602 LOJA VERMELHA', dia(2026, 1, 1), 10, false)])));
+      assert(res.status === 200 && res.body.ignorado === true, `inadimplência: relatório mais antigo é ignorado: ${JSON.stringify(res.body)}`);
+      {
+        const tokenAdmin = authToken;
+        authToken = tokenOutro;
+        res = await req('POST', '/api/inadimplencia/importar', li);
+        authToken = tokenAdmin;
+        assert(res.status === 403, `inadimplência: só admin importa pelo Painel: ${res.status}`);
+      }
+      res = await req('POST', '/api/inadimplencia/importar', Importadores.lerInadimplencia(XLSXt, xlsInad(hojeBr, [])));
+      const vazio = await req('GET', '/api/inadimplencia');
+      assert(res.status === 200 && res.body.titulos === 0 && vazio.body.clientes.length === 0 && vazio.body.relatorio.periodo_fim === hojeBr,
+        `inadimplência: relatório novo sem títulos = ninguém em atraso: ${JSON.stringify(res.body)}`);
+    }
+
     // script do Gmail: o anexo vem como "02_10_2026_RUSSO"'S_..._Clientes_s" (sem extensão) - vale o assunto
     const codigoGs = require('fs').readFileSync(require('path').join(__dirname, '../scripts/gmail-importacao/Codigo.gs'), 'utf8');
     const gs = require('vm').runInNewContext(codigoGs + '\n;({ CONFIG, nomePeloAssunto_ })',
@@ -2883,7 +2961,9 @@ async function main() {
     const msg = { getDate: () => new Date('2026-10-02T06:04:24Z') };
     assert(regra.assunto.test('Relatório de Clientes Sem Compra') && regra.assunto.test("Cortag - Base de Clientes x Compra - Representante RUSSO'S")
       && !regra.assunto.test('Pedido Bloqueado 00677375') && regra.remetente === 'noreply@cortag.com.br'
-      && gs.nomePeloAssunto_(regra, msg, 0, 1) === 'ClientesSemCompra_2026-10-02.xlsx' && gs.nomePeloAssunto_(regra, msg, 1, 2) === 'ClientesSemCompra_2026-10-02_2.xlsx',
+      && gs.nomePeloAssunto_(regra, msg, 0, 1) === 'ClientesSemCompra_2026-10-02.xlsx' && gs.nomePeloAssunto_(regra, msg, 1, 2) === 'ClientesSemCompra_2026-10-02_2.xlsx'
+      && gs.CONFIG.porAssunto[1].assunto.test('Previa Relatório de Inadimplência Período 01/01/2026 a 28/08/2026')
+      && !gs.CONFIG.porAssunto[1].assunto.test('Relatório de Clientes Sem Compra'),
       'script do Gmail: reconhece o relatório de clientes sem compra pelo assunto e manda com nome .xlsx');
   }
   {

@@ -534,6 +534,30 @@ CREATE TABLE IF NOT EXISTS reativacao_adiamentos (
 );
 ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
 
+-- Relatório de Inadimplência (noreply@cortag.com.br, "Previa Relatório de
+-- Inadimplência", sem dia fixo - routes/inadimplencia.js): títulos vencidos e
+-- não pagos. Foto do ÚLTIMO relatório, trocada inteira (sumiu = pago);
+-- relatório com período mais antigo que o importado é ignorado. Dados do
+-- relatório em configuracoes, chave 'inadimplencia_relatorio'.
+CREATE TABLE IF NOT EXISTS titulos_inadimplentes (
+  titulo TEXT NOT NULL,
+  parcela TEXT NOT NULL DEFAULT '',
+  codigo_oficial TEXT NOT NULL,
+  cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+  cliente_nome TEXT,
+  cidade TEXT,
+  uf TEXT,
+  emissao DATE,
+  vencimento DATE NOT NULL,
+  saldo NUMERIC NOT NULL,
+  valor_liquido NUMERIC,
+  cobranca_terceirizada BOOLEAN NOT NULL DEFAULT false,
+  data_relatorio DATE NOT NULL,     -- fim do período do relatório (posição)
+  PRIMARY KEY (titulo, parcela)
+);
+CREATE INDEX IF NOT EXISTS idx_titulos_inadimplentes_cliente ON titulos_inadimplentes (cliente_id);
+ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;
+
 -- Avisos de importação (routes/lib/novidades.js): cada importação de relatório
 -- oficial, catálogo de preços, previsão de estoque, Classificatório ou objetivos
 -- trimestrais vira uma novidade - faixa "🔔 N novidades" no app e push no
@@ -637,3 +661,4 @@ ALTER TABLE titulos_avista_pendentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalogo_precos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clientes_sem_compra ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;

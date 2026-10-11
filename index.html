@@ -3003,6 +3003,39 @@
       display: none;
     }
 
+    /* títulos vencidos e não pagos (Relatório de Inadimplência do ERP) */
+    .clienteInadimplente {
+      margin-top: 10px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--danger-bg);
+      color: var(--danger);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .clienteInadimplente.hidden {
+      display: none;
+    }
+
+    .inadTitulos {
+      margin-top: 6px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .inadTitulos summary {
+      cursor: pointer;
+      color: var(--ink);
+      font-weight: 600;
+      padding: 4px 0;
+    }
+
+    .inadTitulos li {
+      padding: 2px 0;
+    }
+
     /* cliente há 3+ meses sem compra (Relatório de Clientes Sem Compra do ERP) */
     .clienteReativar {
       margin-top: 10px;
@@ -5590,6 +5623,7 @@
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
+          <div class="clienteInadimplente hidden" id="precosClientInadimplente"></div>
           <div class="clienteReativar hidden" id="precosClientReativar"></div>
           <button type="button" class="clienteWhats" id="precosClientWhats"
             aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
@@ -5723,6 +5757,7 @@
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
+          <div class="clienteInadimplente hidden" id="levClientInadimplente"></div>
           <div class="clienteReativar hidden" id="levClientReativar"></div>
           <button type="button" class="clienteWhats" id="levClientWhats"
             aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
@@ -5856,6 +5891,7 @@
     <div id="tabClientes" class="hidden">
       <div class="recompra hidden" id="recompraWrap"></div>
       <div class="recompra hidden" id="pertoWrap"></div>
+      <div class="recompra hidden" id="inadimplenciaWrap"></div>
       <div class="recompra hidden" id="reativarWrap"></div>
       <div class="lev-inputWrap" style="padding-top:12px;">
         <div class="searchBox">
@@ -9057,6 +9093,7 @@
         }
         atualizarBloqueioClienteBar(prefixo, cliente);
         atualizarReativarClienteBar(prefixo, cliente);
+        atualizarInadimplenciaClienteBar(prefixo, cliente);
         atualizarWhatsClienteBar(prefixo, cliente);
       }
       function atualizarBloqueioClienteBar(prefixo, cliente) {
@@ -10128,7 +10165,7 @@
           // aqui e não no clique do botão da aba: também se chega na aba Clientes
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
-          if (tab === 'clientes') { carregarRecompra(false); renderPerto(); carregarReativar(false); }
+          if (tab === 'clientes') { carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -11452,6 +11489,17 @@
         carregarReativar(true);
         return `${r.total} cliente(s) · relatório de ${formatDateBr(dados.dataRelatorio)} · ${r.amarelo} de 3 a 5 meses e ${r.vermelho} de 6 a 12 meses sem compra`
           + `${r.semCliente ? ` · ${r.semCliente} ainda fora do app (entram quando o relatório oficial trouxer)` : ''}.`;
+      }
+
+      // Relatório de Inadimplência do ERP (normalmente chega sozinho pela
+      // importação por e-mail): leitura em importadores.js.
+      async function importarInadimplenciaArquivo(file) {
+        const dados = CortagImportadores.lerInadimplencia(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
+        const r = await apiFetch('/api/inadimplencia/importar', { method: 'POST', body: JSON.stringify(dados) });
+        if (r && r.ignorado) return r.aviso;
+        carregarInadimplencia(true);
+        return `${r.titulos} título(s) em atraso de ${r.clientes} cliente(s) · ${brl(r.total)} · posição de ${formatDateBr(dados.periodoFim)}`
+          + `${r.semCliente ? ` · ${r.semCliente} cliente(s) ainda fora do app` : ''}.`;
       }
 
       async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {
@@ -13261,6 +13309,7 @@
         objetivos: { rotulo: 'Objetivo trimestral', importar: (f, extra) => importarObjetivosTrimestrais(f, extra), pedePeriodo: true },
         classificatorio: { rotulo: 'Classificatório do ERP', importar: (f) => importarClassificatorioErp(f) },
         semcompra: { rotulo: 'Clientes sem compra (ERP)', importar: (f) => importarClientesSemCompraArquivo(f) },
+        inadimplencia: { rotulo: 'Inadimplência (ERP)', importar: (f) => importarInadimplenciaArquivo(f) },
         previsao: { rotulo: 'Previsão de estoque', importar: (f) => importarPrevisaoEstoque(f) },
         videos: { rotulo: 'Vídeos de produto', importar: (f) => importarVideosProduto(f) },
         linkSite: { rotulo: 'Link do site oficial', importar: (f) => importarLinksSite(f) },
@@ -15070,6 +15119,125 @@
           })
           .catch(e => console.warn('"Já falei" não foi pro servidor (fica só neste aparelho por enquanto):', e));
       }
+      // ---- Inadimplência (aba Clientes, acima de "Para reativar") ----
+      // Títulos vencidos e não pagos pelo Relatório de Inadimplência do ERP (sem
+      // dia fixo, pela importação por e-mail) - GET /api/inadimplencia
+      // (routes/inadimplencia.js). É a foto do fim do período do relatório: o
+      // título pode já ter sido pago depois, por isso a tela sempre diz "posição
+      // de DD/MM" e, passado INAD_VELHO_DIAS, avisa. Só alerta: não trava pedido.
+      // Lista guardada no aparelho pra aparecer na loja sem internet.
+      const INAD_LS_KEY = 'cortagInadimplencia_v1';
+      const INAD_ABERTO_LS_KEY = 'cortagInadimplenciaAberto_v1';
+      const INAD_ATUALIZAR_MS = 30 * 60000;
+      const INAD_POR_PAGINA = 8;
+      const INAD_VELHO_DIAS = 15;
+      let inadDados = null; // { relatorio, clientes, carregadoEm }
+      let inadCarregando = false;
+      let inadVerTodos = false;
+
+      function inadAberto() {
+        try { return localStorage.getItem(INAD_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      function inadPosicao() {
+        const fim = inadDados && inadDados.relatorio && inadDados.relatorio.periodo_fim;
+        if (!fim) return '';
+        const velho = diasEntreISO(fim, hojeLocalISO()) > INAD_VELHO_DIAS;
+        return `posição de ${dataCurtaISO(fim)}${velho ? ' — pode já ter sido pago' : ''}`;
+      }
+      function inadDoCliente(cliente) {
+        if (!cliente || !inadDados || !Array.isArray(inadDados.clientes)) return null;
+        return inadDados.clientes.find(c => (c.cliente_id != null && String(c.cliente_id) === String(cliente.id))
+          || (cliente.codigo_oficial && String(c.codigo_oficial) === String(cliente.codigo_oficial))) || null;
+      }
+      function textoAtrasoInad(c) {
+        const dias = diasEntreISO(c.mais_antigo, hojeLocalISO());
+        return `venceu ${dataCurtaISO(c.mais_antigo)}${dias > 0 ? ` (${dias} dia${dias === 1 ? '' : 's'})` : ''}`;
+      }
+      function renderInadItem(c) {
+        const n = c.titulos.length;
+        const meta = [];
+        if (c.cidade) meta.push(escapeHtml(nomeCidade(c.cidade)));
+        meta.push(`${n} título${n === 1 ? '' : 's'}`);
+        meta.push(`mais antigo ${escapeHtml(textoAtrasoInad(c))}`);
+        if (c.cobranca_terceirizada) meta.push('<b>cobrança terceirizada</b>');
+        const nome = c.cliente_id != null
+          ? `<button type="button" class="recompraNome" data-inad-abrir="${escapeHtml(String(c.cliente_id))}"><span>${escapeHtml(c.nome)}</span><span class="recompraSelo recompraSelo--fora">${escapeHtml(brl(c.total))}</span></button>`
+          : `<div class="recompraNome" style="cursor:default;"><span>${escapeHtml(c.nome)} <small>(cód. ${escapeHtml(String(c.codigo_oficial))}, fora do app)</small></span><span class="recompraSelo recompraSelo--fora">${escapeHtml(brl(c.total))}</span></div>`;
+        return `<div class="recompraItem">
+          ${nome}
+          <div class="recompraMeta">${meta.join(' · ')}</div>
+          <details class="inadTitulos"><summary>Ver títulos</summary><ul style="margin:4px 0 0;padding-left:18px;">
+            ${c.titulos.map(t => `<li>${escapeHtml(t.titulo)}${t.parcela ? '/' + escapeHtml(t.parcela) : ''} · venceu ${escapeHtml(dataCurtaISO(t.vencimento))} · ${escapeHtml(brl(t.saldo))}${t.cobranca_terceirizada ? ' · terceirizada' : ''}</li>`).join('')}
+          </ul></details>
+        </div>`;
+      }
+      function renderInadimplencia() {
+        const el = document.getElementById('inadimplenciaWrap');
+        if (!el) return;
+        const temRelatorio = !!(inadDados && inadDados.relatorio);
+        el.classList.toggle('hidden', !!clienteTabSelected || !temRelatorio);
+        if (!temRelatorio) { el.innerHTML = ''; return; }
+        const lista = inadDados.clientes || [];
+        const total = lista.reduce((s, c) => s + (Number(c.total) || 0), 0);
+        const aberta = inadAberto();
+        const resumo = lista.length
+          ? `${lista.length} cliente${lista.length === 1 ? '' : 's'} · ${brl(total)} em atraso · ${inadPosicao()}`
+          : `ninguém em atraso · ${inadPosicao()}`;
+        let corpo = '';
+        if (aberta) {
+          const mostrar = inadVerTodos ? lista : lista.slice(0, INAD_POR_PAGINA);
+          const resto = lista.length - mostrar.length;
+          corpo = `<p class="recompraHint">Relatório de inadimplência do ERP, ${escapeHtml(inadPosicao())}. Pagamento: falar com o financeiro da Cortag.</p>`
+            + mostrar.map(renderInadItem).join('')
+            + (resto > 0 ? `<button type="button" class="recompraMais" id="inadMais">Ver mais ${resto}</button>` : '')
+            + (lista.length ? '' : '<div class="lev-empty">Nenhum título em atraso no último relatório.</div>');
+        }
+        el.innerHTML = `<button type="button" class="recompraToggle" id="inadToggle" aria-expanded="${aberta}">
+            <b>${aberta ? '▾' : '▸'} 💰 Inadimplência</b>
+            <span class="recompraResumo">${escapeHtml(resumo)}</span>
+          </button>${corpo}`;
+        document.getElementById('inadToggle').addEventListener('click', () => {
+          try { localStorage.setItem(INAD_ABERTO_LS_KEY, aberta ? '0' : '1'); } catch (e) { }
+          renderInadimplencia();
+        });
+        document.getElementById('inadMais')?.addEventListener('click', () => { inadVerTodos = true; renderInadimplencia(); });
+        el.querySelectorAll('[data-inad-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.inadAbrir })));
+      }
+      async function carregarInadimplencia(forcar) {
+        if (!inadDados) {
+          try { inadDados = JSON.parse(localStorage.getItem(INAD_LS_KEY)) || null; } catch (e) { inadDados = null; }
+          renderInadimplencia();
+          atualizarInadimplenciaCards();
+        }
+        if (inadCarregando) return;
+        if (!forcar && inadDados && Date.now() - (inadDados.carregadoEm || 0) < INAD_ATUALIZAR_MS) return;
+        inadCarregando = true;
+        try {
+          const r = await apiFetch('/api/inadimplencia');
+          if (r && Array.isArray(r.clientes)) {
+            inadDados = { ...r, carregadoEm: Date.now() };
+            try { localStorage.setItem(INAD_LS_KEY, JSON.stringify(inadDados)); } catch (e) { }
+          }
+        } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
+        inadCarregando = false;
+        renderInadimplencia();
+        atualizarInadimplenciaCards();
+      }
+      function atualizarInadimplenciaCards() {
+        if (!state.levCliente) return;
+        atualizarInadimplenciaClienteBar('lev', state.levCliente);
+        atualizarInadimplenciaClienteBar('precos', state.levCliente);
+      }
+      // Faixa no card do cliente (Pedido e Levantamento): vê antes de fechar o pedido
+      function atualizarInadimplenciaClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientInadimplente');
+        if (!el) return;
+        const c = inadDoCliente(cliente);
+        el.classList.toggle('hidden', !c);
+        if (!c) { el.innerHTML = ''; return; }
+        el.innerHTML = `💰 ${escapeHtml(brl(c.total))} em atraso · ${escapeHtml(textoAtrasoInad(c))}`
+          + `${c.cobranca_terceirizada ? ' · cobrança terceirizada' : ''}<br><small style="font-weight:400;">${escapeHtml(inadPosicao())}</small>`;
+      }
       // ---- Para reativar (aba Clientes, abaixo de "Perto de mim") ----
       // Clientes há 3 meses ou mais sem compra, pelo Relatório de Clientes Sem
       // Compra do ERP (todo dia 2, pela importação por e-mail) - GET
@@ -15323,7 +15491,7 @@
       // Painel mostra o último arquivo de cada tipo; recusado = "⚠ falhou"
       // (o e-mail fica com o marcador "Cortag/Falhou" pra importar na mão).
       const NOME_CURTO_IMPORTACAO_EMAIL = {
-        relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta', semcompra: 'Sem compra',
+        relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta', semcompra: 'Sem compra', inadimplencia: 'Inadimplência',
         bloqueado: 'Pedido bloqueado', avista: 'Pedido à vista',
       };
       async function carregarStatusImportacaoEmail() {
@@ -15554,6 +15722,7 @@
         renderRecompra();
         renderPerto();
         renderReativar();
+        renderInadimplencia();
         document.getElementById('clienteFichaDataInicio').value = '';
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
@@ -15571,6 +15740,7 @@
         renderRecompra();
         renderPerto();
         renderReativar();
+        renderInadimplencia();
       }
       async function loadClienteDetailView() {
         const content = document.getElementById('clienteDetailContent');
@@ -18091,6 +18261,7 @@
           initClassificatorioAlertas();
           initNovidades();
           carregarReativar(false); // faixa "sem compra" no card do cliente, mesmo sem abrir a aba Clientes
+          carregarInadimplencia(false); // faixa "💰 em atraso" no card do cliente
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();

@@ -697,6 +697,25 @@ Supabase, sem PR — não é mudança de código.
   uma novidade/push por relatório ("N para reativar"), nenhum por cliente. **O script do Gmail precisa ser colado de
   novo no Apps Script** pra pegar esse e-mail.
 
+- **"💰 Inadimplência" pelo Relatório de Inadimplência** (10/2026, pedido do usuário logo depois do "Para
+  reativar"). E-mail da noreply@cortag.com.br "Previa Relatório de Inadimplência Período DD/MM/AAAA a DD/MM/AAAA",
+  **sem dia fixo** (2–4 vezes por mês, às vezes repetido em minutos; o início do período varia — 01/01/2024, 2025,
+  2026, até 1900), anexo **sempre `20.xlsx`** (código do representante) — o script do Gmail reconhece pelo **assunto**
+  (`CONFIG.porAssunto`) e manda como `Inadimplencia_AAAA-MM-DD.xlsx`. Planilha (aba "Resumo", conferida no relatório
+  real de 31/08/2026: 42 títulos, 16 clientes, R$ 58.071,79 = linha "Total:"): "Periodo:" no topo, cabeçalho na
+  10ª linha (Título, Parc, Cliente = "22691 NOME", UF, Cidade, Dt Emissão, Vencimento, **Saldo Título** = o que falta
+  pagar, Vl Líquido, comissão + 2 colunas sem título: uma data interna e **"COBR.TERCZ"** = em cobrança
+  terceirizada). Leitura em `lerInadimplencia` (`importadores.js`); gravação/lista em `routes/inadimplencia.js`:
+  **foto do último relatório** em `titulos_inadimplentes` (sumiu = pago), período mais antigo que o importado é
+  ignorado, relatório sem títulos = ninguém em atraso; cliente só pelo código do ERP (não traz CNPJ; fora do app
+  aparece pelo nome). Importar pelo Painel é só admin. Decisões (propostas ao usuário, sem objeção): **só alerta,
+  não trava pedido** (quem bloqueia é o financeiro); faixa vermelha no card do cliente (Pedido/Levantamento,
+  `clienteInadimplente`) "💰 R$ X em atraso · venceu DD/MM (N dias) · cobrança terceirizada"; bloco recolhível
+  **"💰 Inadimplência"** na aba Clientes (acima de "Para reativar"), maior valor primeiro, com os títulos; um push por
+  relatório ("N clientes · R$ X em atraso"). A tela **sempre mostra "posição de DD/MM"** (fim do período) e, depois
+  de 15 dias, "pode já ter sido pago" — o relatório não chega em dia fixo. Lista guardada no aparelho
+  (`cortagInadimplencia_v1`).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -793,8 +812,8 @@ Supabase, sem PR — não é mudança de código.
     ter ficado R$ 8,2 mil / 2 clientes acima do oficial — conferir de novo depois da limpeza.
 - **Outros e-mails automáticos da Cortag** (entrevista de 10/2026): **Pedido Bloqueado** e **Pedido à
   Vista** já entram (ver "Pedido bloqueado e à vista pelo e-mail" acima). **Clientes Sem Compra** já entra
-  (ver "💤 Para reativar" acima). Combinado pra depois, quando o usuário mandar planilha de exemplo:
-  **Inadimplência** ("Prévia Relatório de Inadimplência", anexo `20.xlsx`). **Comissões** (PDF): fora do app, decisão
+  (ver "💤 Para reativar" acima). **Inadimplência** também
+  (ver "💰 Inadimplência" acima). **Comissões** (PDF): fora do app, decisão
   do usuário. "Cancelamento saldo em carteira DD.MM.AAAA" (assistente comercial, tabela no corpo) ainda
   sem decisão.
 - Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma

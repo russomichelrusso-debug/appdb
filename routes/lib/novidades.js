@@ -27,6 +27,7 @@ const TIPOS = {
   'classificatorio': { emoji: '🏅', titulo: 'Classificatório atualizado' },
   'objetivos-trimestrais': { emoji: '🎯', titulo: 'Objetivos trimestrais atualizados' },
   'clientes-sem-compra': { emoji: '💤', titulo: 'Clientes sem compra atualizado' },
+  'inadimplencia': { emoji: '💰', titulo: 'Inadimplência atualizada' },
   // e-mails da Cortag por pedido (routes/importacaoEmail.js): cada pedido é
   // um aviso próprio - não junta nem substitui o anterior do mesmo tipo
   'pedido-bloqueado': { emoji: '⛔', titulo: 'Pedido bloqueado', porPedido: true },

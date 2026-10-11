@@ -33,6 +33,7 @@ let nextPushId = 1;
 let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
 let clientesSemCompra = []; // routes/reativacao.js (foto do Relatório de Clientes Sem Compra)
 let reativacaoAdiamentos = []; // routes/reativacao.js ("Já falei"/"Não reativar")
+let titulosInadimplentes = []; // routes/inadimplencia.js
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -59,6 +60,7 @@ function reset() {
   recompraAdiamentos = [];
   clientesSemCompra = [];
   reativacaoAdiamentos = [];
+  titulosInadimplentes = [];
   novidades = [];
   importacoesEmail = [];
   pedidosBloqueados = [];
@@ -569,6 +571,35 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT CODIGO_SKU FROM PRODUTOS WHERE ID = $1')) {
     return { rows: produtos.filter(p => String(p.id) === String(params[0])).map(p => ({ codigo_sku: p.codigo_sku })) };
+  }
+
+  // Inadimplência - routes/inadimplencia.js
+  if (s.includes('/* INADIMPLENCIA:META */')) {
+    const c = configuracoes[params[0]];
+    return { rows: c ? [{ valor: c.valor }] : [] };
+  }
+  if (s.includes('/* INADIMPLENCIA:GRAVAR-META */')) {
+    configuracoes[params[0]] = { valor: JSON.parse(params[1]), atualizado_em: new Date().toISOString() };
+    return { rows: [] };
+  }
+  if (s.includes('/* INADIMPLENCIA:TRAVA */')) return { rows: [] };
+  if (s.includes('/* INADIMPLENCIA:CLIENTES */')) {
+    return { rows: clientes.filter(c => c.codigo_oficial && params[0].includes(String(c.codigo_oficial))).map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
+  }
+  if (s.includes('/* INADIMPLENCIA:LIMPAR */')) { titulosInadimplentes = []; return { rows: [] }; }
+  if (s.includes('/* INADIMPLENCIA:GRAVAR */')) {
+    const [data, tit, parc, cod, ids, nome, cidade, uf, emissao, venc, saldo, liq, terc] = params;
+    tit.forEach((t, i) => titulosInadimplentes.push({
+      titulo: t, parcela: parc[i], codigo_oficial: cod[i], cliente_id: ids[i], cliente_nome: nome[i], cidade: cidade[i], uf: uf[i],
+      emissao: emissao[i], vencimento: venc[i], saldo: saldo[i], valor_liquido: liq[i], cobranca_terceirizada: terc[i], data_relatorio: data,
+    }));
+    return { rows: [] };
+  }
+  if (s.includes('/* INADIMPLENCIA:TITULOS */')) {
+    return { rows: titulosInadimplentes.map(t => {
+      const c = clientes.find(x => x.id === t.cliente_id) || clientes.find(x => String(x.codigo_oficial) === String(t.codigo_oficial));
+      return { ...t, cliente_id: c ? c.id : null, nome: c ? c.nome : t.cliente_nome };
+    }).sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.titulo.localeCompare(b.titulo) || a.parcela.localeCompare(b.parcela)) };
   }
 
   // Para reativar - routes/reativacao.js
