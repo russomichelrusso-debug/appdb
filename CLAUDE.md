@@ -683,12 +683,13 @@ Supabase, sem PR — não é mudança de código.
   Gmail reconhece pelo **assunto** (`CONFIG.porAssunto`) e manda como `ClientesSemCompra_AAAA-MM-DD.xlsx`. Leitura em
   `lerClientesSemCompra` (`importadores.js`, Painel e e-mail); gravação/lista em `routes/reativacao.js` (foto do
   último relatório em `clientes_sem_compra`; relatório mais antigo que o importado é ignorado). Em 02/10/2026: 296
-  clientes, todos já no app pelo código (cliente que faltar é criado; pelo CNPJ ganha o código), 88 de 3–5 meses e 53
+  clientes, todos já no app pelo código (achado pelo CNPJ ganha o código; **não cria cliente** — sem casar por nome
+  criaria duplicado, achado do `revisor-cortag`; importar pelo Painel é só admin), 88 de 3–5 meses e 53
   de 6–12 (bate com o rodapé do relatório); ~105 clientes com código fora dele = mais de 12 meses. Faixas pelas
   **cores do ERP**: 🟡 3–5, 🔴 6–12, 💤 mais de 12 (com código, fora do relatório, última compra conhecida antes do
   período — valor = o que faturou no último ano em que comprou). Meses **recontados pelo mês de hoje** (mesma conta do
   ERP: relatório de 02/10, compra em setembro = 1) e pela **compra mais nova que o app conhece** (entrada pela
-  implantação + pedido do app): quem pede sai da lista na hora. Tela: bloco recolhível **"💤 Para reativar"** na aba
+  implantação sem a série de 7 dígitos + pedido do app): quem pede sai da lista na hora. Tela: bloco recolhível **"💤 Para reativar"** na aba
   Clientes, abaixo de "Perto de mim" (quem comprava mais primeiro, filtro de cidade, Abrir cliente / Ligar / **Já
   falei** 30 dias / **Não reativar** até comprar de novo — `reativacao_adiamentos`, fila offline); **faixa** "🟡 Sem
   comprar há N meses · última compra · valor" no card do cliente (Pedido/Levantamento, `clienteReativar`) e selo em

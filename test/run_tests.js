@@ -2811,6 +2811,8 @@ async function main() {
       pedidosOficiaisItens: [
         // 9604 pediu depois do relatório (carteira, pela implantação): sai da lista
         { nr_pedido: '696041', codigo_sku: '60863', cliente_codigo_oficial: '9604', quantidade: 1, valor: 100, data_implantacao: hojeBr, data_faturamento: null, status: 'carteira' },
+        // 9601: item avulso da série de 7 dígitos não conta como compra
+        { nr_pedido: '1096011', codigo_sku: '60863', cliente_codigo_oficial: '9601', quantidade: 1, valor: 5, data_implantacao: hojeBr, data_faturamento: null, status: 'carteira' },
         // 9605: fora do relatório, última compra há ~20 meses - "mais de 12 meses"
         { nr_pedido: '696051', codigo_sku: '60863', cliente_codigo_oficial: '9605', quantidade: 1, valor: 700, data_implantacao: `${mesISO(20)}-05`, data_faturamento: `${mesISO(20)}-10`, status: 'faturado', nota_fiscal: '9605001' },
         { nr_pedido: '696052', codigo_sku: '60863', cliente_codigo_oficial: '9605', quantidade: 1, valor: 500, data_implantacao: `${mesISO(24)}-05`, data_faturamento: `${mesISO(24)}-10`, status: 'faturado', nota_fiscal: '9605002' },
@@ -2821,12 +2823,11 @@ async function main() {
     assert(res.status === 200 && res.body.relatorio === null && res.body.clientes.length === 0, `reativação: sem relatório importado, lista vazia: ${JSON.stringify(res.body)}`);
 
     res = await enviarArquivo(`ClientesSemCompra_${hojeBr}.xlsx`, buf, CHAVE_EMAIL, { assunto: 'Relatório de Clientes Sem Compra', mensagemId: 'msc1' });
-    const criado = mockDb.__getClientes().find(c => c.codigo_oficial === '9608');
     assert(res.status === 200 && res.body.tipo === 'semcompra' && res.body.resultado.total === 6 && res.body.resultado.amarelo === 3
-      && res.body.resultado.vermelho === 2 && res.body.resultado.criados === 1 && res.body.resultado.codigosNovos === 1
-      && criado && criado.nome === 'LOJA NOVA NO APP' && mockDb.__getClientes().find(c => c.id === 9607).codigo_oficial === '9607'
+      && res.body.resultado.vermelho === 2 && res.body.resultado.semCliente === 1 && res.body.resultado.codigosNovos === 1
+      && !mockDb.__getClientes().some(c => c.codigo_oficial === '9608') && mockDb.__getClientes().find(c => c.id === 9607).codigo_oficial === '9607'
       && mockDb.__getNovidades().some(n => n.tipo === 'clientes-sem-compra' && n.texto === '5 para reativar · 3 de 3 a 5 meses, 2 de 6 a 12'),
-      `reativação: relatório pelo e-mail entra, acha cliente pelo CNPJ, cria o que falta e gera a novidade: ${JSON.stringify(res.body)}`);
+      `reativação: relatório pelo e-mail entra, acha cliente pelo CNPJ, não cria cliente (evita duplicado) e gera a novidade: ${JSON.stringify(res.body)}`);
 
     res = await req('GET', '/api/reativacao');
     {
@@ -2839,7 +2840,7 @@ async function main() {
         && por(9605).fat === 1200 && por(9605).fat_origem === 'ultimo_ano' && por(9605).ultima_compra === `${mesISO(20)}-05`,
         `reativação: lista 3+ meses, tira quem pediu depois, inclui quem saiu do relatório com compra antiga: ${JSON.stringify(lista)}`);
       // amarelo (por valor) -> vermelho -> mais de 12 meses
-      assert(ids.indexOf(9601) < ids.indexOf(9607) && ids.indexOf(9607) < ids.indexOf(9602) && ids.indexOf(9602) < ids.indexOf(9605),
+      assert(ids.length === 4 && ids.indexOf(9601) < ids.indexOf(9607) && ids.indexOf(9607) < ids.indexOf(9602) && ids.indexOf(9602) < ids.indexOf(9605),
         `reativação: ordem por faixa e, dentro dela, quem comprava mais: ${JSON.stringify(ids)}`);
     }
 
@@ -2847,6 +2848,14 @@ async function main() {
     res = await req('POST', '/api/reativacao/importar', { ...Importadores.lerClientesSemCompra(XLSXt, xlsSemCompra(antesBr(90))) });
     assert(res.status === 200 && res.body.ignorado === true && mockDb.__getConfiguracao('clientes_sem_compra_relatorio').data === hojeBr,
       `reativação: relatório mais antigo que o importado não muda nada: ${JSON.stringify(res.body)}`);
+    {
+      // vendedor (não admin) não importa pelo Painel
+      const tokenAdmin = authToken;
+      authToken = tokenOutro;
+      res = await req('POST', '/api/reativacao/importar', { ...lido });
+      authToken = tokenAdmin;
+      assert(res.status === 403, `reativação: só admin importa pelo Painel: ${res.status}`);
+    }
     res = await req('POST', '/api/reativacao/importar', { dataRelatorio: 'ontem', itens: [] });
     assert(res.status === 400, 'reativação: importação sem data/itens responde 400');
 

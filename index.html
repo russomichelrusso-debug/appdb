@@ -11451,7 +11451,7 @@
         if (r && r.ignorado) return r.aviso;
         carregarReativar(true);
         return `${r.total} cliente(s) · relatório de ${formatDateBr(dados.dataRelatorio)} · ${r.amarelo} de 3 a 5 meses e ${r.vermelho} de 6 a 12 meses sem compra`
-          + `${r.criados ? ` · ${r.criados} cliente(s) novo(s)` : ''}.`;
+          + `${r.semCliente ? ` · ${r.semCliente} ainda fora do app (entram quando o relatório oficial trouxer)` : ''}.`;
       }
 
       async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {

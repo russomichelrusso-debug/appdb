@@ -10,7 +10,8 @@
 // "Meses sem compra" é recontado a cada dia pelo mês de hoje (o relatório de
 // 02/10 diz "1" pra quem comprou em setembro - a mesma conta) e pela compra
 // mais nova que o app conhece depois dele (relatório oficial pela data de
-// implantação, carteira + faturado, ou pedido do app) - quem pede sai da
+// implantação, carteira + faturado, sem a série de 7 dígitos de itens
+// avulsos - mesma régua da Recompra - ou pedido do app) - quem pede sai da
 // lista na hora, sem esperar o relatório do mês seguinte.
 //
 // "Já falei" tira o cliente por 30 dias; "Não reativar" (fechou, mudou de
@@ -51,7 +52,11 @@ const RE_DIA = /^\d{4}-\d{2}-\d{2}$/;
 const RE_MES = /^\d{4}-\d{2}$/;
 const soDigitos = (s) => String(s || '').replace(/\D/g, '');
 
+// Só admin (mesma regra da planilha Classificatório): troca a foto de todo
+// mundo e dá código do ERP a cliente achado pelo CNPJ. A importação por e-mail
+// chama a função direto.
 router.post('/importar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar o relatório de clientes sem compra.' });
   const r = await importarClientesSemCompra(req.body || {}, req.usuario);
   res.status(r.status).json(r.json);
 });
@@ -95,8 +100,10 @@ async function importarClientesSemCompra(dados, usuario) {
     }
 
     // cliente pelo código do ERP; senão pelo CNPJ (e o código passa a ser dele,
-    // se ele ainda não tem um); senão é criado - em 10/2026 todos os 296 já
-    // estavam no app pelo código
+    // se ele ainda não tem um). NÃO cria cliente: sem casar por nome (regra do
+    // relatório oficial) criaria duplicado de cliente cadastrado à mão sem
+    // código; quem cria cadastro é o relatório oficial. Em 10/2026 todos os 296
+    // já estavam no app pelo código.
     const clientes = await pool.query(
       `/* reativacao:clientes-import */ SELECT id, codigo_oficial, regexp_replace(coalesce(documento, ''), '\\D', '', 'g') AS doc FROM clientes`);
     const porCodigo = new Map();
@@ -105,7 +112,6 @@ async function importarClientesSemCompra(dados, usuario) {
       if (c.codigo_oficial) porCodigo.set(String(c.codigo_oficial), c);
       if (c.doc && c.doc.length >= 11 && !porDoc.has(c.doc)) porDoc.set(c.doc, c);
     }
-    let criados = 0;
     let codigosNovos = 0;
     for (const v of validos) {
       const existente = porCodigo.get(v.codigo);
@@ -120,18 +126,20 @@ async function importarClientesSemCompra(dados, usuario) {
         codigosNovos++;
         continue;
       }
-      if (peloDoc || !v.nome) { v.clienteId = null; continue; } // CNPJ de outro código: não mistura
-      const novo = await pool.query(
-        `/* reativacao:criar-cliente */
-         INSERT INTO clientes (nome, documento, codigo_oficial) VALUES ($1, $2, $3)
-         ON CONFLICT DO NOTHING RETURNING id`,
-        [v.nome, v.documento, v.codigo]);
-      v.clienteId = novo.rows[0] ? novo.rows[0].id : null;
-      if (v.clienteId) { criados++; porCodigo.set(v.codigo, { id: v.clienteId, codigo_oficial: v.codigo }); }
+      v.clienteId = null; // fica na foto; entra na lista quando o relatório oficial trouxer o cliente
     }
 
     client = await pool.connect();
     await client.query('BEGIN');
+    // Painel e e-mail ao mesmo tempo: um de cada vez, e a data conferida de novo
+    // aqui dentro (senão o mais velho podia gravar por último)
+    await client.query(`/* reativacao:trava */ SELECT pg_advisory_xact_lock(hashtext('reativacao-importar'))`);
+    const naTrava = await client.query(`/* reativacao:meta */ SELECT valor FROM configuracoes WHERE chave = $1`, [CHAVE_RELATORIO]);
+    const dataNaTrava = naTrava.rows[0] && naTrava.rows[0].valor && naTrava.rows[0].valor.data;
+    if (dataNaTrava && dataNaTrava > dataRelatorio) {
+      await client.query('ROLLBACK');
+      return { status: 200, json: { ok: true, ignorado: true, aviso: `Relatório de ${dataRelatorio} é mais antigo que o já importado (${dataNaTrava}) — nada mudou.` } };
+    }
     await client.query('/* reativacao:limpar */ DELETE FROM clientes_sem_compra');
     await client.query(
       `/* reativacao:gravar */
@@ -159,10 +167,11 @@ async function importarClientesSemCompra(dados, usuario) {
 
     const amarelo = validos.filter(v => v.meses >= 3 && v.meses <= 5).length;
     const vermelho = validos.filter(v => v.meses >= 6).length;
-    console.log(`Clientes sem compra (${dataRelatorio}) importado: ${validos.length} cliente(s), ${criados} criado(s), por ${usuario ? usuario.email : '?'}.`);
+    const semCliente = validos.filter(v => !v.clienteId).length;
+    console.log(`Clientes sem compra (${dataRelatorio}) importado: ${validos.length} cliente(s), ${semCliente} fora do app, por ${usuario ? usuario.email : '?'}.`);
     await registrarImportacao(usuario && usuario.id, 'reativacao/importar', validos.length);
     await avisarImportacao('clientes-sem-compra', `${amarelo + vermelho} para reativar · ${amarelo} de 3 a 5 meses, ${vermelho} de 6 a 12`);
-    return { status: 200, json: { ok: true, total: validos.length, amarelo, vermelho, criados, codigosNovos, semCliente: validos.filter(v => !v.clienteId).length } };
+    return { status: 200, json: { ok: true, total: validos.length, amarelo, vermelho, codigosNovos, semCliente } };
   } catch (e) {
     if (client) { try { await client.query('ROLLBACK'); } catch (err) { console.error('Erro no rollback:', err); } }
     console.error(e);
@@ -193,7 +202,7 @@ router.get('/', async (req, res) => {
       pool.query(
         `/* reativacao:ultima-oficial */
          SELECT cliente_codigo_oficial AS codigo, max(COALESCE(data_implantacao, data_faturamento))::text AS ultima
-         FROM pedidos_oficiais_itens GROUP BY 1`),
+         FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6 GROUP BY 1`),
       pool.query(
         `/* reativacao:ultima-app */
          SELECT ped.cliente_id, max(${sqlDiaDoPedido()})::text AS ultima
@@ -286,15 +295,19 @@ router.post('/:id/adiar', async (req, res) => {
     const ate = tipo === 'ja_falei' ? somarDias(desde, ADIAR_DIAS) : null;
     const cliente = await pool.query('/* reativacao:cliente-existe */ SELECT id FROM clientes WHERE id = $1', [req.params.id]);
     if (cliente.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
-    // "Já falei" nunca encurta um "Já falei" mais longo nem desfaz um "Não reativar"
+    // "Já falei" nunca encurta um "Já falei" mais longo nem desfaz um "Não
+    // reativar" do mesmo dia ou de depois (o da fila offline chega atrasado);
+    // depois de um "Não reativar" que já perdeu efeito (o cliente comprou e
+    // voltou pra lista), vale o "Já falei" novo
     const r = await pool.query(
       `/* reativacao:adiar */
        INSERT INTO reativacao_adiamentos (cliente_id, tipo, desde, ate, usuario_id) VALUES ($1, $2, $3::date, $4::date, $5)
        ON CONFLICT (cliente_id) DO UPDATE SET
-         tipo = CASE WHEN reativacao_adiamentos.tipo = 'nao_reativar' AND EXCLUDED.tipo = 'ja_falei' THEN reativacao_adiamentos.tipo ELSE EXCLUDED.tipo END,
-         desde = CASE WHEN reativacao_adiamentos.tipo = 'nao_reativar' AND EXCLUDED.tipo = 'ja_falei' THEN reativacao_adiamentos.desde ELSE EXCLUDED.desde END,
-         ate = CASE WHEN reativacao_adiamentos.tipo = 'nao_reativar' AND EXCLUDED.tipo = 'ja_falei' THEN NULL
+         tipo = CASE WHEN reativacao_adiamentos.tipo = 'nao_reativar' AND EXCLUDED.tipo = 'ja_falei' AND EXCLUDED.desde <= reativacao_adiamentos.desde THEN reativacao_adiamentos.tipo ELSE EXCLUDED.tipo END,
+         desde = CASE WHEN reativacao_adiamentos.tipo = 'nao_reativar' AND EXCLUDED.tipo = 'ja_falei' AND EXCLUDED.desde <= reativacao_adiamentos.desde THEN reativacao_adiamentos.desde ELSE EXCLUDED.desde END,
+         ate = CASE WHEN reativacao_adiamentos.tipo = 'nao_reativar' AND EXCLUDED.tipo = 'ja_falei' AND EXCLUDED.desde <= reativacao_adiamentos.desde THEN NULL
                     WHEN EXCLUDED.tipo = 'nao_reativar' THEN NULL
+                    WHEN reativacao_adiamentos.tipo = 'nao_reativar' THEN EXCLUDED.ate
                     ELSE GREATEST(reativacao_adiamentos.ate, EXCLUDED.ate) END,
          usuario_id = EXCLUDED.usuario_id, criado_em = now()
        RETURNING tipo, ate::text AS ate`,

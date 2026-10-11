@@ -588,12 +588,7 @@ async function query(sql, params = []) {
     if (c) c.codigo_oficial = params[0];
     return { rows: [], rowCount: c ? 1 : 0 };
   }
-  if (s.includes('/* REATIVACAO:CRIAR-CLIENTE */')) {
-    if (clientes.some(c => (params[1] && c.documento === params[1]) || c.codigo_oficial === params[2])) return { rows: [] };
-    const novo = { id: nextId.clientes++, nome: params[0], documento: params[1], codigo_oficial: params[2] };
-    clientes.push(novo);
-    return { rows: [{ id: novo.id }] };
-  }
+  if (s.includes('/* REATIVACAO:TRAVA */')) return { rows: [] };
   if (s.includes('/* REATIVACAO:LIMPAR */')) { clientesSemCompra = []; return { rows: [] }; }
   if (s.includes('/* REATIVACAO:GRAVAR */')) {
     const [data, codigos, ids, meses, mes, fat, grupo, matriz, telefone, cidade, uf, gestor] = params;
@@ -614,7 +609,7 @@ async function query(sql, params = []) {
   }
   if (s.includes('/* REATIVACAO:ULTIMA-OFICIAL */')) {
     const ultima = new Map();
-    for (const it of pedidosOficiaisItens) {
+    for (const it of pedidosOficiaisItens.filter(i => String(i.nr_pedido).length <= 6)) {
       const d = String(it.data_implantacao || it.data_faturamento || '').slice(0, 10);
       if (d && (!ultima.has(it.cliente_codigo_oficial) || d > ultima.get(it.cliente_codigo_oficial))) ultima.set(it.cliente_codigo_oficial, d);
     }
@@ -653,7 +648,7 @@ async function query(sql, params = []) {
       reativacaoAdiamentos.push({ cliente_id: Number(clienteId), tipo, desde, ate, usuario_id: usuarioId });
       return { rows: [{ tipo, ate }] };
     }
-    if (atual.tipo === 'nao_reativar' && tipo === 'ja_falei') { /* mantém */ }
+    if (atual.tipo === 'nao_reativar' && tipo === 'ja_falei' && desde <= atual.desde) { /* mantém */ }
     else if (tipo === 'nao_reativar') Object.assign(atual, { tipo, desde, ate: null });
     else Object.assign(atual, { tipo, desde, ate: atual.ate && atual.ate > ate ? atual.ate : ate });
     atual.usuario_id = usuarioId;
