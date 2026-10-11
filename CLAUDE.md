@@ -739,8 +739,18 @@ Supabase, sem PR — não é mudança de código.
   + `bonusDaCampanhaNoItem`, na menor quantidade que já ganha desconto); campanha de cesta/"pedido todo" fica de
   fora e teto do pedido/% de lançamentos viram condição escrita. Preço Fixo segue `isPrecoFixoParaCanal` (só
   regra `soNoPrecoFixo` vale nele). Imagem 1080×1080 por html2canvas, pronta antes do "Enviar" (o compartilhar
-  só aceita arquivo logo depois do toque). Falta (PR 2): campanhas no início da aba, encarte com vários produtos
-  e "Quem já compra" com envio pro WhatsApp do comprador.
+  só aceita arquivo logo depois do toque).
+  - **Início da aba Produtos** (PR 2): com a busca vazia, as **campanhas ativas** no canal/estado/data do contexto
+    (`campanhasDaAba`; o classificatório não filtra a lista, cada produto mostra o preço do contexto; cesta e
+    "pedido todo" ficam fora) e os **produtos recentes** (`cortagProdutosRecentes_v1`). Tocar abre a campanha:
+    grade com foto e de/por; marcar até 6 → **card** (1) ou **encarte** (2–6, título "BLACK FRIDAY" escuro ou
+    "OFERTAS", mesmo rodapé de contato).
+  - **"Já compraram" com WhatsApp**: comprador com WhatsApp do comprador cadastrado ganha "mandar oferta", que
+    abre a conversa (`wa.me`) com o texto da oferta no **preço DELE** (`comContextoDoCliente`: canal/
+    classificatório pela política, ou o padrão do canal sem classificatório, e UF da ficha de CNPJ; sem prazo,
+    desconto ou preço editado do orçamento aberto). O `/api/clientes/sync` passou a mandar `classificatorio_tipo`
+    pra isso funcionar sem internet. Imagem não vai direto pra um contato (limite do navegador): pra mandar o
+    card, "Enviar card" e escolher o contato no compartilhar.
 
 ## O que já tentamos e não deu certo
 

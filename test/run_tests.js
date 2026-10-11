@@ -225,6 +225,9 @@ async function main() {
     clientes: [{
       id: 9010, nome: 'CLIENTE COM CODIGO OFICIAL', documento: '99988877000922', codigo_oficial: 'COD9010',
       classificatorio_tipo: null, classificatorio_desconto: null, matriz_grupo: null,
+    }, {
+      id: 9011, nome: 'CLIENTE HOME CENTER', documento: '99988877000923', codigo_oficial: 'COD9011',
+      classificatorio_tipo: 'Home Center Master', classificatorio_desconto: 12, matriz_grupo: null,
     }],
   });
   res = await req('GET', '/api/clientes?busca=CLIENTE%20COM%20CODIGO');
@@ -238,6 +241,11 @@ async function main() {
     res.status === 200 && sincronizado && sincronizado.codigo_oficial === 'COD9010',
     'lista offline (/sync) também traz codigo_oficial, pra funcionar sem internet'
   );
+  {
+    const hc = res.body.clientes.find(c => c.id === 9011);
+    assert(hc && hc.classificatorio_tipo === 'Home Center Master' && Number(hc.classificatorio_desconto) === 12,
+      `lista offline (/sync) traz classificatório e % do ERP (preço da oferta pro comprador): ${JSON.stringify(hc)}`);
+  }
   assert(sincronizado.regime_tributario === null, 'cliente sem ficha de CNPJ vai pro /sync com regime desconhecido (null)');
 
   // 5b2) nome do arquivo CSV escolhido pro cliente - grava no servidor pra
