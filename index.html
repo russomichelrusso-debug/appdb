@@ -5104,6 +5104,436 @@
       display: block;
     }
 
+    /* Início da aba Produtos: campanhas ativas, recentes e campanha aberta */
+    .campLinha {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      margin: 8px 0 0;
+      padding: 10px 12px;
+      background: var(--white);
+      color: var(--ink);
+      border: 0.75px solid var(--hairline);
+      border-left: 4px solid var(--red);
+      border-radius: var(--r-md);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .campLinha--bf {
+      background: #1D1D1F;
+      color: #FFFFFF;
+      border-color: #1D1D1F;
+      border-left-color: var(--red);
+    }
+
+    .campThumb {
+      flex: none;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: var(--fill) center / contain no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--gray);
+    }
+
+    .campLinha--bf .campThumb {
+      background-color: #FFFFFF;
+    }
+
+    .campThumb svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .campTexto {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .campTexto b {
+      display: block;
+      font-size: 14.5px;
+      font-weight: 700;
+    }
+
+    .campTexto span {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
+    .campLinha--bf .campTexto span {
+      color: #AEAEB2;
+    }
+
+    .campPct {
+      flex: none;
+      text-align: right;
+      font-size: 20px;
+      font-weight: 800;
+      color: var(--red);
+      white-space: nowrap;
+      line-height: 1;
+    }
+
+    .campPct small {
+      display: block;
+      margin-top: 3px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--gray);
+    }
+
+    #prodInicio {
+      padding: 0 16px 16px;
+    }
+
+    #prodInicio.hidden,
+    #prodCampanha.hidden,
+    #prodTabList.hidden,
+    #campBarra.hidden {
+      display: none;
+    }
+
+    #prodCampanha {
+      padding: 0 16px 16px;
+    }
+
+    .campCabeca {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px 0 4px;
+    }
+
+    .campCabeca b {
+      flex: 1;
+      min-width: 0;
+      font-size: 15px;
+    }
+
+    .campGrade {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .campItem {
+      position: relative;
+      background: var(--white);
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-md);
+      overflow: hidden;
+    }
+
+    .campItem.selecionado {
+      border-color: var(--red);
+      box-shadow: 0 0 0 1.5px var(--red);
+    }
+
+    .campItemAbrir {
+      display: block;
+      width: 100%;
+      padding: 0;
+      background: none;
+      border: none;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .campItemFoto {
+      height: 120px;
+      background: #F2F2F4 center / contain no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8E8E93;
+      font-size: 11px;
+      text-align: center;
+      padding: 8px;
+    }
+
+    .campItemInfo {
+      padding: 8px 10px 10px;
+    }
+
+    .campItemNome {
+      font-size: 12.5px;
+      font-weight: 600;
+      line-height: 1.25;
+      max-height: 31px;
+      overflow: hidden;
+    }
+
+    .campItemCod {
+      font-size: 11px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
+    .campItemDe {
+      font-size: 11.5px;
+      color: var(--gray);
+      text-decoration: line-through;
+      margin-top: 4px;
+    }
+
+    .campItemPor {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--red);
+    }
+
+    .campItemOff {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      padding: 2px 7px;
+      border-radius: 7px;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 12px;
+      font-weight: 800;
+      pointer-events: none;
+    }
+
+    .campMarcar {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .campMarcar span {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: 2px solid #FFFFFF;
+      background: rgba(0, 0, 0, .28);
+      color: #FFFFFF;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 20px;
+      text-align: center;
+    }
+
+    .campItem.selecionado .campMarcar span {
+      background: var(--red);
+    }
+
+    #campBarra {
+      position: sticky;
+      bottom: 0;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 12px -16px 0;
+      padding: 10px 16px 14px;
+      background: var(--white);
+      border-top: 0.75px solid var(--hairline);
+      box-shadow: 0 -6px 20px rgba(0, 0, 0, .06);
+    }
+
+    #campBarra .txt {
+      flex: 1;
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    #campBarra .recompraBtn {
+      flex: none;
+    }
+
+    #campBarra .recompraBtn--principal {
+      background: var(--red);
+      color: var(--on-accent);
+    }
+
+    .whatsComprador {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-top: 10px;
+      min-height: 36px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 999px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .whatsComprador--sem {
+      background: var(--fill);
+      color: var(--gray);
+      cursor: default;
+    }
+
+    /* Encarte (vários produtos numa imagem): 540 px de largura, 2x = 1080 */
+    .encarteOferta {
+      width: 540px;
+      background: #FFFFFF;
+      color: #1D1D1F;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .eoTopo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 22px;
+      background: #1D1D1F;
+      color: #FFFFFF;
+    }
+
+    .eoTopo img {
+      height: 30px;
+    }
+
+    .eoTitulo {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: .5px;
+    }
+
+    .eoTitulo span {
+      color: #FF2D55;
+    }
+
+    .eoSub {
+      font-size: 13px;
+      color: #C7C7CC;
+      margin-top: 2px;
+    }
+
+    .eoGrade {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .eoItem {
+      position: relative;
+      border: 1px solid #E5E5EA;
+      border-radius: 12px;
+      padding: 8px;
+    }
+
+    .eoFoto {
+      height: 130px;
+      border-radius: 8px;
+      background: #F2F2F4 center / contain no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
+      text-align: center;
+      color: #6E6E73;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .eoOff {
+      position: absolute;
+      top: 14px;
+      left: 14px;
+      padding: 3px 7px;
+      border-radius: 6px;
+      background: #CC0935;
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .eoNome {
+      margin-top: 6px;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.25;
+      max-height: 33px;
+      overflow: hidden;
+    }
+
+    .eoCod {
+      font-size: 11px;
+      color: #6E6E73;
+    }
+
+    .eoDe {
+      margin-top: 3px;
+      font-size: 12px;
+      color: #6E6E73;
+      text-decoration: line-through;
+    }
+
+    .eoPor {
+      font-size: 20px;
+      font-weight: 900;
+      color: #CC0935;
+    }
+
+    .eoCond {
+      font-size: 11px;
+      font-weight: 600;
+      color: #B36B00;
+    }
+
+    .encarteOferta--bf {
+      background: #111111;
+      color: #FFFFFF;
+    }
+
+    .encarteOferta--bf .eoTopo {
+      background: #111111;
+      border-bottom: 1px solid #2C2C2E;
+    }
+
+    .encarteOferta--bf .eoItem {
+      border-color: #2C2C2E;
+      background: #1C1C1E;
+    }
+
+    .encarteOferta--bf .eoFoto {
+      background-color: #FFFFFF;
+    }
+
+    .encarteOferta--bf .eoCod,
+    .encarteOferta--bf .eoDe {
+      color: #AEAEB2;
+    }
+
+    .encarteOferta--bf .eoPor {
+      color: #FFFFFF;
+    }
+
+    .encarteOferta--bf .eoCond {
+      color: #FFB547;
+    }
+
+    .encarteOferta--bf .coRodape {
+      background: #111111;
+      border-top: 1px solid #2C2C2E;
+    }
+
     /* Card de oferta (imagem que vai pro cliente): 540 px, html2canvas em 2x
        = 1080 × 1080. Cores fixas, não variam com o tema do vendedor. */
     #cardOfertaTemplate {
@@ -6458,9 +6888,9 @@
         </div>
       </div>
       <div id="prodTabListWrap">
-        <div class="hist-content" id="prodTabList">
-          <div class="lev-empty">Digite pra buscar um produto no catálogo.</div>
-        </div>
+        <div id="prodInicio"></div>
+        <div id="prodCampanha" class="hidden"></div>
+        <div class="hist-content hidden" id="prodTabList"></div>
       </div>
       <div id="prodTabDetail" class="hidden">
         <div class="hist-clientBar">
@@ -6646,7 +7076,7 @@
 
     <div class="minimodal hidden" id="cardProdutoModal">
       <div class="minimodal-card" style="max-height:88vh;overflow-y:auto;">
-        <h3>Card do produto</h3>
+        <h3 id="cardProdutoTitulo">Card do produto</h3>
         <div class="cardPrevia" id="cardProdutoPrevia"></div>
         <label for="cardTelefone">Seu telefone no card</label>
         <input type="tel" id="cardTelefone" placeholder="(44) 99999-0000" autocomplete="tel">
@@ -10792,7 +11222,7 @@
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
           // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
-          if (tab === 'produtos' && prodTabSelected) renderProdutoOferta(prodTabSelected);
+          if (tab === 'produtos') { if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio(); }
           if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
@@ -16609,7 +17039,8 @@
       function searchProdutoTabList(term) {
         const wrap = document.getElementById('prodTabList');
         const t = term.trim().toLowerCase();
-        if (!t) { wrap.innerHTML = '<div class="lev-empty">Digite pra buscar um produto no catálogo.</div>'; return; }
+        atualizarProdutosInicio();
+        if (!t) { wrap.innerHTML = ''; return; }
         const encontrados = DB.products.filter(p => p.c.toLowerCase().includes(t) || p.n.toLowerCase().includes(t)).slice(0, 30);
         wrap.innerHTML = encontrados.length
           ? encontrados.map(p => `
@@ -16635,7 +17066,10 @@
           return;
         }
         content.innerHTML = prodDetailView === 'compradores'
-          ? lista.map(c => `
+          ? lista.map(c => {
+            const local = loadClientesLocais().find(x => String(x.id) === String(c.id));
+            const w = whatsCompradorDoCliente(local);
+            return `
         <div class="histCard">
           <div class="hcName">${escapeHtml(c.nome)}</div>
           <div class="hcCode">${c.documento ? escapeHtml(c.documento) : ''}</div>
@@ -16644,7 +17078,10 @@
             <div class="hcStat">Última compra<b>${formatDateBr(c.ultima_compra)}</b></div>
             ${c.nota_fiscal ? `<div class="hcStat">Nota Fiscal<b>${escapeHtml(String(c.nota_fiscal))}</b></div>` : ''}
           </div>
-        </div>`).join('')
+          ${w ? `<button type="button" class="whatsComprador" data-whats-oferta="${escapeHtml(String(c.id))}">WhatsApp · mandar oferta${w.nome ? ' pra ' + escapeHtml(w.nome) : ''}</button>`
+            : '<span class="whatsComprador whatsComprador--sem">sem WhatsApp do comprador</span>'}
+        </div>`;
+          }).join('')
           : lista.map(l => `
         <div class="histCard">
           <div class="hcName">${escapeHtml(l.nome)}</div>
@@ -16656,6 +17093,11 @@
         </div>`).join('');
       }
       function initProdDetailSeg() {
+        // botão de WhatsApp de cada comprador (lista refeita a cada troca de aba)
+        document.getElementById('prodDetailContent').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-whats-oferta]');
+          if (b) enviarOfertaAoComprador(b.dataset.whatsOferta);
+        });
         const seg = document.getElementById('prodDetailSeg');
         const btns = [...seg.querySelectorAll('button')];
         btns.forEach(b => b.addEventListener('click', () => {
@@ -16666,6 +17108,7 @@
       }
       async function openProdutoDetail(codigo, nome) {
         prodTabSelected = codigo;
+        guardarProdutoRecente(codigo);
         document.getElementById('prodDetailName').textContent = nome;
         document.getElementById('prodTabListWrap').classList.add('hidden');
         document.getElementById('prodTabDetail').classList.remove('hidden');
@@ -16691,6 +17134,7 @@
         prodTabSelected = null;
         document.getElementById('prodTabDetail').classList.add('hidden');
         document.getElementById('prodTabListWrap').classList.remove('hidden');
+        atualizarProdutosInicio();
       }
       function initProdutosTab() {
         document.getElementById('prodTabSearch').addEventListener('input', (e) => {
@@ -16722,7 +17166,7 @@
       const ICONE_CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
       let FOTOS_PRODUTO = {}; // código -> versão (hora da troca, ms)
       const fotoUrlsMemo = new Map(); // "código@versão" -> URL blob: (as mais recentes; ver urlDaFoto)
-      const FOTO_URLS_MAX = 30;
+      const FOTO_URLS_MAX = 80; // a grade da campanha mostra até 40 de uma vez
       const FOTO_DOWNLOAD_PRAZO_MS = 20000;
 
       function gravarFotosLocais() {
@@ -16735,6 +17179,7 @@
           if (r && r.fotos && typeof r.fotos === 'object') { FOTOS_PRODUTO = r.fotos; gravarFotosLocais(); }
         } catch (e) { /* sem internet: fica com a lista guardada */ }
         if (prodTabSelected) renderProdutoOferta(prodTabSelected);
+        else if (!document.getElementById('tabProdutos').classList.contains('hidden')) atualizarProdutosInicio();
         limparFotosAntigasDoAparelho();
         setTimeout(baixarFotosDasCampanhas, 15000);
       }
@@ -17052,11 +17497,21 @@
         }
       }
 
-      // ---- Card de oferta: gera a imagem ao abrir (o compartilhar do celular só
-      // aceita arquivo logo depois de um toque - por isso "Enviar" já tem a imagem pronta) ----
-      let cardProduto = { cod: null, blob: null, previaUrl: null, geracao: 0 };
+      // ---- Card de oferta e encarte: a imagem é gerada ao abrir (o compartilhar
+      // do celular só aceita arquivo logo depois de um toque - por isso "Enviar"
+      // já tem a imagem pronta). Um produto = card 1080×1080; 2 a 6 = encarte. ----
+      const ENCARTE_MAX = 6;
+      let cardProduto = { cods: [], campanha: null, blob: null, previaUrl: null, geracao: 0 };
+      function vendedorDoCard() {
+        let tel = '';
+        try { tel = localStorage.getItem(VENDEDOR_TEL_LS_KEY) || ''; } catch (e) { }
+        return { nome: (state.currentUser && state.currentUser.nome) || '', tel };
+      }
+      function rodapeDoCard(telefone) {
+        const { nome } = vendedorDoCard();
+        return `<div class="coRodape"><span>${nome ? `Fale comigo: <b>${escapeHtml(nome)}</b>` : 'Fale com seu representante Cortag'}</span><b>${escapeHtml(telefone)}</b></div>`;
+      }
       function htmlDoCardOferta(p, of, fotoUrl, telefone) {
-        const nome = (state.currentUser && state.currentUser.nome) || '';
         const selo = of.regra ? (of.blackFriday ? 'BLACK FRIDAY' : 'OFERTA') : '';
         const cond = of.regra ? condicoesDaOferta(of, false) : '';
         return `<div class="cardOferta${of.regra && of.blackFriday ? ' cardOferta--bf' : ''}">
@@ -17071,7 +17526,32 @@
             <div class="coPreco">${of.regra ? `<span class="coDe">de ${brl(of.de)}</span>` : ''}<span class="coPor">${of.regra ? 'por ' : ''}${brl(of.por)}<small> /un.</small></span></div>
             ${cond ? `<div class="coCond">${escapeHtml(cond)}</div>` : ''}
           </div>
-          <div class="coRodape"><span>${nome ? `Fale comigo: <b>${escapeHtml(nome)}</b>` : 'Fale com seu representante Cortag'}</span><b>${escapeHtml(telefone)}</b></div>
+          ${rodapeDoCard(telefone)}
+        </div>`;
+      }
+      // Encarte: título pela campanha de onde saiu (Black Friday = visual escuro);
+      // cada item com o seu de/por e a condição (quantidade mínima) quando houver.
+      function htmlDoEncarte(itens, campanha, telefone) {
+        const bf = itens.some(x => x.of.regra && x.of.blackFriday) || (campanha && /black\s*friday/i.test(campanha.name || ''));
+        const nomeCampanha = campanha ? String(campanha.name || '').replace(/^\s*black\s*friday\s*[-–·:]\s*/i, '') : '';
+        const validades = itens.map(x => x.of.validoAte).filter(Boolean).sort();
+        const sub = [nomeCampanha, validades.length ? `até ${dataCurtaISO(validades[0])}` : ''].filter(Boolean).join(' · ');
+        const celulas = itens.map(({ p, of, fotoUrl }) => `<div class="eoItem">
+            ${fotoUrl ? `<div class="eoFoto" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : '<div class="eoFoto"></div>'}
+            ${of.regra ? `<div class="eoOff">-${of.pct}%</div>` : ''}
+            <div class="eoNome">${escapeHtml(p.n)}</div>
+            <div class="eoCod">Cód. ${escapeHtml(p.c)}</div>
+            ${of.regra ? `<div class="eoDe">de ${brl(of.de)}</div>` : ''}
+            <div class="eoPor">${brl(of.por)}</div>
+            ${of.regra && of.condicoes.length ? `<div class="eoCond">${escapeHtml(of.condicoes.join(' · '))}</div>` : ''}
+          </div>`).join('');
+        return `<div class="encarteOferta${bf ? ' encarteOferta--bf' : ''}">
+          <div class="eoTopo">
+            <div><div class="eoTitulo">${bf ? 'BLACK <span>FRIDAY</span>' : 'OFERTAS'}</div>${sub ? `<div class="eoSub">${escapeHtml(sub)}</div>` : ''}</div>
+            <img src="${LOGO_B64}" alt="Cortag">
+          </div>
+          <div class="eoGrade">${celulas}</div>
+          ${rodapeDoCard(telefone)}
         </div>`;
       }
       function esperarImagens(el) {
@@ -17084,20 +17564,26 @@
       }
       async function gerarCardProduto() {
         const geracao = ++cardProduto.geracao;
-        const p = productByCod(cardProduto.cod);
         const previa = document.getElementById('cardProdutoPrevia');
         const enviar = document.getElementById('cardEnviarBtn');
         enviar.disabled = true;
         cardProduto.blob = null;
-        if (!p) return;
+        const produtos = cardProduto.cods.map(productByCod).filter(Boolean);
+        if (!produtos.length) return;
         if (typeof html2canvas !== 'function') { previa.innerHTML = '<div class="lev-empty">Gerador de imagem não carregou (sem internet?). Tente de novo.</div>'; return; }
         previa.innerHTML = '<div class="lev-empty">Gerando…</div>';
-        const of = ofertaDoProduto(p);
-        const fotoUrl = await urlDaFoto(cardProduto.cod);
-        await carregarImagem(fotoUrl);
+        const itens = [];
+        for (const p of produtos) {
+          const fotoUrl = await urlDaFoto(p.c);
+          await carregarImagem(fotoUrl);
+          itens.push({ p, of: ofertaDoProduto(p), fotoUrl });
+        }
         if (geracao !== cardProduto.geracao) return;
         const tpl = document.getElementById('cardOfertaTemplate');
-        tpl.innerHTML = htmlDoCardOferta(p, of, fotoUrl, document.getElementById('cardTelefone').value.trim());
+        const telefone = document.getElementById('cardTelefone').value.trim();
+        tpl.innerHTML = itens.length === 1
+          ? htmlDoCardOferta(itens[0].p, itens[0].of, itens[0].fotoUrl, telefone)
+          : htmlDoEncarte(itens, cardProduto.campanha, telefone);
         await esperarImagens(tpl);
         try {
           const canvas = await html2canvas(tpl.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
@@ -17106,7 +17592,7 @@
           if (cardProduto.previaUrl) URL.revokeObjectURL(cardProduto.previaUrl);
           cardProduto.blob = blob;
           cardProduto.previaUrl = URL.createObjectURL(blob);
-          previa.innerHTML = `<img src="${escapeHtml(cardProduto.previaUrl)}" alt="Card do produto">`;
+          previa.innerHTML = `<img src="${escapeHtml(cardProduto.previaUrl)}" alt="Imagem da oferta">`;
           enviar.disabled = false;
         } catch (e) {
           console.error(e);
@@ -17115,11 +17601,13 @@
           if (geracao === cardProduto.geracao) tpl.innerHTML = '';
         }
       }
-      function abrirCardProduto(cod) {
-        cardProduto.cod = cod;
-        let tel = '';
-        try { tel = localStorage.getItem(VENDEDOR_TEL_LS_KEY) || ''; } catch (e) { }
-        document.getElementById('cardTelefone').value = tel;
+      // cods: 1 produto (card) ou 2 a 6 (encarte); campanha = regra de onde saiu (título do encarte)
+      function abrirCardProduto(cods, campanha) {
+        cardProduto.cods = (Array.isArray(cods) ? cods : [cods]).slice(0, ENCARTE_MAX);
+        cardProduto.campanha = campanha || null;
+        document.getElementById('cardProdutoTitulo').textContent = cardProduto.cods.length > 1
+          ? `Encarte com ${cardProduto.cods.length} produtos` : 'Card do produto';
+        document.getElementById('cardTelefone').value = vendedorDoCard().tel;
         document.getElementById('cardProdutoModal').classList.remove('hidden');
         gerarCardProduto();
       }
@@ -17129,6 +17617,202 @@
         if (cardProduto.previaUrl) { URL.revokeObjectURL(cardProduto.previaUrl); cardProduto.previaUrl = null; }
         document.getElementById('cardProdutoPrevia').innerHTML = '';
         document.getElementById('cardProdutoModal').classList.add('hidden');
+      }
+
+      // ---- WhatsApp do comprador ("Já compraram" na ficha do produto) ----
+      // O preço mandado é o DELE: canal e classificatório pela política (como
+      // setLevCliente faz no orçamento) e estado da ficha de CNPJ, sem o prazo,
+      // desconto ou preço editado do orçamento aberto. Só troca o state durante
+      // a conta e devolve tudo como estava.
+      function comContextoDoCliente(cliente, fn) {
+        const salvo = {
+          canal: state.canal, channelDiscount: state.channelDiscount, uf: state.uf, promoDiscount: state.promoDiscount,
+          descontoPrazoDesligado: state.descontoPrazoDesligado, priceOverrides: state.priceOverrides, qtyDiscounts: state.qtyDiscounts,
+        };
+        try {
+          const politica = cliente && cliente.classificatorio_tipo ? classificatorioDaPolitica(cliente.classificatorio_tipo) : null;
+          // sem classificatório: o padrão do canal, como o orçamento faria pra esse cliente
+          state.canal = politica ? politica.canal : 'VAREJO';
+          state.channelDiscount = politica ? politica.v : classiPadraoDoCanal(state.canal);
+          const uf = cliente && cliente.endereco ? String(cliente.endereco.uf || '').toUpperCase() : '';
+          if (uf && STATE_BY_UF[uf]) state.uf = uf;
+          state.promoDiscount = 0;
+          state.descontoPrazoDesligado = true;
+          state.priceOverrides = {};
+          state.qtyDiscounts = {};
+          return fn();
+        } finally {
+          Object.assign(state, salvo);
+        }
+      }
+      function textoOfertaWhats(p, of) {
+        const { nome, tel } = vendedorDoCard();
+        const linhas = [`*${p.n}* (cód. ${p.c})`];
+        linhas.push(of.regra ? `de ${brl(of.de)} por *${brl(of.por)}* /un.` : `*${brl(of.por)}* /un.`);
+        const cond = of.regra ? condicoesDaOferta(of, false) : '';
+        if (cond) linhas.push(cond);
+        if (nome || tel) linhas.push('', [nome, tel].filter(Boolean).join(' · '));
+        return linhas.join('\n');
+      }
+      function enviarOfertaAoComprador(clienteId) {
+        const p = productByCod(prodTabSelected);
+        const cliente = loadClientesLocais().find(c => String(c.id) === String(clienteId));
+        const w = whatsCompradorDoCliente(cliente);
+        if (!p || !w) return;
+        const of = comContextoDoCliente(cliente, () => ofertaDoProduto(p));
+        // ainda dentro do toque (senão o navegador bloqueia a janela nova)
+        window.open(urlWhatsComTexto(w.numero, textoOfertaWhats(p, of)), '_blank', 'noopener');
+      }
+
+      // ---- Início da aba Produtos: campanhas ativas e produtos recentes ----
+      const PRODUTOS_RECENTES_LS_KEY = 'cortagProdutosRecentes_v1';
+      const CAMPANHA_POR_PAGINA = 40;
+      let campanhaAberta = null; // id da regra
+      let campanhaSelecionados = [];
+      let campanhaVerTodos = false;
+      function lerProdutosRecentes() {
+        try { const l = JSON.parse(localStorage.getItem(PRODUTOS_RECENTES_LS_KEY)); return Array.isArray(l) ? l.map(String) : []; } catch (e) { return []; }
+      }
+      function guardarProdutoRecente(cod) {
+        const lista = [String(cod)].concat(lerProdutosRecentes().filter(c => c !== String(cod))).slice(0, 8);
+        try { localStorage.setItem(PRODUTOS_RECENTES_LS_KEY, JSON.stringify(lista)); } catch (e) { }
+      }
+      // Produtos da regra, na ordem da lista da campanha.
+      function produtosDaCampanha(r) {
+        const excluirCodigos = listaDaRegra(r.excluirCodigos), excluirFamilias = listaDaRegra(r.excluirFamilias);
+        const lista = r.targetType === 'category'
+          ? DB.products.filter(p => scopeMatchesProduct('category', String(r.targetValue || ''), p))
+          : listaDaRegra(r.targetValue).map(productByCod).filter(Boolean);
+        return lista.filter(p => !produtoNaListaDaRegra(p, excluirCodigos, excluirFamilias));
+      }
+      // Campanhas que valem no canal/estado/data do contexto (o classificatório
+      // não filtra aqui: cada produto mostra o preço do contexto).
+      function campanhasDaAba() {
+        const ctx = contextoCampanhas();
+        return (state.promoRules || [])
+          .filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
+            && regraValeNoContexto(r, { ...ctx, classiTipos: listaDaRegra(r.classificatorios) }))
+          .map(r => ({ regra: r, produtos: produtosDaCampanha(r) }))
+          .filter(x => x.produtos.length);
+      }
+      function pctDaCampanha(r) {
+        const pcts = (r.tiers || []).map(t => Number(t.pct) || 0).filter(x => x > 0);
+        const max = pcts.length ? Math.max(...pcts) : 0;
+        return { texto: `${pcts.length > 1 ? 'até ' : ''}${String(max).replace('.', ',')}%`, faixas: pcts.length > 1 };
+      }
+      function detalheDaCampanha(r, n) {
+        const partes = [`${n} produto${n === 1 ? '' : 's'}`];
+        if (r.soNoPrecoFixo) partes.push('no preço fixo');
+        const classis = listaDaRegra(r.classificatorios);
+        if (classis.length) partes.push(`só ${classis.join('/')}`);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(r.validoAte || '')) partes.push(`até ${dataCurtaISO(r.validoAte)}`);
+        return partes.join(' · ');
+      }
+      // Foto como fundo de um elemento já na tela (grade, miniatura): carrega
+      // depois, sem travar a lista; descarta se a tela mudou.
+      function preencherFotosDe(el) {
+        el.querySelectorAll('[data-foto-cod]').forEach(async (alvo) => {
+          const url = await urlDaFoto(alvo.dataset.fotoCod);
+          if (!url || !alvo.isConnected) return;
+          alvo.style.backgroundImage = `url('${url}')`;
+          alvo.textContent = '';
+        });
+      }
+      function atualizarProdutosInicio() {
+        const busca = document.getElementById('prodTabSearch');
+        const temBusca = !!(busca && busca.value.trim());
+        document.getElementById('prodTabList').classList.toggle('hidden', !temBusca);
+        document.getElementById('prodInicio').classList.toggle('hidden', temBusca || !!campanhaAberta);
+        document.getElementById('prodCampanha').classList.toggle('hidden', temBusca || !campanhaAberta);
+        if (temBusca) return;
+        if (campanhaAberta) renderCampanhaAberta(); else renderProdutosInicio();
+      }
+      function renderProdutosInicio() {
+        const el = document.getElementById('prodInicio');
+        const campanhas = campanhasDaAba();
+        const recentes = lerProdutosRecentes().map(productByCod).filter(Boolean);
+        const linhas = campanhas.map(({ regra, produtos }) => {
+          const bf = /black\s*friday/i.test(regra.name || '');
+          const comFoto = produtos.find(p => codigoDaFoto(p.c));
+          const pct = pctDaCampanha(regra);
+          return `<button type="button" class="campLinha${bf ? ' campLinha--bf' : ''}" data-campanha="${escapeHtml(String(regra.id))}">
+            <span class="campThumb"${comFoto ? ` data-foto-cod="${escapeHtml(comFoto.c)}"` : ''}>${ICONE_CAMERA}</span>
+            <span class="campTexto"><b>${escapeHtml(regra.name || 'Campanha')}</b><span>${escapeHtml(detalheDaCampanha(regra, produtos.length))}</span></span>
+            <span class="campPct">${escapeHtml(pct.texto)}<small>${pct.faixas ? 'por faixa' : 'de desconto'}</small></span>
+          </button>`;
+        }).join('');
+        el.innerHTML = `<div class="clientesSecao" style="margin:14px 0 2px;">Campanhas ativas · ${escapeHtml(NOME_CANAL[state.canal] || state.canal || '')} · ${escapeHtml(state.uf || '')}</div>
+          ${linhas || '<div class="lev-empty">Nenhuma campanha ativa nesse canal e estado.</div>'}
+          ${recentes.length ? `<div class="clientesSecao" style="margin:16px 0 6px;">Recentes</div>
+            <div class="clientesRecentes" style="padding:2px 0 4px;">${recentes.map(p => `<button type="button" class="clienteRecenteChip" data-recente-prod="${escapeHtml(p.c)}">${escapeHtml(p.c)} · ${escapeHtml(p.n)}</button>`).join('')}</div>` : ''}`;
+        el.querySelectorAll('[data-campanha]').forEach(b => b.addEventListener('click', () => {
+          campanhaAberta = b.dataset.campanha;
+          campanhaSelecionados = [];
+          campanhaVerTodos = false;
+          atualizarProdutosInicio();
+          window.scrollTo(0, 0);
+        }));
+        el.querySelectorAll('[data-recente-prod]').forEach(b => b.addEventListener('click', () => {
+          const p = productByCod(b.dataset.recenteProd);
+          if (p) openProdutoDetail(p.c, p.n);
+        }));
+        preencherFotosDe(el);
+      }
+      function renderCampanhaAberta() {
+        const el = document.getElementById('prodCampanha');
+        const achada = campanhasDaAba().find(x => String(x.regra.id) === String(campanhaAberta));
+        if (!achada) { campanhaAberta = null; atualizarProdutosInicio(); return; }
+        const { regra, produtos } = achada;
+        campanhaSelecionados = campanhaSelecionados.filter(c => produtos.some(p => p.c === c));
+        const mostrar = campanhaVerTodos ? produtos : produtos.slice(0, CAMPANHA_POR_PAGINA);
+        const resto = produtos.length - mostrar.length;
+        const itens = mostrar.map(p => {
+          const of = ofertaDoProduto(p);
+          const marcado = campanhaSelecionados.includes(p.c);
+          return `<div class="campItem${marcado ? ' selecionado' : ''}">
+            <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
+              <div class="campItemFoto"${codigoDaFoto(p.c) ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''}>${codigoDaFoto(p.c) ? '' : 'sem foto · tocar pra adicionar'}</div>
+              <div class="campItemInfo">
+                <div class="campItemNome">${escapeHtml(p.n)}</div>
+                <div class="campItemCod">${escapeHtml(p.c)}</div>
+                ${of.regra ? `<div class="campItemDe">${brl(of.de)}</div>` : ''}
+                <div class="campItemPor">${brl(of.por)}</div>
+              </div>
+            </button>
+            ${of.regra ? `<span class="campItemOff">-${of.pct}%</span>` : ''}
+            <button type="button" class="campMarcar" data-marcar-prod="${escapeHtml(p.c)}" aria-pressed="${marcado}" aria-label="Selecionar ${escapeHtml(p.n)}"><span>${marcado ? '✓' : ''}</span></button>
+          </div>`;
+        }).join('');
+        const n = campanhaSelecionados.length;
+        el.innerHTML = `<div class="campCabeca">
+            <button type="button" class="restoreBtn compacto" id="campVoltarBtn">‹ Campanhas</button>
+            <b>${escapeHtml(regra.name || 'Campanha')}</b>
+          </div>
+          <div class="ofertaCtx">${escapeHtml(detalheDaCampanha(regra, produtos.length))} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b> · muda na aba Pedido</div>
+          <div class="ofertaCtx" style="margin-top:4px;">Marque até ${ENCARTE_MAX} produtos pra mandar um encarte; toque no produto pra abrir.</div>
+          <div class="campGrade">${itens}</div>
+          ${resto > 0 ? `<button type="button" class="recompraMais" id="campMaisBtn">Ver mais ${resto}</button>` : ''}
+          <div id="campBarra"${n ? '' : ' class="hidden"'}>
+            <span class="txt"><b>${n}</b> selecionado${n === 1 ? '' : 's'}</span>
+            <button type="button" class="recompraBtn" id="campLimparBtn">Limpar</button>
+            <button type="button" class="recompraBtn recompraBtn--principal" id="campEnviarBtn">${n > 1 ? `Encarte com ${n}` : 'Card'}</button>
+          </div>`;
+        document.getElementById('campVoltarBtn').addEventListener('click', () => { campanhaAberta = null; atualizarProdutosInicio(); });
+        document.getElementById('campMaisBtn')?.addEventListener('click', () => { campanhaVerTodos = true; renderCampanhaAberta(); });
+        document.getElementById('campLimparBtn').addEventListener('click', () => { campanhaSelecionados = []; renderCampanhaAberta(); });
+        document.getElementById('campEnviarBtn').addEventListener('click', () => abrirCardProduto(campanhaSelecionados.slice(), regra));
+        el.querySelectorAll('[data-abrir-prod]').forEach(b => b.addEventListener('click', () => {
+          const p = productByCod(b.dataset.abrirProd);
+          if (p) openProdutoDetail(p.c, p.n);
+        }));
+        el.querySelectorAll('[data-marcar-prod]').forEach(b => b.addEventListener('click', () => {
+          const c = b.dataset.marcarProd;
+          if (campanhaSelecionados.includes(c)) campanhaSelecionados = campanhaSelecionados.filter(x => x !== c);
+          else if (campanhaSelecionados.length >= ENCARTE_MAX) { showToast(`Até ${ENCARTE_MAX} produtos por encarte`); return; }
+          else campanhaSelecionados.push(c);
+          renderCampanhaAberta();
+        }));
+        preencherFotosDe(el);
       }
       function initFotosProduto() {
         document.getElementById('fotoCameraBtn').addEventListener('click', () => document.getElementById('fotoCameraInput').click());
@@ -19323,6 +20007,7 @@
         }
         try { state.promoRules = await loadActivePromoRules(); } catch (e) { }
         if (prodTabSelected) renderProdutoOferta(prodTabSelected); // ficha aberta antes das campanhas chegarem
+        else atualizarProdutosInicio();
         try { state.classiDiscountRules = await loadActiveClassiDiscountRules(); } catch (e) { }
         try { PREVISAO_MAP = await loadActivePrevisao(); } catch (e) { }
         syncClientesLocaisComInsistenciaNoInicio(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app

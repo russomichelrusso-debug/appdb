@@ -64,6 +64,7 @@ router.get('/sync', async (req, res) => {
   try {
     const result = await pool.query(
       `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
+              c.classificatorio_tipo, -- preço do card pro comprador (aba Produtos), sem internet
               c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em, f.telefone AS telefone_ficha,
               CASE
                 WHEN f.dados_brutos->'mei'->>'optante' = 'true' THEN 'mei'

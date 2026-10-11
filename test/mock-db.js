@@ -914,6 +914,7 @@ async function query(sql, params = []) {
     return { rows: clientes.map(c => ({
       id: c.id, nome: c.nome, documento: c.documento, codigo_oficial: c.codigo_oficial || null,
       nome_arquivo: c.nome_arquivo || null, nome_arquivo_em: c.nome_arquivo_em || null,
+      classificatorio_tipo: c.classificatorio_tipo || null,
       whatsapp_comprador: c.whatsapp_comprador || null, whatsapp_comprador_nome: c.whatsapp_comprador_nome || null,
       whatsapp_comprador_em: c.whatsapp_comprador_em || null,
       telefone_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].telefone) || null,
