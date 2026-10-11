@@ -2009,12 +2009,42 @@ async function main() {
     pos = await geo.geocodificarEndereco({ logradouro: 'RUA X', numero: '1', municipio: 'SAO JOAO DEL REI', uf: 'MG' },
       respostaNominatim([{ lat: '-21.13', lon: '-44.26', place_rank: 26, display_name: "Rua X, São João del-Rei, Minas Gerais" }]));
     assert(pos && pos.nivel === 'rua', 'município com hífen no OSM ("del-Rei") bate com o da ficha ("DEL REI")');
-    assert(await geo.geocodificarEndereco(end, respostaNominatim([])) === null
-      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-23.42', lon: '-51.93', place_rank: 16, display_name: 'Maringá, Paraná' }])) === null
-      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-25.4', lon: '-49.2', place_rank: 26, display_name: 'Avenida Colombo, Curitiba, Paraná' }])) === null
-      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '38.7', lon: '-9.1', place_rank: 26, display_name: 'Avenida Colombo, Maringa, Portugal' }])) === null
-      && await geo.geocodificarEndereco({ ...end, logradouro: '' }, respostaNominatim([])) === null,
+    const semEspera = async () => {};
+    assert(await geo.geocodificarEndereco(end, respostaNominatim([]), semEspera) === null
+      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-23.42', lon: '-51.93', place_rank: 16, display_name: 'Maringá, Paraná' }]), semEspera) === null
+      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '-25.4', lon: '-49.2', place_rank: 26, display_name: 'Avenida Colombo, Curitiba, Paraná' }]), semEspera) === null
+      && await geo.geocodificarEndereco(end, respostaNominatim([{ lat: '38.7', lon: '-9.1', place_rank: 26, display_name: 'Avenida Colombo, Maringa, Portugal' }]), semEspera) === null
+      && await geo.geocodificarEndereco({ ...end, logradouro: '' }, respostaNominatim([]), semEspera) === null,
       'sem resultado, só a cidade, outro município ou fora do Brasil = não encontrado');
+    // abreviação da ficha por extenso; letra sozinha no meio é inicial e fica
+    assert(geo.expandirAbreviacoes('AVENIDA PRES CASTELO BRANCO') === 'AVENIDA PRESIDENTE CASTELO BRANCO'
+      && geo.expandirAbreviacoes('AVENIDA GOV. PAULO CRUZ PIMENTEL') === 'AVENIDA GOVERNADOR PAULO CRUZ PIMENTEL'
+      && geo.expandirAbreviacoes('AVENIDA DR DIDIO B BELLO') === 'AVENIDA DOUTOR DIDIO B BELLO'
+      && geo.expandirAbreviacoes('AV BRASIL') === 'AVENIDA BRASIL'
+      && geo.expandirAbreviacoes('RUA NEY BRAGA') === 'RUA NEY BRAGA',
+      'abreviações do endereço da ficha por extenso');
+    const buscas = geo.buscasDoEndereco({ tipo: 'AVENIDA', logradouro: 'PRES CASTELO BRANCO', numero: '2381', municipio: 'IPORA', uf: 'PR' });
+    assert(buscas.length === 4 && buscas[0].street === '2381 AVENIDA PRES CASTELO BRANCO'
+      && buscas[1].street === '2381 AVENIDA PRESIDENTE CASTELO BRANCO' && buscas[2].street === 'AVENIDA PRESIDENTE CASTELO BRANCO'
+      && buscas[3].q === 'AVENIDA PRESIDENTE CASTELO BRANCO, IPORA, PR' && buscas[2].city === 'IPORA' && buscas[2].state === 'PR',
+      `buscas em ordem: como está, por extenso, sem número, busca livre: ${JSON.stringify(buscas)}`);
+    assert(geo.buscasDoEndereco({ tipo: 'RUA', logradouro: 'NEY BRAGA', numero: 'S/N', municipio: 'CAMPO MOURAO' }).length === 2,
+      'sem abreviação e sem número não repete a mesma busca');
+    {
+      const urls = [];
+      let esperas = 0;
+      const fetchSo3a = async (url) => {
+        urls.push(new URL(url));
+        const achou = urls.length === 3;
+        return { ok: true, status: 200, json: async () => (achou
+          ? [{ lat: '-23.6', lon: '-52.0', place_rank: 26, display_name: 'Avenida Presidente Castelo Branco, Iporã, Paraná' }] : []) };
+      };
+      const p3 = await geo.geocodificarEndereco({ tipo: 'AVENIDA', logradouro: 'PRES CASTELO BRANCO', numero: '2381', municipio: 'IPORA', uf: 'PR' },
+        fetchSo3a, async (ms) => { if (ms >= 1000) esperas++; });
+      assert(p3 && p3.nivel === 'rua' && urls.length === 3 && esperas === 2
+        && urls[2].searchParams.get('street') === 'AVENIDA PRESIDENTE CASTELO BRANCO',
+        'não achou como está na ficha: tenta por extenso e sem número, esperando 1 s+ entre as consultas');
+    }
     let erroOrigem = null;
     try { await geo.geocodificarEndereco(end, respostaNominatim([], 429)); } catch (e) { erroOrigem = e; }
     assert(erroOrigem && erroOrigem.origem === true, 'Nominatim no limite (429) é erro da origem, não do cliente');

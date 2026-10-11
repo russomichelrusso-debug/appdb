@@ -660,7 +660,7 @@ Supabase, sem PR — não é mudança de código.
   do Google porque deixa guardar o resultado e usar fora de mapa do Google, sem chave nem cartão. Só
   clientes **sem GPS** com rua e município na ficha; resultado em `cliente_geocodificacao`, que guarda o
   endereço consultado (`sqlChaveEndereco`): ficha com endereço novo consulta de novo e a posição velha
-  some do `/sync`. Aceita só rua ou prédio (`place_rank` ≥ 26) do mesmo município, dentro do Brasil. **No
+  some do `/sync`. Aceita só rua ou prédio (`place_rank` ≥ 26) do mesmo município, dentro do Brasil. Cada cliente tenta até 4 buscas, parando na primeira que acha (1,1 s entre elas): como está na ficha, abreviações por extenso (`expandirAbreviacoes`: PRES, GOV., DR, PION…), sem o número e busca livre "rua, cidade, UF" — na 1ª passada (10–11/10/2026) só a 1ª existia e 64 de 296 não foram achados, quase todos por abreviação ou número. **No
   Brasil o OSM quase nunca tem o número**: a posição costuma ser um ponto da rua (`nivel = 'rua'`), que em
   avenida longa fica a quilômetros da loja — por isso aparece "aprox." e serve pra "quem está perto", não
   pra navegar. O GPS do levantamento sempre vale mais. Linha "Posição das lojas" no card de status do
