@@ -25,6 +25,7 @@ const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio'
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
 const recompraRoutes = require('./routes/recompra');
 const reativacaoRoutes = require('./routes/reativacao');
+const inadimplenciaRoutes = require('./routes/inadimplencia');
 const novidadesRoutes = require('./routes/novidades');
 const importacaoEmailRoutes = require('./routes/importacaoEmail');
 const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
@@ -161,6 +162,7 @@ app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
 app.use('/api/recompra', requireAuth, recompraRoutes);
 app.use('/api/reativacao', requireAuth, reativacaoRoutes);
+app.use('/api/inadimplencia', requireAuth, inadimplenciaRoutes);
 app.use('/api/novidades', requireAuth, novidadesRoutes);
 // /arquivo pela chave do script do Gmail; /status exige login (dentro da rota)
 app.use('/api/importacao-email', rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }), importacaoEmailRoutes);

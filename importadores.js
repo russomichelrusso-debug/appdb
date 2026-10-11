@@ -576,6 +576,90 @@
     };
   }
 
+  // ---- Relatório de Inadimplência (noreply@cortag.com.br, "Previa Relatório de
+  // Inadimplência Período DD/MM/AAAA a DD/MM/AAAA", anexo "20.xlsx") ----
+  // Aba "Resumo": título, "Periodo:" (col. B, "01/01/2026 a 28/08/2026"),
+  // "Representante:", cabeçalho (Título, Parc, Cliente, UF, Cidade, Dt Emissão,
+  // Vencimento, Saldo Título, Vl Líquido, % Comissão, Vr.Abat.Comissão + 2
+  // colunas sem título: uma data interna e "COBR.TERCZ" = em cobrança
+  // terceirizada), uma linha vazia, os títulos em atraso e a linha "Total:".
+  // Cliente vem como "22691 MARISA F. M. LOPES ME" (código do ERP + nome).
+  // "Saldo Título" é o que falta pagar (parcela paga em parte fica menor que o
+  // "Vl Líquido"). Conferido com o relatório real de 31/08/2026 (42 títulos).
+  const COLUNAS_INADIMPLENCIA = {
+    titulo: ['Título', 'Titulo'],
+    parcela: ['Parc', 'Parcela'],
+    cliente: ['Cliente'],
+    uf: ['UF'],
+    cidade: ['Cidade'],
+    emissao: ['Dt Emissão', 'Dt Emissao', 'Emissão'],
+    vencimento: ['Vencimento'],
+    saldo: ['Saldo Título', 'Saldo Titulo', 'Saldo'],
+    valorLiquido: ['Vl Líquido', 'Vl Liquido'],
+  };
+  function dataSerialOuTextoISO(XLSX, valor) {
+    if (typeof valor === 'number' && valor > 0) {
+      const d = XLSX.SSF.parse_date_code(valor);
+      return d && d.y ? `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}` : null;
+    }
+    return paraDataISO(valor);
+  }
+  function ehCabecalhoInadimplencia(linha) {
+    const c = (linha || []).map(normalizarRotuloImport);
+    return c.includes('TITULO') && c.includes('VENCIMENTO') && c.some(x => x.startsWith('SALDO'));
+  }
+  function lerInadimplencia(XLSX, dados) {
+    const wb = XLSX.read(dados, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames.find(n => normalizarRotuloImport(n) === 'RESUMO') || wb.SheetNames[0]];
+    const linhas = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null, raw: true });
+    const headerIdx = linhas.slice(0, 25).findIndex(ehCabecalhoInadimplencia);
+    if (headerIdx === -1) throw new Error('Não encontrei o cabeçalho (Título, Vencimento, Saldo Título) — confira se é o Relatório de Inadimplência.');
+    const cabecalhos = linhas[headerIdx];
+    const idx = {};
+    for (const campo of Object.keys(COLUNAS_INADIMPLENCIA)) idx[campo] = acharIndiceColuna(cabecalhos, COLUNAS_INADIMPLENCIA[campo]);
+    const faltando = ['titulo', 'cliente', 'vencimento', 'saldo'].filter(c => idx[c] === -1);
+    if (faltando.length) {
+      throw new Error(`Relatório de Inadimplência sem a(s) coluna(s) ${faltando.map(c => COLUNAS_INADIMPLENCIA[c][0]).join(', ')}. `
+        + `Colunas nesta planilha: ${cabecalhos.filter(Boolean).join(', ')}.`);
+    }
+    // "Periodo:" | "01/01/2026 a 28/08/2026"
+    const textoTopo = linhas.slice(0, headerIdx).map(l => (l || []).filter(c => c != null).map(String).join(' ')).join(' ');
+    const periodo = /Per[ií]odo:?\s*(\d{2})\/(\d{2})\/(\d{4})\s*a\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(textoTopo);
+    if (!periodo) throw new Error('Não encontrei o período ("Periodo: DD/MM/AAAA a DD/MM/AAAA") no topo da planilha.');
+    const periodoInicio = `${periodo[3]}-${periodo[2]}-${periodo[1]}`;
+    const periodoFim = `${periodo[6]}-${periodo[5]}-${periodo[4]}`;
+    const texto = (r, campo) => {
+      const v = idx[campo] !== -1 ? r[idx[campo]] : null;
+      return v == null || String(v).trim() === '' ? null : String(v).trim();
+    };
+    const titulos = [];
+    const vistos = new Set();
+    for (let i = headerIdx + 1; i < linhas.length; i++) {
+      const r = linhas[i] || [];
+      const titulo = texto(r, 'titulo');
+      const m = /^(\d+)\s+(.+)$/.exec(texto(r, 'cliente') || '');
+      if (!titulo || !m) continue; // linha vazia e "Total:"
+      const parcela = texto(r, 'parcela') || '';
+      const chave = `${titulo}::${parcela}`;
+      if (vistos.has(chave)) continue;
+      vistos.add(chave);
+      const saldo = valorParaNumero(r[idx.saldo]);
+      const vencimento = dataSerialOuTextoISO(XLSX, r[idx.vencimento]);
+      if (saldo == null || !vencimento) continue;
+      titulos.push({
+        titulo, parcela,
+        codigo_oficial: m[1], cliente_nome: m[2].trim(),
+        uf: texto(r, 'uf'), cidade: texto(r, 'cidade'),
+        emissao: idx.emissao !== -1 ? dataSerialOuTextoISO(XLSX, r[idx.emissao]) : null,
+        vencimento, saldo,
+        valor_liquido: idx.valorLiquido !== -1 ? valorParaNumero(r[idx.valorLiquido]) : null,
+        // coluna sem título no fim da linha
+        cobranca_terceirizada: r.some(c => /COBR\.?\s*TERC/i.test(String(c || ''))),
+      });
+    }
+    return { periodoInicio, periodoFim, titulos };
+  }
+
   // Lê a planilha de previsão de estoque (relatório tipo ESCE007) e monta um
   // mapa código → dados de previsão. Aceita qualquer nome de arquivo, só
   // espera as colunas: Item, Qt. Disp., Qt. Carteira, Qt. Compra, Previsão, Saldo.
@@ -609,7 +693,7 @@
   // ---- Reconhecimento do tipo de planilha ----
   // Pelas abas e colunas (as mesmas marcas que cada leitor exige), do mais
   // específico pro mais genérico. Devolve 'precos' | 'relatorio' |
-  // 'semcompra' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
+  // 'semcompra' | 'inadimplencia' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
   function normalizarRotuloImport(v) {
     return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
   }
@@ -622,6 +706,9 @@
     if (abas.includes('CARTEIRA') || abas.includes('FATURAMENTO') || wb.SheetNames.some(n => ehAbaAguardandoPagamento(n) || ehAbaTitulosAvista(n))) return 'relatorio';
 
     const nomeAba = wb.SheetNames.includes('Export') ? 'Export' : wb.SheetNames[0];
+    // Inadimplência: o cabeçalho vem na 10ª linha (o sheetRows acima lê até a
+    // 12ª) da aba "Resumo" - em qualquer aba, como o leitor
+    if (wb.SheetNames.some(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null }).some(ehCabecalhoInadimplencia))) return 'inadimplencia';
     const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nomeAba], { header: 1, defval: null });
     const celulas = new Set(linhas.slice(0, 10).flat().filter(c => c != null).map(normalizarRotuloImport));
     const tem = (rotulo) => celulas.has(rotulo);
@@ -638,7 +725,7 @@
 
   return {
     detectarTipoPlanilha, lerRelatorioOficial, lerClassificatorio, lerPrevisao, dataRelatorioClassificatorio,
-    lerClientesSemCompra, mesAnoISO,
+    lerClientesSemCompra, mesAnoISO, lerInadimplencia,
     interpretarClassificatorio, paraDataISO, valorParaNumero, normalizarNrPedido,
   };
 });

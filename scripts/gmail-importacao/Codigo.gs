@@ -4,8 +4,9 @@
 // a cada 15 minutos: procura os e-mails da Cortag com planilha anexa e manda
 // cada anexo pro servidor do app (POST /api/importacao-email/arquivo), que lê
 // a planilha e publica sozinho - mesmo efeito de importar pelo Painel (⚙).
-// O "Relatório de Clientes Sem Compra" (todo dia 2) vem com o anexo de nome
-// cortado e sem extensão: é reconhecido pelo assunto (CONFIG.porAssunto).
+// O "Relatório de Clientes Sem Compra" (todo dia 2, anexo de nome cortado e sem
+// extensão) e a "Previa Relatório de Inadimplência" (anexo sempre "20.xlsx")
+// são reconhecidos pelo assunto (CONFIG.porAssunto).
 // Os avisos sem planilha (Pedido Bloqueado, Pedido de Venda à Vista) vão só
 // com assunto + texto (POST /api/importacao-email/mensagem).
 // O servidor NÃO recebe acesso à caixa de e-mail: só os anexos e textos que
@@ -59,6 +60,9 @@ const CONFIG = {
   porAssunto: [
     { remetente: 'noreply@cortag.com.br', assunto: /Clientes Sem Compra|Base de Clientes x Compra/i,
       busca: '(subject:"Clientes Sem Compra" OR subject:"Base de Clientes")', nome: 'ClientesSemCompra' }, // todo dia 2
+    // anexo sempre "20.xlsx" (o código do representante): só o assunto diz o que é
+    { remetente: 'noreply@cortag.com.br', assunto: /Relat[óo]rio de Inadimpl/i,
+      busca: 'subject:Inadimplência', nome: 'Inadimplencia' }, // sem dia fixo, 2-4x por mês
   ],
   // e-mails sem planilha: vai o texto (o servidor lê pedido, cliente, motivo/valor)
   mensagens: [

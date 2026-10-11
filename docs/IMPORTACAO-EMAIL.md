@@ -10,8 +10,14 @@ sem abrir o Painel:
 | Itens em falta (previsão de estoque) | noreply@cortag.com.br | `ESCE007-*.xlsx` | ~1 vez por semana |
 | Lista de Preços | vendas@cortag.com | `... LISTA PADRÃO ... SUL SUDESTE ... .xlsx` | quando muda |
 | Clientes sem compra (assunto "Relatório de Clientes Sem Compra" ou "Base de Clientes x Compra") | noreply@cortag.com.br | qualquer (vem cortado e sem extensão: `02_10_2026_RUSSO"'S_..._Clientes_s`) | todo dia 2, de madrugada |
+| Inadimplência (assunto "Previa Relatório de Inadimplência Período ...") | noreply@cortag.com.br | `20.xlsx` (sempre o mesmo nome) | sem dia fixo, 2–4 vezes por mês, às vezes repetido |
 
-O "Clientes sem compra" é o único reconhecido **pelo assunto** (`CONFIG.porAssunto` no script): o
+A **Inadimplência** também é reconhecida pelo assunto (o anexo é sempre `20.xlsx`, o código do
+representante) e vai como `Inadimplencia_AAAA-MM-DD.xlsx`; vira a lista **"💰 Inadimplência"** da aba
+Clientes e a faixa vermelha no card do cliente (`routes/inadimplencia.js`). **Precisa colar o script de
+novo** depois dessa mudança.
+
+O "Clientes sem compra" é reconhecido **pelo assunto** (`CONFIG.porAssunto` no script): o
 anexo vem com o nome cortado e sem `.xlsx`, então o script o manda como
 `ClientesSemCompra_AAAA-MM-DD.xlsx` (data do e-mail) e o servidor confere o tipo pelas colunas
 ("Meses sem Compra", "Mes Ultima Compra"). Vira a lista **"💤 Para reativar"** da aba Clientes
