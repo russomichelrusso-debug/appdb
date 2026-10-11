@@ -725,6 +725,23 @@ Supabase, sem PR — não é mudança de código.
   **um aberto por vez** (`alternarBlocoCliente`). Inadimplência com relatório de mais de 15 dias fica cinza e vai pro
   fim. Perto de mim sem localização mostra "Permitir"/"Tentar de novo" e o passo a passo Android/iPhone.
 
+- **Foto do produto e card de oferta** (10/2026, 1ª parte do pedido "cards do produto com foto e preço
+  promocional pra compartilhar"; mockups escolhidos pelo usuário). Decisões: foto **pelo Painel e pelo
+  vendedor**, **qualquer vendedor** cadastra, card com **de/por**, **logo e contato** do vendedor; card
+  **escuro quando a campanha tem "BLACK FRIDAY" no nome**, claro nas outras; telefone que cada vendedor
+  preenche uma vez (fica no aparelho, `cortagVendedorTelefone_v1`). Fotos em `produto_fotos` (JPEG reduzido
+  no celular, até 600 KB; `routes/produtoFotos.js`): a imagem só sai com login, o app guarda no Cache Storage
+  (`cortag-fotos-v1`, que o `sw.js` não apaga) e baixa em segundo plano as dos produtos em campanha — ficha e
+  card funcionam sem internet; salvar foto precisa de internet. "Usar nas variações" (mesmo `grupoDoProduto`)
+  copia só pra quem ainda não tem foto (o catálogo antigo de fotos saiu por foto trocada entre produtos).
+  Na ficha do produto (aba Produtos): foto, preço de/por no contexto da aba Pedido, "Enviar card",
+  "+ Orçamento". O de/por vem de `ofertaDoProduto` (mesmo motor do orçamento: `clientPrice` + `avaliarCampanhas`
+  + `bonusDaCampanhaNoItem`, na menor quantidade que já ganha desconto); campanha de cesta/"pedido todo" fica de
+  fora e teto do pedido/% de lançamentos viram condição escrita. Preço Fixo segue `isPrecoFixoParaCanal` (só
+  regra `soNoPrecoFixo` vale nele). Imagem 1080×1080 por html2canvas, pronta antes do "Enviar" (o compartilhar
+  só aceita arquivo logo depois do toque). Falta (PR 2): campanhas no início da aba, encarte com vários produtos
+  e "Quem já compra" com envio pro WhatsApp do comprador.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

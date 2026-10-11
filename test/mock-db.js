@@ -34,6 +34,8 @@ let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
 let clientesSemCompra = []; // routes/reativacao.js (foto do Relatório de Clientes Sem Compra)
 let reativacaoAdiamentos = []; // routes/reativacao.js ("Já falei"/"Não reativar")
 let titulosInadimplentes = []; // routes/inadimplencia.js
+let produtoFotos = {}; // codigo_sku -> { imagem, tamanho, versao } (routes/produtoFotos.js)
+let produtoFotosRelogio = 1760000000000;
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -61,6 +63,7 @@ function reset() {
   clientesSemCompra = [];
   reativacaoAdiamentos = [];
   titulosInadimplentes = [];
+  produtoFotos = {};
   novidades = [];
   importacoesEmail = [];
   pedidosBloqueados = [];
@@ -582,6 +585,33 @@ async function query(sql, params = []) {
     configuracoes[params[0]] = { valor: JSON.parse(params[1]), atualizado_em: new Date().toISOString() };
     return { rows: [] };
   }
+  // Fotos dos produtos - routes/produtoFotos.js
+  if (s.includes('/* FOTOS:LISTA */')) {
+    return { rows: Object.entries(produtoFotos).map(([codigo_sku, f]) => ({ codigo_sku, versao: String(f.versao) })) };
+  }
+  if (s.includes('/* FOTOS:VARIACOES */')) {
+    return { rows: produtos.map(p => ({ codigo_sku: p.codigo_sku, nome: p.nome, tem_foto: !!produtoFotos[p.codigo_sku] })) };
+  }
+  if (s.includes('/* FOTOS:IMAGEM */')) {
+    const f = produtoFotos[params[0]];
+    return { rows: f ? [{ imagem: f.imagem }] : [] };
+  }
+  if (s.includes('/* FOTOS:PRODUTOS */')) {
+    return { rows: produtos.filter(p => params[0].includes(p.codigo_sku)).map(p => ({ codigo_sku: p.codigo_sku })) };
+  }
+  if (s.includes('/* FOTOS:GRAVAR */')) {
+    const [sku, imagem, tamanho] = params;
+    produtoFotosRelogio += 1000;
+    produtoFotos[sku] = { imagem, tamanho, versao: produtoFotosRelogio };
+    return { rows: [{ versao: String(produtoFotosRelogio) }] };
+  }
+  if (s.includes('/* FOTOS:VARIACOES_GRAVAR */')) {
+    const [skus, imagem, tamanho] = params;
+    const novas = skus.filter(c => !produtoFotos[c]);
+    novas.forEach(c => { produtoFotos[c] = { imagem, tamanho, versao: produtoFotosRelogio }; });
+    return { rows: novas.map(codigo_sku => ({ codigo_sku })) };
+  }
+  if (s.includes('/* FOTOS:APAGAR */')) { delete produtoFotos[params[0]]; return { rows: [] }; }
   if (s.includes('/* INADIMPLENCIA:TRAVA */')) return { rows: [] };
   if (s.includes('/* INADIMPLENCIA:CLIENTES */')) {
     return { rows: clientes.filter(c => c.codigo_oficial && params[0].includes(String(c.codigo_oficial))).map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial })) };
@@ -2114,6 +2144,7 @@ module.exports = {
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __getRecompraAdiamentos: () => recompraAdiamentos,
   __getNovidades: () => novidades,
+  __getProdutoFotos: () => produtoFotos,
   __getImportacoesEmail: () => importacoesEmail,
   __getPedidosBloqueados: () => pedidosBloqueados,
   __getPrevisaoEstoque: () => previsaoEstoque,

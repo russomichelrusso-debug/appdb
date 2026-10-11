@@ -633,6 +633,18 @@ CREATE TABLE IF NOT EXISTS pedidos_bloqueados (
 CREATE INDEX IF NOT EXISTS idx_pedidos_bloqueados_cliente ON pedidos_bloqueados (cliente_codigo_oficial);
 ALTER TABLE pedidos_bloqueados ENABLE ROW LEVEL SECURITY;
 
+-- Foto do produto pro card de oferta (aba Produtos, routes/produtoFotos.js).
+-- Qualquer vendedor cadastra (decisão do usuário, 10/2026); o app manda JPEG já
+-- reduzido no celular. Variação que recebe a mesma foto ganha uma cópia própria
+-- (trocar a foto de um tamanho não mexe nos outros).
+CREATE TABLE IF NOT EXISTS produto_fotos (
+  codigo_sku TEXT PRIMARY KEY,
+  imagem BYTEA NOT NULL,
+  tamanho INTEGER NOT NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
+);
+
 -- RLS em TODAS as tabelas do schema (verificador do Supabase: rls_disabled_in_public).
 -- Mesmo motivo do bloco de levantamento_rascunhos acima: fecha o acesso pela API
 -- REST pública do Supabase (PostgREST, roles anon/authenticated); sem política =
@@ -662,3 +674,4 @@ ALTER TABLE catalogo_precos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clientes_sem_compra ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE produto_fotos ENABLE ROW LEVEL SECURITY;

@@ -57,6 +57,9 @@ const PAGINAS_OFFLINE = [
 // quando alguém gera o 1º PDF); as outras, na 1ª vez que forem usadas online.
 // Trocar a versão de uma biblioteca no index.html = trocar aqui também.
 const CACHE_LIBS = 'cortag-libs-v1';
+// Fotos dos produtos (card de oferta da aba Produtos): quem grava é a página
+// (index.html, cacheFotosProduto), com o login - o SW só não pode apagar.
+const CACHE_FOTOS = 'cortag-fotos-v1';
 const LIBS_PRECACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
@@ -98,7 +101,7 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys()
-      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION && k !== CACHE_LIBS).map((k) => caches.delete(k))))
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION && k !== CACHE_LIBS && k !== CACHE_FOTOS).map((k) => caches.delete(k))))
       // biblioteca que saiu da lista (versão trocada) sai do cache
       .then(() => caches.open(CACHE_LIBS))
       .then((cache) => cache.keys().then((reqs) => Promise.all(reqs.filter((r) => !LIBS.has(r.url)).map((r) => cache.delete(r)))))
