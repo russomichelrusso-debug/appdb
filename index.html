@@ -15128,8 +15128,20 @@
         const hoje = hojeLocalISO();
         return reativarDados.clientes.map(c => {
           const meses = mesesDesdeMes(c.mes_ultima_compra, hoje);
-          return { ...c, meses, faixa: faixaReativar(meses) };
+          return { ...c, cidade: nomeCidade(c.cidade), cidadeChave: chaveCidade(c.cidade), meses, faixa: faixaReativar(meses) };
         }).filter(c => c.faixa);
+      }
+      // A cidade vem do relatório do ERP ("Maringa") ou, pra quem saiu dele, da
+      // ficha de CNPJ ("MARINGA", às vezes com acento): o filtro junta as duas
+      // pela chave sem acento/maiúscula, e o nome em maiúsculas vira "Maringa".
+      function chaveCidade(cidade) {
+        return String(cidade || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+      }
+      function nomeCidade(cidade) {
+        const t = String(cidade || '').trim();
+        if (!t || t !== t.toUpperCase()) return t || null;
+        return t.toLowerCase().replace(/(^|\s)(\S)/g, (m, esp, letra) => esp + letra.toUpperCase())
+          .replace(/ (Da|De|Do|Das|Dos|E) /g, (m) => m.toLowerCase());
       }
       function reativarVisiveis() {
         const hoje = hojeLocalISO();
@@ -15177,9 +15189,17 @@
         el.classList.toggle('hidden', !!clienteTabSelected || !temRelatorio);
         if (!temRelatorio) { el.innerHTML = ''; return; }
         const visiveis = reativarVisiveis();
-        const cidades = [...new Set(visiveis.map(c => c.cidade).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
-        if (reativarCidade && !cidades.includes(reativarCidade)) reativarCidade = '';
-        const filtrados = reativarCidade ? visiveis.filter(c => c.cidade === reativarCidade) : visiveis;
+        // uma opção por cidade (chave sem acento/maiúscula); o nome mostrado é o
+        // do relatório do ERP quando houver (vem antes de converter maiúsculas)
+        const nomePorChave = new Map();
+        for (const c of visiveis) {
+          if (!c.cidadeChave) continue;
+          const original = (reativarDados.clientes.find(x => x.cliente_id === c.cliente_id) || {}).cidade || '';
+          if (!nomePorChave.has(c.cidadeChave) || original !== original.toUpperCase()) nomePorChave.set(c.cidadeChave, c.cidade);
+        }
+        const cidades = [...nomePorChave].sort((a, b) => a[1].localeCompare(b[1], 'pt-BR'));
+        if (reativarCidade && !nomePorChave.has(reativarCidade)) reativarCidade = '';
+        const filtrados = reativarCidade ? visiveis.filter(c => c.cidadeChave === reativarCidade) : visiveis;
         const aberta = reativarAberto();
         const porFaixa = (f) => filtrados.filter(c => c.faixa === f);
         const resumo = visiveis.length
@@ -15202,7 +15222,7 @@
           corpo = `<p class="recompraHint">Relatório de clientes sem compra do ERP de ${escapeHtml(formatDateBr(rel.data))}, atualizado com os pedidos que entraram depois. Quem comprava mais vem primeiro.</p>`
             + (cidades.length > 1 ? `<select class="reativarFiltro" id="reativarCidade" aria-label="Filtrar por cidade">
                 <option value="">Todas as cidades</option>
-                ${cidades.map(c => `<option value="${escapeHtml(c)}"${c === reativarCidade ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}
+                ${cidades.map(([chave, nome]) => `<option value="${escapeHtml(chave)}"${chave === reativarCidade ? ' selected' : ''}>${escapeHtml(nome)}</option>`).join('')}
               </select>` : '')
             + Object.keys(REATIVAR_FAIXAS).map(secao).join('')
             + (filtrados.length ? '' : '<div class="lev-empty">Nenhum cliente há 3 meses ou mais sem compra.</div>');
