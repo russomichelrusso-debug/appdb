@@ -2905,6 +2905,50 @@ async function main() {
     res = await req('POST', '/api/reativacao/999999/adiar', { tipo: 'ja_falei' });
     assert(res.status === 404, 'reativação: adiar cliente inexistente responde 404');
 
+    // 31b2) Fotos dos produtos (routes/produtoFotos.js): qualquer vendedor salva,
+    // só JPEG até 600 KB, cópia só pras variações sem foto, imagem só com login
+    {
+      mockDb.__seed({ produtos: [
+        { id: 9701, codigo_sku: 'FT1', nome: 'VENTOSA DUPLA ALUMINIO 120 KG', categoria: null },
+        { id: 9702, codigo_sku: 'FT2', nome: 'VENTOSA DUPLA ALUMINIO 150 KG', categoria: null },
+        { id: 9703, codigo_sku: 'FT3', nome: 'VENTOSA DUPLA ALUMINIO 200 KG - COM ESTOJO', categoria: null },
+        { id: 9704, codigo_sku: 'FT4', nome: 'CORTADOR DE PISO BRIC 75', categoria: null },
+      ] });
+      const jpeg = (n, marca) => Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(n, marca)]).toString('base64');
+      let rf = await req('GET', '/api/produto-fotos');
+      assert(rf.status === 200 && rf.body && Object.keys(rf.body.fotos).length === 0, 'fotos: lista começa vazia');
+      rf = await req('PUT', '/api/produto-fotos/FT1', { imagem: Buffer.from('não é imagem nenhuma, só texto comprido o bastante pra passar do mínimo'.repeat(30)).toString('base64') });
+      assert(rf.status === 422, 'fotos: recusa arquivo que não é JPEG (422)');
+      rf = await req('PUT', '/api/produto-fotos/FT1', { imagem: jpeg(700 * 1024, 1) });
+      assert(rf.status === 422 || rf.status === 413, `fotos: recusa foto acima do limite (${rf.status})`);
+      rf = await req('PUT', '/api/produto-fotos/NAO-EXISTE', { imagem: jpeg(4000, 1) });
+      assert(rf.status === 404, 'fotos: produto fora do catálogo responde 404');
+      rf = await req('GET', '/api/produto-fotos/FT2/variacoes');
+      assert(rf.status === 200 && JSON.stringify(rf.body.variacoes.map(v => v.codigo_sku)) === '["FT1","FT3"]',
+        `fotos: variações pelo grupo do nome (sem o cortador): ${JSON.stringify(rf.body)}`);
+      rf = await req('PUT', '/api/produto-fotos/FT3', { imagem: jpeg(3000, 3) });
+      assert(rf.status === 200 && rf.body.versao > 0, 'fotos: salva foto da variação FT3 antes');
+      rf = await req('PUT', '/api/produto-fotos/FT1', { imagem: 'data:image/jpeg;base64,' + jpeg(5000, 7), variacoes: ['FT2', 'FT3', 'FT4', 'FT4-NAO'] });
+      assert(rf.status === 200 && JSON.stringify(rf.body.variacoes) === '["FT2"]',
+        `fotos: copia só pra variação sem foto, do catálogo e do mesmo produto (FT4 é outro): ${JSON.stringify(rf.body)}`);
+      assert(!mockDb.__getProdutoFotos().FT4, 'fotos: o cortador (outro grupo) não ganhou a foto da ventosa');
+      const fotos = mockDb.__getProdutoFotos();
+      assert(fotos.FT3.imagem[4] === 3 && fotos.FT2.imagem[4] === 7, 'fotos: a foto que FT3 já tinha não foi trocada');
+      rf = await req('GET', '/api/produto-fotos');
+      assert(rf.status === 200 && ['FT1', 'FT2', 'FT3'].every(c => rf.body.fotos[c] > 0), `fotos: lista traz a versão de cada foto: ${JSON.stringify(rf.body)}`);
+      rf = await req('GET', '/api/produto-fotos/FT1');
+      assert(rf.status === 200 && /image\/jpeg/.test(rf.headers['content-type']), 'fotos: devolve a imagem como JPEG');
+      const tokenGuardado = authToken;
+      authToken = '';
+      rf = await req('GET', '/api/produto-fotos/FT1');
+      authToken = tokenGuardado;
+      assert(rf.status === 401, 'fotos: imagem só sai com login');
+      rf = await req('DELETE', '/api/produto-fotos/FT1');
+      assert(rf.status === 200 && !mockDb.__getProdutoFotos().FT1 && mockDb.__getProdutoFotos().FT2, 'fotos: tirar a foto de um não mexe nas variações');
+      rf = await req('GET', '/api/produto-fotos/FT1');
+      assert(rf.status === 404, 'fotos: produto sem foto responde 404');
+    }
+
     // 31c) Inadimplência (routes/inadimplencia.js): "Previa Relatório de
     // Inadimplência", aba "Resumo" no layout do arquivo real de 31/08/2026
     {
