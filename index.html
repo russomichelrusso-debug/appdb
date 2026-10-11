@@ -10791,6 +10791,8 @@
           // aqui e não no clique do botão da aba: também se chega na aba Clientes
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
+          // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
+          if (tab === 'produtos' && prodTabSelected) renderProdutoOferta(prodTabSelected);
           if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
@@ -16719,7 +16721,9 @@
       const FOTO_BYTES_MAX = 550 * 1024; // o servidor aceita até 600 KB
       const ICONE_CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
       let FOTOS_PRODUTO = {}; // código -> versão (hora da troca, ms)
-      const fotoUrlsMemo = new Map(); // "código@versão" -> URL blob:
+      const fotoUrlsMemo = new Map(); // "código@versão" -> URL blob: (as mais recentes; ver urlDaFoto)
+      const FOTO_URLS_MAX = 30;
+      const FOTO_DOWNLOAD_PRAZO_MS = 20000;
 
       function gravarFotosLocais() {
         try { localStorage.setItem(FOTOS_LS_KEY, JSON.stringify(FOTOS_PRODUTO)); } catch (e) { }
@@ -16731,7 +16735,19 @@
           if (r && r.fotos && typeof r.fotos === 'object') { FOTOS_PRODUTO = r.fotos; gravarFotosLocais(); }
         } catch (e) { /* sem internet: fica com a lista guardada */ }
         if (prodTabSelected) renderProdutoOferta(prodTabSelected);
+        limparFotosAntigasDoAparelho();
         setTimeout(baixarFotosDasCampanhas, 15000);
+      }
+      // Foto retirada ou trocada (em outro aparelho) sai do Cache Storage.
+      async function limparFotosAntigasDoAparelho() {
+        if (typeof caches === 'undefined') return;
+        try {
+          const cache = await caches.open(CACHE_FOTOS);
+          for (const r of await cache.keys()) {
+            const m = /\/api\/produto-fotos\/([^/?]+)\?v=(\d+)$/.exec(r.url);
+            if (!m || String(FOTOS_PRODUTO[decodeURIComponent(m[1])]) !== m[2]) await cache.delete(r);
+          }
+        } catch (e) { }
       }
       // Promocional (P/P1/P2 + base) usa a foto do código base.
       function codigoDaFoto(cod) {
@@ -16766,7 +16782,9 @@
           } catch (e) { }
         }
         const token = getStoredToken();
-        const resp = await fetch(chave, { headers: token ? { 'Authorization': 'Bearer ' + token } : {} });
+        // sinal fraco: desiste depois de um tempo (a ficha mostra "foto não baixada")
+        const prazo = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(FOTO_DOWNLOAD_PRAZO_MS) : undefined;
+        const resp = await fetch(chave, { headers: token ? { 'Authorization': 'Bearer ' + token } : {}, signal: prazo });
         if (!resp.ok) return null;
         const blob = await resp.blob();
         await guardarFotoNoAparelho(c, versao, blob);
@@ -16776,11 +16794,19 @@
         const c = codigoDaFoto(cod);
         if (!c) return null;
         const memo = `${c}@${FOTOS_PRODUTO[c]}`;
-        if (fotoUrlsMemo.has(memo)) return fotoUrlsMemo.get(memo);
+        if (fotoUrlsMemo.has(memo)) {
+          const url = fotoUrlsMemo.get(memo);
+          fotoUrlsMemo.delete(memo); fotoUrlsMemo.set(memo, url); // usada agora: vai pro fim da fila
+          return url;
+        }
         try {
           const blob = await blobDaFoto(c);
           if (!blob) return null;
           const url = URL.createObjectURL(blob);
+          // versão anterior da mesma foto e as menos usadas liberam a memória
+          for (const k of [...fotoUrlsMemo.keys()]) {
+            if (k.startsWith(c + '@') || fotoUrlsMemo.size >= FOTO_URLS_MAX) { URL.revokeObjectURL(fotoUrlsMemo.get(k)); fotoUrlsMemo.delete(k); }
+          }
           fotoUrlsMemo.set(memo, url);
           return url;
         } catch (e) { return null; } // sem internet e sem cópia no aparelho
@@ -16815,7 +16841,8 @@
       function ofertaDoProduto(p) {
         const fixo = isPrecoFixoParaCanal(p);
         const lp = listPrice(p, state.uf);
-        const de = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, fixo, 0);
+        const manualPct = qtyDiscountFor(p.c); // desconto do item no orçamento, como em cartTotals
+        const de = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, fixo, manualPct);
         const semOferta = { de, por: de, regra: null };
         if (!(de > 0)) return semOferta;
         const ctx = contextoCampanhas();
@@ -16833,7 +16860,7 @@
         const bonus = bonusDaCampanhaNoItem(bonuses, p, fixo);
         if (!bonus) return semOferta;
         const por = bonus.stacks || bonus.soNoPrecoFixo ? de * (1 - bonus.pct / 100)
-          : clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, false, bonus.pct);
+          : clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, false, Math.max(manualPct, bonus.pct));
         if (!(por < de)) return semOferta;
         const regra = regras.find(r => r.name === bonus.ruleName) || null;
         const condicoes = [];
@@ -16915,15 +16942,24 @@
         if (!p) return;
         fotoEdicao = { cod, blob: null, url: null, variacoes: [] };
         document.getElementById('fotoProdutoTitulo').textContent = p.n;
-        document.getElementById('fotoProdutoCodigo').textContent = `Cód. ${p.c} · confira se a foto é deste produto antes de salvar.`;
+        // salvar precisa de internet (a foto não vai pra fila offline: é grande demais
+        // pro localStorage) - avisa antes, pra não fechar a janela e perder a foto
+        document.getElementById('fotoProdutoCodigo').textContent = `Cód. ${p.c} · confira se a foto é deste produto antes de salvar.`
+          + (navigator.onLine === false ? ' Sem internet agora: a foto só é salva com conexão — não feche esta janela.' : '');
         const previa = document.getElementById('fotoProdutoPrevia');
-        const atual = codigoDaFoto(cod) === cod ? await urlDaFoto(cod) : null;
-        previa.innerHTML = atual ? `<img src="${escapeHtml(atual)}" alt="">` : 'Tire uma foto ou escolha uma da galeria.';
+        previa.textContent = 'Tire uma foto ou escolha uma da galeria.';
         document.getElementById('fotoRemoverBtn').classList.toggle('hidden', !FOTOS_PRODUTO[cod]);
         document.getElementById('fotoSalvarBtn').disabled = true;
         const variacoesEl = document.getElementById('fotoProdutoVariacoes');
         variacoesEl.innerHTML = '';
         document.getElementById('fotoProdutoModal').classList.remove('hidden');
+        if (codigoDaFoto(cod) === cod) {
+          urlDaFoto(cod).then(atual => {
+            // fechou, abriu outro produto ou já escolheu foto nova: não mexe
+            if (!atual || !fotoEdicao || fotoEdicao.cod !== cod || fotoEdicao.blob) return;
+            previa.innerHTML = `<img src="${escapeHtml(atual)}" alt="">`;
+          });
+        }
         try {
           const r = await apiFetch(`/api/produto-fotos/${encodeURIComponent(cod)}/variacoes`);
           if (!fotoEdicao || fotoEdicao.cod !== cod) return;
@@ -17007,6 +17043,7 @@
           await apiFetch(`/api/produto-fotos/${encodeURIComponent(cod)}`, { method: 'DELETE' });
           delete FOTOS_PRODUTO[cod];
           gravarFotosLocais();
+          limparFotosAntigasDoAparelho();
           fecharFotoProduto();
           showToast('Foto retirada');
           if (prodTabSelected === cod) renderProdutoOferta(cod);
@@ -17089,6 +17126,8 @@
       function fecharCardProduto() {
         cardProduto.geracao++;
         cardProduto.blob = null;
+        if (cardProduto.previaUrl) { URL.revokeObjectURL(cardProduto.previaUrl); cardProduto.previaUrl = null; }
+        document.getElementById('cardProdutoPrevia').innerHTML = '';
         document.getElementById('cardProdutoModal').classList.add('hidden');
       }
       function initFotosProduto() {
@@ -19283,6 +19322,7 @@
           console.warn('Não foi possível carregar o catálogo de produtos:', e);
         }
         try { state.promoRules = await loadActivePromoRules(); } catch (e) { }
+        if (prodTabSelected) renderProdutoOferta(prodTabSelected); // ficha aberta antes das campanhas chegarem
         try { state.classiDiscountRules = await loadActiveClassiDiscountRules(); } catch (e) { }
         try { PREVISAO_MAP = await loadActivePrevisao(); } catch (e) { }
         syncClientesLocaisComInsistenciaNoInicio(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app

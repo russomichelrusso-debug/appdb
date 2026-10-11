@@ -2928,9 +2928,10 @@ async function main() {
         `fotos: variações pelo grupo do nome (sem o cortador): ${JSON.stringify(rf.body)}`);
       rf = await req('PUT', '/api/produto-fotos/FT3', { imagem: jpeg(3000, 3) });
       assert(rf.status === 200 && rf.body.versao > 0, 'fotos: salva foto da variação FT3 antes');
-      rf = await req('PUT', '/api/produto-fotos/FT1', { imagem: 'data:image/jpeg;base64,' + jpeg(5000, 7), variacoes: ['FT2', 'FT3', 'FT4-NAO'] });
+      rf = await req('PUT', '/api/produto-fotos/FT1', { imagem: 'data:image/jpeg;base64,' + jpeg(5000, 7), variacoes: ['FT2', 'FT3', 'FT4', 'FT4-NAO'] });
       assert(rf.status === 200 && JSON.stringify(rf.body.variacoes) === '["FT2"]',
-        `fotos: copia só pra variação sem foto e do catálogo: ${JSON.stringify(rf.body)}`);
+        `fotos: copia só pra variação sem foto, do catálogo e do mesmo produto (FT4 é outro): ${JSON.stringify(rf.body)}`);
+      assert(!mockDb.__getProdutoFotos().FT4, 'fotos: o cortador (outro grupo) não ganhou a foto da ventosa');
       const fotos = mockDb.__getProdutoFotos();
       assert(fotos.FT3.imagem[4] === 3 && fotos.FT2.imagem[4] === 7, 'fotos: a foto que FT3 já tinha não foi trocada');
       rf = await req('GET', '/api/produto-fotos');

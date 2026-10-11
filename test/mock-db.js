@@ -597,7 +597,7 @@ async function query(sql, params = []) {
     return { rows: f ? [{ imagem: f.imagem }] : [] };
   }
   if (s.includes('/* FOTOS:PRODUTOS */')) {
-    return { rows: produtos.filter(p => params[0].includes(p.codigo_sku)).map(p => ({ codigo_sku: p.codigo_sku })) };
+    return { rows: produtos.filter(p => params[0].includes(p.codigo_sku)).map(p => ({ codigo_sku: p.codigo_sku, nome: p.nome })) };
   }
   if (s.includes('/* FOTOS:GRAVAR */')) {
     const [sku, imagem, tamanho] = params;

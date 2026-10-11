@@ -102,10 +102,14 @@ router.put('/:sku', async (req, res) => {
   const usuarioId = req.usuario ? req.usuario.id : null;
   try {
     const existe = await pool.query(
-      `/* FOTOS:PRODUTOS */ SELECT codigo_sku FROM produtos WHERE codigo_sku = ANY($1::text[])`, [[sku, ...variacoes]]
+      `/* FOTOS:PRODUTOS */ SELECT codigo_sku, nome FROM produtos WHERE codigo_sku = ANY($1::text[])`, [[sku, ...variacoes]]
     );
-    const conhecidos = new Set(existe.rows.map(r => r.codigo_sku));
-    if (!conhecidos.has(sku)) return res.status(404).json({ erro: 'Produto não encontrado no catálogo.' });
+    const doProduto = existe.rows.find(r => r.codigo_sku === sku);
+    if (!doProduto) return res.status(404).json({ erro: 'Produto não encontrado no catálogo.' });
+    // a cópia só vai pra variação do MESMO produto (mesmo grupoDoProduto) - conferido
+    // aqui, não só no app: lista velha no aparelho não espalha a foto por outra linha
+    const grupo = chaveGrupo(doProduto.nome);
+    const doMesmoGrupo = new Set(existe.rows.filter(r => r.codigo_sku !== sku && chaveGrupo(r.nome) === grupo).map(r => r.codigo_sku));
     const r = await pool.query(
       `/* FOTOS:GRAVAR */ INSERT INTO produto_fotos (codigo_sku, imagem, tamanho, atualizado_em, atualizado_por)
        VALUES ($1, $2, $3, now(), $4)
@@ -114,20 +118,22 @@ router.put('/:sku', async (req, res) => {
        RETURNING (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint AS versao`,
       [sku, imagem, imagem.length, usuarioId]
     );
-    // variação que já tem foto (talvez de outro ângulo/tamanho) não é trocada
-    const paraVariacoes = variacoes.filter(c => conhecidos.has(c));
+    // variação que já tem foto (talvez de outro ângulo/tamanho) não é trocada; a
+    // cópia leva a mesma hora da principal (o app usa uma versão só pras duas)
+    const versao = Number(r.rows[0].versao);
+    const paraVariacoes = variacoes.filter(c => doMesmoGrupo.has(c));
     let aplicadas = [];
     if (paraVariacoes.length) {
       const v = await pool.query(
         `/* FOTOS:VARIACOES_GRAVAR */ INSERT INTO produto_fotos (codigo_sku, imagem, tamanho, atualizado_em, atualizado_por)
-         SELECT c, $2, $3, now(), $4 FROM UNNEST($1::text[]) AS c
+         SELECT c, $2, $3, to_timestamp($5::double precision / 1000), $4 FROM UNNEST($1::text[]) AS c
          ON CONFLICT (codigo_sku) DO NOTHING
          RETURNING codigo_sku`,
-        [paraVariacoes, imagem, imagem.length, usuarioId]
+        [paraVariacoes, imagem, imagem.length, usuarioId, versao]
       );
       aplicadas = v.rows.map(x => x.codigo_sku);
     }
-    res.json({ codigo_sku: sku, versao: Number(r.rows[0].versao), variacoes: aplicadas });
+    res.json({ codigo_sku: sku, versao, variacoes: aplicadas });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao salvar a foto do produto.' });
