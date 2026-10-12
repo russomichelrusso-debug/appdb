@@ -801,6 +801,22 @@ Supabase, sem PR — não é mudança de código.
   celular pedir. Busca ao abrir o app, ao entrar na aba, ao limpar o cliente e ao voltar pro app (chegou na
   loja com ele em segundo plano); leitura vale 2 min e some depois de 10. Sem internet funciona (cópia do `/sync`).
 
+- **Registro de visita: "Sua última visita" e "Visitas × compras"** (10/2026, item 3 da localização). Decisões
+  do usuário (entrevista): **visita = levantamento salvo** (pedido e botão manual ficaram de fora), **cada
+  vendedor vê só as dele**, janela de **60 dias**. Uma visita por cliente por dia de Brasília. O levantamento
+  passou a gravar o **usuário logado** (`levantamentos.usuario_id`; `vendedor_id` é o nome digitado no app,
+  "RUSSO"/"Russo"/"Admin", sem ligação com o login): os antigos foram ligados no `schema.sql` pelo nome do
+  vendedor = nome de um único usuário (em 10/2026: 63 → RUSSO/russo2055, 3 → Admin). `GET /api/visitas`
+  (`routes/visitas.js`) manda, por cliente visitado por ele ou que comprou em 12 meses, a última visita, a
+  última compra (entrada do pedido pela implantação, sem a série de 7 dígitos, ou pedido do app — régua da
+  Recompra) e o faturado de fato em 12 meses; as listas saem no app (`cruzarVisitasCompras`, `index.html`)
+  pela data de hoje: **"Visitados e não compraram"** (visita nos últimos 60 dias e nenhuma compra no dia dela
+  ou depois, a mais antiga primeiro) e **"Compram e você não visita há 60+ dias"** (quem fatura mais
+  primeiro). Bloco recolhível na aba Clientes (abaixo de "Perto de mim") e linha "🚶 Sua última visita: há N
+  dias" no card do cliente (Pedido/Levantamento; laranja passados 60 dias). Funciona sem internet
+  (`cortagVisitas_v1`); o levantamento salvo agora, até o da fila offline, já conta
+  (`cortagVisitasLocais_v1`, até o servidor devolver a mesma visita). As duas cópias saem no logout.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -844,8 +860,7 @@ Supabase, sem PR — não é mudança de código.
   2. **"Clientes perto de mim"**: lista por distância (500 m / 2 km / 10 km) com dias sem visita,
      dias sem compra, 💡 sugestões de recompra e objetivo trimestral em risco — pra encaixar uma
      visita no tempo vago. Casa com o painel de "oportunidades do dia" acima.
-  3. **Registro de visita** a partir de `levantamentos` (lat/lng + `data_visita`): "última visita
-     há N dias" e cruzamento visita × compra (visitado que não compra / compra e não é visitado).
+  3. Feito em 10/2026: **registro de visita** (ver "Visitas × compras" acima).
   4. **Rota da semana por cidade** usando o município da ficha de CNPJ (`cliente_cnpj_ficha`,
      sem GPS). O link pra abrir **um** cliente no Waze já existe (botão "Waze" do card, 10/2026);
      falta a rota com vários clientes da cidade.

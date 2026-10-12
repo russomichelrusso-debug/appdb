@@ -61,6 +61,12 @@ async function semear() {
     geocodificacao: {
       101: { endereco: 'AVENIDA|COLOMBO|7266|MARINGA|PR', latitude: -23.4176, longitude: -51.9775, nivel: 'rua', tentativas: 0 },
     },
+    // "Visitas × compras" (aba Clientes) e "Sua última visita" no card: 102
+    // visitado há 20 dias sem compra depois; 101 compra e sem visita há 70 dias
+    levantamentos: [
+      { id: 9001, cliente_id: 101, usuario_id: admin.id, data_visita: `${dia(70)}T15:00:00.000Z` },
+      { id: 9002, cliente_id: 102, usuario_id: admin.id, data_visita: `${dia(20)}T15:00:00.000Z` },
+    ],
     pedidosOficiaisItens: [
       { nr_pedido: '676001', codigo_sku: '60863', cliente_codigo_oficial: '3663', quantidade: 10, valor: 1850,
         data_faturamento: dia(40), data_implantacao: dia(45), status: 'faturado', nota_fiscal: '900001' },
