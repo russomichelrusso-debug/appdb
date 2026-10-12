@@ -437,6 +437,16 @@ Supabase, sem PR — não é mudança de código.
   - Série de 7 dígitos: o ERP **conta** no classificatório na maioria dos casos (8 clientes), mas não
     em 2 (5569, 21650) — não aplicar o filtro `length(nr_pedido) <= 6` no classificatório.
 
+- **Trocar de cliente limpa o que era do anterior** (10/2026, relato do usuário: trocar o cliente deixava o
+  levantamento e o carrinho do anterior na tela — a contagem ia pro cliente novo e "Finalizar" gravava um pedido
+  dele com os produtos do outro). Só no ⇄ de A → B (`deixarClienteAnterior`, `index.html`); os outros caminhos
+  de `setLevCliente` (abrir levantamento/pedido salvo, Montar proposta, 1ª escolha com o orçamento montado)
+  trazem os itens certos de propósito e não mudam. Levantamento igual à cópia salva sai sem perguntar; com
+  contagem não salva, "Descartar e trocar"/"Voltar" (Voltar desiste da troca). Orçamento que é exatamente o
+  pedido salvo de A (itens **e** contexto, `pedidoSalvoDoOrcamento`) sai sem perguntar; senão, decisão do
+  usuário: **pergunta** "Começar vazio"/"Manter itens" (manter = mesmo orçamento pra outra loja, pedido novo);
+  alteração não gravada de pedido salvo pergunta com "Descartar".
+
 - **Pedido faturado em parte** (10/2026, PRs #154 e seguinte): o card do pedido oficial com selo "P"
   lista à parte "Não faturado · em carteira" (com valor) e "Faturado" — antes ficava tudo misturado.
   A chave de `pedidos_oficiais_itens` passou a ser `nr_pedido` + `codigo_sku` + `nota_chave` (nota

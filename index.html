@@ -10805,7 +10805,67 @@
           return;
         }
         if (!cliente) return;
+        const anterior = state.levCliente;
+        if (anterior && String(anterior.id) !== String(cliente.id)
+          && !await deixarClienteAnterior(anterior, cliente)) return;
         setLevCliente(cliente);
+      }
+      // Trocar de cliente (⇄) com o levantamento/orçamento do anterior na tela:
+      // a contagem dele ia ser salva no cliente novo e "Finalizar" gravava um
+      // pedido do cliente novo com os produtos do anterior. Só aqui, no ⇄ - os
+      // outros caminhos que chamam setLevCliente (abrir levantamento/pedido
+      // salvo, Montar proposta, 1ª escolha com o orçamento já montado) trazem
+      // os itens certos de propósito. Devolve false se o vendedor desistir.
+      async function deixarClienteAnterior(anterior, novo) {
+        if (state.survey.length && !levantamentoIgualAoSalvo()) {
+          if (!await askConfirm(`O levantamento de ${anterior.nome} tem contagem não salva. Descartar e trocar pra ${novo.nome}?`,
+            'Descartar e trocar', { perigo: true, cancelarLabel: 'Voltar' })) return false;
+        }
+        let msg = null;
+        if (state.cart.length) {
+          const editandoDoAnterior = pedidoEditando && String(pedidoEditando.clienteId) === String(anterior.id);
+          if (editandoDoAnterior && pedidoSalvoDoOrcamento()) msg = `Pedido de ${anterior.nome} continua salvo em 🧾 Pedidos`;
+          // "Manter itens" (ou tocar fora): mesmo orçamento pra outra loja - o
+          // pedido sai novo, setLevCliente desliga a edição
+          else if (await askConfirm(editandoDoAnterior
+            ? `A alteração do pedido de ${anterior.nome} não foi gravada ("Atualizar pedido"). Descartar e começar vazio pra ${novo.nome}?`
+            : `O orçamento tem ${state.cart.length} produto(s) montado(s) pra ${anterior.nome}. Começar vazio pra ${novo.nome}?`,
+            editandoDoAnterior ? 'Descartar' : 'Começar vazio', { perigo: !!editandoDoAnterior, cancelarLabel: 'Manter itens' })) msg = 'Orçamento esvaziado';
+          if (msg) esvaziarOrcamento();
+        }
+        if (state.survey.length) {
+          state.survey = [];
+          renderLevList();
+        }
+        state.levLoadedId = null;
+        state.levLoadedName = null; // setLevCliente persiste o rascunho e atualiza o "não salvo"
+        if (msg) showToast(msg);
+        return true;
+      }
+      // Contagem na tela igual à cópia salva dela (pode ser descartada sem perder nada)
+      function levantamentoIgualAoSalvo() {
+        const salvo = state.levLoadedId && loadSavedSurveysList().find(s => s.id === state.levLoadedId);
+        if (!salvo || !Array.isArray(salvo.items)) return false;
+        const chave = (lista) => lista.map(i => `${i.cod}|${i.qty || 0}|${i.ped || 0}`).sort().join(';');
+        return chave(salvo.items) === chave(state.survey);
+      }
+      // Pedido salvo (servidor ou fila) que é o que está no orçamento, sem
+      // alteração por gravar (itens e contexto: prazo, descontos, preço editado)
+      // - null se não achar ou se o orçamento mudou depois. Pedido gravado sem
+      // contexto nunca bate (pergunta). Mesma comparação do servidor (routes/pedidos.js).
+      function pedidoSalvoDoOrcamento() {
+        if (!pedidoEditando) return null;
+        const pedido = todosPedidosSalvos().find(p => (pedidoEditando.id != null && String(p.id) === String(pedidoEditando.id))
+          || (!!pedidoEditando.idEnvio && (p.idEnvio || p.id_envio) === pedidoEditando.idEnvio));
+        if (!pedido || !Array.isArray(pedido.itens)) return null;
+        if (!mesmosItens(state.cart.map(i => ({ cod: String(i.cod), qty: Number(i.qty) })), pedido)) return null;
+        const canonico = (v) => (v == null ? 'null'
+          : Array.isArray(v) ? `[${v.map(canonico).join(',')}]`
+          : typeof v === 'object' ? `{${Object.keys(v).sort().filter(k => v[k] !== undefined).map(k => `${JSON.stringify(k)}:${canonico(v[k])}`).join(',')}}`
+          : JSON.stringify(v));
+        let gravado = pedido.contexto;
+        try { if (typeof gravado === 'string') gravado = JSON.parse(gravado); } catch (e) { return null; }
+        return gravado && canonico(gravado) === canonico(contextoDoOrcamento()) ? pedido : null;
       }
       // ---------------- Compartilhar levantamento (texto ou CSV) ----------------
       function buildLevShareText() {
@@ -11297,15 +11357,16 @@
       async function clearCartWithConfirm() {
         if (state.cart.length === 0) { showToast('O orçamento já está vazio'); return; }
         const ok = await askConfirm('Limpar todos os itens do orçamento?', 'Limpar');
-        if (ok) {
-          state.cart = [];
-          state.paymentTerm = '';
-          state.descontoPrazoDesligado = false;
-          const sel = document.getElementById('paymentTermSelect');
-          if (sel) sel.value = '';
-          setPedidoEditando(null); // orçamento vazio = próximo pedido é novo
-          renderCart();
-        }
+        if (ok) esvaziarOrcamento();
+      }
+      function esvaziarOrcamento() {
+        state.cart = [];
+        state.paymentTerm = '';
+        state.descontoPrazoDesligado = false;
+        const sel = document.getElementById('paymentTermSelect');
+        if (sel) sel.value = '';
+        setPedidoEditando(null); // orçamento vazio = próximo pedido é novo
+        renderCart();
       }
 
       // ---------------- Export as image ----------------
