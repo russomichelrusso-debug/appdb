@@ -5237,6 +5237,13 @@
       display: block;
     }
 
+    /* status (9:16): a prévia não passa da altura da tela */
+    .cardPrevia img.cardPrevia--alta {
+      width: auto;
+      max-width: 100%;
+      max-height: 52vh;
+    }
+
     /* Início da aba Produtos: campanhas ativas, recentes e campanha aberta */
     /* Início da aba Produtos: campanhas agrupadas (Trade do mês + campanhas
        especiais, opção "C" escolhida pelo usuário a partir de mockups) */
@@ -5919,42 +5926,299 @@
       font-size: 15px;
     }
 
-    .cardOferta--bf {
-      background: #111111;
+    /* Card da Black Friday - opção "B" (etiqueta de preço) escolhida pelo
+       usuário a partir de mockups: fundo vermelho, foto num círculo branco e
+       etiqueta preta inclinada com o % e o preço. 540 px = 1080 no 2x. O
+       html2canvas não aplica filter (o logo branco é feito num canvas,
+       logoBrancoUrl) nem gradiente listrado: fundo liso. */
+    .cbf {
+      position: relative;
+      width: 540px;
+      height: 540px;
+      overflow: hidden;
+      background: #CC0935;
       color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Arial, sans-serif;
     }
 
-    .cardOferta--bf .coTopo {
-      background: #111111;
-      border-bottom: 1px solid #2C2C2E;
+    .cbf .cbfTopo {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      top: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .cardOferta--bf .coSemFoto {
-      background: #2A2A2C;
-      color: #AEAEB2;
+    .cbf .cbfTopo img {
+      height: 36px;
     }
 
-    .cardOferta--bf .coFoto {
-      border-radius: 14px;
+    .cbf .cbfSelo {
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+
+    .cbf .cbfCirculo {
+      position: absolute;
+      left: 34px;
+      top: 88px;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background-color: #FFFFFF;
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 76%;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+
+    .cbf .cbfSemFoto {
+      position: absolute;
+      left: 34px;
+      top: 88px;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
       background: #FFFFFF;
+      color: #6E6E73;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px;
+      box-sizing: border-box;
+      font-size: 18px;
+      font-weight: 700;
     }
 
-    .cardOferta--bf .coCod,
-    .cardOferta--bf .coDe {
-      color: #AEAEB2;
+    .cbf .cbfTag {
+      position: absolute;
+      right: 20px;
+      top: 160px;
+      width: 252px;
+      box-sizing: border-box;
+      padding: 20px 18px 18px 34px;
+      border-radius: 14px;
+      background: #0E0D0F;
+      transform: rotate(-7deg);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
     }
 
-    .cardOferta--bf .coPor {
-      color: #FFFFFF;
+    .cbf .cbfFuro {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      width: 13px;
+      height: 13px;
+      margin-top: -7px;
+      border-radius: 50%;
+      background: #CC0935;
     }
 
-    .cardOferta--bf .coCond {
+    .cbf .cbfPct {
+      font-size: 50px;
+      font-weight: 900;
+      line-height: 1;
       color: #FFB547;
     }
 
-    .cardOferta--bf .coRodape {
-      background: #111111;
-      border-top: 1px solid #2C2C2E;
+    .cbf .cbfDe {
+      margin-top: 8px;
+      font-size: 16px;
+      color: #A19EA7;
+      text-decoration: line-through;
+    }
+
+    .cbf .cbfPor {
+      margin-top: 2px;
+      font-size: 33px;
+      font-weight: 900;
+      line-height: 1.05;
+      white-space: nowrap;
+    }
+
+    .cbf .cbfPor small {
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .cbf .cbfTexto {
+      position: absolute;
+      left: 24px;
+      right: 24px;
+      bottom: 68px;
+    }
+
+    .cbf .cbfNome {
+      font-size: 23px;
+      font-weight: 900;
+      line-height: 1.15;
+      text-transform: uppercase;
+    }
+
+    .cbf .cbfCod {
+      margin-top: 4px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: .85;
+    }
+
+    .cbf .cbfCond {
+      margin-top: 3px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #FFE1A8;
+    }
+
+    .cbf .coRodape,
+    .cst .coRodape {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: #0E0D0F;
+      border: 0;
+    }
+
+    /* Status do WhatsApp - opção "E" (vermelho cheio): 540×960 = 1080×1920
+       no 2x. O WhatsApp cobre o topo (nome, barra de tempo) e o rodapé (caixa
+       de resposta): nada importante nos ~70 px de cima nem nos ~80 de baixo. */
+    .cst {
+      position: relative;
+      width: 540px;
+      height: 960px;
+      overflow: hidden;
+      background: linear-gradient(180deg, #D90E3D 0%, #CC0935 45%, #9C0628 100%);
+      color: #FFFFFF;
+      font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Arial, sans-serif;
+    }
+
+    .cst .cstTopo {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      top: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .cst .cstTopo img {
+      height: 42px;
+    }
+
+    .cst .cstSelo {
+      font-size: 24px;
+      font-weight: 900;
+      letter-spacing: 1px;
+    }
+
+    .cst .cstGiga {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 150px;
+      text-align: center;
+      font-size: 172px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -6px;
+    }
+
+    .cst .cstGiga small {
+      display: block;
+      margin-top: -4px;
+      font-size: 36px;
+      letter-spacing: 14px;
+    }
+
+    .cst .cstCirculo,
+    .cst .cstSemFoto {
+      position: absolute;
+      left: 130px;
+      top: 372px;
+      width: 280px;
+      height: 280px;
+      border-radius: 50%;
+      background-color: #FFFFFF;
+      box-shadow: 0 14px 40px rgba(0, 0, 0, .35);
+    }
+
+    .cst .cstCirculo {
+      background-repeat: no-repeat;
+      background-position: center;
+      background-size: 74%;
+    }
+
+    .cst .cstSemFoto {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 40px;
+      box-sizing: border-box;
+      color: #6E6E73;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .cst .cstTexto {
+      position: absolute;
+      left: 32px;
+      right: 32px;
+      top: 672px;
+      text-align: center;
+    }
+
+    .cst .cstNome {
+      font-size: 22px;
+      font-weight: 900;
+      line-height: 1.15;
+      text-transform: uppercase;
+    }
+
+    .cst .cstPreco {
+      margin-top: 8px;
+      display: flex;
+      justify-content: center;
+      align-items: baseline;
+      gap: 14px;
+    }
+
+    .cst .cstDe {
+      font-size: 22px;
+      opacity: .8;
+      text-decoration: line-through;
+    }
+
+    .cst .cstPor {
+      font-size: 60px;
+      font-weight: 900;
+      line-height: 1;
+      white-space: nowrap;
+    }
+
+    .cst .cstCond {
+      margin-top: 6px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #FFE1A8;
+    }
+
+    .cst .coRodape {
+      padding: 16px 32px 84px;
+      font-size: 17px;
+    }
+
+    .cardFormato.hidden {
+      display: none;
+    }
+
+    .cardFormato {
+      margin-bottom: 10px;
     }
 
     /* Blocos da aba Clientes (Recompra, Inadimplência, Para reativar,
@@ -7316,6 +7580,10 @@
     <div class="minimodal hidden" id="cardProdutoModal">
       <div class="minimodal-card" style="max-height:88vh;overflow-y:auto;">
         <h3 id="cardProdutoTitulo">Card do produto</h3>
+        <div class="segmented cardFormato hidden" id="cardFormatoSeg" role="group" aria-label="Formato da imagem">
+          <button type="button" data-formato="card" class="active">Conversa</button>
+          <button type="button" data-formato="status">Status</button>
+        </div>
         <div class="cardPrevia" id="cardProdutoPrevia"></div>
         <label for="cardTelefone">Seu telefone no card</label>
         <input type="tel" id="cardTelefone" placeholder="(44) 99999-0000" autocomplete="tel">
@@ -18543,7 +18811,44 @@
       // do celular só aceita arquivo logo depois de um toque - por isso "Enviar"
       // já tem a imagem pronta). Um produto = card 1080×1080; 2 a 6 = encarte. ----
       const ENCARTE_MAX = 6;
-      let cardProduto = { cods: [], campanha: null, blob: null, previaUrl: null, geracao: 0 };
+      let cardProduto = { cods: [], campanha: null, formato: 'card', blob: null, previaUrl: null, geracao: 0 };
+      // Logo em branco pro fundo vermelho (card da Black Friday e status): o
+      // html2canvas ignora filter, então o logo é pintado de branco num canvas
+      // uma vez e guardado.
+      let logoBrancoPromise = null;
+      function logoBrancoUrl() {
+        if (!logoBrancoPromise) {
+          logoBrancoPromise = new Promise((ok) => {
+            const img = new Image();
+            img.onload = () => {
+              try {
+                const c = document.createElement('canvas');
+                c.width = img.naturalWidth; c.height = img.naturalHeight;
+                const g = c.getContext('2d');
+                g.drawImage(img, 0, 0);
+                g.globalCompositeOperation = 'source-in';
+                g.fillStyle = '#FFFFFF';
+                g.fillRect(0, 0, c.width, c.height);
+                ok(c.toDataURL('image/png'));
+              } catch (e) { ok(LOGO_B64); }
+            };
+            img.onerror = () => ok(LOGO_B64);
+            img.src = LOGO_B64;
+          });
+        }
+        return logoBrancoPromise;
+      }
+      // nome muito longo quebraria em 3+ linhas e passaria por cima da foto
+      // (maiúsculas a 23 px: ~29 letras por linha no card de 540 px)
+      function nomeCurtoDoCard(nome) {
+        const t = String(nome || '').trim();
+        return t.length > 50 ? t.slice(0, 48).replace(/\s+\S*$/, '') + '…' : t;
+      }
+      // Conversa | Status: escondido e em "Conversa" até a imagem nova dizer se cabe status
+      function mostrarFormatoDoCard(visivel) {
+        document.getElementById('cardFormatoSeg').classList.toggle('hidden', !visivel);
+        document.querySelectorAll('#cardFormatoSeg button').forEach(b => b.classList.toggle('active', b.dataset.formato === cardProduto.formato));
+      }
       function vendedorDoCard() {
         let tel = '';
         try { tel = localStorage.getItem(VENDEDOR_TEL_LS_KEY) || ''; } catch (e) { }
@@ -18553,10 +18858,46 @@
         const { nome } = vendedorDoCard();
         return `<div class="coRodape"><span>${nome ? `Fale comigo: <b>${escapeHtml(nome)}</b>` : 'Fale com seu representante Cortag'}</span><b>${escapeHtml(telefone)}</b></div>`;
       }
+      // Card da Black Friday (opção "B" dos mockups): etiqueta de preço sobre o vermelho
+      function htmlDoCardBlackFriday(p, of, fotoUrl, telefone, logoBranco) {
+        const cond = condicoesDaOferta(of, false);
+        return `<div class="cbf">
+          <div class="cbfTopo"><img src="${logoBranco}" alt="Cortag"><span class="cbfSelo">BLACK FRIDAY</span></div>
+          ${fotoUrl ? `<div class="cbfCirculo" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : `<div class="cbfSemFoto">${escapeHtml(nomeCurtoDoCard(p.n))}</div>`}
+          <div class="cbfTag">
+            <span class="cbfFuro"></span>
+            <div class="cbfPct">-${of.pct}%</div>
+            <div class="cbfDe">de ${brl(of.de)}</div>
+            <div class="cbfPor">${brl(of.por)}<small> /un.</small></div>
+          </div>
+          <div class="cbfTexto">
+            <div class="cbfNome">${escapeHtml(nomeCurtoDoCard(p.n))}</div>
+            <div class="cbfCod">Cód. ${escapeHtml(p.c)}</div>
+            ${cond ? `<div class="cbfCond">${escapeHtml(cond)}</div>` : ''}
+          </div>
+          ${rodapeDoCard(telefone)}
+        </div>`;
+      }
+      // Status do WhatsApp (opção "E" dos mockups), 9:16: o desconto ocupa a tela.
+      // Só pra produto com oferta (sem % não tem o que destacar).
+      function htmlDoStatusOferta(p, of, fotoUrl, telefone, logoBranco) {
+        const cond = condicoesDaOferta(of, false);
+        return `<div class="cst">
+          <div class="cstTopo"><img src="${logoBranco}" alt="Cortag"><span class="cstSelo">${of.blackFriday ? 'BLACK FRIDAY' : 'OFERTA'}</span></div>
+          <div class="cstGiga">-${of.pct}%<small>OFF</small></div>
+          ${fotoUrl ? `<div class="cstCirculo" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : `<div class="cstSemFoto">${escapeHtml(nomeCurtoDoCard(p.n))}</div>`}
+          <div class="cstTexto">
+            <div class="cstNome">${escapeHtml(nomeCurtoDoCard(p.n))}</div>
+            <div class="cstPreco"><span class="cstDe">${brl(of.de)}</span><span class="cstPor">${brl(of.por)}</span></div>
+            ${cond ? `<div class="cstCond">${escapeHtml(cond)}</div>` : ''}
+          </div>
+          ${rodapeDoCard(telefone)}
+        </div>`;
+      }
       function htmlDoCardOferta(p, of, fotoUrl, telefone) {
         const selo = of.regra ? (of.blackFriday ? 'BLACK FRIDAY' : 'OFERTA') : '';
         const cond = of.regra ? condicoesDaOferta(of, false) : '';
-        return `<div class="cardOferta${of.regra && of.blackFriday ? ' cardOferta--bf' : ''}">
+        return `<div class="cardOferta">
           <div class="coTopo"><img src="${LOGO_B64}" alt="Cortag">${selo ? `<span class="coSelo">${selo}</span>` : ''}</div>
           <div class="coFoto">
             ${fotoUrl ? `<div class="coImg" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : `<div class="coSemFoto">${escapeHtml(p.n)}</div>`}
@@ -18620,12 +18961,19 @@
           await carregarImagem(fotoUrl);
           itens.push({ p, of: ofertaDoProduto(p, cardProduto.campanha || undefined), fotoUrl });
         }
+        const logoBranco = await logoBrancoUrl();
         if (geracao !== cardProduto.geracao) return;
+        // Conversa | Status: só um produto com oferta tem a versão de status
+        const umComOferta = itens.length === 1 && !!itens[0].of.regra;
+        if (!umComOferta) cardProduto.formato = 'card';
+        mostrarFormatoDoCard(umComOferta);
         const tpl = document.getElementById('cardOfertaTemplate');
         const telefone = document.getElementById('cardTelefone').value.trim();
-        tpl.innerHTML = itens.length === 1
-          ? htmlDoCardOferta(itens[0].p, itens[0].of, itens[0].fotoUrl, telefone)
-          : htmlDoEncarte(itens, cardProduto.campanha, telefone);
+        const [um] = itens;
+        tpl.innerHTML = itens.length > 1 ? htmlDoEncarte(itens, cardProduto.campanha, telefone)
+          : cardProduto.formato === 'status' ? htmlDoStatusOferta(um.p, um.of, um.fotoUrl, telefone, logoBranco)
+          : um.of.regra && um.of.blackFriday ? htmlDoCardBlackFriday(um.p, um.of, um.fotoUrl, telefone, logoBranco)
+          : htmlDoCardOferta(um.p, um.of, um.fotoUrl, telefone);
         await esperarImagens(tpl);
         try {
           const canvas = await html2canvas(tpl.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
@@ -18634,7 +18982,7 @@
           if (cardProduto.previaUrl) URL.revokeObjectURL(cardProduto.previaUrl);
           cardProduto.blob = blob;
           cardProduto.previaUrl = URL.createObjectURL(blob);
-          previa.innerHTML = `<img src="${escapeHtml(cardProduto.previaUrl)}" alt="Imagem da oferta">`;
+          previa.innerHTML = `<img src="${escapeHtml(cardProduto.previaUrl)}" alt="Imagem da oferta"${cardProduto.formato === 'status' ? ' class="cardPrevia--alta"' : ''}>`;
           enviar.disabled = false;
         } catch (e) {
           console.error(e);
@@ -18647,6 +18995,8 @@
       function abrirCardProduto(cods, campanha) {
         cardProduto.cods = (Array.isArray(cods) ? cods : [cods]).slice(0, ENCARTE_MAX);
         cardProduto.campanha = campanha || null;
+        cardProduto.formato = 'card';
+        mostrarFormatoDoCard(false);
         document.getElementById('cardProdutoTitulo').textContent = cardProduto.cods.length > 1
           ? `Encarte com ${cardProduto.cods.length} produtos` : 'Card do produto';
         document.getElementById('cardTelefone').value = vendedorDoCard().tel;
@@ -18965,7 +19315,14 @@
         document.getElementById('cardFecharBtn').addEventListener('click', fecharCardProduto);
         document.getElementById('cardEnviarBtn').addEventListener('click', () => {
           if (!cardProduto.blob) return;
-          shareOrDownloadBlob(cardProduto.blob, `oferta-cortag-${cardProduto.cod}.jpg`, 'Oferta Cortag', 'Imagem salva/baixada');
+          const nomeArq = `oferta-cortag-${cardProduto.cods.length > 1 ? 'encarte' : cardProduto.cods[0]}${cardProduto.formato === 'status' ? '-status' : ''}.jpg`;
+          shareOrDownloadBlob(cardProduto.blob, nomeArq, 'Oferta Cortag', 'Imagem salva/baixada');
+        });
+        document.getElementById('cardFormatoSeg').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-formato]');
+          if (!b || b.dataset.formato === cardProduto.formato) return;
+          cardProduto.formato = b.dataset.formato;
+          gerarCardProduto();
         });
         let telDebounce;
         document.getElementById('cardTelefone').addEventListener('input', (e) => {

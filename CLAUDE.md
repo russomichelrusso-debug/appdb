@@ -789,6 +789,16 @@ Supabase, sem PR — não é mudança de código.
     desconto ou preço editado do orçamento aberto). O `/api/clientes/sync` passou a mandar `classificatorio_tipo`
     pra isso funcionar sem internet. Imagem não vai direto pra um contato (limite do navegador): pra mandar o
     card, "Enviar card" e escolher o contato no compartilhar.
+  - **Card da Black Friday e status do WhatsApp** (10/2026, opções "B" e "E" escolhidas pelo usuário entre 5
+    mockups): produto com oferta de campanha **Black Friday** sai no modelo **"Etiqueta de preço"** (`htmlDoCardBlackFriday`:
+    fundo vermelho, foto num círculo branco, etiqueta preta inclinada com % e de/por); as outras ofertas continuam no
+    card claro de antes. A janela do card ganhou **"Conversa | Status"** (só com 1 produto com oferta): Status gera
+    **1080×1920** no modelo **"Vermelho cheio"** (`htmlDoStatusOferta`: "-N% OFF" gigante, foto em círculo, de/por),
+    sem nada importante nos ~70 px de cima nem nos ~80 de baixo (o WhatsApp cobre com o nome e a caixa de resposta).
+    Limites do html2canvas: **não aplica `filter`** (o logo branco sai de um canvas, `logoBrancoUrl`) nem gradiente
+    listrado (fundo liso); a fonte é a do sistema em peso 900 (a Archivo Black do mockup não está no app). Nome com
+    mais de 50 letras é cortado com "…" (`nomeCurtoDoCard`). O rodapé usa o nome do usuário logado: a conta "Admin"
+    sai "Fale comigo: Admin".
 
 - **"Você está na LOJA X?" — cliente sugerido pela proximidade** (10/2026, item 1 da localização): com o
   card do cliente vazio no Pedido/Levantamento, o app pega o GPS e sugere a loja onde o vendedor está
