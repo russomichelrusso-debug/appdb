@@ -151,7 +151,7 @@
     html[data-theme="dark"] input,
     html[data-theme="dark"] select,
     html[data-theme="dark"] textarea {
-      background: var(--white);
+      background-color: var(--white);
       color: var(--ink);
       border-color: var(--hairline);
     }
@@ -6786,7 +6786,7 @@
           </div>
           <div class="field field--narrow">
             <label for="canalSelect" style="font-size:11px;color:var(--gray);">Canal</label>
-            <select id="canalSelect" style="font-size:13px;padding:6px 8px;">
+            <select id="canalSelect" style="font-size:13px;padding:12px 20px 12px 8px;background-position:right 7px center;">
               <option value="VAREJO" selected>Varejo</option>
               <option value="ATACADO">Atacado</option>
               <option value="E-COMMERCE">E-commerce</option>
@@ -6818,7 +6818,7 @@
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="searchInput" placeholder="Código de barras, código ou nome do produto"
+          <input type="text" id="searchInput" placeholder="Código ou nome do produto"
             autocomplete="off">
           <div class="searchBoxActions">
             <button type="button" class="camBtn" id="scanBtnSearch" aria-label="Ler código de barras pela câmera">
@@ -6936,12 +6936,11 @@
       <div class="lev-stickyTopo">
       <div class="lev-inputWrap">
         <div class="searchBox searchBox--actions2">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-            stroke-linejoin="round">
-            <rect x="3" y="3" width="18" height="18" rx="1" />
-            <path d="M7 3v18M11 3v18M16 3v6M16 15v6" />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="levInput" placeholder="Escaneie o código, ou digite código/nome" autocomplete="off">
+          <input type="text" id="levInput" placeholder="Escaneie ou busque o produto" autocomplete="off">
           <div class="searchBoxActions">
             <button type="button" class="camBtn" id="scanBtnLev" aria-label="Ler código de barras pela câmera">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
