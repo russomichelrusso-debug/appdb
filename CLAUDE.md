@@ -817,6 +817,16 @@ Supabase, sem PR — não é mudança de código.
   (`cortagVisitas_v1`); o levantamento salvo agora, até o da fila offline, já conta
   (`cortagVisitasLocais_v1`, até o servidor devolver a mesma visita). As duas cópias saem no logout.
 
+- **"🗺 Rota por cidade"** (10/2026, item 4 da localização). Decisões do usuário: **bloco próprio** na aba Clientes
+  (abaixo de "Perto de mim"), lojas **prioritárias já marcadas**, **só monta e abre** (nada guardado por dia da
+  semana). Escolhe a cidade (município + UF da ficha de CNPJ, que vem no `/sync` — funciona sem internet; cliente
+  sem ficha fica de fora; em 10/2026 Maringá tinha 23, Umuarama 19) e vêm marcadas até 10 prioritárias (pontos:
+  recompra atrasada 3 / da semana 2, comprou no ano e sem sua visita há 60+ dias 2, para reativar 1; empate por
+  faturado em 12 meses). A marcação automática vale até o vendedor mexer (as listas chegam do servidor depois da 1ª
+  tela); trocar de cidade volta pra automática. "Montar rota no Google Maps" reaproveita o de "Perto de mim"
+  (`ordenarParadas`, `destinoDaParada`, sai da posição atual): ordem pela posição da loja (GPS ou aproximada),
+  loja sem posição no fim, cada parada pelo endereço por extenso quando não há GPS (`montarRotaCidade`, `index.html`).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -861,9 +871,7 @@ Supabase, sem PR — não é mudança de código.
      dias sem compra, 💡 sugestões de recompra e objetivo trimestral em risco — pra encaixar uma
      visita no tempo vago. Casa com o painel de "oportunidades do dia" acima.
   3. Feito em 10/2026: **registro de visita** (ver "Visitas × compras" acima).
-  4. **Rota da semana por cidade** usando o município da ficha de CNPJ (`cliente_cnpj_ficha`,
-     sem GPS). O link pra abrir **um** cliente no Waze já existe (botão "Waze" do card, 10/2026);
-     falta a rota com vários clientes da cidade.
+  4. Feito em 10/2026: **rota por cidade** (ver "🗺 Rota por cidade" acima).
   5. **Estado do preço pela UF do cliente** (ficha de CNPJ) em vez do GPS do vendedor — o botão
      "usar GPS" pega a UF de onde o vendedor está, que erra quando ele atende cliente de outro
      estado.

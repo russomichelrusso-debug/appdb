@@ -7140,6 +7140,7 @@
         <div class="recompra hidden" id="reativarWrap"></div>
         <div class="recompra hidden" id="classifAlertasWrap"></div>
         <div class="recompra hidden" id="pertoWrap"></div>
+        <div class="recompra hidden" id="rotaWrap"></div>
         <div class="recompra hidden" id="visitasWrap"></div>
       </div>
       <div id="clienteTabListWrap">
@@ -11608,7 +11609,7 @@
           // "Recompra da semana" ficava escondido nesse caminho
           // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
           if (tab === 'produtos') { if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio(); }
-          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); }
+          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -13410,6 +13411,7 @@
             podarNomesArquivoPendentes(result.clientes);
             podarWhatsPendentes(result.clientes);
             if (pertoAberto()) renderPerto();
+            renderRota();
             buscarClienteProximo(); // 1ª cópia de clientes chegou depois da leitura do GPS
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
             if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); atualizarWhatsClienteBar('lev', state.levCliente); atualizarWhatsClienteBar('precos', state.levCliente); }
@@ -16112,6 +16114,7 @@
         dinheiro: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/>',
         reativar: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
         classificatorio: '<path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
+        rota: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/>',
         visita: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/>',
       };
       function cabecalhoBloco({ id, aberta, icone, titulo, resumo, numero, rotulo, acao }) {
@@ -16127,7 +16130,7 @@
       // Abrir um bloco fecha os outros (com Recompra e Para reativar abertos
       // juntos a aba virava uma rolagem sem fim). Cada um lembra o seu estado.
       function alternarBlocoCliente(chave) {
-        const chaves = [RECOMPRA_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY];
+        const chaves = [RECOMPRA_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY];
         let aberta = false;
         try { aberta = localStorage.getItem(chave) === '1'; } catch (e) { }
         for (const k of chaves) {
@@ -16138,6 +16141,7 @@
         renderReativar();
         renderClassifAlertas();
         renderPerto();
+        renderRota();
         renderVisitas();
       }
       // Painel (Recentes + blocos) some com cliente aberto ou com texto na
@@ -16604,6 +16608,171 @@
         el.querySelectorAll('[data-perto-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.pertoAbrir })));
         el.querySelectorAll('[data-perto-waze]').forEach(b => b.addEventListener('click', () => abrirWazeCliente(porId.get(b.dataset.pertoWaze))));
       }
+      // ---- Rota por cidade (aba Clientes, abaixo de "Perto de mim") ----
+      // Item 4 da localização. Decisões do usuário: bloco próprio; escolhe a
+      // cidade (município da ficha de CNPJ, vem no /sync - funciona sem
+      // internet), vê as lojas dela e já vêm marcadas até 10 PRIORITÁRIAS:
+      // recompra atrasada/da semana, comprou no ano e sem sua visita há 60+ dias
+      // ("Visitas × compras"), para reativar. Só monta e abre no Google Maps
+      // (nada guardado por dia). A marcação automática vale até o vendedor
+      // mexer nela (as listas chegam do servidor depois da 1ª tela); trocar de
+      // cidade volta pra automática. Ordem das paradas como em "Perto de mim"
+      // (ordenarParadas) pela posição da loja; loja sem posição vai no fim.
+      const ROTA_ABERTO_LS_KEY = 'cortagRotaAberto_v1';
+      const ROTA_CIDADE_LS_KEY = 'cortagRotaCidade_v1';
+      const ROTA_POR_PAGINA = 20;
+      let rotaSelecionados = new Set();
+      let rotaEditada = false; // o vendedor mexeu na marcação desta cidade
+      let rotaVerTodos = false;
+
+      function rotaAberta() {
+        try { return localStorage.getItem(ROTA_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      // 'MARINGA|PR' -> clientes da cidade, pelo município da ficha
+      function cidadesDosClientes() {
+        const porChave = new Map();
+        for (const c of loadClientesLocais()) {
+          const e = c.endereco;
+          if (!e || !e.municipio) continue;
+          const chave = `${chaveCidade(e.municipio)}|${String(e.uf || '').trim().toUpperCase()}`;
+          if (!porChave.has(chave)) porChave.set(chave, { chave, nome: `${nomeCidade(e.municipio)}${e.uf ? ' - ' + String(e.uf).toUpperCase() : ''}`, clientes: [] });
+          porChave.get(chave).clientes.push(c);
+        }
+        return porChave;
+      }
+      function rotaCidadeEscolhida(cidades) {
+        let chave = '';
+        try { chave = localStorage.getItem(ROTA_CIDADE_LS_KEY) || ''; } catch (e) { }
+        if (cidades.has(chave)) return chave;
+        // 1ª vez: a cidade com mais clientes
+        let melhor = '';
+        for (const [k, v] of cidades) if (!melhor || v.clientes.length > cidades.get(melhor).clientes.length) melhor = k;
+        return melhor;
+      }
+      // Lojas da cidade com os motivos de prioridade, prioritárias primeiro
+      function lojasDaCidade(cidade) {
+        const recompraPorId = new Map(recompraVisiveis().map(r => [String(r.cliente_id), r]));
+        const reativarPorId = new Map(reativarVisiveis().map(r => [String(r.cliente_id), r]));
+        const visitas = visitasDados ? cruzarVisitasCompras() : { semVisita: [] };
+        const semVisitaPorId = new Map(visitas.semVisita.map(v => [String(v.cliente_id), v]));
+        const fatPorId = new Map(visitasClientes().map(v => [String(v.cliente_id), v.fat_12m || 0]));
+        return cidade.clientes.map(c => {
+          const id = String(c.id);
+          const rec = recompraPorId.get(id);
+          const semVisita = semVisitaPorId.get(id);
+          const reat = reativarPorId.get(id);
+          const pontos = (rec ? (rec.situacao === 'semana' ? 2 : 3) : 0) + (semVisita ? 2 : 0) + (reat ? 1 : 0);
+          // sem rua legível na ficha, a loja com GPS exato vai pela coordenada
+          const pos = posicaoDoCliente(c);
+          const destino = enderecoParaNavegacao(c.endereco) || (pos && !pos.aprox ? `${pos.lat},${pos.lng}` : '');
+          return { c, id, rec, semVisita, reat, pontos, fat: fatPorId.get(id) || 0, destino };
+        }).sort((a, b) => b.pontos - a.pontos || b.fat - a.fat || String(a.c.nome).localeCompare(String(b.c.nome)));
+      }
+      function marcarPrioritarias(lojas) {
+        rotaSelecionados = new Set(lojas.filter(l => l.pontos > 0 && l.destino).slice(0, ROTA_MAX_PARADAS).map(l => l.id));
+      }
+      function montarRotaCidade(lojas) {
+        const marcadas = lojas.filter(l => rotaSelecionados.has(l.id) && l.destino);
+        if (!marcadas.length) return;
+        const comPos = [], semPos = [];
+        for (const l of marcadas) {
+          const pos = posicaoDoCliente(l.c);
+          if (pos) comPos.push({ c: l.c, pos }); else semPos.push(l);
+        }
+        const recente = (p) => p && Date.now() - p.em < 10 * 60000 ? p : null;
+        const origem = recente(pertoPosicao) || recente(proxPosicao) || (comPos[0] && comPos[0].pos);
+        const ordem = comPos.length ? ordenarParadas(origem, comPos) : [];
+        const destinos = [...ordem.map(destinoDaParada), ...semPos.map(l => l.destino)];
+        const nomes = [...ordem.map(x => x.c.nome), ...semPos.map(l => l.c.nome)];
+        // sem origin: o Google Maps sai da posição atual do celular
+        let url = `https://www.google.com/maps/dir/?api=1&travelmode=driving&destination=${encodeURIComponent(destinos[destinos.length - 1])}`;
+        if (destinos.length > 1) url += `&waypoints=${encodeURIComponent(destinos.slice(0, -1).join('|'))}`;
+        window.open(url, '_blank', 'noopener');
+        showToast(`Rota: ${nomes.join(' → ')}`, 'longo');
+      }
+      function renderRotaItem(l) {
+        const selos = [];
+        if (l.rec) selos.push(seloRecompra(l.rec));
+        if (l.semVisita) selos.push(`<span class="recompraSelo">${l.semVisita.ultima_visita ? `sua última visita ${escapeHtml(dataCurtaISO(l.semVisita.ultima_visita))}` : 'nunca visitado'}</span>`);
+        if (l.reat) selos.push(seloReativar(l.reat));
+        const e = l.c.endereco || {};
+        const rua = [e.tipo, e.logradouro].filter(Boolean).join(' ') + (e.numero && !/^(s\.?\/?\s*n\.?|0+)$/i.test(String(e.numero).trim()) ? `, ${e.numero}` : '');
+        return `<div class="recompraItem">
+          <label class="pertoLinha">
+            <input type="checkbox" data-rota-sel="${escapeHtml(l.id)}"${rotaSelecionados.has(l.id) ? ' checked' : ''}${l.destino ? '' : ' disabled'} aria-label="Incluir ${escapeHtml(l.c.nome)} na rota">
+            <span class="pertoNome">${escapeHtml(l.c.nome)}</span>
+          </label>
+          <div class="recompraMeta">${escapeHtml(rua.trim() || 'sem rua na ficha')}${l.fat > 0 ? ` · ${escapeHtml(brlCurto(l.fat))} em 12 meses` : ''}${selos.length ? ' ' + selos.join(' ') : ''}</div>
+          <div class="recompraAcoes">
+            <button type="button" class="recompraBtn" data-rota-abrir="${escapeHtml(l.id)}">Abrir cliente</button>
+            <button type="button" class="recompraBtn" data-rota-waze="${escapeHtml(l.id)}">Waze</button>
+          </div>
+        </div>`;
+      }
+      function renderRota() {
+        const el = document.getElementById('rotaWrap');
+        if (!el) return;
+        const cidades = cidadesDosClientes();
+        el.classList.toggle('hidden', !!clienteTabSelected || cidades.size === 0);
+        if (!cidades.size) { el.innerHTML = ''; return; }
+        const chave = rotaCidadeEscolhida(cidades);
+        const cidade = cidades.get(chave);
+        const lojas = lojasDaCidade(cidade);
+        if (!rotaEditada) marcarPrioritarias(lojas);
+        // loja que saiu da cidade/da cópia local não entra na rota escondida
+        const ids = new Set(lojas.map(l => l.id));
+        rotaSelecionados.forEach(id => { if (!ids.has(id)) rotaSelecionados.delete(id); });
+        const prioritarias = lojas.filter(l => l.pontos > 0).length;
+        const marcados = rotaSelecionados.size;
+        const aberta = rotaAberta();
+        const resumo = `${cidade.nome}: ${lojas.length} loja${lojas.length === 1 ? '' : 's'}${prioritarias ? ` · ${prioritarias} prioritária${prioritarias === 1 ? '' : 's'}` : ''}`;
+        let corpo = '';
+        if (aberta) {
+          const opcoes = [...cidades.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          const mostrar = rotaVerTodos ? lojas : lojas.slice(0, Math.max(ROTA_POR_PAGINA, prioritarias));
+          const resto = lojas.length - mostrar.length;
+          corpo = `<select class="reativarFiltro" id="rotaCidade" aria-label="Cidade da rota">
+              ${opcoes.map(o => `<option value="${escapeHtml(o.chave)}"${o.chave === chave ? ' selected' : ''}>${escapeHtml(o.nome)} (${o.clientes.length})</option>`).join('')}
+            </select>
+            <p class="recompraHint">Já vêm marcadas até ${ROTA_MAX_PARADAS} prioritárias: recompra atrasada ou da semana, comprou no ano e sem sua visita há ${VISITAS_JANELA_DIAS}+ dias, para reativar. Cidade pela ficha de CNPJ; cliente sem ficha fica de fora.</p>
+            ${marcados ? `<div class="recompraAcoes pertoRota">
+              <button type="button" class="recompraBtn recompraBtn--principal" id="rotaMontarBtn">Montar rota no Google Maps · ${marcados} parada${marcados === 1 ? '' : 's'}</button>
+              <button type="button" class="recompraBtn" id="rotaLimparBtn">Limpar</button>
+            </div>${marcados > 4 ? '<p class="recompraHint">Com mais de 4 lojas, abra no app Google Maps: no navegador do celular o Google pode cortar paradas.</p>' : ''}` : `<p class="recompraHint">Marque as lojas pra montar a rota (até ${ROTA_MAX_PARADAS}).</p>`}
+            ${mostrar.map(renderRotaItem).join('')}
+            ${resto > 0 ? `<button type="button" class="recompraMais" id="rotaMais">Ver mais ${resto}</button>` : ''}`;
+        }
+        el.dataset.cor = prioritarias ? 'azul' : 'cinza';
+        el.innerHTML = cabecalhoBloco({
+          id: 'rotaToggle', aberta, icone: 'rota', titulo: 'Rota por cidade', resumo: escapeHtml(resumo),
+          numero: marcados || null, rotulo: 'na rota',
+        }) + corpo;
+        document.getElementById('rotaToggle').addEventListener('click', () => alternarBlocoCliente(ROTA_ABERTO_LS_KEY));
+        if (!aberta) return;
+        document.getElementById('rotaCidade').addEventListener('change', (ev) => {
+          try { localStorage.setItem(ROTA_CIDADE_LS_KEY, ev.target.value); } catch (e) { }
+          rotaEditada = false;
+          rotaVerTodos = false;
+          renderRota();
+        });
+        document.getElementById('rotaMontarBtn')?.addEventListener('click', () => montarRotaCidade(lojas));
+        document.getElementById('rotaLimparBtn')?.addEventListener('click', () => { rotaSelecionados.clear(); rotaEditada = true; renderRota(); });
+        document.getElementById('rotaMais')?.addEventListener('click', () => { rotaVerTodos = true; renderRota(); });
+        const porId = new Map(lojas.map(l => [l.id, l.c]));
+        el.querySelectorAll('[data-rota-sel]').forEach(cb => cb.addEventListener('change', () => {
+          const id = cb.dataset.rotaSel;
+          if (cb.checked && rotaSelecionados.size >= ROTA_MAX_PARADAS) {
+            cb.checked = false;
+            showToast(`Até ${ROTA_MAX_PARADAS} paradas por rota no Google Maps`);
+            return;
+          }
+          if (cb.checked) rotaSelecionados.add(id); else rotaSelecionados.delete(id);
+          rotaEditada = true;
+          renderRota();
+        }));
+        el.querySelectorAll('[data-rota-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.rotaAbrir })));
+        el.querySelectorAll('[data-rota-waze]').forEach(b => b.addEventListener('click', () => abrirWazeCliente(porId.get(b.dataset.rotaWaze))));
+      }
       // ---- Recompra da semana (topo da aba Clientes) ----
       // Clientes cuja próxima compra, pelo ritmo dos últimos 12 meses, está
       // atrasada ou cai nos próximos 7 dias (cálculo no servidor, GET
@@ -16752,6 +16921,7 @@
         recompraCarregando = false;
         renderRecompra();
         renderPerto();
+        renderRota();
       }
       async function abrirClienteDaRecompra(c) {
         if (!c) return;
@@ -17139,6 +17309,7 @@
         reativarCarregando = false;
         renderReativar();
         renderPerto();
+        renderRota();
         atualizarReativarCards();
       }
       function atualizarReativarCards() {
@@ -17335,6 +17506,7 @@
         } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
         visitasCarregando = false;
         renderVisitas();
+        renderRota();
         atualizarVisitaCards();
       }
       function atualizarVisitaCards() {
@@ -17604,6 +17776,7 @@
         renderClientesRecentes();
         renderRecompra();
         renderPerto();
+        renderRota();
         renderReativar();
         renderVisitas();
         renderInadimplencia();
