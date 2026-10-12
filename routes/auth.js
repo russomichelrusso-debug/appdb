@@ -270,7 +270,7 @@ router.delete('/usuarios/:id', requireAuth, async (req, res) => {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
     }
     if (e.code === '23503') {
-      return res.status(409).json({ erro: 'Esse usuário tem pedidos ou importações gravados — desative em vez de excluir (o histórico continua com o nome dele).' });
+      return res.status(409).json({ erro: 'Esse usuário tem pedidos, levantamentos ou importações gravados — desative em vez de excluir (o histórico continua com o nome dele).' });
     }
     console.error(e);
     res.status(500).json({ erro: 'Erro ao excluir usuário.' });

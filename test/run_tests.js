@@ -418,6 +418,10 @@ async function main() {
     const p78 = mockDb.__getProdutos().find(p => p.codigo_sku === 'NOVO78');
     assert(res.status === 201 && p78 && p78.nome === 'NOVO78',
       `levantamento com produto novo da Lista de Preços cria o produto (sem nome, fica o código): ${JSON.stringify([res.body, p78])}`);
+    {
+      const lev = mockDb.__getLevantamentos().find(l => l.id === res.body.levantamento_id);
+      assert(lev && lev.usuario_id != null, `levantamento grava o usuário logado (dono da visita): ${JSON.stringify(lev)}`);
+    }
     res = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [{ codigo_sku: 'NAO-EXISTE-1', quantidade_contada: 1 }] });
     const rLevSemItens = await req('POST', '/api/levantamentos', { cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, itens: [] });
     assert(res.status === 400 && res.body.erro.includes('não encontrado') && rLevSemItens.status === 422,
@@ -2937,6 +2941,54 @@ async function main() {
     }
     res = await req('POST', '/api/reativacao/999999/adiar', { tipo: 'ja_falei' });
     assert(res.status === 404, 'reativação: adiar cliente inexistente responde 404');
+
+    // 31b1) Registro de visita (routes/visitas.js): visita = levantamento salvo,
+    // só as do usuário logado, um por cliente por dia; última compra pela entrada
+    // do pedido (sem a série de 7 dígitos) ou pedido do app; faturado em 12 meses.
+    {
+      const eu = (await req('GET', '/api/auth/me')).body;
+      const outro = mockDb.__getUsuarios().find(u => u.email === 'outro@example.com');
+      const meioDia = (iso) => `${iso}T15:00:00.000Z`;
+      mockDb.__seed({
+        clientes: [
+          { id: 9651, nome: 'VISITEI E COMPROU', documento: '96510000000101', codigo_oficial: '9651' },
+          { id: 9652, nome: 'VISITEI SEM COMPRA', documento: '96520000000102', codigo_oficial: '9652' },
+          { id: 9653, nome: 'COMPRA SEM VISITA', documento: '96530000000103', codigo_oficial: '9653' },
+          { id: 9654, nome: 'SO O OUTRO VISITOU', documento: '96540000000104', codigo_oficial: '9654' },
+          { id: 9655, nome: 'NEM VISITA NEM COMPRA', documento: '96550000000105', codigo_oficial: '9655' },
+        ],
+        levantamentos: [
+          { id: 96511, cliente_id: 9651, usuario_id: eu.id, data_visita: meioDia(antesBr(10)) },
+          { id: 96521, cliente_id: 9652, usuario_id: eu.id, data_visita: meioDia(antesBr(20)) },
+          { id: 96522, cliente_id: 9652, usuario_id: eu.id, data_visita: `${antesBr(20)}T18:00:00.000Z` },
+          { id: 96523, cliente_id: 9652, usuario_id: eu.id, data_visita: meioDia(antesBr(40)) },
+          { id: 96541, cliente_id: 9654, usuario_id: outro.id, data_visita: meioDia(antesBr(3)) },
+        ],
+        pedidosOficiaisItens: [
+          { nr_pedido: '696511', codigo_sku: '60863', cliente_codigo_oficial: '9651', quantidade: 1, valor: 300, data_implantacao: antesBr(5), data_faturamento: null, status: 'carteira' },
+          // série de 7 dígitos depois da visita não conta como compra
+          { nr_pedido: '1096521', codigo_sku: '60863', cliente_codigo_oficial: '9652', quantidade: 1, valor: 5, data_implantacao: antesBr(2), data_faturamento: null, status: 'carteira' },
+          { nr_pedido: '696531', codigo_sku: '60863', cliente_codigo_oficial: '9653', quantidade: 10, valor: 5000, data_implantacao: antesBr(35), data_faturamento: antesBr(30), status: 'faturado', nota_fiscal: '9653001' },
+          { nr_pedido: '696551', codigo_sku: '60863', cliente_codigo_oficial: '9655', quantidade: 1, valor: 900, data_implantacao: antesBr(500), data_faturamento: antesBr(495), status: 'faturado', nota_fiscal: '9655001' },
+        ],
+      });
+      res = await req('GET', '/api/visitas');
+      const lista = (res.body && res.body.clientes) || [];
+      const por = (id) => lista.find(c => c.cliente_id === id);
+      assert(res.status === 200 && res.body.hoje === hojeBr && res.body.janelaDias === 60
+        && por(9651) && por(9651).ultima_visita === antesBr(10) && por(9651).ultima_compra === antesBr(5)
+        && por(9652) && por(9652).ultima_visita === antesBr(20) && por(9652).visitas === 2 && por(9652).ultima_compra === null
+        && por(9653) && por(9653).ultima_visita === null && por(9653).fat_12m === 5000 && por(9653).ultima_compra === antesBr(35)
+        && !por(9654) && !por(9655),
+        `visitas: última visita só do usuário, um por dia, compra sem a série de 7 dígitos, 12 meses: ${JSON.stringify(lista.filter(c => c.cliente_id >= 9651 && c.cliente_id <= 9655))}`);
+      const tokenEu = authToken;
+      authToken = tokenOutro;
+      res = await req('GET', '/api/visitas');
+      authToken = tokenEu;
+      const doOutro = (res.body.clientes || []).find(c => c.cliente_id === 9654);
+      assert(res.status === 200 && doOutro && doOutro.ultima_visita === antesBr(3) && !(res.body.clientes || []).some(c => c.cliente_id === 9652 && c.ultima_visita),
+        `visitas: cada vendedor vê só as dele: ${JSON.stringify(doOutro)}`);
+    }
 
     // 31b2) Fotos dos produtos (routes/produtoFotos.js): qualquer vendedor salva,
     // só JPEG até 600 KB, cópia só pras variações sem foto, imagem só com login

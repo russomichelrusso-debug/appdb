@@ -253,6 +253,19 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_atualizada_em TIMESTAM
 -- reenvio com o mesmo id_envio devolve o já gravado. NULL nos antigos.
 ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS id_envio TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_levantamentos_id_envio ON levantamentos(id_envio) WHERE id_envio IS NOT NULL;
+-- Quem salvou o levantamento (o usuário logado). O "Registro de visita"
+-- (routes/visitas.js) mostra só as visitas do próprio vendedor; vendedor_id é o
+-- nome digitado no app ("RUSSO", "Russo", "Admin"), sem ligação com o login.
+-- Sem ON DELETE, como pedidos.usuario_id: excluir quem tem levantamento responde
+-- 409 (desativar em vez disso) e o histórico continua com o dono.
+ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS usuario_id INTEGER REFERENCES usuarios(id);
+-- Os gravados antes da coluna: pelo nome do vendedor = nome de um único usuário
+-- (em 10/2026: RUSSO/Russo -> RUSSO, Admin -> Admin). Os que não casam ficam sem dono.
+UPDATE levantamentos l SET usuario_id = u.id
+FROM vendedores v, usuarios u
+WHERE l.usuario_id IS NULL AND v.id = l.vendedor_id AND lower(trim(v.nome)) = lower(trim(u.nome))
+  AND (SELECT count(*) FROM usuarios u2 WHERE lower(trim(u2.nome)) = lower(trim(u.nome))) = 1;
+CREATE INDEX IF NOT EXISTS idx_levantamentos_usuario ON levantamentos(usuario_id, cliente_id);
 
 -- Nome que o vendedor escolheu pro arquivo CSV do cliente (orçamento e cópia
 -- do pedido no Drive) - "DEPOSITO", "COMERCIAL"... são comuns no ramo e a 1ª

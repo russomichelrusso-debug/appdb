@@ -632,6 +632,45 @@ async function query(sql, params = []) {
     }).sort((a, b) => a.vencimento.localeCompare(b.vencimento) || a.titulo.localeCompare(b.titulo) || a.parcela.localeCompare(b.parcela)) };
   }
 
+  // Registro de visita - routes/visitas.js
+  if (s.includes('/* VISITAS:CLIENTES */')) {
+    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, codigo_oficial: c.codigo_oficial || null, municipio: (clienteCnpjFicha[c.id] || {}).municipio || null })) };
+  }
+  if (s.includes('/* VISITAS:ULTIMAS */')) {
+    const por = new Map();
+    for (const l of levantamentos.filter(l => l.cliente_id != null && String(l.usuario_id) === String(params[0]))) {
+      const dia = new Date(l.data_visita).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+      const v = por.get(l.cliente_id) || { cliente_id: l.cliente_id, dias: new Set() };
+      v.dias.add(dia);
+      por.set(l.cliente_id, v);
+    }
+    return { rows: [...por.values()].map(v => ({ cliente_id: v.cliente_id, ultima: [...v.dias].sort().pop(), total: v.dias.size })) };
+  }
+  if (s.includes('/* VISITAS:ULTIMA-OFICIAL */')) {
+    const ultima = new Map();
+    for (const it of pedidosOficiaisItens.filter(i => String(i.nr_pedido).length <= 6)) {
+      const d = String(it.data_implantacao || it.data_faturamento || '').slice(0, 10);
+      if (d && (!ultima.has(it.cliente_codigo_oficial) || d > ultima.get(it.cliente_codigo_oficial))) ultima.set(it.cliente_codigo_oficial, d);
+    }
+    return { rows: [...ultima].map(([codigo, u]) => ({ codigo, ultima: u })) };
+  }
+  if (s.includes('/* VISITAS:ULTIMA-APP */')) {
+    const ultima = new Map();
+    for (const ped of pedidos.filter(p => p.cliente_id != null && p.origem !== 'faturamento')) {
+      const d = diaDoPedidoBr(ped.data_pedido);
+      if (!ultima.has(ped.cliente_id) || d > ultima.get(ped.cliente_id)) ultima.set(ped.cliente_id, d);
+    }
+    return { rows: [...ultima].map(([cliente_id, u]) => ({ cliente_id, ultima: u })) };
+  }
+  if (s.includes('/* VISITAS:FAT-12M */')) {
+    const desde = diasAntes(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }), 365);
+    const total = new Map();
+    for (const it of pedidosOficiaisItens.filter(i => faturadoDeFato(i) && i.data_faturamento && String(i.data_faturamento).slice(0, 10) > desde)) {
+      total.set(it.cliente_codigo_oficial, (total.get(it.cliente_codigo_oficial) || 0) + Number(it.valor || 0));
+    }
+    return { rows: [...total].map(([codigo, t]) => ({ codigo, total: t })) };
+  }
+
   // Para reativar - routes/reativacao.js
   if (s.includes('/* REATIVACAO:META */')) {
     const c = configuracoes[params[0]];
@@ -1643,7 +1682,7 @@ async function query(sql, params = []) {
     }
     const l = {
       id: nextId.levantamentos++, cliente_id: params[0], vendedor_id: params[1], nome: params[2], data_visita: new Date().toISOString(),
-      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null, id_envio: params[6] ?? null,
+      latitude: params[3] ?? null, longitude: params[4] ?? null, localizacao_precisao_m: params[5] ?? null, id_envio: params[6] ?? null, usuario_id: params[7] ?? null,
     };
     levantamentos.push(l);
     return { rows: [{ id: l.id, data_visita: l.data_visita }] };

@@ -3137,6 +3137,22 @@
       display: none;
     }
 
+    /* "Sua última visita: há N dias" (Registro de visita, carregarVisitas) */
+    .clienteVisita {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .clienteVisita.velha {
+      color: var(--warning);
+      font-weight: 600;
+    }
+
+    .clienteVisita.hidden {
+      display: none;
+    }
+
     /* WhatsApp do comprador: com número, o texto do orçamento abre direto
        na conversa dele (wa.me). Tracejado = ainda sem número. */
     .clienteWhats {
@@ -6836,6 +6852,7 @@
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
           <div class="clienteInadimplente hidden" id="precosClientInadimplente"></div>
           <div class="clienteReativar hidden" id="precosClientReativar"></div>
+          <div class="clienteVisita hidden" id="precosClientVisita"></div>
           <button type="button" class="clienteWhats" id="precosClientWhats"
             aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
           <div class="clienteAcoes">
@@ -6971,6 +6988,7 @@
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
           <div class="clienteInadimplente hidden" id="levClientInadimplente"></div>
           <div class="clienteReativar hidden" id="levClientReativar"></div>
+          <div class="clienteVisita hidden" id="levClientVisita"></div>
           <button type="button" class="clienteWhats" id="levClientWhats"
             aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
           <div class="clienteAcoes">
@@ -7122,6 +7140,7 @@
         <div class="recompra hidden" id="reativarWrap"></div>
         <div class="recompra hidden" id="classifAlertasWrap"></div>
         <div class="recompra hidden" id="pertoWrap"></div>
+        <div class="recompra hidden" id="visitasWrap"></div>
       </div>
       <div id="clienteTabListWrap">
         <div class="hist-content" id="clienteTabList"></div>
@@ -10195,6 +10214,7 @@
           };
           if (idx >= 0) list[idx] = entry; else list.push(entry);
           saveSavedSurveysList(list);
+          registrarVisitaLocal(cliente.id); // salvar o levantamento = visita (também o que foi pra fila)
           state.levLoadedId = entry.id;
           state.levLoadedName = entry.name;
           saveLevSurvey(); // marca o rascunho local como já salvo (evita re-avisar "não salvo" se o app fechar logo em seguida)
@@ -10451,6 +10471,7 @@
         atualizarBloqueioClienteBar(prefixo, cliente);
         atualizarReativarClienteBar(prefixo, cliente);
         atualizarInadimplenciaClienteBar(prefixo, cliente);
+        atualizarVisitaClienteBar(prefixo, cliente);
         atualizarWhatsClienteBar(prefixo, cliente);
       }
       function atualizarBloqueioClienteBar(prefixo, cliente) {
@@ -11587,7 +11608,7 @@
           // "Recompra da semana" ficava escondido nesse caminho
           // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
           if (tab === 'produtos') { if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio(); }
-          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); }
+          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -16091,6 +16112,7 @@
         dinheiro: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 10v4M18 10v4"/>',
         reativar: '<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>',
         classificatorio: '<path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
+        visita: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/>',
       };
       function cabecalhoBloco({ id, aberta, icone, titulo, resumo, numero, rotulo, acao }) {
         const lado = acao ? `<span class="blocoAcao">${escapeHtml(acao)}</span>`
@@ -16105,7 +16127,7 @@
       // Abrir um bloco fecha os outros (com Recompra e Para reativar abertos
       // juntos a aba virava uma rolagem sem fim). Cada um lembra o seu estado.
       function alternarBlocoCliente(chave) {
-        const chaves = [RECOMPRA_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY];
+        const chaves = [RECOMPRA_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY];
         let aberta = false;
         try { aberta = localStorage.getItem(chave) === '1'; } catch (e) { }
         for (const k of chaves) {
@@ -16116,6 +16138,7 @@
         renderReativar();
         renderClassifAlertas();
         renderPerto();
+        renderVisitas();
       }
       // Painel (Recentes + blocos) some com cliente aberto ou com texto na
       // busca: o resultado da busca aparece logo abaixo dela.
@@ -17160,6 +17183,174 @@
           })
           .catch(e => console.warn('"Para reativar" não foi pro servidor (fica só neste aparelho por enquanto):', e));
       }
+      // ---- Visitas × compras (aba Clientes) e "Sua última visita" no card ----
+      // Registro de visita (routes/visitas.js). Decisões do usuário: visita =
+      // levantamento salvo; cada vendedor vê só as DELE; janela de 60 dias.
+      // Duas listas: "Visitados e não compraram" (visita nos últimos 60 dias e
+      // nenhuma compra no dia dela ou depois - a mais antiga primeiro) e "Compram
+      // e você não visita" (comprou em 12 meses e sem visita há 60+ dias - quem
+      // fatura mais primeiro). Compra = pedido que entrou no ERP (implantação, sem
+      // a série de 7 dígitos) ou fechado no app. O servidor manda os dados por
+      // cliente e as listas saem daqui, com a data de hoje: funcionam sem internet
+      // e o levantamento salvo agora (até o da fila offline) já conta
+      // (cortagVisitasLocais_v1, até o servidor devolver a mesma visita).
+      const VISITAS_LS_KEY = 'cortagVisitas_v1';
+      const VISITAS_LOCAIS_LS_KEY = 'cortagVisitasLocais_v1'; // cliente id -> 'AAAA-MM-DD'
+      const VISITAS_ABERTO_LS_KEY = 'cortagVisitasAberto_v1';
+      const VISITAS_ATUALIZAR_MS = 30 * 60000;
+      const VISITAS_JANELA_DIAS = 60; // igual a routes/visitas.js
+      const VISITAS_COMPRA_DIAS = 365;
+      const VISITAS_POR_SECAO = 8;
+      let visitasDados = null; // { hoje, janelaDias, clientes, carregadoEm }
+      let visitasCarregando = false;
+      let visitasVerTodas = {};
+
+      function lerVisitasLocais() {
+        try { const v = JSON.parse(localStorage.getItem(VISITAS_LOCAIS_LS_KEY)); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
+      }
+      function gravarVisitasLocais(v) {
+        try { localStorage.setItem(VISITAS_LOCAIS_LS_KEY, JSON.stringify(v)); } catch (e) { }
+      }
+      function registrarVisitaLocal(clienteId) {
+        if (clienteId == null) return;
+        const v = lerVisitasLocais();
+        v[clienteId] = hojeLocalISO();
+        gravarVisitasLocais(v);
+        renderVisitas();
+        atualizarVisitaCards();
+      }
+      function visitasAberto() {
+        try { return localStorage.getItem(VISITAS_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      // Dados do servidor + visitas salvas neste aparelho que ele ainda não tem
+      function visitasClientes() {
+        const porId = new Map(((visitasDados && visitasDados.clientes) || []).map(c => [String(c.cliente_id), { ...c }]));
+        const locais = lerVisitasLocais();
+        let nomes = null;
+        for (const [id, dia] of Object.entries(locais)) {
+          const c = porId.get(String(id));
+          if (c) { if (!c.ultima_visita || dia > c.ultima_visita) c.ultima_visita = dia; continue; }
+          if (!nomes) nomes = new Map(loadClientesLocais().map(x => [String(x.id), x.nome]));
+          if (!nomes.has(String(id))) continue;
+          porId.set(String(id), { cliente_id: Number(id), nome: nomes.get(String(id)), cidade: null, ultima_visita: dia, visitas: 1, ultima_compra: null, fat_12m: 0 });
+        }
+        return [...porId.values()];
+      }
+      function cruzarVisitasCompras() {
+        const hoje = hojeLocalISO();
+        const limite = somarDiasISO(hoje, -VISITAS_JANELA_DIAS);
+        const desdeCompra = somarDiasISO(hoje, -VISITAS_COMPRA_DIAS);
+        const todos = visitasClientes();
+        const semCompra = todos.filter(c => c.ultima_visita && c.ultima_visita >= limite && !(c.ultima_compra && c.ultima_compra >= c.ultima_visita))
+          .sort((a, b) => a.ultima_visita.localeCompare(b.ultima_visita) || String(a.nome).localeCompare(String(b.nome)));
+        const semVisita = todos.filter(c => c.ultima_compra && c.ultima_compra > desdeCompra && !(c.ultima_visita && c.ultima_visita >= limite))
+          .sort((a, b) => (b.fat_12m || 0) - (a.fat_12m || 0) || b.ultima_compra.localeCompare(a.ultima_compra));
+        return { semCompra, semVisita };
+      }
+      // "hoje" / "ontem" / "há 12 dias (30/09)"
+      function textoHaDias(iso) {
+        const dias = diasEntreISO(iso, hojeLocalISO());
+        if (dias <= 0) return 'hoje';
+        if (dias === 1) return 'ontem';
+        return `há ${dias} dias (${dataCurtaISO(iso)})`;
+      }
+      function renderVisitaItem(c, tipo) {
+        const meta = [];
+        if (c.cidade) meta.push(escapeHtml(nomeCidade(c.cidade)));
+        if (tipo === 'semCompra') {
+          meta.push(`visitado ${escapeHtml(textoHaDias(c.ultima_visita))}`);
+          meta.push(c.ultima_compra ? `última compra ${escapeHtml(dataCurtaISO(c.ultima_compra))}` : 'nenhuma compra conhecida');
+        } else {
+          if (c.fat_12m > 0) meta.push(`${escapeHtml(brlCurto(c.fat_12m))} em 12 meses`);
+          meta.push(`última compra ${escapeHtml(dataCurtaISO(c.ultima_compra))}`);
+          meta.push(c.ultima_visita ? `sua última visita ${escapeHtml(dataCurtaISO(c.ultima_visita))}` : 'nunca visitado');
+        }
+        return `<div class="recompraItem">
+          <button type="button" class="recompraNome" data-visita-abrir="${c.cliente_id}"><span>${escapeHtml(c.nome)}</span></button>
+          <div class="recompraMeta">${meta.join(' · ')}</div>
+          <div class="recompraAcoes">
+            <button type="button" class="recompraBtn recompraBtn--principal" data-visita-abrir="${c.cliente_id}">Abrir cliente</button>
+          </div>
+        </div>`;
+      }
+      function renderVisitas() {
+        const el = document.getElementById('visitasWrap');
+        if (!el) return;
+        const temDados = !!visitasDados || Object.keys(lerVisitasLocais()).length > 0;
+        el.classList.toggle('hidden', !!clienteTabSelected || !temDados);
+        if (!temDados) { el.innerHTML = ''; return; }
+        const { semCompra, semVisita } = cruzarVisitasCompras();
+        const aberta = visitasAberto();
+        const resumo = `${semCompra.length ? `${semCompra.length} visitado${semCompra.length === 1 ? '' : 's'} sem compra` : 'nenhum visitado sem compra'}`
+          + ` · ${semVisita.length} compra${semVisita.length === 1 ? '' : 'm'} e sem visita há ${VISITAS_JANELA_DIAS}+ dias`;
+        el.dataset.cor = semCompra.length ? 'azul' : 'cinza';
+        let corpo = '';
+        if (aberta) {
+          const secao = (chave, titulo, lista, vazio) => {
+            const mostrar = visitasVerTodas[chave] ? lista : lista.slice(0, VISITAS_POR_SECAO);
+            const resto = lista.length - mostrar.length;
+            return `<h3 class="recompraSecao">${titulo} (${lista.length})</h3>`
+              + (lista.length ? mostrar.map(c => renderVisitaItem(c, chave)).join('') : `<div class="lev-empty">${vazio}</div>`)
+              + (resto > 0 ? `<button type="button" class="recompraMais" data-visitas-mais="${chave}">Ver mais ${resto}</button>` : '');
+          };
+          corpo = `<p class="recompraHint">Visita = levantamento salvo por você. Compra = pedido que entrou no ERP ou fechado no app${visitasDados && visitasDados.hoje ? '' : ' (lista do servidor ainda não carregada)'}.</p>`
+            + secao('semCompra', `Visitados nos últimos ${VISITAS_JANELA_DIAS} dias e não compraram`, semCompra, 'Todo cliente que você visitou comprou depois.')
+            + secao('semVisita', `Compram e você não visita há ${VISITAS_JANELA_DIAS}+ dias`, semVisita, 'Você visitou todos os clientes que compraram no ano.');
+        }
+        el.innerHTML = cabecalhoBloco({
+          id: 'visitasToggle', aberta, icone: 'visita', titulo: 'Visitas × compras', resumo: escapeHtml(resumo),
+          numero: semCompra.length || null, rotulo: 'sem compra',
+        }) + corpo;
+        const porId = new Map([...semCompra, ...semVisita].map(c => [String(c.cliente_id), c]));
+        document.getElementById('visitasToggle').addEventListener('click', () => alternarBlocoCliente(VISITAS_ABERTO_LS_KEY));
+        el.querySelectorAll('[data-visitas-mais]').forEach(b => b.addEventListener('click', () => {
+          visitasVerTodas[b.dataset.visitasMais] = true;
+          renderVisitas();
+        }));
+        el.querySelectorAll('[data-visita-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra(porId.get(b.dataset.visitaAbrir))));
+      }
+      async function carregarVisitas(forcar) {
+        if (!visitasDados) {
+          try { visitasDados = JSON.parse(localStorage.getItem(VISITAS_LS_KEY)) || null; } catch (e) { visitasDados = null; }
+          renderVisitas();
+          atualizarVisitaCards();
+        }
+        if (visitasCarregando) return;
+        if (!forcar && visitasDados && Date.now() - (visitasDados.carregadoEm || 0) < VISITAS_ATUALIZAR_MS) return;
+        visitasCarregando = true;
+        try {
+          const r = await apiFetch('/api/visitas');
+          if (r && Array.isArray(r.clientes)) {
+            visitasDados = { ...r, carregadoEm: Date.now() };
+            try { localStorage.setItem(VISITAS_LS_KEY, JSON.stringify(visitasDados)); } catch (e) { }
+            // visita do aparelho que o servidor já tem sai da cópia local
+            const locais = lerVisitasLocais();
+            const doServidor = new Map(r.clientes.map(c => [String(c.cliente_id), c.ultima_visita]));
+            for (const id of Object.keys(locais)) {
+              const s = doServidor.get(id);
+              if ((s && s >= locais[id]) || locais[id] < somarDiasISO(hojeLocalISO(), -VISITAS_COMPRA_DIAS)) delete locais[id];
+            }
+            gravarVisitasLocais(locais);
+          }
+        } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
+        visitasCarregando = false;
+        renderVisitas();
+        atualizarVisitaCards();
+      }
+      function atualizarVisitaCards() {
+        if (!state.levCliente) return;
+        atualizarVisitaClienteBar('lev', state.levCliente);
+        atualizarVisitaClienteBar('precos', state.levCliente);
+      }
+      function atualizarVisitaClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientVisita');
+        if (!el) return;
+        const c = cliente && visitasClientes().find(x => String(x.cliente_id) === String(cliente.id));
+        const dia = c && c.ultima_visita;
+        el.classList.toggle('hidden', !dia);
+        el.classList.toggle('velha', !!dia && diasEntreISO(dia, hojeLocalISO()) > VISITAS_JANELA_DIAS);
+        el.textContent = dia ? `🚶 Sua última visita: ${textoHaDias(dia)}` : '';
+      }
       // ---------------- Importação automática por e-mail ----------------
       // Script do Google no Gmail manda os relatórios da Cortag pro servidor
       // (routes/importacaoEmail.js, scripts/gmail-importacao/Codigo.gs). O
@@ -17414,6 +17605,7 @@
         renderRecompra();
         renderPerto();
         renderReativar();
+        renderVisitas();
         renderInadimplencia();
         renderClassifAlertas();
         atualizarPainelClientes();
@@ -20491,6 +20683,9 @@
         try { localStorage.removeItem(CART_CTX_LS_KEY); } catch (e) { }
         try { localStorage.removeItem(PEDIDOS_SALVOS_LS_KEY); } catch (e) { }
         pedidosSalvos = null;
+        // "Visitas × compras" é só do usuário logado
+        try { localStorage.removeItem(VISITAS_LS_KEY); localStorage.removeItem(VISITAS_LOCAIS_LS_KEY); } catch (e) { }
+        visitasDados = null;
         setPedidoEditando(null);
       }
 
@@ -20754,6 +20949,7 @@
           initNovidades();
           carregarReativar(false); // faixa "sem compra" no card do cliente, mesmo sem abrir a aba Clientes
           carregarInadimplencia(false); // faixa "💰 em atraso" no card do cliente
+          carregarVisitas(false); // "Sua última visita" no card do cliente
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();

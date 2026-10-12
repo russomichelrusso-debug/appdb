@@ -25,6 +25,7 @@ const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio'
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
 const recompraRoutes = require('./routes/recompra');
 const reativacaoRoutes = require('./routes/reativacao');
+const visitasRoutes = require('./routes/visitas');
 const inadimplenciaRoutes = require('./routes/inadimplencia');
 const produtoFotosRoutes = require('./routes/produtoFotos');
 const novidadesRoutes = require('./routes/novidades');
@@ -163,6 +164,7 @@ app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
 app.use('/api/recompra', requireAuth, recompraRoutes);
 app.use('/api/reativacao', requireAuth, reativacaoRoutes);
+app.use('/api/visitas', requireAuth, visitasRoutes);
 app.use('/api/inadimplencia', requireAuth, inadimplenciaRoutes);
 app.use('/api/produto-fotos', requireAuth, produtoFotosRoutes);
 app.use('/api/novidades', requireAuth, novidadesRoutes);

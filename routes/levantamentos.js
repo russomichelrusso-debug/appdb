@@ -95,10 +95,11 @@ router.post('/', async (req, res) => {
     const vendedorId = await acharOuCriarVendedor(client, vendedor_nome);
 
     const levResult = await client.query(
-      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m, id_envio)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, data_visita`,
+      `INSERT INTO levantamentos (cliente_id, vendedor_id, nome, latitude, longitude, localizacao_precisao_m, id_envio, usuario_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, data_visita`,
       [clienteId, vendedorId, nome_levantamento || null,
-        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null, idEnvio]
+        localizacao ? localizacao.latitude : null, localizacao ? localizacao.longitude : null, localizacao ? localizacao.precisao_m : null, idEnvio,
+        req.usuario ? req.usuario.id : null] // dono da visita (routes/visitas.js)
     );
     const levantamentoId = levResult.rows[0].id;
 
