@@ -283,6 +283,15 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS nome_arquivo_em TIMESTAMPTZ;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_comprador TEXT;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_comprador_nome TEXT;
 ALTER TABLE clientes ADD COLUMN IF NOT EXISTS whatsapp_comprador_em TIMESTAMPTZ;
+-- Contatos comerciais do cliente pro Salesforce (janela "Contatos" do card do
+-- cliente; a Ficha cadastral mostra e copia): telefone 55+DDD+número, e-mails em
+-- minúsculas (NF/XML pode ter até 3, separados por "; "). O comprador é o
+-- whatsapp_comprador(_nome) acima. contatos_em decide, no aparelho, entre a troca
+-- ainda na fila offline e a do servidor (vale a mais nova), como no WhatsApp.
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS telefone_comercial TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS email_comercial TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS email_nfe TEXT;
+ALTER TABLE clientes ADD COLUMN IF NOT EXISTS contatos_em TIMESTAMPTZ;
 
 -- Situação de pedidos no sistema OFICIAL da empresa (relatório de Carteira +
 -- Faturamento), guardada separada da tabela "pedidos" (que é só o que o

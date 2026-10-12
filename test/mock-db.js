@@ -958,6 +958,9 @@ async function query(sql, params = []) {
       whatsapp_comprador: c.whatsapp_comprador || null, whatsapp_comprador_nome: c.whatsapp_comprador_nome || null,
       whatsapp_comprador_em: c.whatsapp_comprador_em || null,
       telefone_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].telefone) || null,
+      telefone_comercial: c.telefone_comercial || null, email_comercial: c.email_comercial || null,
+      email_nfe: c.email_nfe || null, contatos_em: c.contatos_em || null,
+      email_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].email) || null,
       regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
       latitude: c.latitude == null ? null : String(c.latitude),
       longitude: c.longitude == null ? null : String(c.longitude),
@@ -1162,6 +1165,13 @@ async function query(sql, params = []) {
     c.whatsapp_comprador_nome = params[1];
     c.whatsapp_comprador_em = new Date().toISOString();
     return { rows: [{ id: c.id, nome: c.nome, whatsapp_comprador: c.whatsapp_comprador, whatsapp_comprador_nome: c.whatsapp_comprador_nome, whatsapp_comprador_em: c.whatsapp_comprador_em }] };
+  }
+  // PUT /api/clientes/:id/contatos
+  if (s.includes('/* CLIENTES:CONTATOS */')) {
+    const c = clientes.find(x => String(x.id) === String(params[3]));
+    if (!c) return { rows: [] };
+    Object.assign(c, { telefone_comercial: params[0], email_comercial: params[1], email_nfe: params[2], contatos_em: new Date().toISOString() });
+    return { rows: [{ id: c.id, nome: c.nome, telefone_comercial: c.telefone_comercial, email_comercial: c.email_comercial, email_nfe: c.email_nfe, contatos_em: c.contatos_em }] };
   }
   // PUT /api/clientes/:id/nome-arquivo
   if (s.startsWith('UPDATE CLIENTES SET NOME_ARQUIVO = $1, NOME_ARQUIVO_EM = NOW() WHERE ID = $2')) {

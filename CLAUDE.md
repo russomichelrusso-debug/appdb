@@ -827,6 +827,19 @@ Supabase, sem PR — não é mudança de código.
   (`ordenarParadas`, `destinoDaParada`, sai da posição atual): ordem pela posição da loja (GPS ou aproximada),
   loja sem posição no fim, cada parada pelo endereço por extenso quando não há GPS (`montarRotaCidade`, `index.html`).
 
+- **Contatos comerciais do cliente pro Salesforce** (10/2026, opção "C" escolhida pelo usuário a partir de mockups):
+  telefone comercial, e-mail comercial, e-mail NF/XML, nome completo e telefone do comprador. **Edita no card do
+  cliente** (Pedido/Levantamento): a linha "WhatsApp do comprador" virou **"Contatos"** ("Contatos · Marcos · (44)
+  99812-4471 · 4 de 5") e abre a mesma janela, agora com a seção Empresa (`#whatsCompradorModal`, `index.html`).
+  **A Ficha cadastral só mostra e copia** (card "Contatos comerciais" no topo de `ficha-cnpj.html`, botão de copiar
+  por campo e "Copiar tudo pro Salesforce" = texto com rótulos + CNPJ). O comprador **reaproveita**
+  `whatsapp_comprador(_nome)` (o nome passou de 60 pra 100 letras); os outros três são `clientes.telefone_comercial`
+  (55+DDD+número, fixo vale), `email_comercial` (um), `email_nfe` (até 3, "; ") e `contatos_em`
+  (`PUT /api/clientes/:id/contatos`, `routes/lib/contatosCliente.js`; qualquer usuário logado; vazio apaga). Vêm no
+  `/sync` (com `email_ficha` da Receita) e seguem o padrão do WhatsApp: pendência em `cortagContatosCliente_v1`, fila
+  offline, vale a mais nova. Telefone/e-mail da Receita só como pílula "Receita: …" (costumam ser do contador).
+  O botão "Remover" saiu: apagar o campo e salvar.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

@@ -4236,12 +4236,40 @@
       padding: 0;
     }
 
-    /* WhatsApp do comprador (janela aberta pelo card do cliente) */
+    /* Contatos do cliente (janela aberta pelo card do cliente): empresa
+       (telefone/e-mails pro Salesforce) + comprador (WhatsApp) */
     .whatsSugestoes:empty,
     #whatsContatosBtn.hidden,
     #whatsSemContatos.hidden,
-    #whatsCompradorRemover.hidden {
+    #contatosErro.hidden {
       display: none;
+    }
+
+    #whatsCompradorModal .minimodal-card {
+      max-height: calc(100vh - 32px);
+      overflow-y: auto;
+    }
+
+    #whatsCompradorModal .minimodal-card input {
+      margin-bottom: 12px;
+    }
+
+    #whatsCompradorModal .whatsSugestoes {
+      margin: -6px 0 12px;
+    }
+
+    .contatosSecao {
+      margin: 6px 0 8px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .minimodal-card p#contatosErro {
+      color: var(--danger);
+      font-size: 12px;
     }
 
     #whatsContatosBtn {
@@ -6854,7 +6882,7 @@
           <div class="clienteReativar hidden" id="precosClientReativar"></div>
           <div class="clienteVisita hidden" id="precosClientVisita"></div>
           <button type="button" class="clienteWhats" id="precosClientWhats"
-            aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
+            aria-label="Contatos do cliente: telefone e e-mails da empresa e o comprador (o orçamento em texto vai direto pro WhatsApp dele)"></button>
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="precosSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
@@ -6990,7 +7018,7 @@
           <div class="clienteReativar hidden" id="levClientReativar"></div>
           <div class="clienteVisita hidden" id="levClientVisita"></div>
           <button type="button" class="clienteWhats" id="levClientWhats"
-            aria-label="WhatsApp do comprador desse cliente: o orçamento em texto vai direto pra conversa dele"></button>
+            aria-label="Contatos do cliente: telefone e e-mails da empresa e o comprador (o orçamento em texto vai direto pro WhatsApp dele)"></button>
           <div class="clienteAcoes">
             <button type="button" class="clienteAcao clienteAcao--destaque hidden" id="levSugestoesBtn"
               aria-label="Sugestões de recompra: produtos que o cliente não compra há mais de 1 ano"
@@ -7473,18 +7501,29 @@
     <div class="overlay hidden" id="whatsCompradorOverlay"></div>
     <div class="minimodal hidden" id="whatsCompradorModal">
       <div class="minimodal-card">
-        <h3>WhatsApp do comprador</h3>
+        <h3>Contatos do cliente</h3>
         <p id="whatsCompradorCliente"></p>
+        <div class="contatosSecao">Empresa</div>
+        <label for="contatoTelefone">Telefone comercial</label>
+        <input type="tel" id="contatoTelefone" inputmode="tel" autocomplete="off" placeholder="Ex: 44 3025-1180">
+        <div class="whatsSugestoes" id="contatoTelefoneSug"></div>
+        <label for="contatoEmail">E-mail comercial</label>
+        <input type="email" id="contatoEmail" inputmode="email" autocomplete="off" maxlength="120" placeholder="Ex: compras@loja.com.br">
+        <div class="whatsSugestoes" id="contatoEmailSug"></div>
+        <label for="contatoEmailNfe">E-mail NF/XML</label>
+        <input type="text" id="contatoEmailNfe" inputmode="email" autocomplete="off" maxlength="370" placeholder="Até 3, separados por ;">
+        <div class="whatsSugestoes" id="contatoEmailNfeSug"></div>
+        <p id="contatosErro" class="hidden"></p>
+        <div class="contatosSecao">Comprador</div>
         <button type="button" id="whatsContatosBtn" class="hidden">📇 Escolher dos contatos do celular</button>
-        <label for="whatsCompradorNumero">Número com DDD</label>
+        <label for="whatsCompradorNome">Nome completo do comprador</label>
+        <input type="text" id="whatsCompradorNome" maxlength="100" autocomplete="off" placeholder="Ex: João Carlos da Silva">
+        <label for="whatsCompradorNumero">Telefone / WhatsApp do comprador</label>
         <input type="tel" id="whatsCompradorNumero" inputmode="tel" autocomplete="off" placeholder="Ex: 43 99999-8888">
         <div class="whatsSugestoes" id="whatsSugestoes"></div>
         <p id="whatsCompradorPrevia"></p>
-        <label for="whatsCompradorNome">Nome do comprador (opcional)</label>
-        <input type="text" id="whatsCompradorNome" maxlength="60" autocomplete="off" placeholder="Ex: João">
         <p id="whatsSemContatos" class="hidden">Este navegador não abre a lista de contatos. No iPhone: no app Contatos, toque e segure o número pra copiar e cole aqui.</p>
         <div class="minimodal-btnrow">
-          <button type="button" id="whatsCompradorRemover" class="hidden">Remover</button>
           <button type="button" id="whatsCompradorCancel">Cancelar</button>
           <button type="button" id="whatsCompradorSalvar">Salvar</button>
         </div>
@@ -10796,14 +10835,17 @@
       function urlWhatsComTexto(numero, texto) {
         return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
       }
+      // Linha "Contatos" do card: o comprador (WhatsApp) e quantos dos 5 campos
+      // pro Salesforce já estão preenchidos
       function atualizarWhatsClienteBar(prefixo, cliente) {
         const el = document.getElementById(prefixo + 'ClientWhats');
         if (!el) return;
         const w = whatsCompradorDoCliente(cliente);
-        el.classList.toggle('definido', !!w);
-        el.innerHTML = w
-          ? `<b>WhatsApp</b> · ${escapeHtml(w.nome ? w.nome + ' · ' : '')}${escapeHtml(formatarWhatsBr(w.numero))}`
-          : '＋ WhatsApp do comprador';
+        const k = contatosDoCliente(cliente);
+        const preenchidos = [k.tel, k.email, k.nfe, w && w.nome, w && w.numero].filter(Boolean).length;
+        el.classList.toggle('definido', preenchidos > 0);
+        el.innerHTML = !preenchidos ? '＋ Contatos do cliente (comprador, e-mail NF/XML…)'
+          : `<b>Contatos</b> · ${w ? escapeHtml(w.nome ? w.nome.split(' ')[0] + ' · ' : '') + escapeHtml(formatarWhatsBr(w.numero)) : 'sem comprador'} · ${preenchidos} de 5`;
       }
       function salvarWhatsComprador(cliente, numero, nome) {
         if (!cliente || cliente.id == null) return;
@@ -10847,6 +10889,93 @@
         if (mudou) gravarWhatsPendentes(pend);
       }
 
+      // Contatos da empresa (telefone comercial, e-mail comercial, e-mail
+      // NF/XML) - pro Salesforce, mostrados também na Ficha cadastral. Mesmo
+      // padrão do WhatsApp do comprador: servidor (clientes.telefone_comercial,
+      // email_comercial, email_nfe, contatos_em; vem no /sync) + troca deste
+      // aparelho em CONTATOS_LS_KEY até o servidor confirmar (vale a mais nova).
+      const CONTATOS_LS_KEY = 'cortagContatosCliente_v1';
+      function contatosPendentes() {
+        try { return JSON.parse(localStorage.getItem(CONTATOS_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function gravarContatosPendentes(v) {
+        try { localStorage.setItem(CONTATOS_LS_KEY, JSON.stringify(v)); } catch (e) { }
+      }
+      function contatosDoServidor(c) {
+        return c && c.contatos_em
+          ? { tel: c.telefone_comercial || '', email: c.email_comercial || '', nfe: c.email_nfe || '', em: Date.parse(c.contatos_em) || 0 }
+          : null;
+      }
+      // {tel, email, nfe} (vazio = não preenchido)
+      function contatosDoCliente(cliente) {
+        const vazio = { tel: '', email: '', nfe: '' };
+        if (!cliente || cliente.id == null) return vazio;
+        const id = String(cliente.id);
+        const local = loadClientesLocais().find(c => String(c.id) === id);
+        let melhor = null;
+        for (const v of [contatosPendentes()[id], contatosDoServidor(cliente), contatosDoServidor(local)]) {
+          if (v && (!melhor || v.em > melhor.em)) melhor = v;
+        }
+        return melhor ? { tel: melhor.tel || '', email: melhor.email || '', nfe: melhor.nfe || '' } : vazio;
+      }
+      // Um ou mais e-mails separados por ; , ou espaço -> "a@x.com; b@y.com" em
+      // minúsculas, ou null se algum não for e-mail (igual a routes/lib/contatosCliente.js)
+      function normalizarEmails(texto, max) {
+        const lista = String(texto || '').toLowerCase().split(/[;,\s]+/).filter(Boolean);
+        if (!lista.length || lista.length > max || !lista.every(e => /^[^\s@;,]+@[^\s@;,]+\.[^\s@;,]+$/.test(e) && e.length <= 120)) return null;
+        return [...new Set(lista)].join('; ');
+      }
+      function salvarContatosCliente(cliente, v) {
+        if (!cliente || cliente.id == null) return;
+        const id = String(cliente.id);
+        const pend = contatosPendentes();
+        pend[id] = { ...v, em: Date.now() };
+        gravarContatosPendentes(pend);
+        apiFetch(`/api/clientes/${encodeURIComponent(id)}/contatos`,
+          { method: 'PUT', body: JSON.stringify({ telefone_comercial: v.tel, email_comercial: v.email, email_nfe: v.nfe }) },
+          { tipo: 'contatos-cliente', descricao: 'Contatos do cliente' })
+          .then(r => { if (r && !r.__filaOffline) confirmarContatosDoServidor(r); })
+          .catch(e => console.warn('Contatos do cliente não foram pro servidor (ficam só neste aparelho por enquanto):', e));
+      }
+      function confirmarContatosDoServidor(r) {
+        if (!r || r.id == null) return;
+        const id = String(r.id);
+        const pend = contatosPendentes();
+        const p = pend[id];
+        // resposta de uma troca anterior chegando depois de outra mais nova
+        if (p && (p.tel !== (r.telefone_comercial || '') || p.email !== (r.email_comercial || '') || p.nfe !== (r.email_nfe || ''))) return;
+        const campos = { telefone_comercial: r.telefone_comercial, email_comercial: r.email_comercial, email_nfe: r.email_nfe, contatos_em: r.contatos_em };
+        const locais = loadClientesLocais();
+        const local = locais.find(c => String(c.id) === id);
+        if (local) { Object.assign(local, campos); saveClientesLocais(locais); }
+        if (state.levCliente && String(state.levCliente.id) === id) Object.assign(state.levCliente, campos);
+        delete pend[id];
+        gravarContatosPendentes(pend);
+      }
+      function podarContatosPendentes(clientes) {
+        const pend = contatosPendentes();
+        let mudou = false;
+        for (const c of clientes) {
+          const id = String(c.id);
+          const servidor = contatosDoServidor(c);
+          if (!pend[id] || !servidor) continue;
+          const igual = servidor.tel === pend[id].tel && servidor.email === pend[id].email && servidor.nfe === pend[id].nfe;
+          if (igual || servidor.em >= pend[id].em) { delete pend[id]; mudou = true; }
+        }
+        if (mudou) gravarContatosPendentes(pend);
+      }
+      // pílulas "Receita: ..." (telefone/e-mail da ficha de CNPJ - muitas vezes
+      // é o do contador, por isso só sugestão)
+      function renderSugestoesContato(cliente) {
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id)) || {};
+        const tel = normalizarWhatsBr(local.telefone_ficha || cliente.telefone_ficha);
+        const email = normalizarEmails(local.email_ficha || cliente.email_ficha, 1);
+        const pilula = (alvo, valor, texto) => `<button type="button" data-alvo="${alvo}" data-valor="${escapeHtml(valor)}">Receita: ${escapeHtml(texto)}</button>`;
+        document.getElementById('contatoTelefoneSug').innerHTML = tel ? pilula('contatoTelefone', formatarWhatsBr(tel), formatarWhatsBr(tel)) : '';
+        document.getElementById('contatoEmailSug').innerHTML = email ? pilula('contatoEmail', email, email) : '';
+        document.getElementById('contatoEmailNfeSug').innerHTML = email ? pilula('contatoEmailNfe', email, email) : '';
+      }
+
       let whatsEditando = null; // cliente da janela aberta
       function temSeletorDeContatos() {
         return !!(navigator.contacts && typeof navigator.contacts.select === 'function');
@@ -10857,7 +10986,8 @@
         const valor = input.value.trim();
         const num = normalizarWhatsBr(valor);
         previa.classList.toggle('erro', !!valor && !num);
-        previa.textContent = !valor ? 'Sem número: o orçamento abre o compartilhar normal.'
+        const temNome = !!document.getElementById('whatsCompradorNome').value.trim();
+        previa.textContent = !valor ? (temNome ? 'Sem telefone, o nome do comprador não é guardado.' : 'Sem número: o orçamento abre o compartilhar normal.')
           : num ? `Conversa: +55 ${formatarWhatsBr(num)}` : 'Confira o número: DDD + número (ex: 43 99999-8888).';
         document.querySelectorAll('#whatsSugestoes button').forEach(b => b.classList.toggle('ativo', b.dataset.numero === num));
       }
@@ -10883,7 +11013,12 @@
         document.getElementById('whatsCompradorNome').value = atual ? atual.nome : '';
         document.getElementById('whatsContatosBtn').classList.toggle('hidden', !temSeletorDeContatos());
         document.getElementById('whatsSemContatos').classList.toggle('hidden', temSeletorDeContatos());
-        document.getElementById('whatsCompradorRemover').classList.toggle('hidden', !atual);
+        const k = contatosDoCliente(cliente);
+        document.getElementById('contatoTelefone').value = k.tel ? formatarWhatsBr(k.tel) : '';
+        document.getElementById('contatoEmail').value = k.email;
+        document.getElementById('contatoEmailNfe').value = k.nfe;
+        document.getElementById('contatosErro').classList.add('hidden');
+        renderSugestoesContato(cliente);
         renderSugestoesWhats(sugestaoDaFicha(cliente));
         atualizarPreviaWhats();
         document.getElementById('whatsCompradorOverlay').classList.remove('hidden');
@@ -10919,30 +11054,48 @@
         const nums = (contato.tel || []).map(normalizarWhatsBr).filter(Boolean);
         if (nums.length === 0) { showToast('Esse contato não tem número de celular com DDD', 'erro'); return; }
         const nome = String((contato.name && contato.name[0]) || '').trim();
-        if (nome) document.getElementById('whatsCompradorNome').value = nome.slice(0, 60);
+        if (nome) document.getElementById('whatsCompradorNome').value = nome.slice(0, 100);
         // celular (9 dígitos) primeiro; vários números ficam como pílulas
         const celular = nums.find(n => n.length === 13) || nums[0];
         document.getElementById('whatsCompradorNumero').value = formatarWhatsBr(celular);
         renderSugestoesWhats([...(nums.length > 1 ? nums.map(n => ({ numero: n, rotulo: '' })) : []), ...sugestaoDaFicha(whatsEditando)]);
         atualizarPreviaWhats();
       }
-      function confirmarWhatsComprador(remover) {
+      function confirmarWhatsComprador() {
         const cliente = whatsEditando;
         if (!cliente) return;
+        // empresa: telefone (fixo vale) e e-mails conferidos antes de fechar
+        const erro = (msg, campo) => {
+          const el = document.getElementById('contatosErro');
+          el.textContent = msg;
+          el.classList.remove('hidden');
+          document.getElementById(campo).focus();
+        };
+        const telTxt = document.getElementById('contatoTelefone').value.trim();
+        const emailTxt = document.getElementById('contatoEmail').value.trim();
+        const nfeTxt = document.getElementById('contatoEmailNfe').value.trim();
+        const tel = telTxt ? normalizarWhatsBr(telTxt) : '';
+        const email = emailTxt ? normalizarEmails(emailTxt, 1) : '';
+        const nfe = nfeTxt ? normalizarEmails(nfeTxt, 3) : '';
+        if (tel === null) return erro('Confira o telefone comercial: DDD + número (ex: 44 3025-1180).', 'contatoTelefone');
+        if (email === null) return erro('Confira o e-mail comercial (um só).', 'contatoEmail');
+        if (nfe === null) return erro('Confira o e-mail NF/XML (até 3, separados por ;).', 'contatoEmailNfe');
         const valor = document.getElementById('whatsCompradorNumero').value.trim();
-        const numero = remover ? '' : (valor ? normalizarWhatsBr(valor) : '');
+        const numero = valor ? normalizarWhatsBr(valor) : '';
         if (numero === null) { atualizarPreviaWhats(); document.getElementById('whatsCompradorNumero').focus(); return; }
-        const nome = document.getElementById('whatsCompradorNome').value.replace(/\s+/g, ' ').trim().slice(0, 60);
+        const nome = document.getElementById('whatsCompradorNome').value.replace(/\s+/g, ' ').trim().slice(0, 100);
         const atual = whatsCompradorDoCliente(cliente);
+        const atualK = contatosDoCliente(cliente);
         fecharWhatsComprador();
-        if (!numero && !atual) return;
-        if (atual && atual.numero === numero && atual.nome === nome) return;
-        salvarWhatsComprador(cliente, numero, nome);
+        let salvou = false;
+        if ((numero || atual) && !(atual && atual.numero === numero && atual.nome === nome)) { salvarWhatsComprador(cliente, numero, nome); salvou = true; }
+        if (tel !== atualK.tel || email !== atualK.email || nfe !== atualK.nfe) { salvarContatosCliente(cliente, { tel, email, nfe }); salvou = true; }
+        if (!salvou) return;
         if (state.levCliente && String(state.levCliente.id) === String(cliente.id)) {
           atualizarWhatsClienteBar('lev', state.levCliente);
           atualizarWhatsClienteBar('precos', state.levCliente);
         }
-        showToast(numero ? 'WhatsApp do comprador salvo — o orçamento em texto vai direto pra ele' : 'WhatsApp do comprador removido');
+        showToast(numero ? 'Contatos salvos — o orçamento em texto vai direto pro WhatsApp do comprador' : 'Contatos salvos');
       }
       function initWhatsComprador() {
         document.getElementById('whatsCompradorNumero').addEventListener('input', atualizarPreviaWhats);
@@ -10953,8 +11106,14 @@
           atualizarPreviaWhats();
         });
         document.getElementById('whatsContatosBtn').addEventListener('click', escolherWhatsDosContatos);
-        document.getElementById('whatsCompradorSalvar').addEventListener('click', () => confirmarWhatsComprador(false));
-        document.getElementById('whatsCompradorRemover').addEventListener('click', () => confirmarWhatsComprador(true));
+        document.getElementById('whatsCompradorSalvar').addEventListener('click', () => confirmarWhatsComprador());
+        document.getElementById('whatsCompradorNome').addEventListener('input', atualizarPreviaWhats);
+        // pílulas "Receita: ..." preenchem o campo delas
+        ['contatoTelefoneSug', 'contatoEmailSug', 'contatoEmailNfeSug'].forEach(id => document.getElementById(id).addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-alvo]');
+          if (b) document.getElementById(b.dataset.alvo).value = b.dataset.valor;
+        }));
+        ['contatoTelefone', 'contatoEmail', 'contatoEmailNfe'].forEach(id => document.getElementById(id).addEventListener('input', () => document.getElementById('contatosErro').classList.add('hidden')));
         document.getElementById('whatsCompradorCancel').addEventListener('click', fecharWhatsComprador);
         document.getElementById('whatsCompradorOverlay').addEventListener('click', fecharWhatsComprador);
       }
@@ -13430,6 +13589,7 @@
             saveClientesLocais(result.clientes);
             podarNomesArquivoPendentes(result.clientes);
             podarWhatsPendentes(result.clientes);
+            podarContatosPendentes(result.clientes);
             if (pertoAberto()) renderPerto();
             renderRota();
             buscarClienteProximo(); // 1ª cópia de clientes chegou depois da leitura do GPS
