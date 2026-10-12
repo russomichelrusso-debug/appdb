@@ -5153,6 +5153,17 @@
       color: var(--gray);
     }
 
+    .ofertaEstoque {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .ofertaEstoque .previsaoBadge,
+    .clientPickerItem .previsaoBadge {
+      margin: 0 6px 0 0;
+    }
+
     .ofertaAcoes {
       display: flex;
       gap: 8px;
@@ -18365,7 +18376,7 @@
           ? encontrados.map(p => `
       <button type="button" class="clientPickerItem" data-prod-cod="${escapeHtml(p.c)}" data-prod-nome="${escapeHtml(p.n)}">
         <div class="cpName">${escapeHtml(p.n)}</div>
-        <div class="cpMeta">Cód. ${escapeHtml(p.c)}</div>
+        <div class="cpMeta">${renderPrevisaoBadge(p.c)}Cód. ${escapeHtml(p.c)}</div>
       </button>`).join('')
           : '<div class="lev-empty">Nenhum produto encontrado.</div>';
         wrap.querySelectorAll('[data-prod-cod]').forEach(btn => {
@@ -18669,6 +18680,17 @@
         return partes.join(' · ');
       }
 
+      // Previsão de estoque na ficha do produto (aba Produtos): o mesmo selo do
+      // Pedido/Levantamento + os números da planilha de itens em falta. Produto
+      // fora da planilha não está em falta - nada a mostrar.
+      function renderEstoqueDaFicha(cod) {
+        const prev = PREVISAO_MAP[cod];
+        if (!prev) return '';
+        const partes = [`Disponível ${prev.qtDisponivel}`];
+        if (prev.qtCarteira) partes.push(`em carteira ${prev.qtCarteira}`);
+        if (prev.qtCompra) partes.push(`em compra ${prev.qtCompra}`);
+        return `<div class="ofertaEstoque">${renderPrevisaoBadge(cod)}${escapeHtml(partes.join(' · '))}</div>`;
+      }
       async function renderProdutoOferta(cod) {
         const el = document.getElementById('prodOferta');
         if (!el) return;
@@ -18687,6 +18709,7 @@
               ${of.regra ? `<span class="ofertaDe">${brl(of.de)}</span>` : ''}<span class="ofertaPor">${brl(of.por)}</span>${of.regra ? `<span class="ofertaOff">-${of.pct}%</span>` : ''}
             </div>
             <div class="ofertaMeta">${of.regra ? escapeHtml(condicoesDaOferta(of, true)) : 'Sem campanha pra este produto nesse canal e estado.'}</div>
+            ${renderEstoqueDaFicha(cod)}
           </div>
           <div class="ofertaAcoes">
             <button type="button" class="recompraBtn recompraBtn--principal" id="ofertaCardBtn">Enviar card</button>
