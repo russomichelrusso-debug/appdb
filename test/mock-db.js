@@ -1836,6 +1836,12 @@ async function query(sql, params = []) {
   if (s.startsWith('SELECT') && s.includes('FROM USUARIOS WHERE ID = $1')) {
     return { rows: usuarios.filter(u => u.id == params[0]).map(u => ({ ...u })) };
   }
+  if (s.includes('/* USUARIOS:NOME */')) {
+    const u = usuarios.find(x => x.id == params[0]);
+    if (!u) return { rows: [] };
+    u.nome = params[1];
+    return { rows: [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo !== false }] };
+  }
   if (s.startsWith('UPDATE USUARIOS SET ATIVO')) {
     const u = usuarios.find(x => x.id == params[0]);
     if (!u) return { rows: [] };

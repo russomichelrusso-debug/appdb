@@ -15498,6 +15498,7 @@
             <div class="prDetail">${escapeHtml(u.email || '')}${ativo ? '' : ' · <strong>desativado</strong> (não entra no app)'}</div>
           </div>
           <div class="prBtns">
+            <button data-nome-edit="${u.id}" data-nome-atual="${escapeHtml(u.nome || '')}" data-sou-eu="${souEu ? '1' : ''}" aria-label="Trocar o nome" title="Trocar o nome (aparece no card de oferta e no orçamento)">${PENCIL_SVG}</button>
             ${souEu ? '' : `<button data-ativo-user="${u.id}" data-ativo="${ativo ? '1' : '0'}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="${ativo ? 'prToggleOn' : ''}" aria-label="${ativo ? 'Desativar acesso' : 'Reativar acesso'}" title="${ativo ? 'Ativo — tocar pra desativar o acesso' : 'Desativado — tocar pra reativar o acesso'}">${ativo ? ICON_ATIVO : ICON_INATIVO}</button>`}
             <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
           </div>
@@ -15516,6 +15517,26 @@
               try {
                 await apiFetch(`/api/auth/usuarios/${btn.dataset.ativoUser}`, { method: 'PATCH', body: JSON.stringify({ ativo: !desativar }) });
                 showToast((desativar ? 'Acesso desativado: ' : 'Acesso reativado: ') + usuario);
+                renderUsersList();
+              } catch (e) {
+                showToast(e.message, 'erro');
+              }
+            });
+          });
+          wrap.querySelectorAll('[data-nome-edit]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const novo = await askText('Nome que aparece no card de oferta, no orçamento e como vendedor dos pedidos:', btn.dataset.nomeAtual, 'Salvar');
+              if (novo === null) return;
+              const nome = novo.replace(/\s+/g, ' ').trim();
+              if (!nome || nome === btn.dataset.nomeAtual) return;
+              try {
+                const u = await apiFetch(`/api/auth/usuarios/${btn.dataset.nomeEdit}/nome`, { method: 'PUT', body: JSON.stringify({ nome }) });
+                // o próprio nome vale na hora (card, PDF, vendedor do próximo pedido)
+                if (btn.dataset.souEu && state.currentUser) {
+                  state.currentUser.nome = u.nome;
+                  state.seller = u.nome;
+                }
+                showToast('Nome trocado: ' + u.nome);
                 renderUsersList();
               } catch (e) {
                 showToast(e.message, 'erro');

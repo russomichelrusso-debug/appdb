@@ -1732,6 +1732,24 @@ async function main() {
   );
   const tokenOutro = generateToken();
   await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tokenOutro), outroUsuario.rows[0].id, '90']);
+  // Trocar o nome do usuário (card de oferta, orçamento, vendedor): admin troca
+  // o de qualquer um; quem não é admin, só o próprio
+  {
+    const outroId = outroUsuario.rows[0].id;
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/nome`, { nome: '  Michel\n Russo ' });
+    assert(res.status === 200 && res.body.nome === 'Michel Russo', `admin troca o nome de outro usuário (sem quebra de linha): ${JSON.stringify(res.body)}`);
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/nome`, { nome: 'x' });
+    assert(res.status === 400, 'nome com menos de 2 letras é recusado');
+    const tokenAdm = authToken;
+    authToken = tokenOutro;
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/nome`, { nome: 'Outro Vendedor' });
+    const proprio = res.status;
+    res = await req('PUT', `/api/auth/usuarios/1/nome`, { nome: 'Tentativa' });
+    authToken = tokenAdm;
+    assert(proprio === 200 && res.status === 403, `vendedor troca o próprio nome, mas não o de outro: ${proprio}/${res.status}`);
+    res = await req('PUT', '/api/auth/usuarios/999999/nome', { nome: 'Ninguém' });
+    assert(res.status === 404, 'trocar nome de usuário inexistente: 404');
+  }
   const tokenAntesCotacao = authToken;
   authToken = tokenOutro;
   res = await req('POST', '/api/pedidos', { ...cotacaoBase, pdf_modificado_em: '2026-09-03T10:00:00Z',
