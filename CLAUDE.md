@@ -64,7 +64,9 @@ blocos `<script>` inline (e do CRLF do `index.html`) é `node scripts/checar-htm
 
 Automação do Claude Code (`.claude/`):
 - `settings.json` liga dois hooks: **SessionStart** (`hooks/session-start.sh`, só na nuvem, roda
-  `npm install`) e **PostToolUse** em Edit/Write (`hooks/pos-edicao.js`: `.html` →
+  `npm install` e instala o **`playwright-cli`** — `@playwright/cli`, versão fixa no script — com a
+  skill dele em `~/.claude/skills`, apontado pro Chromium de `/opt/pw-browsers` pelas variáveis
+  `PLAYWRIGHT_MCP_*` que o hook grava no `CLAUDE_ENV_FILE`) e **PostToolUse** em Edit/Write (`hooks/pos-edicao.js`: `.html` →
   `checar-html.js`; `.js` → `node --check`; `routes/`, `server.js`, `importadores.js`,
   `schema.sql`, `test/`… → `node test/run_tests.js`). Falha volta como erro pro Claude corrigir.
 - Subagente **`revisor-cortag`** (`agents/revisor-cortag.md`): revisa o diff contra as regras
