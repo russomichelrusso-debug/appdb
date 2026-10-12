@@ -5105,87 +5105,188 @@
     }
 
     /* Início da aba Produtos: campanhas ativas, recentes e campanha aberta */
-    .campLinha {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      width: 100%;
-      margin: 8px 0 0;
-      padding: 10px 12px;
+    /* Início da aba Produtos: campanhas agrupadas (Trade do mês + campanhas
+       especiais, opção "C" escolhida pelo usuário a partir de mockups) */
+    .campGrupo {
+      margin: 10px 0 0;
       background: var(--white);
       color: var(--ink);
       border: 0.75px solid var(--hairline);
-      border-left: 4px solid var(--red);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-1);
+      overflow: hidden;
+    }
+
+    .campGrupo--escuro {
+      background: #1D1D1F;
+      color: #FFFFFF;
+      border-color: #1D1D1F;
+    }
+
+    .campGrupoCab {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      padding: 16px;
+      background: transparent;
+      color: inherit;
+      border: 0;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .campGrupoTopo,
+    .campGrupoRodape {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+    }
+
+    .campGrupoRodape {
+      justify-content: space-between;
+    }
+
+    .campGrupoNome {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .campGrupoNome small {
+      display: block;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1px;
+      color: var(--red);
+    }
+
+    .campGrupo--escuro .campGrupoNome small {
+      color: #FF6B7A;
+    }
+
+    .campGrupoNome b {
+      display: block;
+      font-size: 22px;
+      font-weight: 800;
+      line-height: 1.15;
+    }
+
+    .campGrupoSelo,
+    .campTilePct {
+      background: var(--red);
+      color: var(--on-accent);
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .campGrupoSelo {
+      flex: none;
+      font-size: 15px;
+      padding: 6px 10px;
+      border-radius: 10px;
+    }
+
+    .campGrupoFotos {
+      display: flex;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .campGrupoFoto {
+      flex: 1;
+      max-width: 64px;
+      height: 52px;
+      border-radius: 10px;
+      background: #FFFFFF center / contain no-repeat;
+      border: 0.75px solid var(--hairline);
+    }
+
+    .campGrupo--escuro .campGrupoFoto {
+      border-color: #FFFFFF;
+    }
+
+    .campGrupoInfo {
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .campGrupo--escuro .campGrupoInfo,
+    .campGrupo--escuro .campTileDet {
+      color: #AEAEB2;
+    }
+
+    .campGrupoVer {
+      flex: none;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .campGrupoGrade {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 0 16px 16px;
+    }
+
+    .campTile {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      padding: 8px;
+      background: var(--white);
+      color: inherit;
+      border: 0.75px solid var(--hairline);
       border-radius: var(--r-md);
       text-align: left;
       cursor: pointer;
     }
 
-    .campLinha--bf {
-      background: #1D1D1F;
-      color: #FFFFFF;
-      border-color: #1D1D1F;
-      border-left-color: var(--red);
+    .campGrupo--escuro .campTile {
+      background: #2C2C2E;
+      border-color: #3A3A3C;
     }
 
-    .campThumb {
-      flex: none;
-      width: 44px;
-      height: 44px;
+    .campTileFoto {
+      position: relative;
+      height: 84px;
       border-radius: 10px;
-      background: var(--fill) center / contain no-repeat;
+      background: #FFFFFF center / contain no-repeat;
       display: flex;
       align-items: center;
       justify-content: center;
       color: var(--gray);
     }
 
-    .campLinha--bf .campThumb {
-      background-color: #FFFFFF;
+    .campGrupo .campTileFoto:not([style*="background-image"]) {
+      background-color: var(--fill);
     }
 
-    .campThumb svg {
-      width: 20px;
-      height: 20px;
+    .campTileFoto svg {
+      width: 22px;
+      height: 22px;
     }
 
-    .campTexto {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .campTexto b {
-      display: block;
-      font-size: 14.5px;
-      font-weight: 700;
-    }
-
-    .campTexto span {
-      display: block;
+    .campTilePct {
+      position: absolute;
+      right: 14px;
+      top: 70px;
       font-size: 12px;
-      color: var(--gray);
-      margin-top: 2px;
+      padding: 2px 7px;
+      border-radius: 7px;
     }
 
-    .campLinha--bf .campTexto span {
-      color: #AEAEB2;
+    .campTileNome {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
     }
 
-    .campPct {
-      flex: none;
-      text-align: right;
-      font-size: 20px;
-      font-weight: 800;
-      color: var(--red);
-      white-space: nowrap;
-      line-height: 1;
-    }
-
-    .campPct small {
-      display: block;
-      margin-top: 3px;
-      font-size: 11px;
-      font-weight: 500;
+    .campTileDet {
+      font-size: 11.5px;
       color: var(--gray);
     }
 
@@ -7706,6 +7807,11 @@
         <h3 id="promoModalTitle">Nova regra de campanha</h3>
         <label for="promoName">Nome da regra</label>
         <input type="text" id="promoName" placeholder="Ex: Campanha de discos - agosto">
+        <label for="promoCampanhaEspecial">Campanha especial (opcional)</label>
+        <input type="text" id="promoCampanhaEspecial" list="promoEspeciaisLista" maxlength="40" placeholder="Vazio = Trade do mês. Ex: Black Friday">
+        <datalist id="promoEspeciaisLista"></datalist>
+        <p class="ap-hint" style="margin:-8px 0 16px;">Na aba Produtos as regras aparecem juntas: o Trade do mês num card e
+          cada campanha especial em outro. Use o mesmo nome em todas as regras da mesma campanha.</p>
 
         <label>O desconto vale pra…</label>
         <div class="segmented" id="targetTypeSeg" style="margin-bottom:12px;">
@@ -17392,7 +17498,7 @@
           pct: Math.round((1 - por / de) * 100),
           validoAte: regra && /^\d{4}-\d{2}-\d{2}$/.test(regra.validoAte || '') ? regra.validoAte : null,
           naoAcumula: !!(bonus.soNoPrecoFixo || !bonus.stacks),
-          blackFriday: /black\s*friday/i.test(bonus.ruleName || ''),
+          blackFriday: /black\s*friday/i.test(bonus.ruleName || '') || /black\s*friday/i.test(campanhaEspecialDaRegra(regra)),
         };
       }
       function rotuloContextoPreco() {
@@ -17605,7 +17711,7 @@
       // Encarte: título pela campanha de onde saiu (Black Friday = visual escuro);
       // cada item com o seu de/por e a condição (quantidade mínima) quando houver.
       function htmlDoEncarte(itens, campanha, telefone) {
-        const bf = itens.some(x => x.of.regra && x.of.blackFriday) || (campanha && /black\s*friday/i.test(campanha.name || ''));
+        const bf = itens.some(x => x.of.regra && x.of.blackFriday) || (campanha && /black\s*friday/i.test(campanhaEspecialDaRegra(campanha) || campanha.name || ''));
         const nomeCampanha = campanha ? String(campanha.name || '').replace(/^\s*black\s*friday\s*[-–·:]\s*/i, '') : '';
         const validades = itens.map(x => x.of.validoAte).filter(Boolean).sort();
         const sub = [nomeCampanha, validades.length ? `até ${dataCurtaISO(validades[0])}` : ''].filter(Boolean).join(' · ');
@@ -17746,6 +17852,7 @@
       const PRODUTOS_RECENTES_LS_KEY = 'cortagProdutosRecentes_v1';
       const CAMPANHA_POR_PAGINA = 40;
       let campanhaAberta = null; // id da regra
+      let grupoCampanhaAberto; // chave do grupo aberto no início da aba (um por vez); undefined = ainda não tocou
       let campanhaSelecionados = [];
       let campanhaVerTodos = false;
       function lerProdutosRecentes() {
@@ -17779,13 +17886,89 @@
         const max = pcts.length ? Math.max(...pcts) : 0;
         return { texto: `${pcts.length > 1 ? 'até ' : ''}${String(max).replace('.', ',')}%`, faixas: pcts.length > 1 };
       }
-      function detalheDaCampanha(r, n) {
+      function detalheDaCampanha(r, n, semData) {
         const partes = [`${n} produto${n === 1 ? '' : 's'}`];
         if (r.soNoPrecoFixo) partes.push('no preço fixo');
         const classis = listaDaRegra(r.classificatorios);
         if (classis.length) partes.push(`só ${classis.join('/')}`);
-        if (/^\d{4}-\d{2}-\d{2}$/.test(r.validoAte || '')) partes.push(`até ${dataCurtaISO(r.validoAte)}`);
+        if (!semData && /^\d{4}-\d{2}-\d{2}$/.test(r.validoAte || '')) partes.push(`até ${dataCurtaISO(r.validoAte)}`);
         return partes.join(' · ');
+      }
+      // Grupo da regra no início da aba: a campanha especial que o Painel marcou
+      // ("Campanha especial") ou, sem ela, o Trade do mês. Regras de Black Friday
+      // de antes do campo entram pelo nome.
+      function campanhaEspecialDaRegra(r) {
+        const v = String((r && r.campanhaEspecial) || '').replace(/\s+/g, ' ').trim();
+        if (v) return v;
+        return /black\s*friday/i.test((r && r.name) || '') ? 'Black Friday' : '';
+      }
+      const NOMES_MES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+      function gruposDeCampanhas(campanhas) {
+        const grupos = new Map();
+        for (const x of campanhas) {
+          const especial = campanhaEspecialDaRegra(x.regra);
+          // Trade: pelo mês da validade (sem validade, o mês de hoje)
+          const anoMes = (/^\d{4}-\d{2}-\d{2}$/.test(x.regra.validoAte || '') ? x.regra.validoAte : hojeBrasiliaISO()).slice(0, 7);
+          const ano = anoMes.slice(0, 4), mes = Number(anoMes.slice(5, 7));
+          const titulo = especial || NOMES_MES[mes - 1] + (ano === hojeBrasiliaISO().slice(0, 4) ? '' : ' ' + ano);
+          const chave = especial ? 'e:' + especial.toLowerCase() : 't:' + anoMes;
+          if (!grupos.has(chave)) grupos.set(chave, { chave, especial: !!especial, titulo, anoMes, campanhas: [] });
+          grupos.get(chave).campanhas.push(x);
+        }
+        // Trade primeiro (pelo mês), depois as especiais
+        return [...grupos.values()].sort((a, b) => (a.especial - b.especial) || (a.especial ? a.titulo.localeCompare(b.titulo) : a.anoMes.localeCompare(b.anoMes)));
+      }
+      // "BLACK FRIDAY - CORTADORES" dentro do grupo Black Friday vira "CORTADORES"
+      function nomeDentroDoGrupo(nome, grupo) {
+        const n = String(nome || 'Campanha');
+        if (!grupo.especial) return n;
+        const t = grupo.titulo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s*');
+        return n.replace(new RegExp(`^\\s*${t}\\s*[-–·:]\\s*`, 'i'), '') || n;
+      }
+      function renderGrupoCampanhas(g, aberto) {
+        const escuro = g.especial && /black\s*friday/i.test(g.titulo);
+        const codigos = new Set();
+        let maior = 0, porFaixa = false;
+        const datas = new Set();
+        const fotos = [];
+        for (const { regra, produtos } of g.campanhas) {
+          produtos.forEach(p => codigos.add(p.c));
+          const pcts = (regra.tiers || []).map(t => Number(t.pct) || 0).filter(v => v > 0);
+          if (pcts.length > 1) porFaixa = true;
+          maior = Math.max(maior, ...pcts, 0);
+          datas.add(/^\d{4}-\d{2}-\d{2}$/.test(regra.validoAte || '') ? regra.validoAte : '');
+          const comFoto = produtos.find(p => codigoDaFoto(p.c) && !fotos.includes(p.c));
+          if (comFoto && fotos.length < 5) fotos.push(comFoto.c);
+        }
+        const pctsDiferentes = new Set(g.campanhas.flatMap(x => (x.regra.tiers || []).map(t => Number(t.pct) || 0).filter(v => v > 0))).size > 1;
+        const pctTexto = `${porFaixa || pctsDiferentes ? 'até ' : ''}${String(maior).replace('.', ',')}%`;
+        const umaData = datas.size === 1 ? [...datas][0] : '';
+        const n = g.campanhas.length;
+        const info = [`${n} campanha${n === 1 ? '' : 's'}`, `${codigos.size} produto${codigos.size === 1 ? '' : 's'}`];
+        if (umaData) info.push(`até ${dataCurtaISO(umaData)}`);
+        const tiles = !aberto ? '' : g.campanhas.map(({ regra, produtos }) => {
+          const comFoto = produtos.find(p => codigoDaFoto(p.c));
+          return `<button type="button" class="campTile" data-campanha="${escapeHtml(String(regra.id))}">
+            <span class="campTileFoto"${comFoto ? ` data-foto-cod="${escapeHtml(comFoto.c)}"` : ''}>${ICONE_CAMERA}</span>
+            <span class="campTilePct">${escapeHtml(pctDaCampanha(regra).texto)}</span>
+            <span class="campTileNome">${escapeHtml(nomeDentroDoGrupo(regra.name, g))}</span>
+            <span class="campTileDet">${escapeHtml(detalheDaCampanha(regra, produtos.length, !!umaData))}</span>
+          </button>`;
+        }).join('');
+        return `<div class="campGrupo${escuro ? ' campGrupo--escuro' : ''}">
+          <button type="button" class="campGrupoCab" data-grupo-campanha="${escapeHtml(g.chave)}" aria-expanded="${aberto}">
+            <span class="campGrupoTopo">
+              <span class="campGrupoNome"><small>${g.especial ? 'CAMPANHA ESPECIAL' : 'TRADE DO MÊS'}</small><b>${escapeHtml(g.titulo)}</b></span>
+              <span class="campGrupoSelo">${escapeHtml(pctTexto)}</span>
+            </span>
+            ${fotos.length ? `<span class="campGrupoFotos">${fotos.map(c => `<span class="campGrupoFoto" data-foto-cod="${escapeHtml(c)}"></span>`).join('')}</span>` : ''}
+            <span class="campGrupoRodape">
+              <span class="campGrupoInfo">${escapeHtml(info.join(' · '))}</span>
+              <span class="campGrupoVer">${aberto ? 'Fechar ▲' : 'Ver campanhas ▼'}</span>
+            </span>
+          </button>
+          ${aberto ? `<div class="campGrupoGrade">${tiles}</div>` : ''}
+        </div>`;
       }
       // Foto como fundo de um elemento já na tela (grade, miniatura): carrega
       // depois, sem travar a lista; descarta se a tela mudou.
@@ -17810,20 +17993,18 @@
         const el = document.getElementById('prodInicio');
         const campanhas = campanhasDaAba();
         const recentes = lerProdutosRecentes().map(productByCod).filter(Boolean);
-        const linhas = campanhas.map(({ regra, produtos }) => {
-          const bf = /black\s*friday/i.test(regra.name || '');
-          const comFoto = produtos.find(p => codigoDaFoto(p.c));
-          const pct = pctDaCampanha(regra);
-          return `<button type="button" class="campLinha${bf ? ' campLinha--bf' : ''}" data-campanha="${escapeHtml(String(regra.id))}">
-            <span class="campThumb"${comFoto ? ` data-foto-cod="${escapeHtml(comFoto.c)}"` : ''}>${ICONE_CAMERA}</span>
-            <span class="campTexto"><b>${escapeHtml(regra.name || 'Campanha')}</b><span>${escapeHtml(detalheDaCampanha(regra, produtos.length))}</span></span>
-            <span class="campPct">${escapeHtml(pct.texto)}<small>${pct.faixas ? 'por faixa' : 'de desconto'}</small></span>
-          </button>`;
-        }).join('');
+        const grupos = gruposDeCampanhas(campanhas);
+        // um grupo só já vem aberto (até o vendedor fechar); com mais, abre o que ele tocou
+        const aberto = g => (grupoCampanhaAberto === undefined ? grupos.length === 1 : g.chave === grupoCampanhaAberto);
+        const linhas = grupos.map(g => renderGrupoCampanhas(g, aberto(g))).join('');
         el.innerHTML = `<div class="clientesSecao" style="margin:14px 0 2px;">Campanhas ativas · ${escapeHtml(NOME_CANAL[state.canal] || state.canal || '')} · ${escapeHtml(state.uf || '')}</div>
           ${linhas || '<div class="lev-empty">Nenhuma campanha ativa nesse canal e estado.</div>'}
           ${recentes.length ? `<div class="clientesSecao" style="margin:16px 0 6px;">Recentes</div>
             <div class="clientesRecentes" style="padding:2px 0 4px;">${recentes.map(p => `<button type="button" class="clienteRecenteChip" data-recente-prod="${escapeHtml(p.c)}">${escapeHtml(p.c)} · ${escapeHtml(p.n)}</button>`).join('')}</div>` : ''}`;
+        el.querySelectorAll('[data-grupo-campanha]').forEach(b => b.addEventListener('click', () => {
+          grupoCampanhaAberto = b.getAttribute('aria-expanded') === 'true' ? null : b.dataset.grupoCampanha;
+          renderProdutosInicio();
+        }));
         el.querySelectorAll('[data-campanha]').forEach(b => b.addEventListener('click', () => {
           campanhaAberta = b.dataset.campanha;
           campanhaSelecionados = [];
@@ -18886,6 +19067,9 @@
 
         document.getElementById('promoModalTitle').textContent = rule ? 'Editar regra de campanha' : 'Nova regra de campanha';
         document.getElementById('promoName').value = rule ? rule.name : '';
+        document.getElementById('promoCampanhaEspecial').value = rule ? (campanhaEspecialDaRegra(rule) || '') : '';
+        document.getElementById('promoEspeciaisLista').innerHTML = [...new Set((state.promoRules || []).map(campanhaEspecialDaRegra).filter(Boolean))]
+          .map(n => `<option value="${escapeHtml(n)}"></option>`).join('');
 
         const targetType = rule ? rule.targetType : 'category';
         setTargetType(targetType);
@@ -19026,6 +19210,8 @@
         }
 
         const rule = { id: promoEditingId || ('r' + Date.now()), name, active: true, targetType, targetValue, basis, stacks, canais };
+        const especial = document.getElementById('promoCampanhaEspecial').value.replace(/\s+/g, ' ').trim().slice(0, 40);
+        if (especial) rule.campanhaEspecial = especial;
         const erroExtras = lerCondicoesExtrasDoForm(rule);
         if (erroExtras) { msg.innerHTML = `<div class="ap-msg error">${escapeHtml(erroExtras)}</div>`; return; }
 

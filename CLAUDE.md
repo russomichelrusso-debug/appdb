@@ -755,6 +755,15 @@ Supabase, sem PR — não é mudança de código.
     "pedido todo" ficam fora) e os **produtos recentes** (`cortagProdutosRecentes_v1`). Tocar abre a campanha:
     grade com foto e de/por; marcar até 6 → **card** (1) ou **encarte** (2–6, título "BLACK FRIDAY" escuro ou
     "OFERTAS", mesmo rodapé de contato).
+  - **Campanhas agrupadas** (10/2026, opção "C" escolhida pelo usuário a partir de mockups): o início da aba junta
+    as campanhas em cards — **Trade do mês** (a campanha mensal; agrupa pelo mês do `validoAte`, sem ele o mês de
+    hoje) e um card por **campanha especial** (esporádica: Black Friday ou outra). Decisão do usuário: o Trade é
+    automático; só a especial ganha o campo opcional **"Campanha especial"** na regra do Painel (`campanhaEspecial`,
+    com sugestão dos nomes já usados) — pelo nome não dá pra separar ("VIDRO 62796 - Master" × "BLACK FRIDAY -
+    Cortadores"). Regra antiga com "BLACK FRIDAY" no nome entra no grupo Black Friday sem o campo
+    (`campanhaEspecialDaRegra`). Tocar no card abre a grade 2 colunas das campanhas (foto, % e o nome sem o
+    prefixo do grupo), um grupo aberto por vez (um grupo só já vem aberto); tocar na campanha abre a grade de
+    produtos de antes. Card escuro só no grupo com "Black Friday" no nome (e o card/encarte de oferta também).
   - **"Já compraram" com WhatsApp**: comprador com WhatsApp do comprador cadastrado ganha "mandar oferta", que
     abre a conversa (`wa.me`) com o texto da oferta no **preço DELE** (`comContextoDoCliente`: canal/
     classificatório pela política, ou o padrão do canal sem classificatório, e UF da ficha de CNPJ; sem prazo,
