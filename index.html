@@ -10650,6 +10650,7 @@
         // Canal e % pelo classificatório do cliente, conforme a Política
         // Comercial (CLASSI_POR_CANAL) - ex: "Atacado Premium" troca o Canal
         // pra Atacado e marca 22%. Nome fora da tabela: usa o % do ERP.
+        const avisos = [];
         if (cliente && cliente.classificatorio_tipo) {
           const politica = classificatorioDaPolitica(cliente.classificatorio_tipo);
           const pct = politica ? politica.v
@@ -10657,9 +10658,20 @@
           if (politica && politica.canal !== state.canal) mudarCanal(politica.canal);
           if (pct != null && !isNaN(pct)) {
             setChannelDiscount(pct);
-            showToast(`Canal ${NOME_CANAL[state.canal] || state.canal} · ${cliente.classificatorio_tipo} ${rotuloPctClassi(pct)}`);
+            avisos.push(`Canal ${NOME_CANAL[state.canal] || state.canal} · ${cliente.classificatorio_tipo} ${rotuloPctClassi(pct)}`);
           }
         }
+        // Estado do preço pela UF do cliente (ficha de CNPJ, cópia do /sync - vale
+        // sem internet), não pelo GPS do vendedor, que erra quando ele atende
+        // cliente de outro estado. Continua editável; pedido salvo reaberto volta
+        // com o estado gravado nele (aplicarContextoDoPedido roda depois daqui).
+        const ufCliente = ufDoCliente(cliente);
+        if (ufCliente && ufCliente !== state.uf) {
+          const sel = document.getElementById('stateSelect');
+          if (sel) { sel.value = ufCliente; sel.dispatchEvent(new Event('change')); } else state.uf = ufCliente;
+          avisos.push(`Estado ${ufCliente} pelo cadastro do cliente`);
+        }
+        if (avisos.length) showToast(avisos.join(' · '), avisos.length > 1 ? 'longo' : undefined);
         // Cobre "cliente selecionado depois que o produto já estava no
         // carrinho" - o gancho em addToCart cobre a ordem inversa. Roda
         // sempre (mesmo sem classificatório, ou cliente=null ao limpar),
@@ -10682,6 +10694,14 @@
           setPedidoEditando(null);
           showToast(`Pedido de ${nomeAnterior} fechado — "Finalizar" agora grava um pedido novo`, 'longo');
         }
+      }
+
+      // UF da ficha de CNPJ do cliente (null sem ficha ou UF desconhecida)
+      function ufDoCliente(cliente) {
+        if (!cliente || cliente.id == null) return null;
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id));
+        const uf = String((local && local.endereco && local.endereco.uf) || '').trim().toUpperCase();
+        return uf && STATE_BY_UF[uf] ? uf : null;
       }
 
       // ---------------- Atalho pra ficha cadastral (CNPJ) ----------------

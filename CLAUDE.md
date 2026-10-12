@@ -872,9 +872,11 @@ Supabase, sem PR — não é mudança de código.
      visita no tempo vago. Casa com o painel de "oportunidades do dia" acima.
   3. Feito em 10/2026: **registro de visita** (ver "Visitas × compras" acima).
   4. Feito em 10/2026: **rota por cidade** (ver "🗺 Rota por cidade" acima).
-  5. **Estado do preço pela UF do cliente** (ficha de CNPJ) em vez do GPS do vendedor — o botão
-     "usar GPS" pega a UF de onde o vendedor está, que erra quando ele atende cliente de outro
-     estado.
+  5. Feito em 10/2026: **estado do preço pela UF do cliente** — selecionar o cliente põe o estado da
+     ficha de CNPJ (`ufDoCliente` em `setLevCliente`, `index.html`, pela cópia do `/sync`), junto com o
+     canal do classificatório, num toast só. Continua editável; sem ficha não muda; pedido salvo reaberto
+     volta com o estado gravado (`aplicarContextoDoPedido` roda depois). O "usar GPS" continua. Em 10/2026:
+     300 fichas no PR, 1 em SP, 1 em RO.
   - Descartado por agora: prospecção de lojas que ainda não são clientes — depende de base
     externa de empresas por região, normalmente paga ou limitada.
 - **Vendedor cadastrado vê só os clientes dele — etapa futura, sem data** (pedido do usuário, 10/2026).
