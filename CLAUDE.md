@@ -790,6 +790,17 @@ Supabase, sem PR — não é mudança de código.
     pra isso funcionar sem internet. Imagem não vai direto pra um contato (limite do navegador): pra mandar o
     card, "Enviar card" e escolher o contato no compartilhar.
 
+- **"Você está na LOJA X?" — cliente sugerido pela proximidade** (10/2026, item 1 da localização): com o
+  card do cliente vazio no Pedido/Levantamento, o app pega o GPS e sugere a loja onde o vendedor está
+  (`buscarClienteProximo`, `index.html`): "Selecionar" ou "Não" (esconde aquela loja por 4 h,
+  `cortagProximoDispensado_v1`), e até 2 outras lojas vizinhas como alternativa. **Só pergunta, nunca
+  seleciona sozinho.** Posição da loja = `posicaoDoCliente` (a mesma de "Perto de mim"): GPS do levantamento
+  (raio 100 m) ou a aproximada pelo endereço (raio 250 m, "pelo endereço da ficha" — em 10/2026 eram 10 lojas
+  com GPS/número e 236 só com a rua), mais a precisão da leitura até 100 m; leitura com precisão pior que
+  200 m não sugere. **Só usa o GPS se a permissão já foi dada** (Permissions API) — abrir a aba nunca faz o
+  celular pedir. Busca ao abrir o app, ao entrar na aba, ao limpar o cliente e ao voltar pro app (chegou na
+  loja com ele em segundo plano); leitura vale 2 min e some depois de 10. Sem internet funciona (cópia do `/sync`).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -829,8 +840,7 @@ Supabase, sem PR — não é mudança de código.
   carteira). Em ordem de prioridade:
   0. Feito em 10/2026: posição aproximada pelo endereço da ficha e "Clientes perto de mim" com rota no
      Google Maps (ver acima) — cobre o item 2 abaixo, menos dias sem visita e objetivo em risco.
-  1. **Cliente sugerido pela proximidade**: ao abrir Levantamento/Pedido dentro da loja, "Você
-     está na LOJA X? Selecionar" — tira o passo de buscar o cliente toda visita.
+  1. Feito em 10/2026: **cliente sugerido pela proximidade** (ver "Você está na LOJA X?" acima).
   2. **"Clientes perto de mim"**: lista por distância (500 m / 2 km / 10 km) com dias sem visita,
      dias sem compra, 💡 sugestões de recompra e objetivo trimestral em risco — pra encaixar uma
      visita no tempo vago. Casa com o painel de "oportunidades do dia" acima.

@@ -2919,6 +2919,84 @@
       cursor: pointer;
     }
 
+    /* "Você está na LOJA X?" - sugestão pela posição do celular, só com o
+       card vazio (ver buscarClienteProximo) */
+    .clienteProximo {
+      margin-top: 8px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 0.75px solid var(--hairline);
+      background: var(--white);
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .clienteProximo.hidden {
+      display: none;
+    }
+
+    .proxPergunta b {
+      font-weight: 800;
+    }
+
+    .proxMeta {
+      margin-top: 2px;
+      font-size: 11.5px;
+      color: var(--gray);
+    }
+
+    .proxAcoes {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .proxAcoes button {
+      min-height: 40px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .proxSim {
+      flex: 1;
+      border: none;
+      background: var(--red);
+      color: #fff;
+    }
+
+    .proxNao {
+      padding: 0 16px;
+      border: 0.75px solid var(--hairline);
+      background: transparent;
+      color: var(--ink);
+    }
+
+    .proxOutras {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .proxOutra {
+      display: block;
+      width: 100%;
+      min-height: 36px;
+      margin-top: 4px;
+      padding: 0 10px;
+      border: 0.75px dashed var(--hairline);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--ink);
+      font-size: 12.5px;
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
     .clienteVazioBtn.hidden,
     .clienteSel.hidden,
     .clienteAcao.hidden {
@@ -6739,6 +6817,7 @@
     <div id="tabPrecos">
       <div class="clienteCard" id="precosClienteCard">
         <button type="button" class="clienteVazioBtn" id="precosSelectClientBtn">＋ Selecionar cliente</button>
+        <div class="clienteProximo hidden" id="precosClienteProximo" role="status"></div>
         <div class="clienteSel hidden" id="precosClienteSel">
           <div class="clienteTopo">
             <div class="clienteInfo">
@@ -6873,6 +6952,7 @@
     <div id="tabLevantamento" class="hidden">
       <div class="clienteCard" id="levClienteCard">
         <button type="button" class="clienteVazioBtn" id="levSelectClientBtn">＋ Selecionar cliente do levantamento</button>
+        <div class="clienteProximo hidden" id="levClienteProximo" role="status"></div>
         <div class="clienteSel hidden" id="levClienteSel">
           <div class="clienteTopo">
             <div class="clienteInfo">
@@ -10570,6 +10650,8 @@
         carregarAtalhoFichaCnpj(cliente);
         atualizarBotaoWaze(cliente);
         atualizarBotaoPedidosSalvos();
+        renderClienteProximo();
+        if (!cliente) buscarClienteProximo();
         // Orçamento aberto como o pedido de outro cliente: trocar (ou limpar)
         // o cliente desliga a edição - o próximo "Finalizar" grava um pedido
         // novo pro cliente escolhido, nunca altera o pedido do anterior.
@@ -11499,6 +11581,7 @@
             renderLevList();
             setTimeout(() => document.getElementById('levInput').focus(), 50);
           }
+          if (tab === 'precos' || tab === 'levantamento') buscarClienteProximo();
           // aqui e não no clique do botão da aba: também se chega na aba Clientes
           // pelo selo de classificatório do card (activateMainTab), e o bloco
           // "Recompra da semana" ficava escondido nesse caminho
@@ -13306,6 +13389,7 @@
             podarNomesArquivoPendentes(result.clientes);
             podarWhatsPendentes(result.clientes);
             if (pertoAberto()) renderPerto();
+            buscarClienteProximo(); // 1ª cópia de clientes chegou depois da leitura do GPS
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
             if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); atualizarWhatsClienteBar('lev', state.levCliente); atualizarWhatsClienteBar('precos', state.levCliente); }
           }
@@ -16149,6 +16233,122 @@
         classifCarregando = false;
         renderClassifAlertas();
       }
+      // ---- Cliente sugerido pela proximidade (Pedido e Levantamento) ----
+      // Card do cliente vazio e o vendedor dentro de uma loja: "Você está na
+      // LOJA X? Selecionar" - tira o passo de buscar o cliente toda visita.
+      // Só pergunta, nunca seleciona sozinho. Posição da loja como em "Perto de
+      // mim" (posicaoDoCliente): o GPS gravado ao salvar o levantamento (raio
+      // curto) ou a aproximada pelo endereço da ficha, que costuma ser um ponto
+      // da rua (raio maior, "pelo endereço"). Só usa o GPS se a permissão já foi
+      // dada (ao salvar levantamento ou em "Perto de mim") - abrir a aba não faz
+      // o celular pedir permissão. Pega de novo ao voltar pro app (chegou na
+      // loja com o app aberto no Pedido). "Não" esconde aquela loja por 4 h.
+      const PROX_DISPENSADOS_LS_KEY = 'cortagProximoDispensado_v1';
+      const PROX_DISPENSA_MS = 4 * 60 * 60 * 1000;
+      const PROX_POSICAO_VALE_MS = 2 * 60 * 1000;   // mais nova que isso: não pega de novo
+      const PROX_POSICAO_EXPIRA_MS = 10 * 60 * 1000; // mais velha: some (o vendedor já saiu da loja)
+      const PROX_PRECISAO_MAX_M = 200;              // leitura pior que isso (dentro de prédio): não sugere
+      const PROX_RAIO_GPS_M = 100;
+      const PROX_RAIO_ENDERECO_M = 250;
+      let proxPosicao = null; // { lat, lng, precisao, em }
+      let proxBuscando = false;
+      let proxExpiraTimer = null;
+
+      function proxDispensados() {
+        let d = {};
+        try { d = JSON.parse(localStorage.getItem(PROX_DISPENSADOS_LS_KEY)) || {}; } catch (e) { }
+        const agora = Date.now();
+        Object.keys(d).forEach(id => { if (!(agora - d[id] < PROX_DISPENSA_MS)) delete d[id]; });
+        return d;
+      }
+      function dispensarClienteProximo(id) {
+        const d = proxDispensados();
+        d[id] = Date.now();
+        try { localStorage.setItem(PROX_DISPENSADOS_LS_KEY, JSON.stringify(d)); } catch (e) { }
+        renderClienteProximo();
+      }
+      // Lojas que cabem na posição atual, da mais perto pra mais longe (até 3 -
+      // galeria/rua de comércio tem loja vizinha). A precisão da leitura entra
+      // no raio, até 100 m.
+      function lojasProximas() {
+        if (!proxPosicao || proxPosicao.precisao > PROX_PRECISAO_MAX_M) return [];
+        const folga = Math.min(proxPosicao.precisao || 0, 100);
+        const dispensados = proxDispensados();
+        return loadClientesLocais().map(c => {
+          if (dispensados[c.id]) return null;
+          const pos = posicaoDoCliente(c);
+          if (!pos) return null;
+          const dist = distanciaM(proxPosicao, pos);
+          return dist <= (pos.aprox ? PROX_RAIO_ENDERECO_M : PROX_RAIO_GPS_M) + folga ? { c, pos, dist } : null;
+        }).filter(Boolean).sort((a, b) => a.dist - b.dist).slice(0, 3);
+      }
+      function renderClienteProximo() {
+        const velha = !proxPosicao || Date.now() - proxPosicao.em > PROX_POSICAO_EXPIRA_MS;
+        const lojas = state.levCliente || velha ? [] : lojasProximas();
+        ['precos', 'lev'].forEach(prefixo => {
+          const el = document.getElementById(prefixo + 'ClienteProximo');
+          if (!el) return;
+          el.classList.toggle('hidden', lojas.length === 0);
+          if (!lojas.length) { el.innerHTML = ''; return; }
+          const [primeira, ...outras] = lojas;
+          const origem = (l) => l.pos.aprox ? 'pelo endereço da ficha' : 'pela visita anterior';
+          el.innerHTML = `<div class="proxPergunta">📍 Você está na <b>${escapeHtml(primeira.c.nome)}</b>?</div>
+            <div class="proxMeta">${formatarDistancia(primeira.dist)} daqui · ${origem(primeira)}</div>
+            <div class="proxAcoes">
+              <button type="button" class="proxSim" data-prox-sim="${escapeHtml(String(primeira.c.id))}">Selecionar</button>
+              <button type="button" class="proxNao" data-prox-nao="${escapeHtml(String(primeira.c.id))}">Não</button>
+            </div>
+            ${outras.length ? `<div class="proxOutras">Outra loja aqui perto:
+              ${outras.map(l => `<button type="button" class="proxOutra" data-prox-sim="${escapeHtml(String(l.c.id))}">${escapeHtml(l.c.nome)} · ${formatarDistancia(l.dist)}</button>`).join('')}
+            </div>` : ''}`;
+        });
+      }
+      async function buscarClienteProximo() {
+        if (state.levCliente || proxBuscando || !('geolocation' in navigator)) return;
+        if (proxPosicao && Date.now() - proxPosicao.em < PROX_POSICAO_VALE_MS) { renderClienteProximo(); return; }
+        // sem a Permissions API (ou sem permissão dada) não pergunta nada
+        try {
+          if (!navigator.permissions || (await navigator.permissions.query({ name: 'geolocation' })).state !== 'granted') return;
+        } catch (e) { return; }
+        if (state.levCliente || proxBuscando) return;
+        proxBuscando = true;
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            proxBuscando = false;
+            // em = hora da leitura (maximumAge deixa vir uma de até 1 min atrás)
+            proxPosicao = { lat: p.coords.latitude, lng: p.coords.longitude, precisao: Math.round(p.coords.accuracy || 0), em: Math.min(Date.now(), p.timestamp || Date.now()) };
+            renderClienteProximo();
+            // some sozinha quando vence, mesmo com a tela parada
+            clearTimeout(proxExpiraTimer);
+            proxExpiraTimer = setTimeout(renderClienteProximo, Math.max(0, proxPosicao.em + PROX_POSICAO_EXPIRA_MS - Date.now()) + 1000);
+          },
+          () => { proxBuscando = false; },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+        );
+      }
+      function selecionarClienteProximo(id) {
+        if (state.levCliente) return;
+        const cliente = loadClientesLocais().find(c => String(c.id) === String(id));
+        if (cliente) setLevCliente(cliente);
+      }
+      function initClienteProximo() {
+        ['precos', 'lev'].forEach(prefixo => {
+          document.getElementById(prefixo + 'ClienteProximo')?.addEventListener('click', (e) => {
+            const sim = e.target.closest('[data-prox-sim]');
+            if (sim) { selecionarClienteProximo(sim.dataset.proxSim); return; }
+            const nao = e.target.closest('[data-prox-nao]');
+            if (nao) dispensarClienteProximo(nao.dataset.proxNao);
+          });
+        });
+        // chegou na loja com o app aberto em segundo plano
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState !== 'visible') return;
+          const aba = ['tabPrecos', 'tabLevantamento'].some(id => !document.getElementById(id)?.classList.contains('hidden'));
+          if (aba) buscarClienteProximo(); else renderClienteProximo();
+        });
+        buscarClienteProximo();
+      }
+
       // ---- Clientes perto de mim (aba Clientes, abaixo da Recompra) ----
       // Lista por distância em linha reta da posição do celular, pra encaixar
       // uma visita no tempo vago. Posição da loja: o GPS gravado ao salvar o
@@ -20482,6 +20682,7 @@
           initLevantamento();
           initLevSaveOpen();
           initPrecosCliente();
+          initClienteProximo();
           initPedidosSalvos();
           initLevShare();
           initCsvNamePrompt();
