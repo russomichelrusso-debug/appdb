@@ -29,9 +29,16 @@
         "source": "git",
         "url": "https://github.com/addyosmani/agent-skills.git"
       }
+    },
+    "taste-skill": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/Leonxlnx/taste-skill.git"
+      }
     }
   },
   "enabledPlugins": {
-    "agent-skills@addy-agent-skills": true
+    "agent-skills@addy-agent-skills": true,
+    "taste-skill@taste-skill": true
   }
 }
