@@ -469,6 +469,31 @@ async function main() {
   assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
   assert(typeof res.body[0].quantidade_contada === 'string', 'quantidade_contada vem como string (NUMERIC do Postgres) - front precisa converter com Number(), nunca somar direto');
 
+  // 12b2) "Abrir levantamento" em qualquer aparelho: lista da equipe (30 dias)
+  // com cliente e vendedor; a quantidade de pedido do item vai pro servidor
+  {
+    const rPed = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      vendedor_nome: 'Outro Vendedor',
+      itens: [{ codigo_sku: '60863', quantidade_contada: 3, quantidade_pedido: 6 }, { codigo_sku: '60863', quantidade_contada: 1, quantidade_pedido: 'x' }],
+    });
+    const rItens = await req('GET', `/api/levantamentos/${rPed.body.levantamento_id}/itens`);
+    assert(rPed.status === 201 && rItens.body.length === 2 && Number(rItens.body[0].quantidade_pedido) === 6 && Number(rItens.body[1].quantidade_pedido) === 0,
+      `levantamento grava a quantidade de pedido do item (valor estranho vira 0): ${JSON.stringify(rItens.body)}`);
+    // salvo de novo no mesmo dia (mesmo cliente e vendedor): só a última versão aparece
+    const rPed2 = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' }, vendedor_nome: 'Outro Vendedor',
+      itens: [{ codigo_sku: '60863', quantidade_contada: 4 }],
+    });
+    const rRec = await req('GET', '/api/levantamentos/recentes');
+    const consulta = mockDb.__queryLog.filter(q => q.sql.includes('levantamentos:recentes')).pop();
+    assert(rRec.status === 200 && rRec.body.length >= 2 && rRec.body[0].id === rPed2.body.levantamento_id
+      && !rRec.body.some(l => l.id === rPed.body.levantamento_id)
+      && rRec.body[0].cliente_nome === 'João Silva Materiais' && rRec.body[0].vendedor === 'Outro Vendedor'
+      && rRec.body.some(l => l.vendedor === 'Michel Russo') && consulta && consulta.params[0] === 30,
+      `levantamentos recentes: equipe inteira, 30 dias, mais novo primeiro, com cliente e vendedor, só a última versão do dia: ${JSON.stringify(rRec.body)}`);
+  }
+
   // 12c) levantamento com id_envio (gerado no toque em salvar): com sinal fraco o
   // servidor gravava, a resposta se perdia e o reenvio da fila gravava outro. O
   // reenvio com o mesmo id devolve o já gravado (200), sem gravar de novo.

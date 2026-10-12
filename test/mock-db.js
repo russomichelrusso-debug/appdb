@@ -1662,7 +1662,7 @@ async function query(sql, params = []) {
     return { rowCount: 0, rows: [] };
   }
   if (s.includes('INSERT INTO LEVANTAMENTO_ITENS')) {
-    levantamentoItens.push({ id: nextId.levantamento_itens++, levantamento_id: params[0], produto_id: params[1], quantidade_contada: params[2] });
+    levantamentoItens.push({ id: nextId.levantamento_itens++, levantamento_id: params[0], produto_id: params[1], quantidade_contada: params[2], quantidade_pedido: params[3] || 0 });
     return { rows: [] };
   }
 
@@ -1672,6 +1672,23 @@ async function query(sql, params = []) {
   }
   if (s.includes('MEDIA_DIAS_ENTRE_PEDIDOS')) {
     return computeRotatividade(params[0]);
+  }
+  if (s.includes('LEVANTAMENTOS:RECENTES')) {
+    // equipe inteira, últimos N dias (params[0]), mais novo primeiro
+    const desde = Date.now() - params[0] * 86400000;
+    const diaBr = (d) => new Date(new Date(d).getTime() - 3 * 3600000).toISOString().slice(0, 10);
+    const vistos = new Set(); // DISTINCT ON (cliente, vendedor, dia de Brasília): só o mais novo
+    const rows = levantamentos.filter(l => new Date(l.data_visita).getTime() >= desde)
+      .sort((a, b) => new Date(b.data_visita) - new Date(a.data_visita) || b.id - a.id)
+      .filter(l => { const k = `${l.cliente_id}|${l.vendedor_id}|${diaBr(l.data_visita)}`; if (vistos.has(k)) return false; vistos.add(k); return true; })
+      .map(l => {
+        const itens = levantamentoItens.filter(li => li.levantamento_id === l.id);
+        const c = clientes.find(c => c.id == l.cliente_id);
+        const v = vendedores.find(v => v.id == l.vendedor_id);
+        return { id: l.id, id_envio: l.id_envio || null, cliente_id: l.cliente_id, cliente_nome: c ? c.nome : null, data_visita: l.data_visita, vendedor: v ? v.nome : null,
+          num_produtos: itens.length, total_unidades: String(itens.reduce((a, li) => a + Number(li.quantidade_contada), 0)) };
+      });
+    return { rows };
   }
   if (s.includes('FROM LEVANTAMENTOS L') && s.includes('LEFT JOIN VENDEDORES')) {
     return computeLevantamentosDoCliente(params[0]);
@@ -1684,7 +1701,7 @@ async function query(sql, params = []) {
     // doOpenSavedSurvey em index.html, que precisa de Number(...) nisso).
     return { rows: itens.map(li => {
       const prod = produtos.find(p => p.id === li.produto_id);
-      return { codigo_sku: prod ? prod.codigo_sku : null, quantidade_contada: String(li.quantidade_contada) };
+      return { codigo_sku: prod ? prod.codigo_sku : null, quantidade_contada: String(li.quantidade_contada), quantidade_pedido: String(li.quantidade_pedido || 0) };
     }) };
   }
 
