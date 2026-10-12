@@ -4531,6 +4531,17 @@
       margin-top: 2px;
     }
 
+    .ssResumo {
+      font-size: 12px;
+      color: var(--gray);
+      margin: 0 2px 8px;
+    }
+
+    .savedSurveyItem .ssLocal {
+      color: var(--info);
+      font-weight: 600;
+    }
+
     .savedSurveyItem .ssDel {
       background: var(--white);
       border: none;
@@ -7430,7 +7441,7 @@
     <div class="minimodal hidden" id="levOpenModal">
       <div class="minimodal-card" style="max-height:80vh;display:flex;flex-direction:column;">
         <h3>Levantamentos salvos</h3>
-        <input type="text" id="levOpenSearch" placeholder="Buscar por nome do cliente..." autocomplete="off"
+        <input type="text" id="levOpenSearch" placeholder="Buscar por cliente ou vendedor..." autocomplete="off"
           style="margin-bottom:12px;">
         <div id="savedSurveysList" style="overflow-y:auto;flex:1;min-height:0;"></div>
         <div class="minimodal-btnrow" style="margin-top:12px;">
@@ -10070,7 +10081,8 @@
           const payload = {
             cliente: { cliente_id: cliente.id, nome: cliente.nome },
             vendedor_nome: state.seller || undefined,
-            itens: state.survey.map(it => ({ codigo_sku: it.cod, quantidade_contada: it.qty })),
+            // pedido também vai pro servidor: abrir em outro aparelho traz a coluna "Ped."
+            itens: state.survey.map(it => ({ codigo_sku: it.cod, quantidade_contada: it.qty, quantidade_pedido: it.ped || 0 })),
             localizacao: localizacao || undefined,
             // gerado no toque: se a resposta se perder e o envio for pela fila, o
             // reenvio devolve o levantamento já gravado em vez de gravar outro
@@ -10092,7 +10104,14 @@
             // guarda o id do registro no servidor - permite recuperar os itens
             // de lá se a cópia local acima nunca chegar a ser gravada (ex.:
             // limite de espaço do navegador) ou for perdida depois.
-            serverId: (result && result.levantamento_id) || (idx >= 0 ? list[idx].serverId : undefined),
+            serverId: (result && result.levantamento_id) || undefined,
+            // salvo sem internet: o id da versão anterior serve só pra recuperar os
+            // itens se a cópia local falhar (fora da deduplicação da janela, que
+            // esconderia a versão anterior de outro dia)
+            serverIdAnterior: (result && result.levantamento_id) ? undefined
+              : (idx >= 0 ? (list[idx].serverId || list[idx].serverIdAnterior) : undefined),
+            // salvo sem internet ainda não tem serverId: a lista da equipe o reconhece por aqui
+            idEnvio: payload.id_envio,
           };
           if (idx >= 0) list[idx] = entry; else list.push(entry);
           saveSavedSurveysList(list);
@@ -10112,36 +10131,100 @@
         }
       }
 
+      // Levantamentos da equipe (últimos 30 dias, GET /api/levantamentos/recentes),
+      // juntos com a cópia deste aparelho: abre em qualquer celular o que foi salvo
+      // em outro. A lista fica guardada pra aparecer também sem internet (abrir um
+      // que só está no servidor precisa de internet pra baixar os itens).
+      const LEV_EQUIPE_LS_KEY = 'cortagLevantamentosEquipe_v1';
+      let levEquipe = null; // { em, lista } - última lista do servidor
+      let levEquipeErro = false;
+      let levEquipeCarga = 0;
+      function carregarLevEquipeGuardada() {
+        try {
+          const v = JSON.parse(localStorage.getItem(LEV_EQUIPE_LS_KEY) || 'null');
+          if (v && Array.isArray(v.lista)) return v;
+        } catch (e) { /* sem cópia */ }
+        return null;
+      }
+      async function atualizarLevEquipe() {
+        const minha = ++levEquipeCarga;
+        try {
+          const lista = await apiLevantamentosRecentes();
+          if (minha !== levEquipeCarga) return;
+          levEquipe = { em: Date.now(), lista: Array.isArray(lista) ? lista : [] };
+          levEquipeErro = false;
+          try { localStorage.setItem(LEV_EQUIPE_LS_KEY, JSON.stringify(levEquipe)); } catch (e) { /* ok sem cópia */ }
+        } catch (e) {
+          if (minha !== levEquipeCarga) return;
+          levEquipeErro = true;
+        }
+        if (!document.getElementById('levOpenModal').classList.contains('hidden')) {
+          renderSavedSurveysList(document.getElementById('levOpenSearch').value);
+        }
+      }
       function openLevOpenModal() {
         document.getElementById('levOpenSearch').value = '';
+        if (!levEquipe) levEquipe = carregarLevEquipeGuardada();
+        levEquipeErro = false;
         renderSavedSurveysList();
         document.getElementById('levOpenOverlay').classList.remove('hidden');
         document.getElementById('levOpenModal').classList.remove('hidden');
         setTimeout(() => document.getElementById('levOpenSearch').focus(), 50);
+        atualizarLevEquipe();
       }
       function closeLevOpenModal() {
         document.getElementById('levOpenOverlay').classList.add('hidden');
         document.getElementById('levOpenModal').classList.add('hidden');
       }
+      // Lista da janela: cópia do aparelho + equipe (sem repetir o mesmo
+      // levantamento: pelo id do servidor ou pelo id_envio do salvo sem internet)
+      function levantamentosDaJanela() {
+        const locais = loadSavedSurveysList().map(s => {
+          const items = Array.isArray(s.items) ? s.items : [];
+          return {
+            chave: 'l:' + s.id, localId: s.id, serverId: s.serverId, idEnvio: s.idEnvio, nome: s.name || '', vendedor: s.vendedor || '',
+            em: Number(s.savedAt) || 0, numProdutos: items.length, unidades: items.reduce((a, i) => a + (Number(i.qty) || 0), 0),
+          };
+        });
+        const serverIds = new Set(locais.map(l => String(l.serverId || '')).filter(Boolean));
+        const envios = new Set(locais.map(l => l.idEnvio).filter(Boolean));
+        const daEquipe = ((levEquipe && levEquipe.lista) || [])
+          .filter(l => l && !serverIds.has(String(l.id)) && !(l.id_envio && envios.has(l.id_envio)))
+          .map(l => ({
+            chave: 's:' + l.id, serverId: l.id, clienteId: l.cliente_id, nome: l.cliente_nome || 'Cliente sem nome', vendedor: l.vendedor || '',
+            em: Date.parse(l.data_visita) || 0, numProdutos: Number(l.num_produtos) || 0, unidades: Number(l.total_unidades) || 0,
+          }));
+        return locais.concat(daEquipe).sort((a, b) => b.em - a.em);
+      }
       function renderSavedSurveysList(filtro) {
         const wrap = document.getElementById('savedSurveysList');
-        let list = loadSavedSurveysList().sort((a, b) => b.savedAt - a.savedAt);
-        const termo = (filtro || '').trim().toLowerCase();
-        if (termo) list = list.filter(s => s.name.toLowerCase().includes(termo));
+        let list = levantamentosDaJanela();
+        const total = list.length;
+        // busca pelo cliente ou pelo vendedor, sem acento/maiúscula, cada palavra em qualquer ordem
+        const palavras = normalize(filtro).split(/\s+/).filter(Boolean);
+        if (palavras.length) list = list.filter(s => { const t = normalize(s.nome + ' ' + s.vendedor); return palavras.every(p => t.includes(p)); });
+        let situacao = '';
+        if (levEquipeErro) {
+          situacao = levEquipe
+            ? `Sem conexão — lista da equipe de ${new Date(levEquipe.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`
+            : 'Sem conexão — só os salvos neste aparelho';
+        } else if (!levEquipe) {
+          situacao = 'Buscando os levantamentos da equipe…';
+        }
+        const cabecalho = `<div class="ssResumo">${palavras.length ? `${list.length} de ${total}` : total} levantamento${total === 1 ? '' : 's'} · equipe, últimos 30 dias${situacao ? `<br>${escapeHtml(situacao)}` : ''}</div>`;
         if (list.length === 0) {
-          wrap.innerHTML = `<div class="promoEmpty">${termo ? 'Nenhum levantamento com esse nome.' : 'Nenhum levantamento salvo ainda.'}</div>`;
+          wrap.innerHTML = cabecalho + `<div class="promoEmpty">${palavras.length ? 'Nenhum levantamento com esse nome.' : 'Nenhum levantamento salvo ainda.'}</div>`;
           return;
         }
-        wrap.innerHTML = list.map(s => {
-          const totalItens = s.items.length;
-          const totalUn = s.items.reduce((a, i) => a + (i.qty || 0), 0);
-          const data = new Date(s.savedAt).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-          return `<div class="savedSurveyItem" data-open-survey="${s.id}">
+        wrap.innerHTML = cabecalho + list.map(s => {
+          const data = new Date(s.em).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+          const origem = s.localId ? `${s.vendedor ? escapeHtml(s.vendedor) + ' · ' : ''}<span class="ssLocal">neste aparelho</span>` : (s.vendedor ? escapeHtml(s.vendedor) : 'no servidor');
+          return `<div class="savedSurveyItem" ${s.localId ? `data-open-survey="${escapeHtml(s.localId)}"` : `data-open-server="${escapeHtml(String(s.serverId))}"`}>
       <div>
-        <div class="ssName">${escapeHtml(s.name)}</div>
-        <div class="ssMeta">${data} · ${totalItens} produto${totalItens === 1 ? '' : 's'} · ${totalUn} un.</div>
+        <div class="ssName">${escapeHtml(s.nome)}</div>
+        <div class="ssMeta">${data} · ${s.numProdutos} produto${s.numProdutos === 1 ? '' : 's'} · ${s.unidades} un. · ${origem}</div>
       </div>
-      <button type="button" class="ssDel" data-del-survey="${s.id}" aria-label="Excluir">${ICON_TRASH}</button>
+      ${s.localId ? `<button type="button" class="ssDel" data-del-survey="${escapeHtml(s.localId)}" aria-label="Excluir deste aparelho">${ICON_TRASH}</button>` : ''}
     </div>`;
         }).join('');
         wrap.querySelectorAll('[data-open-survey]').forEach(el => {
@@ -10150,10 +10233,13 @@
             doOpenSavedSurvey(el.dataset.openSurvey);
           });
         });
+        wrap.querySelectorAll('[data-open-server]').forEach(el => {
+          el.addEventListener('click', () => abrirLevantamentoDoServidor(Number(el.dataset.openServer)));
+        });
         wrap.querySelectorAll('[data-del-survey]').forEach(btn => {
           btn.addEventListener('click', async (e) => {
             e.stopPropagation();
-            if (!await askConfirm('Excluir esse levantamento salvo? Essa ação não pode ser desfeita.', 'Excluir', { perigo: true })) return;
+            if (!await askConfirm('Excluir a cópia desse levantamento deste aparelho? O que já foi pro servidor continua no histórico do cliente.', 'Excluir', { perigo: true })) return;
             const list = loadSavedSurveysList().filter(s => s.id !== btn.dataset.delSurvey);
             saveSavedSurveysList(list);
             if (state.levLoadedId === btn.dataset.delSurvey) { state.levLoadedId = null; state.levLoadedName = null; saveLevSurvey(); refreshLevSaveInfo(); }
@@ -10161,11 +10247,41 @@
           });
         });
       }
-      async function doOpenSavedSurvey(id) {
+      // Levantamento que só está no servidor (salvo em outro aparelho): baixa os
+      // itens, guarda a cópia neste aparelho e abre como os outros
+      async function abrirLevantamentoDoServidor(serverId) {
+        const l = ((levEquipe && levEquipe.lista) || []).find(x => Number(x.id) === serverId);
+        if (!l) return;
+        if (state.survey.length > 0 && !(await askConfirm('Isso vai substituir o levantamento atual (não salvo será perdido). Continuar?'))) return;
+        let itens;
+        try {
+          itens = await apiLevantamentoItens(serverId);
+        } catch (e) {
+          showToast('Não consegui baixar esse levantamento: ' + e.message, 'erro');
+          return;
+        }
+        const entry = {
+          id: 'srv' + serverId,
+          name: l.cliente_nome || 'Cliente sem nome',
+          clienteId: l.cliente_id || null,
+          savedAt: Date.parse(l.data_visita) || Date.now(),
+          vendedor: l.vendedor || '',
+          // NUMERIC do Postgres chega como texto: Number() antes de somar
+          items: (itens || []).map(it => ({ cod: it.codigo_sku, qty: Number(it.quantidade_contada) || 0, ped: Number(it.quantidade_pedido) || 0, done: false })),
+          serverId,
+          idEnvio: l.id_envio || undefined,
+        };
+        const list = loadSavedSurveysList().filter(s => s.id !== entry.id && String(s.serverId || '') !== String(serverId));
+        list.push(entry);
+        saveSavedSurveysList(list);
+        await doOpenSavedSurvey(entry.id, { entrada: entry, confirmado: true });
+      }
+      async function doOpenSavedSurvey(id, opcoes = {}) {
         const list = loadSavedSurveysList();
-        const entry = list.find(s => s.id === id);
+        // entrada pronta: abre mesmo se a cópia no aparelho não coube no localStorage
+        const entry = opcoes.entrada || list.find(s => s.id === id);
         if (!entry) return;
-        if (state.survey.length > 0 && state.levLoadedId !== id) {
+        if (!opcoes.confirmado && state.survey.length > 0 && state.levLoadedId !== id) {
           if (!await askConfirm('Isso vai substituir o levantamento atual (não salvo será perdido). Continuar?')) return;
         }
         let itensSalvos = entry.items || [];
@@ -10176,7 +10292,7 @@
         // como último recurso, em vez de abrir um levantamento "vazio".
         if (itensSalvos.length === 0) {
           try {
-            let levantamentoId = entry.serverId;
+            let levantamentoId = entry.serverId || entry.serverIdAnterior;
             if (!levantamentoId && entry.clienteId) {
               const doServidor = await apiLevantamentosCliente(entry.clienteId);
               levantamentoId = Array.isArray(doServidor) && doServidor.length > 0 ? doServidor[0].id : null;
@@ -10186,7 +10302,7 @@
               // quantidade_contada vem como NUMERIC do Postgres - o driver
               // devolve como string, não number; sem o Number(...) aqui, a
               // soma do resumo (reduce '+') concatena texto em vez de somar.
-              itensSalvos = (doServidorItens || []).map(it => ({ cod: it.codigo_sku, qty: Number(it.quantidade_contada) || 0, ped: 0, done: false }));
+              itensSalvos = (doServidorItens || []).map(it => ({ cod: it.codigo_sku, qty: Number(it.quantidade_contada) || 0, ped: Number(it.quantidade_pedido) || 0, done: false }));
             }
           } catch (e) { /* segue com lista vazia se não conseguir recuperar do servidor */ }
         }
@@ -13307,6 +13423,9 @@
       }
       async function apiLevantamentoItens(levantamentoId) {
         return apiFetch(`/api/levantamentos/${levantamentoId}/itens`);
+      }
+      async function apiLevantamentosRecentes() {
+        return apiFetch('/api/levantamentos/recentes');
       }
       async function apiRecuperarCliente(clienteId) {
         return apiFetch(`/api/clientes/${clienteId}/recuperar`);

@@ -46,13 +46,19 @@ function itensDoLevantamentoValidos(itens) {
     && (typeof it.codigo_sku === 'string' || typeof it.codigo_sku === 'number') && String(it.codigo_sku).trim() !== ''
     && Number.isFinite(Number(it.quantidade_contada)) && Number(it.quantidade_contada) >= 0);
 }
+// Quantidade de pedido do item (coluna "Ped." do levantamento) - opcional: app
+// antigo não manda e valor estranho vira 0, nunca motivo pra recusar.
+function quantidadePedido(it) {
+  const n = Number(it.quantidade_pedido);
+  return Number.isFinite(n) && n >= 0 ? n : 0;
+}
 
 // Grava um levantamento de estoque feito na visita ao cliente. Corpo esperado:
 // {
 //   cliente: { cliente_id?, nome, documento?, contato? },
 //   vendedor_nome?: "...",
 //   nome_levantamento?: "...",
-//   itens: [{ codigo_sku, quantidade_contada }, ...],
+//   itens: [{ codigo_sku, quantidade_contada, quantidade_pedido? }, ...],
 //   localizacao?: { latitude, longitude, precisao_m },  // GPS no momento de salvar
 //   id_envio?: "uuid"  // gerado no toque em salvar: o reenvio da fila offline não grava outro
 // }
@@ -100,8 +106,8 @@ router.post('/', async (req, res) => {
       // produto novo da Lista de Preços que ainda não está em produtos é criado do catálogo
       const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku, null);
       await client.query(
-        'INSERT INTO levantamento_itens (levantamento_id, produto_id, quantidade_contada) VALUES ($1, $2, $3)',
-        [levantamentoId, produtoId, item.quantidade_contada]
+        'INSERT INTO levantamento_itens (levantamento_id, produto_id, quantidade_contada, quantidade_pedido) VALUES ($1, $2, $3, $4)',
+        [levantamentoId, produtoId, item.quantidade_contada, quantidadePedido(item)]
       );
     }
 
@@ -191,6 +197,41 @@ router.delete('/rascunho', async (req, res) => {
   }
 });
 
+// Levantamentos da equipe inteira nos últimos 30 dias (decisão do usuário) -
+// a janela "Abrir levantamento" junta com a cópia do aparelho, pra abrir em
+// qualquer aparelho o que outro (ou o mesmo vendedor em outro celular) salvou.
+// id_envio: o app reconhece o salvo sem internet (cópia local ainda sem o id do servidor).
+const RECENTES_DIAS = 30;
+router.get('/recentes', async (req, res) => {
+  try {
+    // Salvar de novo grava outro levantamento (o POST nunca atualiza): do mesmo
+    // cliente, vendedor e dia (de Brasília) vale só o último - os anteriores
+    // apareciam como cópias velhas ao lado do salvo no aparelho.
+    const result = await pool.query(
+      `/* levantamentos:recentes */
+       SELECT l.id, l.id_envio, l.cliente_id, c.nome AS cliente_nome, l.data_visita, v.nome AS vendedor,
+              COUNT(li.id)::int AS num_produtos, COALESCE(SUM(li.quantidade_contada), 0) AS total_unidades
+       FROM (
+         SELECT DISTINCT ON (cliente_id, vendedor_id, (data_visita AT TIME ZONE 'America/Sao_Paulo')::date) *
+         FROM levantamentos
+         WHERE data_visita >= now() - make_interval(days => $1)
+         ORDER BY cliente_id, vendedor_id, (data_visita AT TIME ZONE 'America/Sao_Paulo')::date, data_visita DESC, id DESC
+       ) l
+       LEFT JOIN clientes c ON c.id = l.cliente_id
+       LEFT JOIN vendedores v ON v.id = l.vendedor_id
+       LEFT JOIN levantamento_itens li ON li.levantamento_id = l.id
+       GROUP BY l.id, l.id_envio, l.cliente_id, l.data_visita, c.nome, v.nome
+       ORDER BY l.data_visita DESC
+       LIMIT 500`,
+      [RECENTES_DIAS]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar levantamentos recentes.' });
+  }
+});
+
 // Itens de um levantamento já gravado - usado como fallback quando a cópia
 // local (localStorage, só no aparelho que salvou) não tem os itens na hora
 // de reabrir (ex.: a gravação local falhou silenciosamente por limite de
@@ -199,7 +240,7 @@ router.delete('/rascunho', async (req, res) => {
 router.get('/:id/itens', async (req, res) => {
   try {
     const result = await pool.query(
-      `SELECT p.codigo_sku, li.quantidade_contada
+      `SELECT p.codigo_sku, li.quantidade_contada, li.quantidade_pedido
        FROM levantamento_itens li
        JOIN produtos p ON p.id = li.produto_id
        WHERE li.levantamento_id = $1

@@ -743,6 +743,17 @@ Supabase, sem PR — não é mudança de código.
   **um aberto por vez** (`alternarBlocoCliente`). Inadimplência com relatório de mais de 15 dias fica cinza e vai pro
   fim. Perto de mim sem localização mostra "Permitir"/"Tentar de novo" e o passo a passo Android/iPhone.
 
+- **"Abrir levantamento" em qualquer aparelho** (10/2026, pedido do usuário: o levantamento ia pro banco mas só
+  abria no celular que salvou). A janela junta a cópia do aparelho com os levantamentos da **equipe inteira dos
+  últimos 30 dias** (decisões do usuário; `GET /api/levantamentos/recentes`, `routes/levantamentos.js`), com busca
+  por cliente ou vendedor (sem acento, palavras em qualquer ordem) e "N de M". Tocar num que só está no servidor
+  baixa os itens e guarda a cópia no aparelho; a lista fica em `cortagLevantamentosEquipe_v1` pra aparecer sem
+  internet (abrir um do servidor precisa de rede). Salvar de novo grava outro levantamento (o POST nunca atualiza):
+  a rota devolve só o último do mesmo cliente + vendedor + dia de Brasília. Sem repetir na janela: pelo `serverId`
+  da cópia ou pelo `id_envio` (salvo sem internet). O POST passou a gravar a **quantidade de pedido** do item
+  (`levantamento_itens.quantidade_pedido`, que existia e ficava 0): os salvos antes disso abrem em outro aparelho
+  com o pedido zerado.
+
 - **Foto do produto e card de oferta** (10/2026, 1ª parte do pedido "cards do produto com foto e preço
   promocional pra compartilhar"; mockups escolhidos pelo usuário). Decisões: foto **pelo Painel e pelo
   vendedor**, **qualquer vendedor** cadastra, card com **de/por**, **logo e contato** do vendedor; card
