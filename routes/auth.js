@@ -173,6 +173,29 @@ router.get('/usuarios', requireAuth, async (req, res) => {
   }
 });
 
+// Troca o nome do usuário (aparece no card de oferta, no PDF do orçamento e
+// como vendedor do pedido/levantamento). Admin troca o de qualquer um; quem
+// não é admin, só o próprio. 2 a 60 letras, sem quebra de linha.
+router.put('/usuarios/:id/nome', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ erro: 'Usuário inválido.' });
+  if (!req.usuario.is_admin && id !== req.usuario.id) return res.status(403).json({ erro: 'Você só pode trocar o seu próprio nome.' });
+  const nome = String((req.body && req.body.nome) ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (nome.length < 2 || nome.length > 60) return res.status(400).json({ erro: 'O nome precisa ter de 2 a 60 letras.' });
+  try {
+    const result = await pool.query(
+      '/* usuarios:nome */ UPDATE usuarios SET nome = $2 WHERE id = $1 RETURNING id, nome, email, is_admin, ativo',
+      [id, nome]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    console.log(`Nome do usuário ${result.rows[0].email} trocado por ${req.usuario.email}.`);
+    res.json(result.rows[0]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao trocar o nome.' });
+  }
+});
+
 // Desativa/reativa um usuário - só admin. É o caminho pro vendedor que saiu:
 // excluir não dá quando ele tem pedidos/importações gravados (o histórico
 // continua com o nome dele). Desativado não entra (login Google recusa) e a

@@ -797,8 +797,10 @@ Supabase, sem PR — não é mudança de código.
     sem nada importante nos ~70 px de cima nem nos ~80 de baixo (o WhatsApp cobre com o nome e a caixa de resposta).
     Limites do html2canvas: **não aplica `filter`** (o logo branco sai de um canvas, `logoBrancoUrl`) nem gradiente
     listrado (fundo liso); a fonte é a do sistema em peso 900 (a Archivo Black do mockup não está no app). Nome com
-    mais de 50 letras é cortado com "…" (`nomeCurtoDoCard`). O rodapé usa o nome do usuário logado: a conta "Admin"
-    sai "Fale comigo: Admin".
+    mais de 50 letras é cortado com "…" (`nomeCurtoDoCard`). O rodapé usa o nome do usuário logado, que agora se troca
+    no Painel › Gerenciar usuários (lápis; `PUT /api/auth/usuarios/:id/nome`, `routes/auth.js`: admin troca o de
+    qualquer um, quem não é admin só o próprio; 2 a 60 letras). O próprio nome vale na hora (`state.currentUser`/
+    `state.seller`: card, PDF do orçamento e vendedor do próximo pedido/levantamento).
 
 - **"Você está na LOJA X?" — cliente sugerido pela proximidade** (10/2026, item 1 da localização): com o
   card do cliente vazio no Pedido/Levantamento, o app pega o GPS e sugere a loja onde o vendedor está
