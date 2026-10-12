@@ -282,6 +282,36 @@ async function main() {
     'número vazio apaga o WhatsApp e o nome do comprador');
   res = await req('PUT', '/api/clientes/99999/whatsapp', { numero: '5543999998888' });
   assert(res.status === 404, 'WhatsApp de cliente inexistente: 404');
+  res = await req('PUT', '/api/clientes/9010/whatsapp', { numero: '5544998124471', nome: 'Marcos Antônio Pereira de Souza Albuquerque Neto Filho da Silva' });
+  assert(res.status === 200 && res.body.whatsapp_comprador_nome === 'Marcos Antônio Pereira de Souza Albuquerque Neto Filho da Silva',
+    `nome completo do comprador passa de 60 letras: ${JSON.stringify(res.body)}`);
+
+  // 5b4) Contatos comerciais (pro Salesforce): telefone comercial (fixo vale),
+  // e-mail comercial e e-mail NF/XML (até 3); vazio apaga; voltam no /sync
+  {
+    const { normalizarTelefoneBr, normalizarEmails } = require('../routes/lib/contatosCliente');
+    assert(normalizarTelefoneBr('(44) 3025-1180') === '554430251180' && normalizarTelefoneBr('+55 44 99812-4471') === '5544998124471'
+      && normalizarTelefoneBr('044 3025 1180') === '554430251180' && normalizarTelefoneBr('3025-1180') === null && normalizarTelefoneBr('44 89812-4471') === null,
+      'contatos: telefone com DDD (fixo ou celular) vira 55+DDD+número');
+    assert(normalizarEmails(' NFE@Loja.com.br ; xml@loja.com.br,nfe@loja.com.br ', 3) === 'nfe@loja.com.br; xml@loja.com.br'
+      && normalizarEmails('a@b.com c@d.com', 1) === null && normalizarEmails('sem-arroba.com', 3) === null,
+      'contatos: e-mails em minúsculas, sem repetir, separados por "; "');
+    res = await req('PUT', '/api/clientes/9010/contatos', { telefone_comercial: '(44) 3025-1180', email_comercial: 'Compras@Loja.com.br', email_nfe: 'nfe@loja.com.br; xml@loja.com.br' });
+    assert(res.status === 200 && res.body.telefone_comercial === '554430251180' && res.body.email_comercial === 'compras@loja.com.br'
+      && res.body.email_nfe === 'nfe@loja.com.br; xml@loja.com.br' && res.body.contatos_em, `grava os contatos do cliente: ${JSON.stringify(res.body)}`);
+    res = await req('GET', '/api/clientes/sync');
+    const comContatos = res.body.clientes.find(c => c.id === 9010);
+    assert(comContatos.telefone_comercial === '554430251180' && comContatos.email_nfe === 'nfe@loja.com.br; xml@loja.com.br' && comContatos.contatos_em
+      && 'email_ficha' in comContatos, '/sync traz os contatos do cliente e o e-mail da ficha (sugestão)');
+    for (const ruim of [{ telefone_comercial: '3025-1180' }, { email_comercial: 'a@b.com; c@d.com' }, { email_nfe: 'x@y.com; nada' }]) {
+      res = await req('PUT', '/api/clientes/9010/contatos', ruim);
+      assert(res.status === 400, `contato fora do formato é recusado: ${JSON.stringify(ruim)}`);
+    }
+    res = await req('PUT', '/api/clientes/9010/contatos', { telefone_comercial: '', email_comercial: '', email_nfe: '' });
+    assert(res.status === 200 && res.body.telefone_comercial === null && res.body.email_comercial === null && res.body.email_nfe === null, 'campos vazios apagam os contatos');
+    res = await req('PUT', '/api/clientes/99999/contatos', { telefone_comercial: '4430251180' });
+    assert(res.status === 404, 'contatos de cliente inexistente: 404');
+  }
 
   // 5c) regime tributário da ficha de CNPJ no /sync - o recado de ICMS-ST do
   // orçamento (gerado offline) muda o texto pra Simples/MEI x regime normal

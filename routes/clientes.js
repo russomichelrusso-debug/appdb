@@ -5,6 +5,7 @@ const { pool, registrarImportacao } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { sqlChaveEndereco } = require('./lib/geocodificacao');
+const { normalizarTelefoneBr, normalizarEmails } = require('./lib/contatosCliente');
 
 router.param('id', validarIdInteiro);
 
@@ -66,6 +67,7 @@ router.get('/sync', async (req, res) => {
       `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
               c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em, f.telefone AS telefone_ficha,
+              c.telefone_comercial, c.email_comercial, c.email_nfe, c.contatos_em, f.email AS email_ficha, -- "Contatos" do card
               CASE
                 WHEN f.dados_brutos->'mei'->>'optante' = 'true' THEN 'mei'
                 WHEN f.dados_brutos->'simples'->>'optante' = 'true' THEN 'simples'
@@ -259,7 +261,7 @@ router.put('/:id/nome-arquivo', async (req, res) => {
 router.put('/:id/whatsapp', async (req, res) => {
   const bruto = String(req.body.numero ?? '').trim();
   const numero = bruto.replace(/\D/g, '');
-  const nome = String(req.body.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const nome = String(req.body.nome ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100); // nome completo (Salesforce)
   if (bruto && !/^55[1-9]{2}\d{8,9}$/.test(numero)) {
     return res.status(400).json({ erro: 'Número de WhatsApp inválido — use DDD + número (ex: 43 99999-8888).' });
   }
@@ -276,6 +278,36 @@ router.put('/:id/whatsapp', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao salvar o WhatsApp do comprador.' });
+  }
+});
+
+// Contatos comerciais do cliente pro Salesforce (janela "Contatos" do card,
+// mostrados na Ficha cadastral): telefone comercial, e-mail comercial e e-mail
+// NF/XML. Qualquer usuário logado, como o WhatsApp do comprador. Campo vazio
+// apaga; fora do formato responde 400 (o app confere antes).
+router.put('/:id/contatos', async (req, res) => {
+  const corpo = req.body || {};
+  const valor = (k) => String(corpo[k] ?? '').trim();
+  const tel = valor('telefone_comercial'), email = valor('email_comercial'), nfe = valor('email_nfe');
+  const telefone = tel ? normalizarTelefoneBr(tel) : '';
+  const emailComercial = email ? normalizarEmails(email, 1) : '';
+  const emailNfe = nfe ? normalizarEmails(nfe, 3) : '';
+  if (telefone === null) return res.status(400).json({ erro: 'Telefone comercial inválido — use DDD + número (ex: 44 3025-1180).' });
+  if (emailComercial === null) return res.status(400).json({ erro: 'E-mail comercial inválido.' });
+  if (emailNfe === null) return res.status(400).json({ erro: 'E-mail NF/XML inválido (até 3, separados por ;).' });
+  try {
+    const result = await pool.query(
+      `/* clientes:contatos */ UPDATE clientes SET telefone_comercial = $1, email_comercial = $2, email_nfe = $3, contatos_em = now()
+       WHERE id = $4 RETURNING id, nome, telefone_comercial, email_comercial, email_nfe, contatos_em`,
+      [telefone || null, emailComercial || null, emailNfe || null, req.params.id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const c = result.rows[0];
+    console.log(`Contatos do cliente: ${c.nome} (id ${c.id}) atualizados por ${req.usuario?.email}.`);
+    res.json({ id: c.id, telefone_comercial: c.telefone_comercial, email_comercial: c.email_comercial, email_nfe: c.email_nfe, contatos_em: c.contatos_em });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao salvar os contatos do cliente.' });
   }
 });
 

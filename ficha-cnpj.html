@@ -266,6 +266,19 @@
     .fonteNota { font-size: 10.5px; color: var(--gray); margin-top: 14px; line-height: 1.5; }
     .avisoCache { background: var(--warning-bg); color: var(--amber); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
     .hidden { display: none !important; }
+
+    /* Contatos comerciais (pro Salesforce): editados no app, card do cliente
+       › Contatos; aqui só mostra e copia */
+    .contatoLinha { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--hairline); }
+    .fichaHead + .contatoLinha { border-top: none; }
+    .contatoLinha .txt { flex: 1; min-width: 0; }
+    .contatoLinha .lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 2px; }
+    .contatoLinha .val { font-size: 13.5px; font-weight: 600; word-break: break-word; }
+    .contatoLinha .val.vazio { color: var(--gray); font-weight: 400; font-style: italic; }
+    .copiarBtn { flex: none; min-width: 44px; min-height: 36px; border: 1px solid var(--hairline); border-radius: 9px; background: var(--fill); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .copiarBtn:active { opacity: .7; }
+    .copiarTudoBtn { width: 100%; min-height: 42px; margin-top: 10px; border: none; border-radius: 10px; background: var(--red); color: #fff; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+    .copiarTudoBtn:disabled { opacity: .5; cursor: default; }
   </style>
 </head>
 
@@ -311,6 +324,7 @@
       </div>
     </div>
 
+    <div id="contatosHost"></div>
     <div id="fichaHost"></div>
   </div>
 
@@ -612,9 +626,76 @@
       });
     }
 
+    // ---- Contatos comerciais (pro Salesforce) ----
+    // Telefone comercial, e-mail comercial, e-mail NF/XML e comprador (nome +
+    // WhatsApp), preenchidos no app (card do cliente › Contatos; funciona sem
+    // internet lá). Aqui só mostra, com botão de copiar em cada campo e "Copiar
+    // tudo pro Salesforce" (texto com rótulos). GET /api/clientes/:id.
+    let contatosReq = 0;
+    function formatarTelefoneBr(numero) {
+      const d = String(numero || '').replace(/\D/g, '').replace(/^55/, '');
+      if (d.length < 10) return String(numero || '');
+      const ddd = d.slice(0, 2), resto = d.slice(2);
+      return `(${ddd}) ${resto.slice(0, resto.length - 4)}-${resto.slice(-4)}`;
+    }
+    async function copiarTexto(texto, btn) {
+      const rotulo = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(texto);
+        btn.textContent = 'Copiado';
+      } catch (e) {
+        btn.textContent = 'Não copiou';
+      }
+      setTimeout(() => { btn.textContent = rotulo; }, 1400);
+    }
+    function renderContatos(c) {
+      const host = document.getElementById('contatosHost');
+      const campos = [
+        ['Telefone comercial', c.telefone_comercial ? formatarTelefoneBr(c.telefone_comercial) : ''],
+        ['E-mail comercial', c.email_comercial || ''],
+        ['E-mail NF/XML', c.email_nfe || ''],
+        ['Comprador', c.whatsapp_comprador_nome || ''],
+        ['Telefone do comprador', c.whatsapp_comprador ? formatarTelefoneBr(c.whatsapp_comprador) : ''],
+      ];
+      const preenchidos = campos.filter(([, v]) => v).length;
+      host.innerHTML = `
+        <div class="card">
+          <div class="fichaHead"><h2>Contatos comerciais</h2><span style="font-size:12px;color:var(--gray);">${preenchidos} de 5</span></div>
+          ${campos.map(([rot, v], i) => `<div class="contatoLinha">
+            <div class="txt"><span class="lbl">${escapeHtml(rot)}</span><span class="val${v ? '' : ' vazio'}">${v ? escapeHtml(v) : 'não preenchido'}</span></div>
+            ${v ? `<button type="button" class="copiarBtn" data-copiar="${i}" aria-label="Copiar ${escapeHtml(rot)}">Copiar</button>` : ''}
+          </div>`).join('')}
+          <button type="button" class="copiarTudoBtn" id="copiarTudoBtn"${preenchidos ? '' : ' disabled'}>Copiar tudo pro Salesforce</button>
+          <p class="cardHint" style="margin:10px 0 0;">Pra preencher ou mudar: no app, card do cliente (Pedido ou Levantamento) › Contatos.</p>
+        </div>`;
+      host.querySelectorAll('[data-copiar]').forEach(b => b.addEventListener('click', () => copiarTexto(campos[Number(b.dataset.copiar)][1], b)));
+      document.getElementById('copiarTudoBtn').addEventListener('click', (e) => {
+        const linhas = [c.nome || state.clienteNome];
+        if (state.clienteDoc) linhas.push(`CNPJ: ${formatarDocumento(state.clienteDoc)}`);
+        campos.forEach(([rot, v]) => { if (v) linhas.push(`${rot}: ${v}`); });
+        copiarTexto(linhas.join('\n'), e.currentTarget);
+      });
+    }
+    async function carregarContatos() {
+      const host = document.getElementById('contatosHost');
+      const req = ++contatosReq;
+      const clienteId = state.clienteId;
+      const velha = () => req !== contatosReq || state.clienteId !== clienteId;
+      host.innerHTML = '';
+      try {
+        const c = await apiFetch(`/api/clientes/${clienteId}`);
+        if (velha()) return;
+        renderContatos(c || {});
+      } catch (e) {
+        if (velha()) return;
+        host.innerHTML = `<div class="card"><div class="ap-msg error inline">Contatos: ${escapeHtml(e.message)}</div></div>`;
+      }
+    }
+
     function selecionarCliente(id, nome, doc) {
       fichaReq++; // a consulta em andamento (outro cliente) não aparece mais
       state.clienteId = id; state.clienteNome = nome; state.clienteDoc = doc;
+      carregarContatos();
       document.getElementById('clientPickerNome').textContent = nome;
       document.getElementById('clientPickerSelected').classList.remove('hidden');
       document.getElementById('clientPickerSearch').classList.add('hidden');
@@ -629,6 +710,8 @@
 
     function esqueceCliente() {
       fichaReq++;
+      contatosReq++;
+      document.getElementById('contatosHost').innerHTML = '';
       state.clienteId = null; state.clienteNome = ''; state.clienteDoc = '';
       document.getElementById('clientPickerSelected').classList.add('hidden');
       document.getElementById('clientPickerSearch').classList.remove('hidden');

@@ -52,6 +52,7 @@ async function semear() {
       101: {
         razao_social: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO LTDA', situacao_cadastral: 'ATIVA',
         logradouro: 'COLOMBO', numero: '7266', bairro: 'ZONA 07', municipio: 'MARINGA', uf: 'PR', cep: '87020001',
+        telefone: '(44) 3226-0011', email: 'fiscal@contabilmaringa.com.br', // "Receita: ..." na janela Contatos
         dados_brutos: { endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' } },
         atualizado_em: hoje.toISOString(),
       },
