@@ -78,6 +78,12 @@ Automação do Claude Code (`.claude/`):
   `/build`, `/test`, `/review`, `/ship`, `/code-simplify`, `/constraints`, `/webperf` e agentes
   code-reviewer/security-auditor/test-engineer/web-performance-auditor. São regras gerais: o que
   está neste arquivo e no `revisor-cortag` vale por cima delas (ex.: o fluxo de PR daqui).
+- Plugin **taste-skill** (`Leonxlnx/taste-skill`, registrado do mesmo jeito, 10/2026): skills de
+  design de interface (`taste-skill`, `redesign-skill`, `minimalist-skill`, `soft-skill`,
+  `image-to-code-skill`, `brandkit`…), só texto, sem script. Pensadas pra landing page em
+  React/Tailwind: aqui as páginas são HTML sem bundler e o "Padrão visual" do README (tokens de cor,
+  tema escuro, botões de modal) vale por cima delas — usar como referência de gosto, não pra trocar
+  o padrão do app.
 - MCP **Playwright** (`.mcp.json` → `.claude/mcp-playwright.js`): navegador com tela de celular
   (Pixel 7) pra abrir o app e tirar print. Com `scripts/app-local.js` rodando, abrir
   `http://localhost:8080/__entrar`. Na nuvem usa o Chromium de `/opt/pw-browsers` (sem janela,
