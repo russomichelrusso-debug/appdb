@@ -828,6 +828,11 @@ Supabase, sem PR — não é mudança de código.
   dias" no card do cliente (Pedido/Levantamento; laranja passados 60 dias). Funciona sem internet
   (`cortagVisitas_v1`); o levantamento salvo agora, até o da fila offline, já conta
   (`cortagVisitasLocais_v1`, até o servidor devolver a mesma visita). As duas cópias saem no logout.
+  Pedido do usuário (PR #231): o bloco só lista quem **não** está em Recompra, Inadimplência ou Para reativar
+  (`idsNosOutrosBlocosClientes`: o que cada bloco mostra — `recompraVisiveis`, `inadDados.clientes`,
+  `reativarVisiveis`, já sem "Já falei"/"Não reativar"; o filtro de cidade do Para reativar não conta) e diz
+  quantos ficaram de fora ("N já nos outros blocos"); é refeito quando essas listas carregam ou mudam. A Rota
+  por cidade (`cruzarVisitasCompras` inteira) e a linha "Sua última visita" do card não são filtradas.
 
 - **"🗺 Rota por cidade"** (10/2026, item 4 da localização). Decisões do usuário: **bloco próprio** na aba Clientes
   (abaixo de "Perto de mim"), lojas **prioritárias já marcadas**, **só monta e abre** (nada guardado por dia da
