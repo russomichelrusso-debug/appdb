@@ -17165,12 +17165,14 @@
         if (!(valorSaldo > 0) || valorSaldo >= minimo) return '';
         const falta = minimo - valorSaldo;
         const nomeItem = (it) => escapeHtml(it.produto || ('Cód. ' + it.codigo_sku));
-        const candidatos = itensSaldo.filter(it => !itemSemPrevisaoDeChegada(String(it.codigo_sku)));
+        // item que saiu da Lista de Preços (descontinuado) é cancelado de qualquer jeito:
+        // aumentar ele não salva o saldo
+        const candidatos = itensSaldo.filter(it => !it.descontinuado && !itemSemPrevisaoDeChegada(String(it.codigo_sku)));
         let acao;
         if (candidatos.length === 0) {
           acao = itensSaldo.length === 1
-            ? 'O item está sem previsão de chegada — aumentar não evita o cancelamento.'
-            : 'Os itens estão sem previsão de chegada — aumentar não evita o cancelamento.';
+            ? 'O item saiu de linha ou está sem previsão de chegada — aumentar não evita o cancelamento.'
+            : 'Os itens saíram de linha ou estão sem previsão de chegada — aumentar não evita o cancelamento.';
         } else {
           const sugestoes = candidatos.map(it => {
             const unitario = Number(it.valor) / Number(it.quantidade);
@@ -17181,7 +17183,7 @@
             ? `Pra faturar, o cliente pode aumentar ${sugestoes[0]}.`
             : `Pra faturar, o cliente pode aumentar qualquer um: ${sugestoes.join('; ')}.`;
           const semPrevisao = itensSaldo.length - candidatos.length;
-          if (semPrevisao > 0) acao += semPrevisao === 1 ? ' O outro item está sem previsão de chegada.' : ' Os outros estão sem previsão de chegada.';
+          if (semPrevisao > 0) acao += semPrevisao === 1 ? ' O outro item saiu de linha ou está sem previsão de chegada.' : ' Os outros saíram de linha ou estão sem previsão de chegada.';
         }
         const regiao = saldoMinimo && saldoMinimo.regiao ? ` (${escapeHtml(saldoMinimo.regiao)})` : '';
         return `<div class="hcSaldoMinimo">⚠ Saldo abaixo do mínimo de ${brl(minimo)}${regiao} · faltam ${brl(falta)} · pode ser cancelado. ${acao}</div>`;

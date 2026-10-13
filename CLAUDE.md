@@ -916,14 +916,18 @@ Supabase, sem PR — não é mudança de código.
   catálogo do aparelho é igual ao do servidor (o sync manda o do aparelho). Servidor sem `catalogo` (app
   publicado antes do Render) não acusa nada.
 
-- **"Descontinuado" na frente do produto que saiu de linha** (10/2026, pedido do usuário): produto cujo código
-  (ou o código base, no promocional P/P1/P2) não está mais na Lista de Preços (`catalogo_precos`) sai como
-  "Descontinuado · NOME" e com `descontinuado: true` em Histórico, Rotatividade, Recuperar, Comprados e não
-  contados, Curva ABC (geral e do cliente), card dos pedidos oficiais e itens da Recompra
-  (`marcarDescontinuados`, `routes/lib/descontinuado.js`). Marca na saída da rota, depois de agrupar (o nome
-  entra no `grupoDoProduto`); catálogo vazio não marca nada; o catálogo fica em cache 5 min e a importação da
-  Lista de Preços limpa (`esquecerCatalogo`). Rota nova que mostre nome de produto do histórico passa pelo mesmo
-  helper. As 💡 sugestões (por grupo, sem código) não são marcadas.
+- **"Descontinuado" na frente do produto que saiu de linha** (10/2026, pedido do usuário): a LISTA PADRÃO só
+  traz produto ativo (usuário: descontinuado é avisado por e-mail, ou o código é trocado). Produto cujo código
+  (ou o código base, no promocional P/P1/P2) não está mais em `catalogo_precos` sai como "Descontinuado · NOME"
+  e com `descontinuado: true` onde a tela é registro do que o cliente comprou: Histórico, Rotatividade, Curva
+  ABC (geral e do cliente; no rótulo curto das barras vira "† ") e card dos pedidos oficiais
+  (`marcarDescontinuados`, `routes/lib/descontinuado.js`, na saída da rota, depois de agrupar). Onde a tela é
+  "o que oferecer" ele **sai da lista**: Recuperar (ocupava as 30 vagas: é o de compra mais antiga), Comprados e
+  não contados, itens da Recompra e a sugestão "aumente o item" do saldo abaixo do mínimo. As 💡 sugestões são
+  por grupo: o grupo sai só quando **nenhum** produto do mesmo `grupoDoProduto` está na Lista de Preços (código
+  trocado por um novo continua). Catálogo vazio não marca nem tira nada; catálogo em cache 5 min, limpo na
+  importação da Lista de Preços (`esquecerCatalogo`, com geração pra consulta em andamento não regravar o
+  velho). Rota nova que mostre produto do histórico passa pelo mesmo helper.
 
 ## O que já tentamos e não deu certo
 

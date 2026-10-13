@@ -1551,6 +1551,9 @@ async function query(sql, params = []) {
 
   // catalogo_precos (routes/catalogoPrecos.js) - usado pela geração em
   // lote de produtos promocionais (routes/produtosPromocionais.js).
+  if (s === 'SELECT CODIGO_SKU, NOME FROM CATALOGO_PRECOS') {
+    return { rows: catalogoPrecos.map(p => ({ codigo_sku: p.codigo_sku, nome: p.nome })) };
+  }
   if (s === 'SELECT CODIGO_SKU FROM CATALOGO_PRECOS') {
     return { rows: catalogoPrecos.map(p => ({ codigo_sku: p.codigo_sku })) };
   }

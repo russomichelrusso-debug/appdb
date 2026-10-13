@@ -18,7 +18,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { codigoBase } = require('./lib/skuNormalizacao');
-const { marcarDescontinuados } = require('./lib/descontinuado');
+const { estaDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const {
@@ -93,6 +93,7 @@ router.get('/', async (req, res) => {
       anotar(c, l);
     }
 
+    const cat = await catalogoOuNada(pool);
     const lista = [];
     for (const [id, eventos] of eventosPorCliente) {
       const comprasCliente = juntarCompras(eventos);
@@ -102,6 +103,7 @@ router.get('/', async (req, res) => {
       const porSku = new Map();
       for (const e of eventos) {
         if (!nomePorCodigo.has(e.sku)) continue; // fora do catálogo: não vai pro orçamento
+        if (cat && estaDescontinuado(e.sku, cat.codigos)) continue; // saiu da Lista de Preços
         if (!porSku.has(e.sku)) porSku.set(e.sku, []);
         porSku.get(e.sku).push(e);
       }
@@ -119,7 +121,6 @@ router.get('/', async (req, res) => {
           .map(it => ({ ...it, nome: nomePorCodigo.get(it.codigo_sku) })),
       });
     }
-    await marcarDescontinuados(pool, lista.flatMap(c => c.itens), 'nome');
     lista.sort((a, b) => ORDEM_SITUACAO[a.situacao] - ORDEM_SITUACAO[b.situacao]
       || (a.situacao === 'semana' ? a.previsao.localeCompare(b.previsao) : a.atraso_dias - b.atraso_dias)
       || String(a.nome).localeCompare(String(b.nome)));
