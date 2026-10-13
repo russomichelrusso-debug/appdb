@@ -2130,6 +2130,71 @@ async function main() {
         && urls[2].searchParams.get('street') === 'AVENIDA PRESIDENTE CASTELO BRANCO',
         'não achou como está na ficha: tenta por extenso e sem número, esperando 1 s+ entre as consultas');
     }
+    // só achou a rua: tenta pelo número com o nome da rua do OSM (address.road)
+    {
+      const ruaNominatim = respostaNominatim([{ lat: '-23.4272', lon: '-51.9111', place_rank: 26, name: 'Avenida Brasil',
+        address: { road: 'Avenida Brasil' }, display_name: 'Avenida Brasil, Maringá, Paraná, Brasil' }]);
+      const depel = { tipo: 'AVENIDA', logradouro: 'BRASIL', numero: '4516', municipio: 'MARINGA', uf: 'PR' };
+      let pedido = null;
+      let p = await geo.geocodificarEndereco(depel, ruaNominatim, semEspera,
+        async (q) => { pedido = q; return { latitude: -23.4207, longitude: -51.9463, nivel: 'interpolado' }; });
+      assert(p && p.nivel === 'interpolado' && p.latitude === -23.4207 && p.numeroTentado === true
+        && pedido && pedido.rua === 'Avenida Brasil' && pedido.numero === '4516' && pedido.latitude === -23.4272
+        && new URL(respostaNominatim.ultima.url).searchParams.get('addressdetails') === '1',
+        `ponto da rua refinado pelo número (rua do OSM + número da ficha): ${JSON.stringify({ p, pedido })}`);
+      p = await geo.geocodificarEndereco(depel, ruaNominatim, semEspera, async () => null);
+      assert(p && p.nivel === 'rua' && p.latitude === -23.4272 && p.numeroTentado === true, 'sem dado pro número: fica a rua, tentativa marcada');
+      p = await geo.geocodificarEndereco(depel, ruaNominatim, semEspera, async () => { throw new Error('Overpass respondeu 504'); });
+      assert(p && p.nivel === 'rua' && p.numeroTentado === false, 'Overpass fora do ar: fica a rua e tenta de novo (não para a noite)');
+      let chamou = false;
+      p = await geo.geocodificarEndereco({ ...depel, numero: 'S/N' }, ruaNominatim, semEspera, async () => { chamou = true; return null; });
+      assert(p && p.nivel === 'rua' && !chamou, 'ficha sem número não consulta o Overpass');
+    }
+    // cálculo pelo número (routes/lib/posicaoPeloNumero.js): rua reta a leste,
+    // 1 número = 1 m; endereços a ~20 m da rua
+    {
+      const ppn = require('../routes/lib/posicaoPeloNumero');
+      const grau = 1 / (111320 * Math.cos(23.4 * Math.PI / 180));
+      const naRua = (m) => [-51.95 + m * grau, -23.4];
+      const casa = (m) => [-51.95 + m * grau, -23.4 + 0.00018];
+      const linhas = [[naRua(0), naRua(1500)], [naRua(1500), naRua(3000)]];
+      const ends = (...ns) => new Map(ns.map((n) => [n, casa(n)]));
+      const longe = (r, m) => r && ppn.distM([r.longitude, r.latitude], casa(m));
+      let r = ppn.estimarPeloNumero({ enderecos: ends(1000, 1400), linhas, numero: 1200 });
+      assert(r && r.nivel === 'interpolado' && r.modo === 'entre' && longe(r, 1200) < 30, `entre dois números, pelo traçado: ${JSON.stringify(r)}`);
+      r = ppn.estimarPeloNumero({ enderecos: ends(500, 700), linhas, numero: 900 });
+      assert(r && r.nivel === 'interpolado' && r.modo === 'um_lado' && longe(r, 900) < 30, `de um lado só, perto: ${JSON.stringify(r)}`);
+      r = ppn.estimarPeloNumero({ enderecos: ends(500, 700), linhas, numero: 2200 });
+      assert(r && r.nivel === 'estimado' && longe(r, 2200) < 40, `de um lado só, longe (1500 números): estimado ${JSON.stringify(r)}`);
+      r = ppn.estimarPeloNumero({ enderecos: ends(2200, 2400), linhas, numero: 1000 });
+      assert(r && r.modo === 'um_lado' && longe(r, 1000) < 40, 'de um lado só, números acima: anda pra trás');
+      assert(ppn.estimarPeloNumero({ enderecos: ends(700), linhas, numero: 900 }) === null
+        && ppn.estimarPeloNumero({ enderecos: ends(700, 750), linhas, numero: 900 }) === null,
+        'um número só (ou dois muito perto) não dá direção: não calcula');
+      r = ppn.estimarPeloNumero({ enderecos: ends(1000, 1400), linhas: [], numero: 1200 });
+      assert(r && r.modo === 'entre_reta' && r.nivel === 'interpolado' && longe(r, 1200) < 5, 'sem traçado, vão até 600: reta');
+      r = ppn.estimarPeloNumero({ enderecos: ends(100, 2000), linhas: [], numero: 1200 });
+      assert(r && r.modo === 'entre_reta' && r.nivel === 'estimado', 'sem traçado, vão grande: reta como estimado');
+      assert(ppn.estimarPeloNumero({ enderecos: new Map([[100, casa(100)], [200, casa(1500)]]), linhas, numero: 150 }) === null,
+        'metros por número absurdo (100 números em 1,4 km): descarta');
+      r = ppn.estimarPeloNumero({ enderecos: ends(1000, 1400), linhas, numero: 1400 });
+      assert(r && r.nivel === 'numero' && r.modo === 'exato', 'o próprio número no OSM');
+      const overpass = { elements: [
+        { type: 'way', tags: { highway: 'primary', name: 'Avenida Brasil' }, geometry: [{ lat: -23.4, lon: -51.95 }, { lat: -23.4, lon: -51.9 }] },
+        { type: 'node', lat: -23.4001, lon: -51.94, tags: { 'addr:housenumber': '1000', 'addr:street': 'Avenida Brasil' } },
+        { type: 'way', tags: { 'addr:housenumber': '1400A', 'addr:street': 'Avenida Brasil' }, geometry: [{ lat: -23.4001, lon: -51.936 }, { lat: -23.4003, lon: -51.936 }] },
+      ] };
+      let enviado = null;
+      const o = await ppn.consultarOverpass({ latitude: -23.4, longitude: -51.94, rua: 'Avenida "X"' },
+        async (url, opts) => { enviado = { url, opts }; return { ok: true, status: 200, json: async () => overpass }; });
+      const corpo = new URLSearchParams(enviado.opts.body).get('data');
+      assert(o.linhas.length === 1 && o.enderecos.get(1000)[0] === -51.94 && o.enderecos.has(1400)
+        && enviado.url === ppn.OVERPASS_URL && /around:6000,-23\.4,-51\.94/.test(corpo) && corpo.includes('"Avenida \\"X\\""'),
+        `Overpass: endereços (nó e prédio) e traçado da rua, nome escapado: ${corpo}`);
+      let erroOv = null;
+      try { await ppn.consultarOverpass({ latitude: -23.4, longitude: -51.94, rua: 'X' }, async () => ({ ok: false, status: 504 })); } catch (e) { erroOv = e; }
+      assert(erroOv && /504/.test(erroOv.message), 'Overpass fora do ar lança erro');
+    }
     let erroOrigem = null;
     try { await geo.geocodificarEndereco(end, respostaNominatim([], 429)); } catch (e) { erroOrigem = e; }
     assert(erroOrigem && erroOrigem.origem === true, 'Nominatim no limite (429) é erro da origem, não do cliente');
@@ -2180,13 +2245,13 @@ async function main() {
         9864: { logradouro: 'C', numero: '3', municipio: 'MARINGA', uf: 'PR' },
       },
       geocodificacao: {
-        9862: { endereco: '|A|1|MARINGA|PR', latitude: -23.4, longitude: -51.9, nivel: 'rua', tentativas: 0 },
+        9862: { endereco: '|A|1|MARINGA|PR', latitude: -23.4, longitude: -51.9, nivel: 'interpolado', tentativas: 0 },
         9864: { endereco: '|C|3|MARINGA|PR', latitude: null, longitude: null, nivel: null, tentativas: 3 },
       },
     });
     res = await req('GET', '/api/geocodificacao/status');
     assert(res.status === 200 && res.body.com_gps >= 1 && res.body.pelo_endereco >= 1 && res.body.nao_encontrados >= 1
-      && res.body.faltam >= 1 && res.body.limite === geo.LIMITE_DIARIO,
+      && res.body.faltam >= 1 && res.body.limite === geo.LIMITE_DIARIO && res.body.pelo_numero >= 1,
       `status da posição das lojas pro Painel: ${JSON.stringify(res.body)}`);
   }
 

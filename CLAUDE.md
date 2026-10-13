@@ -681,8 +681,22 @@ Supabase, sem PR — não é mudança de código.
   some do `/sync`. Aceita só rua ou prédio (`place_rank` ≥ 26) do mesmo município, dentro do Brasil. Cada cliente tenta até 4 buscas, parando na primeira que acha (1,1 s entre elas): como está na ficha, abreviações por extenso (`expandirAbreviacoes`: PRES, GOV., DR, PION…), sem o número e busca livre "rua, cidade, UF" — na 1ª passada (10–11/10/2026) só a 1ª existia e 64 de 296 não foram achados, quase todos por abreviação ou número. **No
   Brasil o OSM quase nunca tem o número**: a posição costuma ser um ponto da rua (`nivel = 'rua'`), que em
   avenida longa fica a quilômetros da loja — por isso aparece "aprox." e serve pra "quem está perto", não
-  pra navegar. O GPS do levantamento sempre vale mais. Linha "Posição das lojas" no card de status do
-  Painel. Na tela: bloco recolhível **"📍 Clientes perto de mim"** na aba Clientes, abaixo da Recompra da
+  pra navegar. O GPS do levantamento sempre vale mais. **Posição pelo número** (10/2026, PR "posição pelo
+  número"): quando o Nominatim só acha a rua, o servidor pede ao **Overpass** (mesma base do OSM) os outros
+  endereços com número e o traçado da rua com o mesmo nome (`address.road` do Nominatim), num raio de 6 km do
+  ponto da rua, e calcula onde fica o número da loja (`routes/lib/posicaoPeloNumero.js`): entre dois números
+  (pelo traçado; em reta se o traçado não liga os dois) ou de um lado só (dois números a 100+ de distância dão
+  a direção e os metros por número - no norte do PR quase sempre ~1 m). `nivel` **'interpolado'** (erro
+  mediano ~20-30 m; o app trata como 'numero') ou **'estimado'** (mais longe dos números conhecidos, ~50-90 m;
+  aproximado no app, "estimada pelo número da ficha"). Medido deixando de fora cada endereço do OSM das 103
+  cidades da carteira; caso real da DEPEL (Av. Brasil, Maringá): ponto da rua a 3,6 km, calculado a 8 m. Em
+  10/2026 cobria só ~27 das 234 lojas "só pela rua" (no interior a rua quase nunca tem número no OSM) - cresce
+  conforme o OSM ganha endereços: 'rua'/'estimado' tentam de novo a cada 60 dias (`numero_tentado_em`);
+  Overpass fora do ar não para a noite (fica a rua, tenta na seguinte). Descartados antes: GeoNames (no Brasil
+  só CEP por município, sem rua), BrasilAPI CEP V2 (devolveu o centro da cidade pros dois CEPs testados),
+  IBGE CNAE (é tabela de atividades, sem endereço). Linha "Posição das lojas" no card de status do
+  Painel (com "N pelo número"). A rota no Google Maps manda coordenada só pra loja com GPS; o resto vai pelo
+  endereço por extenso. Na tela: bloco recolhível **"📍 Clientes perto de mim"** na aba Clientes, abaixo da Recompra da
   semana — distância em linha reta da posição do celular (500 m / 2 km / 10 km), cidade, "aprox.",
   última compra e selo de recompra (da lista da Recompra guardada no aparelho), Abrir cliente e Waze;
   funciona sem internet (tudo vem no `/sync`). Marcar lojas (até 10) e **"Montar rota no Google Maps"**:

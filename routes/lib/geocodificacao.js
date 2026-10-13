@@ -16,15 +16,24 @@
 // pode ficar a quilômetros da loja. Serve pra "quem está perto", não pra
 // navegar: a rota usa o endereço por extenso (o Google acha o número).
 //
+// Quando só acha a rua, tenta a posição PELO NÚMERO com os outros números da
+// mesma rua no OSM (routes/lib/posicaoPeloNumero.js, via Overpass): nivel
+// 'interpolado' (preciso como o número) ou 'estimado' (aproximado). Loja que
+// ficou só com a rua é tentada de novo a cada DIAS_NOVA_TENTATIVA_NUMERO (o
+// OSM ganha endereços com o tempo); Overpass fora do ar não para a noite - a
+// loja fica com a rua e tenta na noite seguinte.
+//
 // A lógica (rodarRodada, geocodificarEndereco) recebe as dependências por
 // parâmetro pra poder ser testada sem banco nem rede - ver test/run_tests.js.
 
 const { agoraBrasilia, dentroDaJanela } = require('./preenchimentoCnpj');
+const { posicaoPeloNumero } = require('./posicaoPeloNumero');
 
 const LIMITE_DIARIO = 150;
 const INTERVALO_MS = 2000;
 const ESPERA_ENTRE_BUSCAS_MS = 1100;
 const MAX_TENTATIVAS = 3;
+const DIAS_NOVA_TENTATIVA_NUMERO = 60;
 const CHAVE_ESTADO = 'geocodificacao_auto';
 const TICK_MS = 15 * 60 * 1000;
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
@@ -111,7 +120,7 @@ function buscasDoEndereco(e) {
 
 // Uma consulta ao Nominatim: { latitude, longitude, nivel } ou null.
 async function consultarNominatim(busca, municipio, fetchFn) {
-  const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', ...busca });
+  const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1', ...busca });
   let resp;
   try {
     resp = await fetchFn(`${NOMINATIM_URL}?${params}`, {
@@ -131,21 +140,37 @@ async function consultarNominatim(busca, municipio, fetchFn) {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Number(r.place_rank) < 26) return null;
   if (latitude < -34 || latitude > 6 || longitude < -74 || longitude > -34) return null;
   if (!normalizar(r.display_name).includes(normalizar(municipio))) return null;
-  return { latitude, longitude, nivel: Number(r.place_rank) >= 28 ? 'numero' : 'rua' };
+  const nivel = Number(r.place_rank) >= 28 ? 'numero' : 'rua';
+  // nome da rua como está no OSM ("Avenida Brasil") - é por ele que o Overpass
+  // acha os outros números da mesma rua
+  const ruaOsm = nivel === 'rua' ? String((r.address && r.address.road) || r.name || '').trim() : '';
+  return ruaOsm ? { latitude, longitude, nivel, ruaOsm } : { latitude, longitude, nivel };
 }
 
-// Devolve { latitude, longitude, nivel } ou null (endereço não encontrado em
-// nenhuma das buscas). Lança erro com .origem = true quando o problema é do
-// serviço. Entre uma busca e outra do mesmo cliente espera ESPERA_ENTRE_BUSCAS_MS
-// (política do Nominatim: no máximo 1 por segundo).
-async function geocodificarEndereco(e, fetchFn = fetch, esperar = (ms) => new Promise((r) => setTimeout(r, ms))) {
-  const { rua } = ruaENumero(e);
+// Devolve { latitude, longitude, nivel, numeroTentado } ou null (endereço não
+// encontrado em nenhuma das buscas). Lança erro com .origem = true quando o
+// problema é do Nominatim. Entre uma busca e outra do mesmo cliente espera
+// ESPERA_ENTRE_BUSCAS_MS (política do Nominatim: no máximo 1 por segundo).
+// numeroTentado: a posição pelo número foi tentada (achando ou não); false se
+// o Overpass falhou - aí tenta de novo na próxima noite.
+async function geocodificarEndereco(e, fetchFn = fetch, esperar = (ms) => new Promise((r) => setTimeout(r, ms)), pelonumero = posicaoPeloNumero) {
+  const { rua, numero } = ruaENumero(e);
   if (!rua || !String(e.municipio || '').trim()) return null;
   const buscas = buscasDoEndereco(e);
   for (let i = 0; i < buscas.length; i++) {
     if (i > 0) await esperar(ESPERA_ENTRE_BUSCAS_MS);
     const pos = await consultarNominatim(buscas[i], String(e.municipio).trim(), fetchFn);
-    if (pos) return pos;
+    if (!pos) continue;
+    const { ruaOsm, ...achado } = pos;
+    if (achado.nivel !== 'rua' || !ruaOsm || !/^\s*\d/.test(numero)) return { ...achado, numeroTentado: true };
+    await esperar(ESPERA_ENTRE_BUSCAS_MS);
+    try {
+      const melhor = await pelonumero({ latitude: achado.latitude, longitude: achado.longitude, rua: ruaOsm, numero }, fetchFn);
+      return { ...(melhor || achado), numeroTentado: true };
+    } catch (err) {
+      console.warn(`Posição pelo número (Overpass) falhou, fica a da rua: ${err.message}`);
+      return { ...achado, numeroTentado: false };
+    }
   }
   return null;
 }
@@ -201,8 +226,11 @@ async function rodarRodada(deps) {
 // ---- Dependências reais (banco + Nominatim) ----
 
 // Clientes sem GPS com ficha que tem rua e município, nunca consultados, com
-// endereço diferente do consultado, ou não achados (até 3 vezes, 1 por noite).
-// Nunca consultados primeiro; quem compra (tem código oficial) na frente.
+// endereço diferente do consultado, não achados (até 3 vezes, 1 por noite) ou
+// que ficaram só com a rua (ou 'estimado') e têm número na ficha: a posição
+// pelo número é tentada de novo a cada DIAS_NOVA_TENTATIVA_NUMERO (ou na noite
+// seguinte, se o Overpass falhou). Nunca consultados primeiro; quem compra
+// (tem código oficial) na frente.
 const SQL_PENDENTES = `
   SELECT c.id, f.dados_brutos->'endereco'->>'tipoLogradouro' AS tipo, f.logradouro, f.numero, f.municipio, f.uf,
          ${sqlChaveEndereco('f')} AS chave
@@ -212,8 +240,10 @@ const SQL_PENDENTES = `
   WHERE c.latitude IS NULL
     AND nullif(trim(f.logradouro), '') IS NOT NULL AND nullif(trim(f.municipio), '') IS NOT NULL
     AND (g.cliente_id IS NULL OR g.endereco <> ${sqlChaveEndereco('f')}
-         OR (g.latitude IS NULL AND g.tentativas < $2 AND g.consultado_em < now() - interval '20 hours'))
-  ORDER BY (g.cliente_id IS NOT NULL), (c.codigo_oficial IS NULL), c.id
+         OR (g.latitude IS NULL AND g.tentativas < $2 AND g.consultado_em < now() - interval '20 hours')
+         OR (g.nivel IN ('rua', 'estimado') AND f.numero ~ '^\\s*[1-9]' AND g.consultado_em < now() - interval '20 hours'
+             AND (g.numero_tentado_em IS NULL OR g.numero_tentado_em < now() - make_interval(days => $3))))
+  ORDER BY (g.cliente_id IS NOT NULL), (g.numero_tentado_em IS NOT NULL), (c.codigo_oficial IS NULL), c.id
   LIMIT $1`;
 
 function dependenciasReais(pool, fetchFn = fetch) {
@@ -227,23 +257,33 @@ function dependenciasReais(pool, fetchFn = fetch) {
        ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
       [CHAVE_ESTADO, JSON.stringify(estado)]
     ),
-    listarPendentes: async (limite) => (await pool.query(SQL_PENDENTES, [limite, MAX_TENTATIVAS])).rows,
+    listarPendentes: async (limite) => (await pool.query(SQL_PENDENTES, [limite, MAX_TENTATIVAS, DIAS_NOVA_TENTATIVA_NUMERO])).rows,
     geocodificar: (cliente) => geocodificarEndereco(cliente, fetchFn),
     gravarPosicao: (cliente, pos) => pool.query(
-      `INSERT INTO cliente_geocodificacao (cliente_id, endereco, latitude, longitude, nivel, tentativas, consultado_em, erro)
-       VALUES ($1, $2, $3, $4, $5, 0, now(), NULL)
+      `INSERT INTO cliente_geocodificacao (cliente_id, endereco, latitude, longitude, nivel, tentativas, consultado_em, erro, numero_tentado_em)
+       VALUES ($1, $2, $3, $4, $5, 0, now(), NULL, CASE WHEN $6 THEN now() END)
        ON CONFLICT (cliente_id) DO UPDATE SET endereco = EXCLUDED.endereco, latitude = EXCLUDED.latitude,
-         longitude = EXCLUDED.longitude, nivel = EXCLUDED.nivel, tentativas = 0, consultado_em = now(), erro = NULL`,
-      [cliente.id, cliente.chave, pos.latitude, pos.longitude, pos.nivel]
+         longitude = EXCLUDED.longitude, nivel = EXCLUDED.nivel, tentativas = 0, consultado_em = now(), erro = NULL,
+         numero_tentado_em = EXCLUDED.numero_tentado_em`,
+      [cliente.id, cliente.chave, pos.latitude, pos.longitude, pos.nivel, pos.numeroTentado !== false]
     ),
-    // endereço novo recomeça a contagem de tentativas
+    // endereço novo recomeça a contagem de tentativas. Nova tentativa pelo
+    // número que não achou nada (mesmo endereço, já com posição): mantém a
+    // posição que tinha e só marca a tentativa.
     registrarFalha: (cliente, erro) => pool.query(
       `INSERT INTO cliente_geocodificacao (cliente_id, endereco, tentativas, consultado_em, erro)
        VALUES ($1, $2, 1, now(), $3)
        ON CONFLICT (cliente_id) DO UPDATE SET
-         tentativas = CASE WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco AND cliente_geocodificacao.latitude IS NULL
+         tentativas = CASE WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco AND cliente_geocodificacao.latitude IS NOT NULL
+                           THEN cliente_geocodificacao.tentativas
+                           WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco
                            THEN cliente_geocodificacao.tentativas + 1 ELSE 1 END,
-         endereco = EXCLUDED.endereco, latitude = NULL, longitude = NULL, nivel = NULL, consultado_em = now(), erro = EXCLUDED.erro`,
+         numero_tentado_em = CASE WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco AND cliente_geocodificacao.latitude IS NOT NULL
+                                  THEN now() END,
+         latitude = CASE WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco THEN cliente_geocodificacao.latitude END,
+         longitude = CASE WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco THEN cliente_geocodificacao.longitude END,
+         nivel = CASE WHEN cliente_geocodificacao.endereco = EXCLUDED.endereco THEN cliente_geocodificacao.nivel END,
+         endereco = EXCLUDED.endereco, consultado_em = now(), erro = EXCLUDED.erro`,
       [cliente.id, cliente.chave, String(erro || '').slice(0, 500)]
     ),
   };
@@ -256,6 +296,8 @@ async function statusGeocodificacao(pool) {
     `SELECT
        count(*) FILTER (WHERE c.latitude IS NOT NULL) AS com_gps,
        count(*) FILTER (WHERE c.latitude IS NULL AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}) AS pelo_endereco,
+       count(*) FILTER (WHERE c.latitude IS NULL AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}
+         AND g.nivel IN ('numero', 'interpolado', 'estimado')) AS pelo_numero,
        count(*) FILTER (WHERE c.latitude IS NULL AND f.cliente_id IS NOT NULL
          AND nullif(trim(f.logradouro), '') IS NOT NULL AND nullif(trim(f.municipio), '') IS NOT NULL) AS com_endereco_sem_gps,
        count(*) FILTER (WHERE c.latitude IS NULL AND g.latitude IS NULL AND g.tentativas >= $1
@@ -272,6 +314,7 @@ async function statusGeocodificacao(pool) {
   return {
     com_gps: Number(linha.com_gps || 0),
     pelo_endereco: peloEndereco,
+    pelo_numero: Number(linha.pelo_numero || 0),
     nao_encontrados: naoEncontrados,
     faltam: Math.max(0, comEndereco - peloEndereco - naoEncontrados),
     limite: LIMITE_DIARIO,
@@ -306,4 +349,5 @@ function iniciarGeocodificacaoAutomatica(pool) {
 module.exports = {
   geocodificarEndereco, rodarRodada, statusGeocodificacao, iniciarGeocodificacaoAutomatica, dependenciasReais,
   sqlChaveEndereco, ruaENumero, expandirAbreviacoes, buscasDoEndereco, SQL_PENDENTES, LIMITE_DIARIO, MAX_TENTATIVAS,
+  DIAS_NOVA_TENTATIVA_NUMERO,
 };
