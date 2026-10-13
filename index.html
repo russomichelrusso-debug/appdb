@@ -16826,7 +16826,7 @@
             : l.pos.fonte === 'numero' ? 'pelo endereço da ficha' : 'pela visita anterior';
           const distancia = (l) => (l.pos.aprox ? '~' : '') + formatarDistancia(l.dist);
           el.innerHTML = `<div class="proxPergunta">📍 Você está na <b>${escapeHtml(primeira.c.nome)}</b>?</div>
-            <div class="proxMeta${soRua(primeira) ? ' proxMeta--rua' : ''}">${distancia(primeira)} daqui · ${origem(primeira)}</div>
+            <div class="proxMeta${primeira.pos.aprox ? ' proxMeta--rua' : ''}">${distancia(primeira)} daqui · ${origem(primeira)}</div>
             <div class="proxAcoes">
               <button type="button" class="proxSim" data-prox-sim="${escapeHtml(String(primeira.c.id))}">Selecionar</button>
               <button type="button" class="proxNao" data-prox-nao="${escapeHtml(String(primeira.c.id))}">Não</button>

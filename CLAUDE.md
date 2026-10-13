@@ -692,7 +692,10 @@ Supabase, sem PR — não é mudança de código.
   cidades da carteira; caso real da DEPEL (Av. Brasil, Maringá): ponto da rua a 3,6 km, calculado a 8 m. Em
   10/2026 cobria só ~27 das 234 lojas "só pela rua" (no interior a rua quase nunca tem número no OSM) - cresce
   conforme o OSM ganha endereços: 'rua'/'estimado' tentam de novo a cada 60 dias (`numero_tentado_em`);
-  Overpass fora do ar não para a noite (fica a rua, tenta na seguinte). Descartados antes: GeoNames (no Brasil
+  Overpass fora do ar não para a noite: na 1ª falha ele não é mais chamado até o dia seguinte, as lojas ficam
+  com a rua e voltam; 3 noites seguidas falhando pra mesma loja = espera os 60 dias. Nova tentativa nunca troca
+  a posição por nível pior (rua < estimado < interpolado < numero). Endereço com `addr:city` de outro município
+  (conurbação Maringá/Sarandi/Paiçandu) fica de fora; o nome da rua vai cru (`namedetails`). Descartados antes: GeoNames (no Brasil
   só CEP por município, sem rua), BrasilAPI CEP V2 (devolveu o centro da cidade pros dois CEPs testados),
   IBGE CNAE (é tabela de atividades, sem endereço). Linha "Posição das lojas" no card de status do
   Painel (com "N pelo número"). A rota no Google Maps manda coordenada só pra loja com GPS; o resto vai pelo

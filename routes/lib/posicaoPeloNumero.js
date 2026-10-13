@@ -141,7 +141,6 @@ function estimarPeloNumero({ enderecos, linhas, numero }) {
   const n = Number(numero);
   if (!Number.isInteger(n) || n <= 0 || !enderecos || !enderecos.size) return null;
   const pronto = (p, nivel, modo) => ({ longitude: p[0], latitude: p[1], nivel, modo });
-  if (enderecos.has(n)) return pronto(enderecos.get(n), 'numero', 'exato');
 
   const rua = montarRua(linhas || []);
   const proj = new Map();
@@ -149,6 +148,9 @@ function estimarPeloNumero({ enderecos, linhas, numero }) {
     const pr = rua.segs.length ? projetar(rua, p) : null;
     if (pr) proj.set(k, pr);
   }
+  // o próprio número: só se estiver junto da rua (com traçado) - prédio de uma
+  // rua homônima no raio não vira 'numero'
+  if (enderecos.has(n) && (!rua.segs.length || proj.has(n))) return pronto(enderecos.get(n), 'numero', 'exato');
   const todos = [...enderecos.keys()].sort((a, b) => a - b);
   const lo = todos.filter((k) => k < n), hi = todos.filter((k) => k > n);
 
@@ -195,14 +197,20 @@ function estimarPeloNumero({ enderecos, linhas, numero }) {
   return pronto(m, salto <= SALTO_INTERPOLADO ? 'interpolado' : 'estimado', 'um_lado');
 }
 
+const normalizar = (s) => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  .toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+
 const numeroInteiro = (s) => {
   const m = /^\s*(\d+)/.exec(String(s == null ? '' : s));
   return m ? Number(m[1]) : null;
 };
 
 // Overpass: endereços com número e vias com o nome exato da rua, perto do ponto
-// dela. Devolve { enderecos, linhas }. Lança erro se o serviço falhar.
-async function consultarOverpass({ latitude, longitude, rua }, fetchFn = fetch) {
+// dela. Endereço com addr:city de outro município (conurbação: Maringá,
+// Sarandi, Paiçandu) fica de fora. Devolve { enderecos, linhas }. Lança erro
+// se o serviço falhar - inclusive o 200 com "remark" de consulta que estourou
+// tempo/memória (viria vazio ou pela metade).
+async function consultarOverpass({ latitude, longitude, rua, municipio }, fetchFn = fetch) {
   const nome = String(rua).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const perto = `around:${RAIO_M},${Number(latitude)},${Number(longitude)}`;
   const q = `[out:json][timeout:25];(way(${perto})["highway"]["name"="${nome}"];`
@@ -216,13 +224,15 @@ async function consultarOverpass({ latitude, longitude, rua }, fetchFn = fetch) 
   if (!resp.ok) throw new Error(`Overpass respondeu ${resp.status}`);
   const json = await resp.json().catch(() => null);
   if (!json || !Array.isArray(json.elements)) throw new Error('Overpass devolveu resposta inválida');
+  if (json.remark && /runtime error|timed out|out of memory/i.test(json.remark)) throw new Error(`Overpass não terminou a consulta: ${json.remark}`);
+  const cidade = normalizar(municipio);
   const enderecos = new Map();
   const linhas = [];
   for (const el of json.elements) {
     const tags = el.tags || {};
     const geo = Array.isArray(el.geometry) ? el.geometry.filter((g) => g && Number.isFinite(g.lon) && Number.isFinite(g.lat)).map((g) => [g.lon, g.lat]) : [];
     if (tags.highway && el.type === 'way' && geo.length >= 2) linhas.push(geo);
-    if (tags['addr:housenumber'] !== undefined) {
+    if (tags['addr:housenumber'] !== undefined && !(cidade && tags['addr:city'] && normalizar(tags['addr:city']) !== cidade)) {
       const n = numeroInteiro(tags['addr:housenumber']);
       let p = null;
       if (el.type === 'node' && Number.isFinite(el.lat) && Number.isFinite(el.lon)) p = [el.lon, el.lat];
@@ -235,10 +245,10 @@ async function consultarOverpass({ latitude, longitude, rua }, fetchFn = fetch) 
 
 // Refina o ponto da rua do Nominatim: { latitude, longitude, nivel } ou null
 // (sem dado suficiente). Lança erro se o Overpass falhar.
-async function posicaoPeloNumero({ latitude, longitude, rua, numero }, fetchFn = fetch) {
+async function posicaoPeloNumero({ latitude, longitude, rua, numero, municipio }, fetchFn = fetch) {
   const n = numeroInteiro(numero);
   if (!n || !rua) return null;
-  const { enderecos, linhas } = await consultarOverpass({ latitude, longitude, rua }, fetchFn);
+  const { enderecos, linhas } = await consultarOverpass({ latitude, longitude, rua, municipio }, fetchFn);
   const r = estimarPeloNumero({ enderecos, linhas, numero: n });
   return r ? { latitude: r.latitude, longitude: r.longitude, nivel: r.nivel } : null;
 }

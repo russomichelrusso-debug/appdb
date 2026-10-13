@@ -2145,7 +2145,16 @@ async function main() {
       p = await geo.geocodificarEndereco(depel, ruaNominatim, semEspera, async () => null);
       assert(p && p.nivel === 'rua' && p.latitude === -23.4272 && p.numeroTentado === true, 'sem dado pro número: fica a rua, tentativa marcada');
       p = await geo.geocodificarEndereco(depel, ruaNominatim, semEspera, async () => { throw new Error('Overpass respondeu 504'); });
-      assert(p && p.nivel === 'rua' && p.numeroTentado === false, 'Overpass fora do ar: fica a rua e tenta de novo (não para a noite)');
+      assert(p && p.nivel === 'rua' && p.numeroTentado === false && p.overpassFalhou === true,
+        'Overpass fora do ar: fica a rua e tenta de novo (não para a noite), falha contada');
+      p = await geo.geocodificarEndereco(depel, ruaNominatim, semEspera, async () => { const e = new Error('já falhou'); e.pausado = true; throw e; });
+      assert(p && p.numeroTentado === false && p.overpassFalhou === false, 'Overpass pulado (já falhou na noite): não conta falha pra loja');
+      assert(pedido && pedido.municipio === 'MARINGA'
+        && new URL(respostaNominatim.ultima.url).searchParams.get('namedetails') === '1', 'manda o município (filtra addr:city) e pede namedetails');
+      const comNomeCru = respostaNominatim([{ lat: '-23.4', lon: '-51.9', place_rank: 26, name: 'Brazil Avenue',
+        namedetails: { name: 'Avenida Brasil', 'name:en': 'Brazil Avenue' }, address: { road: 'Brazil Avenue' }, display_name: 'Avenida Brasil, Maringá' }]);
+      await geo.geocodificarEndereco(depel, comNomeCru, semEspera, async (q) => { pedido = q; return null; });
+      assert(pedido.rua === 'Avenida Brasil', 'usa o "name" cru do OSM (namedetails), não o traduzido');
       let chamou = false;
       p = await geo.geocodificarEndereco({ ...depel, numero: 'S/N' }, ruaNominatim, semEspera, async () => { chamou = true; return null; });
       assert(p && p.nivel === 'rua' && !chamou, 'ficha sem número não consulta o Overpass');
@@ -2179,6 +2188,8 @@ async function main() {
         'metros por número absurdo (100 números em 1,4 km): descarta');
       r = ppn.estimarPeloNumero({ enderecos: ends(1000, 1400), linhas, numero: 1400 });
       assert(r && r.nivel === 'numero' && r.modo === 'exato', 'o próprio número no OSM');
+      r = ppn.estimarPeloNumero({ enderecos: new Map([[1400, [-51.9, -23.45]]]), linhas, numero: 1400 });
+      assert(r === null, 'o próprio número longe do traçado (rua homônima no raio) não vira "numero"');
       const overpass = { elements: [
         { type: 'way', tags: { highway: 'primary', name: 'Avenida Brasil' }, geometry: [{ lat: -23.4, lon: -51.95 }, { lat: -23.4, lon: -51.9 }] },
         { type: 'node', lat: -23.4001, lon: -51.94, tags: { 'addr:housenumber': '1000', 'addr:street': 'Avenida Brasil' } },
@@ -2194,6 +2205,20 @@ async function main() {
       let erroOv = null;
       try { await ppn.consultarOverpass({ latitude: -23.4, longitude: -51.94, rua: 'X' }, async () => ({ ok: false, status: 504 })); } catch (e) { erroOv = e; }
       assert(erroOv && /504/.test(erroOv.message), 'Overpass fora do ar lança erro');
+      erroOv = null;
+      try {
+        await ppn.consultarOverpass({ latitude: -23.4, longitude: -51.94, rua: 'X' },
+          async () => ({ ok: true, status: 200, json: async () => ({ remark: 'runtime error: Query timed out in "query" at line 1 after 26 seconds.', elements: [] }) }));
+      } catch (e) { erroOv = e; }
+      assert(erroOv && /timed out/.test(erroOv.message), 'Overpass 200 com consulta estourada (remark) é falha, não "sem dado"');
+      const outraCidade = await ppn.consultarOverpass({ latitude: -23.4, longitude: -51.94, rua: 'Avenida Brasil', municipio: 'MARINGA' },
+        async () => ({ ok: true, status: 200, json: async () => ({ elements: [
+          { type: 'node', lat: -23.40, lon: -51.94, tags: { 'addr:housenumber': '100', 'addr:city': 'Maringá' } },
+          { type: 'node', lat: -23.41, lon: -51.95, tags: { 'addr:housenumber': '200', 'addr:city': 'Sarandi' } },
+          { type: 'node', lat: -23.42, lon: -51.96, tags: { 'addr:housenumber': '300' } },
+        ] }) }));
+      assert(outraCidade.enderecos.has(100) && !outraCidade.enderecos.has(200) && outraCidade.enderecos.has(300),
+        'endereço com addr:city de outro município (conurbação) fica de fora; sem addr:city entra');
     }
     let erroOrigem = null;
     try { await geo.geocodificarEndereco(end, respostaNominatim([], 429)); } catch (e) { erroOrigem = e; }

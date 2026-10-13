@@ -120,7 +120,7 @@ function buscasDoEndereco(e) {
 
 // Uma consulta ao Nominatim: { latitude, longitude, nivel } ou null.
 async function consultarNominatim(busca, municipio, fetchFn) {
-  const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1', ...busca });
+  const params = new URLSearchParams({ format: 'jsonv2', limit: '1', countrycodes: 'br', addressdetails: '1', namedetails: '1', ...busca });
   let resp;
   try {
     resp = await fetchFn(`${NOMINATIM_URL}?${params}`, {
@@ -142,8 +142,10 @@ async function consultarNominatim(busca, municipio, fetchFn) {
   if (!normalizar(r.display_name).includes(normalizar(municipio))) return null;
   const nivel = Number(r.place_rank) >= 28 ? 'numero' : 'rua';
   // nome da rua como está no OSM ("Avenida Brasil") - é por ele que o Overpass
-  // acha os outros números da mesma rua
-  const ruaOsm = nivel === 'rua' ? String((r.address && r.address.road) || r.name || '').trim() : '';
+  // acha os outros números da mesma rua. namedetails.name = a etiqueta "name"
+  // crua (address.road pode vir traduzida pelo Accept-Language)
+  const ruaOsm = nivel === 'rua'
+    ? String((r.namedetails && r.namedetails.name) || (r.address && r.address.road) || r.name || '').trim() : '';
   return ruaOsm ? { latitude, longitude, nivel, ruaOsm } : { latitude, longitude, nivel };
 }
 
@@ -152,7 +154,9 @@ async function consultarNominatim(busca, municipio, fetchFn) {
 // problema é do Nominatim. Entre uma busca e outra do mesmo cliente espera
 // ESPERA_ENTRE_BUSCAS_MS (política do Nominatim: no máximo 1 por segundo).
 // numeroTentado: a posição pelo número foi tentada (achando ou não); false se
-// o Overpass falhou - aí tenta de novo na próxima noite.
+// o Overpass falhou (overpassFalhou: conta pra desistir por 60 dias depois de
+// MAX_TENTATIVAS noites) ou foi pulado porque já tinha falhado nesta noite
+// (erro com .pausado) - aí tenta de novo na próxima noite.
 async function geocodificarEndereco(e, fetchFn = fetch, esperar = (ms) => new Promise((r) => setTimeout(r, ms)), pelonumero = posicaoPeloNumero) {
   const { rua, numero } = ruaENumero(e);
   if (!rua || !String(e.municipio || '').trim()) return null;
@@ -165,11 +169,12 @@ async function geocodificarEndereco(e, fetchFn = fetch, esperar = (ms) => new Pr
     if (achado.nivel !== 'rua' || !ruaOsm || !/^\s*\d/.test(numero)) return { ...achado, numeroTentado: true };
     await esperar(ESPERA_ENTRE_BUSCAS_MS);
     try {
-      const melhor = await pelonumero({ latitude: achado.latitude, longitude: achado.longitude, rua: ruaOsm, numero }, fetchFn);
+      const melhor = await pelonumero({ latitude: achado.latitude, longitude: achado.longitude, rua: ruaOsm, numero,
+        municipio: String(e.municipio).trim() }, fetchFn);
       return { ...(melhor || achado), numeroTentado: true };
     } catch (err) {
-      console.warn(`Posição pelo número (Overpass) falhou, fica a da rua: ${err.message}`);
-      return { ...achado, numeroTentado: false };
+      if (!err.pausado) console.warn(`Posição pelo número (Overpass) falhou, fica a da rua: ${err.message}`);
+      return { ...achado, numeroTentado: false, overpassFalhou: !err.pausado };
     }
   }
   return null;
@@ -246,7 +251,28 @@ const SQL_PENDENTES = `
   ORDER BY (g.cliente_id IS NOT NULL), (g.numero_tentado_em IS NOT NULL), (c.codigo_oficial IS NULL), c.id
   LIMIT $1`;
 
+// Ranking dos níveis: nova tentativa com o mesmo endereço nunca troca a posição
+// por uma pior (o Overpass pode falhar ou um endereço sair do OSM)
+const SQL_RANK_NIVEL = (x) => `coalesce(array_position(ARRAY['rua', 'estimado', 'interpolado', 'numero'], ${x}), 0)`;
+
 function dependenciasReais(pool, fetchFn = fetch) {
+  // Overpass falhou nesta noite: não chama mais até o dia seguinte (cada
+  // tentativa podia esperar 40 s; as lojas ficam com a rua e voltam amanhã)
+  let overpassForaNoDia = null;
+  const pelonumeroComDisjuntor = async (q, f) => {
+    const { dia } = agoraBrasilia(new Date());
+    if (overpassForaNoDia === dia) {
+      const e = new Error('Overpass já falhou nesta noite');
+      e.pausado = true;
+      throw e;
+    }
+    try {
+      return await posicaoPeloNumero(q, f);
+    } catch (e) {
+      overpassForaNoDia = dia;
+      throw e;
+    }
+  };
   return {
     lerEstado: async () => {
       const r = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', [CHAVE_ESTADO]);
@@ -258,15 +284,29 @@ function dependenciasReais(pool, fetchFn = fetch) {
       [CHAVE_ESTADO, JSON.stringify(estado)]
     ),
     listarPendentes: async (limite) => (await pool.query(SQL_PENDENTES, [limite, MAX_TENTATIVAS, DIAS_NOVA_TENTATIVA_NUMERO])).rows,
-    geocodificar: (cliente) => geocodificarEndereco(cliente, fetchFn),
-    gravarPosicao: (cliente, pos) => pool.query(
-      `INSERT INTO cliente_geocodificacao (cliente_id, endereco, latitude, longitude, nivel, tentativas, consultado_em, erro, numero_tentado_em)
-       VALUES ($1, $2, $3, $4, $5, 0, now(), NULL, CASE WHEN $6 THEN now() END)
-       ON CONFLICT (cliente_id) DO UPDATE SET endereco = EXCLUDED.endereco, latitude = EXCLUDED.latitude,
-         longitude = EXCLUDED.longitude, nivel = EXCLUDED.nivel, tentativas = 0, consultado_em = now(), erro = NULL,
-         numero_tentado_em = EXCLUDED.numero_tentado_em`,
-      [cliente.id, cliente.chave, pos.latitude, pos.longitude, pos.nivel, pos.numeroTentado !== false]
-    ),
+    geocodificar: (cliente) => geocodificarEndereco(cliente, fetchFn, undefined, pelonumeroComDisjuntor),
+    // Mesmo endereço já com posição (nova tentativa pelo número): não troca por
+    // nível pior. tentativas aqui conta as noites seguidas com o Overpass
+    // falhando pra esta loja; na MAX_TENTATIVAS-ésima marca numero_tentado_em
+    // (espera os 60 dias - uma rua cuja consulta sempre falha não fica em loop).
+    gravarPosicao: (cliente, pos) => {
+      const mesmo = `cliente_geocodificacao.endereco = EXCLUDED.endereco AND cliente_geocodificacao.latitude IS NOT NULL`;
+      const pior = `${mesmo} AND ${SQL_RANK_NIVEL('EXCLUDED.nivel')} < ${SQL_RANK_NIVEL('cliente_geocodificacao.nivel')}`;
+      return pool.query(
+        `INSERT INTO cliente_geocodificacao (cliente_id, endereco, latitude, longitude, nivel, tentativas, consultado_em, erro, numero_tentado_em)
+         VALUES ($1, $2, $3, $4, $5, CASE WHEN $7 THEN 1 ELSE 0 END, now(), CASE WHEN $7 THEN 'Overpass falhou' END,
+                 CASE WHEN $6 THEN now() END)
+         ON CONFLICT (cliente_id) DO UPDATE SET
+           latitude = CASE WHEN ${pior} THEN cliente_geocodificacao.latitude ELSE EXCLUDED.latitude END,
+           longitude = CASE WHEN ${pior} THEN cliente_geocodificacao.longitude ELSE EXCLUDED.longitude END,
+           nivel = CASE WHEN ${pior} THEN cliente_geocodificacao.nivel ELSE EXCLUDED.nivel END,
+           tentativas = CASE WHEN $7 AND ${mesmo} THEN cliente_geocodificacao.tentativas + 1 WHEN $7 THEN 1
+                             WHEN NOT $6 AND ${mesmo} THEN cliente_geocodificacao.tentativas ELSE 0 END,
+           numero_tentado_em = CASE WHEN $6 OR ($7 AND ${mesmo} AND cliente_geocodificacao.tentativas + 1 >= $8) THEN now() END,
+           endereco = EXCLUDED.endereco, consultado_em = now(), erro = EXCLUDED.erro`,
+        [cliente.id, cliente.chave, pos.latitude, pos.longitude, pos.nivel, pos.numeroTentado !== false, pos.overpassFalhou === true, MAX_TENTATIVAS]
+      );
+    },
     // endereço novo recomeça a contagem de tentativas. Nova tentativa pelo
     // número que não achou nada (mesmo endereço, já com posição): mantém a
     // posição que tinha e só marca a tentativa.
