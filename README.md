@@ -189,6 +189,9 @@ Cada pedido faturado (aba Pedidos do cliente) com nota fiscal tem o botão **Ras
 - **Mensagens**: `<div class="ap-msg success">` / `<div class="ap-msg error">`; toast com `showToast(msg)` ou `showToast(msg, 'erro')` (vermelho, fica 5s). Nada de `alert()`/`prompt()`/`confirm()` nativos — use `askConfirm(msg, rotulo, { perigo })` e `askText(msg, valorInicial, rotulo)`.
 - **Ícones de lista**: `ICON_TRASH`, `ICON_EDIT`, `ICON_ATIVO`/`ICON_INATIVO` (SVG em `currentColor`), não emoji.
 - **Fonte**: tamanhos inteiros (11, 12, 13, 14, 15…); títulos `h2` 18px, `h3` de modal 17px.
+- **Área de toque**: botão que se toca com o dedo tem no mínimo 44×44 px de área (−/+, ✕, lápis, leitor de código). Desenho menor ganha a área por um `::after` invisível de 44 px (padrão do bloco "Toque, navegação e progresso" do `index.html`).
+- **Navegação**: as 4 abas ficam no rodapé (`.tabbar`, altura em `--navH`); a barra do orçamento fica logo acima delas. Elemento novo preso embaixo (`position: fixed`/`sticky` com `bottom`) soma `var(--navH)`; preso em cima fica em `top: 58px` (só o cabeçalho).
+- **Um botão principal por tela**: só a ação principal é cheia (verde em Finalizar pedido, vermelho nas outras); as demais ações do mesmo grupo vão com contorno (como Compartilhar orçamento).
 - As páginas separadas (`curva-abc.html`, `ficha-cnpj.html`, `calculadora-materiais.html`) repetem os mesmos tokens de status no próprio `:root`.
 
 ## Frontend — carregamento do catálogo de preços

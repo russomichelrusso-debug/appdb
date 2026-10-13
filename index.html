@@ -775,13 +775,14 @@
     .searchWrap {
       padding: 12px 16px 6px;
       position: sticky;
-      top: 103px;
+      top: 58px;
       z-index: 18;
       background: var(--fill);
     }
 
     #resultsList {
-      scroll-margin-top: 190px;
+      /* cabeçalho (58px) + barra de busca presa (~88px) */
+      scroll-margin-top: 146px;
     }
 
     .searchBox {
@@ -4753,11 +4754,11 @@
       text-align: center;
     }
 
-    /* Barra de pesquisa + resumo do Levantamento presos logo abaixo das abas
-       (topo 58px + abas 45px = 103px, mesmo valor que o resumo já usava). */
+    /* Barra de pesquisa + resumo do Levantamento presos logo abaixo do
+       cabeçalho (58px; as abas ficam no rodapé desde 10/2026). */
     .lev-stickyTopo {
       position: sticky;
-      top: 103px;
+      top: 58px;
       z-index: 18;
       background: var(--fill);
     }
@@ -5608,7 +5609,7 @@
 
     #campBarra {
       position: sticky;
-      bottom: 0;
+      bottom: var(--navH);
       display: flex;
       align-items: center;
       gap: 8px;
@@ -6644,7 +6645,7 @@
 
     .pertoRota {
       position: sticky;
-      bottom: 8px;
+      bottom: calc(var(--navH) + 8px);
       padding-top: 8px;
       background: var(--white);
     }
@@ -7040,6 +7041,416 @@
       border-radius: 2px;
       margin-bottom: 16px;
     }
+    /* ---------- Toque, navegação e progresso (10/2026) ----------
+       Mockups escolhidos pelo usuário a partir das 7 leis de UX: abas no
+       rodapé, alvos de toque de 44px, contexto de preço recolhido, atalhos do
+       cabeçalho num menu, lembrete do levantamento não salvo, "quanto falta"
+       na barra do orçamento e um só botão principal na gaveta. */
+    :root {
+      --navH: calc(58px + env(safe-area-inset-bottom));
+    }
+
+    body {
+      /* abas + barra do orçamento */
+      padding-bottom: calc(var(--navH) + 84px);
+    }
+
+    /* Abas no rodapé, perto do polegar (Lei de Jakob) */
+    .tabbar {
+      position: fixed;
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      max-width: 560px;
+      margin: 0 auto;
+      padding: 0 4px env(safe-area-inset-bottom);
+      background: rgba(29, 29, 31, .94);
+      border-top: 1px solid rgba(255, 255, 255, .08);
+      z-index: 30;
+    }
+
+    .tabbtn {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+      min-height: 58px;
+      padding: 7px 2px 4px;
+      font-size: 11px;
+      border-bottom: none;
+    }
+
+    .tabbtn.active {
+      border-bottom: none;
+    }
+
+    .tabbtn svg {
+      width: 24px;
+      height: 24px;
+    }
+
+    .tabbtn::after {
+      content: "";
+      width: 22px;
+      height: 3px;
+      margin-top: 2px;
+      border-radius: 2px;
+      background: transparent;
+    }
+
+    .tabbtn.active::after {
+      background: var(--red);
+    }
+
+    .tabBadge {
+      position: absolute;
+      top: 4px;
+      left: calc(50% + 6px);
+      min-width: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 18px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .tabBadge.hidden {
+      display: none;
+    }
+
+    .cartbar {
+      bottom: var(--navH);
+      padding: 13px 20px;
+      border-radius: 14px 14px 0 0;
+      flex-wrap: wrap;
+      z-index: 31;
+      overflow: hidden;
+    }
+
+    .toast {
+      bottom: calc(var(--navH) + 76px);
+    }
+
+    /* "Quanto falta" na barra do orçamento (Gradiente de Meta) */
+    .cartMetaBarra {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 4px;
+      background: rgba(255, 255, 255, .15);
+    }
+
+    .cartMetaBarra i {
+      display: block;
+      height: 100%;
+      width: 0;
+      background: #34C759;
+      transition: width .3s ease;
+    }
+
+    .cartMetaTxt {
+      flex-basis: 100%;
+      margin-top: 5px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, .78);
+      text-align: left;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .cartMetaTxt b {
+      color: #FFD60A;
+    }
+
+    .cartMetaBarra.hidden,
+    .cartMetaTxt.hidden {
+      display: none;
+    }
+
+    /* Atalhos do cabeçalho num menu com nome (Lei de Hick) */
+    .atalhosWrap {
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .gearBtn.atalhosBtn {
+      border-radius: 999px;
+      padding: 9px 12px;
+      gap: 6px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1;
+    }
+
+    .atalhosPontos {
+      font-size: 18px;
+      line-height: 10px;
+      letter-spacing: 1px;
+    }
+
+    .atalhosMenu {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 8px);
+      min-width: 240px;
+      padding: 6px;
+      background: var(--white);
+      border-radius: var(--r-sm);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+      z-index: 25;
+    }
+
+    .atalhosMenu.hidden {
+      display: none;
+    }
+
+    .atalhoItem {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-height: 48px;
+      padding: 0 12px;
+      border-radius: 10px;
+      color: var(--ink);
+      text-decoration: none;
+      font-size: 15px;
+      font-weight: 500;
+    }
+
+    .atalhoItem:active {
+      background: var(--fill);
+    }
+
+    .atalhoItem svg {
+      width: 20px;
+      height: 20px;
+      color: var(--gray);
+      flex-shrink: 0;
+    }
+
+    /* Estado/Canal/Classificatório recolhidos com cliente escolhido (Lei de Hick) */
+    .ctxResumo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: calc(100% - 32px);
+      margin: 4px 16px 4px;
+      padding: 11px 14px;
+      min-height: 52px;
+      border: none;
+      border-radius: var(--r-sm);
+      background: var(--white);
+      box-shadow: var(--shadow-1);
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .ctxResumo.hidden {
+      display: none;
+    }
+
+    .ctxResumoTxt {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .ctxResumoTxt small {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--gray);
+    }
+
+    .ctxResumoAlterar {
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .controls.recolhido {
+      display: none;
+    }
+
+    /* Levantamento não salvo, visto de outra aba (Efeito Zeigarnik) */
+    .levLembrete {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 44px;
+      border: none;
+      padding: 10px 16px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .levLembrete.hidden {
+      display: none;
+    }
+
+    .levLembrete span {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .levLembrete b {
+      color: var(--red);
+      white-space: nowrap;
+    }
+
+    /* Botão de leitura perto do polegar no Levantamento (Lei de Fitts) */
+    .scanFab {
+      position: fixed;
+      right: max(16px, calc(50% - 280px + 16px));
+      bottom: calc(var(--navH) + 16px);
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      border: none;
+      background: var(--red);
+      color: var(--on-accent);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .28);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      z-index: 29;
+    }
+
+    body.temOrcamento .scanFab {
+      bottom: calc(var(--navH) + 68px);
+    }
+
+    .scanFab svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    .scanFab:active {
+      background: var(--red-deep);
+    }
+
+    #tabLevantamento {
+      /* espaço pro botão de leitura não cobrir o último item */
+      padding-bottom: 84px;
+    }
+
+    /* Alvos de toque de 44px (Lei de Fitts): o visual muda pouco, a área de
+       toque cresce por um ::after invisível quando o desenho é menor. */
+    .qtybox button {
+      width: 44px;
+      height: 44px;
+      font-size: 20px;
+    }
+
+    .qtybox span {
+      width: 34px;
+      font-size: 16px;
+    }
+
+    .levqtybox button {
+      width: 44px;
+      height: 44px;
+      font-size: 19px;
+    }
+
+    .levqtybox input {
+      height: 44px;
+      font-size: 16px;
+    }
+
+    .cartitem .rm,
+    .priceListItem .rm,
+    .levitem .rm {
+      width: 34px;
+      height: 34px;
+      font-size: 18px;
+    }
+
+    .cartitem .rm::after,
+    .priceListItem .rm::after,
+    .levitem .rm::after,
+    .pencilBtn::after,
+    .fichaInfoBtn::after,
+    .camBtn::after,
+    .micBtn::after,
+    .gearBtn::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 44px;
+      height: 44px;
+      transform: translate(-50%, -50%);
+    }
+
+    .cartitem .rm,
+    .levitem .rm,
+    .pencilBtn,
+    .fichaInfoBtn,
+    .camBtn,
+    .micBtn {
+      position: relative;
+    }
+
+    .pencilBtn svg {
+      width: 17px;
+      height: 17px;
+    }
+
+    .camBtn,
+    .micBtn {
+      width: 38px;
+      height: 38px;
+    }
+
+    /* Um só botão principal na gaveta (Efeito Von Restorff): Finalizar fica
+       cheio; Compartilhar vira contorno. */
+    .shareOptBtn {
+      background: transparent;
+      color: var(--red);
+      box-shadow: inset 0 0 0 1.5px var(--red);
+    }
+
+    .shareOptBtn:active {
+      background: var(--accent-bg);
+    }
+
+    /* Blocos da aba Clientes em três grupos (Lei de Miller); o grupo sem
+       nenhum bloco visível some junto com o título. */
+    .clientesGrupo {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .clientesGrupo:not(:has(> .recompra:not(.hidden))) {
+      display: none;
+    }
   </style>
 </head>
 
@@ -7087,22 +7498,6 @@
           <path d="M7 16v-4M12 16V8M17 16v-7" />
         </svg>
       </a>
-      <a class="gearBtn" href="calculadora-materiais.html" id="calcMateriaisLink" aria-label="Calculadora de Materiais"
-        title="Calculadora de Materiais">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round">
-          <rect x="4" y="2" width="16" height="20" rx="2" />
-          <line x1="8" y1="6" x2="16" y2="6" />
-          <line x1="8" y1="11" x2="8" y2="11.01" />
-          <line x1="12" y1="11" x2="12" y2="11.01" />
-          <line x1="16" y1="11" x2="16" y2="11.01" />
-          <line x1="8" y1="15" x2="8" y2="15.01" />
-          <line x1="12" y1="15" x2="12" y2="15.01" />
-          <line x1="16" y1="15" x2="16" y2="15.01" />
-          <line x1="8" y1="19" x2="8" y2="19.01" />
-          <line x1="12" y1="19" x2="12" y2="19.01" />
-        </svg>
-      </a>
       <a class="gearBtn" href="ficha-cnpj.html" id="fichaCnpjLink" aria-label="Ficha Cadastral do Cliente"
         title="Ficha Cadastral do Cliente (CNPJ)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -7113,25 +7508,50 @@
           <line x1="8" y1="17" x2="16" y2="17" />
         </svg>
       </a>
-      <a class="gearBtn" href="https://cortag.portaldocliente.online/" id="portalClienteLink"
-        target="_blank" rel="noopener" aria-label="Portal do Cliente (notas fiscais e boletos)"
-        title="Portal do Cliente - Notas fiscais e boletos">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round">
-          <path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
-          <path d="M15 2v5h5" />
-          <path d="M7 21v-3a1 1 0 011-1h1a1 1 0 011 1v3M13 21v-2a1 1 0 011-1h1a1 1 0 011 1v2" />
-          <path d="M6 17l1.5-1.5L9 17l1.5-1.5L12 17" />
-        </svg>
-      </a>
-      <a class="gearBtn" href="https://cortag.my.site.com/login" id="salesforceLink"
-        target="_blank" rel="noopener" aria-label="Salesforce"
-        title="Salesforce">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-          stroke-linejoin="round">
-          <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z" />
-        </svg>
-      </a>
+      <div class="atalhosWrap">
+        <button type="button" class="gearBtn atalhosBtn" id="atalhosBtn" aria-haspopup="menu" aria-expanded="false"
+          aria-controls="atalhosMenu"><span class="atalhosPontos" aria-hidden="true">⋯</span><span>Atalhos</span></button>
+        <div class="atalhosMenu hidden" id="atalhosMenu" role="menu" aria-label="Atalhos">
+          <a class="atalhoItem" role="menuitem" href="calculadora-materiais.html" id="calcMateriaisLink" aria-label="Calculadora de Materiais"
+            title="Calculadora de Materiais">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="4" y="2" width="16" height="20" rx="2" />
+              <line x1="8" y1="6" x2="16" y2="6" />
+              <line x1="8" y1="11" x2="8" y2="11.01" />
+              <line x1="12" y1="11" x2="12" y2="11.01" />
+              <line x1="16" y1="11" x2="16" y2="11.01" />
+              <line x1="8" y1="15" x2="8" y2="15.01" />
+              <line x1="12" y1="15" x2="12" y2="15.01" />
+              <line x1="16" y1="15" x2="16" y2="15.01" />
+              <line x1="8" y1="19" x2="8" y2="19.01" />
+              <line x1="12" y1="19" x2="12" y2="19.01" />
+            </svg>
+            <span>Calculadora de Materiais</span>
+          </a>
+          <a class="atalhoItem" role="menuitem" href="https://cortag.portaldocliente.online/" id="portalClienteLink"
+            target="_blank" rel="noopener" aria-label="Portal do Cliente (notas fiscais e boletos)"
+            title="Portal do Cliente - Notas fiscais e boletos">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M6 2h9l5 5v13a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2z" />
+              <path d="M15 2v5h5" />
+              <path d="M7 21v-3a1 1 0 011-1h1a1 1 0 011 1v3M13 21v-2a1 1 0 011-1h1a1 1 0 011 1v2" />
+              <path d="M6 17l1.5-1.5L9 17l1.5-1.5L12 17" />
+            </svg>
+            <span>Portal do Cliente (NF e boletos)</span>
+          </a>
+          <a class="atalhoItem" role="menuitem" href="https://cortag.my.site.com/login" id="salesforceLink"
+            target="_blank" rel="noopener" aria-label="Salesforce"
+            title="Salesforce">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <path d="M18 10h-1.26A8 8 0 109 20h9a5 5 0 000-10z" />
+            </svg>
+            <span>Salesforce</span>
+          </a>
+        </div>
+      </div>
       <button class="gearBtn" id="adminBtn" aria-label="Administração">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round">
@@ -7143,12 +7563,17 @@
       </button>
     </header>
 
-    <div class="tabbar">
-      <button type="button" class="tabbtn active" id="tabBtnPrecos" data-tab="precos">Pedido</button>
-      <button type="button" class="tabbtn" id="tabBtnLev" data-tab="levantamento">Levantamento</button>
-      <button type="button" class="tabbtn" id="tabBtnProdutos" data-tab="produtos">Produtos</button>
-      <button type="button" class="tabbtn" id="tabBtnClientes" data-tab="clientes">Clientes</button>
-    </div>
+    <nav class="tabbar" aria-label="Abas">
+      <button type="button" class="tabbtn active" id="tabBtnPrecos" data-tab="precos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z" /><path d="M3 6h18M16 10a4 4 0 01-8 0" /></svg><span>Pedido</span></button>
+      <button type="button" class="tabbtn" id="tabBtnLev" data-tab="levantamento">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" /><rect x="9" y="3" width="6" height="4" rx="1" /><path d="M9 14l2 2 4-4" /></svg><span>Levantamento</span><span class="tabBadge hidden" id="tabLevBadge"></span></button>
+      <button type="button" class="tabbtn" id="tabBtnProdutos" data-tab="produtos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 00-1-1.7l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.7l7 4a2 2 0 002 0l7-4a2 2 0 001-1.7z" /><path d="M3.3 7L12 12l8.7-5M12 22V12" /></svg><span>Produtos</span></button>
+      <button type="button" class="tabbtn" id="tabBtnClientes" data-tab="clientes">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8" /></svg><span>Clientes</span></button>
+    </nav>
+    <button type="button" class="levLembrete hidden" id="levLembrete"></button>
     <button type="button" class="novidadesFaixa hidden" id="novidadesFaixa" aria-label="Ver novidades"></button>
 
     <div id="tabPrecos">
@@ -7196,7 +7621,11 @@
           </div>
         </div>
       </div>
-      <div class="controls">
+      <button type="button" class="ctxResumo hidden" id="ctxResumo" aria-expanded="false" aria-controls="precosControls">
+        <span class="ctxResumoTxt"><span id="ctxResumoLinha"></span><small id="ctxResumoSub"></small></span>
+        <span class="ctxResumoAlterar" id="ctxResumoAlterar">alterar ▾</span>
+      </button>
+      <div class="controls" id="precosControls">
         <div class="ctrl-row">
           <div class="field field--wide">
             <label for="stateSelect">Estado
@@ -7405,6 +7834,13 @@
         <button class="clearBtn" id="levClearBtn">Limpar levantamento</button>
         <button class="exportBtn" id="levAddAllBtn">Adicionar todos ao orçamento</button>
       </div>
+      <button type="button" class="scanFab" id="scanFab" aria-label="Ler código de barras pela câmera">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="6" width="18" height="12" rx="1" />
+          <path d="M7 6v12M10 6v12M15 6v12M18 6v12" />
+        </svg>
+      </button>
     </div>
 
     <div id="tabProdutos" class="hidden">
@@ -7455,14 +7891,22 @@
           <div class="clientesSecao">Recentes</div>
           <div class="clientesRecentes" id="clientesRecentesLista"></div>
         </div>
-        <div class="clientesSecao">Oportunidades de hoje</div>
-        <div class="recompra hidden" id="recompraWrap"></div>
-        <div class="recompra hidden" id="inadimplenciaWrap"></div>
-        <div class="recompra hidden" id="reativarWrap"></div>
-        <div class="recompra hidden" id="classifAlertasWrap"></div>
-        <div class="recompra hidden" id="pertoWrap"></div>
-        <div class="recompra hidden" id="rotaWrap"></div>
-        <div class="recompra hidden" id="visitasWrap"></div>
+        <div class="clientesGrupo">
+          <div class="clientesSecao">Pra vender hoje</div>
+          <div class="recompra hidden" id="recompraWrap"></div>
+          <div class="recompra hidden" id="reativarWrap"></div>
+          <div class="recompra hidden" id="classifAlertasWrap"></div>
+        </div>
+        <div class="clientesGrupo">
+          <div class="clientesSecao">Pra cuidar</div>
+          <div class="recompra hidden" id="inadimplenciaWrap"></div>
+          <div class="recompra hidden" id="visitasWrap"></div>
+        </div>
+        <div class="clientesGrupo">
+          <div class="clientesSecao">Pra rodar</div>
+          <div class="recompra hidden" id="pertoWrap"></div>
+          <div class="recompra hidden" id="rotaWrap"></div>
+        </div>
       </div>
       <div id="clienteTabListWrap">
         <div class="hist-content" id="clienteTabList"></div>
@@ -7516,6 +7960,8 @@
     <button class="cartbar hidden" id="cartBar">
       <span class="l"><span class="badge" id="cartCount">0</span> <span id="cartCountLabel">SKUs no orçamento</span></span>
       <span class="r" id="cartTotalPreview">R$ 0,00 ▸</span>
+      <span class="cartMetaBarra hidden" id="cartMetaBarra" aria-hidden="true"><i id="cartMetaFill"></i></span>
+      <span class="cartMetaTxt hidden" id="cartMetaTxt"></span>
     </button>
 
     <div class="overlay hidden" id="overlay"></div>
@@ -9952,6 +10398,45 @@
         }
         return bestBonusForProduct(validos, p);
       }
+      // Próxima faixa de campanha pra barra do orçamento ("+2 SKUs = 5% na
+      // campanha X"): só regra de degraus (cesta fica de fora) que vale no
+      // contexto e já tem item do alvo que receberia o bônus (Preço Fixo no canal
+      // só ganha regra "soNoPrecoFixo" e vice-versa: r.fixo, posto pelo
+      // cartTotals) e não está bloqueada (teto do pedido, % de lançamentos); a
+      // contagem do degrau usa todas as linhas, como o avaliarCampanhas. A faixa é a menor acima do
+      // que o orçamento já tem, com % maior que o atual. Mostra a mais perto
+      // (o que falta / o mínimo da faixa) e só se falta até metade - longe
+      // disso o recado vira ruído na barra. null = nenhuma.
+      function proximaFaixaCampanha(rules, rows, ctx) {
+        let melhor = null;
+        for (const rule of (rules || [])) {
+          if (!rule || !rule.active || rule.basis === 'combo' || !regraValeNoContexto(rule, ctx)) continue;
+          const t = scopeTotals(rows, rule.targetType, rule.targetValue);
+          if (t.qty <= 0) continue;
+          const recebe = rows.some(r => r.it.qty > 0 && !!r.fixo === !!rule.soNoPrecoFixo
+            && scopeMatchesProduct(rule.targetType, rule.targetValue, r.p)
+            && !produtoNaListaDaRegra(r.p, listaDaRegra(rule.excluirCodigos), listaDaRegra(rule.excluirFamilias)));
+          if (!recebe || motivoCampanhaBloqueada(rule, rows)) continue;
+          const metrica = rule.selfMetric === 'value' ? 'valor' : rule.selfMetric === 'skus' ? 'skus' : 'qtd';
+          const atual = metrica === 'valor' ? t.gross : metrica === 'skus' ? t.skus : t.qty;
+          const faixas = (rule.tiers || []).map(f => ({ min: Number(f.min), pct: Number(f.pct) }))
+            .filter(f => Number.isFinite(f.min) && Number.isFinite(f.pct) && f.pct > 0);
+          let pctAtual = 0;
+          for (const f of faixas) if (atual >= f.min && f.pct > pctAtual) pctAtual = f.pct;
+          let prox = null;
+          for (const f of faixas) {
+            if (f.min > atual && f.pct > pctAtual && (!prox || f.min < prox.min)) prox = f;
+          }
+          if (!prox) continue;
+          const falta = prox.min - atual;
+          const fracao = falta / prox.min;
+          if (fracao > 0.5) continue;
+          if (!melhor || fracao < melhor.fracao) {
+            melhor = { regra: rule.name || 'campanha', metrica, falta, pct: prox.pct, minimo: prox.min, atual, fracao };
+          }
+        }
+        return melhor;
+      }
       // </motor-campanhas>
 
       // Contexto do orçamento pra regraValeNoContexto.
@@ -9990,7 +10475,7 @@
           const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, fixo, qtyPct);
           const cpSemImposto = clientPrice(lpSemImposto, classificatorioEfetivo(), state.promoDiscount, fixo, qtyPct);
           const lineTotal = cp * it.qty;
-          return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal };
+          return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal, fixo };
         }).filter(Boolean);
 
         const { bonuses, avisos } = avaliarCampanhas(state.promoRules, baseRows, contextoCampanhas());
@@ -10020,22 +10505,91 @@
           return { p: r.p, it: r.it, lp: r.lp, cp, lineTotal, cpSemImposto, lineTotalSemImpostos, campaignPct, campaignName };
         });
 
-        return { rows, total, totalSemImpostos, avisosCampanha: avisos };
+        return { rows, baseRows, total, totalSemImpostos, avisosCampanha: avisos };
       }
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
         const bar = document.getElementById('cartBar');
         // Mostra quantos SKUs (produtos diferentes) há no orçamento, não a soma das quantidades.
         const n = state.cart.filter(i => i.qty > 0).length;
+        document.body.classList.toggle('temOrcamento', n > 0);
         if (n === 0) { bar.classList.add('hidden'); return; }
         bar.classList.remove('hidden');
-        const { total } = cartTotals();
+        const { total, totalSemImpostos, baseRows } = cartTotals();
         document.getElementById('cartCount').textContent = n;
         document.getElementById('cartCountLabel').textContent = n === 1 ? 'SKU no orçamento' : 'SKUs no orçamento';
         document.getElementById('cartTotalPreview').textContent = brl(total) + ' ▸';
+        // item do orçamento sem produto no catálogo (ainda carregando) fica fora
+        // do total - a meta sairia "faltam R$ 1.000" até o applyDB
+        renderMetaDoOrcamento(totalSemImpostos, baseRows, baseRows.length < state.cart.length);
+      }
+      // "Quanto falta" sempre à vista na barra do orçamento (pedido do usuário,
+      // 10/2026, mockup "pedido mínimo + campanha"): pedido mínimo FOB e depois
+      // CIF (mesma régua do aviso da gaveta) e a próxima faixa de campanha. A
+      // linha verde mostra o mínimo; com ele batido, a campanha.
+      function metaPedidoMinimo(totalSemImpostos) {
+        const municipio = state.levCliente ? (FICHA_CNPJ_INFO.get(state.levCliente.id) || {}).municipio : null;
+        const minimo = pedidoMinimoCif(state.uf, municipio);
+        if (totalSemImpostos < PEDIDO_MINIMO_FOB) return { alvo: PEDIDO_MINIMO_FOB, falta: PEDIDO_MINIMO_FOB - totalSemImpostos, rotulo: 'pro mínimo FOB' };
+        if (totalSemImpostos < minimo.valor) return { alvo: minimo.valor, falta: minimo.valor - totalSemImpostos, rotulo: 'pro frete CIF' };
+        return null;
+      }
+      function textoFaltaCampanha(c) {
+        if (c.metrica === 'valor') return `+${brl(c.falta)}`;
+        const n = Math.ceil(c.falta - 1e-9);
+        if (c.metrica === 'skus') return `+${n} ${n === 1 ? 'item diferente' : 'itens diferentes'}`;
+        return `+${n} un.`;
+      }
+      function renderMetaDoOrcamento(totalSemImpostos, baseRows, incompleto) {
+        const barra = document.getElementById('cartMetaBarra');
+        const fill = document.getElementById('cartMetaFill');
+        const txt = document.getElementById('cartMetaTxt');
+        if (!barra || !fill || !txt) return;
+        if (incompleto) { barra.classList.add('hidden'); txt.classList.add('hidden'); return; }
+        const minimo = metaPedidoMinimo(totalSemImpostos);
+        let campanha = null;
+        try { campanha = proximaFaixaCampanha(state.promoRules, baseRows || [], contextoCampanhas()); } catch (e) { campanha = null; }
+        const partes = [];
+        if (minimo) partes.push(`Faltam <b>${brl(minimo.falta)}</b> ${minimo.rotulo}`);
+        if (campanha) partes.push(`${escapeHtml(textoFaltaCampanha(campanha))} = <b>${campanha.pct}%</b> em ${escapeHtml(campanha.regra)}`);
+        txt.innerHTML = partes.join(' · ');
+        txt.classList.toggle('hidden', partes.length === 0);
+        const fracao = minimo ? totalSemImpostos / minimo.alvo : campanha ? campanha.atual / campanha.minimo : null;
+        barra.classList.toggle('hidden', fracao == null);
+        if (fracao != null) fill.style.width = `${Math.max(0, Math.min(100, fracao * 100)).toFixed(1)}%`;
+      }
+
+      // ---- Estado/Canal/Classificatório recolhidos (Lei de Hick, 10/2026) ----
+      // Com cliente escolhido o contexto já vem dele: vira uma linha "PR ·
+      // Varejo · Premium 17%" com "alterar", e a busca sobe. Sem cliente os
+      // campos ficam abertos. Abrir vale até trocar de cliente.
+      let ctxPrecoAberto = false;
+      let ctxPrecoClienteId = null;
+      function atualizarResumoContexto() {
+        const resumo = document.getElementById('ctxResumo');
+        const controles = document.getElementById('precosControls');
+        if (!resumo || !controles) return;
+        const cliente = state.levCliente;
+        const idAtual = cliente ? cliente.id : null;
+        if (idAtual !== ctxPrecoClienteId) { ctxPrecoClienteId = idAtual; ctxPrecoAberto = false; }
+        resumo.classList.toggle('hidden', !cliente);
+        controles.classList.toggle('recolhido', !!cliente && !ctxPrecoAberto);
+        resumo.setAttribute('aria-expanded', String(!cliente || ctxPrecoAberto));
+        if (!cliente) return;
+        const op = (CLASSI_POR_CANAL[state.canal] || []).find(o => o.v === state.channelDiscount);
+        const classi = op ? (op.nivel ? `${op.rotulo} ${rotuloPctClassi(op.v)}` : op.rotulo) : `${state.channelDiscount || 0}%`;
+        document.getElementById('ctxResumoLinha').textContent = `${state.uf || '—'} · ${NOME_CANAL[state.canal] || state.canal || ''} · ${classi}`;
+        const promo = Number(state.promoDiscount) || 0;
+        document.getElementById('ctxResumoSub').textContent = `Preço pelo cliente · desc. adicional ${String(promo).replace('.', ',')}%`;
+        document.getElementById('ctxResumoAlterar').textContent = ctxPrecoAberto ? 'fechar ▴' : 'alterar ▾';
+      }
+      function alternarResumoContexto() {
+        ctxPrecoAberto = !ctxPrecoAberto;
+        atualizarResumoContexto();
       }
       function renderCart() {
         salvarContextoDoCarrinho(); // estado/canal/descontos/prazo mudam e o carrinho é redesenhado
+        atualizarResumoContexto();
         const { rows, total, totalSemImpostos, avisosCampanha } = cartTotals();
         document.getElementById('cartTotalSemImpostos').textContent = brl(totalSemImpostos);
         // campanha que chegou no degrau mas não valeu (teto do pedido, % de lançamentos)
@@ -10137,6 +10691,7 @@
           }));
         } catch (e) { /* ok se indisponivel */ }
         agendarSyncRascunhoServidor();
+        atualizarLembreteLev();
       }
       // Reforça o autosave local mandando o mesmo rascunho pro servidor, com
       // debounce (não a cada tecla) - sobrevive a trocar de aparelho ou limpar
@@ -10462,6 +11017,7 @@
           el.textContent = state.levCliente ? `${state.levCliente.nome} · não salvo` : 'Levantamento não salvo';
           el.classList.remove('hasname');
         }
+        atualizarLembreteLev();
       }
 
       // Posição do celular no momento de salvar o levantamento - é quando há
@@ -10785,6 +11341,7 @@
         // de selecionado (pedido do usuário) - continua no seletor.
         document.getElementById(prefixo + 'SelectClientBtn').classList.toggle('hidden', !!cliente);
         document.getElementById(prefixo + 'ClienteSel').classList.toggle('hidden', !cliente);
+        if (prefixo === 'precos') atualizarResumoContexto();
         nameEl.textContent = cliente ? cliente.nome : '';
         nameEl.title = cliente ? cliente.nome : '';
         const badgeEl = document.getElementById(prefixo + 'ClientBadge');
@@ -12051,6 +12608,27 @@
       function hasUnsavedLevantamento() {
         return state.survey.length > 0 && !state.levLoadedId;
       }
+      // Levantamento contado e não salvo fica à vista fora da aba dele (pedido
+      // do usuário, 10/2026): número de itens na aba e faixa "Levantamento em
+      // andamento · Abrir" nas outras abas.
+      function atualizarLembreteLev() {
+        const badge = document.getElementById('tabLevBadge');
+        const faixa = document.getElementById('levLembrete');
+        const aba = document.getElementById('tabLevantamento');
+        if (!badge || !faixa || !aba) return;
+        const pendente = hasUnsavedLevantamento();
+        const n = state.survey.length;
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.classList.toggle('hidden', !pendente);
+        const tabBtn = document.getElementById('tabBtnLev');
+        if (tabBtn) tabBtn.setAttribute('aria-label', pendente ? `Levantamento, ${n} ${n === 1 ? 'item não salvo' : 'itens não salvos'}` : 'Levantamento');
+        const fora = aba.classList.contains('hidden');
+        faixa.classList.toggle('hidden', !pendente || !fora);
+        if (pendente && fora) {
+          const quem = state.levCliente ? ` · ${state.levCliente.nome}` : '';
+          faixa.innerHTML = `<span>📋 Levantamento não salvo · ${n} ${n === 1 ? 'item' : 'itens'}${escapeHtml(quem)}</span><b>Abrir ›</b>`;
+        }
+      }
       function initTabs() {
         const buttons = {
           precos: document.getElementById('tabBtnPrecos'),
@@ -12075,6 +12653,7 @@
             buttons[k].classList.toggle('active', k === tab);
             panels[k].classList.toggle('hidden', k !== tab);
           });
+          atualizarLembreteLev();
           if (tab === 'levantamento') {
             renderLevList();
             setTimeout(() => document.getElementById('levInput').focus(), 50);
@@ -12095,6 +12674,24 @@
             e.returnValue = '';
           }
         });
+      }
+
+      // Menu "Atalhos" do cabeçalho (Calculadora, Portal do Cliente, Salesforce):
+      // abre e fecha no botão, fecha ao tocar fora, ao escolher um item ou no Esc.
+      function initAtalhosCabecalho() {
+        const btn = document.getElementById('atalhosBtn');
+        const menu = document.getElementById('atalhosMenu');
+        if (!btn || !menu) return;
+        const fechar = () => { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); };
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const abrir = menu.classList.contains('hidden');
+          menu.classList.toggle('hidden', !abrir);
+          btn.setAttribute('aria-expanded', String(abrir));
+        });
+        menu.addEventListener('click', (e) => { if (e.target.closest('a')) fechar(); });
+        document.addEventListener('click', (e) => { if (!menu.classList.contains('hidden') && !menu.contains(e.target)) fechar(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
       }
 
       // ---------------- Drawer open/close ----------------
@@ -21714,7 +22311,7 @@
               // a barra fica presa no topo; se o vendedor estava rolado lá embaixo,
               // leva a tela pro começo dos resultados novos (senão ficaria no meio deles)
               const lista = document.getElementById('resultsList');
-              if (lista && searchInput.value.trim().length >= 2 && lista.getBoundingClientRect().top < 190) lista.scrollIntoView({ block: 'start' });
+              if (lista && searchInput.value.trim().length >= 2 && lista.getBoundingClientRect().top < 146) lista.scrollIntoView({ block: 'start' });
             }, 90);
           });
           // código digitado + Enter entra na lista de preços, igual escanear/falar -
@@ -21731,6 +22328,10 @@
           document.getElementById('addAllResultsBtn').addEventListener('click', addAllResultsToCart);
 
           initAppConfirmModal();
+          initAtalhosCabecalho();
+          document.getElementById('ctxResumo').addEventListener('click', alternarResumoContexto);
+          document.getElementById('levLembrete').addEventListener('click', () => activateMainTab('levantamento'));
+          document.getElementById('scanFab').addEventListener('click', () => document.getElementById('scanBtnLev').click());
           document.getElementById('cartBar').addEventListener('click', openDrawer);
           document.getElementById('closeDrawer').addEventListener('click', closeDrawer);
           document.getElementById('overlay').addEventListener('click', closeDrawer);
