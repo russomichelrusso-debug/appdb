@@ -17379,6 +17379,7 @@
         if (!recompraDados) {
           try { recompraDados = JSON.parse(localStorage.getItem(RECOMPRA_LS_KEY)) || null; } catch (e) { recompraDados = null; }
           renderRecompra();
+          renderVisitas();
         }
         if (recompraCarregando) return;
         if (!forcar && recompraDados && Date.now() - (recompraDados.carregadoEm || 0) < RECOMPRA_ATUALIZAR_MS) return;
@@ -17400,6 +17401,7 @@
         } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
         recompraCarregando = false;
         renderRecompra();
+        renderVisitas();
         renderPerto();
         renderRota();
       }
@@ -17456,6 +17458,7 @@
         adiados[c.cliente_id] = somarDiasISO(hoje, 7);
         gravarRecompraAdiados(adiados);
         renderRecompra();
+        renderVisitas();
         showToast(`${c.nome} sai da lista por 7 dias`);
         apiFetch(`/api/recompra/${encodeURIComponent(c.cliente_id)}/adiar`,
           { method: 'POST', body: JSON.stringify({ em: hoje }) },
@@ -17556,6 +17559,7 @@
         if (!inadDados) {
           try { inadDados = JSON.parse(localStorage.getItem(INAD_LS_KEY)) || null; } catch (e) { inadDados = null; }
           renderInadimplencia();
+          renderVisitas();
           atualizarInadimplenciaCards();
         }
         if (inadCarregando) return;
@@ -17570,6 +17574,7 @@
         } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
         inadCarregando = false;
         renderInadimplencia();
+        renderVisitas();
         atualizarInadimplenciaCards();
       }
       function atualizarInadimplenciaCards() {
@@ -17765,6 +17770,7 @@
         if (!reativarDados) {
           try { reativarDados = JSON.parse(localStorage.getItem(REATIVAR_LS_KEY)) || null; } catch (e) { reativarDados = null; }
           renderReativar();
+          renderVisitas();
           atualizarReativarCards();
         }
         if (reativarCarregando) return;
@@ -17788,6 +17794,7 @@
         } catch (e) { /* sem internet: fica com a lista guardada (se houver) */ }
         reativarCarregando = false;
         renderReativar();
+        renderVisitas();
         renderPerto();
         renderRota();
         atualizarReativarCards();
@@ -17817,6 +17824,7 @@
         ocultos[c.cliente_id] = { tipo, ate: tipo === 'ja_falei' ? somarDiasISO(hoje, REATIVAR_ADIAR_DIAS) : null };
         gravarReativarOcultos(ocultos);
         renderReativar();
+        renderVisitas();
         renderPerto();
         showToast(tipo === 'ja_falei' ? `${c.nome} sai da lista por ${REATIVAR_ADIAR_DIAS} dias` : `${c.nome} saiu da lista`);
         apiFetch(`/api/reativacao/${encodeURIComponent(c.cliente_id)}/adiar`,
@@ -17898,6 +17906,18 @@
           .sort((a, b) => (b.fat_12m || 0) - (a.fat_12m || 0) || b.ultima_compra.localeCompare(a.ultima_compra));
         return { semCompra, semVisita };
       }
+      // Quem já está em Recompra, Inadimplência ou Para reativar não repete em
+      // "Visitas × compras" (pedido do usuário): o bloco fica com quem não
+      // aparece em nenhum outro. A Rota por cidade usa as listas inteiras.
+      function idsNosOutrosBlocosClientes() {
+        const ids = new Set();
+        for (const c of recompraVisiveis()) ids.add(String(c.cliente_id));
+        for (const c of (inadDados && Array.isArray(inadDados.clientes) && inadDados.clientes) || []) {
+          if (c.cliente_id != null) ids.add(String(c.cliente_id));
+        }
+        for (const c of reativarVisiveis()) ids.add(String(c.cliente_id));
+        return ids;
+      }
       // "hoje" / "ontem" / "há 12 dias (30/09)"
       function textoHaDias(iso) {
         const dias = diasEntreISO(iso, hojeLocalISO());
@@ -17930,10 +17950,16 @@
         const temDados = !!visitasDados || Object.keys(lerVisitasLocais()).length > 0;
         el.classList.toggle('hidden', !!clienteTabSelected || !temDados);
         if (!temDados) { el.innerHTML = ''; return; }
-        const { semCompra, semVisita } = cruzarVisitasCompras();
+        const nosOutros = idsNosOutrosBlocosClientes();
+        const cruzadas = cruzarVisitasCompras();
+        const fora = (c) => !nosOutros.has(String(c.cliente_id));
+        const semCompra = cruzadas.semCompra.filter(fora);
+        const semVisita = cruzadas.semVisita.filter(fora);
+        const escondidos = new Set([...cruzadas.semCompra, ...cruzadas.semVisita].filter(c => !fora(c)).map(c => String(c.cliente_id))).size;
         const aberta = visitasAberto();
         const resumo = `${semCompra.length ? `${semCompra.length} visitado${semCompra.length === 1 ? '' : 's'} sem compra` : 'nenhum visitado sem compra'}`
-          + ` · ${semVisita.length} compra${semVisita.length === 1 ? '' : 'm'} e sem visita há ${VISITAS_JANELA_DIAS}+ dias`;
+          + ` · ${semVisita.length} compra${semVisita.length === 1 ? '' : 'm'} e sem visita há ${VISITAS_JANELA_DIAS}+ dias`
+          + (escondidos ? ` · ${escondidos} já nos outros blocos` : '');
         el.dataset.cor = semCompra.length ? 'azul' : 'cinza';
         let corpo = '';
         if (aberta) {
@@ -17944,9 +17970,11 @@
               + (lista.length ? mostrar.map(c => renderVisitaItem(c, chave)).join('') : `<div class="lev-empty">${vazio}</div>`)
               + (resto > 0 ? `<button type="button" class="recompraMais" data-visitas-mais="${chave}">Ver mais ${resto}</button>` : '');
           };
-          corpo = `<p class="recompraHint">Visita = levantamento salvo por você. Compra = pedido que entrou no ERP ou fechado no app${visitasDados && visitasDados.hoje ? '' : ' (lista do servidor ainda não carregada)'}.</p>`
-            + secao('semCompra', `Visitados nos últimos ${VISITAS_JANELA_DIAS} dias e não compraram`, semCompra, 'Todo cliente que você visitou comprou depois.')
-            + secao('semVisita', `Compram e você não visita há ${VISITAS_JANELA_DIAS}+ dias`, semVisita, 'Você visitou todos os clientes que compraram no ano.');
+          corpo = `<p class="recompraHint">Visita = levantamento salvo por você. Compra = pedido que entrou no ERP ou fechado no app${visitasDados && visitasDados.hoje ? '' : ' (lista do servidor ainda não carregada)'}.`
+            + (escondidos ? ` ${escondidos} cliente${escondidos === 1 ? '' : 's'} desta lista já ${escondidos === 1 ? 'está' : 'estão'} em Recompra, Inadimplência ou Para reativar e não ${escondidos === 1 ? 'aparece' : 'aparecem'} aqui.` : '')
+            + '</p>'
+            + secao('semCompra', `Visitados nos últimos ${VISITAS_JANELA_DIAS} dias e não compraram`, semCompra, cruzadas.semCompra.length ? 'Nenhum fora dos outros blocos.' : 'Todo cliente que você visitou comprou depois.')
+            + secao('semVisita', `Compram e você não visita há ${VISITAS_JANELA_DIAS}+ dias`, semVisita, cruzadas.semVisita.length ? 'Nenhum fora dos outros blocos.' : 'Você visitou todos os clientes que compraram no ano.');
         }
         el.innerHTML = cabecalhoBloco({
           id: 'visitasToggle', aberta, icone: 'visita', titulo: 'Visitas × compras', resumo: escapeHtml(resumo),
