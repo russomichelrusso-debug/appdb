@@ -15094,6 +15094,7 @@
           const st = await apiFetch('/api/geocodificacao/status');
           const fmt = (n) => Number(n).toLocaleString('pt-BR');
           el.textContent = `${fmt(st.com_gps)} GPS · ${fmt(st.pelo_endereco)} pelo endereço`
+            + (st.pelo_numero ? ` (${fmt(st.pelo_numero)} pelo número)` : '')
             + (st.faltam ? ` · ${fmt(st.faltam)} na fila (${st.limite}/noite)` : '')
             + (st.nao_encontrados ? ` · ${fmt(st.nao_encontrados)} endereço(s) não encontrado(s)` : '');
         } catch (e) {
@@ -16821,10 +16822,11 @@
           // na Av. Brasil de Maringá aparecia "260 m" estando longe, 10/2026)
           const soRua = (l) => l.pos.fonte === 'rua';
           const origem = (l) => soRua(l) ? 'só pela rua da ficha, a loja pode ficar longe daqui'
+            : l.pos.fonte === 'estimado' ? 'estimada pelo número da ficha, pode errar umas quadras'
             : l.pos.fonte === 'numero' ? 'pelo endereço da ficha' : 'pela visita anterior';
-          const distancia = (l) => (soRua(l) ? '~' : '') + formatarDistancia(l.dist);
+          const distancia = (l) => (l.pos.aprox ? '~' : '') + formatarDistancia(l.dist);
           el.innerHTML = `<div class="proxPergunta">📍 Você está na <b>${escapeHtml(primeira.c.nome)}</b>?</div>
-            <div class="proxMeta${soRua(primeira) ? ' proxMeta--rua' : ''}">${distancia(primeira)} daqui · ${origem(primeira)}</div>
+            <div class="proxMeta${primeira.pos.aprox ? ' proxMeta--rua' : ''}">${distancia(primeira)} daqui · ${origem(primeira)}</div>
             <div class="proxAcoes">
               <button type="button" class="proxSim" data-prox-sim="${escapeHtml(String(primeira.c.id))}">Selecionar</button>
               <button type="button" class="proxNao" data-prox-nao="${escapeHtml(String(primeira.c.id))}">Não</button>
@@ -16908,12 +16910,15 @@
         const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
         const lat = num(c.latitude), lng = num(c.longitude);
         // fonte: 'gps' (gravado no levantamento), 'numero' (endereço achado com o
-        // número) ou 'rua' (só um ponto da rua - em avenida longa, a loja pode
-        // ficar a quilômetros dele)
+        // número, ou calculado pelos outros números da rua no OSM - nivel
+        // 'interpolado', erro de ~20-30 m), 'estimado' (calculado mais longe dos
+        // números conhecidos, ~50-90 m) ou 'rua' (só um ponto da rua - em avenida
+        // longa, a loja pode ficar a quilômetros dele). routes/lib/posicaoPeloNumero.js
         if (coordValida(lat, lng)) return { lat, lng, aprox: false, fonte: 'gps' };
         const alat = num(c.latitude_aprox), alng = num(c.longitude_aprox);
-        const numero = c.localizacao_nivel === 'numero';
-        if (coordValida(alat, alng)) return { lat: alat, lng: alng, aprox: !numero, fonte: numero ? 'numero' : 'rua' };
+        const fonte = ['numero', 'interpolado'].includes(c.localizacao_nivel) ? 'numero'
+          : c.localizacao_nivel === 'estimado' ? 'estimado' : 'rua';
+        if (coordValida(alat, alng)) return { lat: alat, lng: alng, aprox: fonte !== 'numero', fonte };
         return null;
       }
       function distanciaM(a, b) {
@@ -16993,8 +16998,10 @@
         }
         return ordem;
       }
+      // só o GPS vai como coordenada: pelo endereço, o Google acha o número melhor
+      // que a posição calculada
       function destinoDaParada({ c, pos }) {
-        if (!pos.aprox) return `${pos.lat},${pos.lng}`;
+        if (pos.fonte === 'gps') return `${pos.lat},${pos.lng}`;
         return enderecoParaNavegacao(c.endereco) || `${pos.lat},${pos.lng}`;
       }
       function montarRotaPerto() {

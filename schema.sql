@@ -494,8 +494,12 @@ ALTER TABLE cnpj_preenchimento_falhas ENABLE ROW LEVEL SECURITY;
 -- GPS. A posição do GPS (clientes.latitude/longitude) sempre vale mais.
 -- endereco = o endereço consultado (mesma chave de SQL_CHAVE_ENDERECO): ficha
 -- com endereço diferente = consulta de novo. latitude NULL = não achou
--- (tentativas conta, desiste em 3). nivel: 'numero' (achou o prédio) ou
+-- (tentativas conta, desiste em 3). nivel: 'numero' (achou o prédio),
+-- 'interpolado' (calculado pelos outros números da rua no OSM, preciso como o
+-- número), 'estimado' (idem, mais longe dos números conhecidos - aproximado) ou
 -- 'rua' (ponto da rua - em avenida longa pode ficar a quilômetros da loja).
+-- numero_tentado_em: quando a posição pelo número foi tentada (rua/estimado
+-- tentam de novo a cada 60 dias; NULL = Overpass falhou, tenta na noite seguinte).
 CREATE TABLE IF NOT EXISTS cliente_geocodificacao (
   cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
   endereco TEXT NOT NULL,
@@ -506,6 +510,7 @@ CREATE TABLE IF NOT EXISTS cliente_geocodificacao (
   consultado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   erro TEXT
 );
+ALTER TABLE cliente_geocodificacao ADD COLUMN IF NOT EXISTS numero_tentado_em TIMESTAMPTZ;
 ALTER TABLE cliente_geocodificacao ENABLE ROW LEVEL SECURITY;
 
 -- "Já falei" da Recompra da semana (routes/recompra.js): o vendedor já

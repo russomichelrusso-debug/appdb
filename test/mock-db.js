@@ -2026,16 +2026,17 @@ async function query(sql, params = []) {
   // status da posição das lojas (statusGeocodificacao, routes/lib/geocodificacao.js)
   if (s.includes('AS COM_GPS') && s.includes('CLIENTE_GEOCODIFICACAO')) {
     const max = params[0];
-    let comGps = 0, peloEndereco = 0, comEndereco = 0, naoEncontrados = 0;
+    let comGps = 0, peloEndereco = 0, peloNumero = 0, comEndereco = 0, naoEncontrados = 0;
     for (const c of clientes) {
       if (c.latitude != null) { comGps++; continue; }
       const f = clienteCnpjFicha[c.id], g = clienteGeocodificacao[c.id];
       if (f && String(f.logradouro || '').trim() && String(f.municipio || '').trim()) comEndereco++;
       const mesmo = g && f && g.endereco === chaveEnderecoFicha(f);
       if (mesmo && g.latitude != null) peloEndereco++;
+      if (mesmo && g.latitude != null && ['numero', 'interpolado', 'estimado'].includes(g.nivel)) peloNumero++;
       if (mesmo && g.latitude == null && g.tentativas >= max) naoEncontrados++;
     }
-    return { rows: [{ com_gps: String(comGps), pelo_endereco: String(peloEndereco), com_endereco_sem_gps: String(comEndereco), nao_encontrados: String(naoEncontrados) }] };
+    return { rows: [{ com_gps: String(comGps), pelo_endereco: String(peloEndereco), pelo_numero: String(peloNumero), com_endereco_sem_gps: String(comEndereco), nao_encontrados: String(naoEncontrados) }] };
   }
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE')) {
     const registro = configuracoes[params[0]];
