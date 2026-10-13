@@ -7,7 +7,7 @@ const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
-const { marcarDescontinuados } = require('./lib/descontinuado');
+const { marcarDescontinuados, estaDescontinuado, grupoDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 
 router.param('id', validarIdInteiro);
 router.param('produtoId', validarIdInteiro);
@@ -467,7 +467,7 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
       const nome = nomePorCodigo.get(sku);
       if (!nome || !linha.ultima_compra) continue; // produto fora do catálogo: sem nome pra agrupar
       const { chave, rotulo } = grupoDoProduto(nome);
-      const g = grupos.get(chave) || { grupo: rotulo, ultima_compra: null, num_pedidos: 0, variacoes: new Set() };
+      const g = grupos.get(chave) || { chave, grupo: rotulo, ultima_compra: null, num_pedidos: 0, variacoes: new Set() };
       // prefere o rótulo com acento quando o catálogo grafa o mesmo nome dos dois jeitos
       if (rotulo !== g.grupo && /[^\x00-\x7F]/.test(rotulo) && !/[^\x00-\x7F]/.test(g.grupo)) g.grupo = rotulo;
       const data = new Date(linha.ultima_compra);
@@ -477,8 +477,12 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
       grupos.set(chave, g);
     }
 
+    const cat = await catalogoOuNada(pool);
     const limite = Date.now() - SUGESTOES_DIAS_SEM_COMPRAR * 86400000;
     const sugestoes = [...grupos.values()]
+      // grupo sem nenhum produto na Lista de Preços saiu de linha: não tem o que
+      // oferecer. Código trocado por um novo continua no mesmo grupo (fica).
+      .filter(g => !(cat && grupoDescontinuado(g.chave, cat)))
       .filter(g => g.ultima_compra.getTime() < limite)
       .sort((a, b) => b.num_pedidos - a.num_pedidos || b.ultima_compra - a.ultima_compra)
       .slice(0, SUGESTOES_LIMITE)
@@ -546,10 +550,12 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
       ...oficial.rows.map(l => ({ ...l, origem: 'oficial' })),
       ...app.rows.filter(l => !pedidoAppJaFaturado(skuDe(l), l.data, datasOficiais)).map(l => ({ ...l, origem: 'app' })),
     ];
+    const cat = await catalogoOuNada(pool);
     for (const linha of linhas) {
       if (!linha.data) continue;
       const sku = codigoBase(String(linha.codigo_sku), codigosConhecidos);
       if (!nomePorCodigo.has(sku)) continue; // fora do catálogo: o app não tem como incluir
+      if (cat && estaDescontinuado(sku, cat.codigos)) continue; // saiu da Lista de Preços: não ocupa vaga
       const d = dia(linha.data);
       const g = porSku.get(sku) || { codigo_sku: sku, nome: nomePorCodigo.get(sku), ultima_compra: d, qtd: { oficial: 0, app: 0 }, pedidos: new Set() };
       if (d > g.ultima_compra) { g.ultima_compra = d; g.qtd = { oficial: 0, app: 0 }; }
@@ -567,7 +573,7 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
         qtd_ultima_compra: g.qtd.oficial || g.qtd.app,
         num_pedidos: g.pedidos.size,
       }));
-    res.json(await marcarDescontinuados(pool, lista, 'nome'));
+    res.json(lista);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar produtos comprados.' });
@@ -595,9 +601,13 @@ router.get('/clientes/:id/recuperar', async (req, res) => {
     const temLevantamento = await pool.query('SELECT 1 FROM levantamentos WHERE cliente_id = $1 LIMIT 1', [req.params.id]);
     if (temLevantamento.rows.length === 0) return res.json([]);
     const ultimaLeitura = new Map(leituras.rows.map(r => [String(r.codigo_sku), r]));
+    const cat = await catalogoOuNada(pool);
     const lista = [];
     for (const c of compras.values()) {
       if (!c.noCatalogo) continue; // fora do catálogo: não tem como ir pro orçamento
+      // saiu da Lista de Preços: não tem o que oferecer, e era o que ocupava as 30 vagas
+      // (é o de compra mais antiga)
+      if (cat && estaDescontinuado(c.codigo_sku, cat.codigos)) continue;
       const leitura = ultimaLeitura.get(c.codigo_sku);
       if (leitura && Number(leitura.quantidade_contada) > 0) continue;
       const r = resumoCompras(c);
@@ -607,7 +617,7 @@ router.get('/clientes/:id/recuperar', async (req, res) => {
       });
     }
     lista.sort((a, b) => a.ultima_compra.localeCompare(b.ultima_compra));
-    res.json(await marcarDescontinuados(pool, lista.slice(0, 30), 'produto'));
+    res.json(lista.slice(0, 30));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar produtos pra recuperar.' });

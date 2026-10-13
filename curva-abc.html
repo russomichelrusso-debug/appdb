@@ -1493,7 +1493,11 @@
       const rotulos = shown.map((b, i) => {
         if (i >= 6 && !b.isOutros) return '';
         const x = plotLeft + i * slot + slot / 2;
-        const texto = b.label.length > 16 ? b.label.slice(0, 15) + '…' : b.label;
+        // "Descontinuado · " ocupava os 15 caracteres do rótulo e todas as barras
+        // de produto fora de linha ficavam iguais: no rótulo curto vira "† " (o
+        // nome inteiro continua no title)
+        const curto = String(b.label).replace(/^Descontinuado · /, '† ');
+        const texto = curto.length > 16 ? curto.slice(0, 15) + '…' : curto;
         return `<text x="${x.toFixed(1)}" y="${(plotBottom + 16).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--gray)"${b.isOutros ? ' font-weight="700" fill="var(--ink)"' : ''}>${escapeHtml(texto)}</text>`;
       }).join('');
 

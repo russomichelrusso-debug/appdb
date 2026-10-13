@@ -1679,6 +1679,8 @@ async function main() {
     const r = await req('GET', '/api/clientes/9131/historico');
     const noCat = (r.body || []).find(x => x.codigo_sku === '71001');
     const fora = (r.body || []).filter(x => x.codigo_sku !== '71001');
+    // "o que oferecer" (Recuperar) tira o descontinuado em vez de marcar: 71002/71003 eram os dois de lá
+    const rec = await req('GET', '/api/clientes/9131/recuperar');
     catalogo.splice(0, catalogo.length);
     esquecerCatalogo();
     const vazio = await req('GET', '/api/clientes/9131/historico');
@@ -1686,8 +1688,21 @@ async function main() {
     esquecerCatalogo();
     assert(r.status === 200 && noCat && !noCat.descontinuado && !String(noCat.produto).startsWith('Descontinuado')
       && fora.length === 2 && fora.every(x => x.descontinuado && String(x.produto).startsWith('Descontinuado · '))
-      && !(vazio.body || []).some(x => x.descontinuado),
+      && !(vazio.body || []).some(x => x.descontinuado)
+      && rec.status === 200 && Array.isArray(rec.body) && rec.body.length === 0,
       `historico: produto que saiu da Lista de Preços vem com "Descontinuado" na frente: ${JSON.stringify(r.body)}`);
+  }
+  {
+    // 💡 sugestões: grupo some só quando nenhum produto do grupo está na Lista de Preços -
+    // código trocado por um novo (mesmo grupoDoProduto) continua sendo oferecido
+    const { grupoDescontinuado, estaDescontinuado } = require('../routes/lib/descontinuado');
+    const { grupoDoProduto } = require('../routes/lib/agrupamentoProduto');
+    const cat = { codigos: new Set(['70500']), grupos: new Set([grupoDoProduto('DISCO DIAMANTADO TURBO 115 mm').chave]) };
+    assert(!grupoDescontinuado(grupoDoProduto('DISCO DIAMANTADO TURBO 110 mm').chave, cat)
+      && grupoDescontinuado(grupoDoProduto('COLHER P/ PEDREIRO KAEF 07').chave, cat)
+      && !grupoDescontinuado('qualquer', { codigos: new Set(), grupos: new Set() })
+      && !estaDescontinuado('P70500', cat.codigos) && estaDescontinuado('70499', cat.codigos),
+      'descontinuado: grupo com código trocado continua; grupo sem produto ativo sai; promocional pelo código base; catálogo vazio não tira nada');
   }
   res = await req('GET', '/api/clientes/9131/rotatividade');
   assert(
