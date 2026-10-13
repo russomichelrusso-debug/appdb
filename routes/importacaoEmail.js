@@ -37,7 +37,8 @@ const { importarClassificatorioErp } = require('./clientesClassificatorio');
 const { importarClientesSemCompra } = require('./reativacao');
 const { importarInadimplencia } = require('./inadimplencia');
 const { acharClientePorNome } = require('../clientMatcher');
-const { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista, remetenteValido, REMETENTE_DO_TIPO } = require('./lib/emailCortag');
+const { ehPedidoBloqueado, ehPedidoAvista, lerPedidoBloqueado, lerPedidoAvista, ehCancelamentoSaldo, lerCancelamentoSaldo,
+  remetenteValido, REMETENTE_DO_TIPO, enderecoDoRemetente } = require('./lib/emailCortag');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { avisarImportacao } = require('./lib/novidades');
 
@@ -55,6 +56,7 @@ const ROTULO_TIPO = {
   inadimplencia: 'Inadimplência',
   bloqueado: 'Pedido bloqueado',
   avista: 'Pedido à vista',
+  cancelamento: 'Cancelamento de saldo em carteira',
 };
 
 function chaveImportacaoValida(req) {
@@ -71,7 +73,7 @@ class Recusado extends Error {}
 
 function conferirRemetente(tipo, corpo) {
   if (!remetenteValido(tipo, corpo.remetente)) {
-    throw new Recusado(`${ROTULO_TIPO[tipo]} só vale de ${REMETENTE_DO_TIPO[tipo]} (veio de "${String(corpo.remetente || '').slice(0, 120)}").`);
+    throw new Recusado(`${ROTULO_TIPO[tipo]} só vale de ${[].concat(REMETENTE_DO_TIPO[tipo] || []).join(' ou ')} (veio de "${String(corpo.remetente || '').slice(0, 120)}").`);
   }
 }
 
@@ -276,11 +278,67 @@ async function receberPedidoAvista(p, recebidoEm) {
   return { ...p, cliente_codigo_oficial: codigo, avisado: avisar };
 }
 
+// "Cancelamento saldo em carteira" (assistentes comerciais): aviso final antes
+// do corte - decisão do usuário (10/2026): selo no pedido + faixa no card do
+// cliente + um push por e-mail. O mesmo aviso reenviado (a assistente já mandou
+// o mesmo e-mail 3 vezes em 1 minuto) não gera outro push. Aviso mais velho
+// que o gravado pro mesmo item não passa por cima.
+async function receberCancelamentoSaldo(aviso, recebidoEm, remetente) {
+  const dataAviso = aviso.data_aviso || recebidoEm.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+  let novos = 0;
+  for (const it of aviso.itens) {
+    const antes = await pool.query(
+      `/* importacao-email:cancelamento-antes */
+       SELECT to_char(data_aviso, 'YYYY-MM-DD') AS data_aviso FROM avisos_cancelamento_saldo WHERE nr_pedido = $1 AND codigo_sku = $2`,
+      [it.nr_pedido, it.codigo_sku]);
+    const dataAntes = antes.rows.length ? antes.rows[0].data_aviso : null;
+    if (dataAntes && dataAntes > dataAviso) continue; // aviso mais novo já gravado
+    await pool.query(
+      `/* importacao-email:cancelamento */
+       INSERT INTO avisos_cancelamento_saldo (nr_pedido, codigo_sku, cliente_codigo_oficial, cliente_nome, descricao, ordem_compra,
+         motivo, minimo, quantidade, valor, data_aviso, remetente, recebido_em)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13)
+       ON CONFLICT (nr_pedido, codigo_sku) DO UPDATE SET
+         cliente_codigo_oficial = COALESCE(EXCLUDED.cliente_codigo_oficial, avisos_cancelamento_saldo.cliente_codigo_oficial),
+         cliente_nome = COALESCE(EXCLUDED.cliente_nome, avisos_cancelamento_saldo.cliente_nome),
+         descricao = EXCLUDED.descricao, ordem_compra = EXCLUDED.ordem_compra, motivo = EXCLUDED.motivo, minimo = EXCLUDED.minimo,
+         quantidade = EXCLUDED.quantidade, valor = EXCLUDED.valor, data_aviso = EXCLUDED.data_aviso, remetente = EXCLUDED.remetente,
+         recebido_em = GREATEST(avisos_cancelamento_saldo.recebido_em, EXCLUDED.recebido_em), atualizado_em = now()
+       WHERE EXCLUDED.data_aviso >= avisos_cancelamento_saldo.data_aviso`,
+      [it.nr_pedido, it.codigo_sku, it.cliente_codigo_oficial, it.cliente_nome, it.descricao, it.ordem_compra,
+       it.motivo, it.minimo, it.quantidade, it.valor, dataAviso, remetente, recebidoEm.toISOString()]);
+    // novo = item sem aviso ou com aviso de outro dia (não é reenvio do mesmo e-mail)
+    if (dataAntes !== dataAviso) novos++;
+  }
+  const pedidos = [...new Set(aviso.itens.map(it => it.nr_pedido))];
+  const avisar = novos > 0 && recente(recebidoEm);
+  if (avisar) {
+    // nome do cliente como está no app (o e-mail corta em 12 letras: "COMBRASILEIR")
+    const codigos = [...new Set(aviso.itens.map(it => it.cliente_codigo_oficial).filter(Boolean))];
+    const nomes = new Map();
+    for (const it of aviso.itens) {
+      if (it.cliente_codigo_oficial && !nomes.has(it.cliente_codigo_oficial)) {
+        nomes.set(it.cliente_codigo_oficial, await nomeDoCliente(it.cliente_codigo_oficial, it.cliente_nome));
+      }
+    }
+    const lista = [...new Set(aviso.itens.map(it => nomes.get(it.cliente_codigo_oficial) || it.cliente_nome).filter(Boolean))];
+    const salvaveis = aviso.itens.some(it => it.minimo);
+    const texto = (lista.length > 4 ? lista.slice(0, 4).join(', ') + ` e mais ${lista.length - 4}` : lista.join(', '))
+      + (salvaveis ? ' · aumentar a quantidade salva o saldo' : '');
+    const titulo = `Saldo de ${pedidos.length} pedido${pedidos.length === 1 ? '' : 's'} vai ser cancelado`
+      + (codigos.length > 1 ? ` (${codigos.length} clientes)` : '');
+    await avisarImportacao('cancelamento-saldo', texto, { titulo });
+  }
+  return { data_aviso: dataAviso, itens: aviso.itens.length, pedidos: pedidos.length, novos, avisado: avisar };
+}
+
 router.post('/mensagem', async (req, res) => {
   if (!chaveImportacaoValida(req)) return res.status(401).json({ erro: 'Chave de importação inválida.' });
   const corpo = req.body || {};
   const assunto = String(corpo.assunto || '').slice(0, 300);
   const texto = String(corpo.texto || '').slice(0, 20000);
+  // HTML do corpo: só o cancelamento de saldo usa (tabela que o texto puro desmancha)
+  const html = String(corpo.html || '').slice(0, 300000);
   if (!assunto || !texto) return res.status(422).json({ erro: 'Envie { assunto, texto }.' });
   const hash = crypto.createHash('sha256').update(`mensagem\n${corpo.mensagemId || ''}\n${assunto}\n${texto}`).digest('hex');
   let tipo = null;
@@ -301,6 +359,18 @@ router.post('/mensagem', async (req, res) => {
       const p = lerPedidoAvista(assunto, texto);
       if (!p) throw new Recusado('Não encontrei pedido/valor no e-mail de pedido à vista.');
       resultado = await receberPedidoAvista(p, recebidoEm);
+    } else if (ehCancelamentoSaldo(assunto)) {
+      tipo = 'cancelamento';
+      conferirRemetente(tipo, corpo);
+      if (!html) throw new Recusado('E-mail de cancelamento de saldo sem o HTML - atualize o script do Gmail.');
+      const aviso = lerCancelamentoSaldo(assunto, html);
+      if (!aviso) throw new Recusado('Não encontrei a tabela de saldos no e-mail de cancelamento.');
+      // tabela sem nenhum item: nada a gravar, mas o e-mail é desse tipo
+      resultado = aviso.itens.length ? await receberCancelamentoSaldo(aviso, recebidoEm, enderecoDoRemetente(corpo.remetente)) : { itens: 0 };
+      if (aviso.parcial) {
+        resultado.parcial = true;
+        console.warn(`Importação por e-mail: "${assunto}" chegou com a tabela cortada - só ${aviso.itens.length} item(ns) gravado(s).`);
+      }
     } else {
       throw new Recusado('E-mail não reconhecido.');
     }

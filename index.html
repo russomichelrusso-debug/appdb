@@ -3182,6 +3182,29 @@
       display: none;
     }
 
+    /* saldo em carteira com aviso de cancelamento (e-mail das assistentes
+       comerciais): ainda dá pra salvar aumentando a quantidade */
+    .clienteCancelamento {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 6px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .clienteCancelamento.hidden {
+      display: none;
+    }
+
     /* títulos vencidos e não pagos (Relatório de Inadimplência do ERP) */
     .clienteInadimplente {
       margin-top: 10px;
@@ -3565,6 +3588,12 @@
     .histCard .hcBloqueado {
       background: var(--danger-bg);
       color: var(--danger);
+    }
+
+    .histCard .hcCancelamento .hcCancelAcao {
+      display: inline-block;
+      margin-top: 6px;
+      text-decoration: none;
     }
 
     .histCard .hcBloqueado {
@@ -7671,6 +7700,7 @@
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
+          <button type="button" class="clienteCancelamento hidden" id="precosClientCancelamento"></button>
           <div class="clienteInadimplente hidden" id="precosClientInadimplente"></div>
           <div class="clienteReativar hidden" id="precosClientReativar"></div>
           <div class="clienteVisita hidden" id="precosClientVisita"></div>
@@ -7811,6 +7841,7 @@
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
+          <button type="button" class="clienteCancelamento hidden" id="levClientCancelamento"></button>
           <div class="clienteInadimplente hidden" id="levClientInadimplente"></div>
           <div class="clienteReativar hidden" id="levClientReativar"></div>
           <div class="clienteVisita hidden" id="levClientVisita"></div>
@@ -11448,6 +11479,7 @@
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
         atualizarBloqueioClienteBar(prefixo, cliente);
+        atualizarCancelamentoClienteBar(prefixo, cliente);
         atualizarReativarClienteBar(prefixo, cliente);
         atualizarInadimplenciaClienteBar(prefixo, cliente);
         atualizarVisitaClienteBar(prefixo, cliente);
@@ -11469,6 +11501,56 @@
         const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id));
         const lista = (local && local.bloqueados) || cliente.bloqueados;
         return Array.isArray(lista) ? lista : [];
+      }
+      // Saldo em carteira com aviso de cancelamento (e-mail "Cancelamento saldo
+      // em carteira" das assistentes comerciais - o aviso final antes do corte).
+      // Uma linha por pedido: tocar abre o histórico de pedidos do cliente, onde
+      // está quanto aumentar e o "Pedir aumento por e-mail". Vem pela cópia local
+      // (/api/clientes/sync), pra aparecer sem internet.
+      function atualizarCancelamentoClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientCancelamento');
+        if (!el) return;
+        const grupos = gruposAvisoCancelamento(avisosCancelamentoDoCliente(cliente));
+        el.classList.toggle('hidden', grupos.length === 0);
+        el.innerHTML = grupos.map(g => `⚠ Saldo do pedido ${escapeHtml(g.nr_pedido)} vai ser cancelado · `
+          + (g.falta > 0 ? `faltam ${brl(g.falta)} pro mínimo — aumentar salva` : escapeHtml(g.motivo || 'aviso da Cortag'))
+          + ` · aviso de ${formatDateBr(g.data_aviso)}`).join('<br>');
+        el.onclick = grupos.length ? async () => {
+          clienteTabView = 'pedidosoficiais';
+          await activateMainTab('clientes');
+          openClienteDetail(cliente);
+        } : null;
+      }
+      function avisosCancelamentoDoCliente(cliente) {
+        if (!cliente) return [];
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id));
+        const lista = (local && local.cancelamentos) || cliente.cancelamentos;
+        if (!Array.isArray(lista)) return [];
+        // a cópia local pode ser de dias atrás (sem internet): mesmo prazo de 15
+        // dias do servidor (routes/lib/cancelamentoSaldo.js), pela data do aviso
+        const d = new Date(Date.now() - 15 * 86400000);
+        const limite = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return lista.filter(a => String(a.data_aviso || '').slice(0, 10) >= limite);
+      }
+      // Avisos (um por item) juntados por pedido: o mínimo vale pro saldo do
+      // pedido inteiro ("Abaixo R$ 300,00" - R$ 600 no Norte/Nordeste).
+      // `falta` só existe quando o motivo é o valor mínimo; nos outros ("Sem
+      // previsão", "Acima de 90 dias", à vista) aumentar não salva o saldo.
+      function gruposAvisoCancelamento(avisos) {
+        const porPedido = new Map();
+        for (const a of avisos || []) {
+          const nr = String(a.nr_pedido);
+          if (!porPedido.has(nr)) porPedido.set(nr, []);
+          porPedido.get(nr).push(a);
+        }
+        return [...porPedido.entries()].map(([nr, itens]) => {
+          const valor = itens.reduce((soma, it) => soma + (Number(it.valor) || 0), 0);
+          const minimo = Math.max(0, ...itens.map(it => Number(it.minimo) || 0));
+          const motivos = [...new Set(itens.map(it => it.motivo).filter(Boolean))];
+          const dataAviso = itens.map(it => String(it.data_aviso || '').slice(0, 10)).sort().pop();
+          return { nr_pedido: nr, itens, valor, minimo: minimo || null, falta: minimo > valor ? minimo - valor : 0,
+            motivo: motivos.join(' · '), data_aviso: dataAviso, remetente: itens.find(it => it.remetente)?.remetente || null };
+        });
       }
       // "Rejeitado/Limite Crédito" -> "Limite Crédito"
       function motivoBloqueioCurto(motivo) {
@@ -17108,22 +17190,93 @@
           ? ` · desde ${new Date(bloqueado.recebido_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}` : '';
         return `<div class="hcBloqueado">⛔ Bloqueado${motivo}${desde}</div>`;
       }
+      // Aviso final de cancelamento do saldo (e-mail "Cancelamento saldo em
+      // carteira" das assistentes comerciais), já juntado por pedido
+      // (gruposAvisoCancelamento). Com o motivo "Abaixo R$ 300,00" o saldo se
+      // salva aumentando a quantidade - com 1 código no aviso, só ele; com 2 ou
+      // mais, qualquer um. Sugestão = a quantidade que completa o mínimo,
+      // arredondada pra cima no múltiplo da embalagem; item sem previsão de
+      // chegada fica fora (é cortado de qualquer jeito).
+      function sugestoesAumentoCancelamento(grupo) {
+        if (!(grupo.falta > 0)) return [];
+        return grupo.itens.filter(it => !itemSemPrevisaoDeChegada(String(it.codigo_sku))).map(it => {
+          const qt = Number(it.quantidade) || 0;
+          const unitario = qt > 0 ? (Number(it.valor) || 0) / qt : 0;
+          if (!(unitario > 0)) return null;
+          const passo = packStep(productByCod(String(it.codigo_sku)));
+          const novaQt = Math.ceil((qt + grupo.falta / unitario) / passo - 1e-9) * passo;
+          return { it, qt, novaQt, acrescimo: (novaQt - qt) * unitario };
+        }).filter(Boolean);
+      }
+      // "Pedir aumento por e-mail": responde a assistente com cópia pro
+      // atendimento01 (quem reabre o pedido), no formato que o vendedor já usava
+      // ("favor faturar conforme abaixo: ... alterar para N unidades"). Vai a
+      // sugestão de menor acréscimo; o vendedor ajusta no e-mail depois de falar
+      // com o cliente.
+      const ATENDIMENTO_CANCELAMENTO = 'atendimento01@cortag.com';
+      function linkPedidoAumento(grupo, sugestao, cliente) {
+        const para = grupo.remetente || ATENDIMENTO_CANCELAMENTO;
+        const [a, m, d] = String(grupo.data_aviso || '').split('-');
+        const hora = new Date().getHours();
+        const it = sugestao.it;
+        const linha = [cliente && cliente.codigo_oficial, cliente && cliente.nome, grupo.nr_pedido, it.codigo_sku, it.descricao]
+          .filter(Boolean).join(' ') + ` - alterar para ${sugestao.novaQt} unidades`;
+        const corpo = `${hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite'}, favor faturar conforme abaixo:\n\n${linha}\n\nAtt,\n${state.seller || ''}`;
+        const params = [
+          para !== ATENDIMENTO_CANCELAMENTO ? 'cc=' + encodeURIComponent(ATENDIMENTO_CANCELAMENTO) : '',
+          'subject=' + encodeURIComponent(`Re: Cancelamento saldo em carteira${d ? ` ${d}.${m}.${a}` : ''}`),
+          'body=' + encodeURIComponent(corpo),
+        ].filter(Boolean).join('&');
+        return `mailto:${encodeURIComponent(para).replace(/%40/g, '@')}?${params}`;
+      }
+      function renderSeloCancelamento(grupo) {
+        if (!grupo) return '';
+        const nomeItem = (it) => escapeHtml(it.descricao || (productByCod(String(it.codigo_sku)) || {}).n || ('Cód. ' + it.codigo_sku));
+        let texto = `⚠ Aviso de cancelamento do saldo · ${formatDateBr(grupo.data_aviso)}${grupo.motivo ? ' · ' + escapeHtml(grupo.motivo) : ''}`;
+        let botao = '';
+        if (grupo.falta > 0) {
+          const sugestoes = sugestoesAumentoCancelamento(grupo);
+          texto += `<br>Saldo de ${brl(grupo.valor)}, mínimo ${brl(grupo.minimo)} · faltam ${brl(grupo.falta)}.`;
+          if (sugestoes.length === 0) {
+            texto += ' O item está sem previsão de chegada — aumentar não evita o corte.';
+          } else {
+            const desc = sugestoes.map(sg => `${nomeItem(sg.it)}: ${sg.qt} → ${sg.novaQt} un. (+${brl(sg.acrescimo)})`);
+            texto += sugestoes.length === 1 ? ` Pra salvar, aumente ${desc[0]}.` : ` Pra salvar, aumente qualquer um: ${desc.join('; ')}.`;
+            const menor = sugestoes.reduce((a, b) => (b.acrescimo < a.acrescimo ? b : a));
+            botao = `<br><a class="restoreBtn compacto hcCancelAcao" href="${escapeHtml(linkPedidoAumento(grupo, menor, clienteTabSelected))}">✉ Pedir aumento por e-mail</a>`;
+          }
+        } else {
+          texto += '<br>' + grupo.itens.map(it => `${nomeItem(it)} · Qt. ${escapeHtml(String(it.quantidade ?? '—'))}${Number(it.valor) > 0 ? ' · ' + brl(Number(it.valor)) : ''}`).join('<br>')
+            + '<br>Aumentar a quantidade não evita esse corte.';
+        }
+        return `<div class="hcSaldoMinimo hcCancelamento">${texto}${botao}</div>`;
+      }
+      // Pedido com aviso de cancelamento que não está nos pedidos importados do
+      // cliente - card só com o que o e-mail traz.
+      function renderPedidoSoCancelamento(grupo) {
+        return `<div class="histCard">
+    <div class="hcTopo">
+      <div class="hcName">Nr.Pedido ${escapeHtml(String(grupo.nr_pedido))}</div>
+    </div>
+    ${renderSeloCancelamento(grupo)}
+  </div>`;
+      }
       // Pedido bloqueado que ainda não está no relatório importado (o e-mail
       // chega antes do relatório da madrugada) - card só com o que o e-mail traz.
-      function renderPedidoSoBloqueado(bloqueado) {
+      function renderPedidoSoBloqueado(bloqueado, avisoCancelamento) {
         return `<div class="histCard">
     <div class="hcTopo">
       <div class="hcName">Nr.Pedido ${escapeHtml(String(bloqueado.nr_pedido))}</div>
     </div>
-    ${renderSeloBloqueado(bloqueado)}
+    ${renderSeloBloqueado(bloqueado)}${renderSeloCancelamento(avisoCancelamento)}
   </div>`;
       }
-      function renderPedidoSoPendente(pendente, bloqueado) {
+      function renderPedidoSoPendente(pendente, bloqueado, avisoCancelamento) {
         return `<div class="histCard">
     <div class="hcTopo">
       <div class="hcName">Nr.Pedido ${escapeHtml(String(pendente.nr_pedido))}</div>
     </div>
-    ${renderSeloBloqueado(bloqueado)}${renderSeloAguardandoPagamento(pendente)}
+    ${renderSeloBloqueado(bloqueado)}${renderSeloCancelamento(avisoCancelamento)}${renderSeloAguardandoPagamento(pendente)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(pendente.data_implantacao)}</b></div>
     </div>
@@ -17188,7 +17341,7 @@
         const regiao = saldoMinimo && saldoMinimo.regiao ? ` (${escapeHtml(saldoMinimo.regiao)})` : '';
         return `<div class="hcSaldoMinimo">⚠ Saldo abaixo do mínimo de ${brl(minimo)}${regiao} · faltam ${brl(falta)} · pode ser cancelado. ${acao}</div>`;
       }
-      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo, bloqueado) {
+      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo, bloqueado, avisoCancelamento) {
         // À vista sem pagamento (aba "Aguardando Pagamento" ou título em aberto
         // na "Pendentes à Vista"): o ERP já lista a NF na aba Faturamento, mas
         // o pedido não saiu - nada de "Faturado", selo T/P, transportadora nem
@@ -17231,7 +17384,8 @@
           const textoPrazo = !prazo ? '' : vencido ? ' · passou de 90 dias'
             : ` · até ${formatDateBr(prazo.limite)}${prazo.diasRestantes <= 15 ? ` (${prazo.diasRestantes === 0 ? 'hoje' : `${prazo.diasRestantes} dia${prazo.diasRestantes === 1 ? '' : 's'}`})` : ''}`;
           listaProdutos = `<div class="hcSecaoItens pendente">Não faturado · em carteira (${itensNaoFaturados.length}${valorNaoFaturado > 0 ? ' · ' + brl(valorNaoFaturado) : ''})${textoPrazo}</div>`
-            + (vencido
+            // com o aviso de cancelamento da Cortag, o selo dele (acima) já diz o que fazer
+            + (avisoCancelamento ? '' : vencido
               ? `<div class="hcSaldoMinimo">⚠ Saldo com mais de 90 dias do pedido (venceu ${formatDateBr(prazo.limite)}) — pela política já deve ter sido cancelado. Confira antes de oferecer ao cliente.</div>`
               : renderAvisoSaldoMinimo(itensNaoFaturados, valorNaoFaturado, saldoMinimo))
             + linhasProdutos(itensNaoFaturados, true)
@@ -17256,7 +17410,7 @@
       ${botaoRastreio}
     </div>
     <div class="hcCode">${qtdProdutos} produto${qtdProdutos === 1 ? '' : 's'}</div>
-    ${renderSeloBloqueado(bloqueado)}${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
+    ${renderSeloBloqueado(bloqueado)}${renderSeloCancelamento(avisoCancelamento)}${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
       ${aguardandoPagamento
@@ -18870,7 +19024,7 @@
       const NOME_CURTO_NOVIDADE = {
         'relatorio-oficial': 'Relatório', 'catalogo-precos': 'Preços', 'previsao-estoque': 'Previsão de estoque',
         'classificatorio': 'Classificatório', 'objetivos-trimestrais': 'Objetivos',
-        'pedido-bloqueado': 'Pedido bloqueado', 'pedido-avista': 'Pedido à vista',
+        'pedido-bloqueado': 'Pedido bloqueado', 'pedido-avista': 'Pedido à vista', 'cancelamento-saldo': 'Cancelamento de saldo',
       };
       let novidadesDados = null; // { novidades, vistas_ate, chave_push }
       let novidadesInscricaoConferida = false;
@@ -19122,6 +19276,7 @@
             if (velha()) return;
             const pendentesPorPedido = new Map((resp.pendentes_pagamento || []).map(p => [String(p.nr_pedido), p]));
             const bloqueadosPorPedido = new Map((resp.bloqueados || []).map(b => [String(b.nr_pedido), b]));
+            const cancelamentosPorPedido = new Map(gruposAvisoCancelamento(resp.avisos_cancelamento).map(g => [g.nr_pedido, g]));
             const titulosPorNf = new Map();
             for (const t of (resp.titulos_avista || [])) {
               if (!titulosPorNf.has(String(t.titulo))) titulosPorNf.set(String(t.titulo), []);
@@ -19129,7 +19284,7 @@
             }
             if (!resp.vinculado) {
               content.innerHTML = '<div class="lev-empty">Esse cliente ainda não foi encontrado no relatório oficial da empresa (Carteira/Faturamento) — o vínculo é feito automaticamente na importação, casando pelo nome.</div>';
-            } else if (resp.itens.length === 0 && pendentesPorPedido.size === 0 && titulosPorNf.size === 0 && bloqueadosPorPedido.size === 0) {
+            } else if (resp.itens.length === 0 && pendentesPorPedido.size === 0 && titulosPorNf.size === 0 && bloqueadosPorPedido.size === 0 && cancelamentosPorPedido.size === 0) {
               content.innerHTML = '<div class="lev-empty">Nenhum pedido oficial encontrado pra esse cliente ainda.</div>';
             } else {
               // Agrupa por Nr.Pedido - a API devolve uma linha por produto, e um
@@ -19146,6 +19301,10 @@
               // bloqueado (e-mail) que ainda não veio no relatório nem nos pendentes
               const soBloqueados = [...bloqueadosPorPedido.values()]
                 .filter(b => !porPedido.has(String(b.nr_pedido)) && !pendentesPorPedido.has(String(b.nr_pedido)));
+              // aviso de cancelamento de pedido que não está nos importados do cliente
+              // (o pendente/bloqueado que não veio no relatório já tem card próprio e leva o selo)
+              const soCancelamentos = [...cancelamentosPorPedido.values()]
+                .filter(g => !porPedido.has(g.nr_pedido) && !pendentesPorPedido.has(g.nr_pedido) && !bloqueadosPorPedido.has(g.nr_pedido));
               // títulos à vista em aberto: ligados ao pedido pela nota fiscal
               const titulosDoPedido = (itens) => {
                 const nfs = new Set(itens.map(it => it.nota_fiscal).filter(Boolean).map(String));
@@ -19153,11 +19312,11 @@
               };
               const nfsNosPedidos = new Set(resp.itens.map(it => it.nota_fiscal).filter(Boolean).map(String));
               const soTitulos = [...titulosPorNf.entries()].filter(([nf]) => !nfsNosPedidos.has(nf));
-              content.innerHTML = soBloqueados.map(renderPedidoSoBloqueado).join('')
+              content.innerHTML = soCancelamentos.map(renderPedidoSoCancelamento).join('') + soBloqueados.map(b => renderPedidoSoBloqueado(b, cancelamentosPorPedido.get(String(b.nr_pedido)))).join('')
                 + soTitulos.map(([nf, ts]) => renderTituloSoPendente(nf, ts)).join('')
-                + soPendentes.map(p => renderPedidoSoPendente(p, bloqueadosPorPedido.get(String(p.nr_pedido)))).join('') + Array.from(porPedido.entries())
+                + soPendentes.map(p => renderPedidoSoPendente(p, bloqueadosPorPedido.get(String(p.nr_pedido)), cancelamentosPorPedido.get(String(p.nr_pedido)))).join('') + Array.from(porPedido.entries())
                 .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens), resp.saldo_minimo,
-                  bloqueadosPorPedido.get(String(nrPedido))))
+                  bloqueadosPorPedido.get(String(nrPedido)), cancelamentosPorPedido.get(String(nrPedido))))
                 .join('');
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(cliente, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));

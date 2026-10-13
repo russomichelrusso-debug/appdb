@@ -7,8 +7,9 @@
 // O "Relatório de Clientes Sem Compra" (todo dia 2, anexo de nome cortado e sem
 // extensão) e a "Previa Relatório de Inadimplência" (anexo sempre "20.xlsx")
 // são reconhecidos pelo assunto (CONFIG.porAssunto).
-// Os avisos sem planilha (Pedido Bloqueado, Pedido de Venda à Vista) vão só
-// com assunto + texto (POST /api/importacao-email/mensagem).
+// Os avisos sem planilha (Pedido Bloqueado, Pedido de Venda à Vista e o
+// "Cancelamento saldo em carteira" das assistentes comerciais) vão só com
+// assunto + texto + HTML do corpo (POST /api/importacao-email/mensagem).
 // O servidor NÃO recebe acesso à caixa de e-mail: só os anexos e textos que
 // este script escolhe mandar.
 //
@@ -68,6 +69,11 @@ const CONFIG = {
   mensagens: [
     { remetente: 'noreply@cortag.com.br', assunto: /^\s*Pedido Bloqueado\b/i, busca: 'subject:"Pedido Bloqueado"' },
     { remetente: 'noreply@cortag.com.br', assunto: /Pedido de Venda [àa] Vista/i, busca: 'subject:"Pedido de Venda"' },
+    // aviso final antes de cortar o saldo em carteira (tabela no corpo); só o
+    // e-mail original - "RES:"/"Re:"/"Fwd:" ficam de fora
+    { remetente: 'thamiris.sabino@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
+    { remetente: 'paloma.mantovani@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
+    { remetente: 'atendimento01@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
   ],
   maxProcessadosGuardados: 400,
   // e-mail com erro do servidor (5xx) nesta quantidade de rodadas seguidas:
@@ -210,15 +216,29 @@ function nomePeloAssunto_(regra, msg, i, total) {
   return `${regra.nome}_${dia}${total > 1 ? '_' + (i + 1) : ''}.xlsx`;
 }
 
-// E-mail sem planilha (Pedido Bloqueado, Pedido de Venda à Vista): só o texto.
+// E-mail sem planilha (Pedido Bloqueado, Pedido de Venda à Vista, Cancelamento
+// saldo em carteira): o texto e o HTML (a tabela do cancelamento só dá pra ler
+// pelo HTML - no texto puro as células viram uma linha só).
 function enviarMensagem_(chave, msg) {
   return postar_(chave, '/api/importacao-email/mensagem', msg.getSubject(), {
     assunto: msg.getSubject(),
     texto: msg.getPlainBody().slice(0, 20000),
+    html: htmlEnxuto_(msg.getBody()).slice(0, 300000),
     remetente: msg.getFrom(),
     recebidoEm: msg.getDate().toISOString(),
     mensagemId: msg.getId(),
   });
+}
+
+// Tira do HTML o que não é conteúdo (comentários, <style>, atributos style/class,
+// <o:p> do Outlook) antes de cortar no limite - e-mail do Outlook tem uns KB de
+// enfeite por linha da tabela, e o corte no meio dela perdia os itens do fim.
+function htmlEnxuto_(html) {
+  return String(html || '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, '')
+    .replace(/<\/?o:p>/gi, '')
+    .replace(/\s(?:style|class|lang)=("[^"]*"|'[^']*')/gi, '');
 }
 
 function postar_(chave, caminho, rotulo, corpo) {

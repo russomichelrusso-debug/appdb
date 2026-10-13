@@ -660,6 +660,31 @@ CREATE TABLE IF NOT EXISTS pedidos_bloqueados (
 CREATE INDEX IF NOT EXISTS idx_pedidos_bloqueados_cliente ON pedidos_bloqueados (cliente_codigo_oficial);
 ALTER TABLE pedidos_bloqueados ENABLE ROW LEVEL SECURITY;
 
+-- Aviso de cancelamento do saldo em carteira (e-mail "Cancelamento saldo em
+-- carteira DD.MM.AAAA" das assistentes comerciais, lido pela importação por
+-- e-mail): um por item do saldo. É o aviso final antes do corte - o vendedor
+-- ainda pode pedir pra aumentar a quantidade. Vale 15 dias ou até o item
+-- aparecer faturado depois do aviso (routes/lib/cancelamentoSaldo.js).
+CREATE TABLE IF NOT EXISTS avisos_cancelamento_saldo (
+  nr_pedido TEXT NOT NULL,
+  codigo_sku TEXT NOT NULL,
+  cliente_codigo_oficial TEXT,
+  cliente_nome TEXT,
+  descricao TEXT,
+  ordem_compra TEXT,
+  motivo TEXT,
+  minimo NUMERIC,
+  quantidade NUMERIC,
+  valor NUMERIC,
+  data_aviso DATE NOT NULL,
+  remetente TEXT,
+  recebido_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (nr_pedido, codigo_sku)
+);
+CREATE INDEX IF NOT EXISTS idx_avisos_cancelamento_cliente ON avisos_cancelamento_saldo (cliente_codigo_oficial);
+ALTER TABLE avisos_cancelamento_saldo ENABLE ROW LEVEL SECURITY;
+
 -- Foto do produto pro card de oferta (aba Produtos, routes/produtoFotos.js).
 -- Qualquer vendedor cadastra (decisão do usuário, 10/2026); o app manda JPEG já
 -- reduzido no celular. Variação que recebe a mesma foto ganha uma cópia própria

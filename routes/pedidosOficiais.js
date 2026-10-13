@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
+const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
@@ -245,11 +246,20 @@ router.get('/:clienteId', async (req, res) => {
        ORDER BY pb.recebido_em DESC`,
       [codigoOficial]
     );
+    // Aviso final de cancelamento do saldo (e-mail "Cancelamento saldo em
+    // carteira") ainda valendo - um por item
+    const cancelamentos = await pool.query(
+      `/* pedidos-oficiais:cancelamentos */
+       SELECT json_build_object(${sqlCamposAviso('acs')}) AS aviso FROM avisos_cancelamento_saldo acs
+       WHERE acs.cliente_codigo_oficial = $1 AND ${sqlAvisoCancelamentoAtivo('acs')}
+       ORDER BY acs.data_aviso DESC, acs.nr_pedido, acs.codigo_sku`,
+      [codigoOficial]
+    );
     // Mínimo do saldo em carteira antes do cancelamento - R$ 600 se a ficha de
     // CNPJ diz que o cliente é do Norte/Nordeste (ver lib/saldoMinimo.js).
     const ficha = await pool.query('SELECT uf FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.clienteId]);
     res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows, titulos_avista: titulos.rows,
-               bloqueados: bloqueados.rows, saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
+               bloqueados: bloqueados.rows, avisos_cancelamento: cancelamentos.rows.map(r => r.aviso), saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar pedidos oficiais.' });

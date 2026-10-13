@@ -24,15 +24,17 @@ anexo vem com o nome cortado e sem `.xlsx`, então o script o manda como
 (`routes/reativacao.js`). **Depois desta mudança (10/2026) o script precisa ser colado de novo** no
 projeto do Apps Script (passos 1 e 3 de "Instalação" - a CHAVE continua a mesma).
 
-E dois avisos **sem planilha** (o script manda só o assunto e o texto do e-mail, pra
+E três avisos **sem planilha** (o script manda só o assunto, o texto e o HTML do e-mail, pra
 `POST /api/importacao-email/mensagem`):
 
 | Aviso | Remetente | Assunto | O que acontece no app |
 |---|---|---|---|
 | Pedido bloqueado | noreply@cortag.com.br | `Pedido Bloqueado 00677375` | selo "⛔ Bloqueado · motivo" no pedido (histórico do cliente) e no card do cliente (Pedido/Levantamento); some quando o relatório traz o pedido faturado (ou em 30 dias) |
 | Pedido à vista | noreply@cortag.com.br | `Pedido de Venda à Vista - Cortag` | selo "À vista · aguardando pagamento" no pedido no mesmo dia, sem esperar o relatório da madrugada |
+| Cancelamento de saldo | thamiris.sabino@, paloma.mantovani@ ou atendimento01@cortag.com (assistentes comerciais) | `Cancelamento saldo em carteira 13.10.2026` | aviso final antes do corte: selo no pedido com quanto falta pro mínimo, quanto aumentar e o botão "Pedir aumento por e-mail"; faixa laranja no card do cliente (Pedido/Levantamento); some quando o item sai faturado depois do aviso (ou em 15 dias). Um push por e-mail; o mesmo e-mail reenviado não avisa de novo. Respostas (`RES:`/`Re:`/`Fwd:`) ficam de fora |
 
-Os dois geram um aviso por pedido (faixa de novidades + push no celular em dia útil, 7h–20h). E-mail
+Bloqueado e à vista geram um aviso por pedido (faixa de novidades + push no celular em dia útil,
+7h–20h); o cancelamento de saldo, um aviso por e-mail (vários pedidos). E-mail
 com mais de 2 dias (ex.: a 1ª rodada, que olha 7 dias pra trás) grava o selo sem push; pedido à vista
 mais velho que o último relatório oficial importado é ignorado (o relatório já traz a foto certa).
 
@@ -115,8 +117,11 @@ O mesmo arquivo nunca é importado duas vezes. O Painel (⚙ › status) mostra 
   `Authentication-Results` do e-mail no log; enquanto isso, importe o anexo pelo Painel.
 - **Atualizar o script** (versão nova do `Codigo.gs`): no script.google.com, apague o conteúdo e
   cole o novo; rode `conferirAutenticacao` e depois `configurar` (cria o marcador novo, se houver).
-- **Avisos de pedido bloqueado/à vista não chegam**: o script colado no Google é anterior a
-  10/2026 — cole de novo a versão atual do `Codigo.gs` (não precisa rodar o `configurar` de novo).
+- **Avisos de pedido bloqueado/à vista/cancelamento de saldo não chegam**: o script colado no
+  Google é anterior à mudança — cole de novo a versão atual do `Codigo.gs` (não precisa rodar o
+  `configurar` de novo). O cancelamento de saldo precisa da versão de 13/10/2026 (manda o HTML). Uma
+  assistente comercial nova (outro endereço) fica de fora até entrar em `CONFIG.mensagens` no script e
+  em `REMETENTE_DO_TIPO.cancelamento` (`routes/lib/emailCortag.js`).
 - **Servidor dormindo** (Render gratuito): o script espera ele acordar; se não acordar, tenta
   de novo na rodada seguinte, sem marcar o e-mail.
 - **Servidor responde com erro** (5xx) pro mesmo e-mail: tenta de novo nas rodadas seguintes e, na

@@ -4,6 +4,7 @@ const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
+const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { sqlChaveEndereco } = require('./lib/geocodificacao');
 const { normalizarTelefoneBr, normalizarEmails } = require('./lib/contatosCliente');
 
@@ -82,7 +83,11 @@ router.get('/sync', async (req, res) => {
               -- pedidos bloqueados ainda valendo (selo no card do cliente, sem internet)
               (SELECT json_agg(json_build_object('nr_pedido', pb.nr_pedido, 'motivo', pb.motivo, 'recebido_em', pb.recebido_em) ORDER BY pb.recebido_em DESC)
                FROM pedidos_bloqueados pb
-               WHERE c.codigo_oficial IS NOT NULL AND pb.cliente_codigo_oficial = c.codigo_oficial AND ${sqlBloqueioAtivo('pb')}) AS bloqueados
+               WHERE c.codigo_oficial IS NOT NULL AND pb.cliente_codigo_oficial = c.codigo_oficial AND ${sqlBloqueioAtivo('pb')}) AS bloqueados,
+              -- saldo em carteira com aviso de cancelamento (faixa no card do cliente, sem internet)
+              (SELECT json_agg(json_build_object(${sqlCamposAviso('acs')}) ORDER BY acs.data_aviso DESC, acs.nr_pedido)
+               FROM avisos_cancelamento_saldo acs
+               WHERE c.codigo_oficial IS NOT NULL AND acs.cliente_codigo_oficial = c.codigo_oficial AND ${sqlAvisoCancelamentoAtivo('acs')}) AS cancelamentos
        FROM clientes c
        LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id
        LEFT JOIN cliente_geocodificacao g ON g.cliente_id = c.id AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}

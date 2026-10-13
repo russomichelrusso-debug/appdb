@@ -467,7 +467,8 @@ Supabase, sem PR — não é mudança de código.
   Dado antigo só se completa reimportando os relatórios. Telas de "o que o cliente comprou" somam as
   notas do mesmo pedido como uma compra (`juntarNotasDoPedido`, `routes/relatorios.js`).
 - **Saldo em carteira abaixo do mínimo** (10/2026): política de cancelamento da Cortag (e-mails
-  "Cancelamento saldo em carteira DD.MM.AAAA" da assistente comercial, chegam depois do corte): o saldo
+  "Cancelamento saldo em carteira DD.MM.AAAA" da assistente comercial — o **aviso final antes do corte**,
+  ver "Aviso de cancelamento do saldo" abaixo): o saldo
   do pedido abaixo de **R$ 300** (**R$ 600 no Norte/Nordeste**) é cancelado, além de item sem
   previsão/obsoleto, acima de 90 dias e à vista sem pagamento. Regra do usuário pra salvar o saldo:
   o cliente aumenta a quantidade — **com 1 código no saldo, só ele; com 2 ou mais, qualquer um
@@ -481,6 +482,25 @@ Supabase, sem PR — não é mudança de código.
   quando faltam 15 ou menos) e, passado o prazo, avisa que já deve ter sido cancelado no lugar da
   sugestão. Saldo abaixo do mínimo pode ser cortado antes: no e-mail de 29/09/2026 havia pedido de
   18/09 cancelado por "Abaixo R$300,00".
+
+- **Aviso de cancelamento do saldo pelo e-mail** (10/2026): o "Cancelamento saldo em carteira DD.MM.AAAA"
+  vem das assistentes comerciais (thamiris.sabino@, paloma.mantovani@ e, uma vez, atendimento01@cortag.com —
+  lista em `REMETENTE_DO_TIPO.cancelamento`, `routes/lib/emailCortag.js`, e em `CONFIG.mensagens` do script),
+  com uma **tabela HTML** no corpo (Cod. Cliente, Nr. Pedido, Item, Descrição, O.C., Motivo, Qt./Vl. Pendente;
+  o texto puro do Gmail junta as células, por isso o script manda o HTML, enxuto antes do corte de 300 mil
+  letras). Correção do usuário: **é o aviso final antes do corte, uma chance de vender mais** — o vendedor
+  responde "alterar para N unidades" (copiando o atendimento01, que reabre o pedido). Decisões: **selo no
+  pedido + faixa no card do cliente + push**. Tabela `avisos_cancelamento_saldo` (um por item; aviso mais
+  velho não passa por cima); vale **15 dias** ou até o item sair faturado **depois** do dia do aviso
+  (`sqlAvisoCancelamentoAtivo`, `routes/lib/cancelamentoSaldo.js`). Selo (`renderSeloCancelamento`,
+  `index.html`): com motivo "Abaixo R$ X" (o mínimo vem do próprio motivo), quanto falta e a quantidade que
+  completa, no múltiplo da embalagem (1 código: só ele; 2+: qualquer um; sem previsão de chegada fica fora),
+  e **"✉ Pedir aumento por e-mail"** (mailto pra assistente, cc atendimento01, assunto "Re: Cancelamento…",
+  a sugestão de menor acréscimo no formato que o vendedor já usava). Outros motivos ("Sem previsão", 90 dias,
+  à vista): só lista, "aumentar não evita". Faixa laranja no Pedido/Levantamento pelo `/sync` (`cancelamentos`),
+  tocar abre os pedidos do cliente. Um push por e-mail ("Saldo de N pedidos vai ser cancelado"); o mesmo
+  aviso reenviado (já veio 3 vezes em 1 min) não avisa de novo; respostas (RES:/Re:/Fwd:) ficam de fora.
+  **O script do Gmail precisa ser colado de novo** no Apps Script.
 
 - **Reabrir pedido salvo pra alterar** (10/2026): o cliente pedia pra mudar quantidade ou incluir
   produto num pedido já fechado e o vendedor fechava outro (vários pedidos do mesmo cliente, mais um
@@ -1022,11 +1042,11 @@ Supabase, sem PR — não é mudança de código.
     relatório) só saem por SQL ou pela limpeza. Provável causa de a Entrada de Pedidos de set/2026
     ter ficado R$ 8,2 mil / 2 clientes acima do oficial — conferir de novo depois da limpeza.
 - **Outros e-mails automáticos da Cortag** (entrevista de 10/2026): **Pedido Bloqueado** e **Pedido à
-  Vista** já entram (ver "Pedido bloqueado e à vista pelo e-mail" acima). **Clientes Sem Compra** já entra
+  Vista** já entram (ver "Pedido bloqueado e à vista pelo e-mail" acima). **Cancelamento saldo em carteira**
+  também (ver "Aviso de cancelamento do saldo" acima). **Clientes Sem Compra** já entra
   (ver "💤 Para reativar" acima). **Inadimplência** também
   (ver "💰 Inadimplência" acima). **Comissões** (PDF): fora do app, decisão
-  do usuário. "Cancelamento saldo em carteira DD.MM.AAAA" (assistente comercial, tabela no corpo) ainda
-  sem decisão.
+  do usuário.
 - Em aberto, perguntar antes de mudar: a série de 7 dígitos ficou fora só do Dashboard; ainda soma
   no faturamento do classificatório, na Curva ABC e no top clientes (valores pequenos). Se o painel
   oficial também a exclui dali, dá pra reaproveitar o mesmo filtro (`length(nr_pedido) <= 6`).

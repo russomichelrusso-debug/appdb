@@ -26,6 +26,7 @@ let configuracoes = {}; // chave -> valor (routes/configuracoes.js)
 let novidades = []; // routes/lib/novidades.js
 let importacoesEmail = []; // routes/importacaoEmail.js
 let pedidosBloqueados = []; // pedidos_bloqueados
+let avisosCancelamento = []; // avisos_cancelamento_saldo
 let previsaoEstoque = []; // previsao_estoque
 let nextNovidadeId = 1;
 let pushInscricoes = []; // push_inscricoes
@@ -67,6 +68,7 @@ function reset() {
   novidades = [];
   importacoesEmail = [];
   pedidosBloqueados = [];
+  avisosCancelamento = [];
   previsaoEstoque = [];
   nextNovidadeId = 1;
   pushInscricoes = [];
@@ -88,6 +90,7 @@ function seed(partial) {
   if (partial.levantamentoItens) levantamentoItens.push(...partial.levantamentoItens);
   if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
   if (partial.geocodificacao) Object.assign(clienteGeocodificacao, partial.geocodificacao);
+  if (partial.avisosCancelamento) avisosCancelamento.push(...partial.avisosCancelamento);
 }
 
 // Reproduz sqlChaveEndereco (routes/lib/geocodificacao.js)
@@ -103,6 +106,20 @@ function bloqueiosAtivos() {
   const limite = Date.now() - 30 * 86400000;
   return pedidosBloqueados.filter(b => new Date(b.recebido_em).getTime() > limite
     && !pedidosOficiaisItens.some(i => i.nr_pedido === b.nr_pedido && i.status === 'faturado'));
+}
+
+// Reproduz sqlAvisoCancelamentoAtivo (routes/lib/cancelamentoSaldo.js): menos
+// de 15 dias e o item não apareceu faturado depois do aviso
+function avisosCancelamentoAtivos() {
+  const limite = Date.now() - 15 * 86400000;
+  return avisosCancelamento.filter(a => new Date(a.recebido_em).getTime() > limite
+    && !pedidosOficiaisItens.some(i => i.nr_pedido === a.nr_pedido && i.codigo_sku === a.codigo_sku && i.status === 'faturado'
+      && i.data_faturamento && String(i.data_faturamento).slice(0, 10) > a.data_aviso));
+}
+function camposAviso(a) {
+  return { nr_pedido: a.nr_pedido, codigo_sku: a.codigo_sku, descricao: a.descricao, motivo: a.motivo,
+    minimo: a.minimo == null ? null : Number(a.minimo), quantidade: a.quantidade == null ? null : Number(a.quantidade),
+    valor: a.valor == null ? null : Number(a.valor), data_aviso: a.data_aviso, remetente: a.remetente };
 }
 
 // Reproduz sqlFaturadoDeFato (routes/lib/faturadoDeFato.js): item faturado cujo
@@ -146,6 +163,25 @@ async function query(sql, params = []) {
       recebido_em: new Date(recebido) > new Date(atual.recebido_em) ? recebido : atual.recebido_em });
     else pedidosBloqueados.push({ nr_pedido: nr, cliente_codigo_oficial: cod, cliente_nome: nome, motivo, recebido_em: recebido });
     return { rows: [] };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:CANCELAMENTO-ANTES */')) {
+    const a = avisosCancelamento.find(x => x.nr_pedido === params[0] && x.codigo_sku === params[1]);
+    return { rows: a ? [{ data_aviso: a.data_aviso }] : [] };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:CANCELAMENTO */')) {
+    const [nr, sku, cod, nome, descricao, oc, motivo, minimo, quantidade, valor, dataAviso, remetente, recebido] = params;
+    const atual = avisosCancelamento.find(x => x.nr_pedido === nr && x.codigo_sku === sku);
+    const novo = { nr_pedido: nr, codigo_sku: sku, cliente_codigo_oficial: cod, cliente_nome: nome, descricao, ordem_compra: oc,
+      motivo, minimo, quantidade, valor, data_aviso: dataAviso, remetente, recebido_em: recebido };
+    if (!atual) avisosCancelamento.push(novo);
+    else if (dataAviso >= atual.data_aviso) {
+      Object.assign(atual, { ...novo, cliente_codigo_oficial: cod || atual.cliente_codigo_oficial, cliente_nome: nome || atual.cliente_nome,
+        recebido_em: new Date(recebido) > new Date(atual.recebido_em) ? recebido : atual.recebido_em });
+    }
+    return { rows: [] };
+  }
+  if (s.includes('/* PEDIDOS-OFICIAIS:CANCELAMENTOS */')) {
+    return { rows: avisosCancelamentoAtivos().filter(a => a.cliente_codigo_oficial === params[0]).map(a => ({ aviso: camposAviso(a) })) };
   }
   if (s.includes('/* IMPORTACAO-EMAIL:BLOQUEIO-ATIVO */')) {
     return { rows: bloqueiosAtivos().filter(b => b.nr_pedido === params[0]).map(() => ({ '?column?': 1 })) };
@@ -947,7 +983,7 @@ async function query(sql, params = []) {
     if (c) c.matriz_grupo = matrizGrupo;
     return { rows: c ? [{ nome: c.nome }] : [] };
   }
-  if (s.includes('AS BLOQUEADOS FROM CLIENTES C')) {
+  if (s.includes('AS CANCELAMENTOS FROM CLIENTES C')) {
     const regime = (brutos) => {
       if (!brutos) return null;
       if (brutos.mei && brutos.mei.optante === true) return 'mei';
@@ -991,6 +1027,10 @@ async function query(sql, params = []) {
       bloqueados: (() => {
         const l = bloqueiosAtivos().filter(b => c.codigo_oficial && b.cliente_codigo_oficial === c.codigo_oficial)
           .map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em }));
+        return l.length ? l : null;
+      })(),
+      cancelamentos: (() => {
+        const l = avisosCancelamentoAtivos().filter(a => c.codigo_oficial && a.cliente_codigo_oficial === c.codigo_oficial).map(camposAviso);
         return l.length ? l : null;
       })(),
     })) };
@@ -2230,6 +2270,7 @@ module.exports = {
   __getProdutoFotos: () => produtoFotos,
   __getImportacoesEmail: () => importacoesEmail,
   __getPedidosBloqueados: () => pedidosBloqueados,
+  __getAvisosCancelamento: () => avisosCancelamento,
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
   __getProdutos: () => produtos,
