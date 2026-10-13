@@ -501,6 +501,14 @@ Supabase, sem PR — não é mudança de código.
   tocar abre os pedidos do cliente. Um push por e-mail ("Saldo de N pedidos vai ser cancelado"); o mesmo
   aviso reenviado (já veio 3 vezes em 1 min) não avisa de novo; respostas (RES:/Re:/Fwd:) ficam de fora.
   **O script do Gmail precisa ser colado de novo** no Apps Script.
+  - **Bloco "⚠ Saldo a cancelar"** no topo de "Pra cuidar" da aba Clientes (`renderCancelamentos`, `index.html`):
+    todos os avisos ainda valendo, um por pedido, montados da cópia local do `/sync` (sem rota própria, funciona
+    sem internet). Decisões do usuário: primeiro "Dá pra salvar aumentando" (quem falta menos primeiro), depois,
+    apagados, "Aumentar não resolve" (também aparecem); botões Abrir cliente (pedidos dele), ✉ Pedir aumento
+    (o mesmo e-mail do selo) e **WhatsApp** (só com WhatsApp do comprador; texto com o saldo e as opções de
+    aumento). Tocar em ✉/WhatsApp **marca** o pedido ("✉ aumento pedido em DD/MM · 💬 cliente avisado em
+    DD/MM", também no selo) e ele vai pro fim da seção, sem sair da lista; a marca fica no aparelho
+    (`cortagCancelamentoMarcas_v1`, por pedido + data do aviso). Quem está no bloco sai de "Visitas × compras".
 
 - **Reabrir pedido salvo pra alterar** (10/2026): o cliente pedia pra mudar quantidade ou incluir
   produto num pedido já fechado e o vendedor fechava outro (vários pedidos do mesmo cliente, mais um

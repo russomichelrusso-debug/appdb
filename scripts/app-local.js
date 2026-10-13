@@ -40,7 +40,8 @@ async function semear() {
   mockDb.__seed({
     clientes: [
       { id: 101, nome: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO', documento: '11222333000181', codigo_oficial: '3663',
-        classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 15, matriz_grupo: null },
+        classificatorio_tipo: 'Varejo Premium', classificatorio_desconto: 15, matriz_grupo: null,
+        whatsapp_comprador: '5544999812447', whatsapp_comprador_nome: 'Marcos Silva', whatsapp_comprador_em: new Date().toISOString() },
       { id: 102, nome: 'CASA DAS FERRAMENTAS LTDA', documento: '44555666000192', codigo_oficial: '5569',
         classificatorio_tipo: 'Varejo Master', classificatorio_desconto: 18, matriz_grupo: null,
         latitude: -23.4205, longitude: -51.9331 }, // posição gravada por levantamento: botão "Waze" vai pela coordenada
@@ -82,6 +83,9 @@ async function semear() {
     avisosCancelamento: [
       { nr_pedido: '676004', codigo_sku: '61362', cliente_codigo_oficial: '3663', cliente_nome: 'DEPOSITO SAO',
         descricao: 'JOELHEIRA EM EVA PARA ASSENTAMENTO PISOS', motivo: 'Abaixo R$ 300,00', minimo: 300, quantidade: 6, valor: 120.76,
+        data_aviso: dia(0), remetente: 'thamiris.sabino@cortag.com', recebido_em: new Date().toISOString() },
+      { nr_pedido: '676003', codigo_sku: '60863', cliente_codigo_oficial: '5569', cliente_nome: 'CASA DAS FERR',
+        descricao: 'DISCO DE CORTE DIAMANTADO', motivo: 'Sem previsão', minimo: null, quantidade: 6, valor: 1110,
         data_aviso: dia(0), remetente: 'thamiris.sabino@cortag.com', recebido_em: new Date().toISOString() },
     ],
   });
