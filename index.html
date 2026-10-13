@@ -2997,6 +2997,24 @@
       cursor: pointer;
     }
 
+    /* loja só com o ponto da rua: aviso numa 2ª linha do botão */
+    .proxOutra--rua {
+      padding-top: 6px;
+      padding-bottom: 6px;
+    }
+
+    .proxOutraAviso {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: var(--warning);
+      font-size: 11.5px;
+    }
+
+    .proxMeta--rua {
+      color: var(--warning);
+    }
+
     .clienteVazioBtn.hidden,
     .clienteSel.hidden,
     .clienteAcao.hidden {
@@ -16798,15 +16816,21 @@
           el.classList.toggle('hidden', lojas.length === 0);
           if (!lojas.length) { el.innerHTML = ''; return; }
           const [primeira, ...outras] = lojas;
-          const origem = (l) => l.pos.aprox ? 'pelo endereço da ficha' : 'pela visita anterior';
+          // Posição só pela rua da ficha (o OpenStreetMap não tem o número):
+          // a distância é até um ponto da rua, não até a loja - avisa (DEPEL
+          // na Av. Brasil de Maringá aparecia "260 m" estando longe, 10/2026)
+          const soRua = (l) => l.pos.fonte === 'rua';
+          const origem = (l) => soRua(l) ? 'só pela rua da ficha, a loja pode ficar longe daqui'
+            : l.pos.fonte === 'numero' ? 'pelo endereço da ficha' : 'pela visita anterior';
+          const distancia = (l) => (soRua(l) ? '~' : '') + formatarDistancia(l.dist);
           el.innerHTML = `<div class="proxPergunta">📍 Você está na <b>${escapeHtml(primeira.c.nome)}</b>?</div>
-            <div class="proxMeta">${formatarDistancia(primeira.dist)} daqui · ${origem(primeira)}</div>
+            <div class="proxMeta${soRua(primeira) ? ' proxMeta--rua' : ''}">${distancia(primeira)} daqui · ${origem(primeira)}</div>
             <div class="proxAcoes">
               <button type="button" class="proxSim" data-prox-sim="${escapeHtml(String(primeira.c.id))}">Selecionar</button>
               <button type="button" class="proxNao" data-prox-nao="${escapeHtml(String(primeira.c.id))}">Não</button>
             </div>
             ${outras.length ? `<div class="proxOutras">Outra loja aqui perto:
-              ${outras.map(l => `<button type="button" class="proxOutra" data-prox-sim="${escapeHtml(String(l.c.id))}">${escapeHtml(l.c.nome)} · ${formatarDistancia(l.dist)}</button>`).join('')}
+              ${outras.map(l => `<button type="button" class="proxOutra${soRua(l) ? ' proxOutra--rua' : ''}" data-prox-sim="${escapeHtml(String(l.c.id))}">${soRua(l) ? `${escapeHtml(l.c.nome)}<span class="proxOutraAviso">${distancia(l)} · só pela rua da ficha, pode estar longe</span>` : `${escapeHtml(l.c.nome)} · ${distancia(l)}`}</button>`).join('')}
             </div>` : ''}`;
         });
       }
@@ -16883,9 +16907,13 @@
       function posicaoDoCliente(c) {
         const num = (v) => (v === null || v === undefined || v === '' ? NaN : Number(v));
         const lat = num(c.latitude), lng = num(c.longitude);
-        if (coordValida(lat, lng)) return { lat, lng, aprox: false };
+        // fonte: 'gps' (gravado no levantamento), 'numero' (endereço achado com o
+        // número) ou 'rua' (só um ponto da rua - em avenida longa, a loja pode
+        // ficar a quilômetros dele)
+        if (coordValida(lat, lng)) return { lat, lng, aprox: false, fonte: 'gps' };
         const alat = num(c.latitude_aprox), alng = num(c.longitude_aprox);
-        if (coordValida(alat, alng)) return { lat: alat, lng: alng, aprox: c.localizacao_nivel !== 'numero' };
+        const numero = c.localizacao_nivel === 'numero';
+        if (coordValida(alat, alng)) return { lat: alat, lng: alng, aprox: !numero, fonte: numero ? 'numero' : 'rua' };
         return null;
       }
       function distanciaM(a, b) {
