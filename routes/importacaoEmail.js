@@ -144,7 +144,8 @@ async function registrar(hash, corpo, tipo, status, erro, resultado) {
 
 // Respostas pro script: 200 = importado (ou já importado antes); 422 = arquivo
 // recusado (marca "Cortag/Falhou", não tenta de novo); 5xx = tentar de novo na
-// próxima rodada (servidor/banco com problema).
+// próxima rodada (servidor/banco com problema, ou e-mail que esta versão do
+// servidor ainda não conhece - deploy subindo).
 router.post('/arquivo', async (req, res) => {
   // a chave já foi conferida antes de ler o corpo (server.js); de novo aqui
   // pra rota nunca ficar aberta se o middleware mudar
@@ -372,7 +373,14 @@ router.post('/mensagem', async (req, res) => {
         console.warn(`Importação por e-mail: "${assunto}" chegou com a tabela cortada - só ${aviso.itens.length} item(ns) gravado(s).`);
       }
     } else {
-      throw new Recusado('E-mail não reconhecido.');
+      // o script só manda e-mail de um tipo que ele conhece: não reconhecer é o
+      // servidor mais velho que o script (deploy ainda subindo - o 1º aviso de
+      // cancelamento, de 13/10/2026, chegou 30 s depois do merge e ficou
+      // "Falhou" pra sempre). 503 = o script tenta de novo nas próximas rodadas
+      // (até ~1 h) em vez de desistir.
+      const erro = 'E-mail não reconhecido por esta versão do servidor - tente de novo.';
+      await registrar(hash, { ...corpo, nome: assunto }, tipo, 'falhou', erro, null).catch(err => console.error(err));
+      return res.status(503).json({ erro, tipo });
     }
     // já gravou o selo e mandou o aviso: se só o registro falhar, responde 200
     // mesmo assim - com 503 o script reenviava e cada reenvio mandava outro push

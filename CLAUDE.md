@@ -500,7 +500,9 @@ Supabase, sem PR — não é mudança de código.
   à vista): só lista, "aumentar não evita". Faixa laranja no Pedido/Levantamento pelo `/sync` (`cancelamentos`),
   tocar abre os pedidos do cliente. Um push por e-mail ("Saldo de N pedidos vai ser cancelado"); o mesmo
   aviso reenviado (já veio 3 vezes em 1 min) não avisa de novo; respostas (RES:/Re:/Fwd:) ficam de fora.
-  **O script do Gmail precisa ser colado de novo** no Apps Script.
+  **O script do Gmail precisa ser colado de novo** no Apps Script. O 1º aviso real (13/10/2026) chegou 30 s depois do
+  merge, o servidor ainda velho respondeu "E-mail não reconhecido" (422) e o script marcou "Falhou" pra sempre (gravado
+  via SQL a partir do e-mail): agora e-mail não reconhecido em `/mensagem` responde **503** e o script tenta de novo por ~1 h.
   - **Bloco "⚠ Saldo a cancelar"** no topo de "Pra cuidar" da aba Clientes (`renderCancelamentos`, `index.html`):
     todos os avisos ainda valendo, um por pedido, montados da cópia local do `/sync` (sem rota própria, funciona
     sem internet). Decisões do usuário: primeiro "Dá pra salvar aumentando" (quem falta menos primeiro), depois,
