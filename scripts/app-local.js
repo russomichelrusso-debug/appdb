@@ -75,6 +75,14 @@ async function semear() {
         data_faturamento: dia(12), data_implantacao: dia(15), status: 'faturado', nota_fiscal: '900002' },
       { nr_pedido: '676003', codigo_sku: '60863', cliente_codigo_oficial: '5569', quantidade: 6, valor: 1110,
         data_faturamento: null, data_implantacao: dia(5), status: 'carteira' },
+      { nr_pedido: '676004', codigo_sku: '61362', cliente_codigo_oficial: '3663', quantidade: 6, valor: 120.76,
+        data_faturamento: null, data_implantacao: dia(30), status: 'carteira' },
+    ],
+    // aviso de cancelamento do saldo (e-mail "Cancelamento saldo em carteira")
+    avisosCancelamento: [
+      { nr_pedido: '676004', codigo_sku: '61362', cliente_codigo_oficial: '3663', cliente_nome: 'DEPOSITO SAO',
+        descricao: 'JOELHEIRA EM EVA PARA ASSENTAMENTO PISOS', motivo: 'Abaixo R$ 300,00', minimo: 300, quantidade: 6, valor: 120.76,
+        data_aviso: dia(0), remetente: 'thamiris.sabino@cortag.com', recebido_em: new Date().toISOString() },
     ],
   });
 }

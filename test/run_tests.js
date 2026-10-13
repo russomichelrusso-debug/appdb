@@ -3003,6 +3003,78 @@ async function main() {
     assert(res.status === 200 && res.body.resultado.nr_pedido === '677999' && res2.status === 422
       && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Relatório de Comissões'),
       `e-mail Cortag: número só no assunto ainda vale; e-mail não reconhecido é recusado (422): ${JSON.stringify([res.body, res2.body])}`);
+
+    // "Cancelamento saldo em carteira" (assistente comercial): tabela HTML do e-mail real de 13/10/2026
+    const [cA, cM, cD] = hojeBr.split('-');
+    const assuntoCanc = `Cancelamento saldo em carteira ${cD}.${cM}.${cA}`;
+    const linhaCanc = (cod, nome, nr, item, desc, oc, motivo, qt, vl) => '<tr>\r\n' + ['VILMAR HEDLER JUNIOR', "RUSSO'S REPRESENTACOES COMERCIAIS LTDA",
+      cod, nome, nr, 'V', item, desc, oc, motivo, qt, vl].map(c => `<td>${c}</td>\r\n`).join('') + '</tr>\r\n';
+    const htmlCanc = '<html><body><p>Prezado(a) RUSSO&#39;S REPRESENTACOES COMERCIAIS LTDA,</p>'
+      + '<table border="1"><tbody>\r\n<tr style="background-color:#D9D9D9;">'
+      + ['Gestor', 'Representante', 'Cod. Cliente', 'Nome Cliente', 'Nr. Pedido', 'Venda/Bonific', 'Item', 'Descrição', 'O.C.', 'Motivo', 'Qt. Pendente', 'Vl. Pendente']
+        .map(c => `<th>${c}</th>\r\n`).join('') + '</tr>\r\n'
+      + linhaCanc('3663', 'PEOCA', '676656', '60538', 'JOELHEIRA EM EVA PARA ASSENTAMENTO PISOS', '23045', 'Abaixo R$ 300,00', '6', '120,76')
+      + linhaCanc('217739', 'C R DE CON07', '00677106', '60226', 'ESTILETE DE METAL - PROFISSIONAL', '', 'Abaixo R$ 300,00', '10', '146,62')
+      + linhaCanc('217739', 'C R DE CON07', '00677106', '60538', 'JOELHEIRA EM EVA &amp; CIA', '', 'Abaixo R$ 300,00', '6', '128,31')
+      + linhaCanc('226838', 'BIGALTONIA', '00673525', '62980', 'MINI DISCO DIAMANTADO 50mm', '', 'Sem previsão', '6', '1.380,22')
+      + '</tbody></table><p>Peço por gentileza que informe os seus clientes.</p></body></html>';
+    const lidoCanc = EmailCortag.lerCancelamentoSaldo(assuntoCanc, htmlCanc);
+    assert(EmailCortag.ehCancelamentoSaldo(assuntoCanc) && !EmailCortag.ehCancelamentoSaldo('RES: ' + assuntoCanc) && !EmailCortag.ehCancelamentoSaldo('Fwd: ' + assuntoCanc)
+      && lidoCanc && lidoCanc.data_aviso === hojeBr && lidoCanc.itens.length === 4
+      && lidoCanc.itens[0].nr_pedido === '676656' && lidoCanc.itens[0].cliente_codigo_oficial === '3663' && lidoCanc.itens[0].ordem_compra === '23045'
+      && lidoCanc.itens[0].minimo === 300 && lidoCanc.itens[0].quantidade === 6 && lidoCanc.itens[0].valor === 120.76
+      && lidoCanc.itens[1].nr_pedido === '677106' && lidoCanc.itens[1].ordem_compra === null && lidoCanc.itens[2].descricao === 'JOELHEIRA EM EVA & CIA'
+      && lidoCanc.itens[3].minimo === null && lidoCanc.itens[3].motivo === 'Sem previsão' && lidoCanc.itens[3].valor === 1380.22,
+      `e-mail Cortag: lê a tabela do cancelamento de saldo (pedido sem zeros, O.C. vazia, mínimo do motivo): ${JSON.stringify(lidoCanc)}`);
+    const cortado = EmailCortag.lerCancelamentoSaldo(assuntoCanc, htmlCanc.slice(0, htmlCanc.indexOf('BIGALTONIA')));
+    assert(!lidoCanc.parcial && cortado.parcial === true && cortado.itens.length === 3,
+      `e-mail Cortag: tabela cortada no envio fica marcada como parcial: ${JSON.stringify([lidoCanc.parcial, cortado.parcial, cortado.itens.length])}`);
+    mockDb.__seed({ clientes: [
+      { id: 9511, nome: 'PEOCA MATERIAIS DE CONSTRUCAO', documento: '55555555001100', codigo_oficial: '3663' },
+      { id: 9512, nome: 'C R DE CONSTRUCAO LTDA', documento: '55555555001200', codigo_oficial: '217739' },
+    ] });
+    const deThamiris = { remetente: 'Thamiris Sabino <thamiris.sabino@cortag.com>', html: htmlCanc, mensagemId: 'canc-1' };
+    res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, remetente: 'noreply@cortag.com.br' });
+    assert(res.status === 422 && mockDb.__getAvisosCancelamento().length === 0,
+      `e-mail Cortag: cancelamento de saldo só vale das assistentes comerciais: ${JSON.stringify(res.body)}`);
+    res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, html: '' });
+    assert(res.status === 422 && /script do Gmail/.test(res.body.erro), `e-mail Cortag: cancelamento sem HTML (script antigo) é recusado: ${JSON.stringify(res.body)}`);
+    const avisosCancAntes = mockDb.__getNovidades().filter(n => n.tipo === 'cancelamento-saldo').length;
+    res = await enviarMensagem(assuntoCanc, 'texto puro', deThamiris);
+    const nCanc = mockDb.__getNovidades().filter(n => n.tipo === 'cancelamento-saldo');
+    assert(res.status === 200 && res.body.tipo === 'cancelamento' && res.body.resultado.novos === 4 && res.body.resultado.avisado === true
+      && mockDb.__getAvisosCancelamento().length === 4 && nCanc.length === avisosCancAntes + 1
+      && nCanc[nCanc.length - 1].titulo === 'Saldo de 3 pedidos vai ser cancelado (3 clientes)'
+      && /PEOCA MATERIAIS DE CONSTRUCAO, C R DE CONSTRUCAO LTDA, BIGALTONIA · aumentar a quantidade salva o saldo/.test(nCanc[nCanc.length - 1].texto),
+      `e-mail Cortag: cancelamento de saldo grava um aviso por item e manda um push com os clientes: ${JSON.stringify([res.body, nCanc[nCanc.length - 1]])}`);
+    // a assistente reenvia o mesmo e-mail (outra mensagem, mesmo dia): não manda outro push
+    res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, mensagemId: 'canc-2' });
+    assert(res.status === 200 && res.body.resultado.novos === 0 && res.body.resultado.avisado === false
+      && mockDb.__getNovidades().filter(n => n.tipo === 'cancelamento-saldo').length === avisosCancAntes + 1,
+      `e-mail Cortag: o mesmo aviso de cancelamento reenviado não gera outro push: ${JSON.stringify(res.body)}`);
+    res = await req('GET', '/api/pedidos-oficiais/9512');
+    const avisos9512 = res.body.avisos_cancelamento || [];
+    res = await req('GET', '/api/clientes/sync');
+    const sync9512 = (res.body.clientes || []).find(c => c.id === 9512);
+    const sync9502b = (res.body.clientes || []).find(c => c.id === 9502);
+    assert(avisos9512.length === 2 && avisos9512.every(a => a.nr_pedido === '677106' && a.minimo === 300 && a.data_aviso === hojeBr && a.remetente === 'thamiris.sabino@cortag.com')
+      && sync9512 && sync9512.cancelamentos && sync9512.cancelamentos.length === 2 && !sync9502b.cancelamentos,
+      `e-mail Cortag: o aviso de cancelamento aparece no histórico do cliente e na cópia local (sync): ${JSON.stringify([avisos9512, sync9512 && sync9512.cancelamentos])}`);
+    // o vendedor pediu o aumento e o item saiu faturado: o aviso some (só desse item)
+    mockDb.__seed({ pedidosOficiaisItens: [{ nr_pedido: '677106', codigo_sku: '60226', cliente_codigo_oficial: '217739', status: 'faturado',
+      quantidade: 12, valor: 175, data_implantacao: '2026-08-01', data_faturamento: hojeBr, nota_fiscal: '900776' }] });
+    res = await req('GET', '/api/pedidos-oficiais/9512');
+    assert((res.body.avisos_cancelamento || []).length === 2,
+      `e-mail Cortag: faturado no próprio dia do aviso não tira o aviso (pode ser a nota de antes do e-mail): ${JSON.stringify(res.body.avisos_cancelamento)}`);
+    const amanhaCanc = new Date(new Date(`${hojeBr}T12:00:00Z`).getTime() + 86400000).toISOString().slice(0, 10);
+    mockDb.__seed({ pedidosOficiaisItens: [{ nr_pedido: '677106', codigo_sku: '60226', cliente_codigo_oficial: '217739', status: 'faturado',
+      quantidade: 12, valor: 175, data_implantacao: '2026-08-01', data_faturamento: amanhaCanc, nota_fiscal: '900777' }] });
+    res = await req('GET', '/api/pedidos-oficiais/9512');
+    assert((res.body.avisos_cancelamento || []).length === 1 && res.body.avisos_cancelamento[0].codigo_sku === '60538',
+      `e-mail Cortag: o aviso de cancelamento some quando o item sai faturado depois dele: ${JSON.stringify(res.body.avisos_cancelamento)}`);
+    // resposta ao e-mail ("RES: Cancelamento...") não é aviso novo
+    res = await enviarMensagem('RES: ' + assuntoCanc, 'Boa tarde, ajustado conforme solicitado.', { ...deThamiris, mensagemId: 'canc-res' });
+    assert(res.status === 422, `e-mail Cortag: resposta ao cancelamento de saldo não é lida como aviso: ${JSON.stringify(res.body)}`);
   }
   // 31b) "Para reativar" (routes/reativacao.js): Relatório de Clientes Sem
   // Compra do ERP (todo dia 2, anexo de nome cortado - o script do Gmail

@@ -32,6 +32,8 @@ const TIPOS = {
   // um aviso próprio - não junta nem substitui o anterior do mesmo tipo
   'pedido-bloqueado': { emoji: '⛔', titulo: 'Pedido bloqueado', porPedido: true },
   'pedido-avista': { emoji: '💳', titulo: 'Pedido à vista aguardando pagamento', porPedido: true },
+  // um aviso por e-mail "Cancelamento saldo em carteira" (vários pedidos)
+  'cancelamento-saldo': { emoji: '⚠️', titulo: 'Saldo em carteira vai ser cancelado', porPedido: true },
 };
 
 const JUNTAR_MINUTOS = 30;
