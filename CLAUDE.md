@@ -681,8 +681,8 @@ Supabase, sem PR — não é mudança de código.
   some do `/sync`. Aceita só rua ou prédio (`place_rank` ≥ 26) do mesmo município, dentro do Brasil. Cada cliente tenta até 4 buscas, parando na primeira que acha (1,1 s entre elas): como está na ficha, abreviações por extenso (`expandirAbreviacoes`: PRES, GOV., DR, PION…), sem o número e busca livre "rua, cidade, UF" — na 1ª passada (10–11/10/2026) só a 1ª existia e 64 de 296 não foram achados, quase todos por abreviação ou número. **No
   Brasil o OSM quase nunca tem o número**: a posição costuma ser um ponto da rua (`nivel = 'rua'`), que em
   avenida longa fica a quilômetros da loja — por isso aparece "aprox." e serve pra "quem está perto", não
-  pra navegar. O GPS do levantamento sempre vale mais. **Posição pelo número** (10/2026, PR "posição pelo
-  número"): quando o Nominatim só acha a rua, o servidor pede ao **Overpass** (mesma base do OSM) os outros
+  pra navegar. O GPS do levantamento sempre vale mais. **Posição pelo número** (10/2026, PR
+  #234): quando o Nominatim só acha a rua, o servidor pede ao **Overpass** (mesma base do OSM) os outros
   endereços com número e o traçado da rua com o mesmo nome (`address.road` do Nominatim), num raio de 6 km do
   ponto da rua, e calcula onde fica o número da loja (`routes/lib/posicaoPeloNumero.js`): entre dois números
   (pelo traçado; em reta se o traçado não liga os dois) ou de um lado só (dois números a 100+ de distância dão
@@ -829,6 +829,14 @@ Supabase, sem PR — não é mudança de código.
   200 m não sugere. **Só usa o GPS se a permissão já foi dada** (Permissions API) — abrir a aba nunca faz o
   celular pedir. Busca ao abrir o app, ao entrar na aba, ao limpar o cliente e ao voltar pro app (chegou na
   loja com ele em segundo plano); leitura vale 2 min e some depois de 10. Sem internet funciona (cópia do `/sync`).
+  **De onde vem a posição, na tela** (PRs #233 e #234, relato do usuário: a DEPEL aparecia "a 260 m" estando
+  longe — a posição dela era um ponto da Av. Brasil, que atravessa Maringá): `posicaoDoCliente` devolve `fonte`
+  — 'gps' ("pela visita anterior"), 'numero' (nível 'numero' ou 'interpolado', "pelo endereço da ficha", raio de
+  GPS), 'estimado' ("~" na distância, "estimada pelo número da ficha, pode errar umas quadras") ou 'rua' ("~" e
+  "só pela rua da ficha, a loja pode ficar longe daqui"; nas outras lojas, numa 2ª linha laranja junto da
+  distância, que não some em nome longo). Antes, loja achada com o número saía como "pela visita anterior".
+  A posição da DEPEL (as duas, mesmo endereço) foi gravada à mão como GPS em 13/10/2026, com a coordenada que o
+  usuário passou — correção de dado, sem PR.
 
 - **Registro de visita: "Sua última visita" e "Visitas × compras"** (10/2026, item 3 da localização). Decisões
   do usuário (entrevista): **visita = levantamento salvo** (pedido e botão manual ficaram de fora), **cada
