@@ -2335,6 +2335,81 @@
       text-align: right;
     }
 
+    /* Card de status agrupado (10/2026): título do grupo, linhas num fundo
+       próprio, chave em tom normal com detalhe pequeno embaixo, e cor só no
+       valor que pede ação. */
+    .ap-grupoTit {
+      margin: 16px 0 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .ap-grupoTit:first-child {
+      margin-top: 4px;
+    }
+
+    .ap-grupo {
+      background: var(--fill);
+      border-radius: 12px;
+      padding: 2px 12px;
+    }
+
+    .ap-grupo .ap-status-row {
+      padding: 9px 0;
+      border-bottom: .75px solid var(--hairline);
+    }
+
+    .ap-grupo .ap-status-row:last-child {
+      border-bottom: none;
+    }
+
+    .ap-grupo .ap-status-row .k {
+      flex: 1;
+      min-width: 0;
+      color: var(--ink);
+    }
+
+    .ap-grupo .ap-status-row .k small {
+      display: block;
+      margin-top: 2px;
+      font-size: 12.5px;
+      line-height: 1.35;
+      color: var(--gray);
+    }
+
+    #apFichasCnpjSub.hidden,
+    #apPosicaoLojasSub.hidden {
+      display: none;
+    }
+
+    .ap-grupo .ap-status-row .v {
+      white-space: nowrap;
+    }
+
+    .ap-status-row .v[data-tipo="ok"] {
+      color: var(--success);
+    }
+
+    .ap-status-row .v[data-tipo="cinza"] {
+      color: var(--gray);
+      font-weight: 500;
+    }
+
+    .ap-status-row .v[data-tipo="warn"] {
+      color: var(--warning);
+    }
+
+    .ap-status-row .v[data-tipo="err"] {
+      color: var(--danger);
+    }
+
+    #apSyncQueueBtn.hidden {
+      display: none;
+    }
+
     .ap-hint {
       font-size: 13px;
       color: var(--gray);
@@ -8412,32 +8487,42 @@
             <span class="ap-statusChevron" aria-hidden="true">▾</span>
           </summary>
           <div class="ap-statusDetalhes">
-            <div class="ap-status-row"><span class="k">Servidor</span><span class="v" id="apSyncServidor">—</span></div>
-            <div class="ap-status-row"><span class="k">Catálogo (servidor)</span><span class="v"
-                id="apSyncCatalogo">—</span></div>
-            <div class="ap-status-row"><span class="k">Catálogo (este aparelho)</span><span class="v"
-                id="apCurCount">—</span></div>
-            <div class="ap-status-row"><span class="k">Origem do catálogo</span><span class="v" id="apCurSource">—</span>
+            <!-- Agrupado por assunto (10/2026, opção "B" escolhida pelo usuário a partir de
+                 mockups): mesmos ids de sempre; data curta ("hoje 10:55") e cor só no que
+                 pede ação (data-tipo ok/cinza/warn/err). -->
+            <div class="ap-grupoTit">Este aparelho</div>
+            <div class="ap-grupo">
+              <div class="ap-status-row"><span class="k">Fila de envio</span><span class="v" id="apSyncQueueCount">Nada pendente</span></div>
+              <div class="ap-status-row"><span class="k">CSVs no Drive</span><span class="v" id="apDriveCsvQueueCount">Nada pendente</span></div>
+              <div class="ap-status-row"><span class="k">Google Drive</span><span class="v" id="apGoogleDriveStatus">Não conectado</span></div>
+              <div class="ap-status-row"><span class="k">Catálogo<small><span id="apSyncCatalogo">—</span> · <span
+                      id="apCurSource">—</span></small></span><span class="v" id="apCurCount">—</span></div>
             </div>
-            <div class="ap-status-row"><span class="k">Previsão de estoque</span><span class="v"
-                id="apSyncPrevisao">—</span></div>
-            <div class="ap-status-row"><span class="k">Importação por e-mail</span><span class="v"
-                id="apImportacaoEmail">—</span></div>
-            <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
-            <div class="ap-status-row"><span class="k">Fichas de CNPJ</span><span class="v" id="apFichasCnpj">—</span></div>
-            <div class="ap-status-row"><span class="k">Posição das lojas</span><span class="v" id="apPosicaoLojas">—</span></div>
-            <div class="ap-status-row"><span class="k">Logado como</span><span class="v" id="apLoggedInAs">—</span></div>
-            <div class="ap-status-row"><span class="k">Pedidos/levantamentos pendentes</span><span class="v"
-                id="apSyncQueueCount">Nada pendente</span></div>
-            <div class="ap-status-row"><span class="k">CSVs de pedido pendentes no Drive</span><span class="v"
-                id="apDriveCsvQueueCount">Nada pendente</span></div>
-            <div class="ap-status-row"><span class="k">Google Drive</span><span class="v" id="apGoogleDriveStatus">Não
-                conectado</span></div>
-            <div class="ap-status-row"><span class="k">Tema</span><span class="v" id="apThemeStatus">Claro</span></div>
-            <button class="restoreBtn" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar pendências
-              agora</button>
+            <button class="restoreBtn hidden" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar agora</button>
             <button class="restoreBtn" id="apSyncQueueVerBtn" style="margin-top:8px;">Ver pendências e recusados</button>
             <div id="apSyncQueueDetalhe"></div>
+            <div class="ap-grupoTit">Servidor</div>
+            <div class="ap-grupo">
+              <div class="ap-status-row"><span class="k">Conexão</span><span class="v" id="apSyncServidor">—</span></div>
+              <div class="ap-status-row"><span class="k">Previsão de estoque</span><span class="v" id="apSyncPrevisao">—</span></div>
+              <div class="ap-status-row"><span class="k">Campanhas</span><span class="v" id="apSyncPromo">—</span></div>
+            </div>
+            <div class="ap-grupoTit">Relatórios por e-mail · último recebido</div>
+            <div class="ap-grupo" id="apImportacaoEmail">
+              <div class="ap-status-row"><span class="k">Verificando…</span></div>
+            </div>
+            <div class="ap-grupoTit">Clientes</div>
+            <div class="ap-grupo">
+              <div class="ap-status-row"><span class="k">Fichas de CNPJ<small id="apFichasCnpjSub" class="hidden"></small></span><span
+                  class="v" id="apFichasCnpj">—</span></div>
+              <div class="ap-status-row"><span class="k">Posição das lojas<small id="apPosicaoLojasSub" class="hidden"></small></span><span
+                  class="v" id="apPosicaoLojas">—</span></div>
+            </div>
+            <div class="ap-grupoTit">Conta</div>
+            <div class="ap-grupo">
+              <div class="ap-status-row"><span class="k"><span id="apLoggedInAs">—</span><small id="apLoggedInEmail"></small></span></div>
+              <div class="ap-status-row"><span class="k">Tema</span><span class="v" id="apThemeStatus" data-tipo="cinza">Claro</span></div>
+            </div>
             <button class="restoreBtn" id="apCompareCatalogBtn" style="margin-top:8px;">Ver diferenças entre servidor e
               aparelho</button>
             <div id="apCompareCatalogResult" style="margin-top:10px;"></div>
@@ -13700,6 +13785,32 @@
       const LS_KEY = 'cortagPriceDB_v1';
       const PREVISAO_LS_KEY = 'cortagPrevisaoDB_v1';
       let PREVISAO_MAP = {};
+      // Data e hora curtas pro card de status do Painel: "hoje 10:55", "ontem
+      // 06:05", "12/10 13:01" (outro ano: a data inteira). Só pra carimbo com
+      // hora (atualizado_em etc.); data sem hora usa formatDateBr.
+      function quandoCurto(d) {
+        const dt = d instanceof Date ? d : new Date(d);
+        if (isNaN(dt.getTime())) return '';
+        const hora = dt.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const hoje = new Date();
+        const ontem = new Date(); ontem.setDate(hoje.getDate() - 1);
+        if (dt.toDateString() === hoje.toDateString()) return `hoje ${hora}`;
+        if (dt.toDateString() === ontem.toDateString()) return `ontem ${hora}`;
+        if (dt.getFullYear() === hoje.getFullYear()) return `${dt.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} ${hora}`;
+        return dt.toLocaleDateString('pt-BR');
+      }
+      // Produtos do catálogo de preços neste aparelho, sem os promocionais do
+      // Painel (vêm de outra chave e não estão no catalogo_precos do servidor).
+      function produtosDoCatalogo() {
+        return DB.products.filter(p => !p._promocional).length;
+      }
+      // Valor de uma linha do card de status com a cor do que ela pede.
+      function marcarStatus(el, texto, tipo) {
+        if (!el) return;
+        el.textContent = texto;
+        if (tipo) el.dataset.tipo = tipo; else delete el.dataset.tipo;
+        el.style.color = '';
+      }
       let PREVISAO_SOURCE = 'Nenhuma previsão carregada';
 
       async function loadActivePrevisao() {
@@ -13720,7 +13831,7 @@
                 saldo: Number(l.saldo) || 0,
               };
             });
-            PREVISAO_SOURCE = `Servidor · atualizado ${new Date(linhas[0].atualizado_em || Date.now()).toLocaleString('pt-BR')} · todos os aparelhos`;
+            PREVISAO_SOURCE = quandoCurto(linhas[0].atualizado_em || Date.now());
             return mapa;
           }
         } catch (e) { console.warn('Não foi possível buscar a previsão do servidor:', e); }
@@ -13730,8 +13841,7 @@
           if (resp.ok) {
             const remote = await resp.json();
             if (remote && remote.mapa && Object.keys(remote.mapa).length) {
-              const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-              PREVISAO_SOURCE = (remote.version || 'Arquivo previsao.json') + (when ? ' · ' + when : '') + ' · todos os aparelhos (formato antigo)';
+              PREVISAO_SOURCE = (remote.generatedAt ? quandoCurto(remote.generatedAt) + ' · ' : '') + 'arquivo antigo';
               return remote.mapa;
             }
           }
@@ -14050,7 +14160,7 @@
         return apiFetch('/api/pedidos-oficiais/importar', { method: 'POST', body: JSON.stringify(payload) });
       }
 
-      let ACTIVE_SOURCE = 'Base original do app';
+      let ACTIVE_SOURCE = 'base original do app';
       let PROMO_SOURCE = 'Nenhuma campanha ativa';
 
       // =================================================================
@@ -14173,10 +14283,16 @@
         if (badge) { badge.textContent = n; badge.classList.toggle('hidden', n === 0); }
         const adminBtn = document.getElementById('apSyncQueueCount');
         const recusados = loadFilaRecusados().length;
-        if (adminBtn) adminBtn.textContent = (n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente')
-          + (recusados ? ` · ${recusados} recusado${recusados === 1 ? '' : 's'} pelo servidor` : '');
+        if (adminBtn) marcarStatus(adminBtn, (n > 0 ? `⚠ ${n} pendente${n === 1 ? '' : 's'}` : (recusados ? '' : 'Nada pendente'))
+          + (n > 0 && recusados ? ' · ' : '') + (recusados ? `⚠ ${recusados} recusado${recusados === 1 ? '' : 's'}` : ''), n > 0 || recusados ? 'warn' : 'cinza');
+        atualizarBotaoEnviarFila();
         atualizarBotaoPedidosSalvos(); // pedido feito sem internet entra/sai da lista 🧾 Pedidos
         atualizarResumoStatus();
+      }
+      // "Tentar enviar agora" só com algo na fila (pedido/levantamento ou CSV do Drive)
+      function atualizarBotaoEnviarFila() {
+        const btn = document.getElementById('apSyncQueueBtn');
+        if (btn) btn.classList.toggle('hidden', loadSyncQueue().length === 0 && loadDriveCsvQueue().length === 0);
       }
       let syncQueueDraining = false;
       async function drenarFilaSync(silencioso) {
@@ -14283,7 +14399,8 @@
         const el = document.getElementById('apDriveCsvQueueCount');
         if (!el) return;
         const n = loadDriveCsvQueue().length;
-        el.textContent = n > 0 ? `${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente';
+        marcarStatus(el, n > 0 ? `⚠ ${n} pendente${n === 1 ? '' : 's'}` : 'Nada pendente', n > 0 ? 'warn' : 'cinza');
+        atualizarBotaoEnviarFila();
         atualizarResumoStatus();
       }
       // Mesmo formato/nome já usado no "Baixar CSV" manual do orçamento, só
@@ -15347,47 +15464,50 @@
       // confere servidor, catálogo e previsão de uma vez, e sincroniza sozinho o
       // que estiver desatualizado - antes disso, cada uma dessas coisas exigia um
       // botão separado (Testar conexão, Sincronizar catálogo...).
-      async function verificarESincronizarTudo(silencioso) {
+      async function verificarESincronizarTudo(silencioso, sincronizar = true) {
         const elServidor = document.getElementById('apSyncServidor');
         const elCatalogo = document.getElementById('apSyncCatalogo');
         const elPrevisao = document.getElementById('apSyncPrevisao');
         const elPromo = document.getElementById('apSyncPromo');
         if (!elServidor) return; // painel ainda não foi aberto nessa sessão
 
-        if (elPrevisao) elPrevisao.textContent = (PREVISAO_SOURCE === 'Nenhuma previsão carregada') ? 'Não carregada' : PREVISAO_SOURCE;
-        if (elPromo) elPromo.textContent = PROMO_SOURCE;
+        if (elPrevisao) marcarStatus(elPrevisao, PREVISAO_SOURCE === 'Nenhuma previsão carregada' ? 'Não carregada' : PREVISAO_SOURCE, PREVISAO_SOURCE === 'Nenhuma previsão carregada' ? 'cinza' : '');
+        if (elPromo) marcarStatus(elPromo, PROMO_SOURCE, PROMO_SOURCE === 'Nenhuma campanha ativa' ? 'cinza' : '');
         carregarStatusFichasCnpj();
         carregarStatusPosicaoLojas();
 
-        elServidor.textContent = 'Verificando…';
-        elCatalogo.textContent = 'Verificando…';
+        marcarStatus(elServidor, 'Verificando…', 'cinza');
+        marcarStatus(elCatalogo, 'verificando…');
         try {
-          const { total } = await apiContagemProdutos();
-          elServidor.textContent = '✓ Conectado';
-          elServidor.style.color = 'var(--success)';
-          if (total === DB.products.length) {
-            elCatalogo.textContent = `✓ Atualizado (${total} produtos)`;
-            elCatalogo.style.color = 'var(--success)';
+          // catálogo do aparelho x catálogo do servidor (o que o app baixa); o
+          // cadastro de produtos só é sincronizado quando falta nele algum código
+          // do catálogo. Os promocionais do Painel não contam (produtosDoCatalogo).
+          const cont = await apiContagemProdutos();
+          marcarStatus(elServidor, '✓ Conectado', 'ok');
+          const local = produtosDoCatalogo();
+          if (cont.catalogo == null) {
+            // servidor ainda sem a contagem nova (o app publica antes do Render):
+            // o total do cadastro não é comparável com o catálogo - não acusa nada
+            marcarStatus(elCatalogo, 'conectado');
           } else if (DB.products.length === 0) {
             // catálogo deste aparelho ainda não terminou de carregar - não é
-            // "desatualizado", e sincronizar agora mandaria uma lista vazia
-            elCatalogo.textContent = 'Carregando catálogo…';
-            elCatalogo.style.color = 'var(--gray)';
-          } else if (state.currentUser?.is_admin) {
-            elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — sincronizando…`;
-            elCatalogo.style.color = 'var(--warning)';
-            await syncProductCatalog();
-            const depois = await apiContagemProdutos();
-            elCatalogo.textContent = `✓ Sincronizado agora (${depois.total} produtos)`;
-            elCatalogo.style.color = 'var(--success)';
+            // "diferente", e sincronizar agora mandaria uma lista vazia
+            marcarStatus(elCatalogo, 'carregando…');
+          } else if (local !== Number(cont.catalogo)) {
+            marcarStatus(elCatalogo, `Diferente do servidor (${Number(cont.catalogo).toLocaleString('pt-BR')})`);
           } else {
-            elCatalogo.textContent = `Desatualizado (servidor: ${total}, app: ${DB.products.length}) — avise o admin`;
-            elCatalogo.style.color = 'var(--warning)';
+            marcarStatus(elCatalogo, '✓ igual ao servidor');
+            // só com o mesmo catálogo do servidor: o sync manda o catálogo DO
+            // APARELHO, e um diferente não criaria os códigos que faltam (e se
+            // repetiria a cada abertura)
+            if (sincronizar && Number(cont.fora_do_cadastro) > 0) {
+              if (state.currentUser?.is_admin) await syncProductCatalog();
+              else elCatalogo.textContent += ' · cadastro incompleto, avise o admin';
+            }
           }
         } catch (e) {
-          elServidor.textContent = '✗ ' + e.message;
-          elServidor.style.color = 'var(--danger)';
-          elCatalogo.textContent = '—';
+          marcarStatus(elServidor, '✗ ' + e.message, 'err');
+          marcarStatus(elCatalogo, '—');
           if (!silencioso) throw e;
         } finally {
           atualizarResumoStatus();
@@ -15675,11 +15795,14 @@
         try {
           const st = await apiFetch('/api/cnpj-preenchimento/status');
           const fmt = (n) => Number(n).toLocaleString('pt-BR');
-          el.textContent = st.faltam > st.desistidos
-            ? `${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)} · completando de madrugada (${st.hoje.limite}/noite)`
-            : `${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)} ✓${st.desistidos ? ` · ${fmt(st.desistidos)} CNPJ não encontrado(s)` : ''}`;
+          const sub = document.getElementById('apFichasCnpjSub');
+          const completando = st.faltam > st.desistidos;
+          marcarStatus(el, `${completando ? '' : '✓ '}${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)}`, completando ? '' : 'ok');
+          const detalhe = completando ? `completando de madrugada (${st.hoje.limite}/noite)`
+            : (st.desistidos ? `${fmt(st.desistidos)} CNPJ não encontrado(s)` : '');
+          if (sub) { sub.textContent = detalhe; sub.classList.toggle('hidden', !detalhe); }
         } catch (e) {
-          el.textContent = '—';
+          marcarStatus(el, '—');
         }
       }
       // Quantos clientes têm posição pro "Perto de mim": GPS do levantamento ou
@@ -15690,27 +15813,35 @@
         try {
           const st = await apiFetch('/api/geocodificacao/status');
           const fmt = (n) => Number(n).toLocaleString('pt-BR');
-          el.textContent = `${fmt(st.com_gps)} GPS · ${fmt(st.pelo_endereco)} pelo endereço`
-            + (st.pelo_numero ? ` (${fmt(st.pelo_numero)} pelo número)` : '')
-            + (st.faltam ? ` · ${fmt(st.faltam)} na fila (${st.limite}/noite)` : '')
-            + (st.nao_encontrados ? ` · ${fmt(st.nao_encontrados)} endereço(s) não encontrado(s)` : '');
+          // com endereço na ficha = com posição + não encontrados + na fila
+          const comPosicao = Number(st.com_gps) + Number(st.pelo_endereco);
+          const total = comPosicao + Number(st.nao_encontrados || 0) + Number(st.faltam || 0);
+          marcarStatus(el, `${fmt(comPosicao)} de ${fmt(total)}`);
+          const sub = document.getElementById('apPosicaoLojasSub');
+          if (sub) {
+            sub.textContent = `${fmt(st.com_gps)} por GPS · ${fmt(st.pelo_endereco)} pelo endereço`
+              + (st.pelo_numero ? ` (${fmt(st.pelo_numero)} pelo número)` : '')
+              + (st.nao_encontrados ? ` · ${fmt(st.nao_encontrados)} não encontrada${st.nao_encontrados === 1 ? '' : 's'}` : '')
+              + (st.faltam ? ` · ${fmt(st.faltam)} na fila (${st.limite}/noite)` : '');
+            sub.classList.remove('hidden');
+          }
         } catch (e) {
-          el.textContent = '—';
+          marcarStatus(el, '—');
         }
       }
       function refreshPrevisaoStatus() {
         const el = document.getElementById('apSyncPrevisao');
-        if (el) el.textContent = PREVISAO_SOURCE;
+        if (el) marcarStatus(el, PREVISAO_SOURCE === 'Nenhuma previsão carregada' ? 'Não carregada' : PREVISAO_SOURCE, PREVISAO_SOURCE === 'Nenhuma previsão carregada' ? 'cinza' : '');
       }
       function refreshGoogleDriveStatus() {
         const el = document.getElementById('apGoogleDriveStatus');
         const btn = document.getElementById('googleDriveConnectBtn');
         if (!el || !btn) return;
         if (tokenGoogleValido()) {
-          el.textContent = 'Conectado';
+          marcarStatus(el, '✓ Conectado', 'ok');
           btn.textContent = 'Desconectar';
         } else {
-          el.textContent = 'Não conectado';
+          marcarStatus(el, 'Não conectado', 'cinza');
           btn.textContent = 'Conectar ao Google Drive';
         }
       }
@@ -15771,7 +15902,7 @@
         }));
         await apiImportarPrevisaoEstoque(itens);
         PREVISAO_MAP = mapa;
-        PREVISAO_SOURCE = `Servidor · atualizado ${new Date().toLocaleString('pt-BR')} · todos os aparelhos`;
+        PREVISAO_SOURCE = quandoCurto(new Date());
         refreshPrevisaoStatus();
         if (document.getElementById('searchInput').value.trim()) renderResults();
         return `${total} produtos enviados — já visível pra todo mundo.`;
@@ -15967,17 +16098,19 @@
         const texto = (id) => (document.getElementById(id)?.textContent || '').trim();
         const servidor = texto('apSyncServidor');
         const catalogo = texto('apSyncCatalogo');
-        const pendencias = loadSyncQueue().length
-          + [texto('apDriveCsvQueueCount')].map(t => parseInt(t, 10)).filter(n => n > 0).reduce((a, b) => a + b, 0);
+        const pendencias = loadSyncQueue().length + loadDriveCsvQueue().length;
         const recusados = loadFilaRecusados().length;
-        const produtos = DB.products.length.toLocaleString('pt-BR');
+        const problemas = [];
+        if (servidor.startsWith('✗')) problemas.push('Sem conexão com o servidor');
+        if (catalogo.startsWith('Diferente')) problemas.push('Catálogo diferente do servidor');
+        if (pendencias > 0) problemas.push(`${pendencias} pendência${pendencias === 1 ? '' : 's'} pra enviar`);
+        if (recusados > 0) problemas.push(`${recusados} envio${recusados === 1 ? '' : 's'} recusado${recusados === 1 ? '' : 's'} — ver pendências`);
+        if (importacaoEmailAlertas > 0) problemas.push(importacaoEmailAlertas === 1 ? 'Relatório por e-mail atrasado ou recusado' : `${importacaoEmailAlertas} relatórios por e-mail atrasados ou recusados`);
         let resumo;
-        if (servidor.startsWith('✗')) resumo = '⚠️ Sem conexão com o servidor';
+        if (problemas.length === 1) resumo = '⚠️ ' + problemas[0];
+        else if (problemas.length > 1) resumo = `⚠️ ${problemas.length} itens pedem atenção`;
         else if (servidor === 'Verificando…' || servidor === '—' || !servidor) resumo = 'Verificando…';
-        else if (catalogo.startsWith('Desatualizado')) resumo = '⚠️ Catálogo desatualizado';
-        else if (pendencias > 0) resumo = `⚠️ ${pendencias} pendência${pendencias === 1 ? '' : 's'} pra enviar`;
-        else if (recusados > 0) resumo = `⚠️ ${recusados} envio${recusados === 1 ? '' : 's'} recusado${recusados === 1 ? '' : 's'} — ver pendências`;
-        else resumo = `✓ Tudo sincronizado · ${produtos} produtos`;
+        else resumo = '✓ Tudo em dia';
         el.textContent = resumo;
         el.classList.toggle('ap-statusAlerta', resumo.startsWith('⚠️'));
       }
@@ -16057,7 +16190,8 @@
         });
 
         if (state.currentUser) {
-          document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome} (${state.currentUser.email})${state.currentUser.is_admin ? ' · admin' : ''}`;
+          document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome}${state.currentUser.is_admin ? ' · admin' : ''}`;
+          document.getElementById('apLoggedInEmail').textContent = state.currentUser.email || '';
           if (state.currentUser.is_admin) {
             document.getElementById('manageUsersGroup').classList.remove('hidden');
             renderUsersList();
@@ -18672,20 +18806,55 @@
         relatorio: 'Relatório', precos: 'Preços', classificatorio: 'Classificatório', previsao: 'Itens em falta', semcompra: 'Sem compra', inadimplencia: 'Inadimplência',
         bloqueado: 'Pedido bloqueado', avista: 'Pedido à vista',
       };
+      // Uma linha por relatório, com o dia do último recebido ("hoje", "ontem",
+      // "05/10 · 8 dias"). Atrasado (laranja) só a Carteira e Faturamento, que
+      // chega todo dia ~3h: mais de 2 dias sem chegar (decisão do usuário, 10/2026);
+      // os outros não têm dia certo. Recusado = vermelho.
+      const ORDEM_IMPORTACAO_EMAIL = ['relatorio', 'avista', 'previsao', 'precos', 'classificatorio', 'semcompra', 'inadimplencia', 'bloqueado'];
+      const NOME_LONGO_IMPORTACAO_EMAIL = { relatorio: 'Carteira e Faturamento', previsao: 'Itens em falta', precos: 'Lista de Preços', semcompra: 'Clientes sem compra' };
+      const DETALHE_IMPORTACAO_EMAIL = { bloqueado: 'Só chega quando há bloqueio', avista: 'Só chega com pedido à vista' };
+      const RELATORIO_DIARIO_ATRASO_DIAS = 2;
+      let importacaoEmailAlertas = 0;
+      function diasDesde(d) {
+        const dt = new Date(d);
+        if (isNaN(dt.getTime())) return null;
+        const a = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+        const h = new Date(); const b = new Date(h.getFullYear(), h.getMonth(), h.getDate());
+        return Math.round((b - a) / 86400000);
+      }
       async function carregarStatusImportacaoEmail() {
         const el = document.getElementById('apImportacaoEmail');
         if (!el) return;
+        const linha = (k, v, tipo, sub) => `<div class="ap-status-row"><span class="k">${escapeHtml(k)}${sub ? `<small>${escapeHtml(sub)}</small>` : ''}</span>`
+          + (v ? `<span class="v"${tipo ? ` data-tipo="${tipo}"` : ''}>${escapeHtml(v)}</span>` : '') + '</div>';
         try {
           const r = await apiFetch('/api/importacao-email/status');
-          const tipos = (r && r.tipos) || [];
-          if (!tipos.length) { el.textContent = 'Nenhum arquivo recebido ainda'; return; }
-          el.textContent = tipos.map(t => {
-            const quando = new Date(t.atualizado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-            return `${NOME_CURTO_IMPORTACAO_EMAIL[t.tipo] || t.rotulo} ${quando}${t.status === 'ok' ? '' : ' ⚠ falhou'}`;
-          }).join(' · ');
+          const tipos = ((r && r.tipos) || []).slice().sort((x, y) => {
+            const ix = ORDEM_IMPORTACAO_EMAIL.indexOf(x.tipo), iy = ORDEM_IMPORTACAO_EMAIL.indexOf(y.tipo);
+            return (ix < 0 ? 99 : ix) - (iy < 0 ? 99 : iy);
+          });
+          importacaoEmailAlertas = 0;
+          if (!tipos.length) { el.innerHTML = linha('Nenhum arquivo recebido ainda', '', '', ''); atualizarResumoStatus(); return; }
+          el.innerHTML = tipos.map(t => {
+            const nome = NOME_LONGO_IMPORTACAO_EMAIL[t.tipo] || NOME_CURTO_IMPORTACAO_EMAIL[t.tipo] || t.rotulo || t.tipo;
+            const dias = diasDesde(t.atualizado_em);
+            const dia = new Date(t.atualizado_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+            let quando = dias === 0 ? 'hoje' : dias === 1 ? 'ontem' : dias != null ? `${dia} · ${dias} dias` : dia;
+            let tipo = dias != null && dias <= 1 ? 'ok' : '';
+            let sub = DETALHE_IMPORTACAO_EMAIL[t.tipo] || '';
+            if (DETALHE_IMPORTACAO_EMAIL[t.tipo]) { tipo = 'cinza'; if (dias > 1) quando = dia; }
+            if (t.tipo === 'relatorio' && dias != null && dias > RELATORIO_DIARIO_ATRASO_DIAS) {
+              tipo = 'warn'; quando = `⚠ ${quando}`; sub = 'Chega todo dia ~3h'; importacaoEmailAlertas++;
+            }
+            if (t.status !== 'ok') {
+              tipo = 'err'; quando = `⚠ falhou ${dia}`; sub = 'E-mail com o marcador "Cortag/Falhou": importar pelo Painel'; importacaoEmailAlertas++;
+            }
+            return linha(nome, quando, tipo, sub);
+          }).join('');
         } catch (e) {
-          el.textContent = 'Não foi possível consultar';
+          el.innerHTML = linha('Não foi possível consultar', '', '', '');
         }
+        atualizarResumoStatus();
       }
 
       // ---------------- Novidades (avisos de importação) ----------------
@@ -20522,8 +20691,7 @@
           if (raw) {
             const saved = JSON.parse(raw);
             if (saved && saved.db && Array.isArray(saved.db.products) && saved.db.products.length) {
-              ACTIVE_SOURCE = 'Atualizado em ' + new Date(saved.updatedAt).toLocaleString('pt-BR') +
-                (saved.fileName ? ' · ' + saved.fileName : '') + ' · somente este aparelho';
+              ACTIVE_SOURCE = 'só neste aparelho' + (saved.fileName ? ' · ' + saved.fileName : '') + ' · ' + quandoCurto(saved.updatedAt);
               return saved.db;
             }
           }
@@ -20545,8 +20713,7 @@
               precos: p.precos,
               precosSemImposto: p.precos_sem_imposto,
             }));
-            const when = remoto.generatedAt ? new Date(remoto.generatedAt).toLocaleString('pt-BR') : '';
-            ACTIVE_SOURCE = (remoto.version || 'Catálogo do servidor') + (when ? ' · ' + when : '') + ' · todos os aparelhos';
+            ACTIVE_SOURCE = 'baixado ' + quandoCurto(remoto.generatedAt || new Date());
             return { products: produtosConvertidos, categories: [] };
           }
         } catch (e) { /* servidor fora do ar ou sem catálogo enviado ainda - ok, tenta as fontes abaixo */ }
@@ -20560,8 +20727,7 @@
           if (resp.ok) {
             const remote = await resp.json();
             if (remote && Array.isArray(remote.products) && remote.products.length) {
-              const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-              ACTIVE_SOURCE = (remote.version || 'Atualização remota') + (when ? ' · ' + when : '') + ' · todos os aparelhos (backup)';
+              ACTIVE_SOURCE = 'reserva do app (precos.json)';
               return remote;
             }
           }
@@ -20573,11 +20739,11 @@
         //    quase nunca roda.
         try {
           const embutido = await carregarCatalogoEmbutido();
-          ACTIVE_SOURCE = 'Base original do app';
+          ACTIVE_SOURCE = 'base original do app';
           return JSON.parse(JSON.stringify(embutido));
         } catch (e) {
           console.warn('Não foi possível carregar o catálogo embutido de reserva:', e);
-          ACTIVE_SOURCE = 'Catálogo indisponível';
+          ACTIVE_SOURCE = 'indisponível';
           return { products: [], taxKeys: DB.taxKeys.length ? DB.taxKeys : [], categories: [] };
         }
       }
@@ -20627,6 +20793,7 @@
       function mergeProdutosPromocionais(lista) {
         for (const p of lista) {
           if (DB.productIndex[p.c]) continue; // já existe (evita duplicar ao recarregar)
+          p._promocional = true; // fora do catalogo_precos: não entra na comparação do Painel
           p._n = normalize(p.n);
           p._tok = p._n.split(/\s+/).filter(Boolean);
           DB.products.push(p);
@@ -20645,7 +20812,7 @@
         try {
           const result = await apiFetch('/api/configuracoes/promocoes');
           if (result && Array.isArray(result.valor)) {
-            PROMO_SOURCE = 'Servidor · atualizado ' + new Date(result.atualizado_em).toLocaleString('pt-BR') + ' · todos os aparelhos';
+            PROMO_SOURCE = quandoCurto(result.atualizado_em);
             return result.valor;
           }
         } catch (e) { console.warn('Não foi possível buscar campanhas do servidor:', e); }
@@ -20655,8 +20822,7 @@
           if (resp.ok) {
             const remote = await resp.json();
             if (remote && Array.isArray(remote.rules)) {
-              const when = remote.generatedAt ? new Date(remote.generatedAt).toLocaleString('pt-BR') : '';
-              PROMO_SOURCE = (remote.version || 'Arquivo promocoes.json') + (when ? ' · ' + when : '') + ' · todos os aparelhos (formato antigo)';
+              PROMO_SOURCE = (remote.generatedAt ? quandoCurto(remote.generatedAt) + ' · ' : '') + 'arquivo antigo';
               return remote.rules;
             }
           }
@@ -20667,7 +20833,7 @@
       }
       async function salvarPromoRulesServidor(rules) {
         await apiFetch('/api/configuracoes/promocoes', { method: 'POST', body: JSON.stringify({ valor: rules }) });
-        PROMO_SOURCE = 'Servidor · atualizado agora · todos os aparelhos';
+        PROMO_SOURCE = quandoCurto(new Date());
       }
       // Desconto extra por classificatório do cliente, por família/produto
       // (ex: "Essenciais da Obra" - Master 20%/Premium 23%/Exclusive 25%) -
@@ -20804,7 +20970,7 @@
 
       function refreshPromoStatus() {
         const el = document.getElementById('apSyncPromo');
-        if (el) el.textContent = PROMO_SOURCE;
+        if (el) marcarStatus(el, PROMO_SOURCE, PROMO_SOURCE === 'Nenhuma campanha ativa' ? 'cinza' : '');
       }
 
       function renderPromoRulesList() {
@@ -21631,7 +21797,7 @@
       }
 
       function refreshAdminCatalogStatus() {
-        document.getElementById('apCurCount').textContent = DB.products.length.toLocaleString('pt-BR');
+        document.getElementById('apCurCount').textContent = produtosDoCatalogo().toLocaleString('pt-BR') + ' produtos';
         document.getElementById('apCurSource').textContent = ACTIVE_SOURCE;
         atualizarResumoStatus();
       }
@@ -21672,10 +21838,10 @@
         syncBtn.addEventListener('click', async () => {
           syncBtn.disabled = true; syncBtn.textContent = 'Sincronizando…';
           try {
-            await verificarESincronizarTudo(false);
+            await verificarESincronizarTudo(false, false); // o reenvio vem logo abaixo, uma vez só
             if (state.currentUser?.is_admin) await syncProductCatalog();
             const recarregou = await recarregarFonteCatalogo();
-            showToast(recarregou ? 'Sincronização concluída — usando: ' + ACTIVE_SOURCE : 'Sincronização concluída');
+            showToast(recarregou ? 'Sincronização concluída — catálogo ' + ACTIVE_SOURCE : 'Sincronização concluída');
           } catch (e) {
             showToast('Não foi possível sincronizar: ' + e.message, 'erro');
           } finally {
@@ -22350,7 +22516,7 @@
             btn.disabled = true; btn.textContent = 'Tentando…';
             await drenarFilaSync(false);
             await drenarFilaDriveCsv(false);
-            btn.disabled = false; btn.textContent = 'Tentar enviar pendências agora';
+            btn.disabled = false; btn.textContent = 'Tentar enviar agora';
             if (document.getElementById('apSyncQueueDetalhe').innerHTML) renderDetalheFila();
           });
           document.getElementById('apSyncQueueVerBtn').addEventListener('click', () => {

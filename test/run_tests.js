@@ -2822,6 +2822,16 @@ async function main() {
     res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05'], 40).toString('base64') });
     assert(res.status === 200 && res.body.produtosRemovidos === 18 && mockDb.__getCatalogoPrecos().length === 1,
       `importação manual da Lista de Preços pelo Painel continua sem a trava dos 5%: ${JSON.stringify(res.body)}`);
+    // Painel: o cadastro de produtos guarda o que saiu do catálogo, então "total" nunca bate com o
+    // catálogo; a contagem diz o tamanho do catálogo e quantos dele faltam no cadastro
+    res = await req('GET', '/api/produtos/contagem');
+    assert(res.status === 200 && res.body.catalogo === 1 && res.body.fora_do_cadastro === 0 && res.body.total > res.body.catalogo,
+      `contagem de produtos separa cadastro, catálogo e o que falta no cadastro: ${JSON.stringify(res.body)}`);
+    mockDb.__getCatalogoPrecos().push({ codigo_sku: 'SOCAT01', nome: 'SÓ NO CATÁLOGO' });
+    res = await req('GET', '/api/produtos/contagem');
+    assert(res.status === 200 && res.body.catalogo === 2 && res.body.fora_do_cadastro === 1,
+      `contagem de produtos acusa código do catálogo que falta no cadastro: ${JSON.stringify(res.body)}`);
+    mockDb.__getCatalogoPrecos().pop();
   }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
   assert(res.status === 422 && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Repres-21.xlsx'),
