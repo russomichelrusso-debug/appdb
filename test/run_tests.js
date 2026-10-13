@@ -3527,7 +3527,7 @@ async function main() {
     const ctxVm = { DB: { categories: [] }, state: { canal: 'VAREJO' }, productByCod: () => null };
     vm.createContext(ctxVm);
     vm.runInContext(ini >= 0 && fim > ini ? html.slice(ini, fim) : '', ctxVm);
-    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem } = ctxVm;
+    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem, proximaFaixaCampanha } = ctxVm;
     if (!avaliarCampanhas || !bestBonusForProduct || !bonusDaCampanhaNoItem) {
       assert(false, 'motor de campanhas: trecho <motor-campanhas> não encontrado no index.html');
     } else {
@@ -3550,6 +3550,24 @@ async function main() {
       assert(iguais && Object.keys(r19.bonuses).length === 0 && Object.keys(atacado.bonuses).length === 0
         && bestBonusForProduct(b, discos[0].p).pct === 5 && bestBonusForProduct(b, discos[1].p) === null,
         'campanha: regra antiga (sem os campos novos) vale como antes - mesma chave e %, ignora estado/classificatório/data, só no Varejo');
+      // 1b) barra do orçamento: próxima faixa da campanha mais perto (só com item do
+      // alvo no orçamento, faltando até metade da faixa; cesta fica de fora)
+      const prox = (regras, rows, extra) => proximaFaixaCampanha(regras, rows, ctx(extra));
+      const p30 = prox([antiga], [linha('60001', 'Discos', 30, 300)]);
+      const p20 = prox([antiga], [linha('60001', 'Discos', 15, 150)]);
+      const pFim = prox([antiga], [linha('60001', 'Discos', 45, 450)]);
+      const pLonge = prox([antiga], [linha('60001', 'Discos', 5, 50)]);
+      const pSemAlvo = prox([antiga], [linha('70001', 'Brocas', 30, 300)]);
+      const pAtacado = prox([antiga], [linha('60001', 'Discos', 30, 300)], { canal: 'ATACADO' });
+      const porSkus = { ...antiga, id: 's', targetType: 'all', targetValue: '', selfMetric: 'skus', tiers: [{ min: '4', pct: '2' }] };
+      const pSkus = prox([porSkus], [linha('60001', 'Discos', 1, 10), linha('70001', 'Brocas', 1, 10), linha('70002', 'Brocas', 1, 10)]);
+      const cesta = { id: 'c', name: 'Cesta', active: true, basis: 'combo', basketItems: [{ type: 'category', value: 'Discos', minQty: 50 }], comboPct: 5 };
+      assert(p30 && p30.falta === 10 && p30.pct === 5 && p30.metrica === 'qtd'
+        && p20 && p20.falta === 5 && p20.pct === 3
+        && pFim === null && pLonge === null && pSemAlvo === null && pAtacado === null
+        && pSkus && pSkus.falta === 1 && pSkus.pct === 2 && pSkus.metrica === 'skus'
+        && prox([cesta], discos) === null,
+        'campanha: próxima faixa pra barra do orçamento (mais perto, só com item do alvo, até metade da faixa, sem cesta)');
 
       // 2) classificatório (ignora acento/maiúscula); sem classificatório no orçamento não vale
       const porClassi = { ...antiga, classificatorios: ['Varejo Exclusive', 'varejo PREMIUM'] };

@@ -882,6 +882,25 @@ Supabase, sem PR — não é mudança de código.
   offline, vale a mais nova. Telefone/e-mail da Receita só como pílula "Receita: …" (costumam ser do contador).
   O botão "Remover" saiu: apagar o campo e salvar.
 
+- **Revisão de UX pelas 7 leis** (10/2026, opções escolhidas pelo usuário a partir de mockups feitos com
+  prints do próprio app): **abas no rodapé** com ícone e nome (`.tabbar` fixa embaixo, altura em `--navH`;
+  a barra do orçamento fica acima; barras presas no topo agora em `top: 58px`); **Estado/Canal/
+  Classificatório recolhidos** numa linha "PR · Varejo · Premium 17% · alterar" quando há cliente escolhido
+  (`atualizarResumoContexto`, chamada no `renderCart`; abrir vale até trocar de cliente; sem cliente os
+  campos ficam abertos); **cabeçalho com Dashboard, Ficha, "⋯ Atalhos" e ⚙** (Calculadora, Portal do Cliente
+  e Salesforce num menu com nome, `initAtalhosCabecalho`); **levantamento não salvo à vista** fora da aba
+  dele (número de itens na aba e faixa "Levantamento não salvo · Abrir", `atualizarLembreteLev`, mesma
+  regra do `hasUnsavedLevantamento`); **"quanto falta" na barra do orçamento** (linha verde + "Faltam R$ X
+  pro mínimo FOB/pro frete CIF", mesma régua do aviso da gaveta, e a próxima faixa de campanha
+  "+2 itens diferentes = 5% em …" por `proximaFaixaCampanha` no `<motor-campanhas>`: só regra de degraus,
+  com item do alvo no orçamento, faltando até metade da faixa; cesta fica de fora); **alvos de toque de
+  44 px** (−/+, ✕, lápis, leitor, ícones do topo; `::after` invisível quando o desenho é menor) e **botão
+  flutuante de leitura** no Levantamento (aciona o `scanBtnLev`; espaço de 84 px no fim da lista pra não
+  cobrir o último item); **"Compartilhar orçamento" com contorno** (Finalizar é o único botão cheio da
+  gaveta); **aba Clientes em três grupos** — Pra vender hoje (Recompra, Para reativar, Classificatório),
+  Pra cuidar (Inadimplência, Visitas × compras), Pra rodar (Perto de mim, Rota por cidade); grupo sem
+  bloco visível some (`:has`). Padrões novos em "Padrão visual" no README.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -904,9 +923,9 @@ Supabase, sem PR — não é mudança de código.
   primeiro** e depois levada pra v2 (merge deste `main` lá); nada da v2 volta pra cá antes da troca;
   a v2 **nunca** usa o `DATABASE_URL` da produção (o `db.js` roda o `schema.sql` na subida).
 
-- Padronização visual que ficou pra depois (levantada na análise de UI): **acessibilidade e área
-  de toque** (botões de 17–32px como `.fichaInfoBtn`, `.rm`, `.pencilBtn`, `.gearBtn`; campos só
-  com placeholder, sem `<label>`; steppers −/+ sem `aria-label`) e **unificar o visual das páginas
+- Padronização visual que ficou pra depois (levantada na análise de UI): **acessibilidade** (a área
+  de toque de 44 px foi feita em 10/2026; faltam campos só com placeholder, sem `<label>`, e steppers
+  −/+ do orçamento sem `aria-label`) e **unificar o visual das páginas
   separadas** com o `index.html` (cabeçalho, cards e botões próprios em cada uma — hoje só os
   tokens e o tema escuro foram alinhados).
 
