@@ -3591,7 +3591,9 @@
     }
 
     .histCard .hcCancelamento .hcCancelAcao {
-      display: inline-block;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
       margin-top: 6px;
       text-decoration: none;
     }
@@ -6701,6 +6703,42 @@
       justify-content: center;
       text-align: center;
       text-decoration: none;
+    }
+
+    /* Saldo a cancelar: o "Pedir aumento" ocupa a linha inteira (ícone de
+       envelope + o que vai ser pedido embaixo) e os outros vão na linha de baixo */
+    .recompraAcoes.cancAcoes {
+      flex-wrap: wrap;
+    }
+
+    a.recompraBtn.cancEmailBtn {
+      flex: 1 1 100%;
+      flex-direction: column;
+      gap: 2px;
+      min-height: 52px;
+    }
+
+    .cancEmailBtn .cancEmailTopo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .cancEmailBtn .cancEmailSub {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--gray);
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .iconeEmail {
+      width: 18px;
+      height: 18px;
+      flex: none;
     }
 
     /* Saldo a cancelar: o que aumentar não resolve fica apagado, no fim */
@@ -17232,6 +17270,8 @@
       // sugestão de menor acréscimo; o vendedor ajusta no e-mail depois de falar
       // com o cliente.
       const ATENDIMENTO_CANCELAMENTO = 'atendimento01@cortag.com';
+      // Envelope de traço (o emoji ✉ saía pequeno e ilegível no Android)
+      const ICONE_EMAIL = '<svg class="iconeEmail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 7l-10 6L2 7"/></svg>';
       function linkPedidoAumento(grupo, sugestao, cliente) {
         const para = grupo.remetente || ATENDIMENTO_CANCELAMENTO;
         const [a, m, d] = String(grupo.data_aviso || '').split('-');
@@ -17261,7 +17301,7 @@
             const desc = sugestoes.map(sg => `${nomeItem(sg.it)}: ${sg.qt} → ${sg.novaQt} un. (+${brl(sg.acrescimo)})`);
             texto += sugestoes.length === 1 ? ` Pra salvar, aumente ${desc[0]}.` : ` Pra salvar, aumente qualquer um: ${desc.join('; ')}.`;
             const menor = sugestoes.reduce((a, b) => (b.acrescimo < a.acrescimo ? b : a));
-            botao = `<br><a class="restoreBtn compacto hcCancelAcao" data-canc-email="${escapeHtml(grupo.nr_pedido)}" data-canc-aviso="${escapeHtml(grupo.data_aviso || '')}" href="${escapeHtml(linkPedidoAumento(grupo, menor, clienteTabSelected))}">✉ Pedir aumento por e-mail</a>`;
+            botao = `<br><a class="restoreBtn compacto hcCancelAcao" data-canc-email="${escapeHtml(grupo.nr_pedido)}" data-canc-aviso="${escapeHtml(grupo.data_aviso || '')}" href="${escapeHtml(linkPedidoAumento(grupo, menor, clienteTabSelected))}">${ICONE_EMAIL}Pedir aumento à Cortag por e-mail</a>`;
           }
         } else {
           texto += '<br>' + grupo.itens.map(it => `${nomeItem(it)} · Qt. ${escapeHtml(String(it.quantidade ?? '—'))}${Number(it.valor) > 0 ? ' · ' + brl(Number(it.valor)) : ''}`).join('<br>')
@@ -18546,7 +18586,11 @@
         const botoes = [`<button type="button" class="recompraBtn" data-canc-abrir="${escapeHtml(String(cliente.id))}">Abrir cliente</button>`];
         if (salva) {
           const menor = sugestoes.reduce((a, b) => (b.acrescimo < a.acrescimo ? b : a));
-          botoes.push(`<a class="recompraBtn recompraBtn--principal" data-canc-email="${nr}" data-canc-aviso="${aviso}" href="${escapeHtml(linkPedidoAumento(grupo, menor, cliente))}">✉ Pedir aumento</a>`);
+          // Diz o que o toque faz (abre o e-mail) e qual aumento vai pedido: com
+          // 2+ opções o e-mail leva a de menor acréscimo.
+          botoes.unshift(`<a class="recompraBtn recompraBtn--principal cancEmailBtn" data-canc-email="${nr}" data-canc-aviso="${aviso}" href="${escapeHtml(linkPedidoAumento(grupo, menor, cliente))}">`
+            + `<span class="cancEmailTopo">${ICONE_EMAIL}Pedir aumento à Cortag por e-mail</span>`
+            + `<span class="cancEmailSub">${escapeHtml(nomeProdutoCancelamento(menor.it))}: ${menor.qt} → ${menor.novaQt} un.</span></a>`);
         }
         if (comprador) {
           botoes.push(`<a class="recompraBtn" data-canc-whats="${nr}" data-canc-aviso="${aviso}" target="_blank" rel="noopener" href="${escapeHtml(urlWhatsComTexto(comprador.numero, textoWhatsCancelamento(grupo, comprador)))}">WhatsApp</a>`);
@@ -18556,7 +18600,7 @@
           <div class="recompraMeta">${meta.join(' · ')}</div>
           <div class="recompraMeta">${linhaItens}</div>
           ${marcas ? `<div class="recompraMeta"><b>${escapeHtml(marcas)}</b></div>` : ''}
-          <div class="recompraAcoes">${botoes.join('')}</div>
+          <div class="recompraAcoes cancAcoes">${botoes.join('')}</div>
         </div>`;
       }
       function renderCancelamentos() {
