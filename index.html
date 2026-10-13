@@ -17958,7 +17958,8 @@
         const escondidos = new Set([...cruzadas.semCompra, ...cruzadas.semVisita].filter(c => !fora(c)).map(c => String(c.cliente_id))).size;
         const aberta = visitasAberto();
         const resumo = `${semCompra.length ? `${semCompra.length} visitado${semCompra.length === 1 ? '' : 's'} sem compra` : 'nenhum visitado sem compra'}`
-          + ` · ${semVisita.length} compra${semVisita.length === 1 ? '' : 'm'} e sem visita há ${VISITAS_JANELA_DIAS}+ dias`;
+          + ` · ${semVisita.length} compra${semVisita.length === 1 ? '' : 'm'} e sem visita há ${VISITAS_JANELA_DIAS}+ dias`
+          + (escondidos ? ` · ${escondidos} já nos outros blocos` : '');
         el.dataset.cor = semCompra.length ? 'azul' : 'cinza';
         let corpo = '';
         if (aberta) {
@@ -17972,8 +17973,8 @@
           corpo = `<p class="recompraHint">Visita = levantamento salvo por você. Compra = pedido que entrou no ERP ou fechado no app${visitasDados && visitasDados.hoje ? '' : ' (lista do servidor ainda não carregada)'}.`
             + (escondidos ? ` ${escondidos} cliente${escondidos === 1 ? '' : 's'} desta lista já ${escondidos === 1 ? 'está' : 'estão'} em Recompra, Inadimplência ou Para reativar e não ${escondidos === 1 ? 'aparece' : 'aparecem'} aqui.` : '')
             + '</p>'
-            + secao('semCompra', `Visitados nos últimos ${VISITAS_JANELA_DIAS} dias e não compraram`, semCompra, escondidos ? 'Nenhum fora dos outros blocos.' : 'Todo cliente que você visitou comprou depois.')
-            + secao('semVisita', `Compram e você não visita há ${VISITAS_JANELA_DIAS}+ dias`, semVisita, escondidos ? 'Nenhum fora dos outros blocos.' : 'Você visitou todos os clientes que compraram no ano.');
+            + secao('semCompra', `Visitados nos últimos ${VISITAS_JANELA_DIAS} dias e não compraram`, semCompra, cruzadas.semCompra.length ? 'Nenhum fora dos outros blocos.' : 'Todo cliente que você visitou comprou depois.')
+            + secao('semVisita', `Compram e você não visita há ${VISITAS_JANELA_DIAS}+ dias`, semVisita, cruzadas.semVisita.length ? 'Nenhum fora dos outros blocos.' : 'Você visitou todos os clientes que compraram no ano.');
         }
         el.innerHTML = cabecalhoBloco({
           id: 'visitasToggle', aberta, icone: 'visita', titulo: 'Visitas × compras', resumo: escapeHtml(resumo),
