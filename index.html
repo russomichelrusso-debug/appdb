@@ -6695,6 +6695,19 @@
       cursor: pointer;
     }
 
+    a.recompraBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      text-decoration: none;
+    }
+
+    /* Saldo a cancelar: o que aumentar não resolve fica apagado, no fim */
+    .recompraItem.cancNaoResolve {
+      opacity: .7;
+    }
+
     .recompraBtn:disabled {
       opacity: .5;
       cursor: default;
@@ -8005,6 +8018,7 @@
         </div>
         <div class="clientesGrupo">
           <div class="clientesSecao">Pra cuidar</div>
+          <div class="recompra hidden" id="cancelamentoWrap"></div>
           <div class="recompra hidden" id="inadimplenciaWrap"></div>
           <div class="recompra hidden" id="visitasWrap"></div>
         </div>
@@ -11521,6 +11535,7 @@
           openClienteDetail(cliente);
         } : null;
       }
+      const CANC_VALIDADE_DIAS = 15;
       function avisosCancelamentoDoCliente(cliente) {
         if (!cliente) return [];
         const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id));
@@ -11528,7 +11543,7 @@
         if (!Array.isArray(lista)) return [];
         // a cópia local pode ser de dias atrás (sem internet): mesmo prazo de 15
         // dias do servidor (routes/lib/cancelamentoSaldo.js), pela data do aviso
-        const d = new Date(Date.now() - 15 * 86400000);
+        const d = new Date(Date.now() - CANC_VALIDADE_DIAS * 86400000);
         const limite = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         return lista.filter(a => String(a.data_aviso || '').slice(0, 10) >= limite);
       }
@@ -12831,7 +12846,7 @@
           // "Recompra da semana" ficava escondido nesse caminho
           // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
           if (tab === 'produtos') { if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio(); }
-          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
+          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); renderCancelamentos(); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -14687,6 +14702,9 @@
             renderRota();
             buscarClienteProximo(); // 1ª cópia de clientes chegou depois da leitura do GPS
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
+            renderCancelamentos();
+            renderVisitas();
+            if (state.levCliente) { atualizarCancelamentoClienteBar('lev', state.levCliente); atualizarCancelamentoClienteBar('precos', state.levCliente); }
             if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); atualizarWhatsClienteBar('lev', state.levCliente); atualizarWhatsClienteBar('precos', state.levCliente); }
           }
           return true;
@@ -17243,13 +17261,14 @@
             const desc = sugestoes.map(sg => `${nomeItem(sg.it)}: ${sg.qt} → ${sg.novaQt} un. (+${brl(sg.acrescimo)})`);
             texto += sugestoes.length === 1 ? ` Pra salvar, aumente ${desc[0]}.` : ` Pra salvar, aumente qualquer um: ${desc.join('; ')}.`;
             const menor = sugestoes.reduce((a, b) => (b.acrescimo < a.acrescimo ? b : a));
-            botao = `<br><a class="restoreBtn compacto hcCancelAcao" href="${escapeHtml(linkPedidoAumento(grupo, menor, clienteTabSelected))}">✉ Pedir aumento por e-mail</a>`;
+            botao = `<br><a class="restoreBtn compacto hcCancelAcao" data-canc-email="${escapeHtml(grupo.nr_pedido)}" data-canc-aviso="${escapeHtml(grupo.data_aviso || '')}" href="${escapeHtml(linkPedidoAumento(grupo, menor, clienteTabSelected))}">✉ Pedir aumento por e-mail</a>`;
           }
         } else {
           texto += '<br>' + grupo.itens.map(it => `${nomeItem(it)} · Qt. ${escapeHtml(String(it.quantidade ?? '—'))}${Number(it.valor) > 0 ? ' · ' + brl(Number(it.valor)) : ''}`).join('<br>')
             + '<br>Aumentar a quantidade não evita esse corte.';
         }
-        return `<div class="hcSaldoMinimo hcCancelamento">${texto}${botao}</div>`;
+        const marcas = textoMarcasCancelamento(grupo);
+        return `<div class="hcSaldoMinimo hcCancelamento">${texto}${marcas ? `<br><b>${marcas}</b>` : ''}${botao}</div>`;
       }
       // Pedido com aviso de cancelamento que não está nos pedidos importados do
       // cliente - card só com o que o e-mail traz.
@@ -17502,6 +17521,7 @@
         classificatorio: '<path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
         rota: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/>',
         visita: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/>',
+        cancelamento: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
       };
       function cabecalhoBloco({ id, aberta, icone, titulo, resumo, numero, rotulo, acao }) {
         const lado = acao ? `<span class="blocoAcao">${escapeHtml(acao)}</span>`
@@ -17516,13 +17536,14 @@
       // Abrir um bloco fecha os outros (com Recompra e Para reativar abertos
       // juntos a aba virava uma rolagem sem fim). Cada um lembra o seu estado.
       function alternarBlocoCliente(chave) {
-        const chaves = [RECOMPRA_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY];
+        const chaves = [RECOMPRA_ABERTO_LS_KEY, CANC_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY];
         let aberta = false;
         try { aberta = localStorage.getItem(chave) === '1'; } catch (e) { }
         for (const k of chaves) {
           try { localStorage.setItem(k, !aberta && k === chave ? '1' : '0'); } catch (e) { }
         }
         renderRecompra();
+        renderCancelamentos();
         renderInadimplencia();
         renderReativar();
         renderClassifAlertas();
@@ -18397,6 +18418,146 @@
       // Títulos vencidos e não pagos pelo Relatório de Inadimplência do ERP (sem
       // dia fixo, pela importação por e-mail) - GET /api/inadimplencia
       // (routes/inadimplencia.js). É a foto do fim do período do relatório: o
+      // ---- Saldo a cancelar (bloco "Pra cuidar" da aba Clientes) ----
+      // Todos os avisos de cancelamento do saldo em carteira ainda valendo (e-mail
+      // das assistentes comerciais), um por pedido. Vem da cópia local de
+      // clientes (/sync) - sem rota própria, funciona sem internet. Decisões do
+      // usuário (10/2026): primeiro os que se salvam aumentando (quem falta menos
+      // primeiro), depois, apagados, os que aumentar não resolve; quem já pediu o
+      // aumento (✉) ou avisou o cliente (WhatsApp) continua na lista, marcado e no
+      // fim da seção, até o item faturar ou o aviso vencer. A marca fica neste
+      // aparelho (CANC_MARCAS_LS_KEY, por pedido e data do aviso - aviso novo do
+      // mesmo pedido começa sem marca).
+      const CANC_ABERTO_LS_KEY = 'cortagCancelamentoAberto_v1';
+      const CANC_MARCAS_LS_KEY = 'cortagCancelamentoMarcas_v1';
+      function cancAberto() {
+        try { return localStorage.getItem(CANC_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      function lerMarcasCancelamento() {
+        try { return JSON.parse(localStorage.getItem(CANC_MARCAS_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function marcasDoPedido(grupo) {
+        const m = lerMarcasCancelamento()[String(grupo.nr_pedido)];
+        return m && m.aviso === (grupo.data_aviso || '') ? m : {};
+      }
+      function marcarCancelamento(nrPedido, dataAviso, tipo) {
+        const marcas = lerMarcasCancelamento();
+        const nr = String(nrPedido);
+        const atual = marcas[nr] && marcas[nr].aviso === (dataAviso || '') ? marcas[nr] : { aviso: dataAviso || '' };
+        atual[tipo] = hojeLocalISO();
+        marcas[nr] = atual;
+        // marca de aviso que já venceu não serve mais
+        const limite = hojeLocalISO(new Date(Date.now() - CANC_VALIDADE_DIAS * 86400000));
+        for (const k of Object.keys(marcas)) if (!marcas[k].aviso || marcas[k].aviso < limite) delete marcas[k];
+        try { localStorage.setItem(CANC_MARCAS_LS_KEY, JSON.stringify(marcas)); } catch (e) { }
+      }
+      function textoMarcasCancelamento(grupo) {
+        const m = marcasDoPedido(grupo);
+        return [m.email ? `✉ aumento pedido em ${dataCurtaISO(m.email)}` : '', m.whats ? `💬 cliente avisado em ${dataCurtaISO(m.whats)}` : '']
+          .filter(Boolean).join(' · ');
+      }
+      // toque em ✉/WhatsApp (o link abre o e-mail ou a conversa) marca o pedido;
+      // a lista se refaz depois, pra marca aparecer ao voltar pro app
+      function ligarMarcasCancelamento(raiz) {
+        raiz.querySelectorAll('[data-canc-email], [data-canc-whats]').forEach(a => a.addEventListener('click', () => {
+          const email = a.dataset.cancEmail != null;
+          marcarCancelamento(email ? a.dataset.cancEmail : a.dataset.cancWhats, a.dataset.cancAviso, email ? 'email' : 'whats');
+          setTimeout(() => {
+            renderCancelamentos();
+            if (clienteTabSelected && clienteTabView === 'pedidosoficiais' && raiz.id === 'clienteDetailContent') loadClienteDetailView();
+          }, 300);
+        }));
+      }
+      // [{ cliente, grupo }] de todos os clientes da cópia local
+      function listaCancelamentos() {
+        const lista = [];
+        for (const cliente of loadClientesLocais()) {
+          if (!Array.isArray(cliente.cancelamentos) || !cliente.cancelamentos.length) continue;
+          for (const grupo of gruposAvisoCancelamento(avisosCancelamentoDoCliente(cliente))) lista.push({ cliente, grupo });
+        }
+        return lista;
+      }
+      function nomeProdutoCancelamento(it) {
+        return (productByCod(String(it.codigo_sku)) || {}).n || it.descricao || ('cód. ' + it.codigo_sku);
+      }
+      // Texto pro WhatsApp do comprador: o que vai ser cortado e, quando dá, o
+      // aumento que salva o saldo (todas as opções, o cliente escolhe).
+      function textoWhatsCancelamento(grupo, comprador) {
+        const ola = `Olá${comprador && comprador.nome ? ', ' + comprador.nome.split(' ')[0] : ''}!`;
+        const itens = grupo.itens.map(it => `${nomeProdutoCancelamento(it)} (${it.quantidade ?? '?'} un.)`).join(', ');
+        const sugestoes = sugestoesAumentoCancelamento(grupo);
+        if (grupo.falta > 0 && sugestoes.length) {
+          const opcoes = sugestoes.map(sg => `${nomeProdutoCancelamento(sg.it)} pra ${sg.novaQt} un.`);
+          return `${ola} O saldo do seu pedido ${grupo.nr_pedido} na Cortag (${itens}, ${brl(grupo.valor)}) vai ser cancelado por ficar abaixo do mínimo de ${brl(grupo.minimo)}. `
+            + `Aumentando ${opcoes.length === 1 ? opcoes[0] : 'um destes: ' + opcoes.join(' ou ')}, ele sai normalmente. Posso ajustar?`;
+        }
+        return `${ola} O saldo do seu pedido ${grupo.nr_pedido} na Cortag (${itens}) vai ser cancelado${grupo.motivo ? ` (${grupo.motivo})` : ''}. Quer que eu veja uma alternativa?`;
+      }
+      function renderCancelamentoItem({ cliente, grupo }) {
+        const sugestoes = sugestoesAumentoCancelamento(grupo);
+        const salva = grupo.falta > 0 && sugestoes.length > 0;
+        const dias = Math.max(0, CANC_VALIDADE_DIAS - diasEntreISO(grupo.data_aviso, hojeLocalISO()));
+        const meta = [`Pedido ${escapeHtml(grupo.nr_pedido)}`, salva ? `faltam ${escapeHtml(brl(grupo.falta))}` : escapeHtml(grupo.motivo || 'aviso da Cortag'),
+          `aviso de ${escapeHtml(dataCurtaISO(grupo.data_aviso))}`, dias > 0 ? `~${dias} dia${dias === 1 ? '' : 's'} pra resolver` : 'último dia'];
+        const linhaItens = salva
+          ? sugestoes.map(sg => `${escapeHtml(nomeProdutoCancelamento(sg.it))}: ${sg.qt} → ${sg.novaQt} un. (+${escapeHtml(brl(sg.acrescimo))})`).join(sugestoes.length > 1 ? ' <i>ou</i> ' : '')
+          : grupo.itens.map(it => `${escapeHtml(nomeProdutoCancelamento(it))} · ${escapeHtml(String(it.quantidade ?? '—'))} un.`).join('; ') + ' — aumentar não evita o corte';
+        const marcas = textoMarcasCancelamento(grupo);
+        const comprador = whatsCompradorDoCliente(cliente);
+        const aviso = escapeHtml(grupo.data_aviso || '');
+        const nr = escapeHtml(grupo.nr_pedido);
+        const botoes = [`<button type="button" class="recompraBtn" data-canc-abrir="${escapeHtml(String(cliente.id))}">Abrir cliente</button>`];
+        if (salva) {
+          const menor = sugestoes.reduce((a, b) => (b.acrescimo < a.acrescimo ? b : a));
+          botoes.push(`<a class="recompraBtn recompraBtn--principal" data-canc-email="${nr}" data-canc-aviso="${aviso}" href="${escapeHtml(linkPedidoAumento(grupo, menor, cliente))}">✉ Pedir aumento</a>`);
+        }
+        if (comprador) {
+          botoes.push(`<a class="recompraBtn" data-canc-whats="${nr}" data-canc-aviso="${aviso}" target="_blank" rel="noopener" href="${escapeHtml(urlWhatsComTexto(comprador.numero, textoWhatsCancelamento(grupo, comprador)))}">WhatsApp</a>`);
+        }
+        return `<div class="recompraItem${salva ? '' : ' cancNaoResolve'}">
+          <button type="button" class="recompraNome" data-canc-abrir="${escapeHtml(String(cliente.id))}"><span>${escapeHtml(cliente.nome)}</span>${salva ? `<span class="recompraSelo">${escapeHtml(brl(grupo.falta))}</span>` : ''}</button>
+          <div class="recompraMeta">${meta.join(' · ')}</div>
+          <div class="recompraMeta">${linhaItens}</div>
+          ${marcas ? `<div class="recompraMeta"><b>${escapeHtml(marcas)}</b></div>` : ''}
+          <div class="recompraAcoes">${botoes.join('')}</div>
+        </div>`;
+      }
+      function renderCancelamentos() {
+        const el = document.getElementById('cancelamentoWrap');
+        if (!el) return;
+        const lista = listaCancelamentos();
+        el.classList.toggle('hidden', !!clienteTabSelected || lista.length === 0);
+        if (!lista.length) { el.innerHTML = ''; return; }
+        const salva = (x) => x.grupo.falta > 0 && sugestoesAumentoCancelamento(x.grupo).length > 0;
+        const marcado = (x) => !!textoMarcasCancelamento(x.grupo);
+        const salvaveis = lista.filter(salva)
+          .sort((a, b) => marcado(a) - marcado(b) || a.grupo.falta - b.grupo.falta || String(a.cliente.nome).localeCompare(String(b.cliente.nome)));
+        const naoResolve = lista.filter(x => !salva(x))
+          .sort((a, b) => marcado(a) - marcado(b) || String(a.cliente.nome).localeCompare(String(b.cliente.nome)));
+        const ultimoAviso = lista.map(x => x.grupo.data_aviso || '').sort().pop();
+        const aberta = cancAberto();
+        el.dataset.cor = salvaveis.some(x => !marcado(x)) ? 'laranja' : 'cinza';
+        let corpo = '';
+        if (aberta) {
+          const secao = (titulo, cor, itens) => itens.length
+            ? `<h3 class="recompraSecao" style="color:${cor};">${titulo} (${itens.length})</h3>` + itens.map(renderCancelamentoItem).join('') : '';
+          corpo = '<p class="recompraHint">Aviso final da Cortag antes de cortar o saldo em carteira. Abaixo do mínimo, o cliente aumentando a quantidade salva o saldo — com 1 produto no saldo, só ele; com 2 ou mais, qualquer um.</p>'
+            + secao('Dá pra salvar aumentando', 'var(--warning)', salvaveis)
+            + secao('Aumentar não resolve', 'var(--gray)', naoResolve);
+        }
+        el.innerHTML = cabecalhoBloco({
+          id: 'cancToggle', aberta, icone: 'cancelamento', titulo: 'Saldo a cancelar',
+          resumo: escapeHtml(`${salvaveis.length ? `${salvaveis.length} ${salvaveis.length === 1 ? 'dá' : 'dão'} pra salvar · ` : ''}aviso de ${dataCurtaISO(ultimoAviso)}`),
+          numero: lista.length, rotulo: lista.length === 1 ? 'pedido' : 'pedidos',
+        }) + corpo;
+        document.getElementById('cancToggle').addEventListener('click', () => alternarBlocoCliente(CANC_ABERTO_LS_KEY));
+        el.querySelectorAll('[data-canc-abrir]').forEach(b => b.addEventListener('click', () => {
+          clienteTabView = 'pedidosoficiais';
+          abrirClienteDaRecompra({ cliente_id: b.dataset.cancAbrir });
+        }));
+        ligarMarcasCancelamento(el);
+      }
+
       // título pode já ter sido pago depois, por isso a tela sempre diz "posição
       // de DD/MM" e, passado INAD_VELHO_DIAS, avisa. Só alerta: não trava pedido.
       // Lista guardada no aparelho pra aparecer na loja sem internet.
@@ -18828,7 +18989,7 @@
           .sort((a, b) => (b.fat_12m || 0) - (a.fat_12m || 0) || b.ultima_compra.localeCompare(a.ultima_compra));
         return { semCompra, semVisita };
       }
-      // Quem já está em Recompra, Inadimplência ou Para reativar não repete em
+      // Quem já está em Recompra, Saldo a cancelar, Inadimplência ou Para reativar não repete em
       // "Visitas × compras" (pedido do usuário): o bloco fica com quem não
       // aparece em nenhum outro. A Rota por cidade usa as listas inteiras.
       function idsNosOutrosBlocosClientes() {
@@ -18838,6 +18999,7 @@
           if (c.cliente_id != null) ids.add(String(c.cliente_id));
         }
         for (const c of reativarVisiveis()) ids.add(String(c.cliente_id));
+        for (const { cliente } of listaCancelamentos()) ids.add(String(cliente.id));
         return ids;
       }
       // "hoje" / "ontem" / "há 12 dias (30/09)"
@@ -19244,6 +19406,7 @@
         renderRota();
         renderReativar();
         renderVisitas();
+        renderCancelamentos();
         renderInadimplencia();
         renderClassifAlertas();
         atualizarPainelClientes();
@@ -19318,6 +19481,7 @@
                 .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens), resp.saldo_minimo,
                   bloqueadosPorPedido.get(String(nrPedido)), cancelamentosPorPedido.get(String(nrPedido))))
                 .join('');
+              ligarMarcasCancelamento(content);
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(cliente, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
             }
