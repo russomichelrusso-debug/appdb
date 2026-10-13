@@ -508,7 +508,8 @@ Supabase, sem PR — não é mudança de código.
     sem internet). Decisões do usuário: primeiro "Dá pra salvar aumentando" (quem falta menos primeiro), depois,
     apagados, "Aumentar não resolve" (também aparecem); botões Abrir cliente (pedidos dele), ✉ Pedir aumento
     (o mesmo e-mail do selo) e **WhatsApp** (só com WhatsApp do comprador; texto com o saldo e as opções de
-    aumento). Tocar em ✉/WhatsApp **marca** o pedido ("✉ aumento pedido em DD/MM · 💬 cliente avisado em
+    aumento). Tocar no WhatsApp **marca** o pedido; o ✉ só marca depois de o vendedor responder "Enviei" à pergunta que
+    aparece ao voltar pro app (decisão do usuário: o mailto não diz se o e-mail saiu, `perguntarSeEnviouEmail`) ("✉ aumento pedido em DD/MM · 💬 cliente avisado em
     DD/MM", também no selo) e ele vai pro fim da seção, sem sair da lista; a marca fica no aparelho
     (`cortagCancelamentoMarcas_v1`, por pedido + data do aviso). Quem está no bloco sai de "Visitas × compras".
 

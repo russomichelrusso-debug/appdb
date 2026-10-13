@@ -18456,17 +18456,54 @@
         return [m.email ? `✉ aumento pedido em ${dataCurtaISO(m.email)}` : '', m.whats ? `💬 cliente avisado em ${dataCurtaISO(m.whats)}` : '']
           .filter(Boolean).join(' · ');
       }
-      // toque em ✉/WhatsApp (o link abre o e-mail ou a conversa) marca o pedido;
-      // a lista se refaz depois, pra marca aparecer ao voltar pro app
+      // toque no WhatsApp (o link abre a conversa) marca o pedido; o ✉ só marca
+      // depois que o vendedor confirma que enviou (pedido do usuário, 10/2026): o
+      // mailto só abre o e-mail pronto, o app não tem como saber se ele foi
+      // enviado - então pergunta ao voltar pro app. A lista se refaz depois, pra
+      // marca aparecer ao voltar.
+      let cancEmailPendente = null;
       function ligarMarcasCancelamento(raiz) {
+        const refazer = () => {
+          renderCancelamentos();
+          if (clienteTabSelected && clienteTabView === 'pedidosoficiais' && raiz.id === 'clienteDetailContent') loadClienteDetailView();
+        };
         raiz.querySelectorAll('[data-canc-email], [data-canc-whats]').forEach(a => a.addEventListener('click', () => {
-          const email = a.dataset.cancEmail != null;
-          marcarCancelamento(email ? a.dataset.cancEmail : a.dataset.cancWhats, a.dataset.cancAviso, email ? 'email' : 'whats');
-          setTimeout(() => {
-            renderCancelamentos();
-            if (clienteTabSelected && clienteTabView === 'pedidosoficiais' && raiz.id === 'clienteDetailContent') loadClienteDetailView();
-          }, 300);
+          if (a.dataset.cancEmail != null) {
+            perguntarSeEnviouEmail(a.dataset.cancEmail, a.dataset.cancAviso, refazer);
+            return;
+          }
+          marcarCancelamento(a.dataset.cancWhats, a.dataset.cancAviso, 'whats');
+          setTimeout(refazer, 300);
         }));
+      }
+      // Pergunta quando o app volta (o e-mail abriu em outro app: a página fica
+      // escondida ou perde o foco). Se ela nem saiu da tela em 3 s (navegador sem
+      // app de e-mail), pergunta assim mesmo. Novo toque troca o pedido pendente.
+      function perguntarSeEnviouEmail(nrPedido, dataAviso, depois) {
+        const pendente = { nr: String(nrPedido), aviso: dataAviso || '', saiu: false };
+        cancEmailPendente = pendente;
+        const saiu = () => { pendente.saiu = true; };
+        const voltou = () => { if (pendente.saiu && document.visibilityState === 'visible') perguntar(); };
+        const limpar = () => {
+          document.removeEventListener('visibilitychange', aoMudar);
+          window.removeEventListener('blur', saiu);
+          window.removeEventListener('focus', voltou);
+          clearTimeout(timer);
+        };
+        const aoMudar = () => { if (document.visibilityState === 'hidden') saiu(); else voltou(); };
+        async function perguntar() {
+          limpar();
+          if (cancEmailPendente !== pendente) return;
+          cancEmailPendente = null;
+          const enviou = await askConfirm(`Você enviou o e-mail pedindo o aumento do pedido ${pendente.nr}?`, 'Enviei', { cancelarLabel: 'Não enviei' });
+          if (!enviou) return;
+          marcarCancelamento(pendente.nr, pendente.aviso, 'email');
+          depois();
+        }
+        document.addEventListener('visibilitychange', aoMudar);
+        window.addEventListener('blur', saiu);
+        window.addEventListener('focus', voltou);
+        const timer = setTimeout(() => { if (!pendente.saiu) perguntar(); }, 3000);
       }
       // [{ cliente, grupo }] de todos os clientes da cópia local
       function listaCancelamentos() {
