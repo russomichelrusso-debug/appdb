@@ -7429,10 +7429,6 @@
       height: 38px;
     }
 
-    .gearBtn {
-      padding: 9px;
-    }
-
     /* Um só botão principal na gaveta (Efeito Von Restorff): Finalizar fica
        cheio; Compartilhar vira contorno. */
     .shareOptBtn {
@@ -10404,7 +10400,10 @@
       }
       // Próxima faixa de campanha pra barra do orçamento ("+2 SKUs = 5% na
       // campanha X"): só regra de degraus (cesta fica de fora) que vale no
-      // contexto e já tem item do alvo no orçamento; a faixa é a menor acima do
+      // contexto e já tem item do alvo que receberia o bônus (Preço Fixo no canal
+      // só ganha regra "soNoPrecoFixo" e vice-versa: r.fixo, posto pelo
+      // cartTotals) e não está bloqueada (teto do pedido, % de lançamentos); a
+      // contagem do degrau usa todas as linhas, como o avaliarCampanhas. A faixa é a menor acima do
       // que o orçamento já tem, com % maior que o atual. Mostra a mais perto
       // (o que falta / o mínimo da faixa) e só se falta até metade - longe
       // disso o recado vira ruído na barra. null = nenhuma.
@@ -10414,6 +10413,10 @@
           if (!rule || !rule.active || rule.basis === 'combo' || !regraValeNoContexto(rule, ctx)) continue;
           const t = scopeTotals(rows, rule.targetType, rule.targetValue);
           if (t.qty <= 0) continue;
+          const recebe = rows.some(r => r.it.qty > 0 && !!r.fixo === !!rule.soNoPrecoFixo
+            && scopeMatchesProduct(rule.targetType, rule.targetValue, r.p)
+            && !produtoNaListaDaRegra(r.p, listaDaRegra(rule.excluirCodigos), listaDaRegra(rule.excluirFamilias)));
+          if (!recebe || motivoCampanhaBloqueada(rule, rows)) continue;
           const metrica = rule.selfMetric === 'value' ? 'valor' : rule.selfMetric === 'skus' ? 'skus' : 'qtd';
           const atual = metrica === 'valor' ? t.gross : metrica === 'skus' ? t.skus : t.qty;
           const faixas = (rule.tiers || []).map(f => ({ min: Number(f.min), pct: Number(f.pct) }))
@@ -10472,7 +10475,7 @@
           const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, fixo, qtyPct);
           const cpSemImposto = clientPrice(lpSemImposto, classificatorioEfetivo(), state.promoDiscount, fixo, qtyPct);
           const lineTotal = cp * it.qty;
-          return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal };
+          return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal, fixo };
         }).filter(Boolean);
 
         const { bonuses, avisos } = avaliarCampanhas(state.promoRules, baseRows, contextoCampanhas());
@@ -10516,7 +10519,9 @@
         document.getElementById('cartCount').textContent = n;
         document.getElementById('cartCountLabel').textContent = n === 1 ? 'SKU no orçamento' : 'SKUs no orçamento';
         document.getElementById('cartTotalPreview').textContent = brl(total) + ' ▸';
-        renderMetaDoOrcamento(totalSemImpostos, baseRows);
+        // item do orçamento sem produto no catálogo (ainda carregando) fica fora
+        // do total - a meta sairia "faltam R$ 1.000" até o applyDB
+        renderMetaDoOrcamento(totalSemImpostos, baseRows, baseRows.length < state.cart.length);
       }
       // "Quanto falta" sempre à vista na barra do orçamento (pedido do usuário,
       // 10/2026, mockup "pedido mínimo + campanha"): pedido mínimo FOB e depois
@@ -10535,11 +10540,12 @@
         if (c.metrica === 'skus') return `+${n} ${n === 1 ? 'item diferente' : 'itens diferentes'}`;
         return `+${n} un.`;
       }
-      function renderMetaDoOrcamento(totalSemImpostos, baseRows) {
+      function renderMetaDoOrcamento(totalSemImpostos, baseRows, incompleto) {
         const barra = document.getElementById('cartMetaBarra');
         const fill = document.getElementById('cartMetaFill');
         const txt = document.getElementById('cartMetaTxt');
         if (!barra || !fill || !txt) return;
+        if (incompleto) { barra.classList.add('hidden'); txt.classList.add('hidden'); return; }
         const minimo = metaPedidoMinimo(totalSemImpostos);
         let campanha = null;
         try { campanha = proximaFaixaCampanha(state.promoRules, baseRows || [], contextoCampanhas()); } catch (e) { campanha = null; }

@@ -3568,6 +3568,17 @@ async function main() {
         && pSkus && pSkus.falta === 1 && pSkus.pct === 2 && pSkus.metrica === 'skus'
         && prox([cesta], discos) === null,
         'campanha: próxima faixa pra barra do orçamento (mais perto, só com item do alvo, até metade da faixa, sem cesta)');
+      // não promete faixa que o item não ganharia: Preço Fixo só recebe "soNoPrecoFixo"
+      // (e vice-versa), e regra bloqueada (teto do pedido) fica de fora
+      const fixa = (c, qty) => Object.assign(linha(c, 'Discos', qty, qty * 10), { fixo: true });
+      const soFixo = { ...antiga, id: 'bf', soNoPrecoFixo: true };
+      const comTeto = { ...antiga, id: 't', maxPctDoPedido: 30 };
+      assert(prox([antiga], [fixa('60001', 30)]) === null
+        && prox([antiga], [fixa('60001', 20), linha('60002', 'Discos', 10, 100)]).falta === 10
+        && prox([soFixo], [linha('60001', 'Discos', 30, 300)]) === null
+        && prox([soFixo], [fixa('60001', 30)]).pct === 5
+        && prox([comTeto], [linha('60001', 'Discos', 30, 300)]) === null,
+        'campanha: próxima faixa só quando algum item do alvo ganharia o desconto (Preço Fixo, soNoPrecoFixo, regra bloqueada)');
 
       // 2) classificatório (ignora acento/maiúscula); sem classificatório no orçamento não vale
       const porClassi = { ...antiga, classificatorios: ['Varejo Exclusive', 'varejo PREMIUM'] };
