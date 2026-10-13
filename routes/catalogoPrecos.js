@@ -1,4 +1,5 @@
 const express = require('express');
+const { esquecerCatalogo } = require('./lib/descontinuado');
 const router = express.Router();
 const XLSX = require('@e965/xlsx');
 const { pool, registrarImportacao } = require('../db');
@@ -285,6 +286,7 @@ async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
     if (removidos.rowCount > 0) {
       console.log(`Catálogo de preços: ${removidos.rowCount} produto(s) removido(s) por não estarem mais na planilha.`);
     }
+    esquecerCatalogo(); // "Descontinuado" passa a valer pelo catálogo novo na próxima consulta
     await registrarImportacao(usuario?.id, 'catalogo-precos/importar', produtos.length);
     await avisarImportacao('catalogo-precos', quantos(produtos.length, 'produto', 'produtos'));
     return { status: 200, json: { ok: true, produtosImportados: produtos.length, produtosRemovidos: removidos.rowCount, produtosNovos: produtosCriados.rowCount || 0 } };

@@ -6,6 +6,7 @@ const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { descontoPelaPolitica } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { marcarDescontinuados } = require('./lib/descontinuado');
 const { saldoMinimoDaUf } = require('./lib/saldoMinimo');
 // "Hoje" é o dia de Brasília: o banco roda em UTC e CURRENT_DATE/now()::date
 // viram o dia seguinte depois das 21h.
@@ -212,6 +213,7 @@ router.get('/:clienteId', async (req, res) => {
         }
       }
     }
+    await marcarDescontinuados(pool, result.rows, 'produto');
     // Pedidos à vista aguardando pagamento desse cliente - pelo código do
     // cliente na aba ou, se a aba não trouxer o código, pelo Nr.Pedido que
     // já está na Carteira/Faturamento dele.

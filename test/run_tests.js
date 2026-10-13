@@ -1668,6 +1668,27 @@ async function main() {
       && hDesemp.primeira_compra === diasAtrasISO(90) && hDesemp.ultima_compra === diasAtrasISO(30),
     `historico: faturado oficial + app, P+base juntos, app do mesmo dia não soma: ${JSON.stringify(res.body)}`
   );
+  {
+    // produto fora da Lista de Preços (catalogo_precos) sai com "Descontinuado · " na frente;
+    // o promocional conta pelo código base; catálogo vazio não marca nada
+    const { esquecerCatalogo } = require('../routes/lib/descontinuado');
+    const catalogo = mockDb.__getCatalogoPrecos();
+    const antes = catalogo.splice(0, catalogo.length);
+    catalogo.push({ codigo_sku: '71001', nome: 'NO CATÁLOGO' });
+    esquecerCatalogo();
+    const r = await req('GET', '/api/clientes/9131/historico');
+    const noCat = (r.body || []).find(x => x.codigo_sku === '71001');
+    const fora = (r.body || []).filter(x => x.codigo_sku !== '71001');
+    catalogo.splice(0, catalogo.length);
+    esquecerCatalogo();
+    const vazio = await req('GET', '/api/clientes/9131/historico');
+    catalogo.push(...antes);
+    esquecerCatalogo();
+    assert(r.status === 200 && noCat && !noCat.descontinuado && !String(noCat.produto).startsWith('Descontinuado')
+      && fora.length === 2 && fora.every(x => x.descontinuado && String(x.produto).startsWith('Descontinuado · '))
+      && !(vazio.body || []).some(x => x.descontinuado),
+      `historico: produto que saiu da Lista de Preços vem com "Descontinuado" na frente: ${JSON.stringify(r.body)}`);
+  }
   res = await req('GET', '/api/clientes/9131/rotatividade');
   assert(
     res.status === 200 && res.body[0].codigo_sku === '71001' && res.body[0].media_dias_entre_pedidos === 60,
