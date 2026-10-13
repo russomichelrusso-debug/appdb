@@ -18,6 +18,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { codigoBase } = require('./lib/skuNormalizacao');
+const { marcarDescontinuados } = require('./lib/descontinuado');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const {
@@ -118,6 +119,7 @@ router.get('/', async (req, res) => {
           .map(it => ({ ...it, nome: nomePorCodigo.get(it.codigo_sku) })),
       });
     }
+    await marcarDescontinuados(pool, lista.flatMap(c => c.itens), 'nome');
     lista.sort((a, b) => ORDEM_SITUACAO[a.situacao] - ORDEM_SITUACAO[b.situacao]
       || (a.situacao === 'semana' ? a.previsao.localeCompare(b.previsao) : a.atraso_dias - b.atraso_dias)
       || String(a.nome).localeCompare(String(b.nome)));

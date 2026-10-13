@@ -1668,6 +1668,27 @@ async function main() {
       && hDesemp.primeira_compra === diasAtrasISO(90) && hDesemp.ultima_compra === diasAtrasISO(30),
     `historico: faturado oficial + app, P+base juntos, app do mesmo dia não soma: ${JSON.stringify(res.body)}`
   );
+  {
+    // produto fora da Lista de Preços (catalogo_precos) sai com "Descontinuado · " na frente;
+    // o promocional conta pelo código base; catálogo vazio não marca nada
+    const { esquecerCatalogo } = require('../routes/lib/descontinuado');
+    const catalogo = mockDb.__getCatalogoPrecos();
+    const antes = catalogo.splice(0, catalogo.length);
+    catalogo.push({ codigo_sku: '71001', nome: 'NO CATÁLOGO' });
+    esquecerCatalogo();
+    const r = await req('GET', '/api/clientes/9131/historico');
+    const noCat = (r.body || []).find(x => x.codigo_sku === '71001');
+    const fora = (r.body || []).filter(x => x.codigo_sku !== '71001');
+    catalogo.splice(0, catalogo.length);
+    esquecerCatalogo();
+    const vazio = await req('GET', '/api/clientes/9131/historico');
+    catalogo.push(...antes);
+    esquecerCatalogo();
+    assert(r.status === 200 && noCat && !noCat.descontinuado && !String(noCat.produto).startsWith('Descontinuado')
+      && fora.length === 2 && fora.every(x => x.descontinuado && String(x.produto).startsWith('Descontinuado · '))
+      && !(vazio.body || []).some(x => x.descontinuado),
+      `historico: produto que saiu da Lista de Preços vem com "Descontinuado" na frente: ${JSON.stringify(r.body)}`);
+  }
   res = await req('GET', '/api/clientes/9131/rotatividade');
   assert(
     res.status === 200 && res.body[0].codigo_sku === '71001' && res.body[0].media_dias_entre_pedidos === 60,
@@ -2822,6 +2843,16 @@ async function main() {
     res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05'], 40).toString('base64') });
     assert(res.status === 200 && res.body.produtosRemovidos === 18 && mockDb.__getCatalogoPrecos().length === 1,
       `importação manual da Lista de Preços pelo Painel continua sem a trava dos 5%: ${JSON.stringify(res.body)}`);
+    // Painel: o cadastro de produtos guarda o que saiu do catálogo, então "total" nunca bate com o
+    // catálogo; a contagem diz o tamanho do catálogo e quantos dele faltam no cadastro
+    res = await req('GET', '/api/produtos/contagem');
+    assert(res.status === 200 && res.body.catalogo === 1 && res.body.fora_do_cadastro === 0 && res.body.total > res.body.catalogo,
+      `contagem de produtos separa cadastro, catálogo e o que falta no cadastro: ${JSON.stringify(res.body)}`);
+    mockDb.__getCatalogoPrecos().push({ codigo_sku: 'SOCAT01', nome: 'SÓ NO CATÁLOGO' });
+    res = await req('GET', '/api/produtos/contagem');
+    assert(res.status === 200 && res.body.catalogo === 2 && res.body.fora_do_cadastro === 1,
+      `contagem de produtos acusa código do catálogo que falta no cadastro: ${JSON.stringify(res.body)}`);
+    mockDb.__getCatalogoPrecos().pop();
   }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
   assert(res.status === 422 && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Repres-21.xlsx'),

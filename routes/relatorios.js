@@ -7,6 +7,7 @@ const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { marcarDescontinuados } = require('./lib/descontinuado');
 
 router.param('id', validarIdInteiro);
 router.param('produtoId', validarIdInteiro);
@@ -189,7 +190,7 @@ router.get('/clientes/:id/historico', async (req, res) => {
     if (!compras) return res.status(404).json({ erro: 'Cliente não encontrado.' });
     const lista = [...compras.values()].map(resumoCompras)
       .sort((a, b) => b.ultima_compra.localeCompare(a.ultima_compra));
-    res.json(lista);
+    res.json(await marcarDescontinuados(pool, lista, 'produto'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao gerar histórico.' });
@@ -205,7 +206,7 @@ router.get('/clientes/:id/rotatividade', async (req, res) => {
     const lista = [...compras.values()].map(resumoCompras)
       .sort((a, b) => (a.media_dias_entre_pedidos ?? Infinity) - (b.media_dias_entre_pedidos ?? Infinity)
         || b.ultima_compra.localeCompare(a.ultima_compra));
-    res.json(lista);
+    res.json(await marcarDescontinuados(pool, lista, 'produto'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular rotatividade.' });
@@ -566,7 +567,7 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
         qtd_ultima_compra: g.qtd.oficial || g.qtd.app,
         num_pedidos: g.pedidos.size,
       }));
-    res.json(lista);
+    res.json(await marcarDescontinuados(pool, lista, 'nome'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar produtos comprados.' });
@@ -606,7 +607,7 @@ router.get('/clientes/:id/recuperar', async (req, res) => {
       });
     }
     lista.sort((a, b) => a.ultima_compra.localeCompare(b.ultima_compra));
-    res.json(lista.slice(0, 30));
+    res.json(await marcarDescontinuados(pool, lista.slice(0, 30), 'produto'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar produtos pra recuperar.' });
@@ -645,7 +646,7 @@ router.get('/produtos-abc-geral', async (req, res) => {
     );
     const reconciliado = await reconciliarProdutosPorCodigoBase(result.rows, { inicio, fim });
     reconciliado.sort((a, b) => b.faturamento_total - a.faturamento_total);
-    res.json(reconciliado);
+    res.json(await marcarDescontinuados(pool, reconciliado, 'produto'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular curva ABC geral.' });
@@ -690,7 +691,7 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
     );
     const reconciliado = await reconciliarProdutosPorCodigoBase(result.rows, { inicio, fim, clienteCodigo: codigoOficial });
     reconciliado.sort((a, b) => b.faturamento_total - a.faturamento_total);
-    res.json(reconciliado);
+    res.json(await marcarDescontinuados(pool, reconciliado, 'produto'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular curva ABC do cliente.' });

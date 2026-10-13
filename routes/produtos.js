@@ -5,11 +5,23 @@ const { pool, registrarImportacao } = require('../db');
 const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 
 // Só a contagem, sem trazer produto nenhum - usado na checagem automática ao
-// abrir o app, pra decidir rapidinho se vale a pena sincronizar de novo.
+// abrir o Painel. `total` é o cadastro de produtos (pedido/levantamento), que
+// guarda de propósito o que saiu da Lista de Preços e os promocionais com
+// pedido - nunca bate com o catálogo. Por isso também vão `catalogo` (o que o
+// app baixa) e `fora_do_cadastro` (código do catálogo que falta no cadastro:
+// só isso pede sincronizar). Antes o Painel comparava `total` com o catálogo
+// do aparelho e reenviava tudo a cada abertura (10/2026: 1.800 x 1.793).
 router.get('/contagem', async (req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*) FROM produtos');
-    res.json({ total: Number(result.rows[0].count) });
+    const result = await pool.query(
+      `/* produtos:contagem */
+       SELECT (SELECT COUNT(*) FROM produtos) AS total,
+              (SELECT COUNT(*) FROM catalogo_precos) AS catalogo,
+              (SELECT COUNT(*) FROM catalogo_precos c
+                WHERE NOT EXISTS (SELECT 1 FROM produtos p WHERE p.codigo_sku = c.codigo_sku)) AS fora_do_cadastro`
+    );
+    const r = result.rows[0] || {};
+    res.json({ total: Number(r.total || 0), catalogo: Number(r.catalogo || 0), fora_do_cadastro: Number(r.fora_do_cadastro || 0) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao contar produtos.' });

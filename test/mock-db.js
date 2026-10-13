@@ -129,6 +129,11 @@ async function query(sql, params = []) {
   // igual independente de indentação/quebra de linha.
   const s = sql.replace(/\s+/g, ' ').toUpperCase();
   if (s.includes('HEALTH:BANCO')) return { rows: [{ '?column?': 1 }], rowCount: 1 };
+  if (s.includes('/* PRODUTOS:CONTAGEM */')) {
+    const noCadastro = new Set(produtos.map(p => String(p.codigo_sku)));
+    return { rows: [{ total: produtos.length, catalogo: catalogoPrecos.length,
+      fora_do_cadastro: catalogoPrecos.filter(c => !noCadastro.has(String(c.codigo_sku))).length }] };
+  }
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
   if (s.includes('CREATE TABLE')) return { rows: [] };

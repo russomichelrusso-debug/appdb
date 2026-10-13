@@ -901,6 +901,30 @@ Supabase, sem PR — não é mudança de código.
   Pra cuidar (Inadimplência, Visitas × compras), Pra rodar (Perto de mim, Rota por cidade); grupo sem
   bloco visível some (`:has`). Padrões novos em "Padrão visual" no README.
 
+- **Card de status do Painel agrupado** (10/2026, opção "B" escolhida pelo usuário a partir de mockups):
+  grupos Este aparelho / Servidor / Relatórios por e-mail / Clientes / Conta (mesmos ids de antes), data
+  curta (`quandoCurto`: "hoje 10:55", "ontem 06:05"), cor só no que pede ação (`marcarStatus`, `data-tipo`
+  ok/cinza/warn/err), "Tentar enviar agora" só com algo na fila, resumo "✓ Tudo em dia" ou "⚠ N itens pedem
+  atenção". Relatórios por e-mail um por linha com o dia do último recebido; **atrasado só a Carteira e
+  Faturamento, mais de 2 dias** (decisão do usuário; os outros não têm dia certo), recusado em vermelho.
+  **Catálogo "1.800 × 1.793"**: o Painel comparava o cadastro `produtos` (que guarda de propósito o que saiu
+  da Lista de Preços e os promocionais com pedido — em 13/10/2026: 4 colheres KAEF, P60863, P61699 e uma
+  linha "Retirado") com o catálogo do aparelho, achava "desatualizado" e reenviava tudo a cada abertura.
+  Agora `GET /api/produtos/contagem` devolve também `catalogo` e `fora_do_cadastro`: o card compara catálogo
+  com catálogo (`produtosDoCatalogo`: sem os promocionais do Painel, marcados `_promocional` no
+  `mergeProdutosPromocionais`) e o cadastro só é sincronizado quando falta nele algum código do catálogo e o
+  catálogo do aparelho é igual ao do servidor (o sync manda o do aparelho). Servidor sem `catalogo` (app
+  publicado antes do Render) não acusa nada.
+
+- **"Descontinuado" na frente do produto que saiu de linha** (10/2026, pedido do usuário): produto cujo código
+  (ou o código base, no promocional P/P1/P2) não está mais na Lista de Preços (`catalogo_precos`) sai como
+  "Descontinuado · NOME" e com `descontinuado: true` em Histórico, Rotatividade, Recuperar, Comprados e não
+  contados, Curva ABC (geral e do cliente), card dos pedidos oficiais e itens da Recompra
+  (`marcarDescontinuados`, `routes/lib/descontinuado.js`). Marca na saída da rota, depois de agrupar (o nome
+  entra no `grupoDoProduto`); catálogo vazio não marca nada; o catálogo fica em cache 5 min e a importação da
+  Lista de Preços limpa (`esquecerCatalogo`). Rota nova que mostre nome de produto do histórico passa pelo mesmo
+  helper. As 💡 sugestões (por grupo, sem código) não são marcadas.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
