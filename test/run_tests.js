@@ -3000,9 +3000,9 @@ async function main() {
 
     res = await enviarMensagem('Pedido Bloqueado 00677999', 'texto sem o formato esperado');
     const res2 = await enviarMensagem('Relatório de Comissões', 'qualquer coisa');
-    assert(res.status === 200 && res.body.resultado.nr_pedido === '677999' && res2.status === 422
+    assert(res.status === 200 && res.body.resultado.nr_pedido === '677999' && res2.status === 503
       && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Relatório de Comissões'),
-      `e-mail Cortag: número só no assunto ainda vale; e-mail não reconhecido é recusado (422): ${JSON.stringify([res.body, res2.body])}`);
+      `e-mail Cortag: número só no assunto ainda vale; e-mail não reconhecido responde 503 (servidor mais velho que o script: o script tenta de novo): ${JSON.stringify([res.body, res2.body])}`);
 
     // "Cancelamento saldo em carteira" (assistente comercial): tabela HTML do e-mail real de 13/10/2026
     const [cA, cM, cD] = hojeBr.split('-');
@@ -3074,7 +3074,7 @@ async function main() {
       `e-mail Cortag: o aviso de cancelamento some quando o item sai faturado depois dele: ${JSON.stringify(res.body.avisos_cancelamento)}`);
     // resposta ao e-mail ("RES: Cancelamento...") não é aviso novo
     res = await enviarMensagem('RES: ' + assuntoCanc, 'Boa tarde, ajustado conforme solicitado.', { ...deThamiris, mensagemId: 'canc-res' });
-    assert(res.status === 422, `e-mail Cortag: resposta ao cancelamento de saldo não é lida como aviso: ${JSON.stringify(res.body)}`);
+    assert(res.status !== 200 && res.body.tipo == null, `e-mail Cortag: resposta ao cancelamento de saldo não é lida como aviso: ${JSON.stringify(res.body)}`);
   }
   // 31b) "Para reativar" (routes/reativacao.js): Relatório de Clientes Sem
   // Compra do ERP (todo dia 2, anexo de nome cortado - o script do Gmail
