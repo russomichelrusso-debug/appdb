@@ -9637,6 +9637,8 @@
         state.channelDiscount = classiPadraoDoCanal(canal);
         renderChannelSeg();
         renderResults();
+        renderPriceList(); // preço e fita de campanha mudam com o canal
+        renderLevList();
         renderCart();
       }
       function initChannelSeg() {
@@ -9645,6 +9647,8 @@
           state.channelDiscount = v;
           marcarClassiAtivo();
           renderResults();
+          renderPriceList(); // preço e fita de campanha mudam com o classificatório
+          renderLevList();
           renderCart();
         }
         seg.addEventListener('click', (e) => {
@@ -23057,6 +23061,7 @@
         // renderCart() (não só a barrinha) pra campanha recém-carregada aparecer de
         // cara mesmo se o orçamento já estava aberto na tela antes do servidor responder.
         renderResults();
+        renderLevList(); // fita de campanha no levantamento aberto (desenhado antes das campanhas chegarem)
         renderCartBar();
         renderCart();
         // initPromoRulesAdmin() (chamado em init(), antes desta função terminar)
