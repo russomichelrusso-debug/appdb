@@ -505,6 +505,18 @@ async function main() {
     // não sujar a contagem de levantamentos do cliente nos testes seguintes
     mockDb.__getLevantamentos().pop();
     mockDb.__getLevantamentoItens().pop();
+    // filiais com o mesmo nome (ou nome que não existe): sem saber qual, recusa (422)
+    // em vez de gravar na filial errada ou criar cliente sem CNPJ
+    const nClientes = mockDb.__getClientes().length;
+    mockDb.__getClientes().push({ id: 990001, nome: 'FILIAL IGUAL LTDA', documento: '11111111000101' },
+      { id: 990002, nome: 'FILIAL IGUAL LTDA', documento: '11111111000202' });
+    const rFilial = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: 987654, nome: 'Filial Igual Ltda.' }, itens: [ { codigo_sku: '60863', quantidade_contada: 1 } ] });
+    const rNinguem = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: 987654, nome: 'Loja Que Não Existe' }, itens: [ { codigo_sku: '60863', quantidade_contada: 1 } ] });
+    assert(rFilial.status === 422 && rNinguem.status === 422 && mockDb.__getClientes().length === nClientes + 2,
+      `cliente_id sumido com nome de 2 filiais ou de ninguém: 422, sem criar cliente: ${JSON.stringify([rFilial.status, rNinguem.status, rNinguem.body])}`);
+    mockDb.__getClientes().splice(nClientes, Infinity);
   }
 
   // 12) historico de levantamentos do cliente
