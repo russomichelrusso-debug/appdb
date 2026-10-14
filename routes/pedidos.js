@@ -4,7 +4,7 @@ const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlDiaDoPedido } = require('./lib/comprasApp');
-const { acharOuCriarProdutoPorSku, ErroPermanente } = require('./lib/produtoPorSku');
+const { acharOuCriarProdutoPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 
@@ -286,10 +286,8 @@ router.post('/', async (req, res) => {
     // produto que não existe nem no catálogo, código inválido: não adianta reenviar
     if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
     console.error(e);
-    // e.code só existe em erro vindo direto do driver do Postgres (ex: violação
-    // de constraint) - esse detalhe não vai pro cliente. Erro lançado por nós
-    // mesmos não tem .code e é uma mensagem pensada pra quem está usando o app ler.
-    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar pedido.' });
+    // só a mensagem que nós mesmos lançamos vai pro app (ver mensagemParaApp)
+    res.status(400).json({ erro: mensagemParaApp(e, 'Erro ao gravar pedido.') });
   } finally {
     if (client) client.release();
   }
@@ -426,7 +424,7 @@ router.patch('/:id', async (req, res) => {
     }
     if (e instanceof ErroPermanente) return res.status(422).json({ erro: e.message });
     console.error(e);
-    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao atualizar pedido.' });
+    res.status(400).json({ erro: mensagemParaApp(e, 'Erro ao atualizar pedido.') });
   } finally {
     if (client) client.release();
   }

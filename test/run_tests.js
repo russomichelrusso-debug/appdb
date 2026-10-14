@@ -160,6 +160,19 @@ async function main() {
     const faltando = [...metodos].filter(m => !liberados.includes(m));
     assert(pre.status === 204 && metodos.has('PUT') && faltando.length === 0,
       `CORS libera todos os métodos usados pelas rotas: ${JSON.stringify({ liberados, faltando })}`);
+    assert(pre.headers['x-content-type-options'] === 'nosniff', 'API manda X-Content-Type-Options: nosniff');
+  }
+
+  // Mensagem de erro que vai pro app: só a que nós lançamos (new Error), nunca a
+  // de erro de programação (TypeError) nem a do Postgres (tem .code)
+  {
+    const { mensagemParaApp } = require('../routes/lib/produtoPorSku');
+    const padrao = 'Erro ao gravar pedido.';
+    const nosso = mensagemParaApp(new Error('Produto com código X não encontrado no catálogo.'), padrao);
+    let tipo; try { null.x; } catch (e) { tipo = mensagemParaApp(e, padrao); }
+    const banco = mensagemParaApp(Object.assign(new Error('duplicate key value violates unique constraint "x"'), { code: '23505' }), padrao);
+    assert(nosso.startsWith('Produto com código') && tipo === padrao && banco === padrao,
+      `mensagemParaApp só repassa o erro lançado pelo app: ${JSON.stringify({ nosso, tipo, banco })}`);
   }
 
   // 2) endpoint protegido sem token -> 401

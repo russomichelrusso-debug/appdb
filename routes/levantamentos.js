@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
-const { acharOuCriarProdutoPorSku, ErroPermanente } = require('./lib/produtoPorSku');
+const { acharOuCriarProdutoPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 async function acharOuCriarVendedor(client, nomeVendedor) {
@@ -151,7 +151,7 @@ router.post('/', async (req, res) => {
       return res.status(503).json({ erro: 'Tente de novo em instantes.' });
     }
     console.error(e);
-    res.status(400).json({ erro: !e.code && e.message ? e.message : 'Erro ao gravar levantamento.' });
+    res.status(400).json({ erro: mensagemParaApp(e, 'Erro ao gravar levantamento.') });
   } finally {
     if (client) client.release();
   }
