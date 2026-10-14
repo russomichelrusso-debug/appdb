@@ -34,13 +34,14 @@ histórico de decisões e no que ainda falta.
 ## Arquitetura, em uma frase
 
 Frontend estático (PWA: `index.html` + páginas soltas `curva-abc.html`/`calculadora-materiais.html`/
-`ficha-cnpj.html`) no GitHub Pages, backend Node/Express (`server.js` + `routes/`) no Render,
+`ficha-cnpj.html`/`tela-cliente.html`) no GitHub Pages, backend Node/Express (`server.js` + `routes/`) no Render,
 Postgres no Supabase, autenticação só via Google Sign-In (sem usuário/senha). `curva-abc.html` e
 `calculadora-materiais.html` são páginas separadas de propósito — usadas esporadicamente, não
 valia deixar o `index.html` mais pesado por causa delas — e se comunicam com o app principal por
 parâmetro de URL (`curva-abc.html?cliente=…`, `ficha-cnpj.html?cliente=…&nome=…&doc=…`) e/ou
 `localStorage` compartilhado: `cortagAuthToken_v1` (sessão), `cortagCart_v1` (carrinho, lido pela
-Curva ABC) e `cortagCalcHandoff_v1` (itens que a calculadora manda pro orçamento).
+Curva ABC) e `cortagCalcHandoff_v1` (itens que a calculadora manda pro orçamento). Entre **dois aparelhos**
+(tablet + celular, PR #245) a ponte é o servidor: salas em memória em `routes/segundaTela.js`, pareadas por QR.
 
 ## Comandos
 
@@ -962,6 +963,12 @@ Supabase, sem PR — não é mudança de código.
 
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
+- **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
+  ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
+  num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos
+  pro celular ("continuar no outro aparelho"), **aprovação de desconto pelo gerente** ao vivo (casa com a v2 de
+  gerentes regionais), cliente acompanhando o orçamento no celular dele por um QR (página só de leitura, link de
+  vida curta) e tablet como catálogo/vitrine das campanhas que manda item pro orçamento do celular.
 - **Tablet como tela do cliente** (10/2026, 1ª das ideias de "dois aparelhos"; mockups escolhidos pelo usuário:
   **lista completa com vitrine temporária**). O tablet abre `tela-cliente.html` (⋯ Atalhos › "Tela do cliente
   (neste tablet)"), que cria uma sala (`routes/segundaTela.js`) e mostra um QR + código de 4 dígitos; o celular entra
@@ -1024,6 +1031,10 @@ Supabase, sem PR — não é mudança de código.
   separadas** com o `index.html` (cabeçalho, cards e botões próprios em cada uma — hoje só os
   tokens e o tema escuro foram alinhados).
 
+- **Dois aparelhos — pendências** (PR #245): o leitor contínuo do celular (`#modoLeitor`) só foi testado com câmera
+  falsa (leituras simuladas) — conferir num aparelho de verdade, principalmente no iPhone (sem BarcodeDetector, usa o
+  ZXing). Na v2 (várias instâncias), as salas de `routes/segundaTela.js` têm de sair da memória (banco ou Redis). O
+  cartão "próxima faixa de campanha" da tela do cliente não foi visto com campanha real.
 - Ideia em aberto, ainda não implementada: um painel de "oportunidades do dia" na tela inicial
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como
