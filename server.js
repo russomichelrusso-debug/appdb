@@ -53,6 +53,9 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
+  // a API só responde JSON e a foto JPEG: o navegador não tenta adivinhar
+  // outro tipo (ex.: tratar uma resposta como HTML/script)
+  res.header('X-Content-Type-Options', 'nosniff');
   res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   // PUT: nome do arquivo do cliente (PUT /api/clientes/:id/nome-arquivo) - sem ele o
   // navegador barrava a chamada do app publicado (outro domínio) antes de chegar aqui

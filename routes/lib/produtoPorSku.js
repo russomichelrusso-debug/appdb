@@ -61,4 +61,12 @@ async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
   throw new Error(`Produto com código ${codigo_sku} não encontrado no catálogo.`);
 }
 
-module.exports = { acharOuCriarProdutoPorSku, ErroPermanente, CODIGO_SKU_REGEX };
+// Texto do erro que pode ir pro app: só o que nós mesmos lançamos com
+// new Error('...') (mensagem pensada pra quem usa o app ler). Erro do driver do
+// Postgres (tem .code) e erro de programação (TypeError, RangeError...: "Cannot
+// read properties of undefined") ficam só no log - devolve o texto padrão.
+function mensagemParaApp(e, padrao) {
+  return e && !e.code && Object.getPrototypeOf(e) === Error.prototype && e.message ? e.message : padrao;
+}
+
+module.exports = { acharOuCriarProdutoPorSku, ErroPermanente, CODIGO_SKU_REGEX, mensagemParaApp };
