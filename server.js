@@ -30,6 +30,7 @@ const inadimplenciaRoutes = require('./routes/inadimplencia');
 const produtoFotosRoutes = require('./routes/produtoFotos');
 const novidadesRoutes = require('./routes/novidades');
 const importacaoEmailRoutes = require('./routes/importacaoEmail');
+const segundaTelaRoutes = require('./routes/segundaTela');
 const { iniciarPreenchimentoAutomatico } = require('./routes/lib/preenchimentoCnpj');
 const { iniciarGeocodificacaoAutomatica } = require('./routes/lib/geocodificacao');
 const { iniciarEnvioAgendado } = require('./routes/lib/novidades');
@@ -168,6 +169,7 @@ app.use('/api/visitas', requireAuth, visitasRoutes);
 app.use('/api/inadimplencia', requireAuth, inadimplenciaRoutes);
 app.use('/api/produto-fotos', requireAuth, produtoFotosRoutes);
 app.use('/api/novidades', requireAuth, novidadesRoutes);
+app.use('/api/segunda-tela', requireAuth, segundaTelaRoutes); // tablet como tela do cliente
 // /arquivo pela chave do script do Gmail; /status exige login (dentro da rota)
 app.use('/api/importacao-email', rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }), importacaoEmailRoutes);
 app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
@@ -219,6 +221,8 @@ function desligar(sinal) {
     process.exit(1);
   }, PRAZO_DESLIGAMENTO_MS);
   forcar.unref();
+  // o tablet da tela do cliente deixa uma requisição esperando até 25 s: responde já
+  segundaTelaRoutes.acordarTodas();
   const fecharPool = () => Promise.resolve()
     .then(() => pool.end && pool.end())
     .catch((e) => console.error('Erro ao fechar o pool do banco:', e))

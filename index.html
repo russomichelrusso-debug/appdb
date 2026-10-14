@@ -7608,6 +7608,372 @@
       white-space: nowrap;
     }
 
+    /* Tablet como tela do cliente (tela-cliente.html): faixa com o estado da
+       conexão, visível em todas as abas enquanto o celular estiver conectado */
+    .segundaTelaFaixa {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 4px 6px 4px 16px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .segundaTelaFaixa.hidden {
+      display: none;
+    }
+
+    .segundaTelaFaixa[data-tipo="aviso"] {
+      background: var(--warning-bg);
+      color: var(--warning);
+    }
+
+    .segundaTelaFaixa[data-tipo="oculto"] {
+      background: var(--fill);
+      color: var(--gray);
+    }
+
+    .segundaTelaPonto {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .segundaTelaTxt {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .segundaTelaTxt b {
+      display: block;
+      font-weight: 700;
+    }
+
+    .segundaTelaFaixa button {
+      min-height: 44px;
+      padding: 0 10px;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .conectarTabletLer {
+      width: 100%;
+      min-height: 48px;
+      margin-bottom: 16px;
+    }
+
+    /* Celular como leitor do levantamento no tablet: botão (só em tela larga),
+       janela do QR no tablet e a tela de leitura contínua no celular */
+    .levLeitorBtn {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      margin: 0 16px 10px;
+      padding: 0 14px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .levLeitorBtn svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    @media (min-width: 700px) {
+      .levLeitorBtn {
+        display: inline-flex;
+      }
+    }
+
+    .leitorQrCard {
+      text-align: center;
+    }
+
+    .leitorQr {
+      width: 220px;
+      height: 220px;
+      margin: 0 auto 12px;
+      padding: 8px;
+      background: #FFFFFF;
+      border: 1px solid var(--neutral-2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .leitorQr svg {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .leitorQrFalha {
+      font-size: 13px;
+      color: #6E6E73;
+    }
+
+    .leitorCodigoRot {
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .leitorCodigo {
+      font-size: 32px;
+      font-weight: 700;
+      letter-spacing: 8px;
+      font-variant-numeric: tabular-nums;
+      margin-bottom: 6px;
+    }
+
+    .minimodal-card p.leitorQrMsg {
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+
+    .modoLeitor {
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      background: #1C1C1E;
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: calc(12px + env(safe-area-inset-top)) 12px calc(16px + env(safe-area-inset-bottom));
+      overflow: hidden;
+    }
+
+    .modoLeitor.hidden {
+      display: none;
+    }
+
+    .modoLeitor video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      z-index: 0;
+    }
+
+    .modoLeitor > :not(video) {
+      position: relative;
+      z-index: 1;
+    }
+
+    .leitorTopo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .leitorStatus {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 12px;
+      border-radius: 16px;
+      background: rgba(0, 0, 0, .6);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .leitorStatus::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #34C759;
+    }
+
+    .leitorStatus[data-tipo="aviso"]::before {
+      background: #FFCC00;
+    }
+
+    .leitorFechar {
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 22px;
+      background: rgba(0, 0, 0, .6);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .leitorFechar svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .leitorCampo {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 3px;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, .55);
+    }
+
+    .leitorCampo button {
+      min-height: 44px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .leitorCampo button.active {
+      background: #FFFFFF;
+      color: #1D1D1F;
+    }
+
+    .leitorMira {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 120px;
+      pointer-events: none;
+    }
+
+    .leitorMira div {
+      width: min(280px, 80%);
+      height: 140px;
+      border: 3px solid #FFFFFF;
+      border-radius: 16px;
+      position: relative;
+      box-shadow: 0 0 0 999px rgba(0, 0, 0, .25);
+    }
+
+    .leitorMira div::after {
+      content: "";
+      position: absolute;
+      left: 10px;
+      right: 10px;
+      top: 50%;
+      height: 2px;
+      background: var(--red);
+    }
+
+    .leitorMsg {
+      text-align: center;
+      font-size: 14px;
+      font-weight: 600;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+    }
+
+    .leitorTentarBtn {
+      margin-left: 6px;
+      min-height: 36px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 10px;
+      background: #FFFFFF;
+      color: #1D1D1F;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .leitorUltima {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px;
+      border-radius: var(--r-lg);
+      background: #FFFFFF;
+      color: #1D1D1F;
+    }
+
+    .leitorUltima.hidden {
+      display: none;
+    }
+
+    .leitorMais {
+      width: 60px;
+      height: 60px;
+      flex-shrink: 0;
+      border-radius: 16px;
+      background: var(--success-strong);
+      color: #FFFFFF;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      font-weight: 800;
+    }
+
+    .leitorUltimaTxt {
+      min-width: 0;
+      font-size: 13px;
+      color: #6E6E73;
+      line-height: 1.35;
+    }
+
+    .leitorUltimaTxt b {
+      display: block;
+      font-size: 15px;
+      color: #1D1D1F;
+    }
+
+    .leitorAcoes {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .leitorAcoes button {
+      min-height: 50px;
+      border: 1px solid rgba(255, 255, 255, .4);
+      border-radius: 14px;
+      background: rgba(0, 0, 0, .45);
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .leitorAcoes button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+
+    .leitorNota {
+      margin: 0;
+      text-align: center;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #D2D2D7;
+      text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
+    }
+
     /* Botão de leitura perto do polegar no Levantamento (Lei de Fitts) */
     .scanFab {
       position: fixed;
@@ -7834,6 +8200,25 @@
             </svg>
             <span>Salesforce</span>
           </a>
+          <a class="atalhoItem" role="menuitem" href="#" id="conectarTabletLink" aria-label="Conectar tablet: o orçamento aparece ao vivo no tablet, virado pro cliente"
+            title="Conectar tablet como tela do cliente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="2" y="4" width="13" height="16" rx="2" />
+              <rect x="17" y="9" width="5" height="11" rx="1" />
+              <path d="M7 17h3" />
+            </svg>
+            <span>Conectar tablet</span>
+          </a>
+          <a class="atalhoItem" role="menuitem" href="tela-cliente.html" id="telaClienteLink" aria-label="Usar este aparelho como tela do cliente"
+            title="Usar este aparelho (tablet) como tela do cliente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="13" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+            </svg>
+            <span>Tela do cliente (neste tablet)</span>
+          </a>
         </div>
       </div>
       <button class="gearBtn" id="adminBtn" aria-label="Administração">
@@ -7858,6 +8243,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8" /></svg><span>Clientes</span></button>
     </nav>
     <button type="button" class="levLembrete hidden" id="levLembrete"></button>
+    <div class="segundaTelaFaixa hidden" id="segundaTelaFaixa" role="status"></div>
+    <div class="segundaTelaFaixa hidden" id="leitorFaixa" role="status"></div>
     <button type="button" class="novidadesFaixa hidden" id="novidadesFaixa" aria-label="Ver novidades"></button>
 
     <div id="tabPrecos">
@@ -8111,6 +8498,15 @@
       </div>
       <div class="hint lev-hint">Cada leitura de código soma 1 unidade. Por nome, toque no produto certo na lista. O
         estoque também pode ser digitado direto.</div>
+      <button type="button" class="levLeitorBtn" id="levLeitorBtn"
+        aria-label="Usar o celular como leitor: o levantamento fica nesta tela e cada código lido no celular soma aqui">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <rect x="7" y="2" width="10" height="20" rx="2" />
+          <path d="M10 7v6M12 7v6M14 7v6M11 18h2" />
+        </svg>
+        Usar o celular como leitor
+      </button>
       <div class="lev-list" id="levList"></div>
       <div class="levComprados hidden" id="levComprados"></div>
       <div class="lev-empty" id="levEmpty">
@@ -8307,6 +8703,57 @@
 
     <div class="overlay hidden" id="shareSheetOverlay"></div>
     <div class="overlay hidden" id="clientPickerOverlay"></div>
+    <div class="minimodal hidden" id="conectarTabletModal">
+      <div class="minimodal-card">
+        <h3>Conectar tablet</h3>
+        <p>No tablet, abra o app em <b>⋯ Atalhos › Tela do cliente</b>, com a mesma conta Google deste celular, e leia o QR que aparece nele.</p>
+        <button type="button" class="recompraBtn recompraBtn--principal conectarTabletLer" id="conectarTabletLerBtn">Ler o QR do tablet</button>
+        <label for="conectarTabletCodigo">Ou digite o código de 4 números</label>
+        <input type="text" id="conectarTabletCodigo" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">
+        <div id="conectarTabletMsg"></div>
+        <div class="minimodal-btnrow">
+          <button type="button" id="conectarTabletCancelarBtn">Cancelar</button>
+          <button type="button" id="conectarTabletOkBtn">Conectar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="minimodal hidden" id="leitorQrModal">
+      <div class="minimodal-card leitorQrCard">
+        <h3>Celular como leitor</h3>
+        <p>No celular, toque em <b>⋯ Atalhos › Conectar tablet</b> (mesma conta Google) e leia este código. Cada leitura dele soma neste levantamento.</p>
+        <div class="leitorQr" id="leitorQr" role="img" aria-label="Código QR pra conectar o celular"></div>
+        <div class="leitorCodigoRot">A câmera não leu? Digite no celular:</div>
+        <div class="leitorCodigo" id="leitorCodigo">····</div>
+        <p class="leitorQrMsg" id="leitorQrMsg" role="status"></p>
+        <div class="minimodal-btnrow">
+          <button type="button" id="leitorQrFecharBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modoLeitor hidden" id="modoLeitor" role="dialog" aria-label="Leitor de código de barras do tablet">
+      <video id="leitorVideo" playsinline muted></video>
+      <div class="leitorTopo">
+        <span class="leitorStatus" id="leitorStatus" role="status"></span>
+        <button type="button" class="leitorFechar" id="leitorFecharBtn" aria-label="Sair do modo leitor">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="leitorCampo" id="leitorCampo" role="radiogroup" aria-label="Cada leitura soma em">
+        <button type="button" role="radio" data-campo="qty" aria-checked="true" class="active">+1 no estoque</button>
+        <button type="button" role="radio" data-campo="ped" aria-checked="false">+1 no pedido</button>
+      </div>
+      <div class="leitorMira" aria-hidden="true"><div></div></div>
+      <div class="leitorMsg" id="leitorMsg" role="status"></div>
+      <section class="leitorUltima hidden" id="leitorUltima" aria-label="Última leitura"></section>
+      <div class="leitorAcoes">
+        <button type="button" id="leitorDesfazerBtn" disabled>Desfazer última</button>
+        <button type="button" id="leitorDigitarBtn" disabled>Digitar quantidade</button>
+      </div>
+      <p class="leitorNota" id="leitorNota"></p>
+    </div>
+
     <div class="minimodal hidden" id="novidadesModal">
       <div class="minimodal-card" style="max-height:82vh;overflow-y:auto;">
         <h3>🔔 Novidades</h3>
@@ -10935,6 +11382,7 @@
       }
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
+        agendarEnvioTelaCliente(); // e a tela do cliente no tablet, se houver
         const bar = document.getElementById('cartBar');
         // Mostra quantos SKUs (produtos diferentes) há no orçamento, não a soma das quantidades.
         const n = state.cart.filter(i => i.qty > 0).length;
@@ -12057,6 +12505,7 @@
         atualizarBotaoPedidosSalvos();
         renderClienteProximo();
         if (!cliente) buscarClienteProximo();
+        agendarEnvioTelaCliente(); // nome do cliente no topo do tablet
         // Orçamento aberto como o pedido de outro cliente: trocar (ou limpar)
         // o cliente desliga a edição - o próximo "Finalizar" grava um pedido
         // novo pro cliente escolhido, nunca altera o pedido do anterior.
@@ -13177,6 +13626,883 @@
         document.addEventListener('click', (e) => { if (!menu.classList.contains('hidden') && !menu.contains(e.target)) fechar(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
       }
+
+      // ---------------- Tablet como tela do cliente (10/2026) ----------------
+      // Mockups escolhidos pelo usuário: o tablet, virado pro comprador, mostra
+      // ao vivo o orçamento que o vendedor monta aqui (lista completa + vitrine
+      // de alguns segundos do item que acabou de entrar). O tablet abre
+      // tela-cliente.html e mostra um QR; este celular lê (⋯ Atalhos › Conectar
+      // tablet) e passa a mandar a foto inteira do orçamento a cada mudança
+      // (routes/segundaTela.js). Vai só o que o cliente pode ver: nome, quantidade,
+      // preço com imposto, campanha, total e quanto falta pro frete - sem
+      // classificatório, canal, ficha nem histórico. "Esconder" apaga a tela do
+      // tablet enquanto o vendedor confere algo. Sem internet o tablet fica com a
+      // última versão e atualiza quando o sinal volta (nada vai pra fila: é só tela).
+      const SEGUNDA_TELA_LS_KEY = 'cortagSegundaTela_v1';
+      const SEGUNDA_TELA_VIGIA_MS = 20000;
+      let segundaTela = null; // { id, modo, oculto }
+      let segundaTelaStatus = 'ok'; // 'ok' | 'semTablet' | 'semRede'
+      let segundaTelaTimer = null;
+      let segundaTelaVigia = null;
+      let segundaTelaEnviando = false;
+      let segundaTelaPendente = false;
+      // prazo das chamadas da tela do cliente: com sinal fraco a conexão pode ficar
+      // pendurada sem erro, e o envio seguinte nunca sairia (o tablet ficaria com o
+      // orçamento velho e a faixa dizendo "ao vivo")
+      function prazoSegundaTela(ms) {
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+        const c = new AbortController();
+        setTimeout(() => c.abort(), ms);
+        return c.signal;
+      }
+
+      function lerSegundaTela() {
+        try {
+          const s = JSON.parse(localStorage.getItem(SEGUNDA_TELA_LS_KEY));
+          return s && /^[a-f0-9]{32}$/.test(String(s.id)) ? { id: s.id, modo: s.modo || 'cliente', oculto: !!s.oculto } : null;
+        } catch (e) { return null; }
+      }
+      function gravarSegundaTela() {
+        try {
+          if (segundaTela) localStorage.setItem(SEGUNDA_TELA_LS_KEY, JSON.stringify(segundaTela));
+          else localStorage.removeItem(SEGUNDA_TELA_LS_KEY);
+        } catch (e) { }
+      }
+
+      // A foto do orçamento que vai pro tablet - mesmo cálculo da gaveta (cartTotals).
+      function estadoParaTelaCliente() {
+        const vendedor = vendedorDoCard();
+        const base = {
+          oculto: !!(segundaTela && segundaTela.oculto),
+          cliente: state.levCliente ? state.levCliente.nome : null,
+          vendedor: vendedor.nome || state.seller || '',
+          telefone: vendedor.tel || '',
+          data: new Date().toLocaleDateString('pt-BR'),
+          uf: state.uf || '',
+        };
+        if (base.oculto) return { ...base, cliente: null, itens: [] };
+        const { rows, baseRows, total, totalSemImpostos } = cartTotals();
+        let economia = 0;
+        const itens = rows.filter(r => r.it.qty > 0).map(r => {
+          const antes = baseRows.find(b => b.p.c === r.p.c);
+          const de = antes && r.campaignPct > 0 && antes.cp > r.cp ? antes.cp : null;
+          if (de) economia += (de - r.cp) * r.it.qty;
+          const codFoto = codigoDaFoto(r.p.c);
+          return {
+            cod: r.p.c,
+            nome: r.p.n,
+            qtd: r.it.qty,
+            unit: Math.round(r.cp * 100) / 100,
+            de: de ? Math.round(de * 100) / 100 : null,
+            total: Math.round(r.lineTotal * 100) / 100,
+            // nunca o nome da regra: ele costuma trazer o classificatório ("VIDRO 62796 - Master")
+            campanha: r.campaignPct > 0 ? `Campanha -${r.campaignPct}%` : null,
+            foto: codFoto ? { cod: codFoto, v: FOTOS_PRODUTO[codFoto] } : null,
+          };
+        });
+        // item ainda sem produto no catálogo (carregando) fica fora do total: sem meta, que sairia errada
+        const incompleto = baseRows.length < state.cart.length;
+        const minimo = itens.length && !incompleto ? metaPedidoMinimo(totalSemImpostos) : null;
+        let campanha = null;
+        try { campanha = itens.length && !incompleto ? proximaFaixaCampanha(state.promoRules, baseRows, contextoCampanhas()) : null; } catch (e) { campanha = null; }
+        return {
+          ...base,
+          itens,
+          total: Math.round(total * 100) / 100,
+          economia: Math.round(economia * 100) / 100,
+          meta: minimo ? {
+            texto: `Faltam ${brl(minimo.falta)} ${minimo.rotulo === 'pro frete CIF' ? 'pro frete CIF' : 'pro pedido mínimo'}`,
+            sub: `${minimo.rotulo === 'pro frete CIF' ? 'Frete por conta da Cortag' : 'Pedido mínimo'} a partir de ${brl(minimo.alvo)} sem impostos`,
+            fracao: minimo.alvo > 0 ? totalSemImpostos / minimo.alvo : 0,
+          } : null,
+          campanha: campanha ? `${textoFaltaCampanha(campanha)} = ${campanha.pct}% de desconto na campanha` : null,
+        };
+      }
+
+      function agendarEnvioTelaCliente() {
+        if (!segundaTela) return;
+        clearTimeout(segundaTelaTimer);
+        segundaTelaTimer = setTimeout(enviarTelaCliente, 350);
+      }
+      async function enviarTelaCliente() {
+        if (!segundaTela) return;
+        if (segundaTelaEnviando) { segundaTelaPendente = true; return; }
+        segundaTelaEnviando = true;
+        const id = segundaTela.id;
+        try {
+          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: estadoParaTelaCliente() }), signal: prazoSegundaTela(10000) });
+          if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
+        } catch (e) {
+          if (segundaTela && segundaTela.id === id) {
+            if (e.status === 404) desligarSegundaTela('O tablet desconectou — a tela do cliente foi fechada.');
+            else segundaTelaStatus = 'semRede';
+          }
+        } finally {
+          segundaTelaEnviando = false;
+          renderFaixaSegundaTela();
+          if (segundaTelaPendente) { segundaTelaPendente = false; agendarEnvioTelaCliente(); }
+        }
+      }
+
+      // Confere de tempos em tempos se o tablet continua lá (e reenvia o que não
+      // foi, quando a internet volta).
+      function iniciarVigiaSegundaTela() {
+        clearInterval(segundaTelaVigia);
+        segundaTelaVigia = setInterval(async () => {
+          if (!segundaTela) { clearInterval(segundaTelaVigia); return; }
+          if (segundaTelaStatus === 'semRede') { enviarTelaCliente(); return; }
+          const id = segundaTela.id;
+          try {
+            const r = await apiFetch(`/api/segunda-tela/salas/${id}`, { signal: prazoSegundaTela(10000) });
+            if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
+          } catch (e) {
+            if (!segundaTela || segundaTela.id !== id) return;
+            if (e.status === 404) { desligarSegundaTela('O tablet desconectou — a tela do cliente foi fechada.'); return; }
+            segundaTelaStatus = 'semRede';
+          }
+          renderFaixaSegundaTela();
+        }, SEGUNDA_TELA_VIGIA_MS);
+      }
+
+      function desligarSegundaTela(aviso) {
+        segundaTela = null;
+        segundaTelaStatus = 'ok';
+        clearTimeout(segundaTelaTimer);
+        clearInterval(segundaTelaVigia);
+        gravarSegundaTela();
+        renderFaixaSegundaTela();
+        if (aviso) showToast(aviso, 'longo');
+      }
+      async function desconectarSegundaTela() {
+        if (!segundaTela) return;
+        const id = segundaTela.id;
+        desligarSegundaTela();
+        try { await apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }); } catch (e) { /* a sala some sozinha no servidor */ }
+      }
+
+      function renderFaixaSegundaTela() {
+        const el = document.getElementById('segundaTelaFaixa');
+        if (!el) return;
+        if (!segundaTela) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+        let titulo, sub, tipo;
+        if (segundaTela.oculto) {
+          tipo = 'oculto'; titulo = 'Tela do tablet escondida'; sub = 'o cliente não vê o orçamento até você tocar em Mostrar';
+        } else if (segundaTelaStatus === 'semRede') {
+          tipo = 'aviso'; titulo = 'Sem internet'; sub = 'o tablet atualiza quando o sinal voltar';
+        } else if (segundaTelaStatus === 'semTablet') {
+          tipo = 'aviso'; titulo = 'O tablet não está respondendo'; sub = 'confira se a tela do cliente continua aberta nele';
+        } else {
+          tipo = 'ok'; titulo = 'Tablet mostrando o orçamento'; sub = 'sem classificatório nem dados internos';
+        }
+        el.dataset.tipo = tipo;
+        el.innerHTML = `<span class="segundaTelaPonto" aria-hidden="true"></span>
+          <span class="segundaTelaTxt"><b>${escapeHtml(titulo)}</b>${escapeHtml(sub)}</span>
+          <button type="button" data-st="esconder">${segundaTela.oculto ? 'Mostrar' : 'Esconder'}</button>
+          <button type="button" data-st="desconectar" aria-label="Desconectar o tablet">Desconectar</button>`;
+        el.classList.remove('hidden');
+      }
+
+      // Código lido do QR do tablet: o QR traz o endereço do app com ?parear=NNNN
+      // (a câmera comum do celular abre o app já conectando); digitado, só os números.
+      function codigoDePareamento(texto) {
+        const t = String(texto || '').trim();
+        if (/^\d{4}$/.test(t)) return t;
+        try {
+          const c = new URL(t).searchParams.get('parear');
+          if (/^\d{4}$/.test(c || '')) return c;
+        } catch (e) { }
+        return null;
+      }
+      async function entrarSegundaTela(codigo) {
+        const msg = document.getElementById('conectarTabletMsg');
+        const ok = document.getElementById('conectarTabletOkBtn');
+        msg.innerHTML = '';
+        ok.disabled = true;
+        try {
+          const r = await apiFetch('/api/segunda-tela/entrar', { method: 'POST', body: JSON.stringify({ codigo }) });
+          if (r && r.modo === 'leitor') {
+            // o tablet está no levantamento: este celular vira o leitor dele
+            document.getElementById('conectarTabletModal').classList.add('hidden');
+            iniciarModoLeitor(r.id);
+            showToast('Conectado — cada código lido aqui soma no levantamento do tablet');
+            return true;
+          }
+          if (!r || r.modo !== 'cliente') throw new Error('Esse tablet está num modo que este app ainda não conhece — atualize o app.');
+          const anterior = segundaTela;
+          segundaTela = { id: r.id, modo: r.modo, oculto: false };
+          segundaTelaStatus = r.tablet_conectado ? 'ok' : 'semTablet';
+          gravarSegundaTela();
+          if (anterior && anterior.id !== r.id) apiFetch(`/api/segunda-tela/salas/${anterior.id}`, { method: 'DELETE' }).catch(() => { });
+          document.getElementById('conectarTabletModal').classList.add('hidden');
+          renderFaixaSegundaTela();
+          iniciarVigiaSegundaTela();
+          enviarTelaCliente();
+          showToast('Tablet conectado — ele mostra o orçamento ao vivo');
+          return true;
+        } catch (e) {
+          document.getElementById('conectarTabletModal').classList.remove('hidden');
+          msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+          return false;
+        } finally {
+          ok.disabled = false;
+        }
+      }
+      function abrirConectarTablet(codigo) {
+        document.getElementById('conectarTabletMsg').innerHTML = '';
+        document.getElementById('conectarTabletCodigo').value = codigo || '';
+        document.getElementById('conectarTabletModal').classList.remove('hidden');
+      }
+      function lidoQrDoTablet(texto) {
+        const codigo = codigoDePareamento(texto);
+        if (!codigo) {
+          abrirConectarTablet();
+          document.getElementById('conectarTabletMsg').innerHTML = '<div class="ap-msg error">Esse não é o QR da tela do cliente. Leia o código que aparece no tablet.</div>';
+          return;
+        }
+        entrarSegundaTela(codigo);
+      }
+
+      function initSegundaTela() {
+        document.getElementById('conectarTabletLink').addEventListener('click', (e) => { e.preventDefault(); abrirConectarTablet(); });
+        document.getElementById('conectarTabletCancelarBtn').addEventListener('click', () => document.getElementById('conectarTabletModal').classList.add('hidden'));
+        document.getElementById('conectarTabletLerBtn').addEventListener('click', () => {
+          document.getElementById('conectarTabletModal').classList.add('hidden');
+          openBarcodeScanner('parear');
+        });
+        const input = document.getElementById('conectarTabletCodigo');
+        const conectar = () => {
+          const codigo = input.value.replace(/\D/g, '');
+          if (!/^\d{4}$/.test(codigo)) {
+            document.getElementById('conectarTabletMsg').innerHTML = '<div class="ap-msg error">O código do tablet tem 4 números.</div>';
+            return;
+          }
+          entrarSegundaTela(codigo);
+        };
+        document.getElementById('conectarTabletOkBtn').addEventListener('click', conectar);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); conectar(); } });
+        document.getElementById('segundaTelaFaixa').addEventListener('click', async (e) => {
+          const b = e.target.closest('[data-st]');
+          if (!b || !segundaTela) return;
+          if (b.dataset.st === 'esconder') {
+            segundaTela.oculto = !segundaTela.oculto;
+            gravarSegundaTela();
+            renderFaixaSegundaTela();
+            clearTimeout(segundaTelaTimer);
+            enviarTelaCliente();
+          } else if (await askConfirm('Desconectar o tablet? A tela do cliente volta a mostrar o QR.', 'Desconectar')) {
+            desconectarSegundaTela();
+          }
+        });
+        window.addEventListener('online', () => { if (segundaTela) enviarTelaCliente(); });
+        // conexão que já existia (app reaberto): continua mandando
+        segundaTela = lerSegundaTela();
+        if (segundaTela) {
+          renderFaixaSegundaTela();
+          iniciarVigiaSegundaTela();
+          agendarEnvioTelaCliente();
+        }
+        // QR lido pela câmera comum do celular: abriu o app com ?parear=NNNN
+        try {
+          const params = new URLSearchParams(location.search);
+          const codigo = codigoDePareamento(params.get('parear') || '');
+          if (params.has('parear')) {
+            params.delete('parear');
+            const resto = params.toString();
+            history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
+          }
+          if (codigo) { abrirConectarTablet(codigo); entrarSegundaTela(codigo); }
+        } catch (e) { }
+      }
+
+
+      // ---------------- Celular como leitor do levantamento no tablet (10/2026) ----------------
+      // 2ª ideia dos "dois aparelhos" (opção "cada leitura soma 1", escolhida nos
+      // mockups): o levantamento fica na tela grande do tablet (ou laptop) e o
+      // celular vira só o leitor - o vendedor anda pelo depósito bipando. O tablet
+      // toca em "Usar o celular como leitor" (aba Levantamento), cria uma sala no
+      // modo 'leitor' e mostra o QR; o celular conecta pelo mesmo "Conectar tablet"
+      // da tela do cliente e abre a câmera contínua. Cada leitura vira um EVENTO com
+      // id gerado aqui, guardado no aparelho até o servidor confirmar
+      // (cortagLeitorFila_v1): sem sinal as leituras esperam e entram no tablet
+      // quando a internet volta, e o reenvio não soma duas vezes (o servidor ignora
+      // id repetido). O tablet soma no levantamento dele como se tivesse lido ali
+      // (mesma resolução de código: DUN-14 = caixa fechada).
+      const LEITOR_TABLET_LS_KEY = 'cortagLeitorTablet_v1';
+      const LEITOR_CELULAR_LS_KEY = 'cortagLeitorCelular_v1';
+      const LEITOR_FILA_LS_KEY = 'cortagLeitorFila_v1';
+      const LEITOR_MESMO_CODIGO_MS = 400; // mesmo código de novo: só depois de sair do quadro e com este intervalo
+      const QRCODE_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js'; // igual ao sw.js
+
+      // ---- lado do tablet ----
+      let leitorTablet = null; // { id, codigo, seq, pareada, recebidas }
+      let leitorTabletGeracao = 0;
+      let leitorTabletRenovar = null;
+      let leitorTabletSemRede = false;
+      const leiturasAplicadas = new Map(); // id da leitura -> { cod, campo, qtd } (pro "Desfazer última" do celular)
+
+      function gravarLeitorTablet() {
+        try {
+          if (leitorTablet && leitorTablet.pareada) localStorage.setItem(LEITOR_TABLET_LS_KEY, JSON.stringify(leitorTablet));
+          else localStorage.removeItem(LEITOR_TABLET_LS_KEY);
+        } catch (e) { }
+      }
+      let qrLibPromise = null;
+      function carregarQrLib() {
+        if (window.qrcode) return Promise.resolve();
+        if (!qrLibPromise) {
+          qrLibPromise = new Promise((resolve, reject) => {
+            const s = document.createElement('script');
+            s.src = QRCODE_CDN;
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('qr'));
+            document.head.appendChild(s);
+          }).catch(e => { qrLibPromise = null; throw e; });
+        }
+        return qrLibPromise;
+      }
+
+      async function abrirLeitorNoTablet() {
+        if (leitorTablet && leitorTablet.pareada) {
+          if (await askConfirm('O celular já está conectado como leitor. Desconectar?', 'Desconectar')) desconectarLeitorTablet();
+          return;
+        }
+        const g = ++leitorTabletGeracao;
+        clearTimeout(leitorTabletRenovar);
+        const qr = document.getElementById('leitorQr');
+        const codigoEl = document.getElementById('leitorCodigo');
+        const msg = document.getElementById('leitorQrMsg');
+        qr.innerHTML = '';
+        codigoEl.textContent = '····';
+        msg.textContent = 'Gerando o código…';
+        document.getElementById('leitorQrModal').classList.remove('hidden');
+        let sala;
+        try {
+          sala = await apiFetch('/api/segunda-tela/salas', { method: 'POST', body: JSON.stringify({ modo: 'leitor' }), signal: prazoSegundaTela(10000) });
+        } catch (e) {
+          if (g === leitorTabletGeracao) msg.textContent = 'Sem conexão com o servidor — confira a internet e tente de novo.';
+          return;
+        }
+        if (g !== leitorTabletGeracao) return;
+        if (leitorTablet) apiFetch(`/api/segunda-tela/salas/${leitorTablet.id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { });
+        leitorTablet = { id: sala.id, codigo: sala.codigo, seq: 0, pareada: false, recebidas: 0 };
+        codigoEl.textContent = sala.codigo;
+        msg.textContent = 'Esperando o celular…';
+        const url = new URL('index.html?parear=' + sala.codigo, location.href).href;
+        carregarQrLib().then(() => {
+          if (g !== leitorTabletGeracao) return;
+          const q = qrcode(0, 'M');
+          q.addData(url);
+          q.make();
+          qr.innerHTML = q.createSvgTag({ cellSize: 5, margin: 2, scalable: true });
+        }).catch(() => { qr.innerHTML = '<div class="leitorQrFalha">Sem o QR: digite o código no celular.</div>'; });
+        // código vencido sem ninguém entrar: gera outro (se a janela ainda estiver aberta)
+        leitorTabletRenovar = setTimeout(async () => {
+          if (g !== leitorTabletGeracao || !leitorTablet || leitorTablet.pareada) return;
+          try {
+            const r = await apiFetch(`/api/segunda-tela/salas/${leitorTablet.id}`, { signal: prazoSegundaTela(10000) });
+            if (r && r.pareada) return;
+          } catch (e) { }
+          if (g === leitorTabletGeracao && !document.getElementById('leitorQrModal').classList.contains('hidden')) abrirLeitorNoTablet();
+        }, Math.max(30000, (Number(sala.valido_por_ms) || 300000) - 5000));
+        ouvirLeitorTablet(g);
+      }
+
+      function fecharJanelaLeitorTablet() {
+        document.getElementById('leitorQrModal').classList.add('hidden');
+        // fechou sem ninguém conectar: a sala sai do servidor
+        if (leitorTablet && !leitorTablet.pareada) desconectarLeitorTablet();
+      }
+
+      // Uma aba por vez aplica as leituras (o app instalado e uma aba do navegador
+      // dividem o localStorage): sem isso as duas somavam e uma gravava por cima da
+      // edição da outra. A 2ª aba fica esperando a trava e assume se a 1ª fechar.
+      function ouvirLeitorTablet(g) {
+        if (navigator.locks && navigator.locks.request) {
+          navigator.locks.request('cortag-leitor-tablet', () => ouvirLeitorTabletComTrava(g)).catch(() => { });
+        } else {
+          ouvirLeitorTabletComTrava(g);
+        }
+      }
+      async function ouvirLeitorTabletComTrava(g) {
+        // a outra aba pode ter aplicado leituras enquanto esta esperava a trava
+        try {
+          const t = JSON.parse(localStorage.getItem(LEITOR_TABLET_LS_KEY));
+          if (leitorTablet && t && t.id === leitorTablet.id && Number(t.seq) > leitorTablet.seq) {
+            leitorTablet.seq = Number(t.seq);
+            leitorTablet.recebidas = Number(t.recebidas) || leitorTablet.recebidas;
+            state.survey = loadLevSurvey().survey; // a contagem com as leituras que a outra aba somou
+            renderLevList();
+          }
+        } catch (e) { }
+        while (g === leitorTabletGeracao && leitorTablet) {
+          // janela do QR fechada (inclusive tocando fora) sem ninguém conectar: desiste
+          if (!leitorTablet.pareada && document.getElementById('leitorQrModal').classList.contains('hidden')) {
+            desconectarLeitorTablet();
+            return;
+          }
+          const inicio = Date.now();
+          let r;
+          try {
+            r = await apiFetch(`/api/segunda-tela/salas/${leitorTablet.id}?papel=tablet&esperar=1&versao=0&pareada=${leitorTablet.pareada ? 1 : 0}&seq=${leitorTablet.seq}`, { signal: prazoSegundaTela(40000) });
+          } catch (e) {
+            if (g !== leitorTabletGeracao) return;
+            if (e.status === 401) return;
+            if (e.status === 404) { encerrarLeitorTablet('O leitor (celular) foi desconectado.'); return; }
+            if (!leitorTabletSemRede) { leitorTabletSemRede = true; renderFaixaLeitorTablet(); }
+            await new Promise(res => setTimeout(res, 3000));
+            continue;
+          }
+          if (g !== leitorTabletGeracao || !leitorTablet) return;
+          const mudou = (r.pareada && !leitorTablet.pareada) || (r.eventos && r.eventos.length);
+          if (leitorTabletSemRede) leitorTabletSemRede = false;
+          if (r.pareada && !leitorTablet.pareada) {
+            leitorTablet.pareada = true;
+            clearTimeout(leitorTabletRenovar);
+            document.getElementById('leitorQrModal').classList.add('hidden');
+            activateMainTab('levantamento');
+            showToast('Celular conectado — cada leitura dele entra neste levantamento');
+          }
+          if (Array.isArray(r.eventos) && r.eventos.length) {
+            for (const ev of r.eventos) {
+              if (ev.seq <= leitorTablet.seq) continue;
+              aplicarEventoLeitor(ev);
+              leitorTablet.seq = ev.seq;
+            }
+            saveLevSurvey();
+            renderLevList();
+          }
+          if (r.perdeu_eventos) showToast('Algumas leituras antigas do celular não chegaram — confira a contagem', 'erro');
+          gravarLeitorTablet();
+          renderFaixaLeitorTablet();
+          if (!mudou && Date.now() - inicio < 1000) await new Promise(res => setTimeout(res, 2000));
+        }
+      }
+
+      function itemDoLevantamento(cod, criar) {
+        let it = state.survey.find(i => i.cod === cod);
+        if (!it && criar) {
+          it = { cod, qty: 0, ped: 0 };
+          state.survey.unshift(it);
+        }
+        return it;
+      }
+      function aplicarEventoLeitor(ev) {
+        const campo = ev.campo === 'ped' ? 'ped' : 'qty';
+        const rotulo = campo === 'ped' ? 'no pedido' : 'no estoque';
+        if (ev.tipo === 'leitura' || ev.tipo === 'definir') {
+          const p = productByCod(String(ev.cod || ''));
+          if (!p) {
+            playScanBeep(false);
+            showToast(`Código ${ev.cod} lido no celular não está no catálogo deste aparelho`, 'erro');
+            return;
+          }
+          const it = itemDoLevantamento(p.c, true);
+          if (ev.tipo === 'leitura') {
+            const qtd = Math.max(1, Math.min(9999, Math.round(Number(ev.qtd) || 1)));
+            it[campo] = (Number(it[campo]) || 0) + qtd;
+            leiturasAplicadas.set(ev.id, { cod: p.c, campo, qtd });
+            leitorTablet.recebidas += 1;
+            playScanBeep(true);
+            showToast(`📱 ${p.n} — ${it[campo]} un. ${rotulo}`);
+          } else {
+            const valor = Math.max(0, Math.min(99999, Math.round(Number(ev.valor) || 0)));
+            it[campo] = valor;
+            showToast(`📱 ${p.n} — ${valor} un. ${rotulo} (digitado no celular)`);
+          }
+          return;
+        }
+        if (ev.tipo === 'desfazer') {
+          // a leitura desfeita sempre chegou antes (vem antes na fila do celular); se o
+          // tablet recarregou e esqueceu, o próprio evento diz o que desfazer
+          let a = leiturasAplicadas.get(ev.ref);
+          if (!a && productByCod(String(ev.cod || ''))) {
+            a = { cod: productByCod(String(ev.cod)).c, campo, qtd: Math.max(1, Math.min(9999, Math.round(Number(ev.qtd) || 1))) };
+          }
+          if (!a) return;
+          leiturasAplicadas.delete(ev.ref);
+          const it = itemDoLevantamento(a.cod, false);
+          if (!it) return;
+          it[a.campo] = Math.max(0, (Number(it[a.campo]) || 0) - a.qtd);
+          if (!(Number(it.qty) > 0) && !(Number(it.ped) > 0)) state.survey = state.survey.filter(i => i !== it);
+          const p = productByCod(a.cod);
+          showToast(`📱 Leitura desfeita${p ? ' — ' + p.n : ''}`);
+        }
+      }
+
+      function encerrarLeitorTablet(aviso) {
+        leitorTabletGeracao++;
+        clearTimeout(leitorTabletRenovar);
+        leitorTablet = null;
+        leitorTabletSemRede = false;
+        leiturasAplicadas.clear();
+        gravarLeitorTablet();
+        document.getElementById('leitorQrModal').classList.add('hidden');
+        renderFaixaLeitorTablet();
+        if (aviso) showToast(aviso, 'longo');
+      }
+      function desconectarLeitorTablet() {
+        const id = leitorTablet && leitorTablet.id;
+        encerrarLeitorTablet();
+        if (id) apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { });
+      }
+      function renderFaixaLeitorTablet() {
+        const el = document.getElementById('leitorFaixa');
+        if (!el) return;
+        if (!leitorTablet || !leitorTablet.pareada) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+        const n = leitorTablet.recebidas;
+        el.dataset.tipo = leitorTabletSemRede ? 'aviso' : 'ok';
+        el.innerHTML = `<span class="segundaTelaPonto" aria-hidden="true"></span>
+          <span class="segundaTelaTxt"><b>${leitorTabletSemRede ? 'Sem internet' : 'Celular conectado como leitor'}</b>${leitorTabletSemRede
+            ? 'as leituras dele entram quando o sinal voltar'
+            : (n ? `${n} ${n === 1 ? 'leitura recebida' : 'leituras recebidas'}` : 'cada leitura soma no levantamento aberto')}</span>
+          <button type="button" data-leitor="desconectar">Desconectar</button>`;
+        el.classList.remove('hidden');
+      }
+
+      // ---- lado do celular ----
+      let leitorCelular = null; // { id }
+      let leitorCampo = 'qty';
+      let leitorUltima = null; // { ev, nome }
+      let leitorStatus = 'ok'; // 'ok' | 'semRede' | 'semTablet'
+      let leitorEnviando = false;
+      let leitorReenvio = null;
+      let leitorVigia = null;
+      let leitorStream = null;
+      let leitorIntervalo = null;
+      let leitorControlesZxing = null;
+      let leitorUltimoTexto = ''; // código no quadro agora
+      let leitorUltimoAceito = '';
+      let leitorUltimoEm = 0;
+      let leitorCameraGeracao = 0;
+      const leitorContagem = new Map(); // "cod|campo" -> lidas nesta conexão (só pra mostrar)
+
+      function filaLeitor() {
+        try { const f = JSON.parse(localStorage.getItem(LEITOR_FILA_LS_KEY)); return Array.isArray(f) ? f : []; } catch (e) { return []; }
+      }
+      function gravarFilaLeitor(fila) {
+        try { localStorage.setItem(LEITOR_FILA_LS_KEY, JSON.stringify(fila)); return true; } catch (e) { return false; }
+      }
+      function pendentesDoLeitor() {
+        return leitorCelular ? filaLeitor().filter(e => e.sala === leitorCelular.id).length : 0;
+      }
+      function novoIdLeitura() {
+        return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+      }
+
+      function iniciarModoLeitor(id) {
+        let anterior = null;
+        try { anterior = (JSON.parse(localStorage.getItem(LEITOR_CELULAR_LS_KEY)) || {}).id || null; } catch (e) { }
+        if (leitorCelular && leitorCelular.id !== id) anterior = leitorCelular.id;
+        leitorCelular = { id };
+        try { localStorage.setItem(LEITOR_CELULAR_LS_KEY, JSON.stringify(leitorCelular)); } catch (e) { }
+        // leitura guardada de uma conexão anterior não vai pra este tablet
+        const fila = filaLeitor();
+        const perdidas = fila.filter(e => e.sala !== id).length;
+        gravarFilaLeitor(fila.filter(e => e.sala === id));
+        if (perdidas) showToast(`${perdidas} ${perdidas === 1 ? 'leitura da conexão anterior não chegou' : 'leituras da conexão anterior não chegaram'} ao tablet e ${perdidas === 1 ? 'foi descartada' : 'foram descartadas'}`, 'erro');
+        if (anterior && anterior !== id) apiFetch(`/api/segunda-tela/salas/${anterior}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { });
+        leitorUltima = null;
+        leitorContagem.clear();
+        leitorStatus = 'ok';
+        document.getElementById('modoLeitor').classList.remove('hidden');
+        renderModoLeitor();
+        ligarCameraLeitor();
+        clearInterval(leitorVigia);
+        leitorVigia = setInterval(vigiarLeitor, SEGUNDA_TELA_VIGIA_MS);
+        enviarFilaLeitor();
+      }
+      function sairDoModoLeitor(aviso) {
+        desligarCameraLeitor();
+        clearInterval(leitorVigia);
+        clearTimeout(leitorReenvio);
+        const id = leitorCelular && leitorCelular.id;
+        if (id) gravarFilaLeitor(filaLeitor().filter(e => e.sala !== id));
+        leitorCelular = null;
+        try { localStorage.removeItem(LEITOR_CELULAR_LS_KEY); } catch (e) { }
+        document.getElementById('modoLeitor').classList.add('hidden');
+        if (aviso) showToast(aviso, 'longo');
+      }
+      async function fecharModoLeitor() {
+        const n = pendentesDoLeitor();
+        const ok = await askConfirm(n
+          ? `${n} ${n === 1 ? 'leitura ainda não chegou' : 'leituras ainda não chegaram'} ao tablet (sem internet). Sair mesmo assim? ${n === 1 ? 'Ela será perdida' : 'Elas serão perdidas'}.`
+          : 'Sair do modo leitor? O tablet deixa de receber as leituras deste celular.', 'Sair', { perigo: n > 0 });
+        if (!ok || !leitorCelular) return;
+        const id = leitorCelular.id;
+        sairDoModoLeitor();
+        apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { });
+      }
+
+      async function ligarCameraLeitor() {
+        desligarCameraLeitor();
+        const g = leitorCameraGeracao;
+        const valendo = () => g === leitorCameraGeracao && !!leitorCelular;
+        const video = document.getElementById('leitorVideo');
+        const msg = document.getElementById('leitorMsg');
+        msg.textContent = 'Abrindo a câmera…';
+        const restricoes = { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } };
+        try {
+          let nativo = false;
+          if ('BarcodeDetector' in window) {
+            try { nativo = (await BarcodeDetector.getSupportedFormats()).includes('ean_13'); } catch (e) { nativo = false; }
+          }
+          if (nativo) {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: restricoes });
+            if (!valendo()) { stream.getTracks().forEach(t => t.stop()); return; }
+            leitorStream = stream;
+            video.srcObject = leitorStream;
+            try { await video.play(); } catch (e) { }
+            const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf'] });
+            let ocupado = false;
+            leitorIntervalo = setInterval(async () => {
+              if (ocupado || video.readyState < 2) return;
+              ocupado = true;
+              try {
+                const lidos = await detector.detect(video);
+                if (lidos && lidos.length) aoLerNoModoLeitor(lidos[0].rawValue);
+                else leitorForaDoQuadro();
+              } catch (e) { }
+              ocupado = false;
+            }, 200);
+          } else {
+            await loadZXingScript();
+            if (!valendo()) return;
+            const leitor = new ZXing.BrowserMultiFormatReader();
+            const controles = await leitor.decodeFromConstraints({ video: restricoes }, video, (result) => {
+              if (result) aoLerNoModoLeitor(result.getText());
+              else leitorForaDoQuadro();
+            });
+            if (!valendo()) { try { controles.stop(); } catch (e) { } return; }
+            leitorControlesZxing = controles;
+          }
+          msg.textContent = 'Aponte pro código de barras';
+        } catch (e) {
+          if (!valendo()) return;
+          let texto = 'Não foi possível abrir a câmera.';
+          if (e && e.name === 'NotAllowedError') texto = 'Permissão de câmera negada — libere a câmera pro app.';
+          else if (e && e.message === 'load-error') texto = 'Não deu pra carregar o leitor (sem internet).';
+          msg.innerHTML = `${escapeHtml(texto)} <button type="button" class="leitorTentarBtn" data-leitor-acao="camera">Tentar de novo</button>`;
+        }
+      }
+      function desligarCameraLeitor() {
+        leitorCameraGeracao++;
+        clearInterval(leitorIntervalo);
+        leitorIntervalo = null;
+        if (leitorControlesZxing) { try { leitorControlesZxing.stop(); } catch (e) { } leitorControlesZxing = null; }
+        if (leitorStream) { try { leitorStream.getTracks().forEach(t => t.stop()); } catch (e) { } leitorStream = null; }
+        const video = document.getElementById('leitorVideo');
+        if (video) video.srcObject = null;
+      }
+
+      // Mesma resolução do levantamento: DUN-14 = caixa fechada (soma a embalagem).
+      function resolverCodigoDoLeitor(texto) {
+        const code = String(texto || '').trim();
+        if (!code) return null;
+        if (DUN_INDEX[code]) {
+          const p = productByCod(DUN_INDEX[code]);
+          if (p) return { p, qtd: packStep(p), caixa: true };
+        }
+        const p = findByExactCode(code);
+        if (!p) return null;
+        const caixa = !!(p.dun && p.dun === code);
+        return { p, qtd: caixa ? packStep(p) : 1, caixa };
+      }
+      // Código que continua no quadro não soma de novo; sai do quadro e volta (a
+      // próxima unidade igual na prateleira), soma. Pausa com pergunta aberta
+      // (Digitar quantidade/Sair) e em aba escondida (duas abas não contam em dobro).
+      function leitorForaDoQuadro() { leitorUltimoTexto = ''; }
+      function aoLerNoModoLeitor(texto) {
+        if (!leitorCelular || document.hidden) return;
+        if (!document.getElementById('appConfirmModal').classList.contains('hidden')) return;
+        const agora = Date.now();
+        if (texto === leitorUltimoTexto) return;
+        if (texto === leitorUltimoAceito && agora - leitorUltimoEm < LEITOR_MESMO_CODIGO_MS) return;
+        leitorUltimoTexto = texto;
+        leitorUltimoAceito = texto;
+        leitorUltimoEm = agora;
+        const achado = resolverCodigoDoLeitor(texto);
+        if (!achado) {
+          playScanBeep(false);
+          document.getElementById('leitorMsg').textContent = `Código não encontrado: ${texto}`;
+          return;
+        }
+        const ev = { id: novoIdLeitura(), tipo: 'leitura', cod: achado.p.c, qtd: achado.qtd, campo: leitorCampo };
+        if (!enfileirarLeitura(ev)) return;
+        const chave = `${achado.p.c}|${leitorCampo}`;
+        leitorContagem.set(chave, (leitorContagem.get(chave) || 0) + achado.qtd);
+        leitorUltima = { ev, nome: achado.p.n, caixa: achado.caixa };
+        playScanBeep(true);
+        document.getElementById('leitorMsg').textContent = 'Aponte pro próximo código';
+        renderModoLeitor();
+      }
+      function enfileirarLeitura(ev) {
+        const fila = filaLeitor();
+        fila.push({ ...ev, sala: leitorCelular.id });
+        if (!gravarFilaLeitor(fila)) {
+          playScanBeep(false);
+          document.getElementById('leitorMsg').textContent = 'Aparelho sem espaço pra guardar a leitura — ela NÃO foi enviada.';
+          return false;
+        }
+        enviarFilaLeitor();
+        return true;
+      }
+      async function enviarFilaLeitor() {
+        if (leitorEnviando || !leitorCelular) return;
+        leitorEnviando = true;
+        clearTimeout(leitorReenvio);
+        const id = leitorCelular.id;
+        try {
+          for (;;) {
+            const lote = filaLeitor().filter(e => e.sala === id).slice(0, 50);
+            if (!lote.length) break;
+            let r;
+            try {
+              r = await apiFetch(`/api/segunda-tela/salas/${id}/eventos`, {
+                method: 'POST',
+                body: JSON.stringify({ eventos: lote.map(({ sala, ...ev }) => ev) }),
+                signal: prazoSegundaTela(10000),
+              });
+            } catch (e) {
+              if (e.status === 400) {
+                // leitura que o servidor nunca vai aceitar: sai, pra não travar as outras
+                const ids = new Set(lote.map(x => x.id));
+                gravarFilaLeitor(filaLeitor().filter(x => !ids.has(x.id)));
+                continue;
+              }
+              throw e;
+            }
+            const ids = new Set(lote.map(x => x.id));
+            gravarFilaLeitor(filaLeitor().filter(x => !ids.has(x.id)));
+            leitorStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
+          }
+        } catch (e) {
+          if (leitorCelular && leitorCelular.id === id) {
+            if (e.status === 404) {
+              const n = pendentesDoLeitor();
+              sairDoModoLeitor(`O tablet desconectou o leitor${n ? ` — ${n} ${n === 1 ? 'leitura não chegou' : 'leituras não chegaram'} a ele` : ''}.`);
+            } else if (e.status !== 401) {
+              leitorStatus = 'semRede';
+              leitorReenvio = setTimeout(enviarFilaLeitor, 4000);
+            }
+          }
+        } finally {
+          leitorEnviando = false;
+          if (leitorCelular) renderModoLeitor();
+          // trocou de tablet no meio do envio: a fila da sala nova não espera o vigia
+          if (leitorCelular && leitorCelular.id !== id && pendentesDoLeitor()) enviarFilaLeitor();
+        }
+      }
+      async function vigiarLeitor() {
+        if (!leitorCelular) { clearInterval(leitorVigia); return; }
+        if (pendentesDoLeitor()) { enviarFilaLeitor(); return; }
+        const id = leitorCelular.id;
+        try {
+          const r = await apiFetch(`/api/segunda-tela/salas/${id}`, { signal: prazoSegundaTela(10000) });
+          if (leitorCelular && leitorCelular.id === id) leitorStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
+        } catch (e) {
+          if (!leitorCelular || leitorCelular.id !== id) return;
+          if (e.status === 404) { sairDoModoLeitor('O tablet desconectou o leitor.'); return; }
+          leitorStatus = 'semRede';
+        }
+        if (leitorCelular) renderModoLeitor();
+      }
+
+      function renderModoLeitor() {
+        const n = pendentesDoLeitor();
+        const status = document.getElementById('leitorStatus');
+        let tipo = 'ok', texto = 'Mandando pro tablet';
+        if (leitorStatus === 'semRede' || (n && leitorStatus !== 'ok')) {
+          tipo = 'aviso';
+          texto = n ? `Sem internet · ${n} ${n === 1 ? 'leitura guardada' : 'leituras guardadas'}` : 'Sem internet';
+        } else if (leitorStatus === 'semTablet') {
+          tipo = 'aviso'; texto = 'O tablet não está respondendo';
+        }
+        status.dataset.tipo = tipo;
+        status.textContent = texto;
+        document.querySelectorAll('#leitorCampo button').forEach(b => {
+          const ativo = b.dataset.campo === leitorCampo;
+          b.classList.toggle('active', ativo);
+          b.setAttribute('aria-checked', String(ativo));
+        });
+        const card = document.getElementById('leitorUltima');
+        if (leitorUltima) {
+          const ev = leitorUltima.ev;
+          const total = leitorContagem.get(`${ev.cod}|${ev.campo}`) || 0;
+          card.innerHTML = `<span class="leitorMais">+${escapeHtml(ev.qtd)}</span>
+            <span class="leitorUltimaTxt"><b>${escapeHtml(leitorUltima.nome)}</b>${leitorUltima.caixa ? 'Caixa fechada · ' : ''}${total} ${total === 1 ? 'lida' : 'lidas'} agora ${ev.campo === 'ped' ? 'pro pedido' : 'no estoque'}</span>`;
+          card.classList.remove('hidden');
+        } else {
+          card.classList.add('hidden');
+          card.innerHTML = '';
+        }
+        document.getElementById('leitorDesfazerBtn').disabled = !leitorUltima;
+        document.getElementById('leitorDigitarBtn').disabled = !leitorUltima;
+        document.getElementById('leitorNota').textContent = n
+          ? 'As leituras ficam guardadas neste celular e entram no tablet quando o sinal voltar.'
+          : 'O levantamento fica no tablet: é lá que você confere e salva.';
+      }
+
+      function desfazerUltimaLeitura() {
+        if (!leitorUltima || !leitorCelular) return;
+        const ev = leitorUltima.ev;
+        if (!enfileirarLeitura({ id: novoIdLeitura(), tipo: 'desfazer', ref: ev.id, cod: ev.cod, campo: ev.campo, qtd: ev.qtd })) return;
+        const chave = `${ev.cod}|${ev.campo}`;
+        leitorContagem.set(chave, Math.max(0, (leitorContagem.get(chave) || 0) - ev.qtd));
+        document.getElementById('leitorMsg').textContent = `Desfeita: ${leitorUltima.nome}`;
+        leitorUltima = null;
+        renderModoLeitor();
+      }
+      async function digitarQuantidadeLeitor() {
+        if (!leitorUltima || !leitorCelular) return;
+        const { ev, nome } = leitorUltima;
+        const txt = await askText(`Quantidade de ${nome} ${ev.campo === 'ped' ? 'no pedido' : 'no estoque'} (troca o total no tablet):`, '', 'Definir');
+        if (txt == null || !leitorCelular) return;
+        const valor = Math.round(Number(String(txt).replace(',', '.')));
+        if (!Number.isFinite(valor) || valor < 0 || valor > 99999) { showToast('Quantidade inválida', 'erro'); return; }
+        if (!enfileirarLeitura({ id: novoIdLeitura(), tipo: 'definir', cod: ev.cod, campo: ev.campo, valor })) return;
+        leitorContagem.set(`${ev.cod}|${ev.campo}`, valor);
+        document.getElementById('leitorMsg').textContent = `${nome}: ${valor} un. ${ev.campo === 'ped' ? 'no pedido' : 'no estoque'}`;
+        if (leitorUltima && leitorUltima.ev === ev) leitorUltima = null;
+        renderModoLeitor();
+      }
+
+      function initLeitor() {
+        document.getElementById('levLeitorBtn').addEventListener('click', abrirLeitorNoTablet);
+        document.getElementById('leitorQrFecharBtn').addEventListener('click', fecharJanelaLeitorTablet);
+        document.getElementById('leitorFaixa').addEventListener('click', async (e) => {
+          if (!e.target.closest('[data-leitor="desconectar"]')) return;
+          if (await askConfirm('Desconectar o celular? As leituras dele deixam de entrar neste levantamento.', 'Desconectar')) desconectarLeitorTablet();
+        });
+        document.getElementById('leitorFecharBtn').addEventListener('click', fecharModoLeitor);
+        document.getElementById('leitorDesfazerBtn').addEventListener('click', desfazerUltimaLeitura);
+        document.getElementById('leitorDigitarBtn').addEventListener('click', digitarQuantidadeLeitor);
+        document.getElementById('leitorCampo').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-campo]');
+          if (!b) return;
+          leitorCampo = b.dataset.campo === 'ped' ? 'ped' : 'qty';
+          leitorUltimoTexto = ''; // trocar de campo e ler o mesmo produto de novo vale
+          leitorUltimoAceito = '';
+          renderModoLeitor();
+        });
+        document.getElementById('leitorMsg').addEventListener('click', (e) => {
+          if (e.target.closest('[data-leitor-acao="camera"]')) ligarCameraLeitor();
+        });
+        window.addEventListener('online', () => { if (leitorCelular) enviarFilaLeitor(); });
+        // app reaberto: o tablet continua recebendo, o celular volta a ser leitor
+        try {
+          const t = JSON.parse(localStorage.getItem(LEITOR_TABLET_LS_KEY));
+          if (t && /^[a-f0-9]{32}$/.test(String(t.id)) && t.pareada) {
+            leitorTablet = { id: t.id, codigo: t.codigo, seq: Number(t.seq) || 0, pareada: true, recebidas: Number(t.recebidas) || 0 };
+            renderFaixaLeitorTablet();
+            ouvirLeitorTablet(++leitorTabletGeracao);
+          }
+        } catch (e) { }
+        try {
+          const c = JSON.parse(localStorage.getItem(LEITOR_CELULAR_LS_KEY));
+          if (c && /^[a-f0-9]{32}$/.test(String(c.id))) iniciarModoLeitor(c.id);
+        } catch (e) { }
+      }
+
 
       // ---------------- Drawer open/close ----------------
       function openDrawer() {
@@ -22656,6 +23982,10 @@
       // na aba Preços, entra na lista de preços; em qualquer outro campo, só
       // preenche e dispara a busca.
       function onScanSuccess(text) {
+        if (scannerTargetInput === 'parear') {
+          lidoQrDoTablet(text);
+          return;
+        }
         if (scannerTargetInput === 'levInput') {
           processLevScan(text);
           return;
@@ -22935,6 +24265,7 @@
         pedidosSalvos = null;
         // "Visitas × compras" é só do usuário logado
         try { localStorage.removeItem(VISITAS_LS_KEY); localStorage.removeItem(VISITAS_LOCAIS_LS_KEY); } catch (e) { }
+        try { [SEGUNDA_TELA_LS_KEY, LEITOR_TABLET_LS_KEY, LEITOR_CELULAR_LS_KEY, LEITOR_FILA_LS_KEY].forEach(k => localStorage.removeItem(k)); } catch (e) { }
         visitasDados = null;
         setPedidoEditando(null);
       }
@@ -22976,6 +24307,9 @@
           try { await apiFetch('/api/novidades/push/cancelar', { method: 'POST', body: JSON.stringify({ endpoint: inscricaoPush.endpoint }) }); } catch (e) { }
           try { await inscricaoPush.unsubscribe(); } catch (e) { }
         }
+        await desconectarSegundaTela(); // o tablet não fica mostrando o orçamento de quem saiu
+        desconectarLeitorTablet(); // nem somando leituras num levantamento depois do logout
+        if (leitorCelular) { const id = leitorCelular.id; sairDoModoLeitor(); apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { }); }
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
@@ -23167,6 +24501,8 @@
 
           initAppConfirmModal();
           initAtalhosCabecalho();
+          initSegundaTela();
+          initLeitor();
           document.getElementById('ctxResumo').addEventListener('click', alternarResumoContexto);
           document.getElementById('levLembrete').addEventListener('click', () => activateMainTab('levantamento'));
           document.getElementById('scanFab').addEventListener('click', () => document.getElementById('scanBtnLev').click());

@@ -962,6 +962,40 @@ Supabase, sem PR — não é mudança de código.
 
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
+- **Tablet como tela do cliente** (10/2026, 1ª das ideias de "dois aparelhos"; mockups escolhidos pelo usuário:
+  **lista completa com vitrine temporária**). O tablet abre `tela-cliente.html` (⋯ Atalhos › "Tela do cliente
+  (neste tablet)"), que cria uma sala (`routes/segundaTela.js`) e mostra um QR + código de 4 dígitos; o celular entra
+  por ⋯ Atalhos › "Conectar tablet" (lê o QR com o leitor do app ou digita o código; o QR é o endereço
+  `index.html?parear=NNNN`, então a câmera comum também conecta). **Mesma conta Google nos dois** - o código só é
+  procurado entre as salas do próprio usuário. Daí o celular manda a **foto inteira** do orçamento a cada mudança
+  (`estadoParaTelaCliente`, gancho em `renderCartBar` e `setLevCliente`) e o tablet espera a próxima versão por
+  long-poll (até 25 s). Vai só o que o cliente pode ver: nome, quantidade, preço com imposto, campanha (de/por),
+  total, economia, "faltam R$ X pro frete CIF/pedido mínimo" e a próxima faixa de campanha - **nunca classificatório,
+  canal, ficha nem histórico**. A campanha vai como "Campanha -10%", **sem o nome da regra** (ele costuma trazer o
+  classificatório: "VIDRO 62796 - Master" - achado do `revisor-cortag`). O tablet fica logado na conta do vendedor e na
+  mão do cliente: o menu "⋯" (que leva de volta ao app) só abre **segurando** o botão, e o "Voltar ao app" some depois
+  do 1º pareamento. Toda chamada da tela tem prazo (`prazoSegundaTela`/`prazo`): com sinal fraco a conexão ficava
+  pendurada e o tablet congelava com o orçamento velho. Item novo aparece ~7 s em destaque (vitrine) e volta pra lista. Faixa verde no celular
+  em todas as abas com **Esconder** (o tablet mostra "Seu orçamento volta já") e **Desconectar**. Salas **só na
+  memória** do servidor (deploy/reinício desconecta - o tablet mostra QR novo; com várias instâncias, na v2, teria
+  de ir pro banco); nada passa pela fila offline (é só tela: sem internet o tablet fica com a última versão e o
+  celular reenvia quando volta). Conexão do celular em `cortagSegundaTela_v1` (sobrevive a reabrir o app); sair do
+  app desconecta. Fora desta 1ª versão (decisão do usuário): escolher o que o tablet mostra (preço unitário e
+  campanha sempre aparecem, código não).
+- **Celular como leitor do levantamento no tablet** (10/2026, 2ª ideia, opção **"cada leitura soma 1"** escolhida nos
+  mockups). No tablet/laptop, aba Levantamento › "Usar o celular como leitor" (botão só em tela de 700 px ou mais)
+  cria uma sala no modo `'leitor'` e mostra o QR; o celular conecta pelo mesmo "Conectar tablet" e abre a tela de
+  leitura contínua (`#modoLeitor`): câmera sempre ligada, "+1 no estoque | +1 no pedido", "Desfazer última" e
+  "Digitar quantidade" (troca o total do item no tablet). O mesmo código parado na frente da câmera só conta de novo
+  depois de 1,5 s. Cada leitura é um **evento com id gerado no celular** (`POST /api/segunda-tela/salas/:id/eventos`),
+  guardado em `cortagLeitorFila_v1` até o servidor confirmar: **sem internet a leitura espera e entra no tablet
+  quando o sinal volta**, e o servidor ignora id repetido (resposta perdida + reenvio não soma duas vezes). O
+  celular resolve o código pelo catálogo dele (DUN-14 = caixa fechada, soma a embalagem; código desconhecido nem é
+  enviado) e manda o SKU; o tablet soma no levantamento aberto (`aplicarEventoLeitor`) - salvar, comprados e não
+  contados etc. continuam no tablet. O tablet pede os eventos depois do último `seq` aplicado e guarda a conexão
+  (`cortagLeitorTablet_v1`, com o `seq`), então recarregar não perde nem repete leitura; "Desfazer" de leitura feita
+  antes de recarregar o tablet é ignorado. O servidor guarda as últimas 500 leituras por sala.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

@@ -136,7 +136,7 @@ async function main() {
     servirArquivo(req, res);
   }).listen(PORTA, '127.0.0.1', () => {
     console.log(`\nApp local: http://localhost:${PORTA}/__entrar  (abre o index.html já logado como admin)`);
-    console.log(`Outras páginas: /curva-abc.html, /calculadora-materiais.html, /ficha-cnpj.html`);
+    console.log(`Outras páginas: /curva-abc.html, /calculadora-materiais.html, /ficha-cnpj.html, /tela-cliente.html`);
     console.log('Banco em memória (mock dos testes) — tudo some ao parar (Ctrl+C).');
   });
 }

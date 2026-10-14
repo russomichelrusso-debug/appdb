@@ -44,6 +44,7 @@ const PAGINAS_OFFLINE = [
   './curva-abc.html',
   './calculadora-materiais.html',
   './ficha-cnpj.html',
+  './tela-cliente.html',
 ];
 
 // Bibliotecas de fora (cdnjs/jsdelivr) que o app usa no campo: imagem e PDF do
@@ -70,6 +71,8 @@ const LIBS = new Set(LIBS_PRECACHE.concat([
   'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs',
   'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs',
+  // QR Code do pareamento da tela do cliente (tela-cliente.html)
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
 ]));
 
 // Páginas e scripts do app são guardados pelo endereço SEM parâmetros: antes
