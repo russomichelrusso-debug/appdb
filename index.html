@@ -6866,6 +6866,31 @@
       color: var(--gray);
     }
 
+    /* Filtro "onde" da ficha do produto (Já compraram/Levantamento):
+       cidade ou perto de mim + raio, lado a lado */
+    .prodLocal {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .prodLocal .reativarFiltro {
+      margin: 0;
+    }
+
+    .prodLocalHint {
+      font-size: 12px;
+      color: var(--gray);
+      margin: 4px 0 10px;
+    }
+
+    .histCard .hcOnde {
+      font-size: 12px;
+      color: var(--gray);
+      margin-top: 2px;
+    }
+
     .reativarFiltro {
       display: block;
       width: 100%;
@@ -21419,26 +21444,162 @@
       }
       let prodDetailData = null; // guarda {compradores, levantamentos} pra trocar de aba sem buscar de novo
       let prodDetailView = 'compradores';
+      // ---- "Onde" na ficha do produto (10/2026, pedido do usuário: "escolher uma
+      // cidade e um raio pra saber qual cliente tem tal produto") ----
+      // Filtra Já compraram e Levantamento pela cidade da ficha de CNPJ (cópia do
+      // /sync, funciona sem internet) ou pela posição do celular, com raio. Centro
+      // da cidade = mediana das posições das lojas dela na carteira (GPS ou
+      // aproximada pelo endereço, posicaoDoCliente) - não há coordenada de
+      // município no app. Loja da própria cidade entra sempre; de outra cidade,
+      // só com posição dentro do raio (sem posição não dá pra saber).
+      const PROD_LOCAL_LS_KEY = 'cortagProdLocal_v1';
+      const PROD_LOCAL_RAIOS_KM = [0, 10, 30, 50, 100]; // 0 = só a cidade
+      const PROD_PERTO_RAIOS_KM = [2, 10, 30, 50, 100];
+      let prodLocalBuscandoGps = false;
+      let prodLocalErroGps = '';
+      function prodLocalFiltro() {
+        let f = null;
+        try { f = JSON.parse(localStorage.getItem(PROD_LOCAL_LS_KEY) || 'null'); } catch (e) { }
+        const onde = f && typeof f.onde === 'string' ? f.onde : '';
+        const raio = Number(f && f.raio);
+        const raios = onde === 'perto' ? PROD_PERTO_RAIOS_KM : PROD_LOCAL_RAIOS_KM;
+        return { onde, raio: raios.includes(raio) ? raio : raios[onde === 'perto' ? 1 : 0] };
+      }
+      function guardarProdLocalFiltro(f) {
+        try { localStorage.setItem(PROD_LOCAL_LS_KEY, JSON.stringify(f)); } catch (e) { }
+      }
+      function chaveCidadeDoCliente(c) {
+        const e = c && c.endereco;
+        return e && e.municipio ? `${chaveCidade(e.municipio)}|${String(e.uf || '').trim().toUpperCase()}` : '';
+      }
+      function centroDaCidade(cidade) {
+        const pos = cidade.clientes.map(posicaoDoCliente).filter(Boolean);
+        if (!pos.length) return null;
+        const mediana = (v) => { v.sort((a, b) => a - b); const m = v.length >> 1; return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
+        return { lat: mediana(pos.map(p => p.lat)), lng: mediana(pos.map(p => p.lng)) };
+      }
+      function buscarGpsProdLocal() {
+        if (!('geolocation' in navigator)) { prodLocalErroGps = 'Este aparelho não informa a localização.'; renderProdDetailView(); return; }
+        if (prodLocalBuscandoGps) return;
+        prodLocalBuscandoGps = true;
+        prodLocalErroGps = '';
+        renderProdDetailView();
+        navigator.geolocation.getCurrentPosition(
+          (p) => {
+            prodLocalBuscandoGps = false;
+            pertoPosicao = { lat: p.coords.latitude, lng: p.coords.longitude, em: Date.now() };
+            renderProdDetailView();
+          },
+          (err) => {
+            prodLocalBuscandoGps = false;
+            prodLocalErroGps = err && err.code === 1 ? 'Localização bloqueada no navegador — libere pra usar "Perto de mim".'
+              : 'Não foi possível pegar sua localização.';
+            renderProdDetailView();
+          },
+          { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+        );
+      }
+      // lista -> { itens: [{ r, local, cidade, dist }], barra, aviso }
+      function aplicarProdLocal(lista) {
+        const clientes = loadClientesLocais();
+        const carteira = new Map(clientes.map(x => [String(x.id), x]));
+        const cidades = cidadesDosClientes();
+        const f = prodLocalFiltro();
+        const nomeDaCidade = (c) => { const k = chaveCidadeDoCliente(c); return k && cidades.has(k) ? cidades.get(k).nome : ''; };
+        const base = lista.map(r => {
+          const local = carteira.get(String(r.id)) || { id: r.id };
+          return { r, local, cidade: nomeDaCidade(local), dist: null };
+        });
+        if (!cidades.size) return { itens: base, barra: '', aviso: '' };
+        const naCidade = new Map();
+        for (const it of base) { const k = chaveCidadeDoCliente(it.local); if (k) naCidade.set(k, (naCidade.get(k) || 0) + 1); }
+        const opcoes = [...cidades.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+        const raios = f.onde === 'perto' ? PROD_PERTO_RAIOS_KM : PROD_LOCAL_RAIOS_KM;
+        const barra = `<div class="prodLocal">
+            <select class="reativarFiltro" data-prod-local="onde" aria-label="Filtrar por cidade">
+              <option value="">Todas as cidades</option>
+              <option value="perto"${f.onde === 'perto' ? ' selected' : ''}>📍 Perto de mim</option>
+              ${opcoes.map(o => `<option value="${escapeHtml(o.chave)}"${o.chave === f.onde ? ' selected' : ''}>${escapeHtml(o.nome)}${naCidade.get(o.chave) ? ` (${naCidade.get(o.chave)})` : ''}</option>`).join('')}
+            </select>
+            <select class="reativarFiltro" data-prod-local="raio" aria-label="Raio de distância"${f.onde ? '' : ' disabled'}>
+              ${raios.map(km => `<option value="${km}"${km === f.raio ? ' selected' : ''}>${km ? `até ${km} km` : 'Só a cidade'}</option>`).join('')}
+            </select>
+          </div>`;
+        if (!f.onde) return { itens: base, barra, aviso: '' };
+        let centro = null, cidade = null;
+        if (f.onde === 'perto') {
+          const recente = pertoPosicao && Date.now() - pertoPosicao.em < 10 * 60000 ? pertoPosicao : null;
+          if (!recente) {
+            if (!prodLocalBuscandoGps && !prodLocalErroGps) setTimeout(buscarGpsProdLocal, 0);
+            return { itens: [], barra, aviso: prodLocalErroGps || 'Pegando sua localização…', esperando: true };
+          }
+          centro = recente;
+        } else {
+          cidade = cidades.get(f.onde);
+          if (!cidade) return { itens: base, barra, aviso: '' };
+          centro = f.raio ? centroDaCidade(cidade) : null;
+        }
+        let semPosicao = 0;
+        const itens = [];
+        for (const it of base) {
+          const daCidade = cidade && chaveCidadeDoCliente(it.local) === cidade.chave;
+          const pos = posicaoDoCliente(it.local);
+          if (centro && pos) it.dist = distanciaM(centro, pos);
+          if (daCidade) { itens.push(it); continue; }
+          if (!centro) continue;
+          if (it.dist === null) { semPosicao++; continue; }
+          if (it.dist <= f.raio * 1000) itens.push(it);
+        }
+        if (centro) itens.sort((a, b) => (a.dist ?? Infinity) - (b.dist ?? Infinity));
+        const avisos = [];
+        if (cidade && f.raio && !centro) avisos.push(`Nenhuma loja de ${escapeHtml(cidade.nome)} tem posição: mostrando só a cidade.`);
+        if (centro) avisos.push(`${f.onde === 'perto' ? 'Distância em linha reta daqui' : `Distância em linha reta do centro de ${escapeHtml(cidade.nome)}`}${semPosicao ? ` · ${semPosicao} sem posição${cidade ? ' (de outras cidades)' : ''} ficaram de fora` : ''}.`);
+        return { itens, barra, aviso: avisos.join(' ') };
+      }
+      function linhaOnde(it) {
+        const partes = [];
+        if (it.cidade) partes.push(escapeHtml(it.cidade));
+        if (it.dist !== null) partes.push(`${posicaoDoCliente(it.local)?.aprox ? '~' : ''}${formatarDistancia(it.dist)}`);
+        return partes.length ? `<div class="hcOnde">📍 ${partes.join(' · ')}</div>` : '';
+      }
       function renderProdDetailView() {
         const content = document.getElementById('prodDetailContent');
         if (!prodDetailData) return;
-        const lista = prodDetailData[prodDetailView] || [];
-        if (lista.length === 0) {
+        const listaToda = prodDetailData[prodDetailView] || [];
+        if (listaToda.length === 0) {
+          const segBtns = document.getElementById('prodDetailSeg').querySelectorAll('button');
+          segBtns[0].textContent = `Já compraram (${(prodDetailData.compradores || []).length})`;
+          segBtns[1].textContent = `Levantamento (${(prodDetailData.levantamentos || []).length})`;
           content.innerHTML = prodDetailView === 'compradores'
             ? '<div class="lev-empty">Nenhum cliente comprou esse produto ainda.</div>'
             : '<div class="lev-empty">Nenhum levantamento recente tem esse produto contado.</div>';
           return;
         }
-        content.innerHTML = prodDetailView === 'compradores'
-          ? (() => {
-            const carteira = new Map(loadClientesLocais().map(x => [String(x.id), x]));
-            return lista.map(c => {
-            const local = carteira.get(String(c.id)) || { id: c.id };
-            const w = whatsCompradorDoCliente(local);
+        const filtro = aplicarProdLocal(listaToda);
+        const segBtns = document.getElementById('prodDetailSeg').querySelectorAll('button');
+        const contagem = (v) => {
+          const total = (prodDetailData[v] || []).length;
+          if (!prodLocalFiltro().onde || filtro.esperando) return `${total}`;
+          const n = v === prodDetailView ? filtro.itens.length : aplicarProdLocal(prodDetailData[v] || []).itens.length;
+          return n === total ? `${total}` : `${n} de ${total}`;
+        };
+        segBtns[0].textContent = `Já compraram (${contagem('compradores')})`;
+        segBtns[1].textContent = `Levantamento (${contagem('levantamentos')})`;
+        const topo = filtro.barra + (filtro.aviso ? `<p class="prodLocalHint">${filtro.aviso}</p>` : '');
+        const itens = filtro.itens;
+        if (!itens.length) {
+          content.innerHTML = topo + (filtro.esperando ? '' : '<div class="lev-empty">Nenhum cliente nessa região. Aumente o raio ou escolha outra cidade.</div>');
+          return;
+        }
+        content.innerHTML = topo + (prodDetailView === 'compradores'
+          ? itens.map(it => {
+            const c = it.r;
+            const w = whatsCompradorDoCliente(it.local);
             return `
         <div class="histCard">
           <div class="hcName">${escapeHtml(c.nome)}</div>
           <div class="hcCode">${c.documento ? escapeHtml(c.documento) : ''}</div>
+          ${linhaOnde(it)}
           <div class="hcStats">
             <div class="hcStat">Total comprado<b>${c.total_comprado}</b></div>
             <div class="hcStat">Última compra<b>${formatDateBr(c.ultima_compra)}</b></div>
@@ -21447,23 +21608,40 @@
           ${w ? `<button type="button" class="whatsComprador" data-whats-oferta="${escapeHtml(String(c.id))}" data-whats-cod="${escapeHtml(String(prodDetailData.codigo || ''))}">WhatsApp · mandar oferta${w.nome ? ' pra ' + escapeHtml(w.nome) : ''}</button>`
             : '<span class="whatsComprador whatsComprador--sem">sem WhatsApp do comprador</span>'}
         </div>`;
-          }).join('');
-          })()
-          : lista.map(l => `
+          }).join('')
+          : itens.map(it => { const l = it.r; return `
         <div class="histCard">
           <div class="hcName">${escapeHtml(l.nome)}</div>
           <div class="hcCode">${l.documento ? escapeHtml(l.documento) : ''}</div>
+          ${linhaOnde(it)}
           <div class="hcStats">
             <div class="hcStat">Estoque contado<b>${l.quantidade_contada}</b></div>
             <div class="hcStat">Data da visita<b>${formatDateBr(l.data_visita)}</b></div>
           </div>
-        </div>`).join('');
+        </div>`; }).join(''));
       }
       function initProdDetailSeg() {
         // botão de WhatsApp de cada comprador (lista refeita a cada troca de aba)
         document.getElementById('prodDetailContent').addEventListener('click', (e) => {
           const b = e.target.closest('[data-whats-oferta]');
           if (b) enviarOfertaAoComprador(b.dataset.whatsOferta, b.dataset.whatsCod);
+        });
+        // filtro de cidade/raio (refeito junto com a lista)
+        document.getElementById('prodDetailContent').addEventListener('change', (e) => {
+          const sel = e.target.closest('[data-prod-local]');
+          if (!sel) return;
+          const f = prodLocalFiltro();
+          if (sel.dataset.prodLocal === 'onde') {
+            const eraPerto = f.onde === 'perto';
+            f.onde = sel.value;
+            // trocar entre cidade e "perto de mim" volta pro raio padrão de cada um
+            if ((f.onde === 'perto') !== eraPerto) f.raio = f.onde === 'perto' ? 10 : 0;
+            if (f.onde === 'perto') prodLocalErroGps = '';
+          } else {
+            f.raio = Number(sel.value) || 0;
+          }
+          guardarProdLocalFiltro(f);
+          renderProdDetailView();
         });
         const seg = document.getElementById('prodDetailSeg');
         const btns = [...seg.querySelectorAll('button')];
@@ -21491,10 +21669,7 @@
           // abriu outro produto enquanto esperava: a lista (e o WhatsApp dela) é do outro
           if (prodTabSelected !== codigo) return;
           prodDetailData = { ...data, codigo };
-          const segBtns = seg.querySelectorAll('button');
-          segBtns[0].textContent = `Já compraram (${data.compradores.length})`;
-          segBtns[1].textContent = `Levantamento (${data.levantamentos.length})`;
-          renderProdDetailView();
+          renderProdDetailView(); // põe as contagens nas abas, já com o filtro de cidade
         } catch (e) {
           content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
