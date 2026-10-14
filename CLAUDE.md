@@ -60,7 +60,7 @@ Consulta que o mock não conhece responde 500 — normal; se a tela testada depe
 PR contra `main`.
 
 Não há lint nem build configurados — as páginas `.html` (`index.html`, `curva-abc.html`,
-`ficha-cnpj.html`, `calculadora-materiais.html`) não têm bundler; a checagem de sintaxe dos
+`ficha-cnpj.html`, `calculadora-materiais.html`, `tela-cliente.html`) não têm bundler; a checagem de sintaxe dos
 blocos `<script>` inline (e do CRLF do `index.html`) é `node scripts/checar-html.js [arquivo]`.
 
 Automação do Claude Code (`.claude/`):
@@ -1000,15 +1000,26 @@ Supabase, sem PR — não é mudança de código.
   mockups). No tablet/laptop, aba Levantamento › "Usar o celular como leitor" (botão só em tela de 700 px ou mais)
   cria uma sala no modo `'leitor'` e mostra o QR; o celular conecta pelo mesmo "Conectar tablet" e abre a tela de
   leitura contínua (`#modoLeitor`): câmera sempre ligada, "+1 no estoque | +1 no pedido", "Desfazer última" e
-  "Digitar quantidade" (troca o total do item no tablet). O mesmo código parado na frente da câmera só conta de novo
-  depois de 1,5 s. Cada leitura é um **evento com id gerado no celular** (`POST /api/segunda-tela/salas/:id/eventos`),
+  "Digitar quantidade" (troca o total do item no tablet). O mesmo código parado na frente da câmera **não** soma de
+  novo: só depois de sair do quadro (um quadro sem ele) e com 400 ms da última aceita - a próxima unidade igual na
+  prateleira soma. A leitura pausa com pergunta aberta (Digitar quantidade/Sair) e em aba escondida. Cada leitura é um **evento com id gerado no celular** (`POST /api/segunda-tela/salas/:id/eventos`),
   guardado em `cortagLeitorFila_v1` até o servidor confirmar: **sem internet a leitura espera e entra no tablet
   quando o sinal volta**, e o servidor ignora id repetido (resposta perdida + reenvio não soma duas vezes). O
   celular resolve o código pelo catálogo dele (DUN-14 = caixa fechada, soma a embalagem; código desconhecido nem é
   enviado) e manda o SKU; o tablet soma no levantamento aberto (`aplicarEventoLeitor`) - salvar, comprados e não
   contados etc. continuam no tablet. O tablet pede os eventos depois do último `seq` aplicado e guarda a conexão
-  (`cortagLeitorTablet_v1`, com o `seq`), então recarregar não perde nem repete leitura; "Desfazer" de leitura feita
-  antes de recarregar o tablet é ignorado. O servidor guarda as últimas 500 leituras por sala.
+  (`cortagLeitorTablet_v1`, com o `seq`), então recarregar não perde nem repete leitura; o "Desfazer" leva o código/campo/quantidade da
+  leitura, então funciona mesmo com o tablet recarregado. Só uma aba do tablet aplica as leituras (Web Lock
+  `cortag-leitor-tablet`; a outra assume se a 1ª fechar, relendo a contagem do aparelho). A câmera do celular tem
+  contador de geração (`leitorCameraGeracao`): sair do modo leitor no meio da abertura não deixa a câmera acesa.
+  Logout no tablet ou no celular desconecta o leitor. Conectar o celular em outra sala avisa quantas leituras da
+  conexão anterior não chegaram. O servidor guarda as últimas 500 leituras por sala. Achados do `revisor-cortag`
+  (8 no leitor, 8 na tela do cliente) corrigidos no próprio PR #245.
+- **Tablet: rotação e largura** (PRs #247 e #248, 10/2026, relatos do usuário depois de instalar o app no tablet):
+  o app instalado ficava preso em pé (`manifest.json` com `portrait-primary` → `"any"`; o celular continua em pé
+  por `screen.orientation.lock`), e o levantamento ocupava só a coluna de celular — agora, só na aba Levantamento e
+  a partir de 700 px, vai até 1280 px em grade (2 colunas em pé, 3 deitado). Detalhes em "Pegadinhas de ambiente"
+  › "Rotação do app instalado".
 
 ## O que já tentamos e não deu certo
 
