@@ -129,6 +129,14 @@ Pegadinhas de ambiente:
   `index.html` segue numa coluna de 560 px no centro, **menos a aba Levantamento**: a partir de 700 px de largura
   (`body.abaLev`, ligada em `activateMainTab`) o app vai até 1280 px e a lista de itens vira grade (tablet em pé = 2
   colunas, deitado = 3) — pedido do usuário pro levantamento no tablet com o celular de leitor.
+- **"O app não abre em tela cheia"** (10/2026, reclamação de vendedores no Chrome do Android): o manifest está certo
+  (`display: standalone`); a causa é o ícone na tela ser um **atalho** ("Adicionar à tela inicial" › atalho, ou criado
+  antes de o Chrome aceitar instalar), que abre como aba do Chrome com a barra de endereço. O `index.html` agora mostra a
+  faixa "Aberto no navegador · Instalar" (`#instalarFaixa`, pelo `beforeinstallprompt`, que o Chrome só dispara com o app
+  **não** instalado; ✕ esconde 7 dias, `cortagInstalarDispensado_v1`). Quem já tem o app instalado e abre pelo atalho
+  antigo não vê a faixa (o Chrome não avisa): orientar a apagar o atalho e usar o ícone do app (ou menu do Chrome › "Abrir
+  no app"). Ficha/Histórico abrem em aba nova (`window.open`) de propósito (não perder o orçamento): no app instalado
+  aparecem com a barra do Chrome — esperado. O `<meta name="theme-color">` era `var(--red)` (inválido: CSS não vale em meta).
 - Proteção contra iframe: `frame-ancestors` no `<meta>` não vale (só em cabeçalho, e o GitHub Pages
   não manda). Cada página começa escondida (`#antiFrame`) e só aparece fora de frame; página nova
   separada leva o mesmo trecho no `<head>`.
