@@ -4,7 +4,7 @@ const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
-const { SQL_HOJE_BR } = require('./lib/comprasApp');
+const { SQL_HOJE_BR, SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido } = require('./lib/comprasApp');
 const { avisarImportacao, quantos } = require('./lib/novidades');
 
 router.param('id', validarIdInteiro);
@@ -33,6 +33,18 @@ function faixaDoTipo(tipo) {
 }
 
 const LIMIAR_PERTO_DE_SUBIR = 0.15; // falta <= 15% do tamanho da faixa conta como "perto"
+// Coluna DATE: o pg entrega como Date à meia-noite LOCAL (sem setTypeParser no
+// projeto) e o mock como texto 'AAAA-MM-DD' - String(d).slice(0, 10) de um Date
+// dá "Tue Oct 13" (achado do revisor-cortag, 10/2026). Lê os dois.
+function diaDoBanco(d) {
+  if (d == null || d === '') return null;
+  if (d instanceof Date) {
+    if (isNaN(d.getTime())) return null;
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  return String(d).slice(0, 10);
+}
+
 function hojeBrasil() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 }
@@ -307,7 +319,20 @@ function sqlFaturamentoClassificatorioPorCliente(agruparPorMatrizGrupo) {
              AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_INICIO_SQL}
              AND poi.data_faturamento < ${PERIODO_CLASSIFICATORIO_INICIO_SQL} + (${SQL_HOJE_BR} - ${PERIODO_CLASSIFICATORIO_FIM_SQL})
          ), 0) AS faturamento_mesmo_periodo_ano_anterior,
-         MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}) AS ultima_compra
+         MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}) AS ultima_compra,
+         -- Último PEDIDO (pra "sem comprar há N dias"): a nota faturada, a
+         -- entrada do pedido no ERP (implantação, inclusive em carteira, sem a
+         -- série de 7 dígitos) ou o pedido do app ainda não faturado. Só pela
+         -- nota, em 14/10/2026 o alerta "sem comprar há 60+ dias" listava 5
+         -- clientes que já tinham pedido de novo (um Master "há 209 dias" com
+         -- pedido implantado na véspera).
+         GREATEST(
+           MAX(poi.data_faturamento) FILTER (WHERE ${sqlFaturadoDeFato('poi')}),
+           MAX(poi.data_implantacao) FILTER (WHERE length(poi.nr_pedido) <= 6),
+           (SELECT MAX(${sqlDiaDoPedido('ped')}) FROM pedidos ped JOIN clientes c3 ON c3.id = ped.cliente_id
+            WHERE ${SQL_PEDIDO_APP_VALIDO}
+              AND ${agruparPorMatrizGrupo ? '(c3.id = c.id OR (c.matriz_grupo IS NOT NULL AND c3.matriz_grupo = c.matriz_grupo))' : 'c3.id = c.id'})
+         ) AS ultimo_pedido
   FROM clientes c
   ${joinC2}
   LEFT JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
@@ -347,6 +372,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     const faturamentoAnoCorrente = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_ano_corrente) : 0;
     const faturamentoMesmoPeriodoAnoAnterior = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_mesmo_periodo_ano_anterior) : 0;
     const ultimaCompra = fatResult.rows[0] ? fatResult.rows[0].ultima_compra : null;
+    const ultimoPedido = fatResult.rows[0] ? diaDoBanco(fatResult.rows[0].ultimo_pedido) : null;
     const anoPeriodo = fatResult.rows[0] ? Number(fatResult.rows[0].ano_fechado) : new Date().getUTCFullYear() - 1;
     const anoAtual = fatResult.rows[0] ? Number(fatResult.rows[0].ano_atual) : new Date().getUTCFullYear();
     const trimestreAtualIdx = fatResult.rows[0] ? Number(fatResult.rows[0].trimestre_atual_idx) : Math.floor(new Date().getUTCMonth() / 3);
@@ -456,7 +482,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       [req.params.id]
     );
     const erpRow = erpResult.rows[0];
-    const dataTxt = d => (d == null ? null : String(d).slice(0, 10));
+    const dataTxt = diaDoBanco;
     // "Ult.Compra" da planilha é congelada na apuração do ERP (relatório de
     // 02/10 = até 31/08): o card dizia "Última compra 20/08" de quem já tinha
     // faturado em 16/09 e 13/10. Vai junto a última compra faturada DESTE
@@ -572,6 +598,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     res.json({
       ...status,
       ultimaCompra,
+      ultimoPedido,
       matrizGrupo: cliente.matriz_grupo,
       pic: !!cliente.classificatorio_pic,
       vlAcordo: cliente.classificatorio_vl_acordo != null ? Number(cliente.classificatorio_vl_acordo) : null,
@@ -744,8 +771,9 @@ router.get('/classificatorio/alertas', async (req, res) => {
         }
       }
 
-      if (!status.ehRede && row.ultima_compra) {
-        const diasSemComprar = Math.floor((hoje - new Date(row.ultima_compra).getTime()) / 86400000);
+      const ultimoPedido = diaDoBanco(row.ultimo_pedido) || diaDoBanco(row.ultima_compra);
+      if (!status.ehRede && ultimoPedido) {
+        const diasSemComprar = Math.floor((hoje - new Date(`${ultimoPedido}T00:00:00Z`).getTime()) / 86400000);
         if (diasSemComprar >= DIAS_SEM_COMPRAR_ALERTA) {
           semComprarRecente.push({ ...item, diasSemComprar });
         }
@@ -973,4 +1001,5 @@ module.exports.faixaDoTipo = faixaDoTipo;
 module.exports.SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE = SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE;
 module.exports.interpretarDiferencaErp = interpretarDiferencaErp;
 module.exports.aplicarLeituraErp = aplicarLeituraErp;
+module.exports.diaDoBanco = diaDoBanco;
 module.exports.importarClassificatorioErp = importarClassificatorioErp;

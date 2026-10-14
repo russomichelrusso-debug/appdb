@@ -1167,12 +1167,13 @@ async function query(sql, params = []) {
     const clienteDoStatus = clientes.find(c => Number(c.id) === Number(params[0]));
     const agruparPorMatrizGrupo = (!clienteDoStatus || clienteDoStatus.classificatorio_tipo !== 'Rede')
       && s.includes('C2.MATRIZ_GRUPO = C.MATRIZ_GRUPO'); // variante individual não soma o grupo
-    const { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0], agruparPorMatrizGrupo);
+    const { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra, ultimo_pedido } = calcularFaturamentoAnoFechadoParaCliente(params[0], agruparPorMatrizGrupo);
     // A rota real envolve essa subconsulta num SELECT externo que também pede
     // EXTRACT(YEAR FROM ...) AS ano_fechado/ano_atual/trimestre_atual_idx -
     // inclui aqui pra bater com isso.
     return { rows: [{
-      cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra,
+      cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior,
+      ultima_compra: comoDateDoPg(ultima_compra), ultimo_pedido: comoDateDoPg(ultimo_pedido),
       ano_fechado: anoClassificatorioFechado(), ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora(),
     }] };
   }
@@ -1207,7 +1208,10 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes("CLASSIFICATORIO_TIPO IS NOT NULL")) {
     const classificados = clientes.filter(c => c.classificatorio_tipo);
-    const rows = classificados.map(c => ({ cliente_id: c.id, ...calcularFaturamentoAnoFechadoParaCliente(c.id) }));
+    const rows = classificados.map(c => {
+      const f = calcularFaturamentoAnoFechadoParaCliente(c.id);
+      return { cliente_id: c.id, ...f, ultima_compra: comoDateDoPg(f.ultima_compra), ultimo_pedido: comoDateDoPg(f.ultimo_pedido) };
+    });
     return { rows };
   }
   // PUT /api/clientes/:id/whatsapp
@@ -1290,7 +1294,8 @@ async function query(sql, params = []) {
       id: c.id,
       nome: c.nome,
       classificatorio_tipo: c.classificatorio_tipo || null,
-      ultima_compra: calcularFaturamentoAnoFechadoParaCliente(c.id).ultima_compra,
+      ultima_compra: comoDateDoPg(calcularFaturamentoAnoFechadoParaCliente(c.id).ultima_compra),
+      ultimo_pedido: comoDateDoPg(calcularFaturamentoAnoFechadoParaCliente(c.id).ultimo_pedido),
     }));
     return { rows };
   }
@@ -2193,6 +2198,12 @@ function inicioJanelaTrimestralMovel() {
 // próprio cliente quando `agruparPorMatrizGrupo` é false (usado pra Rede,
 // onde matriz_grupo guarda o nome da rede/cooperativa, não empresas
 // irmãs - somar tudo misturaria lojas sem relação societária entre si).
+// O pg entrega coluna DATE como Date à meia-noite local - não como texto.
+function comoDateDoPg(iso) {
+  if (!iso) return null;
+  const [a, m, d] = String(iso).slice(0, 10).split('-').map(Number);
+  return new Date(a, m - 1, d);
+}
 function calcularFaturamentoAnoFechadoParaCliente(clienteId, agruparPorMatrizGrupo = true) {
   const cliente = clientes.find(c => Number(c.id) === Number(clienteId));
   if (!cliente) return { faturamento_12m: 0, faturamento_ano_corrente: 0, faturamento_mesmo_periodo_ano_anterior: 0, ultima_compra: null };
@@ -2222,7 +2233,14 @@ function calcularFaturamentoAnoFechadoParaCliente(clienteId, agruparPorMatrizGru
   const faturamento_mesmo_periodo_ano_anterior = itensMesmoPeriodo.reduce((s, it) => s + (Number(it.valor) || 0), 0);
   const datas = itensFaturados.map(it => it.data_faturamento).filter(Boolean).sort();
   const ultima_compra = datas.length ? datas[datas.length - 1] : null;
-  return { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra };
+  // ultimo_pedido: nota faturada, implantação (sem série de 7 dígitos) ou pedido do app
+  const idsGrupo = grupo.map(c => Number(c.id));
+  const candidatos = [ultima_compra,
+    ...pedidosOficiaisItens.filter(it => codigos.includes(it.cliente_codigo_oficial) && it.data_implantacao && String(it.nr_pedido).length <= 6).map(it => String(it.data_implantacao).slice(0, 10)),
+    ...pedidos.filter(p => idsGrupo.includes(Number(p.cliente_id)) && p.origem !== 'faturamento' && p.data_pedido).map(p => diaDoPedidoBr(p.data_pedido)),
+  ].filter(Boolean).map(d => String(d).slice(0, 10)).sort();
+  const ultimo_pedido = candidatos.length ? candidatos[candidatos.length - 1] : null;
+  return { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra, ultimo_pedido };
 }
 
 function computeHistorico(clienteId) {
