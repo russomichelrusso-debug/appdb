@@ -3645,7 +3645,7 @@ async function main() {
     const ctxVm = { DB: { categories: [] }, state: { canal: 'VAREJO' }, productByCod: () => null };
     vm.createContext(ctxVm);
     vm.runInContext(ini >= 0 && fim > ini ? html.slice(ini, fim) : '', ctxVm);
-    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem, proximaFaixaCampanha } = ctxVm;
+    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem, proximaFaixaCampanha, campanhasDoItem } = ctxVm;
     if (!avaliarCampanhas || !bestBonusForProduct || !bonusDaCampanhaNoItem) {
       assert(false, 'motor de campanhas: trecho <motor-campanhas> não encontrado no index.html');
     } else {
@@ -3668,6 +3668,27 @@ async function main() {
       assert(iguais && Object.keys(r19.bonuses).length === 0 && Object.keys(atacado.bonuses).length === 0
         && bestBonusForProduct(b, discos[0].p).pct === 5 && bestBonusForProduct(b, discos[1].p) === null,
         'campanha: regra antiga (sem os campos novos) vale como antes - mesma chave e %, ignora estado/classificatório/data, só no Varejo');
+      // 1a) fita do card (Pedido/Levantamento): campanhas do item no contexto, sem
+      // olhar a quantidade; "pedido todo", exclusão, outro canal/estado e Preço Fixo ×
+      // soNoPrecoFixo ficam de fora; maior % primeiro
+      if (!campanhasDoItem) {
+        assert(false, 'campanha: campanhasDoItem não está no trecho <motor-campanhas>');
+      } else {
+        const disco = { c: '60001', n: '60001', familia: 'Discos' };
+        const regras = [
+          antiga,
+          { id: 'r2', name: 'Lista', active: true, targetType: 'skuList', targetValue: '60001,60002', basis: 'self', selfMetric: 'qty', tiers: [{ min: 6, pct: 10 }] },
+          { id: 'r3', name: 'Pedido todo', active: true, targetType: 'all', targetValue: '', basis: 'self', selfMetric: 'skus', tiers: [{ min: 3, pct: 2 }] },
+          { id: 'r4', name: 'Sem 60001', active: true, targetType: 'category', targetValue: 'Discos', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 20 }], excluirCodigos: ['60001'] },
+          { id: 'r5', name: 'Só SP', active: true, targetType: 'product', targetValue: '60001', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 30 }], ufs: ['SP'] },
+          { id: 'r6', name: 'BF fixo', active: true, targetType: 'product', targetValue: '60001', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 15 }], soNoPrecoFixo: true },
+          { id: 'r7', name: 'Inativa', active: false, targetType: 'product', targetValue: '60001', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 40 }] },
+        ];
+        const nomes = (fixo, extra) => campanhasDoItem(regras, disco, ctx(extra), fixo).map(r => r.name).join();
+        assert(nomes(false) === 'Lista,Discos' && nomes(true) === 'BF fixo' && nomes(false, { uf: 'SP' }) === 'Só SP,Lista,Discos'
+          && nomes(false, { canal: 'ATACADO' }) === '' && campanhasDoItem(regras, { c: '70001', n: '70001', familia: 'Brocas' }, ctx(), false).length === 0,
+          'campanha: fita do card lista as campanhas do item no contexto (sem pedido todo, exclusão, inativa; Preço Fixo só com soNoPrecoFixo), maior % primeiro');
+      }
       // 1b) barra do orçamento: próxima faixa da campanha mais perto (só com item do
       // alvo no orçamento, faltando até metade da faixa; cesta fica de fora)
       const prox = (regras, rows, extra) => proximaFaixaCampanha(regras, rows, ctx(extra));
