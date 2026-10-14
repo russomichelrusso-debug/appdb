@@ -27,6 +27,7 @@ let novidades = []; // routes/lib/novidades.js
 let importacoesEmail = []; // routes/importacaoEmail.js
 let pedidosBloqueados = []; // pedidos_bloqueados
 let avisosCancelamento = []; // avisos_cancelamento_saldo
+let importLog = []; // import_log (rota, criado_em)
 let previsaoEstoque = []; // previsao_estoque
 let nextNovidadeId = 1;
 let pushInscricoes = []; // push_inscricoes
@@ -69,6 +70,7 @@ function reset() {
   importacoesEmail = [];
   pedidosBloqueados = [];
   avisosCancelamento = [];
+  importLog = [];
   previsaoEstoque = [];
   nextNovidadeId = 1;
   pushInscricoes = [];
@@ -110,11 +112,14 @@ function bloqueiosAtivos() {
 
 // Reproduz sqlAvisoCancelamentoAtivo (routes/lib/cancelamentoSaldo.js): menos
 // de 15 dias e o item não apareceu faturado depois do aviso
+// - e some quando um relatório importado depois do aviso não traz mais o item em carteira
 function avisosCancelamentoAtivos() {
   const limite = Date.now() - 15 * 86400000;
   return avisosCancelamento.filter(a => new Date(a.recebido_em).getTime() > limite
     && !pedidosOficiaisItens.some(i => i.nr_pedido === a.nr_pedido && i.codigo_sku === a.codigo_sku && i.status === 'faturado'
-      && i.data_faturamento && String(i.data_faturamento).slice(0, 10) > a.data_aviso));
+      && i.data_faturamento && String(i.data_faturamento).slice(0, 10) > a.data_aviso)
+    && (pedidosOficiaisItens.some(i => i.nr_pedido === a.nr_pedido && i.codigo_sku === a.codigo_sku && i.status === 'carteira')
+      || !importLog.some(l => l.rota === 'pedidos-oficiais/importar' && new Date(l.criado_em).getTime() > new Date(a.recebido_em).getTime())));
 }
 function camposAviso(a) {
   return { nr_pedido: a.nr_pedido, codigo_sku: a.codigo_sku, descricao: a.descricao, motivo: a.motivo,
@@ -2122,6 +2127,7 @@ async function query(sql, params = []) {
   // Rastro de quem fez cada importação em massa (registrarImportacao, db.js) -
   // o teste não confere o conteúdo, só que a chamada não derruba a rota.
   if (s.startsWith('INSERT INTO IMPORT_LOG')) {
+    importLog.push({ rota: params[1], criado_em: new Date().toISOString() });
     return { rows: [] };
   }
 
