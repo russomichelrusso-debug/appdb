@@ -166,6 +166,11 @@ Pegadinhas de ambiente:
   Usar `formatDateBr` (`index.html`, formata `AAAA-MM-DD` direto do texto), `partesDoPeriodo`
   (`curva-abc.html`, rótulos dos gráficos) ou `String(d).slice(0, 10)`. Já causou: faturado 11/09
   aparecendo 10/09 (PR #134) e o gráfico mensal inteiro um mês atrás, setembro como "ago/26" (PR #135).
+  **No servidor (Node) é diferente:** o projeto não tem `setTypeParser`, então o `pg` entrega coluna `DATE`
+  como objeto `Date` (meia-noite local), e `String(d).slice(0, 10)` dá `"Tue Oct 13"`. No Node usar
+  `diaDoBanco` (`routes/clientesClassificatorio.js`, lê `Date` e texto) ou `::text` no SQL. O mock devolve
+  texto na maioria das consultas e esconde isso: as de faturamento por cliente devolvem `Date` como o pg
+  (`comoDateDoPg`, `test/mock-db.js`). Já causou a "Última compra" do card do ERP quebrada (PR #251, corrigido no #254).
 
 ## Fluxo de trabalho
 
@@ -378,6 +383,16 @@ Supabase, sem PR — não é mudança de código.
     que ganhou `unidade`/`vazio` por cartão.
   - Decisão do usuário: em "Já compraram" a data mostrada é a do **faturamento** (a NF ao lado é
     dela), não a do pedido.
+  - **"Sem comprar há N dias" conta pelo último PEDIDO** (PR #254, 10/2026, pedido do usuário: "o cliente fica
+    constando sem pedido há muito tempo e na verdade já vendeu depois"): `ultimo_pedido` em
+    `sqlFaturamentoClassificatorioPorCliente` = o mais novo entre a nota faturada de fato, a implantação no ERP
+    (carteira inclusive, sem a série de 7 dígitos) e o pedido do app (`SQL_PEDIDO_APP_VALIDO` +
+    `sqlDiaDoPedido`), agrupado por `matriz_grupo` como o faturamento. Usado no alerta "Sem comprar há 60+ dias"
+    do classificatório, nos cartões "Contas sem comprar"/"ativos por canal" do Dashboard e na linha da ficha
+    (`status.ultimoPedido`). Só pela nota, em 14/10/2026 o alerta listava 5 clientes que já tinham pedido de novo
+    (NANUNCIO & CALCA, Master, "há 209 dias" com pedido implantado em 13/10). Faturamento e faixa continuam por
+    `sqlFaturadoDeFato`. "Para reativar", "Visitas × compras" e "Recompra" já contavam carteira + app. Tela nova
+    de "há quanto tempo não compra" usa a mesma régua.
   - **Produto que saiu da tabela de preços** aparece com o nome da coluna "Descrição" do relatório
     (`pedidos_oficiais_itens.descricao`, gravada na importação desde 09/2026), não só com o código.
     Eram 94 códigos fora de `produtos` (615 linhas, 411 pedidos, 72 sem venda há mais de 1 ano —
@@ -456,6 +471,18 @@ Supabase, sem PR — não é mudança de código.
     (`cliente_classificatorio_erp.data_relatorio`).
   - Série de 7 dígitos: o ERP **conta** no classificatório na maioria dos casos (8 clientes), mas não
     em 2 (5569, 21650) — não aplicar o filtro `length(nr_pedido) <= 6` no classificatório.
+  - **"Última compra" do Oficial do ERP** (PR #251, 10/2026, relato do usuário: "20/08" no card e NF de 16/09 e
+    13/10 no histórico): a "Ult.Compra" da planilha para na apuração (relatório de 02/10 = até 31/08). A rota
+    manda `erp.ultimaCompraApp` (último faturado de fato **deste CNPJ** no app, sem somar o grupo) e o card
+    mostra a mais nova: "13/10/2026 (no ERP até 31/08: 20/08)". Em 14/10/2026, 5 dos 6 clientes de Goioerê
+    tinham a do ERP atrasada.
+  - **Objetivo trimestral de período encerrado** (PR #251): os objetivos do Painel valem pro período importado
+    (`configuracoes.objetivos_trimestrais`, `periodoInicio`/`periodoFim`). Em 14/10/2026 ainda era o de jul–set
+    e o card dizia "Faltam R$ 5.448 pra bater o objetivo do trimestre" com a entrada de jul–set. Passado o
+    `periodoFim` (dia de Brasília), a rota não manda `faltaPObjetivo`/`objetivoTrimestral` e devolve
+    `objetivoEncerrado` ({período, objetivo, entrada, falta}): a ficha mostra só o resultado, em cinza, com
+    "os objetivos do trimestre atual ainda não foram importados", e o card do Pedido/Levantamento volta pra
+    meta automática da faixa. Objetivos não chegam por e-mail: alguém tem de importar a cada trimestre.
 
 - **Trocar de cliente limpa o que era do anterior** (10/2026, relato do usuário: trocar o cliente deixava o
   levantamento e o carrinho do anterior na tela — a contagem ia pro cliente novo e "Finalizar" gravava um pedido
@@ -485,7 +512,8 @@ Supabase, sem PR — não é mudança de código.
   previsão/obsoleto, acima de 90 dias e à vista sem pagamento. Regra do usuário pra salvar o saldo:
   o cliente aumenta a quantidade — **com 1 código no saldo, só ele; com 2 ou mais, qualquer um
   deles**. O card do pedido parcial mostra "⚠ Saldo abaixo do mínimo · faltam R$ X" com quanto de
-  cada item completa (`renderAvisoSaldoMinimo`, `index.html`), cruzado com a planilha de itens em
+  cada item completa (`renderAvisoSaldoMinimo`, `index.html`; quantidade no **múltiplo da embalagem**,
+  `packStep`, desde o PR #251: antes saía "+11 un." de cola vendida em caixa de 6), cruzado com a planilha de itens em
   falta (Previsão de estoque, `PREVISAO_MAP`): item sem previsão de chegada fica fora da sugestão
   (aumentar não evita o corte) e cada item do saldo leva o selo "chega DD/MM"/"sem previsão". O
   mínimo vem da API pela UF da ficha de CNPJ (`routes/lib/saldoMinimo.js`; sem ficha = R$ 300).
