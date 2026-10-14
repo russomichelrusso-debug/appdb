@@ -29,6 +29,9 @@ como meia-noite UTC; no fuso do Brasil viram o dia/mês anterior. Exibir com `fo
 (`index.html`), `partesDoPeriodo` (`curva-abc.html`) ou `String(d).slice(0, 10)`. Procure
 `new Date(` aplicado a esses campos seguido de `toLocaleDateString`, `getDate`, `getMonth`,
 `toISOString().slice`, `Intl.DateTimeFormat`. (PRs #134 e #135.)
+**No Node é o contrário:** o `pg` entrega `DATE` como objeto `Date` (o projeto não tem `setTypeParser`), e
+`String(d).slice(0, 10)` numa linha do banco dá `"Tue Oct 13"`. No servidor usar `diaDoBanco`
+(`routes/clientesClassificatorio.js`) ou `::text` no SQL. O mock devolve texto e esconde isso (PR #254).
 No SQL, o dia de `data_pedido` (TIMESTAMPTZ, banco em UTC) sai **só** por `sqlDiaDoPedido`
 (`routes/lib/comprasApp.js`): `data_pedido::date`/`DATE(data_pedido)` põe o pedido das 21h+ no
 dia seguinte, e converter direto pro fuso estraga o pedido de PDF (gravado só com a data, à
