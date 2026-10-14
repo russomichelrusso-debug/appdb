@@ -16859,7 +16859,11 @@
         }
         const local = [erp.cidade, erp.uf].filter(Boolean).join('/');
         const info = [
-          ['Última compra', erp.ultimaCompra ? formatDateBr(erp.ultimaCompra) : 'sem compra registrada'],
+          // a da planilha para na apuração do ERP; faturado depois dela (que o
+          // app já importou) vale mais - senão "20/08" ao lado de NF de 13/10
+          ['Última compra', erp.ultimaCompraApp && erp.ultimaCompraApp > (erp.ultimaCompra || '')
+            ? `${formatDateBr(erp.ultimaCompraApp)} <span style="color:var(--gray);font-size:12px;">(no ERP até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5)}: ${erp.ultimaCompra ? formatDateBr(erp.ultimaCompra).slice(0, 5) : 'nenhuma'})</span>`
+            : (erp.ultimaCompra ? formatDateBr(erp.ultimaCompra) : 'sem compra registrada'), true],
           ['Situação', erp.situacao],
           ['Cidade', local],
           ['Cliente desde', erp.clienteDesde ? formatDateBr(erp.clienteDesde) : null],
@@ -16890,7 +16894,7 @@
             </div>
           </div>
           ${aviso}
-          ${info.length ? `<dl class="clsInfo">${info.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>` : ''}
+          ${info.length ? `<dl class="clsInfo">${info.map(([k, v, html]) => `<dt>${k}</dt><dd>${html ? v : escapeHtml(String(v))}</dd>`).join('')}</dl>` : ''}
         </div>`;
       }
 

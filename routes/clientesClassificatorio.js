@@ -457,6 +457,18 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     );
     const erpRow = erpResult.rows[0];
     const dataTxt = d => (d == null ? null : String(d).slice(0, 10));
+    // "Ult.Compra" da planilha é congelada na apuração do ERP (relatório de
+    // 02/10 = até 31/08): o card dizia "Última compra 20/08" de quem já tinha
+    // faturado em 16/09 e 13/10. Vai junto a última compra faturada DESTE
+    // CNPJ que o app conhece (sem somar o grupo, como a da planilha).
+    let ultimaCompraClienteApp = null;
+    if (erpRow) {
+      if (ehRede) ultimaCompraClienteApp = dataTxt(ultimaCompra);
+      else {
+        const r = await pool.query(`${SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id`, [req.params.id]);
+        ultimaCompraClienteApp = dataTxt(r.rows[0] && r.rows[0].ultima_compra);
+      }
+    }
     // Parte dos 12 meses da matriz que vem de empresas FORA do app (filiais
     // atendidas por outros representantes): matriz do ERP menos o "12 meses ·
     // cliente" das empresas do grupo que estão no app, no mesmo relatório.
@@ -554,6 +566,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       uf: erpRow.uf,
       clienteDesde: dataTxt(erpRow.cliente_desde),
       ultimaCompra: dataTxt(erpRow.ultima_compra),
+      ultimaCompraApp: ultimaCompraClienteApp,
     } : null;
 
     res.json({

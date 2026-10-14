@@ -887,6 +887,16 @@ async function main() {
       && erp.fat12mOutrasEmpresas === 23445.15,
     `status devolve a foto oficial da planilha (números iguais aos dela): ${JSON.stringify(erp)}`
   );
+  // "Ult.Compra" da planilha para na apuração do ERP (31/08): faturado depois
+  // dela, que o app já importou, vai em ultimaCompraApp pro card mostrar
+  mockDb.__getPedidosOficiaisItens().push({ nr_pedido: 'PERP60', codigo_sku: '60863', cliente_codigo_oficial: 'COD9060', quantidade: 1, valor: 100, data_faturamento: '2026-09-16', data_implantacao: '2026-09-10', status: 'faturado' });
+  res = await req('GET', '/api/clientes/9060/classificatorio/status');
+  assert(
+    res.status === 200 && res.body.erp?.ultimaCompra === '2026-07-27' && res.body.erp?.ultimaCompraApp === '2026-09-16',
+    `última compra faturada depois da apuração do ERP vem junto da da planilha: ${JSON.stringify({ erp: res.body.erp?.ultimaCompra, app: res.body.erp?.ultimaCompraApp })}`
+  );
+  mockDb.__getPedidosOficiaisItens().pop();
+
   // relatório mais antigo não desfaz nem a faixa nem a foto - nem matriz, PIC e valor de acordo
   res = await req('POST', '/api/clientes/classificatorio/importar', {
     dataRelatorio: '2026-09-01', apuradoAte: '2026-07-31',
