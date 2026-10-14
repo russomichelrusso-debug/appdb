@@ -476,6 +476,13 @@ Supabase, sem PR — não é mudança de código.
     manda `erp.ultimaCompraApp` (último faturado de fato **deste CNPJ** no app, sem somar o grupo) e o card
     mostra a mais nova: "13/10/2026 (no ERP até 31/08: 20/08)". Em 14/10/2026, 5 dos 6 clientes de Goioerê
     tinham a do ERP atrasada.
+  - **"Faltam R$ X pra manter/subir" do ERP** é da apuração (coluna "Diferenca"): embaixo do aviso o card mostra
+    quanto faturou depois dela (`erp.conciliacao.doze.depoisApuracao`) e, quando isso já cobre o que faltava,
+    "pode já ter resolvido; confira Ao vivo no app" (6 de 202 clientes com diferença em 14/10/2026).
+  - Outros dados de foto do ERP conferidos em 14/10/2026 e já tratados: Para reativar (recontado pela compra
+    mais nova), previsão de estoque (data passada não aparece), Inadimplência ("posição de DD/MM" + aviso após
+    15 dias), pedido bloqueado (some quando fatura), Recompra ("pedidos do ERP até DD/MM"). "Situação" da
+    planilha: todos "Ativo".
   - **Objetivo trimestral de período encerrado** (PR #251): os objetivos do Painel valem pro período importado
     (`configuracoes.objetivos_trimestrais`, `periodoInicio`/`periodoFim`). Em 14/10/2026 ainda era o de jul–set
     e o card dizia "Faltam R$ 5.448 pra bater o objetivo do trimestre" com a entrada de jul–set. Passado o
