@@ -43,7 +43,7 @@
   }}</script>
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="var(--red)">
+  <meta name="theme-color" content="#CC0935">
   <link rel="icon" href="icon-192.png">
   <link rel="apple-touch-icon" href="icon-192.png">
   <style>
@@ -5252,6 +5252,54 @@
       display: none;
     }
 
+    /* Aberto na aba do Chrome (sem tela cheia): convite pra instalar o app.
+       Atalho criado por "Adicionar à tela inicial" abre no Chrome, com a barra
+       de endereço - só o app instalado abre em tela cheia (10/2026). */
+    .instalarFaixa {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: calc(100% - 32px);
+      margin: 10px 16px 0;
+      padding: 8px 8px 8px 14px;
+      background: rgba(204, 9, 53, .07);
+      border: 0.75px solid rgba(204, 9, 53, .25);
+      border-radius: var(--r-md);
+      color: var(--ink);
+      font-size: 13px;
+    }
+
+    .instalarFaixa.hidden {
+      display: none;
+    }
+
+    .instalarFaixa .instalarTexto {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .instalarFaixa .instalarBtn {
+      min-height: 44px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: var(--r-sm);
+      background: var(--red);
+      color: #fff;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .instalarFaixa .instalarFechar {
+      min-width: 44px;
+      min-height: 44px;
+      border: 0;
+      background: none;
+      color: var(--gray);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
     .novidadesFaixa .seta {
       color: var(--red);
       font-size: 18px;
@@ -8326,6 +8374,11 @@
     <div class="segundaTelaFaixa hidden" id="segundaTelaFaixa" role="status"></div>
     <div class="segundaTelaFaixa hidden" id="leitorFaixa" role="status"></div>
     <button type="button" class="novidadesFaixa hidden" id="novidadesFaixa" aria-label="Ver novidades"></button>
+    <div class="instalarFaixa hidden" id="instalarFaixa" role="status">
+      <span class="instalarTexto">📲 <b>Aberto no navegador</b>, sem tela cheia. Instale o app pra abrir direto, em tela cheia.</span>
+      <button type="button" class="instalarBtn" id="instalarAppBtn">Instalar</button>
+      <button type="button" class="instalarFechar" id="instalarFecharBtn" aria-label="Agora não">✕</button>
+    </div>
 
     <div id="tabPrecos">
       <div class="clienteCard" id="precosClienteCard">
@@ -24733,6 +24786,47 @@
           screen.orientation.lock('portrait-primary').catch(() => { });
         }
       } catch (e) { }
+      // Instalar o app (Chrome do Android/computador). Reclamação de 10/2026: "o app
+      // não abre em tela cheia". O atalho de "Adicionar à tela inicial" (ou o ícone
+      // criado antes de o Chrome aceitar instalar) abre como aba do Chrome, com a
+      // barra de endereço; só o app instalado abre sozinho. O Chrome só dispara o
+      // beforeinstallprompt quando o app NÃO está instalado neste aparelho, então a
+      // faixa nunca aparece pra quem já usa o app instalado. "✕" esconde por 7 dias.
+      (function () {
+        const CHAVE_DISPENSA = 'cortagInstalarDispensado_v1';
+        let pedidoInstalacao = null;
+        const faixa = () => document.getElementById('instalarFaixa');
+        function dispensadoRecente() {
+          try { return Date.now() - Number(localStorage.getItem(CHAVE_DISPENSA) || 0) < 7 * 864e5; } catch (e) { return false; }
+        }
+        function esconder() { const el = faixa(); if (el) el.classList.add('hidden'); }
+        window.addEventListener('beforeinstallprompt', (e) => {
+          e.preventDefault(); // a faixa substitui a barrinha do Chrome
+          pedidoInstalacao = e;
+          const el = faixa();
+          if (el && !dispensadoRecente()) el.classList.remove('hidden');
+        });
+        window.addEventListener('appinstalled', () => { pedidoInstalacao = null; esconder(); });
+        document.addEventListener('DOMContentLoaded', () => {
+          const btn = document.getElementById('instalarAppBtn');
+          const fechar = document.getElementById('instalarFecharBtn');
+          if (btn) btn.addEventListener('click', async () => {
+            if (!pedidoInstalacao) { esconder(); return; }
+            const pedido = pedidoInstalacao;
+            pedidoInstalacao = null; // o prompt() só pode ser chamado uma vez
+            try {
+              await pedido.prompt();
+              const escolha = await pedido.userChoice;
+              esconder();
+              if (escolha && escolha.outcome === 'accepted') showToast('App instalado — abra pelo ícone "Cortag". Se tinha um atalho antigo na tela, pode apagar.');
+            } catch (e) { esconder(); }
+          });
+          if (fechar) fechar.addEventListener('click', () => {
+            try { localStorage.setItem(CHAVE_DISPENSA, String(Date.now())); } catch (e) { }
+            esconder();
+          });
+        });
+      })();
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('sw.js')
