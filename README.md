@@ -53,11 +53,12 @@ routes/
   fichasTecnicas.js                     # balão de ficha técnica (specs resumidas)
   codigosProduto.js                      # EAN-13/DUN-14 por SKU (scanner de código de barras)
   assistente.js                           # assistente de IA (Gemini) — interpreta pergunta falada, nunca inventa dado
+  segundaTela.js                          # tablet como tela do cliente: salas em memória, pareamento por QR, long-poll
   lib/                                     # regras compartilhadas: skuNormalizacao (código promocional → base),
                                            # agrupamentoProduto (variações → "o produto"), politicaComercial,
                                            # cnpjBrasilApi, preenchimentoCnpj
 test/                    # suite de testes (node test/run_tests.js), banco simulado em test/mock-db.js
-index.html, curva-abc.html, calculadora-materiais.html, ficha-cnpj.html, catalogo-embutido.js, manifest.json, icon-*.png  # PWA estático servido pelo GitHub Pages
+index.html, curva-abc.html, calculadora-materiais.html, ficha-cnpj.html, tela-cliente.html, catalogo-embutido.js, manifest.json, icon-*.png  # PWA estático servido pelo GitHub Pages
 .github/workflows/keep-alive.yml  # ping em /health a cada 10 min pra evitar o Render dormir (free tier)
 ```
 
@@ -133,6 +134,7 @@ Não é usuário/senha. O fluxo:
 - `/api/inadimplencia` (+ `POST /api/inadimplencia/importar`, só admin) — "💰 Inadimplência" (aba Clientes) e faixa no card do cliente: títulos vencidos e não pagos do Relatório de Inadimplência do ERP (e-mail sem dia fixo, anexo `20.xlsx`, ou Painel), por cliente, maior valor primeiro. Foto do último relatório em `titulos_inadimplentes` (sumiu = pago; período mais antigo é ignorado), dados do relatório em `configuracoes.inadimplencia_relatorio`; a tela sempre mostra "posição de DD/MM". Só alerta, não trava pedido
 - `/api/reativacao` (+ `POST /api/reativacao/importar`, `POST /api/reativacao/:id/adiar`) — "💤 Para reativar" (aba Clientes): clientes há 3+ meses sem compra pelo Relatório de Clientes Sem Compra do ERP (todo dia 2, pela importação por e-mail ou pelo Painel; foto em `clientes_sem_compra`, dados do relatório em `configuracoes.clientes_sem_compra_relatorio`) — 🟡 3–5 meses, 🔴 6–12, 💤 mais de 12 (com código do ERP, fora do relatório, última compra antes do período). Meses recontados pelo mês de hoje e pela compra mais nova que o app conhece. `adiar` = "Já falei" (30 dias) ou "Não reativar" (até comprar de novo), tabela `reativacao_adiamentos`
 - `/api/recompra` (+ `POST /api/recompra/:id/adiar`) — Recompra da semana (topo da aba Clientes): clientes com a próxima compra atrasada ou prevista pros próximos 7 dias, pelo ritmo dos últimos 12 meses (mediana dos intervalos, mín. 3 compras; compras a até 7 dias uma da outra = uma só), com os produtos pro "Montar proposta" (`routes/lib/ritmoCompra.js`). `adiar` = "Já falei": sai da lista por 7 dias (tabela `recompra_adiamentos`)
+- `/api/segunda-tela` — tablet como tela do cliente (`tela-cliente.html`): `POST /salas` (tablet cria a sala e recebe o código de 4 dígitos do QR, válido 5 min), `POST /entrar {codigo}` (celular da MESMA conta entra; o código vale uma vez), `PUT /salas/:id/estado` (celular manda a foto inteira do orçamento), `GET /salas/:id?papel=tablet&esperar=1&versao=N&pareada=0|1` (tablet espera até 25 s pela próxima versão — long-poll) e `DELETE /salas/:id`. Salas só na memória do servidor (reinício/deploy desconecta; o tablet mostra um QR novo), no máximo 4 por conta
 - `/api/produtos/:codigo/clientes` — "Já compraram" (faturado oficial + app, por cliente, com a última data de faturamento e NF) e "Levantamento" (última contagem por cliente) da aba Produtos
 - `/api/dashboard/resumo` — dados do Dashboard (`curva-abc.html`): entrada de pedidos mensal + lista dos pedidos do mês (`entradaPedidosMes`), vendas semanal/trimestral, top clientes, clientes ativos por canal, contas sem compra
 - `/api/produtos-abc-geral`, `/api/clientes/:id/produtos-abc` — Curva ABC geral e por cliente (faturado oficial)

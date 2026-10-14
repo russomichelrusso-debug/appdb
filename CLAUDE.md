@@ -962,6 +962,24 @@ Supabase, sem PR — não é mudança de código.
 
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
+- **Tablet como tela do cliente** (10/2026, 1ª das ideias de "dois aparelhos"; mockups escolhidos pelo usuário:
+  **lista completa com vitrine temporária**). O tablet abre `tela-cliente.html` (⋯ Atalhos › "Tela do cliente
+  (neste tablet)"), que cria uma sala (`routes/segundaTela.js`) e mostra um QR + código de 4 dígitos; o celular entra
+  por ⋯ Atalhos › "Conectar tablet" (lê o QR com o leitor do app ou digita o código; o QR é o endereço
+  `index.html?parear=NNNN`, então a câmera comum também conecta). **Mesma conta Google nos dois** - o código só é
+  procurado entre as salas do próprio usuário. Daí o celular manda a **foto inteira** do orçamento a cada mudança
+  (`estadoParaTelaCliente`, gancho em `renderCartBar` e `setLevCliente`) e o tablet espera a próxima versão por
+  long-poll (até 25 s). Vai só o que o cliente pode ver: nome, quantidade, preço com imposto, campanha (de/por),
+  total, economia, "faltam R$ X pro frete CIF/pedido mínimo" e a próxima faixa de campanha - **nunca classificatório,
+  canal, ficha nem histórico**. Item novo aparece ~7 s em destaque (vitrine) e volta pra lista. Faixa verde no celular
+  em todas as abas com **Esconder** (o tablet mostra "Seu orçamento volta já") e **Desconectar**. Salas **só na
+  memória** do servidor (deploy/reinício desconecta - o tablet mostra QR novo; com várias instâncias, na v2, teria
+  de ir pro banco); nada passa pela fila offline (é só tela: sem internet o tablet fica com a última versão e o
+  celular reenvia quando volta). Conexão do celular em `cortagSegundaTela_v1` (sobrevive a reabrir o app); sair do
+  app desconecta. Fora desta 1ª versão (decisão do usuário): escolher o que o tablet mostra (preço unitário e
+  campanha sempre aparecem, código não). Próximo passo combinado: **celular como leitor do levantamento no tablet**
+  (opção "cada leitura soma 1").
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

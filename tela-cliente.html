@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://accounts.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; img-src 'self' data: blob: https:; connect-src 'self' https:; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self';">
+  <!-- Contra clickjacking: mesmo trecho das outras páginas (ver ficha-cnpj.html). -->
+  <style id="antiFrame">html { display: none !important; }</style>
+  <script>
+    if (window.top === window.self) {
+      document.getElementById('antiFrame').remove();
+    } else {
+      try { window.top.location = window.self.location.href; } catch (e) { }
+    }
+  </script>
+  <title>Cortag · Tela do cliente</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#CC0935">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <!-- QR Code do pareamento (versão fixa: o sw.js guarda pelo endereço) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js" defer></script>
+  <style>
+    :root {
+      --red: #CC0935;
+      --red-deep: #A30729;
+      --ink: #1D1D1F;
+      --gray: #6E6E73;
+      --fill: #F5F5F7;
+      --hairline: #D2D2D7;
+      --white: #FFFFFF;
+      --r-sm: 10px;
+      --r-md: 16px;
+      --r-lg: 22px;
+      --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
+      /* mesmos tokens de status do index.html */
+      --on-accent: #FFFFFF;
+      --success: #1E8E3E;
+      --warning: #B36B00;
+      --danger: #B3261E;
+      --success-bg: #E7F3EC;
+      --warning-bg: #FFF4E5;
+      --danger-bg: #FDECEC;
+      --accent-bg: #FCE9EC;
+      --info-bg: #E8F0FE;
+      --info: #0062C4;
+      --neutral-2: #E8E8ED;
+      --success-strong: #1E8E3E;
+      color-scheme: light;
+    }
+
+    html[data-theme="dark"] {
+      --ink: #F2F2F4;
+      --gray: #98989D;
+      --fill: #1C1C1E;
+      --hairline: #3A3A3C;
+      --white: #2C2C2E;
+      --success: #4CC46B;
+      --warning: #F0A33C;
+      --danger: #FF6B61;
+      --success-bg: #1F3A27;
+      --warning-bg: #3A2D17;
+      --danger-bg: #3D1F1D;
+      --accent-bg: #3D1C24;
+      --info-bg: #1B2A40;
+      --info: #6CB1FF;
+      --neutral-2: #3A3A3C;
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--fill);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .hidden { display: none !important; }
+
+    button { font: inherit; color: inherit; }
+
+    /* ---- carregando / login (mesmo esquema das outras páginas) ---- */
+    .loadingScreen, .loginScreen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      background: var(--fill);
+      z-index: 50;
+      padding: 16px;
+    }
+    .brand { font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: var(--red); }
+    .loginCard {
+      width: 100%;
+      max-width: 380px;
+      background: var(--white);
+      border-radius: var(--r-lg);
+      padding: 28px 22px;
+      box-shadow: var(--shadow-2);
+      text-align: center;
+    }
+    .loginCard h2 { margin: 6px 0 10px; font-size: 18px; }
+    .ap-hint { font-size: 13px; color: var(--gray); line-height: 1.4; }
+    .ap-msg { border-radius: var(--r-sm); padding: 10px 12px; font-size: 13px; margin-bottom: 10px; text-align: left; }
+    .ap-msg.error { background: var(--danger-bg); color: var(--danger); }
+
+    /* ---- moldura ---- */
+    .topo {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      min-height: 68px;
+      background: var(--white);
+      border-bottom: 1px solid var(--hairline);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 24px;
+    }
+    .topoEsq { display: flex; align-items: center; gap: 18px; min-width: 0; }
+    .marca { font-size: 23px; font-weight: 800; letter-spacing: -.5px; color: var(--red); flex-shrink: 0; }
+    .topoDiv { width: 1px; height: 32px; background: var(--hairline); flex-shrink: 0; }
+    .topoCliente { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .topoCliente small { font-size: 13px; color: var(--gray); }
+    .topoCliente strong { font-size: 18px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .topoDir { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .topoVendedor { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+    .topoVendedor strong { font-size: 15px; font-weight: 600; }
+    .topoVendedor small { font-size: 13px; color: var(--gray); }
+    .opcoesBtn {
+      width: 44px;
+      height: 44px;
+      border: 0;
+      border-radius: 22px;
+      background: transparent;
+      color: var(--gray);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .opcoesBtn svg { width: 22px; height: 22px; }
+    .opcoesMenu {
+      position: absolute;
+      right: 16px;
+      top: 62px;
+      min-width: 220px;
+      padding: 6px;
+      background: var(--white);
+      border-radius: var(--r-sm);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .22);
+      z-index: 20;
+    }
+    .opcoesMenu button {
+      display: block;
+      width: 100%;
+      min-height: 48px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 10px;
+      background: transparent;
+      text-align: left;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    .opcoesMenu button:active { background: var(--fill); }
+    .opcoesMenu .perigo { color: var(--danger); }
+
+    .conexaoAviso {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      background: var(--ink);
+      color: var(--fill);
+      border-radius: 20px;
+      padding: 8px 16px;
+      font-size: 14px;
+      z-index: 30;
+      box-shadow: var(--shadow-2);
+    }
+
+    /* ---- pareamento ---- */
+    .parear {
+      min-height: calc(100vh - 68px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      padding: 28px 16px;
+      text-align: center;
+    }
+    .parear h1 { margin: 0; font-size: 30px; font-weight: 700; letter-spacing: -.4px; }
+    .parear .sub { margin: 6px 0 0; font-size: 16px; color: var(--gray); }
+    .parearCard {
+      background: var(--white);
+      border-radius: var(--r-lg);
+      box-shadow: var(--shadow-2);
+      padding: 26px 32px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 36px;
+      align-items: center;
+      text-align: left;
+      max-width: 760px;
+    }
+    .qrBox {
+      width: 250px;
+      height: 250px;
+      padding: 10px;
+      background: #FFFFFF;
+      border: 1px solid var(--neutral-2);
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .qrBox svg { width: 100%; height: 100%; display: block; }
+    .qrBox .qrFalha { color: #6E6E73; font-size: 13px; text-align: center; line-height: 1.4; }
+    .parearPassos { display: flex; flex-direction: column; gap: 16px; max-width: 380px; }
+    .parearPassos ol { margin: 0; padding-left: 22px; font-size: 16px; line-height: 1.5; display: flex; flex-direction: column; gap: 8px; }
+    .codigoRotulo { font-size: 13px; color: var(--gray); }
+    .codigo { font-size: 36px; font-weight: 700; letter-spacing: 10px; font-variant-numeric: tabular-nums; }
+    .dica {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+      background: var(--info-bg);
+      color: var(--info);
+      border-radius: var(--r-sm);
+      padding: 10px 12px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+    .dica svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+    .parearRodape { font-size: 13px; color: var(--gray); }
+    .voltarApp { color: var(--red); font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px; }
+
+    /* ---- conectado, sem orçamento / tela escondida ---- */
+    .aguardando {
+      min-height: calc(100vh - 68px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 32px 16px;
+      text-align: center;
+    }
+    .aguardando .marcaGrande { font-size: 56px; font-weight: 800; letter-spacing: -1.5px; color: var(--red); }
+    .aguardando h2 { margin: 0; font-size: 24px; font-weight: 600; }
+    .aguardando p { margin: 0; font-size: 16px; color: var(--gray); }
+
+    /* ---- orçamento (opção A: lista completa) ---- */
+    .orcamento {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 22px;
+      padding: 22px 24px 32px;
+      align-items: flex-start;
+    }
+    .lista {
+      flex: 999 1 560px;
+      min-width: 0;
+      background: var(--white);
+      border-radius: var(--r-lg);
+      padding: 6px 22px 12px;
+    }
+    .linha {
+      display: grid;
+      grid-template-columns: 72px minmax(0, 1fr) 80px 116px 128px;
+      gap: 16px;
+      align-items: center;
+    }
+    .linhaCab { padding: 14px 0; border-bottom: 1px solid var(--neutral-2); font-size: 13px; color: var(--gray); }
+    .linhaCab span:nth-child(n+3) { text-align: right; }
+    .item { padding: 12px; margin: 6px -12px 0; border-radius: 14px; transition: background-color .6s; }
+    .item.novo { background: var(--accent-bg); }
+    .foto {
+      width: 72px;
+      height: 72px;
+      border-radius: 12px;
+      background: var(--fill);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .foto img { width: 100%; height: 100%; object-fit: contain; background: #FFFFFF; }
+    .foto svg { width: 30px; height: 30px; color: var(--gray); }
+    .itemNome { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+    .itemNome strong { font-size: 18px; font-weight: 600; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; }
+    .selos { display: flex; flex-wrap: wrap; gap: 6px; }
+    .selo { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 3px 8px; }
+    .selo.novo { background: var(--red); color: var(--on-accent); }
+    .selo.campanha { background: var(--success-bg); color: var(--success); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .qtd { font-size: 20px; font-weight: 600; }
+    .unit { font-size: 16px; color: var(--gray); display: flex; flex-direction: column; align-items: flex-end; }
+    .unit s { font-size: 13px; }
+    .totalLinha { font-size: 18px; font-weight: 600; }
+
+    .lado { flex: 1 1 300px; max-width: 380px; display: flex; flex-direction: column; gap: 16px; position: sticky; top: 90px; }
+    .cartao { background: var(--white); border-radius: var(--r-lg); padding: 22px 24px; display: flex; flex-direction: column; gap: 6px; }
+    .cartao .rot { font-size: 14px; color: var(--gray); }
+    .totalGrande { font-size: 44px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .economia { font-size: 14px; color: var(--success); font-weight: 600; }
+    .metaTitulo { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
+    .metaTitulo svg { width: 22px; height: 22px; color: var(--success); flex-shrink: 0; }
+    .barra { height: 10px; background: var(--neutral-2); border-radius: 5px; overflow: hidden; margin: 6px 0 2px; }
+    .barra div { height: 100%; background: var(--success-strong); border-radius: 5px; transition: width .4s; }
+    .cartao.campanha { background: var(--accent-bg); }
+    .cartao.campanha .rot { color: var(--red-deep); font-weight: 700; font-size: 13px; letter-spacing: .4px; }
+    html[data-theme="dark"] .cartao.campanha .rot { color: #FF8FA6; }
+    .cartao.campanha strong { font-size: 17px; line-height: 1.3; }
+    .rodapeOrc { font-size: 12px; color: var(--gray); text-align: center; }
+
+    /* ---- vitrine temporária do item que acabou de entrar (opção B por cima da A) ---- */
+    .vitrine {
+      position: fixed;
+      inset: 0;
+      z-index: 40;
+      background: rgba(0, 0, 0, .45);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      cursor: pointer;
+    }
+    .vitrineCard {
+      width: 100%;
+      max-width: 980px;
+      background: var(--white);
+      border-radius: var(--r-lg);
+      box-shadow: 0 20px 60px rgba(0, 0, 0, .3);
+      padding: 32px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 32px;
+      align-items: center;
+      animation: vitrineEntra .35s ease-out;
+      position: relative;
+      overflow: hidden;
+    }
+    @keyframes vitrineEntra { from { transform: scale(.94); opacity: 0; } to { transform: none; opacity: 1; } }
+    .vitrineFoto {
+      width: 360px;
+      max-width: 100%;
+      aspect-ratio: 1;
+      border-radius: var(--r-lg);
+      background: var(--fill);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .vitrineFoto img { width: 100%; height: 100%; object-fit: contain; background: #FFFFFF; }
+    .vitrineFoto > svg { width: 110px; height: 110px; color: var(--gray); }
+    .vitrinePct { position: absolute; top: 16px; left: 16px; background: var(--red); color: var(--on-accent); font-size: 16px; font-weight: 700; border-radius: 8px; padding: 6px 12px; }
+    .vitrineInfo { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+    .vitrineTag { font-size: 14px; font-weight: 600; color: var(--red); letter-spacing: .3px; }
+    .vitrineInfo h2 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -.5px; overflow-wrap: break-word; }
+    .vitrineDe { font-size: 18px; color: var(--gray); text-decoration: line-through; font-variant-numeric: tabular-nums; }
+    .vitrinePor { font-size: 52px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.05; }
+    .vitrinePor small { font-size: 20px; font-weight: 500; color: var(--gray); letter-spacing: 0; }
+    .vitrineConta { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; font-size: 18px; }
+    .vitrineConta .qtdTag { background: var(--fill); border-radius: 10px; padding: 8px 14px; font-weight: 600; }
+    .vitrineConta b { font-variant-numeric: tabular-nums; }
+    .vitrineTempo { position: absolute; left: 0; bottom: 0; height: 4px; background: var(--red); animation: vitrineTempo linear forwards; }
+    @keyframes vitrineTempo { from { width: 100%; } to { width: 0; } }
+
+    @media (max-width: 760px) {
+      .topo { padding: 10px 16px; }
+      .topoVendedor { display: none; }
+      .orcamento { padding: 16px; }
+      .lista { padding: 4px 14px 10px; }
+      .linha { grid-template-columns: 40px minmax(0, 1fr) 34px 84px; gap: 8px; }
+      .linha > :nth-child(4) { display: none; }
+      .foto { width: 40px; height: 40px; border-radius: 8px; }
+      .foto svg { width: 22px; height: 22px; }
+      .itemNome strong { font-size: 14px; }
+      .qtd { font-size: 16px; }
+      .totalLinha { font-size: 15px; }
+      .lado { max-width: none; position: static; }
+      .vitrineCard { padding: 20px; gap: 18px; }
+      .vitrineInfo h2 { font-size: 24px; }
+      .vitrinePor { font-size: 38px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .vitrineCard { animation: none; }
+      .item { transition: none; }
+    }
+  </style>
+</head>
+
+<body>
+  <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
+
+  <div id="loadingScreen" class="loadingScreen">
+    <div class="brand">Cortag</div>
+  </div>
+
+  <div id="loginScreen" class="loginScreen hidden">
+    <div class="loginCard">
+      <div class="brand">Cortag</div>
+      <h2>Entrar</h2>
+      <div id="loginMsg"></div>
+      <p class="ap-hint">Entre com a <b>mesma conta Google do celular</b> que vai montar o orçamento.</p>
+      <div id="googleSignInBtn" style="display:flex;justify-content:center;"></div>
+    </div>
+  </div>
+
+  <div id="pagina" class="hidden">
+    <header class="topo">
+      <div class="topoEsq">
+        <span class="marca">CORTAG</span>
+        <span class="topoDiv hidden" id="topoDiv"></span>
+        <div class="topoCliente hidden" id="topoCliente">
+          <small>Orçamento para</small>
+          <strong id="topoClienteNome"></strong>
+        </div>
+      </div>
+      <div class="topoDir">
+        <div class="topoVendedor hidden" id="topoVendedor">
+          <strong id="topoVendedorNome"></strong>
+          <small id="topoVendedorSub"></small>
+        </div>
+        <button type="button" class="opcoesBtn" id="opcoesBtn" aria-label="Opções da tela" aria-haspopup="menu" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>
+        </button>
+      </div>
+      <div class="opcoesMenu hidden" id="opcoesMenu" role="menu">
+        <button type="button" role="menuitem" id="telaCheiaBtn">Tela cheia</button>
+        <button type="button" role="menuitem" id="novoCodigoBtn">Conectar outro celular</button>
+        <button type="button" role="menuitem" class="perigo" id="sairBtn">Sair da tela do cliente</button>
+      </div>
+    </header>
+
+    <section class="parear hidden" id="telaParear" aria-labelledby="parearTitulo">
+      <div>
+        <h1 id="parearTitulo">Tela do cliente</h1>
+        <p class="sub">Mostra pro comprador, ao vivo, o orçamento que você monta no celular.</p>
+      </div>
+      <div class="parearCard">
+        <div class="qrBox" id="qrBox" role="img" aria-label="Código QR pra conectar o celular"></div>
+        <div class="parearPassos">
+          <ol>
+            <li>No celular, toque em <b>⋯ Atalhos › Conectar tablet</b>.</li>
+            <li>Aponte a câmera pra este código.</li>
+          </ol>
+          <div>
+            <div class="codigoRotulo">A câmera não leu? Digite no celular:</div>
+            <div class="codigo" id="codigoTxt">····</div>
+          </div>
+          <div class="dica">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
+            <span>Este tablet mostra só o orçamento. Classificatório, ficha e histórico do cliente ficam no celular.</span>
+          </div>
+        </div>
+      </div>
+      <div class="parearRodape" id="parearRodape">Código válido por 5 minutos · precisa de internet nos dois aparelhos · mesma conta Google</div>
+      <a class="voltarApp" href="index.html">← Voltar ao app</a>
+    </section>
+
+    <section class="aguardando hidden" id="telaAguardando">
+      <div class="marcaGrande">CORTAG</div>
+      <h2 id="aguardandoTitulo">Celular conectado</h2>
+      <p id="aguardandoTxt">O orçamento aparece aqui assim que o primeiro produto entrar.</p>
+    </section>
+
+    <section class="orcamento hidden" id="telaOrcamento">
+      <div class="lista" aria-label="Itens do orçamento">
+        <div class="linha linhaCab" aria-hidden="true"><span></span><span>Produto</span><span>Qtde.</span><span>Unitário</span><span>Total</span></div>
+        <div id="itens"></div>
+      </div>
+      <aside class="lado">
+        <div class="cartao">
+          <span class="rot">Total com impostos</span>
+          <span class="totalGrande" id="totalTxt"></span>
+          <span class="rot" id="contagemTxt"></span>
+          <span class="economia hidden" id="economiaTxt"></span>
+        </div>
+        <div class="cartao hidden" id="metaCartao">
+          <span class="metaTitulo">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7" /><circle cx="7" cy="17.5" r="1.8" /><circle cx="17" cy="17.5" r="1.8" /></svg>
+            <span id="metaTxt"></span>
+          </span>
+          <div class="barra" aria-hidden="true"><div id="metaFill"></div></div>
+          <span class="rot" id="metaSub"></span>
+        </div>
+        <div class="cartao campanha hidden" id="campanhaCartao">
+          <span class="rot">CAMPANHA</span>
+          <strong id="campanhaTxt"></strong>
+        </div>
+        <div class="rodapeOrc" id="rodapeTxt"></div>
+      </aside>
+    </section>
+  </div>
+
+  <div class="vitrine hidden" id="vitrine" role="dialog" aria-label="Produto que acabou de entrar no orçamento"></div>
+  <div class="conexaoAviso hidden" id="conexaoAviso" role="status"></div>
+
+  <script>
+    // =================================================================
+    // Tela do cliente (10/2026): o tablet mostra ao vivo o orçamento que o
+    // vendedor monta no celular. Esta página cria a sala no servidor
+    // (routes/segundaTela.js), mostra o QR, espera o celular entrar e depois
+    // fica esperando cada versão nova do orçamento (long-poll). O celular manda
+    // sempre a foto inteira - aqui só se desenha. Item novo aparece uns
+    // segundos em destaque (vitrine) e volta pra lista (decisão do usuário:
+    // lista completa com vitrine temporária).
+    // =================================================================
+    const API_CONFIG_LS_KEY = 'cortagApiConfig_v1';
+    const API_BASE_URL_DEFAULT = 'https://appdb-z6uh.onrender.com';
+    const AUTH_TOKEN_LS_KEY = 'cortagAuthToken_v1';
+    const AUTH_TOKEN_SS_KEY = 'cortagAuthToken_v1';
+    const GOOGLE_CLIENT_ID = '587215783588-g9nrt4mq8onu12qkj4r8h4ao307478i4.apps.googleusercontent.com';
+    const CACHE_FOTOS = 'cortag-fotos-v1'; // o mesmo do index.html/sw.js: foto já baixada no app vale aqui
+    const VITRINE_MS = 7000;
+
+    function getApiConfig() {
+      let baseUrl = API_BASE_URL_DEFAULT;
+      try {
+        const saved = JSON.parse(localStorage.getItem(API_CONFIG_LS_KEY) || '{}');
+        if (saved.baseUrl) baseUrl = saved.baseUrl;
+      } catch (e) { }
+      return { baseUrl };
+    }
+    function getStoredToken() {
+      try { return localStorage.getItem(AUTH_TOKEN_LS_KEY) || sessionStorage.getItem(AUTH_TOKEN_SS_KEY) || null; }
+      catch (e) { return null; }
+    }
+    function setStoredToken(token) {
+      try { localStorage.setItem(AUTH_TOKEN_LS_KEY, token); } catch (e) { }
+    }
+    function clearStoredToken() {
+      try { localStorage.removeItem(AUTH_TOKEN_LS_KEY); sessionStorage.removeItem(AUTH_TOKEN_SS_KEY); } catch (e) { }
+    }
+
+    async function apiFetch(path, options = {}) {
+      const { baseUrl } = getApiConfig();
+      const token = getStoredToken();
+      let resp;
+      try {
+        resp = await fetch(baseUrl + path, {
+          ...options,
+          headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': 'Bearer ' + token } : {}), ...(options.headers || {}) },
+        });
+      } catch (e) {
+        const erro = new Error('Sem conexão com o servidor.');
+        erro.semRede = true;
+        throw erro;
+      }
+      let body = null;
+      try { body = await resp.json(); } catch (e) { }
+      if (resp.status === 401) {
+        clearStoredToken();
+        showLoginScreen('Sessão expirada — entre de novo.');
+      }
+      if (!resp.ok) {
+        const erro = new Error((body && body.erro) || `Erro no servidor (${resp.status}).`);
+        erro.status = resp.status;
+        throw erro;
+      }
+      return body;
+    }
+    async function apiGoogleLogin(idToken) {
+      const { baseUrl } = getApiConfig();
+      const resp = await fetch(baseUrl + '/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id_token: idToken }),
+      });
+      const body = await resp.json().catch(() => null);
+      if (!resp.ok) throw new Error((body && body.erro) || 'Não foi possível entrar.');
+      return body;
+    }
+
+    function loadGoogleIdentity() {
+      if (window.google && window.google.accounts && window.google.accounts.id) return Promise.resolve();
+      return new Promise((resolve, reject) => {
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.onload = () => resolve();
+        s.onerror = () => reject(new Error('Não consegui carregar o serviço de login do Google — confira sua internet.'));
+        document.head.appendChild(s);
+      });
+    }
+    async function onGoogleCredential(response) {
+      const msg = document.getElementById('loginMsg');
+      msg.innerHTML = '';
+      try {
+        const result = await apiGoogleLogin(response.credential);
+        setStoredToken(result.token);
+        hideLoginScreen();
+        await boot();
+      } catch (e) {
+        msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    async function initLoginScreen() {
+      try {
+        await loadGoogleIdentity();
+        google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: onGoogleCredential });
+        google.accounts.id.renderButton(document.getElementById('googleSignInBtn'), { theme: 'outline', size: 'large', text: 'signin_with' });
+      } catch (e) {
+        document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+      }
+    }
+    function showLoginScreen(message) {
+      pararTudo();
+      document.getElementById('loadingScreen').classList.add('hidden');
+      document.getElementById('pagina').classList.add('hidden');
+      document.getElementById('loginScreen').classList.remove('hidden');
+      initLoginScreen();
+      if (message) document.getElementById('loginMsg').innerHTML = `<div class="ap-msg error">${escapeHtml(message)}</div>`;
+    }
+    function hideLoginScreen() { document.getElementById('loginScreen').classList.add('hidden'); }
+
+    function escapeHtml(s) {
+      return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+    function brl(v) {
+      return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+    const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+
+    const ICONE_CAIXA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8M12 13v8" /></svg>';
+
+    // ---------------- sala e conexão ----------------
+    let sala = null;          // { id, codigo, valido_ate }
+    let geracao = 0;          // sobe a cada sala nova: a espera da sala anterior para sozinha
+    let versao = 0;
+    let pareada = false;
+    let estado = null;
+    let renovarTimer = null;
+    let semRedeDesde = 0;
+
+    function pararTudo() {
+      geracao++;
+      clearTimeout(renovarTimer);
+    }
+
+    async function novaSala() {
+      pararTudo();
+      const g = geracao;
+      const anterior = sala;
+      sala = null;
+      versao = 0;
+      pareada = false;
+      estado = null;
+      fecharVitrine();
+      if (anterior) apiFetch(`/api/segunda-tela/salas/${anterior.id}`, { method: 'DELETE' }).catch(() => { });
+      mostrar('parear');
+      document.getElementById('codigoTxt').textContent = '····';
+      document.getElementById('qrBox').innerHTML = '';
+      let criada = null;
+      while (g === geracao && !criada) {
+        try {
+          criada = await apiFetch('/api/segunda-tela/salas', { method: 'POST', body: JSON.stringify({ modo: 'cliente' }) });
+          avisoConexao(null);
+        } catch (e) {
+          if (e.status === 401) return;
+          avisoConexao('Sem conexão com o servidor — tentando de novo…');
+          await esperar(4000);
+        }
+      }
+      if (g !== geracao) return;
+      sala = criada;
+      desenharCodigo();
+      // código venceu sem ninguém entrar: troca por um novo
+      const validade = Math.max(30000, new Date(sala.valido_ate).getTime() - Date.now() - 5000);
+      renovarTimer = setTimeout(() => { if (g === geracao && !pareada) novaSala(); }, validade);
+      ouvir(g);
+    }
+
+    function desenharCodigo() {
+      document.getElementById('codigoTxt').textContent = sala.codigo;
+      // o QR leva o endereço do app com o código: o leitor do app entende, e a
+      // câmera comum do celular abre o app já pedindo pra conectar
+      const url = new URL('index.html?parear=' + sala.codigo, location.href).href;
+      const box = document.getElementById('qrBox');
+      const tentar = (n) => {
+        if (window.qrcode) {
+          const qr = qrcode(0, 'M');
+          qr.addData(url);
+          qr.make();
+          box.innerHTML = qr.createSvgTag({ cellSize: 6, margin: 2, scalable: true });
+        } else if (n < 20) {
+          setTimeout(() => tentar(n + 1), 250);
+        } else {
+          box.innerHTML = '<div class="qrFalha">Não deu pra desenhar o QR.<br>Use o código ao lado.</div>';
+        }
+      };
+      tentar(0);
+    }
+
+    async function ouvir(g) {
+      while (g === geracao && sala) {
+        let r;
+        try {
+          r = await apiFetch(`/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=${versao}&pareada=${pareada ? 1 : 0}`);
+        } catch (e) {
+          if (g !== geracao) return;
+          if (e.status === 401) return;
+          if (e.status === 404) {
+            // o celular desconectou, ou o servidor reiniciou: QR novo
+            avisoConexao('Conexão encerrada. Conecte o celular de novo.', 6000);
+            novaSala();
+            return;
+          }
+          if (!semRedeDesde) semRedeDesde = Date.now();
+          if (Date.now() - semRedeDesde > 6000) avisoConexao('Sem conexão — o orçamento atualiza quando o sinal voltar.');
+          await esperar(3000);
+          continue;
+        }
+        if (g !== geracao) return;
+        semRedeDesde = 0;
+        avisoConexao(null);
+        if (r.pareada && !pareada) {
+          pareada = true;
+          clearTimeout(renovarTimer);
+          manterTelaAcesa();
+        }
+        if (Object.prototype.hasOwnProperty.call(r, 'estado')) aplicarEstado(r.estado);
+        versao = r.versao;
+        desenhar();
+      }
+    }
+
+    let avisoTimer = null;
+    function avisoConexao(texto, ms) {
+      const el = document.getElementById('conexaoAviso');
+      clearTimeout(avisoTimer);
+      if (!texto) { el.classList.add('hidden'); return; }
+      el.textContent = texto;
+      el.classList.remove('hidden');
+      if (ms) avisoTimer = setTimeout(() => el.classList.add('hidden'), ms);
+    }
+
+    // a tela do tablet não pode apagar no meio da conversa com o cliente
+    let wakeLock = null;
+    async function manterTelaAcesa() {
+      try {
+        if ('wakeLock' in navigator && !wakeLock && document.visibilityState === 'visible') {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => { wakeLock = null; });
+        }
+      } catch (e) { /* navegador sem suporte ou bateria fraca: só não segura */ }
+    }
+    document.addEventListener('visibilitychange', () => { if (pareada) manterTelaAcesa(); });
+
+    // ---------------- desenho ----------------
+    function mostrar(qual) {
+      document.getElementById('telaParear').classList.toggle('hidden', qual !== 'parear');
+      document.getElementById('telaAguardando').classList.toggle('hidden', qual !== 'aguardando');
+      document.getElementById('telaOrcamento').classList.toggle('hidden', qual !== 'orcamento');
+    }
+
+    let novosCods = new Set();
+    function aplicarEstado(novo) {
+      const antes = estado;
+      estado = novo && typeof novo === 'object' ? novo : null;
+      novosCods = new Set();
+      if (!estado || estado.oculto || !Array.isArray(estado.itens)) { fecharVitrine(); return; }
+      // só o que entrou DEPOIS da 1ª versão vira "novo" (abrir a tela com um
+      // orçamento pronto não dispara vitrine), e só se a tela estava à mostra
+      if (!antes || antes.oculto || !Array.isArray(antes.itens)) return;
+      const tinha = new Set(antes.itens.map(i => i.cod));
+      const entraram = estado.itens.filter(i => !tinha.has(i.cod));
+      entraram.forEach(i => novosCods.add(i.cod));
+      if (entraram.length) abrirVitrine(entraram[entraram.length - 1]);
+    }
+
+    function desenhar() {
+      const temCliente = !!(estado && estado.cliente && !estado.oculto);
+      document.getElementById('topoDiv').classList.toggle('hidden', !temCliente);
+      document.getElementById('topoCliente').classList.toggle('hidden', !temCliente);
+      document.getElementById('topoClienteNome').textContent = temCliente ? estado.cliente : '';
+      const vendedor = estado && !estado.oculto ? (estado.vendedor || '') : '';
+      document.getElementById('topoVendedor').classList.toggle('hidden', !vendedor);
+      document.getElementById('topoVendedorNome').textContent = vendedor;
+      document.getElementById('topoVendedorSub').textContent = estado ? [estado.telefone, estado.data].filter(Boolean).join(' · ') : '';
+
+      if (!pareada) { mostrar('parear'); return; }
+      if (!estado || estado.oculto || !Array.isArray(estado.itens) || !estado.itens.length) {
+        document.getElementById('aguardandoTitulo').textContent = estado && estado.oculto ? 'Seu orçamento volta já' : 'Celular conectado';
+        document.getElementById('aguardandoTxt').textContent = estado && estado.oculto
+          ? 'O vendedor está conferindo uma informação.'
+          : 'O orçamento aparece aqui assim que o primeiro produto entrar.';
+        mostrar('aguardando');
+        return;
+      }
+      mostrar('orcamento');
+      desenharItens();
+      desenharLado();
+    }
+
+    function desenharItens() {
+      const host = document.getElementById('itens');
+      host.innerHTML = estado.itens.map((it, i) => {
+        const novo = novosCods.has(it.cod);
+        const de = Number(it.de) > Number(it.unit) + 0.004 ? `<s>${brl(it.de)}</s>` : '';
+        return `<div class="linha item${novo ? ' novo' : ''}">
+          <div class="foto" data-foto="${i}">${ICONE_CAIXA}</div>
+          <div class="itemNome">
+            <strong>${escapeHtml(it.nome)}</strong>
+            ${novo || it.campanha ? `<div class="selos">${novo ? '<span class="selo novo">Acabou de entrar</span>' : ''}${it.campanha ? `<span class="selo campanha">${escapeHtml(it.campanha)}</span>` : ''}</div>` : ''}
+          </div>
+          <span class="num qtd">${escapeHtml(it.qtd)}</span>
+          <span class="num unit">${de}${brl(it.unit)}</span>
+          <span class="num totalLinha">${brl(it.total)}</span>
+        </div>`;
+      }).join('');
+      host.querySelectorAll('[data-foto]').forEach(el => {
+        const it = estado.itens[Number(el.dataset.foto)];
+        if (it && it.foto) urlDaFoto(it.foto).then(url => { if (url && el.isConnected) el.innerHTML = `<img src="${url}" alt="">`; });
+      });
+      // o destaque de "novo" some sozinho
+      if (novosCods.size) {
+        const cods = novosCods;
+        setTimeout(() => {
+          if (novosCods !== cods) return;
+          novosCods = new Set();
+          host.querySelectorAll('.item.novo').forEach(el => el.classList.remove('novo'));
+          host.querySelectorAll('.selo.novo').forEach(el => el.remove());
+        }, VITRINE_MS + 8000);
+      }
+    }
+
+    function desenharLado() {
+      const itens = estado.itens;
+      document.getElementById('totalTxt').textContent = brl(estado.total);
+      const unidades = itens.reduce((s, it) => s + (Number(it.qtd) || 0), 0);
+      document.getElementById('contagemTxt').textContent =
+        `${itens.length} ${itens.length === 1 ? 'produto' : 'produtos'} · ${unidades.toLocaleString('pt-BR')} ${unidades === 1 ? 'unidade' : 'unidades'}`;
+      const eco = document.getElementById('economiaTxt');
+      eco.textContent = Number(estado.economia) >= 0.01 ? `Você economiza ${brl(estado.economia)} nas campanhas` : '';
+      eco.classList.toggle('hidden', !(Number(estado.economia) >= 0.01));
+
+      const meta = estado.meta;
+      document.getElementById('metaCartao').classList.toggle('hidden', !meta);
+      if (meta) {
+        document.getElementById('metaTxt').textContent = meta.texto || '';
+        document.getElementById('metaSub').textContent = meta.sub || '';
+        const f = Math.max(0, Math.min(1, Number(meta.fracao) || 0));
+        document.getElementById('metaFill').style.width = `${(f * 100).toFixed(1)}%`;
+      }
+      const camp = estado.campanha;
+      document.getElementById('campanhaCartao').classList.toggle('hidden', !camp);
+      document.getElementById('campanhaTxt').textContent = camp || '';
+      document.getElementById('rodapeTxt').textContent = `Preços com impostos${estado.uf ? ' · ' + estado.uf : ''} · valem para hoje`;
+    }
+
+    // ---------------- vitrine temporária ----------------
+    let vitrineTimer = null;
+    function abrirVitrine(it) {
+      const el = document.getElementById('vitrine');
+      const temDe = Number(it.de) > Number(it.unit) + 0.004;
+      const pct = temDe ? Math.round((1 - Number(it.unit) / Number(it.de)) * 100) : 0;
+      el.innerHTML = `<div class="vitrineCard">
+        <div class="vitrineFoto" id="vitrineFoto">${ICONE_CAIXA}${pct > 0 ? `<span class="vitrinePct">-${pct}%</span>` : ''}</div>
+        <div class="vitrineInfo">
+          <span class="vitrineTag">ACABOU DE ENTRAR NO ORÇAMENTO</span>
+          <h2>${escapeHtml(it.nome)}</h2>
+          <div>
+            ${temDe ? `<div class="vitrineDe">${brl(it.de)}</div>` : ''}
+            <div class="vitrinePor">${brl(it.unit)} <small>cada</small></div>
+          </div>
+          <div class="vitrineConta"><span class="qtdTag">${escapeHtml(it.qtd)} ${Number(it.qtd) === 1 ? 'unidade' : 'unidades'}</span><span>=</span><b>${brl(it.total)}</b></div>
+          ${it.campanha ? `<span class="selo campanha" style="align-self:flex-start;font-size:14px;padding:8px 12px;">${escapeHtml(it.campanha)}</span>` : ''}
+        </div>
+        <div class="vitrineTempo" style="animation-duration:${VITRINE_MS}ms"></div>
+      </div>`;
+      el.classList.remove('hidden');
+      if (it.foto) {
+        urlDaFoto(it.foto).then(url => {
+          const box = document.getElementById('vitrineFoto');
+          if (!url || !box) return;
+          const svg = box.querySelector('svg');
+          if (svg) svg.outerHTML = `<img src="${url}" alt="">`;
+        });
+      }
+      clearTimeout(vitrineTimer);
+      vitrineTimer = setTimeout(fecharVitrine, VITRINE_MS);
+    }
+    function fecharVitrine() {
+      clearTimeout(vitrineTimer);
+      document.getElementById('vitrine').classList.add('hidden');
+    }
+    document.getElementById('vitrine').addEventListener('click', fecharVitrine);
+
+    // ---------------- fotos dos produtos ----------------
+    // Mesmo endereço (e mesmo Cache Storage) do index.html: foto que o app já
+    // baixou neste aparelho nem vai à rede.
+    const fotosMemo = new Map();
+    function urlDaFoto(foto) {
+      if (!foto || !foto.cod || !foto.v) return Promise.resolve(null);
+      const chave = `${getApiConfig().baseUrl}/api/produto-fotos/${encodeURIComponent(foto.cod)}?v=${encodeURIComponent(foto.v)}`;
+      if (!fotosMemo.has(chave)) {
+        fotosMemo.set(chave, (async () => {
+          try {
+            if (typeof caches !== 'undefined') {
+              const guardada = await (await caches.open(CACHE_FOTOS)).match(chave);
+              if (guardada) return URL.createObjectURL(await guardada.blob());
+            }
+          } catch (e) { }
+          try {
+            const token = getStoredToken();
+            const resp = await fetch(chave, { headers: token ? { 'Authorization': 'Bearer ' + token } : {} });
+            if (!resp.ok) return null;
+            const blob = await resp.blob();
+            try { if (typeof caches !== 'undefined') await (await caches.open(CACHE_FOTOS)).put(chave, new Response(blob, { headers: { 'Content-Type': 'image/jpeg' } })); } catch (e) { }
+            return URL.createObjectURL(blob);
+          } catch (e) {
+            fotosMemo.delete(chave); // sem rede: tenta de novo no próximo desenho
+            return null;
+          }
+        })());
+      }
+      return fotosMemo.get(chave);
+    }
+
+    // ---------------- menu de opções ----------------
+    function initOpcoes() {
+      const btn = document.getElementById('opcoesBtn');
+      const menu = document.getElementById('opcoesMenu');
+      const fechar = () => { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); };
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const abrir = menu.classList.contains('hidden');
+        menu.classList.toggle('hidden', !abrir);
+        btn.setAttribute('aria-expanded', String(abrir));
+      });
+      document.addEventListener('click', (e) => { if (!menu.contains(e.target)) fechar(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { fechar(); fecharVitrine(); } });
+      const telaCheia = document.getElementById('telaCheiaBtn');
+      if (!document.documentElement.requestFullscreen) telaCheia.classList.add('hidden');
+      telaCheia.addEventListener('click', () => {
+        fechar();
+        if (document.fullscreenElement) document.exitFullscreen().catch(() => { });
+        else document.documentElement.requestFullscreen().catch(() => { });
+      });
+      document.getElementById('novoCodigoBtn').addEventListener('click', () => { fechar(); novaSala(); });
+      document.getElementById('sairBtn').addEventListener('click', () => {
+        fechar();
+        pararTudo();
+        if (sala) apiFetch(`/api/segunda-tela/salas/${sala.id}`, { method: 'DELETE' }).catch(() => { });
+        location.href = 'index.html';
+      });
+    }
+
+    let paginaIniciada = false;
+    async function boot() {
+      if (!getStoredToken()) { showLoginScreen(); return; }
+      try {
+        await apiFetch('/api/auth/me');
+      } catch (e) {
+        if (e.status === 401) return; // apiFetch já mostrou o login
+        // sem rede no boot: segue - a criação da sala tenta de novo sozinha
+      }
+      document.getElementById('loadingScreen').classList.add('hidden');
+      document.getElementById('pagina').classList.remove('hidden');
+      if (!paginaIniciada) { paginaIniciada = true; initOpcoes(); }
+      novaSala();
+    }
+    document.addEventListener('DOMContentLoaded', boot);
+  </script>
+</body>
+
+</html>

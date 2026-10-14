@@ -7608,6 +7608,70 @@
       white-space: nowrap;
     }
 
+    /* Tablet como tela do cliente (tela-cliente.html): faixa com o estado da
+       conexão, visível em todas as abas enquanto o celular estiver conectado */
+    .segundaTelaFaixa {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 52px;
+      padding: 4px 6px 4px 16px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .segundaTelaFaixa.hidden {
+      display: none;
+    }
+
+    .segundaTelaFaixa[data-tipo="aviso"] {
+      background: var(--warning-bg);
+      color: var(--warning);
+    }
+
+    .segundaTelaFaixa[data-tipo="oculto"] {
+      background: var(--fill);
+      color: var(--gray);
+    }
+
+    .segundaTelaPonto {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
+    }
+
+    .segundaTelaTxt {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .segundaTelaTxt b {
+      display: block;
+      font-weight: 700;
+    }
+
+    .segundaTelaFaixa button {
+      min-height: 44px;
+      padding: 0 10px;
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .conectarTabletLer {
+      width: 100%;
+      min-height: 48px;
+      margin-bottom: 16px;
+    }
+
     /* Botão de leitura perto do polegar no Levantamento (Lei de Fitts) */
     .scanFab {
       position: fixed;
@@ -7834,6 +7898,25 @@
             </svg>
             <span>Salesforce</span>
           </a>
+          <a class="atalhoItem" role="menuitem" href="#" id="conectarTabletLink" aria-label="Conectar tablet: o orçamento aparece ao vivo no tablet, virado pro cliente"
+            title="Conectar tablet como tela do cliente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="2" y="4" width="13" height="16" rx="2" />
+              <rect x="17" y="9" width="5" height="11" rx="1" />
+              <path d="M7 17h3" />
+            </svg>
+            <span>Conectar tablet</span>
+          </a>
+          <a class="atalhoItem" role="menuitem" href="tela-cliente.html" id="telaClienteLink" aria-label="Usar este aparelho como tela do cliente"
+            title="Usar este aparelho (tablet) como tela do cliente">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+              stroke-linejoin="round">
+              <rect x="3" y="4" width="18" height="13" rx="2" />
+              <path d="M8 21h8M12 17v4" />
+            </svg>
+            <span>Tela do cliente (neste tablet)</span>
+          </a>
         </div>
       </div>
       <button class="gearBtn" id="adminBtn" aria-label="Administração">
@@ -7858,6 +7941,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8" /></svg><span>Clientes</span></button>
     </nav>
     <button type="button" class="levLembrete hidden" id="levLembrete"></button>
+    <div class="segundaTelaFaixa hidden" id="segundaTelaFaixa" role="status"></div>
     <button type="button" class="novidadesFaixa hidden" id="novidadesFaixa" aria-label="Ver novidades"></button>
 
     <div id="tabPrecos">
@@ -8307,6 +8391,21 @@
 
     <div class="overlay hidden" id="shareSheetOverlay"></div>
     <div class="overlay hidden" id="clientPickerOverlay"></div>
+    <div class="minimodal hidden" id="conectarTabletModal">
+      <div class="minimodal-card">
+        <h3>Conectar tablet</h3>
+        <p>No tablet, abra o app em <b>⋯ Atalhos › Tela do cliente</b>, com a mesma conta Google deste celular, e leia o QR que aparece nele.</p>
+        <button type="button" class="recompraBtn recompraBtn--principal conectarTabletLer" id="conectarTabletLerBtn">Ler o QR do tablet</button>
+        <label for="conectarTabletCodigo">Ou digite o código de 4 números</label>
+        <input type="text" id="conectarTabletCodigo" inputmode="numeric" maxlength="4" autocomplete="off" placeholder="0000">
+        <div id="conectarTabletMsg"></div>
+        <div class="minimodal-btnrow">
+          <button type="button" id="conectarTabletCancelarBtn">Cancelar</button>
+          <button type="button" id="conectarTabletOkBtn">Conectar</button>
+        </div>
+      </div>
+    </div>
+
     <div class="minimodal hidden" id="novidadesModal">
       <div class="minimodal-card" style="max-height:82vh;overflow-y:auto;">
         <h3>🔔 Novidades</h3>
@@ -10935,6 +11034,7 @@
       }
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
+        agendarEnvioTelaCliente(); // e a tela do cliente no tablet, se houver
         const bar = document.getElementById('cartBar');
         // Mostra quantos SKUs (produtos diferentes) há no orçamento, não a soma das quantidades.
         const n = state.cart.filter(i => i.qty > 0).length;
@@ -12057,6 +12157,7 @@
         atualizarBotaoPedidosSalvos();
         renderClienteProximo();
         if (!cliente) buscarClienteProximo();
+        agendarEnvioTelaCliente(); // nome do cliente no topo do tablet
         // Orçamento aberto como o pedido de outro cliente: trocar (ou limpar)
         // o cliente desliga a edição - o próximo "Finalizar" grava um pedido
         // novo pro cliente escolhido, nunca altera o pedido do anterior.
@@ -13177,6 +13278,277 @@
         document.addEventListener('click', (e) => { if (!menu.classList.contains('hidden') && !menu.contains(e.target)) fechar(); });
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fechar(); });
       }
+
+      // ---------------- Tablet como tela do cliente (10/2026) ----------------
+      // Mockups escolhidos pelo usuário: o tablet, virado pro comprador, mostra
+      // ao vivo o orçamento que o vendedor monta aqui (lista completa + vitrine
+      // de alguns segundos do item que acabou de entrar). O tablet abre
+      // tela-cliente.html e mostra um QR; este celular lê (⋯ Atalhos › Conectar
+      // tablet) e passa a mandar a foto inteira do orçamento a cada mudança
+      // (routes/segundaTela.js). Vai só o que o cliente pode ver: nome, quantidade,
+      // preço com imposto, campanha, total e quanto falta pro frete - sem
+      // classificatório, canal, ficha nem histórico. "Esconder" apaga a tela do
+      // tablet enquanto o vendedor confere algo. Sem internet o tablet fica com a
+      // última versão e atualiza quando o sinal volta (nada vai pra fila: é só tela).
+      const SEGUNDA_TELA_LS_KEY = 'cortagSegundaTela_v1';
+      const SEGUNDA_TELA_VIGIA_MS = 20000;
+      let segundaTela = null; // { id, modo, oculto }
+      let segundaTelaStatus = 'ok'; // 'ok' | 'semTablet' | 'semRede'
+      let segundaTelaTimer = null;
+      let segundaTelaVigia = null;
+      let segundaTelaEnviando = false;
+      let segundaTelaPendente = false;
+
+      function lerSegundaTela() {
+        try {
+          const s = JSON.parse(localStorage.getItem(SEGUNDA_TELA_LS_KEY));
+          return s && /^[a-f0-9]{32}$/.test(String(s.id)) ? { id: s.id, modo: s.modo || 'cliente', oculto: !!s.oculto } : null;
+        } catch (e) { return null; }
+      }
+      function gravarSegundaTela() {
+        try {
+          if (segundaTela) localStorage.setItem(SEGUNDA_TELA_LS_KEY, JSON.stringify(segundaTela));
+          else localStorage.removeItem(SEGUNDA_TELA_LS_KEY);
+        } catch (e) { }
+      }
+
+      // A foto do orçamento que vai pro tablet - mesmo cálculo da gaveta (cartTotals).
+      function estadoParaTelaCliente() {
+        const vendedor = vendedorDoCard();
+        const base = {
+          oculto: !!(segundaTela && segundaTela.oculto),
+          cliente: state.levCliente ? state.levCliente.nome : null,
+          vendedor: vendedor.nome || state.seller || '',
+          telefone: vendedor.tel || '',
+          data: new Date().toLocaleDateString('pt-BR'),
+          uf: state.uf || '',
+        };
+        if (base.oculto) return { ...base, cliente: null, itens: [] };
+        const { rows, baseRows, total, totalSemImpostos } = cartTotals();
+        let economia = 0;
+        const itens = rows.filter(r => r.it.qty > 0).map(r => {
+          const antes = baseRows.find(b => b.p.c === r.p.c);
+          const de = antes && r.campaignPct > 0 && antes.cp > r.cp ? antes.cp : null;
+          if (de) economia += (de - r.cp) * r.it.qty;
+          const codFoto = codigoDaFoto(r.p.c);
+          return {
+            cod: r.p.c,
+            nome: r.p.n,
+            qtd: r.it.qty,
+            unit: Math.round(r.cp * 100) / 100,
+            de: de ? Math.round(de * 100) / 100 : null,
+            total: Math.round(r.lineTotal * 100) / 100,
+            campanha: r.campaignPct > 0 ? `${r.campaignName || 'Campanha'} -${r.campaignPct}%` : null,
+            foto: codFoto ? { cod: codFoto, v: FOTOS_PRODUTO[codFoto] } : null,
+          };
+        });
+        // item ainda sem produto no catálogo (carregando) fica fora do total: sem meta, que sairia errada
+        const incompleto = baseRows.length < state.cart.length;
+        const minimo = itens.length && !incompleto ? metaPedidoMinimo(totalSemImpostos) : null;
+        let campanha = null;
+        try { campanha = itens.length && !incompleto ? proximaFaixaCampanha(state.promoRules, baseRows, contextoCampanhas()) : null; } catch (e) { campanha = null; }
+        return {
+          ...base,
+          itens,
+          total: Math.round(total * 100) / 100,
+          economia: Math.round(economia * 100) / 100,
+          meta: minimo ? {
+            texto: `Faltam ${brl(minimo.falta)} ${minimo.rotulo === 'pro frete CIF' ? 'pro frete CIF' : 'pro pedido mínimo'}`,
+            sub: `${minimo.rotulo === 'pro frete CIF' ? 'Frete por conta da Cortag' : 'Pedido mínimo'} a partir de ${brl(minimo.alvo)} sem impostos`,
+            fracao: minimo.alvo > 0 ? totalSemImpostos / minimo.alvo : 0,
+          } : null,
+          campanha: campanha ? `${textoFaltaCampanha(campanha)} = ${campanha.pct}% de desconto em ${campanha.regra}` : null,
+        };
+      }
+
+      function agendarEnvioTelaCliente() {
+        if (!segundaTela) return;
+        clearTimeout(segundaTelaTimer);
+        segundaTelaTimer = setTimeout(enviarTelaCliente, 350);
+      }
+      async function enviarTelaCliente() {
+        if (!segundaTela) return;
+        if (segundaTelaEnviando) { segundaTelaPendente = true; return; }
+        segundaTelaEnviando = true;
+        const id = segundaTela.id;
+        try {
+          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: estadoParaTelaCliente() }) });
+          if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
+        } catch (e) {
+          if (segundaTela && segundaTela.id === id) {
+            if (e.status === 404) desligarSegundaTela('O tablet desconectou — a tela do cliente foi fechada.');
+            else segundaTelaStatus = 'semRede';
+          }
+        } finally {
+          segundaTelaEnviando = false;
+          renderFaixaSegundaTela();
+          if (segundaTelaPendente) { segundaTelaPendente = false; agendarEnvioTelaCliente(); }
+        }
+      }
+
+      // Confere de tempos em tempos se o tablet continua lá (e reenvia o que não
+      // foi, quando a internet volta).
+      function iniciarVigiaSegundaTela() {
+        clearInterval(segundaTelaVigia);
+        segundaTelaVigia = setInterval(async () => {
+          if (!segundaTela) { clearInterval(segundaTelaVigia); return; }
+          if (segundaTelaStatus === 'semRede') { enviarTelaCliente(); return; }
+          const id = segundaTela.id;
+          try {
+            const r = await apiFetch(`/api/segunda-tela/salas/${id}`);
+            if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
+          } catch (e) {
+            if (!segundaTela || segundaTela.id !== id) return;
+            if (e.status === 404) { desligarSegundaTela('O tablet desconectou — a tela do cliente foi fechada.'); return; }
+            segundaTelaStatus = 'semRede';
+          }
+          renderFaixaSegundaTela();
+        }, SEGUNDA_TELA_VIGIA_MS);
+      }
+
+      function desligarSegundaTela(aviso) {
+        segundaTela = null;
+        segundaTelaStatus = 'ok';
+        clearTimeout(segundaTelaTimer);
+        clearInterval(segundaTelaVigia);
+        gravarSegundaTela();
+        renderFaixaSegundaTela();
+        if (aviso) showToast(aviso, 'longo');
+      }
+      async function desconectarSegundaTela() {
+        if (!segundaTela) return;
+        const id = segundaTela.id;
+        desligarSegundaTela();
+        try { await apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE' }); } catch (e) { /* a sala some sozinha no servidor */ }
+      }
+
+      function renderFaixaSegundaTela() {
+        const el = document.getElementById('segundaTelaFaixa');
+        if (!el) return;
+        if (!segundaTela) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+        let titulo, sub, tipo;
+        if (segundaTela.oculto) {
+          tipo = 'oculto'; titulo = 'Tela do tablet escondida'; sub = 'o cliente não vê o orçamento até você tocar em Mostrar';
+        } else if (segundaTelaStatus === 'semRede') {
+          tipo = 'aviso'; titulo = 'Sem internet'; sub = 'o tablet atualiza quando o sinal voltar';
+        } else if (segundaTelaStatus === 'semTablet') {
+          tipo = 'aviso'; titulo = 'O tablet não está respondendo'; sub = 'confira se a tela do cliente continua aberta nele';
+        } else {
+          tipo = 'ok'; titulo = 'Tablet mostrando o orçamento'; sub = 'sem classificatório nem dados internos';
+        }
+        el.dataset.tipo = tipo;
+        el.innerHTML = `<span class="segundaTelaPonto" aria-hidden="true"></span>
+          <span class="segundaTelaTxt"><b>${escapeHtml(titulo)}</b>${escapeHtml(sub)}</span>
+          <button type="button" data-st="esconder">${segundaTela.oculto ? 'Mostrar' : 'Esconder'}</button>
+          <button type="button" data-st="desconectar" aria-label="Desconectar o tablet">Desconectar</button>`;
+        el.classList.remove('hidden');
+      }
+
+      // Código lido do QR do tablet: o QR traz o endereço do app com ?parear=NNNN
+      // (a câmera comum do celular abre o app já conectando); digitado, só os números.
+      function codigoDePareamento(texto) {
+        const t = String(texto || '').trim();
+        if (/^\d{4}$/.test(t)) return t;
+        try {
+          const c = new URL(t).searchParams.get('parear');
+          if (/^\d{4}$/.test(c || '')) return c;
+        } catch (e) { }
+        return null;
+      }
+      async function entrarSegundaTela(codigo) {
+        const msg = document.getElementById('conectarTabletMsg');
+        const ok = document.getElementById('conectarTabletOkBtn');
+        msg.innerHTML = '';
+        ok.disabled = true;
+        try {
+          const r = await apiFetch('/api/segunda-tela/entrar', { method: 'POST', body: JSON.stringify({ codigo }) });
+          if (!r || r.modo !== 'cliente') throw new Error('Esse tablet está num modo que este app ainda não conhece — atualize o app.');
+          const anterior = segundaTela;
+          segundaTela = { id: r.id, modo: r.modo, oculto: false };
+          segundaTelaStatus = r.tablet_conectado ? 'ok' : 'semTablet';
+          gravarSegundaTela();
+          if (anterior && anterior.id !== r.id) apiFetch(`/api/segunda-tela/salas/${anterior.id}`, { method: 'DELETE' }).catch(() => { });
+          document.getElementById('conectarTabletModal').classList.add('hidden');
+          renderFaixaSegundaTela();
+          iniciarVigiaSegundaTela();
+          enviarTelaCliente();
+          showToast('Tablet conectado — ele mostra o orçamento ao vivo');
+          return true;
+        } catch (e) {
+          document.getElementById('conectarTabletModal').classList.remove('hidden');
+          msg.innerHTML = `<div class="ap-msg error">${escapeHtml(e.message)}</div>`;
+          return false;
+        } finally {
+          ok.disabled = false;
+        }
+      }
+      function abrirConectarTablet(codigo) {
+        document.getElementById('conectarTabletMsg').innerHTML = '';
+        document.getElementById('conectarTabletCodigo').value = codigo || '';
+        document.getElementById('conectarTabletModal').classList.remove('hidden');
+      }
+      function lidoQrDoTablet(texto) {
+        const codigo = codigoDePareamento(texto);
+        if (!codigo) {
+          abrirConectarTablet();
+          document.getElementById('conectarTabletMsg').innerHTML = '<div class="ap-msg error">Esse não é o QR da tela do cliente. Leia o código que aparece no tablet.</div>';
+          return;
+        }
+        entrarSegundaTela(codigo);
+      }
+
+      function initSegundaTela() {
+        document.getElementById('conectarTabletLink').addEventListener('click', (e) => { e.preventDefault(); abrirConectarTablet(); });
+        document.getElementById('conectarTabletCancelarBtn').addEventListener('click', () => document.getElementById('conectarTabletModal').classList.add('hidden'));
+        document.getElementById('conectarTabletLerBtn').addEventListener('click', () => {
+          document.getElementById('conectarTabletModal').classList.add('hidden');
+          openBarcodeScanner('parear');
+        });
+        const input = document.getElementById('conectarTabletCodigo');
+        const conectar = () => {
+          const codigo = input.value.replace(/\D/g, '');
+          if (!/^\d{4}$/.test(codigo)) {
+            document.getElementById('conectarTabletMsg').innerHTML = '<div class="ap-msg error">O código do tablet tem 4 números.</div>';
+            return;
+          }
+          entrarSegundaTela(codigo);
+        };
+        document.getElementById('conectarTabletOkBtn').addEventListener('click', conectar);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); conectar(); } });
+        document.getElementById('segundaTelaFaixa').addEventListener('click', async (e) => {
+          const b = e.target.closest('[data-st]');
+          if (!b || !segundaTela) return;
+          if (b.dataset.st === 'esconder') {
+            segundaTela.oculto = !segundaTela.oculto;
+            gravarSegundaTela();
+            renderFaixaSegundaTela();
+            clearTimeout(segundaTelaTimer);
+            enviarTelaCliente();
+          } else if (await askConfirm('Desconectar o tablet? A tela do cliente volta a mostrar o QR.', 'Desconectar')) {
+            desconectarSegundaTela();
+          }
+        });
+        window.addEventListener('online', () => { if (segundaTela) enviarTelaCliente(); });
+        // conexão que já existia (app reaberto): continua mandando
+        segundaTela = lerSegundaTela();
+        if (segundaTela) {
+          renderFaixaSegundaTela();
+          iniciarVigiaSegundaTela();
+          agendarEnvioTelaCliente();
+        }
+        // QR lido pela câmera comum do celular: abriu o app com ?parear=NNNN
+        try {
+          const params = new URLSearchParams(location.search);
+          const codigo = codigoDePareamento(params.get('parear') || '');
+          if (params.has('parear')) {
+            params.delete('parear');
+            const resto = params.toString();
+            history.replaceState(null, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
+          }
+          if (codigo) { abrirConectarTablet(codigo); entrarSegundaTela(codigo); }
+        } catch (e) { }
+      }
+
 
       // ---------------- Drawer open/close ----------------
       function openDrawer() {
@@ -22656,6 +23028,10 @@
       // na aba Preços, entra na lista de preços; em qualquer outro campo, só
       // preenche e dispara a busca.
       function onScanSuccess(text) {
+        if (scannerTargetInput === 'parear') {
+          lidoQrDoTablet(text);
+          return;
+        }
         if (scannerTargetInput === 'levInput') {
           processLevScan(text);
           return;
@@ -22976,6 +23352,7 @@
           try { await apiFetch('/api/novidades/push/cancelar', { method: 'POST', body: JSON.stringify({ endpoint: inscricaoPush.endpoint }) }); } catch (e) { }
           try { await inscricaoPush.unsubscribe(); } catch (e) { }
         }
+        await desconectarSegundaTela(); // o tablet não fica mostrando o orçamento de quem saiu
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
@@ -23167,6 +23544,7 @@
 
           initAppConfirmModal();
           initAtalhosCabecalho();
+          initSegundaTela();
           document.getElementById('ctxResumo').addEventListener('click', alternarResumoContexto);
           document.getElementById('levLembrete').addEventListener('click', () => activateMainTab('levantamento'));
           document.getElementById('scanFab').addEventListener('click', () => document.getElementById('scanBtnLev').click());

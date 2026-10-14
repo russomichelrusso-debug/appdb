@@ -8,6 +8,8 @@ const { generateToken, hashToken } = require('../auth-utils');
 const dbPath = path.resolve(__dirname, '../db.js');
 // /health/banco guarda a resposta por 15 s (server.js); no teste, 300 ms
 process.env.HEALTH_BANCO_CACHE_MS = '300';
+// tela do cliente no tablet (routes/segundaTela.js): espera de 25 s vira 400 ms no teste
+process.env.SEGUNDA_TELA_ESPERA_MS = '400';
 const originalResolve = Module._resolveFilename;
 Module._resolveFilename = function (request, ...args) {
   const resolved = originalResolve.call(this, request, ...args);
@@ -3898,7 +3900,7 @@ async function main() {
     const raiz = path.join(__dirname, '..');
     const sw = fs.readFileSync(path.join(raiz, 'sw.js'), 'utf8');
     const usadas = new Set();
-    for (const f of ['index.html', 'curva-abc.html', 'calculadora-materiais.html', 'ficha-cnpj.html', 'importadores.js']) {
+    for (const f of ['index.html', 'curva-abc.html', 'calculadora-materiais.html', 'ficha-cnpj.html', 'tela-cliente.html', 'importadores.js']) {
       for (const m of fs.readFileSync(path.join(raiz, f), 'utf8').matchAll(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"`\s)]+/g)) usadas.add(m[0]);
     }
     const faltando = [...usadas].filter(u => !sw.includes(`'${u}'`));
@@ -3913,6 +3915,90 @@ async function main() {
     const prazo = Number((sw.match(/PRAZO_REDE_PAGINA_MS\s*=\s*(\d+)/) || [])[1]);
     assert(prazo >= 2000 && prazo <= 8000 && /setTimeout\([\s\S]{0,200}daCopia\(\)/.test(sw) && /event\.waitUntil\(/.test(sw),
       `service worker abre a página guardada se a rede não responder em ${prazo} ms (e guarda a nova em segundo plano)`);
+  }
+
+  {
+    // Tablet como tela do cliente (routes/segundaTela.js): o tablet cria a sala e
+    // mostra o código; o celular da MESMA conta entra com ele e manda o orçamento;
+    // o tablet espera a próxima versão (long-poll) e recebe o estado.
+    const tokenAntes = authToken;
+    const novoUsuario = async (nome, email) => {
+      const u = await mockDb.pool.query(
+        'INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, false) RETURNING id',
+        [nome, email, 'sub-' + email]
+      );
+      const tok = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tok), u.rows[0].id, '90']);
+      return tok;
+    };
+    const tokTela = await novoUsuario('Vendedor Tela', 'vend.tela@example.com');
+    const tokOutraConta = await novoUsuario('Outra Conta Tela', 'outra.tela@example.com');
+    authToken = tokTela;
+    let res = await req('POST', '/api/segunda-tela/salas', { modo: 'qualquer' });
+    assert(res.status === 400, `segunda tela: modo desconhecido é recusado: ${res.status}`);
+    res = await req('POST', '/api/segunda-tela/salas', { modo: 'cliente' });
+    const sala = res.body || {};
+    assert(res.status === 200 && /^[a-f0-9]{32}$/.test(sala.id) && /^\d{4}$/.test(sala.codigo),
+      `segunda tela: tablet cria a sala com id e código de 4 dígitos: ${JSON.stringify(res.body)}`);
+
+    // outra conta não acha o código nem a sala
+    authToken = tokOutraConta;
+    res = await req('POST', '/api/segunda-tela/entrar', { codigo: sala.codigo });
+    const outraEntrar = res.status;
+    res = await req('GET', `/api/segunda-tela/salas/${sala.id}`);
+    assert(outraEntrar === 404 && res.status === 404, `segunda tela: outra conta não entra pelo código nem vê a sala: ${outraEntrar}/${res.status}`);
+
+    // tablet esperando: o celular entrar acorda a espera com pareada = true
+    authToken = tokTela;
+    const espera1 = req('GET', `/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=0&pareada=0`);
+    await new Promise(r => setTimeout(r, 60));
+    res = await req('POST', '/api/segunda-tela/entrar', { codigo: 'ab' });
+    assert(res.status === 400, `segunda tela: código fora do formato: 400: ${res.status}`);
+    res = await req('POST', '/api/segunda-tela/entrar', { codigo: sala.codigo });
+    assert(res.status === 200 && res.body.id === sala.id && res.body.modo === 'cliente' && res.body.tablet_conectado === true,
+      `segunda tela: celular entra pelo código e vê o tablet conectado: ${JSON.stringify(res.body)}`);
+    const r1 = await espera1;
+    assert(r1.status === 200 && r1.body.pareada === true && r1.body.versao === 0, `segunda tela: a espera do tablet volta quando o celular entra: ${JSON.stringify(r1.body)}`);
+    res = await req('POST', '/api/segunda-tela/entrar', { codigo: sala.codigo });
+    assert(res.status === 404, `segunda tela: o código vale uma vez só: ${res.status}`);
+
+    // estado: inválido recusado; válido acorda a espera do tablet com o estado
+    res = await req('PUT', `/api/segunda-tela/salas/${sala.id}/estado`, { estado: [1, 2] });
+    assert(res.status === 400, `segunda tela: estado que não é objeto: 400: ${res.status}`);
+    res = await req('PUT', `/api/segunda-tela/salas/${sala.id}/estado`, { estado: { itens: [], x: 'a'.repeat(210 * 1024) } });
+    assert(res.status === 413, `segunda tela: estado grande demais: 413: ${res.status}`);
+    const espera2 = req('GET', `/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=0&pareada=1`);
+    await new Promise(r => setTimeout(r, 60));
+    res = await req('PUT', `/api/segunda-tela/salas/${sala.id}/estado`, { estado: { cliente: 'LOJA TESTE', itens: [{ cod: '60863', qtd: 3 }] } });
+    assert(res.status === 200 && res.body.versao === 1 && res.body.tablet_conectado === true, `segunda tela: celular manda o orçamento: ${JSON.stringify(res.body)}`);
+    const r2 = await espera2;
+    assert(r2.status === 200 && r2.body.versao === 1 && r2.body.estado && r2.body.estado.itens[0].qtd === 3,
+      `segunda tela: a espera do tablet volta com o orçamento novo: ${JSON.stringify(r2.body)}`);
+
+    // sem mudança, a espera termina sozinha no prazo, sem estado
+    const t0 = Date.now();
+    res = await req('GET', `/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=1&pareada=1`);
+    assert(res.status === 200 && res.body.versao === 1 && res.body.estado === undefined && Date.now() - t0 >= 350,
+      `segunda tela: sem mudança a espera volta no prazo e sem estado: ${JSON.stringify(res.body)} em ${Date.now() - t0} ms`);
+    // o celular consulta sem esperar (e não recebe o estado de volta)
+    res = await req('GET', `/api/segunda-tela/salas/${sala.id}`);
+    assert(res.status === 200 && res.body.estado === undefined && res.body.tablet_conectado === true, `segunda tela: celular confere se o tablet está lá: ${JSON.stringify(res.body)}`);
+
+    // desconectar: a espera do tablet volta com 404 e a sala some
+    const espera3 = req('GET', `/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=1&pareada=1`);
+    await new Promise(r => setTimeout(r, 60));
+    res = await req('DELETE', `/api/segunda-tela/salas/${sala.id}`);
+    const r3 = await espera3;
+    res = await req('PUT', `/api/segunda-tela/salas/${sala.id}/estado`, { estado: { itens: [] } });
+    assert(r3.status === 404 && res.status === 404, `segunda tela: desconectar encerra a espera e a sala: ${r3.status}/${res.status}`);
+
+    // no máximo 4 salas por conta: a mais antiga sai
+    const ids = [];
+    for (let i = 0; i < 5; i++) ids.push((await req('POST', '/api/segunda-tela/salas', { modo: 'cliente' })).body.id);
+    res = await req('GET', `/api/segunda-tela/salas/${ids[0]}`);
+    const ultima = await req('GET', `/api/segunda-tela/salas/${ids[4]}`);
+    assert(res.status === 404 && ultima.status === 200, `segunda tela: a 5ª sala da conta tira a mais antiga: ${res.status}/${ultima.status}`);
+    authToken = tokenAntes;
   }
 
   // Rotas destrutivas ou de administração que não tinham teste (auditoria de
