@@ -16859,6 +16859,16 @@
           else if (ld.situacao === 'topo') aviso = `<div class="clsAviso clsAviso--ok">✓ Na faixa máxima (${nomeFaixa(status.tipo)})</div>`;
           else if (ld.situacao === 'meta') aviso = `<div class="clsAviso clsAviso--subir">Faltam ${brl(ld.falta)} pra meta do acordo (${brl(ld.meta)})</div>`;
           else aviso = `<div class="clsAviso clsAviso--subir">Diferença classificatória: ${brl(ld.falta)}</div>`;
+          // O "faltam" é da apuração do ERP (ex.: até 31/08); o que faturou
+          // depois dela não está no número - sem isso o card dizia "faltam
+          // R$ X" de quem já tinha comprado mais que isso (6 clientes em 14/10/2026).
+          const depois = erp.conciliacao && erp.conciliacao.doze ? Number(erp.conciliacao.doze.depoisApuracao) || 0 : 0;
+          if (ld.falta > 0 && depois > 0) {
+            const desde = formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5);
+            aviso += `<div class="clsTileSub" style="margin:4px 0 0;">${depois >= ld.falta
+              ? `Depois de ${desde} já faturou ${brl(depois)} — pode já ter resolvido; confira "Ao vivo no app" abaixo.`
+              : `Depois de ${desde} já faturou ${brl(depois)} (não entra nesse número).`}</div>`;
+          }
         }
         const local = [erp.cidade, erp.uf].filter(Boolean).join('/');
         const info = [
