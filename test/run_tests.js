@@ -493,6 +493,19 @@ async function main() {
     itens: [ { codigo_sku: '60863', quantidade_contada: 12 } ],
   });
   assert(res.status === 201 && res.body.levantamento_id, 'grava levantamento com itens');
+  {
+    // cliente_id que não existe mais (cliente mesclado/apagado, cópia velha na fila
+    // offline): acha pelo nome em vez de bater na FK e voltar 400 pra sempre
+    const rSumiu = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: 987654, nome: 'João Silva Materiais' },
+      itens: [ { codigo_sku: '60863', quantidade_contada: 1 } ],
+    });
+    assert(rSumiu.status === 201 && rSumiu.body.cliente_id === clienteId,
+      `levantamento com cliente_id que não existe mais cai no cliente pelo nome: ${JSON.stringify(rSumiu.body)}`);
+    // não sujar a contagem de levantamentos do cliente nos testes seguintes
+    mockDb.__getLevantamentos().pop();
+    mockDb.__getLevantamentoItens().pop();
+  }
 
   // 12) historico de levantamentos do cliente
   res = await req('GET', `/api/clientes/${clienteId}/levantamentos`);
@@ -3829,6 +3842,9 @@ async function main() {
     // 10/2026: todo levantamento salvo dava "Erro ao gravar levantamento").
     assert(/ALTER TABLE\s+levantamento_itens\s+ADD COLUMN IF NOT EXISTS\s+quantidade_pedido\b/i.test(schema),
       'schema.sql: levantamento_itens.quantidade_pedido tem ALTER TABLE ... ADD COLUMN IF NOT EXISTS');
+    // Idem pra restrição que um ON CONFLICT usa: só no CREATE TABLE, o banco antigo fica sem ela.
+    assert(/CREATE UNIQUE INDEX IF NOT EXISTS\s+\w+\s+ON\s+vendedores\s*\(\s*nome\s*\)/i.test(schema),
+      'schema.sql: índice único em vendedores(nome) fora do CREATE TABLE (ON CONFLICT de acharOuCriarVendedor)');
     // Importação em lote: o relatório oficial fazia ~3 consultas por cliente (ida de
     // Oregon a São Paulo cada uma) - ~860 pra 250 clientes. Agora é um número fixo.
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);

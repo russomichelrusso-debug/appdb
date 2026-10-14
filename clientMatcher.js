@@ -38,7 +38,16 @@ async function acharClientePorNome(client, nome){
 }
 
 async function acharOuCriarCliente(client, { cliente_id, nome, documento, codigo_oficial, contato }) {
-  if (cliente_id) return cliente_id;
+  // O id vem da cópia do aparelho: cliente apagado/mesclado depois (12 em
+  // 09/10/2026) fazia o pedido ou levantamento da fila offline bater na FK e
+  // voltar 400 pra sempre. Id que não existe mais cai na busca por código/CNPJ/nome.
+  if (cliente_id) {
+    const id = Number(cliente_id);
+    if (Number.isSafeInteger(id) && id > 0) {
+      const existe = await client.query('/* cliente:existe */ SELECT id FROM clientes WHERE id = $1', [id]);
+      if (existe.rows.length > 0) return existe.rows[0].id;
+    }
+  }
   nome = limparNomeCliente(nome) || nome;
   // Cod.Cliente do ERP é a chave mais confiável quando existe - vem antes de
   // CNPJ e nome porque diferencia clientes com o mesmo nome mas CNPJs

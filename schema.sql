@@ -60,6 +60,10 @@ CREATE TABLE IF NOT EXISTS vendedores (
   id SERIAL PRIMARY KEY,
   nome TEXT UNIQUE NOT NULL
 );
+-- O UNIQUE acima só vale em banco novo: o de produção tinha a tabela sem ele e o
+-- "ON CONFLICT (nome)" de acharOuCriarVendedor (pedido e levantamento) dava erro
+-- 42P10 com qualquer nome de vendedor ainda não cadastrado (10/2026).
+CREATE UNIQUE INDEX IF NOT EXISTS idx_vendedores_nome ON vendedores(nome);
 
 CREATE TABLE IF NOT EXISTS pedidos (
   id SERIAL PRIMARY KEY,

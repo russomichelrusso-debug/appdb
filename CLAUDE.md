@@ -98,7 +98,11 @@ Pegadinhas de ambiente:
   `PGHOST`/`PGPORT`/`PGUSER`/`PGDATABASE` sem `DATABASE_URL`.
 - `schema.sql` roda inteiro em toda subida: tabela nova vem **antes** da primeira referência a ela
   (até 10/2026 o `CREATE TABLE usuarios` vinha depois de um `REFERENCES usuarios` e um banco novo
-  só subia na 2ª execução). O pool (`db.js`) tem `max` 10 (`PG_POOL_MAX`), espera de conexão de
+  só subia na 2ª execução). **Coluna ou `UNIQUE` novo em tabela que já existe vai num `ALTER TABLE ... ADD
+  COLUMN IF NOT EXISTS`/`CREATE UNIQUE INDEX IF NOT EXISTS` à parte** — no `CREATE TABLE IF NOT EXISTS` ele só
+  vale em banco novo: em 10/2026 `levantamento_itens.quantidade_pedido` faltava em produção (todo levantamento
+  dava "Erro ao gravar levantamento") e o `UNIQUE` de `vendedores.nome` também (pedido/levantamento com nome de
+  vendedor novo dava 42P10 no `ON CONFLICT (nome)`). O pool (`db.js`) tem `max` 10 (`PG_POOL_MAX`), espera de conexão de
   20 s e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
   andamento (até 25 s) e fecha o pool.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
