@@ -25,6 +25,22 @@
       try { window.top.location = window.self.location.href; } catch (e) { }
     }
   </script>
+  <!-- Integridade do pdf.js: o import() do módulo não aceita o atributo integrity, então
+       o hash vai num import map (Chrome 127+, Safari 18+, Firefox 138+; navegador mais
+       velho ignora). O import map casa pelo endereço exato: as novas tentativas de
+       loadPdfJs (?tentativa=1 a 5) vão listadas. O worker só fica coberto aqui quando o
+       pdf.js o carrega na própria página (o CSP barra o worker de blob, então é o caso de
+       hoje); num worker de verdade quem confere é só o sw.js, que confere tudo ao baixar.
+       Mesmos hashes de INTEGRIDADE_CDN. -->
+  <script type="importmap">{"integrity": {
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs": "sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD",
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs?tentativa=1": "sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD",
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs?tentativa=2": "sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD",
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs?tentativa=3": "sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD",
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs?tentativa=4": "sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD",
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs?tentativa=5": "sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD",
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs": "sha384-Tfvhzz17zRZraaeJSy+9zZprh8OYQHd3NC7yMUa5APLz8buWdx7MloIddcBGa3oW"
+  }}</script>
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="var(--red)">
@@ -9708,11 +9724,34 @@
     <div id="exportTemplate"></div>
     <div id="cardOfertaTemplate" aria-hidden="true"></div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" integrity="sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H" crossorigin="anonymous"></script>
     <!-- leitura das planilhas importadas: compartilhada com a importação por e-mail do servidor -->
     <script src="importadores.js"></script>
     <script>
       "use strict";
+      // Bibliotecas de CDN (cdnjs/jsdelivr) com o hash do arquivo (SRI): se a CDN for
+      // invadida e o arquivo trocado, o navegador recusa em vez de rodar o código no app
+      // (que tem o token de sessão no localStorage). Trocar a versão de uma biblioteca =
+      // trocar o endereço E o hash aqui, na LIBS do sw.js e, se for o caso, no import map
+      // do <head> e na tag do html2canvas (node scripts/conferir-integridade.js calcula e confere).
+      const INTEGRIDADE_CDN = {
+        'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js': 'sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js': 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk',
+        'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js': 'sha384-vuyrTV5nkscLp1knFvt+FIHfKKzmROBq5reruhMRslauj54mW+l2B8b6szMN6lCL',
+        'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js': 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB',
+        'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js': 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT',
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs': 'sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD',
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs': 'sha384-Tfvhzz17zRZraaeJSy+9zZprh8OYQHd3NC7yMUa5APLz8buWdx7MloIddcBGa3oW',
+        'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js': 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1',
+      };
+      // <script> de biblioteca da CDN já com o hash conferido pelo navegador
+      function scriptDaCdn(src) {
+        const s = document.createElement('script');
+        s.crossOrigin = 'anonymous';
+        if (INTEGRIDADE_CDN[src]) s.integrity = INTEGRIDADE_CDN[src];
+        s.src = src;
+        return s;
+      }
 
       // Catálogo de produtos: começa vazio e é preenchido por applyDB() assim
       // que loadActiveDB() resolver (cache local -> servidor -> precos.json ->
@@ -14025,8 +14064,7 @@
         if (window.qrcode) return Promise.resolve();
         if (!qrLibPromise) {
           qrLibPromise = new Promise((resolve, reject) => {
-            const s = document.createElement('script');
-            s.src = QRCODE_CDN;
+            const s = scriptDaCdn(QRCODE_CDN);
             s.onload = () => resolve();
             s.onerror = () => reject(new Error('qr'));
             document.head.appendChild(s);
@@ -15066,8 +15104,7 @@
         if (jsPdfPronto()) return Promise.resolve();
         if (jsPdfLoadPromise) return jsPdfLoadPromise;
         const carregar = (src) => new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = src;
+          const s = scriptDaCdn(src);
           s.onload = () => resolve();
           s.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s);
@@ -15795,11 +15832,10 @@
         if (window.XLSX) return Promise.resolve(window.XLSX);
         if (sheetJsLoadPromise) return sheetJsLoadPromise;
         sheetJsLoadPromise = new Promise((resolve, reject) => {
-          const s = document.createElement('script');
           // SheetJS 0.20.3 (pacote @e965/xlsx, o mesmo do servidor): a 0.18.5 do cdnjs tinha
           // falhas conhecidas ao abrir planilha maliciosa (CVE-2023-30533, CVE-2024-22363) e o
           // SheetJS não publica mais versão nova no cdnjs. Trocar aqui = trocar na LIBS do sw.js.
-          s.src = 'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js';
+          const s = scriptDaCdn('https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js');
           s.onload = () => resolve(window.XLSX);
           s.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s);
@@ -22330,12 +22366,14 @@
       // dados viram pedidos de verdade no banco compartilhado, identificados pelo
       // número da cotação pra não duplicar se o mesmo PDF for processado 2x.
       let pdfJsLoadPromise = null;
+      const PDFJS_MAX_TENTATIVAS = 5;
       function loadPdfJs() {
         if (window.__pdfjsLib) return Promise.resolve(window.__pdfjsLib);
         if (pdfJsLoadPromise) return pdfJsLoadPromise;
         // nova tentativa com outro endereço: o navegador pode guardar a falha do
-        // import() até recarregar a página (o sw.js atende sem o parâmetro)
-        const tentativa = loadPdfJs.falhas ? `?tentativa=${loadPdfJs.falhas}` : '';
+        // import() até recarregar a página (o sw.js atende sem o parâmetro). Até 5: cada
+        // endereço está no import map do <head> com o hash; depois disso, recarregar o app.
+        const tentativa = loadPdfJs.falhas ? `?tentativa=${Math.min(loadPdfJs.falhas, PDFJS_MAX_TENTATIVAS)}` : '';
         pdfJsLoadPromise = import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs' + tentativa).then(lib => {
           lib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs';
           window.__pdfjsLib = lib;
@@ -24126,8 +24164,7 @@
         if (window.ZXing) return Promise.resolve();
         if (zxingLoadPromise) return zxingLoadPromise;
         zxingLoadPromise = new Promise((resolve, reject) => {
-          const s = document.createElement('script');
-          s.src = ZXING_CDN;
+          const s = scriptDaCdn(ZXING_CDN);
           s.onload = () => resolve();
           s.onerror = () => reject(new Error('load-error'));
           document.head.appendChild(s);

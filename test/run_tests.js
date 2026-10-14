@@ -3990,7 +3990,8 @@ async function main() {
     const sw = fs.readFileSync(path.join(raiz, 'sw.js'), 'utf8');
     const usadas = new Set();
     for (const f of ['index.html', 'curva-abc.html', 'calculadora-materiais.html', 'ficha-cnpj.html', 'tela-cliente.html', 'importadores.js']) {
-      for (const m of fs.readFileSync(path.join(raiz, f), 'utf8').matchAll(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"`\s)]+/g)) usadas.add(m[0]);
+      // sem os parâmetros: o SW atende pelo endereço puro (?tentativa=N do pdf.js)
+      for (const m of fs.readFileSync(path.join(raiz, f), 'utf8').matchAll(/https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^'"`\s)?]+/g)) usadas.add(m[0]);
     }
     const faltando = [...usadas].filter(u => !sw.includes(`'${u}'`));
     // SheetJS do cdnjs parou na 0.18.5 (CVE-2023-30533, CVE-2024-22363): só a do pacote @e965/xlsx
@@ -4004,6 +4005,53 @@ async function main() {
     const prazo = Number((sw.match(/PRAZO_REDE_PAGINA_MS\s*=\s*(\d+)/) || [])[1]);
     assert(prazo >= 2000 && prazo <= 8000 && /setTimeout\([\s\S]{0,200}daCopia\(\)/.test(sw) && /event\.waitUntil\(/.test(sw),
       `service worker abre a página guardada se a rede não responder em ${prazo} ms (e guarda a nova em segundo plano)`);
+
+    // Integridade (SRI) das bibliotecas de CDN: toda biblioteca usada tem hash no
+    // sw.js, e o index.html (INTEGRIDADE_CDN, import map do pdf.js, tags fixas) e a
+    // tela-cliente.html usam o mesmo hash. O SW baixa conferindo o hash e não cai
+    // pra uma busca sem conferência. (Hash x arquivo real: scripts/conferir-integridade.js)
+    const blocoLibs = (sw.match(/const LIBS = new Map\(\[([\s\S]*?)\]\);/) || [])[1] || '';
+    const hashSw = new Map([...blocoLibs.matchAll(/'(https:\/\/[^']+)',\s*'(sha384-[A-Za-z0-9+/=]{64})'/g)].map(m => [m[1], m[2]]));
+    const index = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
+    const blocoIndex = (index.match(/const INTEGRIDADE_CDN = \{([\s\S]*?)\};/) || [])[1] || '';
+    const hashIndex = new Map([...blocoIndex.matchAll(/'(https:\/\/[^']+)':\s*'(sha384-[A-Za-z0-9+/=]{64})'/g)].map(m => [m[1], m[2]]));
+    const semHash = [...usadas].filter(u => !hashSw.has(u));
+    const diferentes = [...new Set([...hashSw.keys(), ...hashIndex.keys()])].filter(u => hashSw.get(u) !== hashIndex.get(u));
+    // tags <script src> e import map: o hash de cada endereço = o da LIBS
+    const problemasTag = [];
+    for (const f of ['index.html', 'curva-abc.html', 'calculadora-materiais.html', 'ficha-cnpj.html', 'tela-cliente.html']) {
+      const html = fs.readFileSync(path.join(raiz, f), 'utf8');
+      for (const m of html.matchAll(/<script\b[^>]*\bsrc="(https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\/[^"]+)"[^>]*>/g)) {
+        const integ = (m[0].match(/\bintegrity="([^"]+)"/) || [])[1];
+        if (integ !== hashSw.get(m[1]) || !/\bcrossorigin="anonymous"/.test(m[0])) problemasTag.push(`${f}: ${m[1]}`);
+      }
+      // carregador dinâmico que cria o <script> na mão (sem scriptDaCdn) e aponta pra CDN
+      for (const m of html.matchAll(/createElement\('script'\);\s*\n?\s*s\.src = ([^;]+);/g)) {
+        if (/cdnjs|jsdelivr|_CDN\b|^src$/.test(m[1].trim())) problemasTag.push(`${f}: <script> da CDN sem scriptDaCdn (${m[1].trim()})`);
+      }
+    }
+    const importMap = (index.match(/<script type="importmap">([\s\S]*?)<\/script>/) || [])[1];
+    let integMap = {};
+    try { integMap = JSON.parse(importMap).integrity || {}; } catch (e) { problemasTag.push('import map inválido'); }
+    for (const u of [...usadas].filter(x => x.endsWith('.mjs'))) {
+      if (integMap[u] !== hashSw.get(u)) problemasTag.push(`import map sem o hash de ${u}`);
+    }
+    // cada chave do import map com o hash do endereço sem parâmetro, e as novas
+    // tentativas do pdf.js (?tentativa=1..PDFJS_MAX_TENTATIVAS) todas listadas
+    for (const [u, h] of Object.entries(integMap)) {
+      if (h !== hashSw.get(u.split('?')[0])) problemasTag.push(`import map com hash errado: ${u}`);
+    }
+    const maxTentativas = Number((index.match(/PDFJS_MAX_TENTATIVAS = (\d+)/) || [])[1]);
+    const pdfMin = [...usadas].find(u => u.endsWith('/pdf.min.mjs'));
+    for (let i = 1; i <= maxTentativas; i++) {
+      if (!integMap[`${pdfMin}?tentativa=${i}`]) problemasTag.push(`import map sem ?tentativa=${i}`);
+    }
+    if (!(maxTentativas >= 1) || !/Math\.min\(loadPdfJs\.falhas, PDFJS_MAX_TENTATIVAS\)/.test(index)) problemasTag.push('loadPdfJs sem limite de tentativas');
+    assert(hashSw.size === usadas.size && semHash.length === 0 && diferentes.length === 0 && problemasTag.length === 0,
+      `bibliotecas de CDN com o mesmo hash (SRI) no sw.js e nas páginas: ${JSON.stringify({ semHash, diferentes, problemasTag })}`);
+    assert(/integrity: LIBS\.get\(url\)/.test(sw) && !/\(\) => fetch\(req\)/.test(sw) && /CACHE_LIBS = 'cortag-libs-v2'/.test(sw)
+      && /migrarLibsAnteriores\(cache\)/.test(sw) && /hashSri\(velha\.clone\(\)\)\) === LIBS\.get\(url\)/.test(sw),
+      'service worker baixa as bibliotecas conferindo o hash, sem busca sem conferência, em cache novo (trazendo do anterior só o que bate)');
   }
 
   {
