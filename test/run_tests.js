@@ -3140,6 +3140,21 @@ async function main() {
     res = await req('GET', '/api/pedidos-oficiais/9512');
     assert((res.body.avisos_cancelamento || []).length === 1 && res.body.avisos_cancelamento[0].codigo_sku === '60538',
       `e-mail Cortag: o aviso de cancelamento some quando o item sai faturado depois dele: ${JSON.stringify(res.body.avisos_cancelamento)}`);
+    // relatório importado depois do aviso: com o item ainda em carteira o aviso fica;
+    // sem ele em carteira (saldo já cortado), o aviso sai da lista
+    mockDb.__seed({ pedidosOficiaisItens: [{ nr_pedido: '677106', codigo_sku: '60538', cliente_codigo_oficial: '217739', status: 'carteira',
+      quantidade: 6, valor: 90, data_implantacao: '2026-08-01', data_faturamento: null, nota_fiscal: null, nota_chave: '' }] });
+    await new Promise(r => setTimeout(r, 5));
+    await mockDb.registrarImportacao(null, 'pedidos-oficiais/importar', 1);
+    res = await req('GET', '/api/pedidos-oficiais/9512');
+    assert((res.body.avisos_cancelamento || []).length === 1,
+      `e-mail Cortag: relatório depois do aviso com o item ainda em carteira mantém o aviso: ${JSON.stringify(res.body.avisos_cancelamento)}`);
+    const itensCanc = mockDb.__getPedidosOficiaisItens();
+    itensCanc.splice(itensCanc.findIndex(i => i.nr_pedido === '677106' && i.codigo_sku === '60538' && i.status === 'carteira'), 1);
+    res = await req('GET', '/api/pedidos-oficiais/9512');
+    const syncCanc = (await req('GET', '/api/clientes/sync')).body.clientes.find(c => c.id === 9512);
+    assert((res.body.avisos_cancelamento || []).length === 0 && !(syncCanc.cancelamentos && syncCanc.cancelamentos.length),
+      `e-mail Cortag: relatório depois do aviso sem o item em carteira (saldo já cortado) tira o aviso: ${JSON.stringify([res.body.avisos_cancelamento, syncCanc.cancelamentos])}`);
     // resposta ao e-mail ("RES: Cancelamento...") não é aviso novo
     res = await enviarMensagem('RES: ' + assuntoCanc, 'Boa tarde, ajustado conforme solicitado.', { ...deThamiris, mensagemId: 'canc-res' });
     assert(res.status !== 200 && res.body.tipo == null, `e-mail Cortag: resposta ao cancelamento de saldo não é lida como aviso: ${JSON.stringify(res.body)}`);

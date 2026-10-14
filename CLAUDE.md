@@ -539,7 +539,10 @@ Supabase, sem PR — não é mudança de código.
   responde "alterar para N unidades" (copiando o atendimento01, que reabre o pedido). Decisões: **selo no
   pedido + faixa no card do cliente + push**. Tabela `avisos_cancelamento_saldo` (um por item; aviso mais
   velho não passa por cima); vale **15 dias** ou até o item sair faturado **depois** do dia do aviso
-  (`sqlAvisoCancelamentoAtivo`, `routes/lib/cancelamentoSaldo.js`). Selo (`renderSeloCancelamento`,
+  (`sqlAvisoCancelamentoAtivo`, `routes/lib/cancelamentoSaldo.js`). Também sai quando um relatório oficial
+  importado **depois** do aviso (`import_log`, rota `pedidos-oficiais/importar`) não traz mais o item em carteira:
+  o saldo já foi cortado (10/2026: 6 dos 7 avisos de 13/10 já tinham sumido da carteira no relatório de 14/10 e
+  seguiam em "Saldo a cancelar" com "Pedir aumento" por 15 dias). Selo (`renderSeloCancelamento`,
   `index.html`): com motivo "Abaixo R$ X" (o mínimo vem do próprio motivo), quanto falta e a quantidade que
   completa, no múltiplo da embalagem (1 código: só ele; 2+: qualquer um; sem previsão de chegada fica fora),
   e **"✉ Pedir aumento por e-mail"** (mailto pra assistente, cc atendimento01, assunto "Re: Cancelamento…",
