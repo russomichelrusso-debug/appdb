@@ -1031,6 +1031,12 @@ Supabase, sem PR — não é mudança de código.
   importação da Lista de Preços (`esquecerCatalogo`, com geração pra consulta em andamento não regravar o
   velho). Rota nova que mostre produto do histórico passa pelo mesmo helper.
 
+- **"Onde" na ficha do produto** (10/2026, pedido do usuário: "selecionar uma cidade e um raio pra saber qual cliente
+  tem tal produto"): Já compraram e Levantamento ganharam dois seletores — cidade (município da ficha de CNPJ, com quantos
+  da lista em cada uma) ou "📍 Perto de mim", e raio ("Só a cidade"/10/30/50/100 km; perto de mim 2–100 km). Tudo no app,
+  pela cópia do `/sync` (funciona sem internet): centro da cidade = mediana das posições das lojas dela na carteira
+  (`centroDaCidade`, não há coordenada de município); loja da cidade entra sempre, de outra cidade só com posição dentro do
+  raio (`aplicarProdLocal`, `index.html`); lista por distância, "N de M" nas abas, escolha guardada em `cortagProdLocal_v1`.
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
