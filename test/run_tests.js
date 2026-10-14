@@ -493,6 +493,31 @@ async function main() {
     itens: [ { codigo_sku: '60863', quantidade_contada: 12 } ],
   });
   assert(res.status === 201 && res.body.levantamento_id, 'grava levantamento com itens');
+  {
+    // cliente_id que não existe mais (cliente mesclado/apagado, cópia velha na fila
+    // offline): acha pelo nome em vez de bater na FK e voltar 400 pra sempre
+    const rSumiu = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: 987654, nome: 'João Silva Materiais' },
+      itens: [ { codigo_sku: '60863', quantidade_contada: 1 } ],
+    });
+    assert(rSumiu.status === 201 && rSumiu.body.cliente_id === clienteId,
+      `levantamento com cliente_id que não existe mais cai no cliente pelo nome: ${JSON.stringify(rSumiu.body)}`);
+    // não sujar a contagem de levantamentos do cliente nos testes seguintes
+    mockDb.__getLevantamentos().pop();
+    mockDb.__getLevantamentoItens().pop();
+    // filiais com o mesmo nome (ou nome que não existe): sem saber qual, recusa (422)
+    // em vez de gravar na filial errada ou criar cliente sem CNPJ
+    const nClientes = mockDb.__getClientes().length;
+    mockDb.__getClientes().push({ id: 990001, nome: 'FILIAL IGUAL LTDA', documento: '11111111000101' },
+      { id: 990002, nome: 'FILIAL IGUAL LTDA', documento: '11111111000202' });
+    const rFilial = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: 987654, nome: 'Filial Igual Ltda.' }, itens: [ { codigo_sku: '60863', quantidade_contada: 1 } ] });
+    const rNinguem = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: 987654, nome: 'Loja Que Não Existe' }, itens: [ { codigo_sku: '60863', quantidade_contada: 1 } ] });
+    assert(rFilial.status === 422 && rNinguem.status === 422 && mockDb.__getClientes().length === nClientes + 2,
+      `cliente_id sumido com nome de 2 filiais ou de ninguém: 422, sem criar cliente: ${JSON.stringify([rFilial.status, rNinguem.status, rNinguem.body])}`);
+    mockDb.__getClientes().splice(nClientes, Infinity);
+  }
 
   // 12) historico de levantamentos do cliente
   res = await req('GET', `/api/clientes/${clienteId}/levantamentos`);
@@ -3829,6 +3854,9 @@ async function main() {
     // 10/2026: todo levantamento salvo dava "Erro ao gravar levantamento").
     assert(/ALTER TABLE\s+levantamento_itens\s+ADD COLUMN IF NOT EXISTS\s+quantidade_pedido\b/i.test(schema),
       'schema.sql: levantamento_itens.quantidade_pedido tem ALTER TABLE ... ADD COLUMN IF NOT EXISTS');
+    // Idem pra restrição que um ON CONFLICT usa: só no CREATE TABLE, o banco antigo fica sem ela.
+    assert(/CREATE UNIQUE INDEX IF NOT EXISTS\s+\w+\s+ON\s+vendedores\s*\(\s*nome\s*\)/i.test(schema),
+      'schema.sql: índice único em vendedores(nome) fora do CREATE TABLE (ON CONFLICT de acharOuCriarVendedor)');
     // Importação em lote: o relatório oficial fazia ~3 consultas por cliente (ida de
     // Oregon a São Paulo cada uma) - ~860 pra 250 clientes. Agora é um número fixo.
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);

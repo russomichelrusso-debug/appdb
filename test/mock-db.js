@@ -189,6 +189,13 @@ async function query(sql, params = []) {
   if (s.includes('/* PEDIDOS-OFICIAIS:BLOQUEADOS */')) {
     return { rows: bloqueiosAtivos().filter(b => b.cliente_codigo_oficial === params[0]).map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em })) };
   }
+  if (s.includes('/* CLIENTE:MESMO-NOME */')) {
+    const norm = (n) => String(n || '').toUpperCase().trim().replace(/[.,\s]+/g, ' ');
+    return { rows: clientes.filter(c => norm(c.nome) === norm(params[0])).slice(0, 2).map(c => ({ id: c.id })) };
+  }
+  if (s.includes('/* CLIENTE:EXISTE */')) {
+    return { rows: clientes.filter(c => Number(c.id) === Number(params[0])).map(c => ({ id: c.id })) };
+  }
   if (s.includes('/* IMPORTACAO-EMAIL:CLIENTE-POR-CODIGO */')) {
     return { rows: clientes.filter(c => c.codigo_oficial === params[0]).map(c => ({ nome: c.nome })) };
   }

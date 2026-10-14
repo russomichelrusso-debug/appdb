@@ -111,9 +111,13 @@ function payloadPush(n) {
 
 // Manda um push pra uma inscrição. Inscrição morta (404/410) sai do banco - e a
 // gravada antes da regra de hosts exatos que não passa nela também (nem é chamada).
+// Erro do banco aqui só vai pro log: lançar parava o laço de processarPushPendentes
+// e os aparelhos seguintes ficavam sem o aviso (já reservado como enviado).
 async function enviarPush(inscricao, payload, topico) {
+  const gravar = (sql) => pool.query(sql, [inscricao.id])
+    .catch(e => console.error('Falha ao atualizar inscrição de aviso:', e.message));
   if (!endpointPushValido(inscricao.endpoint)) {
-    await pool.query('/* push:apagar */ DELETE FROM push_inscricoes WHERE id = $1', [inscricao.id]);
+    await gravar('/* push:apagar */ DELETE FROM push_inscricoes WHERE id = $1');
     return false;
   }
   try {
@@ -121,16 +125,16 @@ async function enviarPush(inscricao, payload, topico) {
       { endpoint: inscricao.endpoint, keys: { p256dh: inscricao.p256dh, auth: inscricao.auth } },
       payload,
       { TTL: 24 * 3600, urgency: 'normal', topic: topico, timeout: 10000 });
-    await pool.query('/* push:enviado */ UPDATE push_inscricoes SET ultimo_envio_em = now() WHERE id = $1', [inscricao.id]);
-    return true;
   } catch (e) {
     if (e && (e.statusCode === 404 || e.statusCode === 410)) {
-      await pool.query('/* push:apagar */ DELETE FROM push_inscricoes WHERE id = $1', [inscricao.id]);
+      await gravar('/* push:apagar */ DELETE FROM push_inscricoes WHERE id = $1');
     } else {
       console.error('Falha ao enviar aviso no celular:', e && (e.statusCode || e.message));
     }
     return false;
   }
+  await gravar('/* push:enviado */ UPDATE push_inscricoes SET ultimo_envio_em = now() WHERE id = $1');
+  return true;
 }
 
 // Envia os pushes que já podem sair. A linha é "reservada" no próprio UPDATE
@@ -140,13 +144,18 @@ async function processarPushPendentes() {
   if (processando) return 0;
   processando = true;
   try {
+    // inscrições lidas ANTES de reservar: com a conexão caindo entre as duas
+    // consultas (o pooler do Supabase derruba conexão de vez em quando), o aviso
+    // ficava reservado como enviado e não saía nunca
+    const inscricoes = pushConfigurado()
+      ? await pool.query('/* push:inscricoes */ SELECT id, endpoint, p256dh, auth FROM push_inscricoes')
+      : { rows: [] };
     const pendentes = await pool.query(
       `/* novidades:reservar-push */
        UPDATE novidades SET push_pendente = false, push_enviado_em = now()
        WHERE push_pendente AND push_enviar_em <= now()
        RETURNING id, tipo, titulo, texto`);
     if (pendentes.rows.length === 0 || !pushConfigurado()) return 0;
-    const inscricoes = await pool.query('/* push:inscricoes */ SELECT id, endpoint, p256dh, auth FROM push_inscricoes');
     let enviados = 0;
     for (const n of pendentes.rows) {
       for (const i of inscricoes.rows) {
