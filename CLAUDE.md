@@ -220,6 +220,12 @@ Supabase, sem PR — não é mudança de código.
   - **Link vindo de dado** (planilha, configuração, cadastro) passa por `urlHttpsOuVazio` (`index.html`),
     na importação e na exibição: `escapeHtml` não barra `href="javascript:..."`.
   - **Push só pros hosts exatos dos serviços de push** (`HOSTS_PUSH` em `routes/lib/novidades.js`).
+  - **Limite de requisições nas leituras pesadas** (`middleware/limiteRotasPesadas.js`, depois do `requireAuth`
+    em todo `app.use` de dados do `server.js`): por usuário, só GET, 40/min nas que varrem a carteira (Dashboard,
+    Curva ABC geral, alertas, `/sync`, Recompra, Visitas, Para reativar, Inadimplência, exportar…) e 150/min nos
+    relatórios de um cliente; 429 com "espera um minuto". Medido no app: abrir o app = 4, aba Clientes = 6,
+    Dashboard = 4, abrir um cliente = 3. Rota de leitura pesada nova entra numa das listas (`ROTAS_CARTEIRA`/
+    `ROTAS_CLIENTE`); `LIMITE_ROTAS_CARTEIRA_POR_MIN`/`LIMITE_ROTAS_CLIENTE_POR_MIN` no Render ajustam sem deploy.
 - Atalhos de produtividade pro vendedor: botão "Produtos comprados" (pula direto pra Curva ABC já
   filtrada no cliente), botão de adicionar direto ao orçamento a partir da Curva ABC, correção da
   lista de campanhas que sumia no Painel Administrativo (race condition de render antes do dado
