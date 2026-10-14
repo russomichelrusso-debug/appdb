@@ -821,6 +821,47 @@
       color: var(--gray);
     }
 
+    /* ✕ das buscas das abas Clientes/Produtos: só aparece com texto */
+    .searchClearBtn {
+      position: absolute;
+      right: 4px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 40px;
+      height: 40px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--gray);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .searchClearBtn.hidden {
+      display: none;
+    }
+
+    .searchClearBtn span {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: rgba(29, 29, 31, .08);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .searchClearBtn svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .searchClearBtn:active {
+      color: var(--red);
+    }
+
     .searchBox--actions2 input {
       padding-right: 92px;
     }
@@ -8556,6 +8597,10 @@
             <path d="M21 21l-4.3-4.3" />
           </svg>
           <input type="text" id="prodTabSearch" placeholder="Buscar produto por código ou nome" autocomplete="off">
+          <button type="button" class="searchClearBtn hidden" data-limpar-busca="prodTabSearch" aria-label="Limpar busca">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+                aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></span>
+          </button>
         </div>
       </div>
       <div id="prodTabListWrap">
@@ -8588,6 +8633,10 @@
             <path d="M21 21l-4.3-4.3" />
           </svg>
           <input type="text" id="clienteTabSearch" placeholder="Buscar cliente por nome ou CNPJ" autocomplete="off">
+          <button type="button" class="searchClearBtn hidden" data-limpar-busca="clienteTabSearch" aria-label="Limpar busca">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+                aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></span>
+          </button>
         </div>
       </div>
       <!-- some com cliente aberto ou com texto na busca (o resultado fica logo abaixo dela) -->
@@ -21187,7 +21236,23 @@
           content.innerHTML = `<div class="lev-empty">${escapeHtml(e.message)}</div>`;
         }
       }
+      // ✕ da busca: apaga tudo de uma vez (antes só pelo backspace, letra por
+      // letra) e manda o 'input' de sempre, que refaz a lista/painel da aba.
+      function initLimparBusca(inputId) {
+        const input = document.getElementById(inputId);
+        const btn = document.querySelector(`[data-limpar-busca="${inputId}"]`);
+        if (!input || !btn) return;
+        const atualizar = () => btn.classList.toggle('hidden', !input.value);
+        input.addEventListener('input', atualizar);
+        btn.addEventListener('click', () => {
+          input.value = '';
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.focus();
+        });
+        atualizar();
+      }
       function initClientesTab() {
+        initLimparBusca('clienteTabSearch');
         document.getElementById('clienteTabSearch').addEventListener('input', (e) => {
           atualizarPainelClientes();
           clearTimeout(clienteTabDebounce);
@@ -21322,6 +21387,7 @@
         atualizarProdutosInicio();
       }
       function initProdutosTab() {
+        initLimparBusca('prodTabSearch');
         document.getElementById('prodTabSearch').addEventListener('input', (e) => {
           clearTimeout(prodTabDebounce);
           const term = e.target.value;
