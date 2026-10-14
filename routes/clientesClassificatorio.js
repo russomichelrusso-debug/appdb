@@ -33,6 +33,10 @@ function faixaDoTipo(tipo) {
 }
 
 const LIMIAR_PERTO_DE_SUBIR = 0.15; // falta <= 15% do tamanho da faixa conta como "perto"
+function hojeBrasil() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
 const DIAS_SEM_COMPRAR_ALERTA = 60; // mesmo limiar já usado na "carteira antiga"
 
 function normalizarDoc(v) {
@@ -407,18 +411,36 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // - meta explícita por cliente/grupo, diferente da meta automática por
     // FAIXA calculada acima. Só aparece quando existe um objetivo importado
     // pra esse cliente/grupo; convive com (não substitui) a meta por faixa.
+    // Período já encerrado (ninguém importou os objetivos do trimestre novo):
+    // não é mais "o objetivo do trimestre" - em 14/10/2026 o card dizia
+    // "Faltam R$ 5.448 pra bater o objetivo do trimestre" com a entrada de
+    // jul-set. Vai à parte em `objetivoEncerrado`, só como resultado.
     let objetivoTrimestral = null;
     let entradaTrimestral = null;
     let faltaPObjetivo = null;
+    let objetivoEncerrado = null;
     const objetivosConfigResult = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', ['objetivos_trimestrais']);
     const objetivosConfig = objetivosConfigResult.rows[0]?.valor;
     if (objetivosConfig && objetivosConfig.periodoInicio && objetivosConfig.periodoFim) {
       const chaveGrupo = cliente.matriz_grupo || cliente.nome;
       const objetivo = objetivosConfig.objetivos?.[chaveGrupo];
       if (objetivo != null) {
-        objetivoTrimestral = Number(objetivo);
-        entradaTrimestral = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
-        faltaPObjetivo = Math.max(0, objetivoTrimestral - entradaTrimestral);
+        const valorObjetivo = Number(objetivo);
+        const entrada = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
+        const falta = Math.max(0, valorObjetivo - entrada);
+        if (String(objetivosConfig.periodoFim).slice(0, 10) < hojeBrasil()) {
+          objetivoEncerrado = {
+            periodoInicio: String(objetivosConfig.periodoInicio).slice(0, 10),
+            periodoFim: String(objetivosConfig.periodoFim).slice(0, 10),
+            objetivo: valorObjetivo,
+            entrada,
+            falta,
+          };
+        } else {
+          objetivoTrimestral = valorObjetivo;
+          entradaTrimestral = entrada;
+          faltaPObjetivo = falta;
+        }
       }
     }
 
@@ -549,6 +571,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       faturamentoMesmoPeriodoAnoAnterior,
       objetivoTrimestral,
       entradaTrimestral,
+      objetivoEncerrado,
       faltaPObjetivo,
     });
   } catch (e) {

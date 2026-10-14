@@ -801,8 +801,9 @@ async function main() {
   // planilha com um cliente normal (objetivo importado e calculado), um
   // cliente Rede (pulado - RDA/Rede fora de escopo por enquanto) e uma
   // linha com nome não reconhecido (aparece no resumo de erro).
+  // período que ainda não acabou (objetivo de trimestre já encerrado vai à parte, abaixo)
   const periodoObjInicio = `${anoFechado + 1}-01-01`;
-  const periodoObjFim = `${anoFechado + 1}-03-31`;
+  const periodoObjFim = `${anoFechado + 2}-03-31`;
   mockDb.__seed({
     clientes: [{
       id: 9008, nome: 'CLIENTE OBJETIVO TESTE', documento: '99988877000788', codigo_oficial: 'COD9008',
@@ -830,6 +831,19 @@ async function main() {
   assert(
     res.status === 200 && res.body.objetivoTrimestral === 8000 && res.body.entradaTrimestral === 5000 && res.body.faltaPObjetivo === 3000,
     `faltaPObjetivo calcula objetivo (8.000) menos entrada no período (5.000) = 3.000: ${JSON.stringify({ objetivoTrimestral: res.body.objetivoTrimestral, entradaTrimestral: res.body.entradaTrimestral, faltaPObjetivo: res.body.faltaPObjetivo })}`
+  );
+
+  // Objetivo de um trimestre que já acabou (os do trimestre novo não foram
+  // importados): não aparece como "objetivo do trimestre", só como resultado.
+  res = await req('POST', '/api/clientes/classificatorio/objetivos-trimestrais/importar', {
+    periodoInicio: '2020-01-01', periodoFim: '2020-03-31',
+    itens: [{ matriz: 'CLIENTE OBJETIVO TESTE', objetivo: 8000 }],
+  });
+  res = await req('GET', '/api/clientes/9008/classificatorio/status');
+  assert(
+    res.status === 200 && res.body.faltaPObjetivo == null && res.body.objetivoTrimestral == null
+      && res.body.objetivoEncerrado?.periodoFim === '2020-03-31' && res.body.objetivoEncerrado?.objetivo === 8000,
+    `objetivo de trimestre encerrado vai em objetivoEncerrado, sem "faltam": ${JSON.stringify({ falta: res.body.faltaPObjetivo, enc: res.body.objetivoEncerrado })}`
   );
 
   // cliente Rede (9005) não recebeu objetivo (foi pulado no import) -
