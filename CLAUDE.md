@@ -118,6 +118,11 @@ Pegadinhas de ambiente:
 - `sw.js`: página do app vai à rede, mas com sinal fraco abre com a cópia guardada depois de
   `PRAZO_REDE_PAGINA_MS` (4 s) e grava a nova em segundo plano; o script (`importadores.js`) segue
   a página (página da cópia = script da cópia), pra nunca misturar versões.
+- **Rotação do app instalado** (10/2026, relato do usuário: o tablet com o PWA instalado ficava preso em pé): o
+  `manifest.json` tinha `"orientation": "portrait-primary"`. Agora é `"any"`, e o `index.html` trava em pé só no
+  celular instalado (`screen.orientation.lock`, lado menor da tela < 600 px). O manifest é servido do cache primeiro
+  pelo `sw.js`: mudar o manifest = subir o `CACHE_VERSION`, senão o aparelho continua com o velho. O conteúdo do
+  `index.html` segue numa coluna de 560 px no centro, também com o tablet deitado.
 - Proteção contra iframe: `frame-ancestors` no `<meta>` não vale (só em cabeçalho, e o GitHub Pages
   não manda). Cada página começa escondida (`#antiFrame`) e só aparece fora de frame; página nova
   separada leva o mesmo trecho no `<head>`.

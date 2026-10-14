@@ -16,9 +16,11 @@
 // unregister() no mesmo commit - senão o mesmo problema se repete.
 // v2 (10/2026): apaga o importadores.js guardado pela regra antiga (ver abaixo).
 // v4 (10/2026): apaga as cópias por endereço com parâmetro (ver chaveDaPagina).
+// v5 (10/2026): manifest.json novo (orientation "any": o app instalado no tablet ficava preso em pé);
+// o manifest é servido do cache primeiro, então só a troca de versão faz o aparelho pegar o novo.
 // Pula o "v3" de propósito: era o número do SW antigo removido em 30/08 (acima),
 // e um cache com nome parecido de um aparelho esquecido não pode ser reaproveitado.
-const CACHE_VERSION = 'cortag-sw-v4';
+const CACHE_VERSION = 'cortag-sw-v5';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.

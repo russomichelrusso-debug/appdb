@@ -24565,6 +24565,16 @@
       // unregister()) no mesmo commit - foi exatamente o inverso disso que
       // deixou um Service Worker velho preso pra sempre em aparelhos que já
       // tinham instalado o app (PR #27).
+      // O manifest libera a rotação (o tablet ficava preso em pé, 10/2026); no
+      // celular o app instalado continua em pé, como sempre foi. O navegador só
+      // deixa travar no app instalado - na aba comum a chamada falha e nada muda.
+      try {
+        const lado = Math.min(screen.width, screen.height);
+        const instalado = window.matchMedia('(display-mode: standalone)').matches;
+        if (instalado && lado < 600 && screen.orientation && screen.orientation.lock) {
+          screen.orientation.lock('portrait-primary').catch(() => { });
+        }
+      } catch (e) { }
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('sw.js')
