@@ -16717,6 +16717,17 @@
               </div>
               <div style="font-size:12px;margin-top:4px;color:var(--gray);">Entrada no trimestre: ${brl(status.entradaTrimestral)} de ${brl(status.objetivoTrimestral)}</div>
             </div>`);
+        } else if (status.objetivoEncerrado) {
+          // Objetivo importado é de um trimestre que já acabou (os do trimestre
+          // novo ainda não foram importados): só o resultado, sem "faltam".
+          const enc = status.objetivoEncerrado;
+          const bateu = !(enc.falta > 0);
+          partes.push(`
+            <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--fill);">
+              <div style="font-size:12px;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo de ${formatDateBr(enc.periodoInicio).slice(0, 5)} a ${formatDateBr(enc.periodoFim).slice(0, 5)}${sufixoGrupo} · encerrado</div>
+              <div style="font-size:13px;margin-top:4px;">${bateu ? `✓ Batido: ${brl(enc.entrada)} de ${brl(enc.objetivo)}` : `Ficou em ${brl(enc.entrada)} de ${brl(enc.objetivo)} (faltaram ${brl(enc.falta)})`}</div>
+              <div style="font-size:12px;margin-top:4px;color:var(--gray);">Os objetivos do trimestre atual ainda não foram importados.</div>
+            </div>`);
         }
 
         if ((status.ehRede || semFaixaAoVivo) && status.trimestral && status.trimestral.historico && status.trimestral.historico.some(t => t.faturado > 0)) {
@@ -16848,7 +16859,11 @@
         }
         const local = [erp.cidade, erp.uf].filter(Boolean).join('/');
         const info = [
-          ['Última compra', erp.ultimaCompra ? formatDateBr(erp.ultimaCompra) : 'sem compra registrada'],
+          // a da planilha para na apuração do ERP; faturado depois dela (que o
+          // app já importou) vale mais - senão "20/08" ao lado de NF de 13/10
+          ['Última compra', erp.ultimaCompraApp && erp.ultimaCompraApp > (erp.ultimaCompra || '')
+            ? `${formatDateBr(erp.ultimaCompraApp)} <span style="color:var(--gray);font-size:12px;">(no ERP até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5)}: ${erp.ultimaCompra ? formatDateBr(erp.ultimaCompra).slice(0, 5) : 'nenhuma'})</span>`
+            : (erp.ultimaCompra ? formatDateBr(erp.ultimaCompra) : 'sem compra registrada'), true],
           ['Situação', erp.situacao],
           ['Cidade', local],
           ['Cliente desde', erp.clienteDesde ? formatDateBr(erp.clienteDesde) : null],
@@ -16879,7 +16894,7 @@
             </div>
           </div>
           ${aviso}
-          ${info.length ? `<dl class="clsInfo">${info.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`).join('')}</dl>` : ''}
+          ${info.length ? `<dl class="clsInfo">${info.map(([k, v, html]) => `<dt>${k}</dt><dd>${html ? v : escapeHtml(String(v))}</dd>`).join('')}</dl>` : ''}
         </div>`;
       }
 
@@ -19052,7 +19067,9 @@
         } else {
           const sugestoes = candidatos.map(it => {
             const unitario = Number(it.valor) / Number(it.quantidade);
-            const unidades = unitario > 0 ? Math.ceil(falta / unitario) : null;
+            // no múltiplo da embalagem (o cliente aumenta em caixas fechadas)
+            const passo = packStep(productByCod(String(it.codigo_sku)));
+            const unidades = unitario > 0 ? Math.ceil(falta / unitario / passo - 1e-9) * passo : null;
             return `${nomeItem(it)}${unidades ? ` (+${unidades} un.)` : ''}`;
           });
           acao = candidatos.length === 1

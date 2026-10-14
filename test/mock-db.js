@@ -1165,7 +1165,8 @@ async function query(sql, params = []) {
   }
   if (s.includes('SELECT C.ID AS CLIENTE_ID') && s.includes('WHERE C.ID = $1')) {
     const clienteDoStatus = clientes.find(c => Number(c.id) === Number(params[0]));
-    const agruparPorMatrizGrupo = !clienteDoStatus || clienteDoStatus.classificatorio_tipo !== 'Rede';
+    const agruparPorMatrizGrupo = (!clienteDoStatus || clienteDoStatus.classificatorio_tipo !== 'Rede')
+      && s.includes('C2.MATRIZ_GRUPO = C.MATRIZ_GRUPO'); // variante individual não soma o grupo
     const { faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior, ultima_compra } = calcularFaturamentoAnoFechadoParaCliente(params[0], agruparPorMatrizGrupo);
     // A rota real envolve essa subconsulta num SELECT externo que também pede
     // EXTRACT(YEAR FROM ...) AS ano_fechado/ano_atual/trimestre_atual_idx -

@@ -33,6 +33,10 @@ function faixaDoTipo(tipo) {
 }
 
 const LIMIAR_PERTO_DE_SUBIR = 0.15; // falta <= 15% do tamanho da faixa conta como "perto"
+function hojeBrasil() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+}
+
 const DIAS_SEM_COMPRAR_ALERTA = 60; // mesmo limiar já usado na "carteira antiga"
 
 function normalizarDoc(v) {
@@ -407,18 +411,36 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // - meta explícita por cliente/grupo, diferente da meta automática por
     // FAIXA calculada acima. Só aparece quando existe um objetivo importado
     // pra esse cliente/grupo; convive com (não substitui) a meta por faixa.
+    // Período já encerrado (ninguém importou os objetivos do trimestre novo):
+    // não é mais "o objetivo do trimestre" - em 14/10/2026 o card dizia
+    // "Faltam R$ 5.448 pra bater o objetivo do trimestre" com a entrada de
+    // jul-set. Vai à parte em `objetivoEncerrado`, só como resultado.
     let objetivoTrimestral = null;
     let entradaTrimestral = null;
     let faltaPObjetivo = null;
+    let objetivoEncerrado = null;
     const objetivosConfigResult = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', ['objetivos_trimestrais']);
     const objetivosConfig = objetivosConfigResult.rows[0]?.valor;
     if (objetivosConfig && objetivosConfig.periodoInicio && objetivosConfig.periodoFim) {
       const chaveGrupo = cliente.matriz_grupo || cliente.nome;
       const objetivo = objetivosConfig.objetivos?.[chaveGrupo];
       if (objetivo != null) {
-        objetivoTrimestral = Number(objetivo);
-        entradaTrimestral = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
-        faltaPObjetivo = Math.max(0, objetivoTrimestral - entradaTrimestral);
+        const valorObjetivo = Number(objetivo);
+        const entrada = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
+        const falta = Math.max(0, valorObjetivo - entrada);
+        if (String(objetivosConfig.periodoFim).slice(0, 10) < hojeBrasil()) {
+          objetivoEncerrado = {
+            periodoInicio: String(objetivosConfig.periodoInicio).slice(0, 10),
+            periodoFim: String(objetivosConfig.periodoFim).slice(0, 10),
+            objetivo: valorObjetivo,
+            entrada,
+            falta,
+          };
+        } else {
+          objetivoTrimestral = valorObjetivo;
+          entradaTrimestral = entrada;
+          faltaPObjetivo = falta;
+        }
       }
     }
 
@@ -435,6 +457,18 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     );
     const erpRow = erpResult.rows[0];
     const dataTxt = d => (d == null ? null : String(d).slice(0, 10));
+    // "Ult.Compra" da planilha é congelada na apuração do ERP (relatório de
+    // 02/10 = até 31/08): o card dizia "Última compra 20/08" de quem já tinha
+    // faturado em 16/09 e 13/10. Vai junto a última compra faturada DESTE
+    // CNPJ que o app conhece (sem somar o grupo, como a da planilha).
+    let ultimaCompraClienteApp = null;
+    if (erpRow) {
+      if (ehRede) ultimaCompraClienteApp = dataTxt(ultimaCompra);
+      else {
+        const r = await pool.query(`${SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id`, [req.params.id]);
+        ultimaCompraClienteApp = dataTxt(r.rows[0] && r.rows[0].ultima_compra);
+      }
+    }
     // Parte dos 12 meses da matriz que vem de empresas FORA do app (filiais
     // atendidas por outros representantes): matriz do ERP menos o "12 meses ·
     // cliente" das empresas do grupo que estão no app, no mesmo relatório.
@@ -532,6 +566,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       uf: erpRow.uf,
       clienteDesde: dataTxt(erpRow.cliente_desde),
       ultimaCompra: dataTxt(erpRow.ultima_compra),
+      ultimaCompraApp: ultimaCompraClienteApp,
     } : null;
 
     res.json({
@@ -549,6 +584,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       faturamentoMesmoPeriodoAnoAnterior,
       objetivoTrimestral,
       entradaTrimestral,
+      objetivoEncerrado,
       faltaPObjetivo,
     });
   } catch (e) {
