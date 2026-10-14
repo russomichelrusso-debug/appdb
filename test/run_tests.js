@@ -3824,6 +3824,11 @@ async function main() {
     });
     assert(tabelas.length >= 27 && semRls.length === 0 && !/FORCE\s+ROW\s+LEVEL/i.test(schema),
       `schema.sql: RLS ligado (sem FORCE) em todas as ${tabelas.length} tabelas: ${JSON.stringify(semRls)}`);
+    // Coluna nova em tabela que já existe em produção precisa de ALTER ... ADD COLUMN
+    // IF NOT EXISTS: só no CREATE TABLE, o banco antigo fica sem ela (quantidade_pedido,
+    // 10/2026: todo levantamento salvo dava "Erro ao gravar levantamento").
+    assert(/ALTER TABLE\s+levantamento_itens\s+ADD COLUMN IF NOT EXISTS\s+quantidade_pedido\b/i.test(schema),
+      'schema.sql: levantamento_itens.quantidade_pedido tem ALTER TABLE ... ADD COLUMN IF NOT EXISTS');
     // Importação em lote: o relatório oficial fazia ~3 consultas por cliente (ida de
     // Oregon a São Paulo cada uma) - ~860 pra 250 clientes. Agora é um número fixo.
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
