@@ -4371,6 +4371,54 @@ async function main() {
     authToken = tokenAntes;
   }
 
+  {
+    // Limite de requisições nas rotas de leitura pesadas (middleware/limiteRotasPesadas.js):
+    // por usuário, só GET, contado uma vez mesmo passando por vários app.use('/api…')
+    const { grupoDaRota, LIMITE_CARTEIRA, LIMITE_CLIENTE } = require('../middleware/limiteRotasPesadas');
+    const carteira = grupoDaRota('/api/recompra');
+    const cliente = grupoDaRota('/api/clientes/12/historico');
+    const classificados = ['/api/dashboard/resumo', '/api/produtos-abc-geral', '/api/clientes/classificatorio/alertas', '/api/clientes/sync',
+      '/api/visitas', '/api/reativacao', '/api/inadimplencia', '/api/pedidos/exportar', '/api/produtos/61366/clientes', '/api/levantamentos/recentes', '/api/recompra/']
+      .every(c => grupoDaRota(c) === carteira)
+      && ['/api/clientes/12/rotatividade', '/api/clientes/12/classificatorio/status', '/api/clientes/12/produtos-abc', '/api/pedidos-oficiais/12',
+        '/api/pedidos-oficiais/12/resumo', '/api/clientes/12/consumo-estimado/5'].every(c => grupoDaRota(c) === cliente)
+      && ['/api/clientes', '/api/pedidos', '/api/pedidos/salvos', '/api/produtos', '/api/configuracoes/promocoes', '/api/pedidos-oficiais/status',
+        '/api/recompra/12/adiar', '/api/novidades'].every(c => grupoDaRota(c) === null)
+      && carteira && cliente && carteira !== cliente;
+    assert(classificados, 'limite de rotas pesadas: rotas da carteira, de um cliente e livres classificadas certo');
+
+    const tokenAntes = authToken;
+    const novaSessao = async (email) => {
+      const u = await mockDb.pool.query(
+        'INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, false) RETURNING id', ['Limite ' + email, email, 'sub-' + email]);
+      const tok = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tok), u.rows[0].id, '90']);
+      return tok;
+    };
+    const tokA = await novaSessao('limite.a@example.com');
+    const tokB = await novaSessao('limite.b@example.com');
+
+    // passa por 3 app.use (clientes, clientesClassificatorio, relatorios): conta 1
+    authToken = tokA;
+    res = await req('GET', '/api/clientes/1/historico');
+    const restanteCliente = Number(res.headers['ratelimit-remaining']);
+    assert(restanteCliente === LIMITE_CLIENTE - 1, `rota de cliente contada uma vez só: restam ${restanteCliente} de ${LIMITE_CLIENTE}`);
+
+    let bloqueadoEm = 0;
+    for (let i = 1; i <= LIMITE_CARTEIRA + 1; i++) {
+      res = await req('GET', '/api/recompra');
+      if (res.status === 429) { bloqueadoEm = i; break; }
+    }
+    const msg = res.body && res.body.erro;
+    // gravação do mesmo usuário continua passando; outro usuário tem a conta dele
+    const adiar = await req('POST', '/api/recompra/1/adiar', {});
+    authToken = tokB;
+    const outro = await req('GET', '/api/recompra');
+    assert(bloqueadoEm === LIMITE_CARTEIRA + 1 && /espera um minuto/.test(msg || '') && adiar.status !== 429 && outro.status !== 429,
+      `limite de rotas pesadas: ${LIMITE_CARTEIRA} por minuto por usuário, depois 429 (gravação e outro usuário passam): ${JSON.stringify({ bloqueadoEm, msg, adiar: adiar.status, outro: outro.status })}`);
+    authToken = tokenAntes;
+  }
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

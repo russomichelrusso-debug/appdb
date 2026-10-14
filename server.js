@@ -6,6 +6,7 @@ require('express-async-errors');
 const rateLimit = require('express-rate-limit');
 const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
+const { limiteRotasPesadas } = require('./middleware/limiteRotasPesadas');
 
 const authRoutes = require('./routes/auth');
 const clientesRoutes = require('./routes/clientes');
@@ -152,31 +153,32 @@ const authLimiter = rateLimit({
 app.use('/api/auth/google', authLimiter);
 app.use('/api/auth', authRoutes);
 
-// todas as rotas de dados exigem estar logado (ver middleware/auth.js)
-app.use('/api/clientes', requireAuth, clientesRoutes);
-app.use('/api/clientes', requireAuth, clientesClassificatorioRoutes); // /classificatorio/... - registrado depois, cai aqui só se clientesRoutes não bater
-app.use('/api/produtos', requireAuth, produtosRoutes);
-app.use('/api/pedidos', requireAuth, pedidosRoutes);
-app.use('/api/levantamentos', requireAuth, levantamentosRoutes);
-app.use('/api/previsao-estoque', requireAuth, previsaoEstoqueRoutes);
-app.use('/api/configuracoes', requireAuth, configuracoesRoutes);
-app.use('/api/fichas-tecnicas', requireAuth, fichasTecnicasRoutes);
-app.use('/api/codigos-produto', requireAuth, codigosProdutoRoutes);
-app.use('/api/pedidos-oficiais', requireAuth, pedidosOficiaisRoutes);
-app.use('/api/assistente', requireAuth, assistenteRoutes);
-app.use('/api/catalogo-precos', requireAuth, catalogoPrecosRoutes);
-app.use('/api/produtos-promocionais', requireAuth, produtosPromocionaisRoutes);
-app.use('/api/recompra', requireAuth, recompraRoutes);
-app.use('/api/reativacao', requireAuth, reativacaoRoutes);
-app.use('/api/visitas', requireAuth, visitasRoutes);
-app.use('/api/inadimplencia', requireAuth, inadimplenciaRoutes);
-app.use('/api/produto-fotos', requireAuth, produtoFotosRoutes);
-app.use('/api/novidades', requireAuth, novidadesRoutes);
-app.use('/api/segunda-tela', requireAuth, segundaTelaRoutes); // tablet como tela do cliente
+// todas as rotas de dados exigem estar logado (ver middleware/auth.js); as de
+// leitura pesada têm limite de requisições por usuário (middleware/limiteRotasPesadas.js)
+app.use('/api/clientes', requireAuth, limiteRotasPesadas, clientesRoutes);
+app.use('/api/clientes', requireAuth, limiteRotasPesadas, clientesClassificatorioRoutes); // /classificatorio/... - registrado depois, cai aqui só se clientesRoutes não bater
+app.use('/api/produtos', requireAuth, limiteRotasPesadas, produtosRoutes);
+app.use('/api/pedidos', requireAuth, limiteRotasPesadas, pedidosRoutes);
+app.use('/api/levantamentos', requireAuth, limiteRotasPesadas, levantamentosRoutes);
+app.use('/api/previsao-estoque', requireAuth, limiteRotasPesadas, previsaoEstoqueRoutes);
+app.use('/api/configuracoes', requireAuth, limiteRotasPesadas, configuracoesRoutes);
+app.use('/api/fichas-tecnicas', requireAuth, limiteRotasPesadas, fichasTecnicasRoutes);
+app.use('/api/codigos-produto', requireAuth, limiteRotasPesadas, codigosProdutoRoutes);
+app.use('/api/pedidos-oficiais', requireAuth, limiteRotasPesadas, pedidosOficiaisRoutes);
+app.use('/api/assistente', requireAuth, limiteRotasPesadas, assistenteRoutes);
+app.use('/api/catalogo-precos', requireAuth, limiteRotasPesadas, catalogoPrecosRoutes);
+app.use('/api/produtos-promocionais', requireAuth, limiteRotasPesadas, produtosPromocionaisRoutes);
+app.use('/api/recompra', requireAuth, limiteRotasPesadas, recompraRoutes);
+app.use('/api/reativacao', requireAuth, limiteRotasPesadas, reativacaoRoutes);
+app.use('/api/visitas', requireAuth, limiteRotasPesadas, visitasRoutes);
+app.use('/api/inadimplencia', requireAuth, limiteRotasPesadas, inadimplenciaRoutes);
+app.use('/api/produto-fotos', requireAuth, limiteRotasPesadas, produtoFotosRoutes);
+app.use('/api/novidades', requireAuth, limiteRotasPesadas, novidadesRoutes);
+app.use('/api/segunda-tela', requireAuth, limiteRotasPesadas, segundaTelaRoutes); // tablet como tela do cliente
 // /arquivo pela chave do script do Gmail; /status exige login (dentro da rota)
 app.use('/api/importacao-email', rateLimit({ windowMs: 15 * 60 * 1000, limit: 120, standardHeaders: true, legacyHeaders: false }), importacaoEmailRoutes);
-app.use('/api', requireAuth, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
-app.use('/api', requireAuth, radarCnpjRoutes); // /api/clientes/:id/ficha-cnpj, /api/radar-cnpj/:cnpj
+app.use('/api', requireAuth, limiteRotasPesadas, relatoriosRoutes); // /api/clientes/:id/historico, /rotatividade, etc.
+app.use('/api', requireAuth, limiteRotasPesadas, radarCnpjRoutes); // /api/clientes/:id/ficha-cnpj, /api/radar-cnpj/:cnpj
 
 // Rede de segurança final: qualquer erro que escape dos try/catch das rotas
 // (síncrono ou de promise, via express-async-errors) cai aqui em vez de
