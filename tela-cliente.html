@@ -146,6 +146,10 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: manipulation;
     }
     .opcoesBtn svg { width: 22px; height: 22px; }
     .opcoesMenu {
@@ -438,7 +442,7 @@
           <strong id="topoVendedorNome"></strong>
           <small id="topoVendedorSub"></small>
         </div>
-        <button type="button" class="opcoesBtn" id="opcoesBtn" aria-label="Opções da tela" aria-haspopup="menu" aria-expanded="false">
+        <button type="button" class="opcoesBtn" id="opcoesBtn" aria-label="Opções da tela (segure pra abrir)" aria-haspopup="menu" aria-expanded="false">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>
         </button>
       </div>
@@ -472,7 +476,7 @@
         </div>
       </div>
       <div class="parearRodape" id="parearRodape">Código válido por 5 minutos · precisa de internet nos dois aparelhos · mesma conta Google</div>
-      <a class="voltarApp" href="index.html">← Voltar ao app</a>
+      <a class="voltarApp" href="index.html" id="voltarAppLink">← Voltar ao app</a>
     </section>
 
     <section class="aguardando hidden" id="telaAguardando">
@@ -637,6 +641,15 @@
       return (Number(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     }
     const esperar = (ms) => new Promise(r => setTimeout(r, ms));
+    // prazo da requisição: com sinal fraco a conexão pode ficar pendurada sem
+    // erro nenhum, e o tablet congelaria mostrando um orçamento velho
+    function prazo(ms) {
+      if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+      const c = new AbortController();
+      setTimeout(() => c.abort(), ms);
+      return c.signal;
+    }
+    const PRAZO_ESPERA_MS = 40000; // o servidor segura a espera até 25 s
 
     const ICONE_CAIXA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8l-9-5-9 5 9 5 9-5z" /><path d="M3 8v8l9 5 9-5V8M12 13v8" /></svg>';
 
@@ -648,6 +661,7 @@
     let estado = null;
     let renovarTimer = null;
     let semRedeDesde = 0;
+    let jaPareou = false; // depois do 1º celular, o tablet já está com o cliente: some o "Voltar ao app"
 
     function pararTudo() {
       geracao++;
@@ -670,7 +684,7 @@
       let criada = null;
       while (g === geracao && !criada) {
         try {
-          criada = await apiFetch('/api/segunda-tela/salas', { method: 'POST', body: JSON.stringify({ modo: 'cliente' }) });
+          criada = await apiFetch('/api/segunda-tela/salas', { method: 'POST', body: JSON.stringify({ modo: 'cliente' }), signal: prazo(10000) });
           avisoConexao(null);
         } catch (e) {
           if (e.status === 401) return;
@@ -681,10 +695,22 @@
       if (g !== geracao) return;
       sala = criada;
       desenharCodigo();
-      // código venceu sem ninguém entrar: troca por um novo
-      const validade = Math.max(30000, new Date(sala.valido_ate).getTime() - Date.now() - 5000);
-      renovarTimer = setTimeout(() => { if (g === geracao && !pareada) novaSala(); }, validade);
+      // código venceu sem ninguém entrar: troca por um novo. O prazo vem em ms
+      // (não a hora do servidor): o relógio do tablet pode estar errado.
+      const validade = Math.max(30000, (Number(sala.valido_por_ms) || 300000) - 5000);
+      renovarTimer = setTimeout(() => renovarSeNinguemEntrou(g), validade);
       ouvir(g);
+    }
+
+    // Antes de trocar o QR, confere no servidor: o celular pode ter entrado nos
+    // últimos segundos, com a resposta que avisa o tablet ainda a caminho.
+    async function renovarSeNinguemEntrou(g) {
+      if (g !== geracao || pareada || !sala) return;
+      try {
+        const r = await apiFetch(`/api/segunda-tela/salas/${sala.id}`, { signal: prazo(10000) });
+        if (r && r.pareada) return; // a espera em andamento traz o pareamento
+      } catch (e) { /* sem resposta: troca o código mesmo assim */ }
+      if (g === geracao && !pareada) novaSala();
     }
 
     function desenharCodigo() {
@@ -711,8 +737,9 @@
     async function ouvir(g) {
       while (g === geracao && sala) {
         let r;
+        const inicio = Date.now();
         try {
-          r = await apiFetch(`/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=${versao}&pareada=${pareada ? 1 : 0}`);
+          r = await apiFetch(`/api/segunda-tela/salas/${sala.id}?papel=tablet&esperar=1&versao=${versao}&pareada=${pareada ? 1 : 0}`, { signal: prazo(PRAZO_ESPERA_MS) });
         } catch (e) {
           if (g !== geracao) return;
           if (e.status === 401) return;
@@ -730,14 +757,19 @@
         if (g !== geracao) return;
         semRedeDesde = 0;
         avisoConexao(null);
+        const mudou = (r.pareada && !pareada) || r.versao !== versao || Object.prototype.hasOwnProperty.call(r, 'estado');
         if (r.pareada && !pareada) {
           pareada = true;
+          jaPareou = true;
+          document.getElementById('voltarAppLink').classList.add('hidden');
           clearTimeout(renovarTimer);
           manterTelaAcesa();
         }
         if (Object.prototype.hasOwnProperty.call(r, 'estado')) aplicarEstado(r.estado);
         versao = r.versao;
         desenhar();
+        // resposta na hora sem nada novo (não deveria acontecer): não repete sem pausa
+        if (!mudou && Date.now() - inicio < 1000) await esperar(2000);
       }
     }
 
@@ -939,11 +971,24 @@
       const btn = document.getElementById('opcoesBtn');
       const menu = document.getElementById('opcoesMenu');
       const fechar = () => { menu.classList.add('hidden'); btn.setAttribute('aria-expanded', 'false'); };
+      // O tablet fica na mão do cliente, logado na conta do vendedor: o menu (que
+      // leva de volta ao app) só abre segurando o botão - um toque só mostra a dica.
+      const abrirMenu = () => { menu.classList.remove('hidden'); btn.setAttribute('aria-expanded', 'true'); };
+      let segurarTimer = null;
+      let abriuSegurando = false;
+      btn.addEventListener('pointerdown', () => {
+        abriuSegurando = false;
+        clearTimeout(segurarTimer);
+        segurarTimer = setTimeout(() => { abriuSegurando = true; abrirMenu(); }, 800);
+      });
+      ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => btn.addEventListener(ev, () => clearTimeout(segurarTimer)));
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const abrir = menu.classList.contains('hidden');
-        menu.classList.toggle('hidden', !abrir);
-        btn.setAttribute('aria-expanded', String(abrir));
+        if (abriuSegurando) { abriuSegurando = false; return; }
+        if (e.detail === 0) { abrirMenu(); return; } // teclado
+        if (!menu.classList.contains('hidden')) { fechar(); return; }
+        avisoConexao('Segure o botão pra abrir as opções', 2500);
       });
       document.addEventListener('click', (e) => { if (!menu.contains(e.target)) fechar(); });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { fechar(); fecharVitrine(); } });

@@ -971,7 +971,11 @@ Supabase, sem PR — não é mudança de código.
   (`estadoParaTelaCliente`, gancho em `renderCartBar` e `setLevCliente`) e o tablet espera a próxima versão por
   long-poll (até 25 s). Vai só o que o cliente pode ver: nome, quantidade, preço com imposto, campanha (de/por),
   total, economia, "faltam R$ X pro frete CIF/pedido mínimo" e a próxima faixa de campanha - **nunca classificatório,
-  canal, ficha nem histórico**. Item novo aparece ~7 s em destaque (vitrine) e volta pra lista. Faixa verde no celular
+  canal, ficha nem histórico**. A campanha vai como "Campanha -10%", **sem o nome da regra** (ele costuma trazer o
+  classificatório: "VIDRO 62796 - Master" - achado do `revisor-cortag`). O tablet fica logado na conta do vendedor e na
+  mão do cliente: o menu "⋯" (que leva de volta ao app) só abre **segurando** o botão, e o "Voltar ao app" some depois
+  do 1º pareamento. Toda chamada da tela tem prazo (`prazoSegundaTela`/`prazo`): com sinal fraco a conexão ficava
+  pendurada e o tablet congelava com o orçamento velho. Item novo aparece ~7 s em destaque (vitrine) e volta pra lista. Faixa verde no celular
   em todas as abas com **Esconder** (o tablet mostra "Seu orçamento volta já") e **Desconectar**. Salas **só na
   memória** do servidor (deploy/reinício desconecta - o tablet mostra QR novo; com várias instâncias, na v2, teria
   de ir pro banco); nada passa pela fila offline (é só tela: sem internet o tablet fica com a última versão e o

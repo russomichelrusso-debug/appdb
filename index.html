@@ -13298,6 +13298,15 @@
       let segundaTelaVigia = null;
       let segundaTelaEnviando = false;
       let segundaTelaPendente = false;
+      // prazo das chamadas da tela do cliente: com sinal fraco a conexão pode ficar
+      // pendurada sem erro, e o envio seguinte nunca sairia (o tablet ficaria com o
+      // orçamento velho e a faixa dizendo "ao vivo")
+      function prazoSegundaTela(ms) {
+        if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+        const c = new AbortController();
+        setTimeout(() => c.abort(), ms);
+        return c.signal;
+      }
 
       function lerSegundaTela() {
         try {
@@ -13338,7 +13347,8 @@
             unit: Math.round(r.cp * 100) / 100,
             de: de ? Math.round(de * 100) / 100 : null,
             total: Math.round(r.lineTotal * 100) / 100,
-            campanha: r.campaignPct > 0 ? `${r.campaignName || 'Campanha'} -${r.campaignPct}%` : null,
+            // nunca o nome da regra: ele costuma trazer o classificatório ("VIDRO 62796 - Master")
+            campanha: r.campaignPct > 0 ? `Campanha -${r.campaignPct}%` : null,
             foto: codFoto ? { cod: codFoto, v: FOTOS_PRODUTO[codFoto] } : null,
           };
         });
@@ -13357,7 +13367,7 @@
             sub: `${minimo.rotulo === 'pro frete CIF' ? 'Frete por conta da Cortag' : 'Pedido mínimo'} a partir de ${brl(minimo.alvo)} sem impostos`,
             fracao: minimo.alvo > 0 ? totalSemImpostos / minimo.alvo : 0,
           } : null,
-          campanha: campanha ? `${textoFaltaCampanha(campanha)} = ${campanha.pct}% de desconto em ${campanha.regra}` : null,
+          campanha: campanha ? `${textoFaltaCampanha(campanha)} = ${campanha.pct}% de desconto na campanha` : null,
         };
       }
 
@@ -13372,7 +13382,7 @@
         segundaTelaEnviando = true;
         const id = segundaTela.id;
         try {
-          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: estadoParaTelaCliente() }) });
+          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: estadoParaTelaCliente() }), signal: prazoSegundaTela(10000) });
           if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
         } catch (e) {
           if (segundaTela && segundaTela.id === id) {
@@ -13395,7 +13405,7 @@
           if (segundaTelaStatus === 'semRede') { enviarTelaCliente(); return; }
           const id = segundaTela.id;
           try {
-            const r = await apiFetch(`/api/segunda-tela/salas/${id}`);
+            const r = await apiFetch(`/api/segunda-tela/salas/${id}`, { signal: prazoSegundaTela(10000) });
             if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
           } catch (e) {
             if (!segundaTela || segundaTela.id !== id) return;
@@ -13419,7 +13429,7 @@
         if (!segundaTela) return;
         const id = segundaTela.id;
         desligarSegundaTela();
-        try { await apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE' }); } catch (e) { /* a sala some sozinha no servidor */ }
+        try { await apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }); } catch (e) { /* a sala some sozinha no servidor */ }
       }
 
       function renderFaixaSegundaTela() {

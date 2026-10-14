@@ -113,7 +113,8 @@ router.post('/salas', (req, res) => {
     esperando: new Set(),
   };
   salas.set(sala.id, sala);
-  res.json({ id: sala.id, codigo: sala.codigo, modo, valido_ate: new Date(sala.codigoExpiraEm).toISOString() });
+  // valido_por_ms: o tablet conta o prazo pelo próprio relógio (o dele pode estar errado)
+  res.json({ id: sala.id, codigo: sala.codigo, modo, valido_por_ms: VALIDADE_CODIGO_MS });
 });
 
 // Celular: entra na sala pelo código (lido do QR ou digitado). O código vale uma
@@ -152,6 +153,9 @@ router.put('/salas/:id/estado', (req, res) => {
 // Tablet (e o celular, pra saber se o tablet ainda está lá). Com esperar=1, só
 // responde quando a versão ou o pareamento mudar - ou passados ESPERA_MS.
 router.get('/salas/:id', async (req, res) => {
+  // servidor desligando (deploy): o tablet espera uns segundos e tenta de novo,
+  // em vez de repetir a pergunta sem parar
+  if (desligando) return res.status(503).json({ erro: 'Servidor reiniciando.' });
   const sala = salaDoUsuario(req);
   if (!sala) return res.status(404).json({ erro: 'Conexão encerrada.' });
   const ehTablet = req.query.papel === 'tablet';
@@ -159,7 +163,7 @@ router.get('/salas/:id', async (req, res) => {
   const pareadaCliente = req.query.pareada === '1';
   const mudou = () => sala.encerrada || sala.versao !== versaoCliente || sala.pareada !== pareadaCliente;
   if (ehTablet) sala.tabletVistoEm = Date.now();
-  if (req.query.esperar === '1' && !desligando && !mudou()) {
+  if (req.query.esperar === '1' && !mudou()) {
     if (ehTablet) sala.tabletEsperando += 1;
     await new Promise((resolve) => {
       let feito = false;
@@ -180,6 +184,7 @@ router.get('/salas/:id', async (req, res) => {
     }
   }
   if (res.writableEnded || res.destroyed) return;
+  if (desligando) return res.status(503).json({ erro: 'Servidor reiniciando.' });
   if (sala.encerrada) return res.status(404).json({ erro: 'Conexão encerrada.' });
   const agora = Date.now();
   if (ehTablet) sala.atividadeEm = agora;

@@ -3938,7 +3938,7 @@ async function main() {
     assert(res.status === 400, `segunda tela: modo desconhecido é recusado: ${res.status}`);
     res = await req('POST', '/api/segunda-tela/salas', { modo: 'cliente' });
     const sala = res.body || {};
-    assert(res.status === 200 && /^[a-f0-9]{32}$/.test(sala.id) && /^\d{4}$/.test(sala.codigo),
+    assert(res.status === 200 && /^[a-f0-9]{32}$/.test(sala.id) && /^\d{4}$/.test(sala.codigo) && sala.valido_por_ms === 300000,
       `segunda tela: tablet cria a sala com id e código de 4 dígitos: ${JSON.stringify(res.body)}`);
 
     // outra conta não acha o código nem a sala
@@ -3998,6 +3998,29 @@ async function main() {
     res = await req('GET', `/api/segunda-tela/salas/${ids[0]}`);
     const ultima = await req('GET', `/api/segunda-tela/salas/${ids[4]}`);
     assert(res.status === 404 && ultima.status === 200, `segunda tela: a 5ª sala da conta tira a mais antiga: ${res.status}/${ultima.status}`);
+
+    // limpeza: sala sem par com código vencido sai; com o tablet esperando, fica
+    const segundaTela = require('../routes/segundaTela');
+    const salaVencida = segundaTela._salas.get(ids[3]);
+    const salaOuvindo = segundaTela._salas.get(ids[4]);
+    salaVencida.codigoExpiraEm = Date.now() - 120000;
+    salaOuvindo.codigoExpiraEm = Date.now() - 120000;
+    salaOuvindo.tabletEsperando = 1;
+    segundaTela.limparSalas();
+    assert(!segundaTela._salas.has(ids[3]) && segundaTela._salas.has(ids[4]),
+      'segunda tela: limpeza tira a sala sem par com código vencido e mantém a que tem o tablet esperando');
+    salaOuvindo.tabletEsperando = 0;
+
+    // desligamento do servidor: a espera aberta volta na hora (503, o tablet tenta de
+    // novo em seguida) e a próxima não espera - o deploy não fica preso 25 s
+    const espera4 = req('GET', `/api/segunda-tela/salas/${ids[4]}?papel=tablet&esperar=1&versao=0&pareada=0`);
+    await new Promise(r => setTimeout(r, 60));
+    const t1 = Date.now();
+    segundaTela.acordarTodas();
+    const r4 = await espera4;
+    res = await req('GET', `/api/segunda-tela/salas/${ids[4]}?papel=tablet&esperar=1&versao=0&pareada=0`);
+    assert(r4.status === 503 && res.status === 503 && Date.now() - t1 < 300,
+      `segunda tela: no desligamento as esperas respondem na hora: ${r4.status}/${res.status} em ${Date.now() - t1} ms`);
     authToken = tokenAntes;
   }
 
