@@ -922,6 +922,23 @@ async function main() {
   );
   mockDb.__getPedidosOficiaisItens().pop();
 
+  // "Sem comprar há 60+ dias" conta pelo último PEDIDO: nota de 100 dias atrás
+  // entra no alerta; pedido implantado há 3 dias (em carteira, sem nota) tira
+  const diaAtras = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+  const itens9060 = mockDb.__getPedidosOficiaisItens();
+  itens9060.push({ nr_pedido: 'PSC60', codigo_sku: '60863', cliente_codigo_oficial: 'COD9060', quantidade: 1, valor: 100, data_faturamento: diaAtras(100), data_implantacao: diaAtras(105), status: 'faturado', nota_fiscal: 'NSC60' });
+  res = await req('GET', '/api/clientes/classificatorio/alertas');
+  const sem9060 = (res.body.semComprarRecente || []).find(c => c.id === 9060);
+  assert(sem9060 && sem9060.diasSemComprar >= 99 && sem9060.diasSemComprar <= 101,
+    `nota de 100 dias atrás e nenhum pedido depois: entra em "sem comprar há 60+ dias": ${JSON.stringify(sem9060 && sem9060.diasSemComprar)}`);
+  itens9060.push({ nr_pedido: 'PSC61', codigo_sku: '60863', cliente_codigo_oficial: 'COD9060', quantidade: 1, valor: 100, data_faturamento: null, data_implantacao: diaAtras(3), status: 'carteira' });
+  res = await req('GET', '/api/clientes/classificatorio/alertas');
+  assert(!(res.body.semComprarRecente || []).some(c => c.id === 9060),
+    'pedido em carteira implantado há 3 dias tira o cliente de "sem comprar há 60+ dias"');
+  res = await req('GET', '/api/clientes/9060/classificatorio/status');
+  assert(res.body.ultimoPedido === diaAtras(3), `status devolve o último pedido como AAAA-MM-DD: ${res.body.ultimoPedido}`);
+  itens9060.splice(itens9060.findIndex(it => it.nr_pedido === 'PSC60'), 2);
+
   // relatório mais antigo não desfaz nem a faixa nem a foto - nem matriz, PIC e valor de acordo
   res = await req('POST', '/api/clientes/classificatorio/importar', {
     dataRelatorio: '2026-09-01', apuradoAte: '2026-07-31',

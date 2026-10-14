@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE } = require('./clientesClassificatorio');
+const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE, diaDoBanco } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
@@ -809,7 +809,7 @@ router.get('/dashboard/resumo', async (req, res) => {
       // (que filtra por classificatorio_tipo IS NOT NULL) e usa a mesma
       // subconsulta de faturamento 12m sem filtro nenhum de cliente.
       pool.query(
-        `SELECT c.id, c.nome, c.classificatorio_tipo, base.ultima_compra
+        `SELECT c.id, c.nome, c.classificatorio_tipo, base.ultima_compra, base.ultimo_pedido
          FROM clientes c
          JOIN (${SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
       ),
@@ -821,8 +821,11 @@ router.get('/dashboard/resumo', async (req, res) => {
     const clientesDe6a8Meses = [];
     for (const row of porCliente.rows) {
       const canal = canalDoCliente(row.classificatorio_tipo);
-      if (!row.ultima_compra) continue;
-      const diasSemComprar = Math.floor((hoje - new Date(row.ultima_compra)) / (1000 * 60 * 60 * 24));
+      // último pedido (carteira e app inclusive), não só a última nota: quem
+      // já pediu de novo não é "conta sem comprar"
+      const ultimoPedido = diaDoBanco(row.ultimo_pedido) || diaDoBanco(row.ultima_compra);
+      if (!ultimoPedido) continue;
+      const diasSemComprar = Math.floor((hoje - new Date(`${ultimoPedido}T00:00:00Z`)) / (1000 * 60 * 60 * 24));
       if (diasSemComprar <= 365) ativosPorCanal[canal] = (ativosPorCanal[canal] || 0) + 1;
       if (diasSemComprar >= FAIXA_3_A_5_MESES[0] && diasSemComprar <= FAIXA_3_A_5_MESES[1]) {
         clientesDe3a5Meses.push({ id: row.id, nome: row.nome, diasSemComprar });

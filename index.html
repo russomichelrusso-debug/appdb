@@ -16691,10 +16691,13 @@
           partes.push(`<div style="margin-top:8px;color:var(--success);font-size:13px;">✓ Já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}.</div>`);
         }
 
-        if (status.ultimaCompra) {
-          const dias = Math.floor((Date.now() - new Date(status.ultimaCompra).getTime()) / 86400000);
+        // pelo último PEDIDO (em carteira ou do app, ainda sem nota, também
+        // conta) - servidor antigo sem ultimoPedido cai na última nota
+        const ultimoPedido = status.ultimoPedido || (status.ultimaCompra ? String(status.ultimaCompra).slice(0, 10) : null);
+        if (ultimoPedido) {
+          const dias = Math.floor((Date.now() - new Date(ultimoPedido).getTime()) / 86400000);
           if (dias >= 60) {
-            partes.push(`<div style="margin-top:6px;color:var(--warning);font-size:12px;">Sem comprar há ${dias} dias (última compra: ${formatDateBr(status.ultimaCompra)}).</div>`);
+            partes.push(`<div style="margin-top:6px;color:var(--warning);font-size:12px;">Sem comprar há ${dias} dias (último pedido: ${formatDateBr(ultimoPedido)}).</div>`);
           }
         }
 
