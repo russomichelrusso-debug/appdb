@@ -134,7 +134,13 @@ Pegadinhas de ambiente:
   separada leva o mesmo trecho no `<head>`.
 - Biblioteca de CDN (cdnjs/jsdelivr) nova ou com versão trocada nas páginas entra também na lista
   `LIBS` do `sw.js` — é ela que deixa imagem/PDF do orçamento e a câmera do iPhone funcionarem sem
-  internet (o teste do `run_tests.js` acusa a que faltar). O SW guarda página/script do app pelo
+  internet (o teste do `run_tests.js` acusa a que faltar). **Com o hash (SRI, 10/2026)**: o mesmo
+  `sha384-…` vai na `LIBS` do `sw.js`, em `INTEGRIDADE_CDN` do `index.html` (carregue com
+  `scriptDaCdn(url)`, nunca `createElement('script')` + `src` da CDN), no import map do `<head>` (pdf.js:
+  `import()` não aceita `integrity`) e nas tags fixas (`integrity` + `crossorigin="anonymous"`);
+  `node scripts/conferir-integridade.js` baixa e confere (o teste só confere que os lugares concordam).
+  O SW baixa conferindo o hash e nunca guarda arquivo que não bate; trocar a forma de conferir = subir
+  `CACHE_LIBS`. O login do Google (`accounts.google.com/gsi/client`) não tem versão no endereço e fica sem hash. O SW guarda página/script do app pelo
   endereço sem parâmetros (`chaveDaPagina`).
 - Fila offline (`drenarFilaSync`, `index.html`): uma aba por vez (Web Locks — o app instalado e uma aba
   do navegador dividem o `localStorage`); **sem prazo no envio** de propósito (abortar não para o servidor,

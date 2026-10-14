@@ -16,6 +16,8 @@
 // unregister() no mesmo commit - senão o mesmo problema se repete.
 // v2 (10/2026): apaga o importadores.js guardado pela regra antiga (ver abaixo).
 // v4 (10/2026): apaga as cópias por endereço com parâmetro (ver chaveDaPagina).
+// libs-v2 (10/2026): bibliotecas da CDN conferidas pelo hash (SRI) ao baixar - o cache
+// de bibliotecas guardado antes, sem conferência, é descartado e baixado de novo.
 // v5 (10/2026): manifest.json novo (orientation "any": o app instalado no tablet ficava preso em pé);
 // o manifest é servido do cache primeiro, então só a troca de versão faz o aparelho pegar o novo.
 // Pula o "v3" de propósito: era o número do SW antigo removido em 30/08 (acima),
@@ -58,8 +60,15 @@ const PAGINAS_OFFLINE = [
 // parte, que não é apagado quando CACHE_VERSION sobe (não mudam: o endereço
 // tem a versão). As de PRECACHE já vão na instalação (a de PDF só carrega
 // quando alguém gera o 1º PDF); as outras, na 1ª vez que forem usadas online.
-// Trocar a versão de uma biblioteca no index.html = trocar aqui também.
-const CACHE_LIBS = 'cortag-libs-v1';
+// Trocar a versão de uma biblioteca no index.html = trocar aqui também, com o hash
+// (o mesmo de INTEGRIDADE_CDN no index.html; node scripts/conferir-integridade.js).
+//
+// Cada uma com o hash do arquivo (SRI): o SW só guarda e entrega o arquivo que
+// bate com ele. Se a CDN for invadida e trocar o arquivo, a cópia adulterada
+// nunca entra no cache (servido do cache primeiro, ficaria pra sempre) - e o
+// pdf.js (import() sem atributo integrity) e o worker dele também ficam cobertos.
+const CACHE_LIBS_ANTERIOR = 'cortag-libs-v1';
+const CACHE_LIBS = 'cortag-libs-v2';
 // Fotos dos produtos (card de oferta da aba Produtos): quem grava é a página
 // (index.html, cacheFotosProduto), com o login - o SW só não pode apagar.
 const CACHE_FOTOS = 'cortag-fotos-v1';
@@ -69,13 +78,44 @@ const LIBS_PRECACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js',
   'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js',
 ];
-const LIBS = new Set(LIBS_PRECACHE.concat([
-  'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs',
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs',
+const LIBS = new Map([
+  ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js', 'sha384-vuyrTV5nkscLp1knFvt+FIHfKKzmROBq5reruhMRslauj54mW+l2B8b6szMN6lCL'],
+  ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js', 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB'],
+  ['https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js', 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs', 'sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs', 'sha384-Tfvhzz17zRZraaeJSy+9zZprh8OYQHd3NC7yMUa5APLz8buWdx7MloIddcBGa3oW'],
   // QR Code do pareamento da tela do cliente (tela-cliente.html)
-  'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',
-]));
+  ['https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'],
+]);
+// Baixa a biblioteca conferindo o hash: arquivo diferente = erro (nunca vai pro cache).
+// Em modo CORS mesmo pro <script> sem crossorigin: resposta opaca não deixa
+// conferir o hash e ocupa ~7 MB da cota do aparelho no Chrome.
+function baixarLib(url) {
+  return fetch(url, { mode: 'cors', credentials: 'omit', integrity: LIBS.get(url) });
+}
+// sha384 em base64, no formato do SRI
+async function hashSri(resp) {
+  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-384', await resp.arrayBuffer()));
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return 'sha384-' + btoa(bin);
+}
+// Copia do cache de bibliotecas anterior (guardado sem conferência) só o que
+// bate com o hash da LIBS; o activate apaga o anterior depois. Resposta opaca
+// (corpo ilegível) não bate e fica de fora.
+async function migrarLibsAnteriores(cache) {
+  if (!(await caches.has(CACHE_LIBS_ANTERIOR))) return;
+  const anterior = await caches.open(CACHE_LIBS_ANTERIOR);
+  await Promise.all([...LIBS.keys()].map(async (url) => {
+    try {
+      if (await cache.match(url)) return;
+      const velha = await anterior.match(url);
+      if (velha && velha.ok && (await hashSri(velha.clone())) === LIBS.get(url)) await cache.put(url, velha);
+    } catch (e) { }
+  }));
+}
 
 // Páginas e scripts do app são guardados pelo endereço SEM parâmetros: antes
 // cada curva-abc.html?cliente=… virava uma cópia nova (o cache crescia sem
@@ -96,9 +136,14 @@ self.addEventListener('install', (event) => {
         cache.add(new Request(url, { cache: 'reload' })).catch(() => {})
       )
     )),
-    caches.open(CACHE_LIBS).then((cache) => Promise.all(
-      LIBS_PRECACHE.map((url) => cache.match(url).then((ja) => ja || cache.add(url)).catch(() => {}))
-    )),
+    // primeiro traz do cache anterior (sem conferência) o que bate com o hash -
+    // atualizar com sinal fraco não pode deixar o aparelho sem as bibliotecas
+    // offline; depois baixa o que ainda falta do precache
+    caches.open(CACHE_LIBS).then((cache) => migrarLibsAnteriores(cache).then(() => Promise.all(
+      LIBS_PRECACHE.map((url) => cache.match(url).then((ja) => ja || baixarLib(url).then((resp) => {
+        if (resp.ok) return cache.put(url, resp);
+      })).catch(() => {}))
+    ))),
   ]));
   self.skipWaiting();
 });
@@ -123,16 +168,16 @@ self.addEventListener('fetch', (event) => {
   // não muda); sem cópia, da rede, guardando pra próxima. Pelo endereço sem
   // parâmetros: a nova tentativa do pdf.js depois de uma falha vem com
   // "?tentativa=N" (o navegador pode guardar a falha do import() do endereço puro).
+  // Sem rede ou com o arquivo adulterado (hash não bate): erro - nunca cai pra uma
+  // busca sem conferência.
   const urlLib = url.origin + url.pathname;
   if (LIBS.has(urlLib)) {
     event.respondWith(
       caches.open(CACHE_LIBS).then((cache) => cache.match(urlLib).then((cached) => cached
-        // busca em modo CORS mesmo pro <script> sem crossorigin: resposta opaca
-        // ocupa ~7 MB da cota do aparelho no Chrome, e não dá pra saber se é erro
-        || fetch(urlLib, { mode: 'cors', credentials: 'omit' }).then((resp) => {
+        || baixarLib(urlLib).then((resp) => {
           if (resp.ok) cache.put(urlLib, resp.clone());
           return resp;
-        }, () => fetch(req))))
+        })))
     );
     return;
   }
