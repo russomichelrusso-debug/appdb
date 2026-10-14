@@ -981,8 +981,20 @@ Supabase, sem PR — não é mudança de código.
   de ir pro banco); nada passa pela fila offline (é só tela: sem internet o tablet fica com a última versão e o
   celular reenvia quando volta). Conexão do celular em `cortagSegundaTela_v1` (sobrevive a reabrir o app); sair do
   app desconecta. Fora desta 1ª versão (decisão do usuário): escolher o que o tablet mostra (preço unitário e
-  campanha sempre aparecem, código não). Próximo passo combinado: **celular como leitor do levantamento no tablet**
-  (opção "cada leitura soma 1").
+  campanha sempre aparecem, código não).
+- **Celular como leitor do levantamento no tablet** (10/2026, 2ª ideia, opção **"cada leitura soma 1"** escolhida nos
+  mockups). No tablet/laptop, aba Levantamento › "Usar o celular como leitor" (botão só em tela de 700 px ou mais)
+  cria uma sala no modo `'leitor'` e mostra o QR; o celular conecta pelo mesmo "Conectar tablet" e abre a tela de
+  leitura contínua (`#modoLeitor`): câmera sempre ligada, "+1 no estoque | +1 no pedido", "Desfazer última" e
+  "Digitar quantidade" (troca o total do item no tablet). O mesmo código parado na frente da câmera só conta de novo
+  depois de 1,5 s. Cada leitura é um **evento com id gerado no celular** (`POST /api/segunda-tela/salas/:id/eventos`),
+  guardado em `cortagLeitorFila_v1` até o servidor confirmar: **sem internet a leitura espera e entra no tablet
+  quando o sinal volta**, e o servidor ignora id repetido (resposta perdida + reenvio não soma duas vezes). O
+  celular resolve o código pelo catálogo dele (DUN-14 = caixa fechada, soma a embalagem; código desconhecido nem é
+  enviado) e manda o SKU; o tablet soma no levantamento aberto (`aplicarEventoLeitor`) - salvar, comprados e não
+  contados etc. continuam no tablet. O tablet pede os eventos depois do último `seq` aplicado e guarda a conexão
+  (`cortagLeitorTablet_v1`, com o `seq`), então recarregar não perde nem repete leitura; "Desfazer" de leitura feita
+  antes de recarregar o tablet é ignorado. O servidor guarda as últimas 500 leituras por sala.
 
 ## O que já tentamos e não deu certo
 

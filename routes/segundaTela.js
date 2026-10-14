@@ -8,6 +8,13 @@
 // aberta até algo mudar ou passar ESPERA_MS (long-poll - funciona atrás de
 // qualquer proxy e sem biblioteca nova).
 //
+// Modo 'leitor' (2ª ideia, opção "cada leitura soma 1"): o levantamento fica na
+// tela do tablet e o celular vira o leitor de código de barras. Aí o celular não
+// manda foto: manda EVENTOS (cada leitura, desfazer, quantidade digitada), cada
+// um com um id gerado no celular - o reenvio depois de uma resposta perdida não
+// conta duas vezes. O tablet pede os eventos depois do último número (seq) que
+// já aplicou.
+//
 // As salas ficam SÓ NA MEMÓRIA do servidor, de propósito: é um elo de minutos a
 // horas, nada que precise sobreviver. Deploy ou reinício do Render apaga todas -
 // os dois aparelhos recebem 404 e o tablet mostra um QR novo. (Com mais de uma
@@ -20,7 +27,7 @@ const express = require('express');
 const crypto = require('crypto');
 const router = express.Router();
 
-const MODOS = new Set(['cliente']);
+const MODOS = new Set(['cliente', 'leitor']);
 const VALIDADE_CODIGO_MS = 5 * 60 * 1000;
 const SALA_PARADA_MS = 12 * 60 * 60 * 1000;
 const ESPERA_MS = Number(process.env.SEGUNDA_TELA_ESPERA_MS) || 25000;
@@ -30,6 +37,12 @@ const CONECTADO_MS = ESPERA_MS + 15000;
 const MAX_SALAS_POR_USUARIO = 4;
 const MAX_ESTADO_BYTES = 200 * 1024;
 const ID_SALA_REGEX = /^[a-f0-9]{32}$/;
+const TIPOS_EVENTO = new Set(['leitura', 'desfazer', 'definir']);
+const ID_EVENTO_REGEX = /^[A-Za-z0-9_-]{1,64}$/;
+const MAX_EVENTOS_POR_ENVIO = 100;
+const MAX_EVENTO_BYTES = 2048;
+const MAX_EVENTOS_GUARDADOS = 500; // o tablet pega em segundos; o resto é folga pra reconexão
+const MAX_IDS_LEMBRADOS = 5000;
 
 const salas = new Map(); // id -> sala
 let desligando = false;
@@ -61,6 +74,7 @@ function resumo(sala, agora) {
     modo: sala.modo,
     pareada: sala.pareada,
     versao: sala.versao,
+    seq: sala.seq,
     tablet_conectado: tabletConectado(sala, agora),
   };
 }
@@ -106,6 +120,9 @@ router.post('/salas', (req, res) => {
     pareada: false,
     estado: null,
     versao: 0,
+    seq: 0,
+    eventos: [],
+    idsEventos: new Set(),
     atividadeEm: agora,
     tabletVistoEm: agora,
     tabletEsperando: 0,
@@ -150,6 +167,45 @@ router.put('/salas/:id/estado', (req, res) => {
   res.json(resumo(sala, agora));
 });
 
+// Celular no modo leitor: manda as leituras (e desfazer/quantidade digitada).
+// Evento com id já recebido é ignorado - o celular reenvia o que não teve
+// confirmação, e isso não pode somar de novo.
+router.post('/salas/:id/eventos', (req, res) => {
+  const sala = salaDoUsuario(req);
+  if (!sala) return res.status(404).json({ erro: 'Conexão com o tablet encerrada.' });
+  if (sala.modo !== 'leitor') return res.status(409).json({ erro: 'Este tablet não está no modo leitor.' });
+  if (!sala.pareada) return res.status(409).json({ erro: 'O tablet ainda não foi conectado.' });
+  const eventos = req.body && req.body.eventos;
+  if (!Array.isArray(eventos) || eventos.length === 0 || eventos.length > MAX_EVENTOS_POR_ENVIO) {
+    return res.status(400).json({ erro: `Mande de 1 a ${MAX_EVENTOS_POR_ENVIO} leituras por vez.` });
+  }
+  for (const ev of eventos) {
+    if (!ev || typeof ev !== 'object' || Array.isArray(ev) || !ID_EVENTO_REGEX.test(String(ev.id || ''))
+      || !TIPOS_EVENTO.has(ev.tipo) || Buffer.byteLength(JSON.stringify(ev)) > MAX_EVENTO_BYTES) {
+      return res.status(400).json({ erro: 'Leitura em formato inválido.' });
+    }
+  }
+  let aceitos = 0;
+  for (const ev of eventos) {
+    if (sala.idsEventos.has(ev.id)) continue;
+    sala.idsEventos.add(ev.id);
+    sala.seq += 1;
+    sala.eventos.push({ ...ev, seq: sala.seq });
+    aceitos += 1;
+  }
+  if (sala.eventos.length > MAX_EVENTOS_GUARDADOS) sala.eventos.splice(0, sala.eventos.length - MAX_EVENTOS_GUARDADOS);
+  if (sala.idsEventos.size > MAX_IDS_LEMBRADOS) {
+    // os ids mais antigos saem (Set guarda na ordem de entrada)
+    const sobra = sala.idsEventos.size - MAX_IDS_LEMBRADOS;
+    let i = 0;
+    for (const id of sala.idsEventos) { if (i++ >= sobra) break; sala.idsEventos.delete(id); }
+  }
+  const agora = Date.now();
+  sala.atividadeEm = agora;
+  if (aceitos) acordar(sala);
+  res.json({ ...resumo(sala, agora), aceitos });
+});
+
 // Tablet (e o celular, pra saber se o tablet ainda está lá). Com esperar=1, só
 // responde quando a versão ou o pareamento mudar - ou passados ESPERA_MS.
 router.get('/salas/:id', async (req, res) => {
@@ -161,7 +217,9 @@ router.get('/salas/:id', async (req, res) => {
   const ehTablet = req.query.papel === 'tablet';
   const versaoCliente = Number(req.query.versao);
   const pareadaCliente = req.query.pareada === '1';
-  const mudou = () => sala.encerrada || sala.versao !== versaoCliente || sala.pareada !== pareadaCliente;
+  const seqCliente = Number(req.query.seq) || 0;
+  const mudou = () => sala.encerrada || sala.versao !== versaoCliente || sala.pareada !== pareadaCliente
+    || (ehTablet && sala.seq !== seqCliente);
   if (ehTablet) sala.tabletVistoEm = Date.now();
   if (req.query.esperar === '1' && !mudou()) {
     if (ehTablet) sala.tabletEsperando += 1;
@@ -190,6 +248,11 @@ router.get('/salas/:id', async (req, res) => {
   if (ehTablet) sala.atividadeEm = agora;
   const corpo = resumo(sala, agora);
   if (ehTablet && sala.versao !== versaoCliente) corpo.estado = sala.estado;
+  if (ehTablet && sala.modo === 'leitor') {
+    corpo.eventos = sala.eventos.filter(ev => ev.seq > seqCliente);
+    // o tablet ficou tanto tempo fora que leituras já saíram da memória
+    corpo.perdeu_eventos = sala.eventos.length > 0 && sala.eventos[0].seq > seqCliente + 1;
+  }
   res.json(corpo);
 });
 

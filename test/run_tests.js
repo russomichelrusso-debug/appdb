@@ -3992,6 +3992,40 @@ async function main() {
     res = await req('PUT', `/api/segunda-tela/salas/${sala.id}/estado`, { estado: { itens: [] } });
     assert(r3.status === 404 && res.status === 404, `segunda tela: desconectar encerra a espera e a sala: ${r3.status}/${res.status}`);
 
+    // modo leitor: o celular manda leituras com id; reenvio não conta de novo; o
+    // tablet recebe o que veio depois do último seq que aplicou
+    res = await req('POST', '/api/segunda-tela/salas', { modo: 'leitor' });
+    const leitor = res.body || {};
+    res = await req('POST', `/api/segunda-tela/salas/${leitor.id}/eventos`, { eventos: [{ id: 'a1', tipo: 'leitura', cod: '60863', qtd: 1, campo: 'qty' }] });
+    assert(res.status === 409, `leitor: antes do celular entrar não aceita leitura: ${res.status}`);
+    res = await req('POST', '/api/segunda-tela/entrar', { codigo: leitor.codigo });
+    assert(res.status === 200 && res.body.modo === 'leitor', `leitor: celular entra e sabe que é o modo leitor: ${JSON.stringify(res.body)}`);
+    res = await req('POST', `/api/segunda-tela/salas/${leitor.id}/eventos`, { eventos: [{ id: 'x y', tipo: 'leitura' }] });
+    const idRuim = res.status;
+    res = await req('POST', `/api/segunda-tela/salas/${leitor.id}/eventos`, { eventos: [{ id: 'b1', tipo: 'apagar-tudo' }] });
+    assert(idRuim === 400 && res.status === 400, `leitor: id ou tipo de evento inválido: 400: ${idRuim}/${res.status}`);
+    const esperaLeitor = req('GET', `/api/segunda-tela/salas/${leitor.id}?papel=tablet&esperar=1&versao=0&pareada=1&seq=0`);
+    await new Promise(r => setTimeout(r, 60));
+    res = await req('POST', `/api/segunda-tela/salas/${leitor.id}/eventos`, { eventos: [
+      { id: 'a1', tipo: 'leitura', cod: '60863', qtd: 1, campo: 'qty' },
+      { id: 'a2', tipo: 'leitura', cod: '60863', qtd: 1, campo: 'qty' },
+    ] });
+    assert(res.status === 200 && res.body.aceitos === 2 && res.body.seq === 2, `leitor: duas leituras aceitas: ${JSON.stringify(res.body)}`);
+    const rl = await esperaLeitor;
+    assert(rl.status === 200 && rl.body.eventos.length === 2 && rl.body.eventos[1].seq === 2 && rl.body.eventos[0].cod === '60863',
+      `leitor: a espera do tablet volta com as leituras: ${JSON.stringify(rl.body)}`);
+    res = await req('POST', `/api/segunda-tela/salas/${leitor.id}/eventos`, { eventos: [
+      { id: 'a2', tipo: 'leitura', cod: '60863', qtd: 1, campo: 'qty' },
+      { id: 'a3', tipo: 'desfazer', ref: 'a2' },
+    ] });
+    assert(res.status === 200 && res.body.aceitos === 1 && res.body.seq === 3, `leitor: reenvio da mesma leitura não conta de novo: ${JSON.stringify(res.body)}`);
+    res = await req('GET', `/api/segunda-tela/salas/${leitor.id}?papel=tablet&esperar=1&versao=0&pareada=1&seq=2`);
+    assert(res.status === 200 && res.body.eventos.length === 1 && res.body.eventos[0].tipo === 'desfazer' && res.body.perdeu_eventos === false,
+      `leitor: o tablet recebe só o que veio depois do seq dele: ${JSON.stringify(res.body)}`);
+    res = await req('POST', `/api/segunda-tela/salas/${sala.id}/eventos`, { eventos: [{ id: 'c1', tipo: 'leitura' }] });
+    assert(res.status === 404, `leitor: sala encerrada não recebe leitura: ${res.status}`);
+    await req('DELETE', `/api/segunda-tela/salas/${leitor.id}`);
+
     // no máximo 4 salas por conta: a mais antiga sai
     const ids = [];
     for (let i = 0; i < 5; i++) ids.push((await req('POST', '/api/segunda-tela/salas', { modo: 'cliente' })).body.id);
