@@ -72,6 +72,8 @@
       --success-deep: #166B2E;
       --warning-strong: #B36B00;
       --danger-strong: #B3261E;
+      /* fita e borda das campanhas de Black Friday (igual nos dois temas) */
+      --black-friday: #111113;
       color-scheme: light;
     }
 
@@ -4531,6 +4533,133 @@
       margin-left: 5px;
     }
 
+    /* Fita de campanha no card do item (Pedido e Levantamento, opção "D" dos
+       mockups de 10/2026): borda + fita no topo; preta com amarelo na Black Friday. */
+    .card.emCampanha,
+    .levitem.emCampanha {
+      --cor-campanha: var(--success-strong);
+      border-color: transparent;
+      box-shadow: 0 0 0 2px var(--cor-campanha);
+    }
+
+    /* "Sem estoque" (.levitem.zero) vem depois e trocaria a borda */
+    .levitem.zero.emCampanha {
+      box-shadow: 0 0 0 2px var(--cor-campanha), var(--shadow-1);
+    }
+
+    .card.emCampanha.bf,
+    .levitem.emCampanha.bf {
+      --cor-campanha: var(--black-friday);
+    }
+
+    html[data-theme="dark"] .card.emCampanha.bf,
+    html[data-theme="dark"] .levitem.emCampanha.bf {
+      --cor-campanha: var(--yellow);
+    }
+
+    .fitaCampanha {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: calc(100% + 32px);
+      min-height: 36px;
+      margin: -14px -16px 10px;
+      padding: 8px 16px;
+      border: none;
+      border-radius: var(--r-md) var(--r-md) 0 0;
+      background: var(--success-strong);
+      color: var(--on-accent);
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .fitaCampanha .fitaNome {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .fitaCampanha .fitaPct {
+      flex-shrink: 0;
+    }
+
+    .fitaCampanha.bf {
+      background: var(--black-friday);
+      letter-spacing: .02em;
+      text-transform: uppercase;
+    }
+
+    .fitaCampanha.bf .fitaPct {
+      color: var(--yellow);
+    }
+
+    /* Na Lista de preços o card fica dentro de .priceListItem (sem padding
+       próprio): a borda vai pro de fora e a fita não encosta no ✕. */
+    .priceListItem .card.emCampanha {
+      box-shadow: none;
+    }
+
+    .priceListItem .card .fitaCampanha {
+      width: calc(100% - 34px);
+      margin: 0 34px 8px 0;
+      border-radius: var(--r-sm);
+    }
+
+    .priceListItem:has(> .card.emCampanha) {
+      border-color: transparent;
+      box-shadow: 0 0 0 2px var(--success-strong);
+    }
+
+    .priceListItem:has(> .card.emCampanha.bf) {
+      box-shadow: 0 0 0 2px var(--black-friday);
+    }
+
+    html[data-theme="dark"] .priceListItem:has(> .card.emCampanha.bf) {
+      box-shadow: 0 0 0 2px var(--yellow);
+    }
+
+    .campItemRegra {
+      padding: 12px 0;
+      border-top: 1px solid var(--hairline);
+      font-size: 13px;
+    }
+
+    .campItemRegra:first-child {
+      border-top: none;
+      padding-top: 0;
+    }
+
+    .campItemRegra ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      color: var(--gray);
+      line-height: 1.5;
+    }
+
+    .campItemRegra li.faixa {
+      color: var(--ink);
+      font-weight: 600;
+    }
+
+    .campItemStatus {
+      margin-top: 8px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .campItemStatus.ok {
+      color: var(--success);
+    }
+
+    .campItemStatus.warn {
+      color: var(--warning);
+    }
+
     .pencilBtn {
       background: none;
       border: none;
@@ -8334,6 +8463,16 @@
         </div>
       </div>
     </div>
+    <div class="minimodal hidden" id="campanhaItemModal">
+      <div class="minimodal-card" style="max-width:380px;max-height:85vh;overflow-y:auto;">
+        <h3>Campanha do produto</h3>
+        <p class="ap-hint" id="campanhaItemProduto" style="margin:0 0 12px;"></p>
+        <div id="campanhaItemLista"></div>
+        <div class="minimodal-btnrow" style="margin-top:14px;">
+          <button type="button" id="campanhaItemFecharBtn">Fechar</button>
+        </div>
+      </div>
+    </div>
     <div class="minimodal hidden" id="pedidosSalvosModal">
       <div class="minimodal-card" style="max-width:400px;max-height:85vh;overflow-y:auto;">
         <h3>Pedidos salvos</h3>
@@ -9790,6 +9929,9 @@
         container.querySelectorAll('[data-ficha]').forEach(btn => {
           btn.addEventListener('click', () => openFichaTecnica(btn.dataset.ficha));
         });
+        container.querySelectorAll('[data-campanha-item]').forEach(btn => {
+          btn.addEventListener('click', () => abrirCampanhaDoItem(btn.dataset.campanhaItem));
+        });
       }
       // Guarda os últimos resultados de busca exibidos - usado pelo botão
       // "Adicionar todos ao orçamento" (index.html:3775-3777), que precisa
@@ -9973,7 +10115,9 @@
         const edited = isPriceEdited(p.c);
         const qtyDisc = descontoItemVisivel(p);
         const rotuloFamilia = p.familia || (p.cat != null ? DB.categories[p.cat] : '');
-        return `<div class="card">
+        const campanhas = campanhasDoCard(p);
+        return `<div class="card${classeCampanhaDoCard(campanhas)}">
+    ${htmlFitaCampanha(p, campanhas)}
     <span class="catbadge">${escapeHtml(rotuloFamilia)}</span>
     ${isPrecoFixoParaCanal(p) ? '<span class="fixedbadge">Preço fixo</span>' : ''}
     ${edited ? '<span class="editedbadge">Preço editado</span>' : ''}
@@ -10605,6 +10749,23 @@
         }
         return melhor;
       }
+      // Campanhas que podem dar desconto NESTE item no contexto do orçamento
+      // (canal, estado, classificatório, data): alvo, exclusões e Preço Fixo ×
+      // "soNoPrecoFixo" na mesma régua do bonusDaCampanhaNoItem. Não olha a
+      // quantidade - é a fita do card ("faz parte da campanha"), não o desconto.
+      // "Pedido todo" fica de fora: marcaria todo card. Maior % primeiro.
+      function maiorPctDaRegra(r) {
+        if (r.basis === 'combo') return Number(r.comboPct) || 0;
+        return Math.max(0, ...(r.tiers || []).map(t => Number(t.pct) || 0));
+      }
+      function campanhasDoItem(rules, p, ctx, precoFixo) {
+        return (rules || [])
+          .filter(r => r && r.active && r.targetType !== 'all' && String(r.targetValue || '').trim()
+            && maiorPctDaRegra(r) > 0 && !!r.soNoPrecoFixo === !!precoFixo && regraValeNoContexto(r, ctx)
+            && scopeMatchesProduct(r.targetType, String(r.targetValue), p)
+            && !produtoNaListaDaRegra(p, listaDaRegra(r.excluirCodigos), listaDaRegra(r.excluirFamilias)))
+          .sort((a, b) => maiorPctDaRegra(b) - maiorPctDaRegra(a));
+      }
       // </motor-campanhas>
 
       // Contexto do orçamento pra regraValeNoContexto.
@@ -10624,6 +10785,99 @@
       }
       function contextoCampanhas() {
         return { canal: state.canal || 'VAREJO', uf: state.uf, classiTipos: classiTiposDoOrcamento(), hoje: hojeBrasiliaISO() };
+      }
+
+      // ---- Fita de campanha no card do item (Pedido e Levantamento) ----
+      // Opção "D" escolhida pelo usuário a partir de mockups (10/2026): o card do
+      // produto em campanha ganha borda e uma fita no topo com o nome e o maior
+      // desconto (preta com amarelo na Black Friday); tocar na fita abre as
+      // faixas e condições. A fita só diz que o item faz parte - o desconto em si
+      // continua saindo do orçamento (cartTotals), como antes.
+      function campanhasDoCard(p, ctx) {
+        return campanhasDoItem(state.promoRules, p, ctx || contextoCampanhas(), isPrecoFixoParaCanal(p));
+      }
+      function ehCampanhaBlackFriday(r) {
+        return /black\s*friday/i.test((r && r.name) || '') || /black\s*friday/i.test(campanhaEspecialDaRegra(r));
+      }
+      function pctCampanhaTexto(n) {
+        return String(n).replace('.', ',') + '%';
+      }
+      function classeCampanhaDoCard(campanhas) {
+        if (!campanhas.length) return '';
+        return ' emCampanha' + (ehCampanhaBlackFriday(campanhas[0]) ? ' bf' : '');
+      }
+      function htmlFitaCampanha(p, campanhas) {
+        if (!campanhas.length) return '';
+        const r = campanhas[0];
+        const bf = ehCampanhaBlackFriday(r);
+        const variasFaixas = r.basis !== 'combo' && (r.tiers || []).filter(t => Number(t.pct) > 0).length > 1;
+        const valor = `${variasFaixas ? 'até ' : ''}-${pctCampanhaTexto(maiorPctDaRegra(r))}${r.soNoPrecoFixo ? ' no fixo' : ''}`;
+        const mais = campanhas.length > 1 ? ` +${campanhas.length - 1}` : '';
+        return `<button type="button" class="fitaCampanha${bf ? ' bf' : ''}" data-campanha-item="${escapeHtml(p.c)}" aria-label="Ver condições da campanha ${escapeHtml(r.name || '')}">`
+          + `<span class="fitaNome">${bf ? '' : '🎉 '}${escapeHtml(r.name || 'Campanha')}${mais}</span><span class="fitaPct">${escapeHtml(valor)} ›</span></button>`;
+      }
+      function faixasDaCampanhaTexto(r) {
+        if (r.basis === 'combo') {
+          const itens = (r.basketItems || []).map(i => {
+            const nome = i.type === 'product' ? (productByCod(i.value) || {}).n || `cód. ${i.value}` : i.value;
+            return `${nome}${(Number(i.minQty) || 1) > 1 ? ` (mín. ${i.minQty})` : ''}`;
+          });
+          const modo = r.basketMode === 'atLeast' ? `pelo menos ${r.basketMinCount || itens.length} de: ` : '';
+          return [`Cesta (${modo}${itens.join(' + ')}): -${pctCampanhaTexto(Number(r.comboPct) || 0)}`];
+        }
+        return (r.tiers || []).filter(t => Number(t.pct) > 0).slice().sort((a, b) => a.min - b.min).map(t => {
+          const min = Number(t.min) || 0;
+          const quando = r.selfMetric === 'value' ? `A partir de ${brl(min)}`
+            : r.selfMetric === 'skus' ? `${min} ${min === 1 ? 'item diferente' : 'itens diferentes'}`
+            : `${min} un.`;
+          return `${quando}: -${pctCampanhaTexto(Number(t.pct))}`;
+        });
+      }
+      function condicoesDaCampanhaTexto(r) {
+        const partes = [];
+        if (r.targetType === 'category') partes.push(`Conta a família ${r.targetValue} inteira no orçamento`);
+        else if (r.targetType === 'skuList') {
+          const n = listaDaRegra(r.targetValue).length;
+          if (n > 1) partes.push(`Conta os ${n} produtos da campanha juntos no orçamento`);
+        }
+        if (r.soNoPrecoFixo) partes.push('Desconto sobre o preço fixo, não soma com outros descontos');
+        else if (r.stacks === false) partes.push('Não soma com o desconto do item: vale o maior');
+        else partes.push('Soma com o classificatório e os outros descontos');
+        if (Number(r.maxPctDoPedido) > 0) partes.push(`Junto com outros produtos: o item da campanha até ${r.maxPctDoPedido}% do pedido`);
+        if (r.exigeItens && Number(r.exigeItens.pct) > 0) partes.push(`Mínimo de ${r.exigeItens.pct}% dos itens em lançamentos/família foco`);
+        if (r.excluirOutraCampanha) partes.push('Não vale no item que já ganha outra campanha');
+        const classis = listaDaRegra(r.classificatorios);
+        if (classis.length) partes.push('Só ' + classis.join(', '));
+        if (/^\d{4}-\d{2}-\d{2}$/.test(r.validoAte || '')) partes.push('Válido até ' + formatDateBr(r.validoAte));
+        return partes;
+      }
+      function abrirCampanhaDoItem(cod) {
+        const p = productByCod(cod);
+        if (!p) return;
+        const campanhas = campanhasDoCard(p);
+        if (!campanhas.length) return;
+        let noOrcamento = null, avisos = [];
+        if (state.cart.some(i => i.cod === p.c && i.qty > 0)) {
+          const t = cartTotals();
+          noOrcamento = t.rows.find(x => x.p.c === p.c) || null;
+          avisos = t.avisosCampanha || [];
+        }
+        document.getElementById('campanhaItemProduto').textContent = `${p.n} · cód. ${p.c}`;
+        document.getElementById('campanhaItemLista').innerHTML = campanhas.map(r => {
+          const aviso = avisos.find(a => a.regra === r.name);
+          let status = '';
+          if (noOrcamento && noOrcamento.campaignPct > 0 && noOrcamento.campaignName === r.name) status = `<div class="campItemStatus ok">✓ No orçamento: -${pctCampanhaTexto(noOrcamento.campaignPct)} aplicado</div>`;
+          else if (aviso) status = `<div class="campItemStatus warn">⚠ Não aplicada no orçamento: ${escapeHtml(aviso.motivo)}</div>`;
+          return `<div class="campItemRegra${ehCampanhaBlackFriday(r) ? ' bf' : ''}">
+            <b>${escapeHtml(r.name || 'Campanha')}</b>
+            <ul>${faixasDaCampanhaTexto(r).map(x => `<li class="faixa">${escapeHtml(x)}</li>`).join('')}${condicoesDaCampanhaTexto(r).map(x => `<li>${escapeHtml(x)}</li>`).join('')}</ul>
+            ${status}
+          </div>`;
+        }).join('');
+        document.getElementById('campanhaItemModal').classList.remove('hidden');
+      }
+      function initCampanhaDoItem() {
+        document.getElementById('campanhaItemFecharBtn').addEventListener('click', () => document.getElementById('campanhaItemModal').classList.add('hidden'));
       }
 
       function cartTotals() {
@@ -12684,13 +12938,16 @@
 
         // itens já adicionados ao orçamento vão pro final da lista, como um "feito"
         const ordered = [...state.survey].sort((a, b) => (a.done ? 1 : 0) - (b.done ? 1 : 0));
+        const ctxCampanhas = contextoCampanhas();
         listEl.innerHTML = ordered.map((it, idx) => {
           const p = productByCod(it.cod);
           if (!p) return '';
           const qtyDisc = descontoItemVisivel(p);
           const cp = clientPrice(listPrice(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), qtyDisc);
           const edited = isPriceEdited(p.c);
-          return `<div class="levitem ${it.qty === 0 ? 'zero' : ''}${it.done ? ' done' : ''}">
+          const campanhas = campanhasDoCard(p, ctxCampanhas);
+          return `<div class="levitem ${it.qty === 0 ? 'zero' : ''}${it.done ? ' done' : ''}${classeCampanhaDoCard(campanhas)}">
+      ${htmlFitaCampanha(p, campanhas)}
       <div class="top">
         <div class="levNumWrap">
           <span class="levNum">${idx + 1}</span>
@@ -12754,6 +13011,9 @@
         });
         listEl.querySelectorAll('[data-edit-price]').forEach(b => {
           b.addEventListener('click', () => openPriceEditModal(b.dataset.editPrice));
+        });
+        listEl.querySelectorAll('[data-campanha-item]').forEach(b => {
+          b.addEventListener('click', () => abrirCampanhaDoItem(b.dataset.campanhaItem));
         });
       }
 
@@ -22853,6 +23113,7 @@
           initNovaPromocao();
           initFecharMinimodalAoClicarFora();
           initSugestoesRecompra();
+          initCampanhaDoItem();
           initRastreio();
           initImportacaoUnificada();
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);

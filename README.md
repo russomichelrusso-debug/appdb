@@ -192,6 +192,7 @@ Cada pedido faturado (aba Pedidos do cliente) com nota fiscal tem o botão **Ras
 - **Área de toque**: botão que se toca com o dedo tem no mínimo 44×44 px de área (−/+, ✕, lápis, leitor de código). Desenho menor ganha a área por um `::after` invisível de 44 px (padrão do bloco "Toque, navegação e progresso" do `index.html`).
 - **Navegação**: as 4 abas ficam no rodapé (`.tabbar`, altura em `--navH`); a barra do orçamento fica logo acima delas. Elemento novo preso embaixo (`position: fixed`/`sticky` com `bottom`) soma `var(--navH)`; preso em cima fica em `top: 58px` (só o cabeçalho).
 - **Um botão principal por tela**: só a ação principal é cheia (verde em Finalizar pedido, vermelho nas outras); as demais ações do mesmo grupo vão com contorno (como Compartilhar orçamento).
+- **Produto em campanha** (card da busca do Pedido, Lista de preços e item do Levantamento): `.emCampanha` (borda de 2 px) + `htmlFitaCampanha` no topo (verde; `.bf` preta com amarelo, `--black-friday`, quando a campanha é de Black Friday); tocar na fita abre `#campanhaItemModal` com as faixas e condições. Quais campanhas = `campanhasDoItem` (`<motor-campanhas>`).
 - As páginas separadas (`curva-abc.html`, `ficha-cnpj.html`, `calculadora-materiais.html`) repetem os mesmos tokens de status no próprio `:root`.
 
 ## Frontend — carregamento do catálogo de preços
