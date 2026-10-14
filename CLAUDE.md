@@ -122,7 +122,9 @@ Pegadinhas de ambiente:
   `manifest.json` tinha `"orientation": "portrait-primary"`. Agora é `"any"`, e o `index.html` trava em pé só no
   celular instalado (`screen.orientation.lock`, lado menor da tela < 600 px). O manifest é servido do cache primeiro
   pelo `sw.js`: mudar o manifest = subir o `CACHE_VERSION`, senão o aparelho continua com o velho. O conteúdo do
-  `index.html` segue numa coluna de 560 px no centro, também com o tablet deitado.
+  `index.html` segue numa coluna de 560 px no centro, **menos a aba Levantamento**: a partir de 700 px de largura
+  (`body.abaLev`, ligada em `activateMainTab`) o app vai até 1280 px e a lista de itens vira grade (tablet em pé = 2
+  colunas, deitado = 3) — pedido do usuário pro levantamento no tablet com o celular de leitor.
 - Proteção contra iframe: `frame-ancestors` no `<meta>` não vale (só em cabeçalho, e o GitHub Pages
   não manda). Cada página começa escondida (`#antiFrame`) e só aparece fora de frame; página nova
   separada leva o mesmo trecho no `<head>`.

@@ -7974,6 +7974,29 @@
       text-shadow: 0 1px 3px rgba(0, 0, 0, .6);
     }
 
+    /* Levantamento em tela larga (tablet deitado, laptop - 10/2026, pedido do
+       usuário): o app sai da coluna de celular e a lista de itens vira grade.
+       Só nessa aba: as outras continuam na coluna de 560 px. A partir de 700 px,
+       a mesma largura do botão "Usar o celular como leitor" (tablet em pé = 2
+       colunas, deitado = 3). */
+    @media (min-width: 700px) {
+      body.abaLev .wrap,
+      body.abaLev .tabbar,
+      body.abaLev .cartbar {
+        max-width: 1280px;
+      }
+
+      body.abaLev .lev-list {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+        align-items: start;
+      }
+
+      body.abaLev .scanFab {
+        right: max(16px, calc(50% - 640px + 16px));
+      }
+    }
+
     /* Botão de leitura perto do polegar no Levantamento (Lei de Fitts) */
     .scanFab {
       position: fixed;
@@ -13586,6 +13609,8 @@
             buttons[k].classList.toggle('active', k === tab);
             panels[k].classList.toggle('hidden', k !== tab);
           });
+          // tablet/laptop deitado: o Levantamento usa a largura toda (CSS em "abaLev")
+          document.body.classList.toggle('abaLev', tab === 'levantamento');
           atualizarLembreteLev();
           if (tab === 'levantamento') {
             renderLevList();
