@@ -253,6 +253,11 @@ ALTER TABLE clientes ADD COLUMN IF NOT EXISTS localizacao_atualizada_em TIMESTAM
 -- reenvio com o mesmo id_envio devolve o já gravado. NULL nos antigos.
 ALTER TABLE levantamentos ADD COLUMN IF NOT EXISTS id_envio TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_levantamentos_id_envio ON levantamentos(id_envio) WHERE id_envio IS NOT NULL;
+-- Quantidade de pedido do item (coluna "Ped." do levantamento), gravada pelo
+-- POST /api/levantamentos. Estava só no CREATE TABLE: o banco de produção, com a
+-- tabela já criada, ficou sem a coluna e todo levantamento salvo dava "Erro ao
+-- gravar levantamento" (10/2026).
+ALTER TABLE levantamento_itens ADD COLUMN IF NOT EXISTS quantidade_pedido NUMERIC NOT NULL DEFAULT 0;
 -- Quem salvou o levantamento (o usuário logado). O "Registro de visita"
 -- (routes/visitas.js) mostra só as visitas do próprio vendedor; vendedor_id é o
 -- nome digitado no app ("RUSSO", "Russo", "Admin"), sem ligação com o login.

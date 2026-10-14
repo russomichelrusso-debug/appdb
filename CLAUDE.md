@@ -807,7 +807,8 @@ Supabase, sem PR — não é mudança de código.
   internet (abrir um do servidor precisa de rede). Salvar de novo grava outro levantamento (o POST nunca atualiza):
   a rota devolve só o último do mesmo cliente + vendedor + dia de Brasília. Sem repetir na janela: pelo `serverId`
   da cópia ou pelo `id_envio` (salvo sem internet). O POST passou a gravar a **quantidade de pedido** do item
-  (`levantamento_itens.quantidade_pedido`, que existia e ficava 0): os salvos antes disso abrem em outro aparelho
+  (`levantamento_itens.quantidade_pedido`; estava só no `CREATE TABLE` e o banco de produção ficou sem a
+  coluna — todo levantamento salvo dava "Erro ao gravar levantamento" até 14/10/2026, quando entrou o `ALTER`): os salvos antes disso abrem em outro aparelho
   com o pedido zerado.
 
 - **Foto do produto e card de oferta** (10/2026, 1ª parte do pedido "cards do produto com foto e preço
