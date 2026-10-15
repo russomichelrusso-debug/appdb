@@ -8782,10 +8782,371 @@
     .clientesGrupo:not(:has(> .recompra:not(.hidden))) {
       display: none;
     }
+    /* ---------- Laptop e tablet (10/2026, mockup "telas por aparelho"
+       escolhido pelo usuário) ----------
+       A partir de 900 px (laptop e tablet deitado): abas num menu à esquerda,
+       orçamento preso à direita nas abas Pedido e Produtos (body.orcDocado,
+       ligado em atualizarOrcamentoDocado) e cada aba em colunas - cliente e
+       contexto à esquerda (presos ao rolar), produtos/itens no meio. Os blocos
+       seguintes ajustam: trilho estreito até 1349 px, cliente em faixa no
+       tablet deitado (até 1099 px) e o tablet em pé (700-899 px). Abaixo de
+       700 px (celular) nada muda. */
+    @media (min-width: 900px) {
+      :root {
+        --navH: 0px;
+        --ladoW: 216px;
+        --orcW: 380px;
+        --conteudoMax: 1280px;
+      }
+
+      body {
+        padding-left: var(--ladoW);
+        padding-bottom: 96px;
+      }
+
+      body.orcDocado {
+        padding-right: var(--orcW);
+        padding-bottom: 24px;
+      }
+
+      .wrap,
+      body.abaLev .wrap {
+        max-width: none;
+      }
+
+      #tabPrecos,
+      #tabLevantamento,
+      #tabProdutos,
+      #tabClientes {
+        max-width: var(--conteudoMax);
+        margin: 0 auto;
+      }
+
+      /* Abas: menu lateral com ícone e nome */
+      .tabbar,
+      body.abaLev .tabbar {
+        top: 0;
+        bottom: 0;
+        left: 0;
+        right: auto;
+        width: var(--ladoW);
+        max-width: none;
+        margin: 0;
+        flex-direction: column;
+        gap: 4px;
+        padding: 12px 12px 16px;
+        border-top: none;
+        border-right: 1px solid rgba(255, 255, 255, .08);
+      }
+
+      .tabbtn {
+        flex: none;
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 12px;
+        min-height: 48px;
+        padding: 0 14px;
+        border-radius: 12px;
+        font-size: 15px;
+      }
+
+      .tabbtn::after {
+        display: none;
+      }
+
+      .tabbtn.active {
+        background: rgba(255, 255, 255, .12);
+        box-shadow: inset 3px 0 0 var(--red);
+      }
+
+      .tabBadge {
+        position: static;
+        margin-left: auto;
+      }
+
+      /* Barra do orçamento (Levantamento e Clientes): embaixo, no meio do conteúdo */
+      .cartbar,
+      body.abaLev .cartbar {
+        left: calc(var(--ladoW) + 24px);
+        right: 24px;
+        bottom: 16px;
+        max-width: 560px;
+        border-radius: 14px;
+      }
+
+      .toast {
+        left: calc(50% + var(--ladoW) / 2);
+        bottom: 96px;
+      }
+
+      body.orcDocado .toast {
+        left: calc(50% + (var(--ladoW) - var(--orcW)) / 2);
+        bottom: 24px;
+      }
+
+      .shareSheet {
+        max-width: 520px;
+        margin: 0 auto;
+      }
+
+      /* Orçamento: painel à direita (gaveta nas outras abas, preso no Pedido/Produtos) */
+      .drawer {
+        top: 0;
+        bottom: 0;
+        left: auto;
+        right: 0;
+        width: var(--orcW);
+        max-width: none;
+        max-height: none;
+        margin: 0;
+        border-radius: 0;
+      }
+
+      .drawer-header::before {
+        display: none;
+      }
+
+      /* .field tem flex: 1 (feito pras linhas de campos): no painel alto esticava */
+      .drawer > .field {
+        flex: none;
+      }
+
+      body.orcDocado .drawer.hidden {
+        display: flex;
+      }
+
+      body.orcDocado .drawer {
+        z-index: 25;
+        box-shadow: none;
+        border-left: 0.75px solid var(--hairline);
+      }
+
+      body.orcDocado #closeDrawer,
+      body.orcDocado #overlay,
+      body.orcDocado .cartbar {
+        display: none;
+      }
+
+      /* Colunas: lado (presa ao rolar) + meio */
+      #tabPrecos:not(.hidden),
+      #tabLevantamento:not(.hidden),
+      #clienteTabDetail:not(.hidden) {
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+        align-items: start;
+      }
+
+      .pedidoLado,
+      .levLado,
+      .cliDetLado {
+        position: sticky;
+        top: 58px;
+        max-height: calc(100vh - 58px);
+        overflow-y: auto;
+        padding-bottom: 16px;
+      }
+
+      #clienteTabDetail > .hist-clientBar {
+        grid-column: 1 / -1;
+      }
+
+      .cliDetLado {
+        padding-top: 4px;
+      }
+
+      #resultsList {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        align-items: start;
+      }
+
+      .campGrade,
+      .catFamGrade,
+      .campGrupoGrade {
+        grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+      }
+
+      /* Clientes: os três grupos lado a lado */
+      #clientesPainel {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      #clientesRecentes {
+        grid-column: 1 / -1;
+      }
+
+      /* Coluna do lado: Estado numa linha só (o nome do estado não cabia com
+         Canal e Desc. ao lado) e "Levantamento não salvo" acima dos botões */
+      .pedidoLado .ctrl-row {
+        flex-wrap: wrap;
+      }
+
+      .pedidoLado .field--wide {
+        flex-basis: 100%;
+      }
+
+      .levLado .lev-savebar {
+        flex-wrap: wrap;
+      }
+
+      .levLado .lev-saveinfo {
+        flex-basis: 100%;
+      }
+
+      /* "Nenhum produto encontrado" ocupa a largura, não uma célula da grade */
+      #resultsList > .empty-state {
+        grid-column: 1 / -1;
+      }
+
+      /* a folha escondida fica embaixo da tela, mas a sombra dela aparecia */
+      .shareSheet.hidden {
+        box-shadow: none;
+      }
+    }
+
+    /* Com mouse (laptop): realce ao passar e sem o botão flutuante de leitura
+       (a câmera do laptop é rara: fica o botão da busca). No tablet (toque)
+       o botão flutuante continua - o levantamento na loja é pela câmera. */
+    @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+      .tabbtn:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, .06);
+      }
+
+      .scanFab {
+        display: none;
+      }
+    }
+
+    /* Laptop pequeno e tablet deitado (900-1349 px, ex.: 1280x800, iPad
+       deitado): com o menu largo e o orçamento preso sobravam ~150 px pros
+       produtos. O menu vira trilho (ícone com o nome embaixo) e o orçamento e
+       a coluna do lado afinam. */
+    @media (min-width: 900px) and (max-width: 1349px) {
+      :root {
+        --ladoW: 84px;
+        --orcW: 340px;
+      }
+
+      .tabbar,
+      body.abaLev .tabbar {
+        padding: 8px 6px;
+      }
+
+      .tabbtn {
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        min-height: 64px;
+        padding: 8px 2px;
+        font-size: 11px;
+      }
+
+      .tabBadge {
+        position: absolute;
+        margin-left: 0;
+      }
+
+      #tabPrecos:not(.hidden),
+      #tabLevantamento:not(.hidden),
+      #clienteTabDetail:not(.hidden) {
+        grid-template-columns: 320px minmax(0, 1fr);
+      }
+    }
+
+    /* Tablet deitado e laptop pequeno (900-1349 px): o Levantamento é o do
+       tablet na loja com o celular de leitor (PRs #247/#248) - a coluna do lado
+       roubava uma coluna de itens (1280 deitado = 3). O cliente vira uma faixa
+       em cima (card à esquerda, salvar/abrir à direita) e a lista usa a largura. */
+    @media (min-width: 900px) and (max-width: 1349px) {
+      #tabLevantamento:not(.hidden) {
+        display: block;
+      }
+
+      .levLado {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        padding-bottom: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+    }
+
+    /* Tablet deitado (900-1099 px, ex.: 1024x768): coluna do lado mais estreita
+       (a busca fica à vista; os produtos numa coluna) */
+    @media (min-width: 900px) and (max-width: 1099px) {
+      :root {
+        --orcW: 320px;
+      }
+
+      #tabPrecos:not(.hidden),
+      #clienteTabDetail:not(.hidden) {
+        grid-template-columns: 290px minmax(0, 1fr);
+      }
+    }
+
+    /* Tablet em pé (700-899 px, ex.: 768, 810, 834): abas embaixo e gaveta do
+       orçamento como no celular, mas usando a largura - card do cliente ao lado
+       do contexto, produtos e blocos da aba Clientes em 2 colunas. */
+    @media (min-width: 700px) and (max-width: 899px) {
+      .wrap,
+      .tabbar,
+      body.abaLev .wrap,
+      body.abaLev .tabbar {
+        max-width: none;
+      }
+
+      .cartbar,
+      body.abaLev .cartbar,
+      .drawer {
+        max-width: 640px;
+      }
+
+      .pedidoLado,
+      .levLado {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      .pedidoLado > .clienteCard {
+        grid-row: 1 / span 2;
+      }
+
+      #resultsList {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      #resultsList > .empty-state {
+        grid-column: 1 / -1;
+      }
+
+      #clientesPainel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      #clientesRecentes {
+        grid-column: 1 / -1;
+      }
+
+      .campGrade,
+      .catFamGrade,
+      .campGrupoGrade {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      }
+    }
   </style>
 </head>
 
-<body>
+<body data-aba="precos">
   <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
 
   <div id="loadingScreen" class="loadingScreen">
@@ -8934,6 +9295,7 @@
     </div>
 
     <div id="tabPrecos">
+      <div class="pedidoLado">
       <div class="clienteCard" id="precosClienteCard">
         <button type="button" class="clienteVazioBtn" id="precosSelectClientBtn">＋ Selecionar cliente</button>
         <div class="clienteProximo hidden" id="precosClienteProximo" role="status"></div>
@@ -9027,6 +9389,8 @@
         </div>
       </div>
 
+      </div>
+      <div class="pedidoMeio">
       <div class="searchWrap">
         <div class="searchBox searchBox--actions2">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -9077,9 +9441,11 @@
         <button type="button" class="addAllBtn" id="addAllResultsBtn">Adicionar todos ao orçamento</button>
       </div>
       <div class="results" id="resultsList"></div>
+      </div>
     </div>
 
     <div id="tabLevantamento" class="hidden">
+      <div class="levLado">
       <div class="clienteCard" id="levClienteCard">
         <button type="button" class="clienteVazioBtn" id="levSelectClientBtn">＋ Selecionar cliente do levantamento</button>
         <div class="clienteProximo hidden" id="levClienteProximo" role="status"></div>
@@ -9153,6 +9519,8 @@
           </button>
         </div>
       </div>
+      </div>
+      <div class="levMeio">
       <!-- Pesquisa + resumo fixos logo abaixo das abas: com 100+ itens
            levantados, o vendedor confere/escaneia de qualquer ponto da lista
            sem precisar voltar ao topo. -->
@@ -9214,6 +9582,7 @@
           <path d="M7 6v12M10 6v12M15 6v12M18 6v12" />
         </svg>
       </button>
+      </div>
     </div>
 
     <div id="tabProdutos" class="hidden">
@@ -9316,6 +9685,7 @@
           </div>
           <button type="button" class="restoreBtn compacto" id="clienteDetailBackBtn">Voltar</button>
         </div>
+        <div class="cliDetLado">
         <div class="ap-card" id="clienteFichaResumo" style="margin:0 16px 12px;">
           <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
             <div>
@@ -9343,6 +9713,8 @@
         <div class="ap-card hidden" id="clienteClassificatorioCard" style="margin:0 16px 12px;">
           <div id="clienteClassificatorioContent"></div>
         </div>
+        </div>
+        <div class="cliDetMeio">
         <div class="segmented segmented--scroll" id="clienteViewSeg" style="margin:0 16px 12px;">
           <button type="button" data-v="pedidosoficiais" class="active">Pedidos</button>
           <button type="button" data-v="historico">Histórico</button>
@@ -9350,6 +9722,7 @@
           <button type="button" data-v="recuperar">Recuperar</button>
         </div>
         <div class="hist-content" id="clienteDetailContent"></div>
+        </div>
       </div>
     </div>
 
@@ -12159,6 +12532,7 @@
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
         agendarEnvioTelaCliente(); // e a tela do cliente no tablet, se houver
+        agendarRenderCartDocado(); // e o orçamento preso à direita, no laptop
         const bar = document.getElementById('cartBar');
         // Mostra quantos SKUs (produtos diferentes) há no orçamento, não a soma das quantidades.
         const n = state.cart.filter(i => i.qty > 0).length;
@@ -12237,7 +12611,56 @@
         ctxPrecoAberto = !ctxPrecoAberto;
         atualizarResumoContexto();
       }
+      // Laptop e tablet deitado (10/2026, mockup "telas por aparelho"): a partir
+      // de 900 px o orçamento fica preso à direita nas abas Pedido e Produtos
+      // (body.orcDocado, CSS no fim do <style>), sem gaveta nem fundo escurecido.
+      // Como a gaveta só era redesenhada ao abrir, toda mudança do carrinho
+      // (renderCartBar) pede um renderCart no próximo quadro enquanto ele está à
+      // vista - menos quando o renderCart acabou de rodar no mesmo toque
+      // (renderCart(); renderCartBar()) ou roda antes do quadro chegar.
+      const MQ_TELA_LARGA = window.matchMedia('(min-width: 900px)');
+      let renderCartRodando = false;
+      let renderCartAgendado = false;
+      let renderCartNesteToque = false;
+      let renderCartVezes = 0;
+      // só depois de o init() ler o carrinho guardado (initTabs): antes disso,
+      // girar o tablet na tela de login desenhava o carrinho vazio e o
+      // saveCartLocal apagava o orçamento guardado (achado do revisor-cortag)
+      let orcamentoDocadoPronto = false;
+      function orcamentoDocado() {
+        return document.body.classList.contains('orcDocado');
+      }
+      function agendarRenderCartDocado() {
+        if (renderCartRodando || renderCartNesteToque || renderCartAgendado || !orcamentoDocado()) return;
+        renderCartAgendado = true;
+        const vezes = renderCartVezes;
+        requestAnimationFrame(() => {
+          renderCartAgendado = false;
+          if (orcamentoDocado() && renderCartVezes === vezes) renderCart();
+        });
+      }
+      function atualizarOrcamentoDocado() {
+        if (!orcamentoDocadoPronto) return;
+        const aba = document.body.dataset.aba;
+        const docado = MQ_TELA_LARGA.matches && (aba === 'precos' || aba === 'produtos');
+        const antes = orcamentoDocado();
+        if (docado === antes) return;
+        // a gaveta aberta numa aba sem o orçamento preso fecha ao entrar/sair dele
+        closeDrawer();
+        document.body.classList.toggle('orcDocado', docado);
+        if (docado) renderCart();
+      }
+      MQ_TELA_LARGA.addEventListener('change', atualizarOrcamentoDocado);
       function renderCart() {
+        renderCartRodando = true;
+        renderCartVezes++;
+        if (!renderCartNesteToque) {
+          renderCartNesteToque = true;
+          Promise.resolve().then(() => { renderCartNesteToque = false; });
+        }
+        try { renderCartCorpo(); } finally { renderCartRodando = false; }
+      }
+      function renderCartCorpo() {
         salvarContextoDoCarrinho(); // estado/canal/descontos/prazo mudam e o carrinho é redesenhado
         atualizarResumoContexto();
         const { rows, total, totalSemImpostos, avisosCampanha } = cartTotals();
@@ -14382,6 +14805,9 @@
           });
           // tablet/laptop deitado: o Levantamento usa a largura toda (CSS em "abaLev")
           document.body.classList.toggle('abaLev', tab === 'levantamento');
+          // laptop: menu lateral e orçamento preso (CSS por body[data-aba])
+          document.body.dataset.aba = tab;
+          atualizarOrcamentoDocado();
           atualizarLembreteLev();
           if (tab === 'levantamento') {
             renderLevList();
@@ -14397,6 +14823,21 @@
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
+        orcamentoDocadoPronto = true;
+        atualizarOrcamentoDocado();
+        // laptop: "/" vai pra busca da aba aberta (como em sites de busca)
+        document.addEventListener('keydown', (e) => {
+          if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || !MQ_TELA_LARGA.matches) return;
+          const alvo = e.target;
+          if (alvo && (alvo.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))) return;
+          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden), .shareSheet:not(.hidden), .scannerModal:not(.hidden), .modoLeitor:not(.hidden)')) return;
+          const busca = { precos: 'searchInput', levantamento: 'levInput', produtos: 'prodTabSearch', clientes: 'clienteTabSearch' }[document.body.dataset.aba];
+          const campo = busca && document.getElementById(busca);
+          if (!campo || campo.offsetParent === null) return;
+          e.preventDefault();
+          campo.focus();
+          campo.select();
+        });
         window.addEventListener('beforeunload', (e) => {
           if (hasUnsavedLevantamento()) {
             e.preventDefault();
@@ -15302,6 +15743,7 @@
       // ---------------- Drawer open/close ----------------
       function openDrawer() {
         renderCart();
+        if (orcamentoDocado()) return; // laptop: já está à vista, sem fundo escurecido
         document.getElementById('overlay').classList.remove('hidden');
         document.getElementById('drawer').classList.remove('hidden');
       }

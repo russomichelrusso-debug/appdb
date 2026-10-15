@@ -1137,6 +1137,30 @@ Supabase, sem PR — não é mudança de código.
   Clientes (Recompra, Classificatório, Saldo a cancelar, Inadimplência, Para reativar, Visitas, Perto de mim, Rota por
   cidade; `fantasiaNaMeta`, pela cópia de clientes do aparelho - funciona sem internet).
 
+- **Laptop e tablet: menu lateral, orçamento preso e colunas** (10/2026, pedido "tela pra telefone, tablet e laptop com
+  visualização diferente"; mockups no canvas "Cortag · telas por aparelho"; o usuário pediu laptop primeiro, todas as abas,
+  depois tablet - os dois no PR #276). Só CSS no fim do `<style>` + pouco JS; **abaixo de 700 px (celular) nada muda**.
+  - **A partir de 900 px** (laptop e tablet deitado): abas viram **menu à esquerda** (`--ladoW`); nas abas **Pedido e
+    Produtos o orçamento fica preso à direita** (`body.orcDocado`, `atualizarOrcamentoDocado`, pela aba em
+    `body[data-aba]` + `MQ_TELA_LARGA`): a mesma `#drawer`, sempre visível, sem fundo escurecido nem ✕. Como ela só era
+    redesenhada ao abrir, `renderCartBar` agenda um `renderCart` no próximo quadro enquanto está preso
+    (`agendarRenderCartDocado`, que pula se o `renderCart` já rodou no mesmo toque ou antes do quadro; `renderCart` virou
+    casca de `renderCartCorpo`). **Só liga depois do `initTabs`** (`orcamentoDocadoPronto`): girar o tablet na tela de
+    login desenhava o carrinho vazio e o `saveCartLocal` apagava o orçamento guardado (achado do `revisor-cortag`). Nas
+    outras abas a barra do orçamento fica embaixo do conteúdo e a gaveta abre como painel à direita.
+  - **Colunas**: Pedido = cliente/contexto (`.pedidoLado`, preso ao rolar) + busca e produtos (`.pedidoMeio`); ficha do
+    cliente na aba Clientes = resumo/classificatório (`.cliDetLado`) + pedidos/histórico (`.cliDetMeio`); "Oportunidades de
+    hoje" com os 3 grupos lado a lado; resultados e grades de campanha/catálogo em `auto-fill`. Levantamento: coluna do
+    lado (`.levLado`/`.levMeio`) só a partir de 1350 px; **até 1349 px o cliente vira faixa em cima** e a lista usa a
+    largura (tablet 1280 deitado = 3 colunas, pedido do PR #247). Divs de coluna só agrupam (nada no JS depende da
+    ordem dos filhos).
+  - **Faixas**: 900-1349 px menu em trilho (ícone com o nome embaixo) e orçamento mais estreito; 900-1099 (ex.: 1024×768)
+    coluna do lado de 290 px. **Tablet em pé (700-899 px)**: abas embaixo e gaveta como no celular, mas na largura toda -
+    card do cliente ao lado do contexto, produtos e blocos da aba Clientes em 2 colunas.
+  - Com mouse (`hover: hover` e `pointer: fine`): realce no menu e sem o botão flutuante de leitura; **em tela de toque o
+    botão flutuante continua**. Tecla **"/"** vai pra busca da aba aberta.
+  - Tela nova com `position: fixed` centrada na coluna de 560 px: conferir no laptop/tablet (`--ladoW`/`--orcW`).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
