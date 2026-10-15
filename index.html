@@ -23418,6 +23418,11 @@
       let catalogoMostrar = CATALOGO_POR_PAGINA;
       let catalogoScroll = null;
       let vitrine = null; // { titulo, produtos, i, separados }
+      // Voltar do Android (e o gesto de voltar do iPhone) com a vitrine aberta: sem
+      // isto fechava o app com o celular na mão do cliente. A vitrine põe uma
+      // entrada no histórico ao abrir; voltar tira ela, e o app põe outra e avisa
+      // "segure o ✕" - quem sai é só o ✕ segurado, que tira a entrada ao fechar.
+      let vitrineSaindoDoHistorico = false;
       // "01 - CORTADORES MANUAIS" -> "Cortadores manuais"
       function nomeDaFamilia(f) {
         const t = String(f || '').replace(/^\s*\d+\s*-\s*/, '').trim();
@@ -23554,6 +23559,7 @@
         minis.innerHTML = produtos.map((p, i) => `<button type="button" class="vitrineMini" data-vitrine-i="${i}"${codigoDaFoto(p.c) ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''} aria-label="${escapeHtml(p.n)}"></button>`).join('');
         document.getElementById('vitrine').classList.remove('hidden');
         document.documentElement.classList.add('vitrineAberta');
+        try { history.pushState({ cortagVitrine: true }, ''); } catch (e) { }
         preencherFotosAoVer(minis, 'vitrine');
         renderVitrine();
       }
@@ -23615,6 +23621,8 @@
         if (!vitrine) return;
         const separados = vitrine.separados.slice();
         vitrine = null;
+        // tira a entrada que a vitrine pôs (senão o próximo "voltar" não faz nada)
+        if (history.state && history.state.cortagVitrine) { vitrineSaindoDoHistorico = true; history.back(); }
         document.getElementById('vitrine').classList.add('hidden');
         document.documentElement.classList.remove('vitrineAberta');
         if (observadoresDeFoto.vitrine) observadoresDeFoto.vitrine.disconnect();
@@ -23665,6 +23673,12 @@
           const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
           x0 = null;
           if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) irNaVitrine(dx < 0 ? 1 : -1);
+        });
+        window.addEventListener('popstate', () => {
+          if (vitrineSaindoDoHistorico) { vitrineSaindoDoHistorico = false; return; }
+          if (!vitrine) return;
+          try { history.pushState({ cortagVitrine: true }, ''); } catch (e) { }
+          showToast('Segure o ✕ pra sair da vitrine');
         });
         document.addEventListener('keydown', (e) => {
           if (!vitrine) return;
