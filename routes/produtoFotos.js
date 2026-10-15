@@ -15,11 +15,14 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
+const { gerarMiniaturaSemTravar } = require('./lib/miniaturaFoto');
 
 const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 const FOTO_MIN_BYTES = 1024;
 const FOTO_MAX_BYTES = 600 * 1024;
 const VARIACOES_MAX = 60;
+const MINIATURAS_POR_PEDIDO = 100; // códigos por pedido do app
+const MINIATURAS_GERAR_POR_PEDIDO = 15; // geradas na hora por pedido (~0,2-0,5 s cada no Render)
 
 function ehJpeg(buf) {
   return buf.length >= 4 && buf[0] === 0xFF && buf[1] === 0xD8 && buf[2] === 0xFF;
@@ -64,6 +67,79 @@ router.get('/:sku/variacoes', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar as variações do produto.' });
+  }
+});
+
+// ---- Miniaturas pro catálogo sem internet (10/2026) ----
+// A miniatura é gerada na primeira vez que alguém pede e fica no banco; só
+// grava se a foto não foi trocada no meio (mesma versão).
+async function miniaturaGerada(sku, versao) {
+  const r = await pool.query(
+    `/* FOTOS:IMAGEM_PRA_MINI */ SELECT imagem FROM produto_fotos
+     WHERE codigo_sku = $1 AND (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint = $2`, [sku, versao]
+  );
+  if (!r.rows.length) return null;
+  const mini = await gerarMiniaturaSemTravar(r.rows[0].imagem);
+  if (!mini) return null;
+  await pool.query(
+    `/* FOTOS:MINIATURA_GRAVAR */ UPDATE produto_fotos SET miniatura = $2
+     WHERE codigo_sku = $1 AND (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint = $3`, [sku, mini, versao]
+  );
+  return mini;
+}
+
+// { codigos: [...] } -> { miniaturas: { "61366": { v: versão, img: base64 } }, faltam: N }
+// "faltam" = do pedido que ainda não tinham miniatura e ficaram pra próxima
+// (gera no máximo MINIATURAS_GERAR_POR_PEDIDO por vez). Foto que não dá pra
+// ler fica de fora (o app usa a foto cheia).
+router.post('/miniaturas', async (req, res) => {
+  const pedidos = Array.isArray(req.body?.codigos) ? [...new Set(req.body.codigos.map(String))] : [];
+  if (!pedidos.length || pedidos.length > MINIATURAS_POR_PEDIDO || pedidos.some(c => !CODIGO_SKU_REGEX.test(c))) {
+    return res.status(422).json({ erro: `Mande de 1 a ${MINIATURAS_POR_PEDIDO} códigos.` });
+  }
+  try {
+    const r = await pool.query(
+      `/* FOTOS:MINIATURAS */ SELECT codigo_sku, (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint AS versao, miniatura
+       FROM produto_fotos WHERE codigo_sku = ANY($1::text[])`, [pedidos]
+    );
+    const miniaturas = {};
+    let gerar = MINIATURAS_GERAR_POR_PEDIDO, faltam = 0;
+    for (const row of r.rows) {
+      const versao = Number(row.versao);
+      let mini = row.miniatura;
+      if (!mini) {
+        if (gerar <= 0) { faltam++; continue; }
+        gerar--;
+        mini = await miniaturaGerada(row.codigo_sku, versao);
+        if (!mini) continue;
+      }
+      miniaturas[row.codigo_sku] = { v: versao, img: Buffer.from(mini).toString('base64') };
+    }
+    res.json({ miniaturas, faltam });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar as miniaturas das fotos.' });
+  }
+});
+
+// Uma miniatura (foto que apareceu na tela antes do lote chegar).
+router.get('/:sku/mini', async (req, res) => {
+  const sku = String(req.params.sku || '');
+  if (!CODIGO_SKU_REGEX.test(sku)) return res.status(400).json({ erro: 'Código de produto inválido.' });
+  try {
+    const r = await pool.query(
+      `/* FOTOS:MINIATURAS */ SELECT codigo_sku, (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint AS versao, miniatura
+       FROM produto_fotos WHERE codigo_sku = ANY($1::text[])`, [[sku]]
+    );
+    if (!r.rows.length) return res.status(404).json({ erro: 'Produto sem foto.' });
+    const mini = r.rows[0].miniatura || await miniaturaGerada(sku, Number(r.rows[0].versao));
+    if (!mini) return res.status(404).json({ erro: 'Não deu pra gerar a miniatura dessa foto.' });
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Cache-Control', 'private, max-age=31536000, immutable');
+    res.send(Buffer.from(mini));
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar a miniatura da foto.' });
   }
 });
 
@@ -114,7 +190,7 @@ router.put('/:sku', async (req, res) => {
       `/* FOTOS:GRAVAR */ INSERT INTO produto_fotos (codigo_sku, imagem, tamanho, atualizado_em, atualizado_por)
        VALUES ($1, $2, $3, now(), $4)
        ON CONFLICT (codigo_sku) DO UPDATE SET imagem = EXCLUDED.imagem, tamanho = EXCLUDED.tamanho,
-         atualizado_em = now(), atualizado_por = EXCLUDED.atualizado_por
+         atualizado_em = now(), atualizado_por = EXCLUDED.atualizado_por, miniatura = NULL
        RETURNING (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint AS versao`,
       [sku, imagem, imagem.length, usuarioId]
     );

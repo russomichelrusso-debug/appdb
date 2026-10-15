@@ -705,6 +705,9 @@ CREATE TABLE IF NOT EXISTS produto_fotos (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
   atualizado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL
 );
+-- Miniatura (lado maior 300 px) pro catálogo sem internet: gerada pelo servidor
+-- na primeira vez que o app pede (routes/lib/miniaturaFoto.js); trocar a foto zera.
+ALTER TABLE produto_fotos ADD COLUMN IF NOT EXISTS miniatura BYTEA;
 
 -- RLS em TODAS as tabelas do schema (verificador do Supabase: rls_disabled_in_public).
 -- Mesmo motivo do bloco de levantamento_rascunhos acima: fecha o acesso pela API
