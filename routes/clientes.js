@@ -7,6 +7,7 @@ const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { sqlChaveEndereco } = require('./lib/geocodificacao');
 const { normalizarTelefoneBr, normalizarEmails } = require('./lib/contatosCliente');
+const { ordenarClientesPorBusca } = require('./lib/buscaCliente');
 
 router.param('id', validarIdInteiro);
 
@@ -25,16 +26,21 @@ function formatarDocumento(v) {
 // Busca clientes por nome ou documento - usado pelo app pra autocompletar
 // "qual cliente é esse" ao salvar um levantamento ou pedido.
 router.get('/', async (req, res) => {
-  const busca = (req.query.busca || '').trim();
+  const busca = String(req.query.busca || '').trim(); // ?busca=a&busca=b chega como lista
   try {
-    const result = busca
-      ? await pool.query(
-          `SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em, whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em FROM clientes
-           WHERE nome ILIKE $1 OR documento ILIKE $1
-           ORDER BY nome LIMIT 20`,
-          [`%${busca}%`]
-        )
-      : await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em, whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em FROM clientes ORDER BY nome LIMIT 50');
+    if (busca) {
+      // A carteira inteira (centenas de clientes) e a ordem pela busca em memória:
+      // sem acento, palavras em qualquer ordem, CNPJ com ou sem pontuação, código
+      // do ERP, nome fantasia e cidade da ficha de CNPJ (routes/lib/buscaCliente.js).
+      const todos = await pool.query(
+        `/* clientes:busca */ SELECT c.id, c.nome, c.documento, c.contato, c.classificatorio_tipo, c.classificatorio_desconto, c.codigo_oficial,
+                c.nome_arquivo, c.nome_arquivo_em, c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em,
+                f.nome_fantasia, f.municipio, f.uf
+         FROM clientes c LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id`
+      );
+      return res.json(ordenarClientesPorBusca(todos.rows, busca.slice(0, 100), 20));
+    }
+    const result = await pool.query('SELECT id, nome, documento, contato, classificatorio_tipo, classificatorio_desconto, codigo_oficial, nome_arquivo, nome_arquivo_em, whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em FROM clientes ORDER BY nome LIMIT 50');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -75,6 +81,7 @@ router.get('/sync', async (req, res) => {
                 WHEN f.dados_brutos->'simples'->>'optante' = 'false' THEN 'normal'
               END AS regime_tributario,
               c.latitude, c.longitude,
+              f.nome_fantasia, -- a busca sem internet também acha pelo nome fantasia
               CASE WHEN f.cliente_id IS NOT NULL THEN json_build_object(
                 'tipo', f.dados_brutos->'endereco'->>'tipoLogradouro', 'logradouro', f.logradouro,
                 'numero', f.numero, 'municipio', f.municipio, 'uf', f.uf
