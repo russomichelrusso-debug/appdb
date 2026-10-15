@@ -3729,6 +3729,38 @@ async function main() {
   }
 
   {
+    // Busca do catálogo (index.html, trecho <motor-busca>): relato de 10/2026, "Serra
+    // copo 50 mm" não achava nada na aba Produtos (que fazia busca por trecho exato).
+    {
+      const fsB = require('fs');
+      const vmB = require('vm');
+      const htmlB = fsB.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+      const iniB = htmlB.indexOf('// <motor-busca>');
+      const fimB = htmlB.indexOf('// </motor-busca>');
+      const prods = [
+        { c: '60882', n: 'SERRA COPO DIAMANTADA PORCELANATO 50 mm' },
+        { c: '60883', n: 'SERRA COPO DIAMANTADA PORCELANATO 150 mm' },
+        { c: '60884', n: 'SERRA COPO DIAMANTADA PORCELANATO 51 mm' },
+        { c: '61420', n: 'SERRA COPO DIAMANTA. P/ ALVENARIA C/ HASTE 50mm' },
+        { c: '62857', n: 'ESPAÇADOR NIVELADOR 1,5 mm SUPRA - PCT C/ 50 UN.' },
+        { c: '62438', n: 'BROCA DE AÇO RAPIDO 4,5 mm' },
+        { c: '60876', n: 'BATEDOR ARGAMASSA' },
+      ];
+      const ctxB = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
+      vmB.createContext(ctxB);
+      vmB.runInContext(iniB >= 0 && fimB > iniB ? htmlB.slice(iniB, fimB) : '', ctxB);
+      if (!ctxB.searchProducts) {
+        assert(false, 'busca: trecho <motor-busca> não encontrado no index.html');
+      } else {
+        const cods = (q) => ctxB.searchProducts(q).map(p => p.c).join(',');
+        assert(cods('Serra copo 50 mm') === '60882,61420' && cods('copo serra 50mm') === '60882,61420',
+          'busca: palavras em qualquer ordem, "50mm" = "50 mm", medida exata (sem 150/51 e sem o pacote com 50 un.)');
+        assert(cods('sera copo 50') === '60882,61420', 'busca: aceita erro de digitação');
+        assert(cods('broca 4.5') === '62438' && cods('broca 4,5mm') === '62438', 'busca: vírgula e ponto decimal iguais');
+        assert(cods('argamasa') === '60876' && cods('60882') === '60882', 'busca: erro de digitação numa palavra só e código exato');
+      }
+    }
+
     // Motor de campanhas do Painel (index.html, trecho <motor-campanhas>): campos
     // opcionais do Trade News de 10/2026 (classificatório, estado, validade, teto do
     // alvo no pedido, itens diferentes com exclusões, exigência de lançamentos) e
