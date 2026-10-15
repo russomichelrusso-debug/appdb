@@ -1137,6 +1137,22 @@ Supabase, sem PR — não é mudança de código.
   Clientes (Recompra, Classificatório, Saldo a cancelar, Inadimplência, Para reativar, Visitas, Perto de mim, Rota por
   cidade; `fantasiaNaMeta`, pela cópia de clientes do aparelho - funciona sem internet).
 
+- **Laptop: menu lateral, orçamento preso e colunas** (10/2026, 1ª parte do pedido "tela pra telefone, tablet e laptop
+  com visualização diferente"; mockups no canvas "Cortag · telas por aparelho", o usuário pediu laptop primeiro, todas as
+  abas, e o tablet depois). Só CSS no fim do `<style>` (`@media (min-width: 1100px)`) + pouco JS; abaixo de 1100 px nada
+  muda. As abas viram **menu à esquerda** (`--ladoW`); nas abas **Pedido e Produtos o orçamento fica preso à direita**
+  (`body.orcDocado`, `atualizarOrcamentoDocado`, pela aba em `body[data-aba]` + `MQ_LAPTOP`): a mesma `#drawer`, sempre
+  visível, sem fundo escurecido nem ✕; como ela só era redesenhada ao abrir, `renderCartBar` agenda um `renderCart` no
+  próximo quadro enquanto está preso (`agendarRenderCartDocado`; `renderCart` virou casca de `renderCartCorpo` pra não
+  entrar em laço). Nas outras abas a barra do orçamento fica embaixo do conteúdo e a gaveta abre como painel à direita.
+  **Colunas**: Pedido e Levantamento = cliente/contexto (`.pedidoLado`/`.levLado`, presos ao rolar) + busca e itens
+  (`.pedidoMeio`/`.levMeio`); ficha do cliente na aba Clientes = resumo/classificatório (`.cliDetLado`) + pedidos/histórico
+  (`.cliDetMeio`); "Oportunidades de hoje" com os 3 grupos lado a lado; resultados e grades de campanha/catálogo em
+  `auto-fill`. Divs de coluna só agrupam (nada no JS depende da ordem dos filhos). Entre 1100 e 1349 px (ex.: 1280×800)
+  o menu vira trilho (ícone com o nome embaixo) e o orçamento afina, senão sobravam ~150 px pros produtos.
+  Tecla **"/"** vai pra busca da aba aberta. O botão flutuante de leitura some no laptop (fica o da busca).
+  Tela nova com `position: fixed` centrada na coluna de 560 px: conferir no laptop (`--ladoW`/`--orcW`).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
