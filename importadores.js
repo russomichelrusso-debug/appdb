@@ -219,7 +219,9 @@
         valor: valorParaNumero(valorBruto),
         data_implantacao: dataImplantISO,
         data_faturamento: status === 'faturado' ? dataEmissaoISO : null,
-        nota_fiscal: notaFiscalBruta != null ? String(notaFiscalBruta) : null,
+        // mesma normalização do Título da aba "Pendentes à Vista" (que liga
+        // nesta NF): "000123456" e "123456" são a mesma nota
+        nota_fiscal: normalizarNrPedido(notaFiscalBruta) || null,
         classificatorio: classificatorioBruto ?? null,
         transportadora: campo(r, 'transportadora') ?? null,
         situacao_pedido: campo(r, 'situacao_pedido') ?? null,

@@ -2738,6 +2738,15 @@ async function main() {
     });
     assert(rSoPagamento.status === 200 && !rSoPagamento.body.relatorioAntigo && mockDb.__getPedidosPendentesPagamento().some(p => p.nr_pedido === 'PV59408'),
       `planilha só com as abas de pagamento troca a lista à vista: ${JSON.stringify(rSoPagamento.body)}`);
+    // NF com zero à esquerda (vinda de fora do importadores.js) grava igual ao
+    // Título da aba "Pendentes à Vista", que liga nela
+    const rNfZeros = await req('POST', '/api/pedidos-oficiais/importar', {
+      itens: [{ ...base, nr_pedido: 'PV69408', codigo_sku: '61362', status: 'faturado', quantidade: 1, valor: 90, data_implantacao: '2026-09-28', data_faturamento: '2026-09-30', nota_fiscal: ' 0006002', situacao_pedido: 'Atendido Total' }],
+      titulos_avista: [{ titulo: '0006002', parcela: 1, valor: 90 }],
+    });
+    assert(rNfZeros.status === 200 && linhas('PV69408').length === 1 && linhas('PV69408')[0].nota_fiscal === '6002'
+      && mockDb.__getTitulosAvistaPendentes().some(t => t.titulo === '6002'),
+      `relatório oficial: NF com zero à esquerda grava como o Título dos pendentes à vista: ${JSON.stringify(linhas('PV69408'))}`);
     await req('POST', '/api/pedidos-oficiais/importar', { titulos_avista: [], pendentes_pagamento: [] });
     mockDb.__setConfiguracao('relatorio_oficial_mais_novo', null);
   }
@@ -2884,7 +2893,7 @@ async function main() {
       ['Total', null, null, null, null, null, null, null, null]],
     Faturamento: [['Relatório de Faturamento'], [],
       ['Cliente', 'Cod.Cliente', 'Nr.Pedido', 'Item', 'Descrição', 'Qte.Faturada', 'Vlr.Faturado', 'Dt.Implant', 'Dt.Emissão', 'Nota Fiscal', 'Classificatório', 'Situação'],
-      ['LOJA EMAIL', 'COD9501', '675990', '61362', 'CORTADOR', 2, 300, dia(2026, 9, 25), dia(2026, 9, 30), 889001, 'Varejo Premium (17)', 'Atendido Total']],
+      ['LOJA EMAIL', 'COD9501', '675990', '61362', 'CORTADOR', 2, 300, dia(2026, 9, 25), dia(2026, 9, 30), ' 000889001', 'Varejo Premium (17)', 'Atendido Total']],
   });
   const xlsClassif = planilha({ Cliente: [['Relatório Classificatório'],
     ['Cod.Cliente', 'CNPJ', 'Matriz', 'Classificatorio', 'Fat.Cliente', 'Ult.Compra'],
@@ -2911,7 +2920,7 @@ async function main() {
     assert(rel.itens.length === 2 && cart.nr_pedido === '676001' && cart.data_implantacao === '2026-10-01' && cart.data_faturamento === null && cart.valor === 400
       && fat.data_implantacao === '2026-09-25' && fat.data_faturamento === '2026-09-30' && fat.nota_fiscal === '889001' && fat.descricao === 'CORTADOR'
       && rel.classificacoes.length === 1 && rel.classificacoes[0].tipo === 'Varejo Premium' && rel.pendentesPagamento === null,
-      `importadores: lê Carteira e Faturamento (datas, zeros do pedido, classificação): ${JSON.stringify(rel)}`);
+      `importadores: lê Carteira e Faturamento (datas, zeros do pedido e da NF, classificação): ${JSON.stringify(rel)}`);
     const cl = Importadores.lerClassificatorio(XLSXt, xlsClassif);
     assert(cl.length === 1 && cl[0].codigoOficial === 'COD9501' && cl[0].classificatorioTipo === 'Varejo Master' && cl[0].ultimaCompra === '2026-08-31' && cl[0].fat12mCliente === 1234.5
       && Importadores.dataRelatorioClassificatorio("02.10.2026_RUSSO'S REPRESENTACO_Classificatorio.xlsx") === '2026-10-02',
