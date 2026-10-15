@@ -1063,8 +1063,12 @@ Supabase, sem PR — não é mudança de código.
   tela cheia, um produto por vez, passar com o dedo/setas, miniaturas, **sem preço nenhum** e selo de campanha **sem o
   nome da regra** (costuma trazer o classificatório, mesma regra da tela do cliente); **sair só segurando o ✕** 0,8 s
   (o celular fica na mão do cliente); "Separar pra proposta" junta produtos e, ao sair, pergunta se vão pro orçamento.
-  Arrastar na vitrine não rola a página nem puxa pra atualizar (`html.vitrineAberta`); o gesto de voltar do Android
-  ainda fecha o app (o app não usa `history`).
+  Arrastar na vitrine não rola a página nem puxa pra atualizar (`html.vitrineAberta`). **Voltar do Android/gesto do
+  iPhone não sai**: a vitrine põe uma entrada no histórico ao abrir (`history.pushState`, no toque); voltar cai na de
+  baixo e o app anda pra frente de novo (`history.forward()`, não outra entrada: o Chrome marca pra pular a entrada
+  posta sem toque na tela e o 2º voltar fecharia o app) e avisa "Segure o ✕"; o ✕ segurado volta uma entrada ao fechar.
+  Entrada da vitrine que sobrou de um recarregar vira normal (`replaceState`) ao carregar. Único uso de
+  `history`/`popstate` no app — tela nova que também precise segurar o voltar tem de conviver com esse listener.
   Voltar da ficha do produto devolve a grade na mesma altura (`catalogoScroll`).
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
