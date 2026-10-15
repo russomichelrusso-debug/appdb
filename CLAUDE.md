@@ -971,6 +971,9 @@ Supabase, sem PR — não é mudança de código.
   tela); trocar de cidade volta pra automática. "Montar rota no Google Maps" reaproveita o de "Perto de mim"
   (`ordenarParadas`, `destinoDaParada`, sai da posição atual): ordem pela posição da loja (GPS ou aproximada),
   loja sem posição no fim, cada parada pelo endereço por extenso quando não há GPS (`montarRotaCidade`, `index.html`).
+  **Várias cidades na mesma rota** (10/2026, pedido do usuário): "+ Adicionar cidade à rota" junta outra cidade (chips com ✕,
+  `cortagRotaCidades_v1`, lista; a antiga `cortagRotaCidade_v1` vira a 1ª), lojas agrupadas por cidade; o que já está marcado
+  continua ao adicionar, tirar a cidade desmarca as lojas dela. Sem o vendedor mexer, as prioritárias são as 10 melhores de todas.
 
 - **Contatos comerciais do cliente pro Salesforce** (10/2026, opção "C" escolhida pelo usuário a partir de mockups):
   telefone comercial, e-mail comercial, e-mail NF/XML, nome completo e telefone do comprador. **Edita no card do
