@@ -468,9 +468,10 @@ async function main() {
   res = await req('POST', '/api/pedidos', {
     cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
     vendedor_nome: 'Michel Russo',
-    itens: [ { codigo_sku: '60863', quantidade: 60, preco_unitario: 28.59 } ],
+    // código com espaço em volta (passa no itensValidos): acha o produto pelo código limpo
+    itens: [ { codigo_sku: ' 60863 ', quantidade: 60, preco_unitario: 28.59 } ],
   });
-  assert(res.status === 201, 'grava segundo pedido');
+  assert(res.status === 201, `grava segundo pedido (código com espaço em volta): ${JSON.stringify(res.body)}`);
 
   // 9) pedido com produto que não existe -> deve falhar com erro claro
   res = await req('POST', '/api/pedidos', {
@@ -1764,6 +1765,7 @@ async function main() {
     clientes: [
       { id: 9131, nome: 'LOJA ERP', documento: '11122233000468', codigo_oficial: 'COD9131' },
       { id: 9132, nome: 'LOJA SEM LEVANTAMENTO', documento: '11122233000549', codigo_oficial: 'COD9132' },
+      { id: 9133, nome: 'LOJA VISITA A NOITE', documento: '11122233000620', codigo_oficial: 'COD9133' },
     ],
     pedidosOficiaisItens: [
       { nr_pedido: 'H1', codigo_sku: '71001', cliente_codigo_oficial: 'COD9131', quantidade: 12, valor: 10, data_faturamento: diasAtrasISO(90), status: 'faturado' },
@@ -1773,6 +1775,8 @@ async function main() {
       { nr_pedido: 'H4', codigo_sku: '71003', cliente_codigo_oficial: 'COD9131', quantidade: 3, valor: 10, data_faturamento: diasAtrasISO(150), status: 'faturado' },
       { nr_pedido: 'H5', codigo_sku: '71001', cliente_codigo_oficial: 'COD9131', quantidade: 99, valor: 10, data_faturamento: null, status: 'carteira' },
       { nr_pedido: 'H6', codigo_sku: '71001', cliente_codigo_oficial: 'COD9132', quantidade: 5, valor: 10, data_faturamento: diasAtrasISO(10), status: 'faturado' },
+      // faturado no dia seguinte ao da visita feita às 23h30 de Brasília (02h30 UTC desse dia)
+      { nr_pedido: 'H7', codigo_sku: '71001', cliente_codigo_oficial: 'COD9133', quantidade: 7, valor: 10, data_faturamento: diasAtrasISO(60), status: 'faturado' },
     ],
     // o mesmo desempenador pedido pelo app no dia do faturamento H2 (mesma compra)
     pedidos: [{ id: 9931, cliente_id: 9131, data_pedido: diasAtrasISO(30) + 'T12:00:00Z' }],
@@ -1782,11 +1786,15 @@ async function main() {
     levantamentos: [
       { id: 9941, cliente_id: 9131, nome: 'visita 1', data_visita: diasAtrasISO(100) + 'T15:00:00Z' },
       { id: 9942, cliente_id: 9131, nome: 'visita 2', data_visita: diasAtrasISO(20) + 'T15:00:00Z' },
+      { id: 9943, cliente_id: 9133, nome: 'visita à noite', data_visita: diasAtrasISO(60) + 'T02:30:00Z' },
+      { id: 9944, cliente_id: 9133, nome: 'visita seguinte', data_visita: diasAtrasISO(20) + 'T15:00:00Z' },
     ],
     levantamentoItens: [
       { id: 9951, levantamento_id: 9941, produto_id: 831, quantidade_contada: 10 },
       { id: 9952, levantamento_id: 9942, produto_id: 831, quantidade_contada: 4 },
       { id: 9953, levantamento_id: 9942, produto_id: 832, quantidade_contada: 0 },
+      { id: 9954, levantamento_id: 9943, produto_id: 831, quantidade_contada: 2 },
+      { id: 9955, levantamento_id: 9944, produto_id: 831, quantidade_contada: 3 },
     ],
   });
   res = await req('GET', '/api/clientes/9131/historico');
@@ -1853,6 +1861,12 @@ async function main() {
   assert(
     res.status === 200 && consumo && consumo.pedido_no_periodo === 24 && consumo.consumo_estimado === 30,
     `consumo estimado conta o faturado entre as visitas (10 + 24 - 4 = 30): ${JSON.stringify(res.body.consumos)}`
+  );
+  res = await req('GET', '/api/clientes/9133/consumo-estimado/831');
+  const consumoNoite = (res.body.consumos || [])[0];
+  assert(
+    res.status === 200 && consumoNoite && consumoNoite.pedido_no_periodo === 7 && consumoNoite.consumo_estimado === 6,
+    `consumo estimado: visita às 23h30 de Brasília conta no dia de Brasília, e o faturado do dia seguinte entra no período (2 + 7 - 3 = 6): ${JSON.stringify(res.body.consumos)}`
   );
   res = await req('GET', '/api/clientes/999999/historico');
   assert(res.status === 404, 'historico de cliente inexistente responde 404');

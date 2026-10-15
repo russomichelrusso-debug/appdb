@@ -617,7 +617,7 @@ async function query(sql, params = []) {
     const rows = [];
     for (const l of levantamentos.filter(l => String(l.cliente_id) === String(params[0]))) {
       for (const li of levantamentoItens.filter(i => i.levantamento_id === l.id && String(i.produto_id) === String(params[1]))) {
-        rows.push({ data_visita: l.data_visita, quantidade_contada: li.quantidade_contada });
+        rows.push({ data_visita: l.data_visita, quantidade_contada: li.quantidade_contada, dia_visita: DIA_BR.format(new Date(l.data_visita)) });
       }
     }
     return { rows: rows.sort((a, b) => new Date(a.data_visita) - new Date(b.data_visita)) };

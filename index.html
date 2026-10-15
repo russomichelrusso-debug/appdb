@@ -9,7 +9,7 @@
        dados renderizados). Mesmo assim isso restringe de onde scripts/estilos/objetos
        podem carregar e bloqueia <object>/<embed>. Sem frame-ancestors: no <meta> ele
        não tem efeito (só em cabeçalho HTTP) - a proteção contra iframe é a de baixo. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self';">
   <!-- Contra clickjacking (o app aberto dentro de um iframe de outro site, pra
        enganar o toque): frame-ancestors só vale em cabeçalho HTTP - no <meta> o
        navegador ignora - e o GitHub Pages não deixa mandar cabeçalho. Então a página
