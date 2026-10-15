@@ -1040,6 +1040,22 @@ Supabase, sem PR — não é mudança de código.
   raio (`aplicarProdLocal`, `index.html`); lista por distância, "N de M" nas abas, escolha guardada em `cortagProdLocal_v1`.
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
+- **Modo Catálogo na aba Produtos** (10/2026, combinação A + B + D escolhida pelo usuário a partir de mockups, depois
+  que quase todo produto ganhou foto): chave **"Lista | Catálogo"** abaixo da busca (`cortagProdModo_v1`; Lista = o
+  início de antes, com as campanhas). Catálogo = as famílias da Lista de Preços (`productFamilia`, ordem pela numeração
+  "01 - …", nome sem o número) em cards com 4 fotos, nº de produtos e selo da maior campanha (A); tocar abre a grade de
+  fotos da família com os **chips das famílias presos no topo**, preço do contexto do orçamento (de/por pelo
+  `ofertaDoProduto`), "+" que põe no orçamento e 40 produtos, mais 80 a cada "Ver mais" (B); o selo do card da família usa a régua da
+  fita (`campanhasDoCard`: classificatório e Preço Fixo do orçamento), não a lista de campanhas. Promocionais do Painel (`_promocional`)
+  ficam fora; descontinuado já não está na Lista de Preços. Fotos só quando chegam perto da tela (`preencherFotosAoVer`,
+  IntersectionObserver): sem internet aparece só a que já foi vista ou é de campanha — catálogo inteiro offline pediria
+  miniaturas geradas no servidor (não feito). **"Mostrar ao cliente"** (D) abre a vitrine (`#vitrine`, `abrirVitrine`):
+  tela cheia, um produto por vez, passar com o dedo/setas, miniaturas, **sem preço nenhum** e selo de campanha **sem o
+  nome da regra** (costuma trazer o classificatório, mesma regra da tela do cliente); **sair só segurando o ✕** 0,8 s
+  (o celular fica na mão do cliente); "Separar pra proposta" junta produtos e, ao sair, pergunta se vão pro orçamento.
+  Arrastar na vitrine não rola a página nem puxa pra atualizar (`html.vitrineAberta`); o gesto de voltar do Android
+  ainda fecha o app (o app não usa `history`).
+  Voltar da ficha do produto devolve a grade na mesma altura (`catalogoScroll`).
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
   num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos

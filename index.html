@@ -6053,6 +6053,399 @@
       color: var(--on-accent);
     }
 
+    /* ---- Modo Catálogo da aba Produtos (10/2026, opções A + B + D dos mockups) ---- */
+    .prodModoSeg {
+      margin: 12px 16px 0;
+    }
+
+    #prodCatalogo {
+      padding: 0 16px 16px;
+    }
+
+    #prodCatalogo.hidden {
+      display: none;
+    }
+
+    .catFamGrade {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .catFam {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      padding: 8px;
+      background: var(--white);
+      color: var(--ink);
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-md);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .catFamMosaico {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      border-radius: 10px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+
+    .catFamFoto {
+      aspect-ratio: 1;
+      background: #FFFFFF center / contain no-repeat;
+    }
+
+    .catFamFoto:not([style*="background-image"]) {
+      background-color: var(--fill);
+    }
+
+    .catFamNome {
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+    }
+
+    .catFamQtd {
+      font-size: 11.5px;
+      color: var(--gray);
+    }
+
+    .catFamTag {
+      align-self: flex-start;
+      margin-top: 2px;
+      padding: 2px 7px;
+      border-radius: 7px;
+      background: var(--accent-bg);
+      color: var(--red);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .catFamTag.bf,
+    .campItemOff.bf {
+      background: var(--black-friday);
+      color: var(--yellow);
+    }
+
+    /* chips das famílias presos no topo, abaixo do cabeçalho */
+    .catChips {
+      position: sticky;
+      top: 58px;
+      z-index: 5;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      margin: 0 -16px;
+      padding: 10px 16px 8px;
+      background: var(--fill);
+    }
+
+    .catChips::-webkit-scrollbar {
+      display: none;
+    }
+
+    .catChip {
+      flex: none;
+      min-height: 36px;
+      padding: 0 13px;
+      border: 0.75px solid var(--hairline);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .catChip.ativo {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--fill);
+    }
+
+    .catCabeca {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0 4px;
+    }
+
+    .catCabeca b {
+      flex: 1;
+      min-width: 0;
+      font-size: 16px;
+    }
+
+    .catCabeca .recompraBtn {
+      flex: none;
+      background: var(--white);
+      border: 0.75px solid var(--hairline);
+      color: var(--red);
+    }
+
+    .catItemInfo {
+      padding-right: 46px;
+    }
+
+    .catAddBtn {
+      position: absolute;
+      right: 8px;
+      bottom: 8px;
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: none;
+      border-radius: 50%;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 34px;
+      cursor: pointer;
+    }
+
+    /* alvo de toque de 44 px (padrão do app) */
+    .catAddBtn::after {
+      content: "";
+      position: absolute;
+      inset: -5px;
+    }
+
+    /* Vitrine pro cliente: tela cheia, um produto por vez, sem preço */
+    .vitrine {
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      background: var(--fill);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: calc(12px + env(safe-area-inset-top)) 16px calc(14px + env(safe-area-inset-bottom));
+      overflow: hidden;
+    }
+
+    .vitrine.hidden,
+    #vitrineSelo.hidden,
+    .prodModoSeg.hidden {
+      display: none;
+    }
+
+    /* arrastar na vitrine não rola a página de trás nem puxa pra atualizar
+       (recarregaria o app com o preço na tela) */
+    html.vitrineAberta,
+    html.vitrineAberta body {
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    .vitrine,
+    .vitrinePalco {
+      touch-action: none;
+    }
+
+    .vitrine > * {
+      width: 100%;
+      max-width: 720px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .vitrineTopo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .vitrineFam {
+      flex: 1;
+      min-width: 0;
+      font-size: 15px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vitrineSair {
+      position: relative;
+      flex: none;
+      width: 44px;
+      height: 44px;
+      border: none;
+      border-radius: 50%;
+      background: var(--white);
+      color: var(--gray);
+      font-size: 18px;
+      cursor: pointer;
+      overflow: hidden;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      touch-action: none;
+    }
+
+    /* enche de vermelho enquanto segura */
+    .vitrineSair::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: var(--red);
+      opacity: .25;
+      transform: scaleY(0);
+      transform-origin: bottom;
+    }
+
+    .vitrineSair.segurando::before {
+      transform: scaleY(1);
+      transition: transform .8s linear;
+    }
+
+    .vitrinePalco {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      border-radius: var(--r-lg);
+      background: #FFFFFF;
+      box-shadow: var(--shadow-2);
+      overflow: hidden;
+    }
+
+    .vitrineFoto {
+      position: absolute;
+      inset: 16px;
+      background: center / contain no-repeat;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #8E8E93;
+      font-size: 14px;
+      text-align: center;
+    }
+
+    #vitrineSelo {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      padding: 6px 12px;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    #vitrineSelo.bf {
+      background: var(--black-friday);
+      color: var(--yellow);
+    }
+
+    .vitrineNome {
+      font-size: 20px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .vitrineCod {
+      margin-top: 4px;
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .vitrineNav {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    #vitrineAntBtn,
+    #vitrineProxBtn {
+      flex: none;
+      width: 48px;
+      height: 44px;
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--ink);
+      font-size: 22px;
+      cursor: pointer;
+    }
+
+    #vitrineAntBtn:disabled,
+    #vitrineProxBtn:disabled {
+      opacity: .35;
+    }
+
+    .vitrineSeparar {
+      flex: 1;
+      min-height: 44px;
+      border: 1.5px solid var(--red);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--red);
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .vitrineSeparar[aria-pressed="true"] {
+      background: var(--red);
+      color: var(--on-accent);
+    }
+
+    .vitrineMinis {
+      touch-action: pan-x;
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      padding: 2px 0;
+    }
+
+    .vitrineMinis::-webkit-scrollbar {
+      display: none;
+    }
+
+    .vitrineMini {
+      position: relative;
+      flex: none;
+      width: 52px;
+      height: 52px;
+      padding: 0;
+      border: 2px solid transparent;
+      border-radius: 10px;
+      background: #FFFFFF center / contain no-repeat;
+      cursor: pointer;
+    }
+
+    .vitrineMini:not([style*="background-image"]) {
+      background-color: var(--neutral-2);
+    }
+
+    .vitrineMini.ativo {
+      border-color: var(--red);
+    }
+
+    .vitrineMini.separado::after {
+      content: "★";
+      position: absolute;
+      top: -2px;
+      right: 2px;
+      color: var(--red);
+      font-size: 13px;
+    }
+
     .whatsComprador {
       display: inline-flex;
       align-items: center;
@@ -8790,7 +9183,12 @@
         </div>
       </div>
       <div id="prodTabListWrap">
+        <div class="segmented prodModoSeg" id="prodModoSeg" role="group" aria-label="Como mostrar os produtos">
+          <button type="button" data-v="lista">Lista</button>
+          <button type="button" data-v="catalogo">Catálogo</button>
+        </div>
         <div id="prodInicio"></div>
+        <div id="prodCatalogo" class="hidden"></div>
         <div id="prodCampanha" class="hidden"></div>
         <div class="hist-content hidden" id="prodTabList"></div>
       </div>
@@ -8988,6 +9386,27 @@
           <button type="button" id="leitorQrFecharBtn">Fechar</button>
         </div>
       </div>
+    </div>
+
+    <div class="vitrine hidden" id="vitrine" role="dialog" aria-label="Vitrine de produtos pro cliente">
+      <div class="vitrineTopo">
+        <div class="vitrineFam" id="vitrineFam"></div>
+        <button type="button" class="vitrineSair" id="vitrineSairBtn" aria-label="Segure pra sair da vitrine">✕</button>
+      </div>
+      <div class="vitrinePalco" id="vitrinePalco">
+        <div class="vitrineFoto" id="vitrineFoto"></div>
+        <span class="hidden" id="vitrineSelo"></span>
+      </div>
+      <div>
+        <div class="vitrineNome" id="vitrineNome"></div>
+        <div class="vitrineCod" id="vitrineCod"></div>
+      </div>
+      <div class="vitrineNav">
+        <button type="button" id="vitrineAntBtn" aria-label="Produto anterior">‹</button>
+        <button type="button" class="vitrineSeparar" id="vitrineSepararBtn" aria-pressed="false">☆ Separar pra proposta</button>
+        <button type="button" id="vitrineProxBtn" aria-label="Próximo produto">›</button>
+      </div>
+      <div class="vitrineMinis" id="vitrineMinis"></div>
     </div>
 
     <div class="modoLeitor hidden" id="modoLeitor" role="dialog" aria-label="Leitor de código de barras do tablet">
@@ -11119,14 +11538,14 @@
         renderCartBar();
         renderCart();
       });
-      function addToCart(cod, explicitQty) {
+      function addToCart(cod, explicitQty, semAviso) {
         const p = productByCod(cod);
         const amount = (explicitQty !== undefined && explicitQty > 0) ? explicitQty : packStep(p);
         const existing = state.cart.find(i => i.cod === cod);
         if (existing) existing.qty += amount;
         else state.cart.push({ cod, qty: amount });
         autoFillClassificatorioDiscount(cod);
-        showToast('Adicionado ao orçamento');
+        if (!semAviso) showToast('Adicionado ao orçamento');
         renderCartBar();
       }
       function removeFromCart(cod) {
@@ -21929,6 +22348,8 @@
         }));
       }
       async function openProdutoDetail(codigo, nome) {
+        // volta pro mesmo ponto da grade do catálogo ao fechar a ficha
+        catalogoScroll = prodModo === 'catalogo' && !campanhaAberta && !document.getElementById('prodTabSearch').value.trim() ? window.scrollY : null;
         prodTabSelected = codigo;
         guardarProdutoRecente(codigo);
         document.getElementById('prodDetailName').textContent = nome;
@@ -21978,6 +22399,7 @@
         });
         document.getElementById('scanBtnProd').addEventListener('click', () => openBarcodeScanner('prodTabSearch'));
         document.getElementById('prodDetailBackBtn').addEventListener('click', closeProdutoDetail);
+        initModoCatalogo();
         initProdDetailSeg();
         initFotosProduto();
       }
@@ -22001,7 +22423,7 @@
       const ICONE_CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
       let FOTOS_PRODUTO = {}; // código -> versão (hora da troca, ms)
       const fotoUrlsMemo = new Map(); // "código@versão" -> URL blob: (as mais recentes; ver urlDaFoto)
-      const FOTO_URLS_MAX = 80; // a grade da campanha mostra até 40 de uma vez
+      const FOTO_URLS_MAX = 160; // a grade da campanha mostra até 40 de uma vez; a do catálogo, mais com "Ver mais"
       const FOTO_DOWNLOAD_PRAZO_MS = 20000;
 
       function gravarFotosLocais() {
@@ -22730,21 +23152,42 @@
       // Foto como fundo de um elemento já na tela (grade, miniatura): carrega
       // depois, sem travar a lista; descarta se a tela mudou.
       function preencherFotosDe(el) {
-        el.querySelectorAll('[data-foto-cod]').forEach(async (alvo) => {
-          const url = await urlDaFoto(alvo.dataset.fotoCod);
-          if (!url || !alvo.isConnected) return;
-          alvo.style.backgroundImage = `url('${url}')`;
-          alvo.textContent = '';
-        });
+        el.querySelectorAll('[data-foto-cod]').forEach(carregarFotoEm);
+      }
+      async function carregarFotoEm(alvo) {
+        const url = await urlDaFoto(alvo.dataset.fotoCod);
+        if (!url || !alvo.isConnected) return;
+        alvo.style.backgroundImage = `url('${url}')`;
+        alvo.textContent = '';
+      }
+      // Igual, mas só quando o elemento chega perto da tela (grade grande do
+      // catálogo: baixar as 270 fotos das brocas de uma vez travava o sinal fraco).
+      // Um observador por tela (chave), refeito a cada render.
+      const observadoresDeFoto = {};
+      function preencherFotosAoVer(el, chave) {
+        if (observadoresDeFoto[chave]) observadoresDeFoto[chave].disconnect();
+        if (typeof IntersectionObserver === 'undefined') { preencherFotosDe(el); return; }
+        const obs = new IntersectionObserver((entradas) => {
+          for (const e of entradas) {
+            if (!e.isIntersecting) continue;
+            obs.unobserve(e.target);
+            carregarFotoEm(e.target);
+          }
+        }, { rootMargin: '300px' });
+        observadoresDeFoto[chave] = obs;
+        el.querySelectorAll('[data-foto-cod]').forEach(a => obs.observe(a));
       }
       function atualizarProdutosInicio() {
         const busca = document.getElementById('prodTabSearch');
         const temBusca = !!(busca && busca.value.trim());
+        const catalogo = prodModo === 'catalogo';
+        document.getElementById('prodModoSeg').classList.toggle('hidden', temBusca);
         document.getElementById('prodTabList').classList.toggle('hidden', !temBusca);
-        document.getElementById('prodInicio').classList.toggle('hidden', temBusca || !!campanhaAberta);
+        document.getElementById('prodInicio').classList.toggle('hidden', temBusca || !!campanhaAberta || catalogo);
         document.getElementById('prodCampanha').classList.toggle('hidden', temBusca || !campanhaAberta);
+        document.getElementById('prodCatalogo').classList.toggle('hidden', temBusca || !!campanhaAberta || !catalogo);
         if (temBusca) return;
-        if (campanhaAberta) renderCampanhaAberta(); else renderProdutosInicio();
+        if (campanhaAberta) renderCampanhaAberta(); else if (catalogo) renderCatalogo(); else renderProdutosInicio();
       }
       function renderProdutosInicio() {
         const el = document.getElementById('prodInicio');
@@ -22847,6 +23290,294 @@
           atualizarBarra();
         }));
         preencherFotosDe(el);
+      }
+      // ---- Modo Catálogo da aba Produtos (10/2026) ----
+      // Com quase todo produto com foto, o usuário pediu um catálogo dentro do
+      // app; escolheu nos mockups a combinação A + B + D: as famílias da Lista de
+      // Preços em cards com 4 fotos (A), dentro da família a grade de fotos com
+      // os chips das famílias presos no topo (B), e "Mostrar ao cliente" (D): a
+      // vitrine em tela cheia, um produto por vez, SEM PREÇO (o preço do catálogo
+      // é o do orçamento aberto, com o classificatório do cliente). Sair da
+      // vitrine só segurando o ✕ (o celular fica na mão do cliente, como o "⋯"
+      // da tela do cliente no tablet); o que o cliente separou vai pro orçamento.
+      // Fotos: só as que chegam perto da tela (preencherFotosAoVer); sem
+      // internet aparece a que já foi vista ou é de campanha (já baixada).
+      // Produto do catálogo = Lista de Preços sem os promocionais do Painel (o
+      // descontinuado já não está nela).
+      const PROD_MODO_LS_KEY = 'cortagProdModo_v1';
+      const CATALOGO_POR_PAGINA = 40;
+      const CATALOGO_VER_MAIS = 80;
+      const VITRINE_SEGURAR_MS = 800;
+      let prodModo = (() => { try { return localStorage.getItem(PROD_MODO_LS_KEY) === 'catalogo' ? 'catalogo' : 'lista'; } catch (e) { return 'lista'; } })();
+      let catalogoFamilia = null; // chave da família aberta (null = cards das famílias)
+      let catalogoMostrar = CATALOGO_POR_PAGINA;
+      let catalogoScroll = null;
+      let vitrine = null; // { titulo, produtos, i, separados }
+      // "01 - CORTADORES MANUAIS" -> "Cortadores manuais"
+      function nomeDaFamilia(f) {
+        const t = String(f || '').replace(/^\s*\d+\s*-\s*/, '').trim();
+        if (!t) return 'Outros';
+        const l = t.toLocaleLowerCase('pt-BR');
+        return l.charAt(0).toLocaleUpperCase('pt-BR') + l.slice(1);
+      }
+      function familiasDoCatalogo() {
+        const m = new Map();
+        for (const p of DB.products) {
+          if (p._promocional) continue;
+          const f = productFamilia(p) || '';
+          if (!m.has(f)) m.set(f, { chave: f, nome: nomeDaFamilia(f), produtos: [] });
+          m.get(f).produtos.push(p);
+        }
+        // pela numeração da planilha ("01 - ..."), sem número no fim
+        const ordem = (x) => { const n = /^\s*(\d+)/.exec(x.chave); return n ? Number(n[1]) : Infinity; };
+        return [...m.values()].sort((a, b) => (ordem(a) - ordem(b)) || a.nome.localeCompare(b.nome, 'pt-BR'));
+      }
+      // Maior desconto de campanha por código, pro selo do card da família - pela
+      // régua da fita do card (campanhasDoCard: classificatório e Preço Fixo do
+      // orçamento), senão o card prometia o -10% do Master a um cliente Premium.
+      // campanhasDaAba só escolhe quem conferir (não varre o catálogo inteiro).
+      function campanhaPorCodigo() {
+        const m = new Map();
+        const ctx = contextoCampanhas();
+        const candidatos = new Set();
+        for (const { produtos } of campanhasDaAba()) produtos.forEach(p => candidatos.add(p));
+        for (const p of candidatos) {
+          const regras = campanhasDoCard(p, ctx);
+          if (regras.length) m.set(p.c, { pct: maiorPctDaRegra(regras[0]), bf: regras.some(ehCampanhaBlackFriday) });
+        }
+        return m;
+      }
+      function renderCatalogo() {
+        const el = document.getElementById('prodCatalogo');
+        const familias = familiasDoCatalogo();
+        if (!familias.length) { el.innerHTML = '<div class="lev-empty">O catálogo ainda está carregando.</div>'; return; }
+        const fam = catalogoFamilia !== null && familias.find(f => f.chave === catalogoFamilia);
+        if (!fam) { catalogoFamilia = null; renderCatalogoFamilias(el, familias); }
+        else renderCatalogoDaFamilia(el, familias, fam);
+        if (catalogoScroll !== null) {
+          const y = catalogoScroll;
+          catalogoScroll = null;
+          requestAnimationFrame(() => window.scrollTo(0, y));
+        }
+      }
+      function renderCatalogoFamilias(el, familias) {
+        const camp = campanhaPorCodigo();
+        const total = familias.reduce((n, f) => n + f.produtos.length, 0);
+        const cards = familias.map(f => {
+          const fotos = f.produtos.filter(p => codigoDaFoto(p.c)).slice(0, 4);
+          let pct = 0, bf = false;
+          for (const p of f.produtos) { const c = camp.get(p.c); if (c) { pct = Math.max(pct, c.pct); bf = bf || c.bf; } }
+          const tiles = [0, 1, 2, 3].map(i => fotos[i] ? `<span class="catFamFoto" data-foto-cod="${escapeHtml(fotos[i].c)}"></span>` : '<span class="catFamFoto"></span>').join('');
+          return `<button type="button" class="catFam" data-cat-familia="${escapeHtml(f.chave)}">
+            <span class="catFamMosaico">${tiles}</span>
+            <span class="catFamNome">${escapeHtml(f.nome)}</span>
+            <span class="catFamQtd">${f.produtos.length} produto${f.produtos.length === 1 ? '' : 's'}</span>
+            ${pct > 0 ? `<span class="catFamTag${bf ? ' bf' : ''}">${bf ? 'BLACK FRIDAY · ' : 'Campanha · '}até -${escapeHtml(pctCampanhaTexto(pct))}</span>` : ''}
+          </button>`;
+        }).join('');
+        el.innerHTML = `<div class="clientesSecao" style="margin:14px 0 2px;">Catálogo · ${total.toLocaleString('pt-BR')} produtos · ${familias.length} famílias</div>
+          <div class="ofertaCtx">Preço de <b>${escapeHtml(rotuloContextoPreco())}</b> · muda na aba Pedido</div>
+          <div class="catFamGrade">${cards}</div>`;
+        el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => abrirFamiliaDoCatalogo(b.dataset.catFamilia)));
+        preencherFotosAoVer(el, 'catalogo');
+      }
+      function abrirFamiliaDoCatalogo(chave) {
+        catalogoFamilia = chave;
+        catalogoMostrar = CATALOGO_POR_PAGINA;
+        renderCatalogo();
+        window.scrollTo(0, 0);
+      }
+      function renderCatalogoDaFamilia(el, familias, fam) {
+        const mostrar = fam.produtos.slice(0, catalogoMostrar);
+        const resto = fam.produtos.length - mostrar.length;
+        const chips = `<button type="button" class="catChip" data-cat-voltar>‹ Famílias</button>`
+          + familias.map(f => `<button type="button" class="catChip${f === fam ? ' ativo' : ''}" data-cat-familia="${escapeHtml(f.chave)}">${escapeHtml(f.nome)}</button>`).join('');
+        const itens = mostrar.map(p => {
+          const of = ofertaDoProduto(p);
+          const foto = codigoDaFoto(p.c);
+          return `<div class="campItem">
+            <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
+              <div class="campItemFoto"${foto ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''}>${foto ? '' : 'sem foto'}</div>
+              <div class="campItemInfo catItemInfo">
+                <div class="campItemNome">${escapeHtml(p.n)}</div>
+                <div class="campItemCod">${escapeHtml(p.c)}${Number(p.emb) > 1 ? ` · cx ${escapeHtml(String(p.emb))}` : ''}</div>
+                ${of.regra ? `<div class="campItemDe">${brl(of.de)}</div>` : ''}
+                <div class="campItemPor">${of.por > 0 ? brl(of.por) : '—'}</div>
+              </div>
+            </button>
+            ${of.regra ? `<span class="campItemOff${of.blackFriday ? ' bf' : ''}">-${of.pct}%</span>` : ''}
+            <button type="button" class="catAddBtn" data-add-prod="${escapeHtml(p.c)}" aria-label="Pôr ${escapeHtml(p.n)} no orçamento">+</button>
+          </div>`;
+        }).join('');
+        el.innerHTML = `<div class="catChips" id="catChips">${chips}</div>
+          <div class="catCabeca">
+            <b>${escapeHtml(fam.nome)}</b>
+            <button type="button" class="recompraBtn" id="catVitrineBtn">Mostrar ao cliente</button>
+          </div>
+          <div class="ofertaCtx">${fam.produtos.length} produto${fam.produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
+          <div class="campGrade">${itens}</div>
+          ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
+        el.querySelector('[data-cat-voltar]').addEventListener('click', () => { catalogoFamilia = null; renderCatalogo(); window.scrollTo(0, 0); });
+        el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => {
+          if (b.dataset.catFamilia !== fam.chave) abrirFamiliaDoCatalogo(b.dataset.catFamilia);
+        }));
+        // chip da família aberta à vista (só rola a fileira, não a página)
+        const faixa = document.getElementById('catChips');
+        const ativo = faixa.querySelector('.catChip.ativo');
+        if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
+        document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(fam.nome, fam.produtos, 0));
+        document.getElementById('catMaisBtn')?.addEventListener('click', () => {
+          catalogoMostrar += CATALOGO_VER_MAIS;
+          catalogoScroll = window.scrollY;
+          renderCatalogo();
+        });
+        el.querySelectorAll('[data-abrir-prod]').forEach(b => b.addEventListener('click', () => {
+          const p = productByCod(b.dataset.abrirProd);
+          if (p) openProdutoDetail(p.c, p.n);
+        }));
+        el.querySelectorAll('[data-add-prod]').forEach(b => b.addEventListener('click', () => addToCart(b.dataset.addProd)));
+        preencherFotosAoVer(el, 'catalogo');
+      }
+      // ---- Vitrine pro cliente (D) ----
+      function abrirVitrine(titulo, produtos, inicio) {
+        if (!produtos.length) return;
+        vitrine = { titulo, produtos, i: Math.max(0, Math.min(inicio || 0, produtos.length - 1)), separados: [] };
+        document.getElementById('vitrineFam').textContent = titulo;
+        const minis = document.getElementById('vitrineMinis');
+        minis.innerHTML = produtos.map((p, i) => `<button type="button" class="vitrineMini" data-vitrine-i="${i}"${codigoDaFoto(p.c) ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''} aria-label="${escapeHtml(p.n)}"></button>`).join('');
+        document.getElementById('vitrine').classList.remove('hidden');
+        document.documentElement.classList.add('vitrineAberta');
+        preencherFotosAoVer(minis, 'vitrine');
+        renderVitrine();
+      }
+      function seloDaVitrine(p) {
+        const r = campanhasDoCard(p)[0];
+        if (!r) return null;
+        const pct = maiorPctDaRegra(r);
+        const faixas = (r.tiers || []).filter(t => Number(t.pct) > 0).length > 1;
+        // sem o nome da regra: costuma trazer o classificatório ("VIDRO 62796 - Master")
+        return { texto: `${ehCampanhaBlackFriday(r) ? 'BLACK FRIDAY' : 'Campanha'} · ${faixas ? 'até ' : ''}-${pctCampanhaTexto(pct)}`, bf: ehCampanhaBlackFriday(r) };
+      }
+      function renderVitrine() {
+        if (!vitrine) return;
+        const { produtos, i } = vitrine;
+        const p = produtos[i];
+        document.getElementById('vitrineNome').textContent = p.n;
+        document.getElementById('vitrineCod').textContent = `Cód. ${p.c}${Number(p.emb) > 1 ? ` · caixa com ${p.emb}` : ''} · ${i + 1} de ${produtos.length}`;
+        const selo = seloDaVitrine(p);
+        const seloEl = document.getElementById('vitrineSelo');
+        seloEl.classList.toggle('hidden', !selo);
+        seloEl.classList.toggle('bf', !!(selo && selo.bf));
+        seloEl.textContent = selo ? selo.texto : '';
+        const foto = document.getElementById('vitrineFoto');
+        foto.style.backgroundImage = '';
+        foto.textContent = codigoDaFoto(p.c) ? '' : 'sem foto';
+        if (codigoDaFoto(p.c)) {
+          urlDaFoto(p.c).then(url => {
+            if (!vitrine || vitrine.produtos[vitrine.i] !== p) return;
+            if (url) foto.style.backgroundImage = `url('${url}')`;
+            else foto.textContent = 'foto não baixada (sem internet)';
+          });
+        }
+        // a próxima já vai baixando
+        if (produtos[i + 1] && codigoDaFoto(produtos[i + 1].c)) urlDaFoto(produtos[i + 1].c);
+        const separado = vitrine.separados.includes(p.c);
+        const sep = document.getElementById('vitrineSepararBtn');
+        sep.setAttribute('aria-pressed', String(separado));
+        sep.textContent = separado ? `★ Separado${vitrine.separados.length > 1 ? ` (${vitrine.separados.length})` : ''}` : '☆ Separar pra proposta';
+        document.getElementById('vitrineAntBtn').disabled = i === 0;
+        document.getElementById('vitrineProxBtn').disabled = i === produtos.length - 1;
+        const minis = document.getElementById('vitrineMinis');
+        minis.querySelectorAll('.vitrineMini').forEach((b, k) => {
+          b.classList.toggle('ativo', k === i);
+          b.classList.toggle('separado', vitrine.separados.includes(produtos[k].c));
+        });
+        const ativo = minis.children[i];
+        if (ativo) minis.scrollLeft = ativo.offsetLeft - (minis.clientWidth - ativo.offsetWidth) / 2;
+      }
+      function irNaVitrine(passo) {
+        if (!vitrine) return;
+        const novo = vitrine.i + passo;
+        if (novo < 0 || novo >= vitrine.produtos.length) return;
+        vitrine.i = novo;
+        renderVitrine();
+      }
+      async function fecharVitrine() {
+        if (!vitrine) return;
+        const separados = vitrine.separados.slice();
+        vitrine = null;
+        document.getElementById('vitrine').classList.add('hidden');
+        document.documentElement.classList.remove('vitrineAberta');
+        if (observadoresDeFoto.vitrine) observadoresDeFoto.vitrine.disconnect();
+        document.getElementById('vitrineMinis').innerHTML = '';
+        if (!separados.length) return;
+        const n = separados.length;
+        const ok = await askConfirm(`O cliente separou ${n} produto${n === 1 ? '' : 's'} na vitrine. Pôr no orçamento?`, 'Pôr no orçamento', { cancelarLabel: 'Agora não' });
+        if (!ok) return;
+        separados.forEach(c => { if (productByCod(c)) addToCart(c, undefined, true); });
+        showToast(`${n} produto${n === 1 ? '' : 's'} no orçamento`);
+      }
+      function initModoCatalogo() {
+        const seg = document.getElementById('prodModoSeg');
+        const marcar = () => seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === prodModo));
+        marcar();
+        seg.addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-v]');
+          if (!b || b.dataset.v === prodModo) return;
+          prodModo = b.dataset.v;
+          try { localStorage.setItem(PROD_MODO_LS_KEY, prodModo); } catch (er) { }
+          campanhaAberta = null;
+          marcar();
+          atualizarProdutosInicio();
+        });
+        document.getElementById('vitrineAntBtn').addEventListener('click', () => irNaVitrine(-1));
+        document.getElementById('vitrineProxBtn').addEventListener('click', () => irNaVitrine(1));
+        document.getElementById('vitrineSepararBtn').addEventListener('click', () => {
+          if (!vitrine) return;
+          const c = vitrine.produtos[vitrine.i].c;
+          vitrine.separados = vitrine.separados.includes(c) ? vitrine.separados.filter(x => x !== c) : vitrine.separados.concat(c);
+          renderVitrine();
+        });
+        document.getElementById('vitrineMinis').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-vitrine-i]');
+          if (!b || !vitrine) return;
+          vitrine.i = Number(b.dataset.vitrineI);
+          renderVitrine();
+        });
+        // passar com o dedo
+        const palco = document.getElementById('vitrinePalco');
+        let x0 = null, y0 = null;
+        palco.addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+        palco.addEventListener('touchend', (e) => {
+          if (x0 === null) return;
+          const dx = e.changedTouches[0].clientX - x0, dy = e.changedTouches[0].clientY - y0;
+          x0 = null;
+          if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) irNaVitrine(dx < 0 ? 1 : -1);
+        });
+        document.addEventListener('keydown', (e) => {
+          if (!vitrine) return;
+          if (e.key === 'ArrowRight') irNaVitrine(1);
+          else if (e.key === 'ArrowLeft') irNaVitrine(-1);
+        });
+        // sair só segurando o ✕ (toque curto avisa)
+        const sair = document.getElementById('vitrineSairBtn');
+        let segurar = null;
+        const soltar = (avisar) => {
+          if (!segurar) return;
+          clearTimeout(segurar);
+          segurar = null;
+          sair.classList.remove('segurando');
+          if (avisar) showToast('Segure o ✕ pra sair da vitrine');
+        };
+        sair.addEventListener('pointerdown', (e) => {
+          e.preventDefault();
+          sair.classList.add('segurando');
+          segurar = setTimeout(() => { segurar = null; sair.classList.remove('segurando'); fecharVitrine(); }, VITRINE_SEGURAR_MS);
+        });
+        sair.addEventListener('pointerup', () => soltar(true));
+        sair.addEventListener('pointerleave', () => soltar(false));
+        sair.addEventListener('pointercancel', () => soltar(false));
+        sair.addEventListener('contextmenu', (e) => e.preventDefault());
       }
       function initFotosProduto() {
         document.getElementById('fotoCameraBtn').addEventListener('click', () => document.getElementById('fotoCameraInput').click());
