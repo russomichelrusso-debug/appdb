@@ -17058,6 +17058,7 @@
         catch (e) { return []; }
       }
       function saveClientesLocais(clientes) {
+        fantasiaLocalPorId = null;
         try { localStorage.setItem(CLIENTES_LOCAIS_LS_KEY, JSON.stringify({ clientes, updatedAt: Date.now() })); }
         catch (e) { console.warn('Não foi possível salvar a cópia local de clientes:', e); }
       }
@@ -17246,14 +17247,23 @@
       // Nome fantasia (da ficha de CNPJ) só quando é diferente da razão social -
       // o vendedor conhece a loja por ele. Cliente sem o campo (levantamento
       // reaberto, Recentes) pega da cópia de clientes do aparelho.
-      function fantasiaDoCliente(c) {
+      // id = o do cliente quando o objeto não é da cópia de clientes (blocos da
+      // aba Clientes trazem cliente_id).
+      let fantasiaLocalPorId = null; // refeito quando a cópia de clientes muda (saveClientesLocais)
+      function fantasiaDoCliente(c, id) {
         if (!c) return '';
         let f = c.nome_fantasia;
-        if (f === undefined && c.id != null) {
-          const local = loadClientesLocais().find(x => String(x.id) === String(c.id));
-          f = local && local.nome_fantasia;
+        const chave = id != null ? id : c.id;
+        if (f === undefined && chave != null) {
+          if (!fantasiaLocalPorId) fantasiaLocalPorId = new Map(loadClientesLocais().map(x => [String(x.id), x.nome_fantasia]));
+          f = fantasiaLocalPorId.get(String(chave));
         }
         return f && textoBuscaCliente(f) !== textoBuscaCliente(c.nome) ? String(f) : '';
+      }
+      // Fantasia em negrito no começo da linha de detalhes dos blocos da aba Clientes.
+      function fantasiaNaMeta(c, id) {
+        const f = fantasiaDoCliente(c, id);
+        return f ? [`<b>${escapeHtml(f)}</b>`] : [];
       }
       // Antes de desistir (ou cair pro cache local), tenta mais 2 vezes com um
       // pequeno atraso crescente - cobre bem a janela de alguns segundos em que o
@@ -20072,7 +20082,7 @@
         return `
       <button type="button" class="clientPickerItem" data-alerta-cliente-id="${c.id}">
         <div class="cpName"><span>${escapeHtml(c.nome)}</span></div>
-        <div class="cpMeta">${c.documento ? escapeHtml(c.documento) : 'sem documento'} · ${detalhe}</div>
+        <div class="cpMeta">${fantasiaNaMeta(c).concat(c.documento ? escapeHtml(c.documento) : 'sem documento', detalhe).join(' · ')}</div>
       </button>`;
       }
       // ---- Blocos da aba Clientes: cabeçalho comum e um aberto por vez ----
@@ -20492,7 +20502,7 @@
       }
       function renderPertoItem({ c, pos, dist }, recompraPorId, ultimaPorId, reativarPorId) {
         const id = String(c.id);
-        const meta = [];
+        const meta = fantasiaNaMeta(c);
         if (c.endereco && c.endereco.municipio) meta.push(escapeHtml(c.endereco.municipio));
         if (pos.aprox) meta.push('<span title="Posição pelo endereço da ficha — pode errar em avenida longa">aprox.</span>');
         const ultima = ultimaPorId.get(id);
@@ -20691,7 +20701,7 @@
             <input type="checkbox" data-rota-sel="${escapeHtml(l.id)}"${rotaSelecionados.has(l.id) ? ' checked' : ''}${l.destino ? '' : ' disabled'} aria-label="Incluir ${escapeHtml(l.c.nome)} na rota">
             <span class="pertoNome">${escapeHtml(l.c.nome)}</span>
           </label>
-          <div class="recompraMeta">${escapeHtml(rua.trim() || 'sem rua na ficha')}${l.fat > 0 ? ` · ${escapeHtml(brlCurto(l.fat))} em 12 meses` : ''}${selos.length ? ' ' + selos.join(' ') : ''}</div>
+          <div class="recompraMeta">${fantasiaNaMeta(l.c).map(f => f + ' · ').join('')}${escapeHtml(rua.trim() || 'sem rua na ficha')}${l.fat > 0 ? ` · ${escapeHtml(brlCurto(l.fat))} em 12 meses` : ''}${selos.length ? ' ' + selos.join(' ') : ''}</div>
           <div class="recompraAcoes">
             <button type="button" class="recompraBtn" data-rota-abrir="${escapeHtml(l.id)}">Abrir cliente</button>
             <button type="button" class="recompraBtn" data-rota-waze="${escapeHtml(l.id)}">Waze</button>
@@ -20834,7 +20844,7 @@
         const rotuloProposta = n ? `Montar proposta · ${n} ${n === 1 ? 'item' : 'itens'}` : 'Montar proposta';
         return `<div class="recompraItem">
           <button type="button" class="recompraNome" data-recompra-abrir="${c.cliente_id}"><span>${escapeHtml(c.nome)}</span>${seloRecompra(c)}</button>
-          <div class="recompraMeta">compra a cada ~${c.ritmo_dias} dias · última ${escapeHtml(dataCurtaISO(c.ultima_compra))} · ${c.num_compras} compras em 12 meses</div>
+          <div class="recompraMeta">${fantasiaNaMeta(c, c.cliente_id).map(f => f + ' · ').join('')}compra a cada ~${c.ritmo_dias} dias · última ${escapeHtml(dataCurtaISO(c.ultima_compra))} · ${c.num_compras} compras em 12 meses</div>
           <div class="recompraAcoes">
             <button type="button" class="recompraBtn recompraBtn--principal" data-recompra-proposta="${c.cliente_id}"${n ? '' : ' disabled'}>${rotuloProposta}</button>
             <button type="button" class="recompraBtn" data-recompra-adiar="${c.cliente_id}">Já falei</button>
@@ -21100,7 +21110,7 @@
         const sugestoes = sugestoesAumentoCancelamento(grupo);
         const salva = grupo.falta > 0 && sugestoes.length > 0;
         const dias = Math.max(0, CANC_VALIDADE_DIAS - diasEntreISO(grupo.data_aviso, hojeLocalISO()));
-        const meta = [`Pedido ${escapeHtml(grupo.nr_pedido)}`, salva ? `faltam ${escapeHtml(brl(grupo.falta))}` : escapeHtml(grupo.motivo || 'aviso da Cortag'),
+        const meta = [...fantasiaNaMeta(cliente), `Pedido ${escapeHtml(grupo.nr_pedido)}`, salva ? `faltam ${escapeHtml(brl(grupo.falta))}` : escapeHtml(grupo.motivo || 'aviso da Cortag'),
           `aviso de ${escapeHtml(dataCurtaISO(grupo.data_aviso))}`, dias > 0 ? `~${dias} dia${dias === 1 ? '' : 's'} pra resolver` : 'último dia'];
         const linhaItens = salva
           ? sugestoes.map(sg => `${escapeHtml(nomeProdutoCancelamento(sg.it))}: ${sg.qt} → ${sg.novaQt} un. (+${escapeHtml(brl(sg.acrescimo))})`).join(sugestoes.length > 1 ? ' <i>ou</i> ' : '')
@@ -21197,7 +21207,7 @@
       }
       function renderInadItem(c) {
         const n = c.titulos.length;
-        const meta = [];
+        const meta = c.cliente_id != null ? fantasiaNaMeta(c, c.cliente_id) : [];
         if (c.cidade) meta.push(escapeHtml(nomeCidade(c.cidade)));
         meta.push(`${n} título${n === 1 ? '' : 's'}`);
         meta.push(`mais antigo ${escapeHtml(textoAtrasoInad(c))}`);
@@ -21377,7 +21387,7 @@
         return d.length >= 10 && d.length <= 11 ? d : null;
       }
       function renderReativarItem(c) {
-        const meta = [];
+        const meta = fantasiaNaMeta(c, c.cliente_id);
         if (c.cidade) meta.push(escapeHtml(c.cidade));
         const valor = textoValorReativar(c);
         if (valor) meta.push(escapeHtml(valor));
@@ -21617,7 +21627,7 @@
         return `há ${dias} dias (${dataCurtaISO(iso)})`;
       }
       function renderVisitaItem(c, tipo) {
-        const meta = [];
+        const meta = fantasiaNaMeta(c, c.cliente_id);
         if (c.cidade) meta.push(escapeHtml(nomeCidade(c.cidade)));
         if (tipo === 'semCompra') {
           meta.push(`visitado ${escapeHtml(textoHaDias(c.ultima_visita))}`);
