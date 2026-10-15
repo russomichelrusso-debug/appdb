@@ -23420,9 +23420,13 @@
       let vitrine = null; // { titulo, produtos, i, separados }
       // Voltar do Android (e o gesto de voltar do iPhone) com a vitrine aberta: sem
       // isto fechava o app com o celular na mão do cliente. A vitrine põe uma
-      // entrada no histórico ao abrir; voltar tira ela, e o app põe outra e avisa
-      // "segure o ✕" - quem sai é só o ✕ segurado, que tira a entrada ao fechar.
-      let vitrineSaindoDoHistorico = false;
+      // entrada no histórico ao abrir (no toque de "Mostrar ao cliente"); voltar
+      // cai na entrada de baixo e o app anda pra frente de novo (history.forward)
+      // e avisa "segure o ✕" - quem sai é só o ✕ segurado, que volta uma entrada
+      // ao fechar. Andar pra frente em vez de pôr outra entrada: o Chrome marca
+      // pra pular a entrada posta sem toque na tela, e o 2º voltar fecharia o app.
+      // Entrada da vitrine que sobrou de um recarregar com ela aberta vira normal.
+      try { if (history.state && history.state.cortagVitrine) history.replaceState(null, ''); } catch (e) { }
       // "01 - CORTADORES MANUAIS" -> "Cortadores manuais"
       function nomeDaFamilia(f) {
         const t = String(f || '').replace(/^\s*\d+\s*-\s*/, '').trim();
@@ -23621,8 +23625,9 @@
         if (!vitrine) return;
         const separados = vitrine.separados.slice();
         vitrine = null;
-        // tira a entrada que a vitrine pôs (senão o próximo "voltar" não faz nada)
-        if (history.state && history.state.cortagVitrine) { vitrineSaindoDoHistorico = true; history.back(); }
+        // tira a entrada que a vitrine pôs (senão o próximo "voltar" não faz nada);
+        // o popstate dele chega com a vitrine já fechada e é ignorado
+        if (history.state && history.state.cortagVitrine) history.back();
         document.getElementById('vitrine').classList.add('hidden');
         document.documentElement.classList.remove('vitrineAberta');
         if (observadoresDeFoto.vitrine) observadoresDeFoto.vitrine.disconnect();
@@ -23674,10 +23679,10 @@
           x0 = null;
           if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) irNaVitrine(dx < 0 ? 1 : -1);
         });
-        window.addEventListener('popstate', () => {
-          if (vitrineSaindoDoHistorico) { vitrineSaindoDoHistorico = false; return; }
-          if (!vitrine) return;
-          try { history.pushState({ cortagVitrine: true }, ''); } catch (e) { }
+        window.addEventListener('popstate', (e) => {
+          // com a vitrine fechada, ou chegando de volta na entrada dela (o forward abaixo): nada
+          if (!vitrine || (e.state && e.state.cortagVitrine)) return;
+          try { history.forward(); } catch (er) { }
           showToast('Segure o ✕ pra sair da vitrine');
         });
         document.addEventListener('keydown', (e) => {
