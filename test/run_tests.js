@@ -271,6 +271,23 @@ async function main() {
       `busca de cliente: sem acento, qualquer ordem, CNPJ sem pontuação, código do ERP, nome fantasia, cidade e erro de digitação: ${JSON.stringify(r)}`);
   }
   {
+    // nome fantasia vale como a razão social: digitado inteiro vai pro topo
+    // (antes pesava +1 por palavra e perdia pra razão social parecida) e
+    // sigla/palavras juntas ("wa", "jr") acham "W. A."/"J. R." do cadastro
+    const { ordenarClientesPorBusca } = require('../routes/lib/buscaCliente');
+    const L = [
+      { id: 1, nome: 'CASA FORTE DAS TINTAS E VERNIZES LTDA' },
+      { id: 2, nome: 'THEODORA ASTERIA MOREIRA & CIA.LTDA.EPP', nome_fantasia: 'CASA DAS TINTAS' },
+      { id: 3, nome: 'W. A. MATS. CONSTR. LTDA', nome_fantasia: 'W A MATERIAIS PARA CONSTRUCAO' },
+      { id: 4, nome: 'J. R. FERRAGENS LTDA ME', nome_fantasia: 'A REBIMBELA' },
+      { id: 5, nome: 'IRACEMA PERISSATO E CIA LTDA', nome_fantasia: 'LOJA BOM JESUS' },
+    ];
+    const ids = (q) => ordenarClientesPorBusca(L, q).map(c => c.id).join(',');
+    const r = { exato: ids('casa das tintas'), comeco: ids('loja bom'), sigla: ids('wa materiais'), sigla2: ids('jr ferragens'), erro: ids('rebinbela') };
+    assert(r.exato.startsWith('2') && r.comeco === '5' && r.sigla === '3' && r.sigla2 === '4' && r.erro === '4',
+      `busca de cliente pelo nome fantasia e por sigla: ${JSON.stringify(r)}`);
+  }
+  {
     // a busca sem internet (index.html) usa cópia igual do motor do servidor
     const fsC = require('fs');
     const trecho = (txt) => {

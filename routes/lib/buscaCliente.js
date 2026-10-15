@@ -52,12 +52,35 @@ function penalidadePalavraCliente(w, tokens) {
   }
   return Infinity;
 }
+// Palavras vizinhas juntas ("W A MATERIAIS" → "wa", "VITOR MULTI COISAS" →
+// "multicoisas"): o vendedor digita a sigla ou o nome da loja sem o espaço do
+// cadastro. Só valem inteiras (+1) ou, com 3 letras ou mais, pelo começo (+2),
+// sem erro de digitação.
+function juntasCliente(tokens) {
+  const juntas = [];
+  for (let i = 0; i + 1 < tokens.length; i++) {
+    juntas.push(tokens[i] + tokens[i + 1]);
+    if (i + 2 < tokens.length) juntas.push(tokens[i] + tokens[i + 1] + tokens[i + 2]);
+  }
+  return juntas;
+}
+function penalidadeJuntaCliente(w, juntas) {
+  if (w.length < 2) return Infinity;
+  let melhor = Infinity;
+  for (const t of juntas) {
+    if (t === w) return 1;
+    if (w.length >= 3 && t.startsWith(w)) melhor = 2;
+  }
+  return melhor;
+}
 // Pontos do cliente pra busca (menor é melhor) ou null se não bate.
 // Código do ERP/CNPJ exato 0, começo do código/CNPJ 1, CNPJ contém 2, nome
-// igual 3, nome começando com a busca 4; depois 10 + o quanto cada palavra
-// errou - palavra no nome conta como está, no nome fantasia +1, na cidade +2,
-// e a frase seguida no nome tira 1. Todas as palavras têm de bater em algum
-// campo (só as de ligação podem faltar).
+// (razão social) ou nome fantasia igual 3, nome ou fantasia começando com a
+// busca 4; depois 10 + o quanto cada palavra errou - palavra no nome ou no
+// nome fantasia conta como está (o vendedor conhece a loja pelo fantasia:
+// "LOJA BOM JESUS" é a IRACEMA PERISSATO E CIA), na cidade +2, e a frase
+// seguida no nome ou no fantasia tira 1. Todas as palavras têm de bater em
+// algum campo (só as de ligação podem faltar).
 function pontuarClienteBusca(c, busca) {
   const q = textoBuscaCliente(busca);
   if (!q) return null;
@@ -70,13 +93,17 @@ function pontuarClienteBusca(c, busca) {
     if (digitos.length >= 4 && doc.includes(digitos)) return 2;
   }
   const nome = textoBuscaCliente(c.nome);
-  if (nome === q) return 3;
-  if (nome.startsWith(q)) return 4;
+  const fantasia = textoBuscaCliente(c.nome_fantasia);
+  if (nome === q || fantasia === q) return 3;
+  if (nome.startsWith(q) || (fantasia && fantasia.startsWith(q))) return 4;
+  const tokensNome = nome.split(' ').filter(Boolean);
+  const tokensFantasia = fantasia.split(' ').filter(Boolean);
   const campos = [
-    [nome.split(' '), 0],
-    [textoBuscaCliente(c.nome_fantasia).split(' ').filter(Boolean), 1],
+    [tokensNome, 0],
+    [tokensFantasia, 0],
     [textoBuscaCliente(c.municipio).split(' ').filter(Boolean), 2],
   ];
+  const juntas = juntasCliente(tokensNome).concat(juntasCliente(tokensFantasia));
   const todas = q.split(' ');
   const palavras = todas.filter(w => !LIGACAO_BUSCA_CLIENTE.has(w));
   let total = 0, achou = 0;
@@ -86,6 +113,7 @@ function pontuarClienteBusca(c, busca) {
       const p = penalidadePalavraCliente(w, tokens);
       if (p + extra < melhor) melhor = p + extra;
     }
+    if (melhor > 1) melhor = Math.min(melhor, penalidadeJuntaCliente(w, juntas));
     if (melhor === Infinity) {
       if (LIGACAO_BUSCA_CLIENTE.has(w) && palavras.length) continue;
       return null;
@@ -94,7 +122,8 @@ function pontuarClienteBusca(c, busca) {
     achou++;
   }
   if (!achou) return null;
-  const frase = todas.length > 1 && (' ' + nome + ' ').includes(' ' + q + ' ') ? -1 : 0;
+  const frase = todas.length > 1 && ((' ' + nome + ' ').includes(' ' + q + ' ')
+    || (' ' + fantasia + ' ').includes(' ' + q + ' ')) ? -1 : 0;
   return 10 + total + frase;
 }
 // Os clientes que batem com a busca, melhor primeiro (empate: nome mais curto, alfabético).
