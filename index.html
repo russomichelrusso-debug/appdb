@@ -947,6 +947,11 @@
       padding-right: 92px;
     }
 
+    /* busca do Pedido: ✕ + leitor + microfone */
+    .searchBox--actions2:has(.searchClearBtn:not(.hidden)) input#searchInput {
+      padding-right: 130px;
+    }
+
     .searchBoxActions {
       position: absolute;
       right: 6px;
@@ -3045,13 +3050,21 @@
        mesmo sem busca, e não fazia nada ao tocar (não havia resultado pra somar). */
     .resultsAddAllBar {
       display: flex;
-      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      justify-content: space-between;
       padding: 0 16px;
       margin: 12px 0 8px;
     }
 
     .resultsAddAllBar.hidden {
       display: none;
+    }
+
+    .resultsContagem {
+      font-size: 13px;
+      color: var(--gray);
+      min-width: 0;
     }
 
     .addAllBtn {
@@ -8570,9 +8583,13 @@
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="searchInput" placeholder="Código ou nome do produto"
-            autocomplete="off">
+          <input type="text" id="searchInput" placeholder="Código, nome ou medida do produto"
+            autocomplete="off" enterkeyhint="search">
           <div class="searchBoxActions">
+            <button type="button" class="searchClearBtn hidden" data-limpar-busca="searchInput" aria-label="Limpar busca">
+              <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
+                  aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></span>
+            </button>
             <button type="button" class="camBtn" id="scanBtnSearch" aria-label="Ler código de barras pela câmera">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                 stroke-linejoin="round">
@@ -8606,6 +8623,7 @@
       </div>
 
       <div class="resultsAddAllBar hidden" id="resultsAddAllBar">
+        <span class="resultsContagem" id="resultsContagem"></span>
         <button type="button" class="addAllBtn" id="addAllResultsBtn">Adicionar todos ao orçamento</button>
       </div>
       <div class="results" id="resultsList"></div>
@@ -10655,6 +10673,9 @@
         const list = document.getElementById('resultsList');
         const hint = document.getElementById('searchHint');
         const addAllBar = document.getElementById('resultsAddAllBar');
+        // ✕ da busca também quando o app limpa o campo sozinho (código que entrou na lista de preços)
+        const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
+        if (limpar) limpar.classList.toggle('hidden', !q);
         if (q.trim().length < 2) {
           list.innerHTML = '';
           hint.style.display = 'block';
@@ -10669,11 +10690,17 @@
           list.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
       <p>Nenhum produto encontrado para "${escapeHtml(q)}"</p>
+      <p style="font-size:13px;">Tente só o começo das palavras (ex.: "serra cop 50") ou o código.</p>
     </div>`;
           addAllBar.classList.add('hidden');
           return;
         }
         addAllBar.classList.remove('hidden');
+        // quantos achou (a busca para em 50) e quantos o "Adicionar todos" vai pôr no orçamento
+        document.getElementById('resultsContagem').textContent = items.length >= 50
+          ? '50+ produtos — digite a medida pra afinar' : `${items.length} produto${items.length === 1 ? '' : 's'}`;
+        document.getElementById('addAllResultsBtn').textContent = items.length === 1
+          ? 'Adicionar ao orçamento' : `Adicionar os ${items.length} ao orçamento`;
         list.innerHTML = items.map(p => renderCard(p)).join('');
         wireProductCardButtons(list);
       }
@@ -10767,9 +10794,20 @@
         const code = (rawCode || '').toString().trim();
         if (!code) return;
         let p = findByExactCode(code);
+        let achados = 0;
         if (!p && code.length >= 2) {
           const results = searchProducts(code);
+          achados = results.length;
           if (results.length === 1) p = results[0];
+        }
+        if (!p && achados > 1) {
+          // Enter num nome com vários resultados: não é "código não encontrado" -
+          // fecha o teclado pra mostrar a lista e o vendedor toca no certo
+          const input = document.getElementById('searchInput');
+          if (input) input.blur();
+          renderResults();
+          showToast(`${achados >= 50 ? '50+' : achados} produtos — toque no certo ou digite a medida`);
+          return;
         }
         if (!p) { showToast('Código não encontrado: ' + code); return; }
         addToPriceList(p.c);
@@ -25103,6 +25141,7 @@
           initBarcodeScanner();
 
           const searchInput = document.getElementById('searchInput');
+          initLimparBusca('searchInput');
           let debounceTimer;
           searchInput.addEventListener('input', () => {
             clearTimeout(debounceTimer);
