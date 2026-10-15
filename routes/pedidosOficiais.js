@@ -648,7 +648,12 @@ async function importarRelatorioOficial(body, usuario) {
     .filter(it => it.nr_pedido != null && it.codigo_sku != null && it.cliente_codigo_oficial != null)
     .map(it => {
       const nr = String(it.nr_pedido).trim();
-      return /^\d+$/.test(nr) ? { ...it, nr_pedido: nr.replace(/^0+(?=\d)/, '') } : it;
+      const comNr = /^\d+$/.test(nr) ? { ...it, nr_pedido: nr.replace(/^0+(?=\d)/, '') } : it;
+      // NF igual ao Título dos pendentes à vista (normalizarTitulosAvista), que
+      // liga nela: com zero à esquerda o pagamento pendente não era reconhecido
+      if (it.nota_fiscal == null) return comNr;
+      const nf = String(it.nota_fiscal).trim();
+      return { ...comNr, nota_fiscal: !nf ? null : /^\d+$/.test(nf) ? nf.replace(/^0+(?=\d)/, '') : nf };
     });
   const descartados = itensBrutos.length - itensValidos.length;
   if (descartados > 0) {
