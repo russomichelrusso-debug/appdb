@@ -1154,12 +1154,20 @@ Supabase, sem PR — não é mudança de código.
     lado (`.levLado`/`.levMeio`) só a partir de 1350 px; **até 1349 px o cliente vira faixa em cima** e a lista usa a
     largura (tablet 1280 deitado = 3 colunas, pedido do PR #247). Divs de coluna só agrupam (nada no JS depende da
     ordem dos filhos).
-  - **Faixas**: 900-1349 px menu em trilho (ícone com o nome embaixo) e orçamento mais estreito; 900-1099 (ex.: 1024×768)
+  - **Faixas**: 900-1599 px menu em trilho (ícone com o nome embaixo) e orçamento mais estreito (o menu largo só a
+    partir de 1600 px: em 1440 sobravam ~480 px pra tabela de produtos); 900-1099 (ex.: 1024×768)
     coluna do lado de 290 px. **Tablet em pé (700-899 px)**: abas embaixo e gaveta como no celular, mas na largura toda -
     card do cliente ao lado do contexto, produtos e blocos da aba Clientes em 2 colunas.
   - Com mouse (`hover: hover` e `pointer: fine`): realce no menu e sem o botão flutuante de leitura; **em tela de toque o
     botão flutuante continua**. Tecla **"/"** vai pra busca da aba aberta.
   - Tela nova com `position: fixed` centrada na coluna de 560 px: conferir no laptop/tablet (`--ladoW`/`--orcW`).
+  - **Tabela de produtos no Pedido** (laptop com mouse, 1250 px ou mais; `MQ_TABELA_PRODUTOS`): a busca vira tabela densa
+    (código + embalagem, produto com selo de campanha/preço fixo/previsão, preço, desconto, quantidade digitada, "+"),
+    `renderLinhaTabela`/`wireTabelaProdutos`. Mesmos `data-*` do card (`wireProductCardButtons`), então preço,
+    campanha e edição saem das mesmas funções - campo novo no card entra também na linha. Teclado: ↓ da busca entra na
+    tabela, ↑↓ troca de linha, Enter põe no orçamento, Esc volta pra busca; quantidade digitada vai pro múltiplo da
+    embalagem pra cima (com aviso). Até 1349 px a coluna Desc. some (o desconto fica no orçamento). Tablet (toque) e
+    laptop mais estreito continuam com os cards.
 
 ## O que já tentamos e não deu certo
 

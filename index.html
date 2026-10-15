@@ -9020,11 +9020,11 @@
       }
     }
 
-    /* Laptop pequeno e tablet deitado (900-1349 px, ex.: 1280x800, iPad
-       deitado): com o menu largo e o orçamento preso sobravam ~150 px pros
-       produtos. O menu vira trilho (ícone com o nome embaixo) e o orçamento e
-       a coluna do lado afinam. */
-    @media (min-width: 900px) and (max-width: 1349px) {
+    /* Até 1599 px (laptop comum, 1280/1366/1440, e tablet deitado): com o menu
+       largo e o orçamento preso sobravam ~150 px pros produtos (~480 px pra
+       tabela em 1440). O menu vira trilho (ícone com o nome embaixo) e o
+       orçamento e a coluna do lado afinam; o menu largo fica pra 1600 px ou mais. */
+    @media (min-width: 900px) and (max-width: 1599px) {
       :root {
         --ladoW: 84px;
         --orcW: 340px;
@@ -9142,6 +9142,199 @@
       .campGrupoGrade {
         grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
       }
+    }
+    /* Tabela de produtos do Pedido no laptop com mouse (renderLinhaTabela; só
+       existe quando MQ_TABELA_PRODUTOS vale) */
+    .srOnly {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    #resultsList.emTabela {
+      display: block;
+      overflow-x: auto;
+    }
+
+    .prodTabela {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      background: var(--white);
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-md);
+      font-size: 13px;
+    }
+
+    .prodTabela th {
+      text-align: left;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--gray);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+      padding: 9px 8px;
+    }
+
+    .prodTabela td {
+      padding: 6px 8px;
+      border-top: 0.75px solid var(--neutral-2);
+      vertical-align: middle;
+    }
+
+    .prodTabela th:first-child,
+    .prodTabela td:first-child {
+      padding-left: 12px;
+    }
+
+    .prodTabela th:last-child,
+    .prodTabela td:last-child {
+      padding-right: 10px;
+    }
+
+    .prodLinha:hover {
+      background: var(--fill);
+    }
+
+    .prodLinha:focus-within {
+      background: var(--info-bg);
+    }
+
+    .prodTabela .tCod {
+      width: 1%;
+      white-space: nowrap;
+      color: var(--gray);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .prodTabela .tCod small {
+      display: block;
+      font-size: 11px;
+    }
+
+    .prodTabela .pname {
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .tSelos {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      margin-top: 3px;
+    }
+
+    .tSelos .fixedbadge,
+    .tSelos .editedbadge,
+    .tSelos .previsaoBadge {
+      display: inline-block;
+      margin: 0;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .tSelos .fixedbadge {
+      color: #7A5B00;
+      background: var(--yellow);
+    }
+
+    .tCampanha {
+      border: none;
+      border-radius: 20px;
+      padding: 2px 8px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 700;
+      background: var(--success-strong);
+      color: var(--on-accent);
+      cursor: pointer;
+    }
+
+    .tCampanha.bf {
+      background: var(--black-friday);
+      color: var(--yellow);
+    }
+
+    .prodTabela .tPreco {
+      width: 1%;
+      text-align: right;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .prodTabela td.tPreco s {
+      display: block;
+      font-size: 11px;
+      color: var(--gray);
+    }
+
+    .prodTabela td.tPreco b {
+      font-size: 14px;
+    }
+
+    .prodTabela td.tPreco .pencilBtn {
+      margin-left: 2px;
+      vertical-align: middle;
+    }
+
+    .prodTabela .tDesc {
+      width: 1%;
+    }
+
+    .prodTabela .tQtd {
+      width: 1%;
+      text-align: right;
+    }
+
+    .prodTabela .tQtd input {
+      width: 64px;
+      height: 34px;
+      box-sizing: border-box;
+      padding: 0 8px;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      background: var(--white);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .prodTabela .tQtd input:focus {
+      outline: 2px solid var(--blue);
+      outline-offset: 0;
+      border-color: transparent;
+    }
+
+    .prodTabela .tAdd {
+      width: 1%;
+    }
+
+    .prodTabela .addbtn {
+      width: 34px;
+      height: 34px;
+    }
+
+    /* até 1349 px a coluna Desc. não cabe: o desconto do item fica no orçamento */
+    @media (max-width: 1349px) {
+      .prodTabela .tDesc {
+        display: none;
+      }
+    }
+
+    .prodTabelaDica {
+      padding: 8px 4px;
+      font-size: 12px;
+      color: var(--gray);
     }
   </style>
 </head>
@@ -11522,6 +11715,10 @@
         const list = document.getElementById('resultsList');
         const hint = document.getElementById('searchHint');
         const addAllBar = document.getElementById('resultsAddAllBar');
+        // tabela do laptop: o redesenho (desconto, preço editado) não tira o foco da quantidade
+        const ativo = document.activeElement;
+        const focoQtd = ativo && ativo.dataset ? ativo.dataset.tabelaQtd : null;
+        list.classList.remove('emTabela');
         // ✕ da busca também quando o app limpa o campo sozinho (código que entrou na lista de preços)
         const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
         if (limpar) limpar.classList.toggle('hidden', !q);
@@ -11550,8 +11747,15 @@
           ? '50+ produtos — digite a medida pra afinar' : `${items.length} produto${items.length === 1 ? '' : 's'}`;
         document.getElementById('addAllResultsBtn').textContent = items.length === 1
           ? 'Adicionar ao orçamento' : `Adicionar os ${items.length} ao orçamento`;
-        list.innerHTML = items.map(p => renderCard(p)).join('');
+        const tabela = MQ_TABELA_PRODUTOS.matches;
+        list.classList.toggle('emTabela', tabela);
+        list.innerHTML = tabela ? htmlTabelaProdutos(items) : items.map(p => renderCard(p)).join('');
         wireProductCardButtons(list);
+        if (tabela) {
+          wireTabelaProdutos(list);
+          const voltar = focoQtd && list.querySelector(`[data-tabela-qtd="${CSS.escape(focoQtd)}"]`);
+          if (voltar) voltar.focus();
+        }
       }
       // Adiciona ao orçamento todos os produtos visíveis agora (na busca ou na
       // lista escaneada), cada um com a quantidade/desconto já ajustados no
@@ -11743,6 +11947,93 @@
       <button class="addbtn" data-add="${escapeHtml(p.c)}" aria-label="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     </div>
   </div>`;
+      }
+
+      // ---- Tabela de produtos no laptop (10/2026, mockup "telas por aparelho",
+      // pedido do usuário) ----
+      // Com mouse e 1250 px ou mais, a busca do Pedido vira tabela densa: código,
+      // produto, preço, desconto e quantidade digitada, e teclado - ↓ da busca
+      // entra na tabela, ↑↓ troca de linha, Enter põe no orçamento, Esc volta pra
+      // busca. Usa os mesmos data-* do card (wireProductCardButtons): preço,
+      // campanha, preço fixo e edição saem das mesmas funções. Tablet (toque)
+      // continua com os cards, e laptop mais estreito também (não cabe).
+      const MQ_TABELA_PRODUTOS = window.matchMedia('(min-width: 1250px) and (hover: hover) and (pointer: fine)');
+      MQ_TABELA_PRODUTOS.addEventListener('change', () => renderResults());
+      function htmlTabelaProdutos(items) {
+        return `<table class="prodTabela">
+    <thead><tr><th>Código</th><th>Produto</th><th class="tPreco">Preço ${escapeHtml(state.uf || '')}</th><th class="tDesc">Desc.</th><th class="tQtd">Qtd</th><th><span class="srOnly">Adicionar</span></th></tr></thead>
+    <tbody>${items.map(p => renderLinhaTabela(p)).join('')}</tbody>
+  </table>
+  <div class="prodTabelaDica">↓ entra na tabela · ↑ ↓ muda de linha · digite a quantidade e Enter põe no orçamento · Esc volta pra busca</div>`;
+      }
+      function renderLinhaTabela(p) {
+        const lp = listPrice(p, state.uf);
+        const fixo = isPrecoFixoParaCanal(p);
+        const cp = clientPrice(lp, classificatorioEfetivo(), state.promoDiscount, fixo, qtyDiscountFor(p.c));
+        const hasDiscount = cp < lp - 0.005;
+        const edited = isPriceEdited(p.c);
+        const qtyDisc = descontoItemVisivel(p);
+        const campanhas = campanhasDoCard(p);
+        const cod = escapeHtml(p.c);
+        const selos = (campanhas.length ? htmlSeloCampanhaTabela(p, campanhas) : '')
+          + (fixo ? '<span class="fixedbadge">Preço fixo</span>' : '')
+          + (edited ? '<span class="editedbadge">Preço editado</span>' : '')
+          + renderPrevisaoBadge(p.c);
+        return `<tr class="prodLinha">
+    <td class="tCod">${cod}<small>Emb. ${p.emb}</small></td>
+    <td class="tNome"><div class="pname">${escapeHtml(p.n)}${FICHAS_MAP[p.c] ? `<button class="fichaInfoBtn" data-ficha="${cod}" aria-label="Ver informações técnicas">i</button>` : ''}${renderVideoLinks(p.c)}</div>${selos ? `<div class="tSelos">${selos}</div>` : ''}</td>
+    <td class="tPreco">${hasDiscount ? `<s>${brl(lp)}</s>` : ''}<b>${brl(cp)}</b><button class="pencilBtn${edited ? ' isEdited' : ''}" data-edit-price="${cod}" aria-label="Editar preço base">${PENCIL_SVG}</button></td>
+    <td class="tDesc"><div class="pct-wrap mini"><input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${cod}" aria-label="Desconto individual do item" title="Desconto individual do item" ${fixo ? 'disabled' : ''}></div></td>
+    <td class="tQtd"><input type="text" inputmode="numeric" autocomplete="off" value="${getPendingQty(p)}" data-tabela-qtd="${cod}" aria-label="Quantidade de ${escapeHtml(p.n)}" title="Múltiplo de ${p.emb}"></td>
+    <td class="tAdd"><button class="addbtn" data-add="${cod}" aria-label="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></td>
+  </tr>`;
+      }
+      function htmlSeloCampanhaTabela(p, campanhas) {
+        const r = campanhas[0];
+        const mais = campanhas.length > 1 ? ` +${campanhas.length - 1}` : '';
+        return `<button type="button" class="tCampanha${ehCampanhaBlackFriday(r) ? ' bf' : ''}" data-campanha-item="${escapeHtml(p.c)}" aria-label="Ver condições da campanha ${escapeHtml(r.name || '')}" title="${escapeHtml(r.name || 'Campanha')}">${escapeHtml(rotuloPctDaFita(r))}${mais}</button>`;
+      }
+      // quantidade digitada: no múltiplo da embalagem, pra cima (como o resto do app)
+      function qtdDigitadaNaTabela(inp) {
+        const p = productByCod(inp.dataset.tabelaQtd);
+        if (!p) return;
+        const step = packStep(p);
+        const n = Math.floor(Number(String(inp.value).replace(',', '.')));
+        if (!(n > 0)) { inp.value = getPendingQty(p); return; }
+        const q = Math.max(step, Math.ceil(n / step) * step);
+        if (q !== n) showToast(`${p.c}: ${q} un. (embalagem com ${step})`);
+        state.pendingQty[p.c] = q;
+        inp.value = q;
+      }
+      function wireTabelaProdutos(list) {
+        const campos = [...list.querySelectorAll('[data-tabela-qtd]')];
+        campos.forEach((inp, i) => {
+          inp.addEventListener('focus', () => inp.select());
+          inp.addEventListener('change', () => qtdDigitadaNaTabela(inp));
+          inp.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+              e.preventDefault();
+              qtdDigitadaNaTabela(inp);
+              const alvo = campos[i + (e.key === 'ArrowDown' ? 1 : -1)];
+              if (alvo) alvo.focus();
+              else if (e.key === 'ArrowUp') document.getElementById('searchInput').focus();
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              qtdDigitadaNaTabela(inp);
+              const btn = list.querySelector(`[data-add="${CSS.escape(inp.dataset.tabelaQtd)}"]`);
+              if (btn) btn.click();
+              // o "Adicionar" volta a quantidade pro múltiplo padrão
+              const p = productByCod(inp.dataset.tabelaQtd);
+              if (p) inp.value = getPendingQty(p);
+              inp.select();
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              const busca = document.getElementById('searchInput');
+              busca.focus();
+              busca.select();
+            }
+          });
+        });
       }
 
       function escapeHtml(s) {
@@ -12406,12 +12697,15 @@
         if (!campanhas.length) return '';
         return ' emCampanha' + (ehCampanhaBlackFriday(campanhas[0]) ? ' bf' : '');
       }
+      function rotuloPctDaFita(r) {
+        const variasFaixas = r.basis !== 'combo' && (r.tiers || []).filter(t => Number(t.pct) > 0).length > 1;
+        return `${variasFaixas ? 'até ' : ''}-${pctCampanhaTexto(maiorPctDaRegra(r))}${r.soNoPrecoFixo ? ' no fixo' : ''}`;
+      }
       function htmlFitaCampanha(p, campanhas) {
         if (!campanhas.length) return '';
         const r = campanhas[0];
         const bf = ehCampanhaBlackFriday(r);
-        const variasFaixas = r.basis !== 'combo' && (r.tiers || []).filter(t => Number(t.pct) > 0).length > 1;
-        const valor = `${variasFaixas ? 'até ' : ''}-${pctCampanhaTexto(maiorPctDaRegra(r))}${r.soNoPrecoFixo ? ' no fixo' : ''}`;
+        const valor = rotuloPctDaFita(r);
         const mais = campanhas.length > 1 ? ` +${campanhas.length - 1}` : '';
         return `<button type="button" class="fitaCampanha${bf ? ' bf' : ''}" data-campanha-item="${escapeHtml(p.c)}" aria-label="Ver condições da campanha ${escapeHtml(r.name || '')}">`
           + `<span class="fitaNome">${bf ? '' : '🎉 '}${escapeHtml(r.name || 'Campanha')}${mais}</span><span class="fitaPct">${escapeHtml(valor)} ›</span></button>`;
@@ -26625,6 +26919,12 @@
           // a busca ao vivo por nome (renderResults) continua funcionando normalmente
           // enquanto a pessoa só está digitando, sem interferir uma coisa na outra.
           searchInput.addEventListener('keydown', (e) => {
+            // laptop: ↓ entra na tabela de produtos
+            if (e.key === 'ArrowDown' && MQ_TABELA_PRODUTOS.matches) {
+              const primeiro = document.querySelector('#resultsList [data-tabela-qtd]');
+              if (primeiro) { e.preventDefault(); primeiro.focus(); }
+              return;
+            }
             if (e.key === 'Enter') {
               e.preventDefault();
               processPrecoCodigo(searchInput.value);
