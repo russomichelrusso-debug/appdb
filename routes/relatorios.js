@@ -4,7 +4,7 @@ const { pool } = require('../db');
 const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE, diaDoBanco } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
-const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
+const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { marcarDescontinuados, estaDescontinuado, grupoDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
@@ -244,7 +244,7 @@ router.get('/clientes/:id/consumo-estimado/:produtoId', async (req, res) => {
   const { id, produtoId } = req.params;
   try {
     const leiturasResult = await pool.query(
-      `SELECT l.data_visita, li.quantidade_contada
+      `SELECT l.data_visita, li.quantidade_contada, (l.data_visita AT TIME ZONE '${FUSO}')::date::text AS dia_visita
        FROM levantamento_itens li
        JOIN levantamentos l ON li.levantamento_id = l.id
        WHERE l.cliente_id = $1 AND li.produto_id = $2
@@ -260,7 +260,10 @@ router.get('/clientes/:id/consumo-estimado/:produtoId', async (req, res) => {
       pool.query('SELECT codigo_sku FROM produtos WHERE id = $1', [produtoId]),
     ]);
     const doProduto = compras && produto.rows[0] ? compras.get(String(produto.rows[0].codigo_sku)) : null;
-    const diaDe = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+    // dia da visita no fuso de Brasília (data_visita é TIMESTAMPTZ): pelo dia
+    // UTC, a visita feita depois das 21h caía no dia seguinte e a compra desse
+    // dia saía do período
+    const diaDe = (l) => l.dia_visita || (l.data_visita instanceof Date ? l.data_visita.toISOString() : String(l.data_visita)).slice(0, 10);
     const consumos = [];
     for (let i = 1; i < leituras.length; i++) {
       const inicio = leituras[i-1].data_visita;
@@ -268,7 +271,7 @@ router.get('/clientes/:id/consumo-estimado/:produtoId', async (req, res) => {
       let pedidoNoPeriodo = 0;
       if (doProduto) {
         for (const [d, q] of doProduto.dias) {
-          if (d > diaDe(inicio) && d <= diaDe(fim)) pedidoNoPeriodo += q.quantidade;
+          if (d > diaDe(leituras[i-1]) && d <= diaDe(leituras[i])) pedidoNoPeriodo += q.quantidade;
         }
       }
       const dias = (new Date(fim) - new Date(inicio)) / 86400000;

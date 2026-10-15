@@ -1303,7 +1303,9 @@
       if (!dias) return { inicio: null, fim: null };
       const fim = new Date();
       const inicio = new Date(fim.getTime() - dias * 86400000);
-      const fmt = (d) => d.toISOString().slice(0, 10);
+      // dia do aparelho, não o de UTC: depois das 21h o toISOString já dava o
+      // dia seguinte e o período perdia o 1º dia
+      const fmt = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       return { inicio: fmt(inicio), fim: fmt(fim) };
     }
 

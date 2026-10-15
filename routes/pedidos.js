@@ -246,7 +246,9 @@ router.post('/', async (req, res) => {
     }
 
     for (const item of itens) {
-      const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku, criarProdutosDesconhecidos ? item.descricao : null);
+      // trim como em trocarItensDoPedido: " 60863" passava no itensValidos, não
+      // achava o produto e o pedido voltava 400 pra sempre na fila offline
+      const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), criarProdutosDesconhecidos ? item.descricao : null);
       await client.query(
         'INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario) VALUES ($1, $2, $3, $4)',
         [pedidoId, produtoId, item.quantidade, item.preco_unitario]
