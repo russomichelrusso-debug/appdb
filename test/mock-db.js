@@ -964,6 +964,14 @@ async function query(sql, params = []) {
     clientes.push(c);
     return { rows: [s.includes('RETURNING *') ? c : { id: c.id }] };
   }
+  // GET /api/clientes?busca= (routes/clientes.js): carteira inteira com nome
+  // fantasia/cidade da ficha; a ordem pela busca é feita em memória na rota.
+  if (s.includes('/* CLIENTES:BUSCA */')) {
+    return { rows: clientes.map(c => {
+      const f = clienteCnpjFicha[c.id] || {};
+      return { classificatorio_tipo: null, classificatorio_desconto: null, ...c, nome_fantasia: f.nome_fantasia || null, municipio: f.municipio || null, uf: f.uf || null };
+    }) };
+  }
   if (s.includes('SELECT ID, NOME, DOCUMENTO, CONTATO, CLASSIFICATORIO_TIPO, CLASSIFICATORIO_DESCONTO')) {
     const busca = params[0] ? params[0].replace(/%/g, '').toUpperCase() : null;
     const found = busca
@@ -1014,6 +1022,7 @@ async function query(sql, params = []) {
       telefone_comercial: c.telefone_comercial || null, email_comercial: c.email_comercial || null,
       email_nfe: c.email_nfe || null, contatos_em: c.contatos_em || null,
       email_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].email) || null,
+      nome_fantasia: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].nome_fantasia) || null,
       regime_tributario: regime(clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos),
       latitude: c.latitude == null ? null : String(c.latitude),
       longitude: c.longitude == null ? null : String(c.longitude),

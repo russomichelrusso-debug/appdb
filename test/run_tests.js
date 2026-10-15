@@ -250,6 +250,37 @@ async function main() {
     res.status === 200 && res.body.length === 1 && res.body[0].codigo_oficial === 'COD9010',
     `busca de cliente devolve codigo_oficial pro seletor mostrar entre parênteses: ${JSON.stringify(res.body[0])}`
   );
+  // 5c) busca sem acento, palavras em qualquer ordem, CNPJ sem pontuação, código
+  // do ERP, nome fantasia e cidade da ficha de CNPJ (routes/lib/buscaCliente.js)
+  mockDb.__seed({
+    clientes: [
+      { id: 9020, nome: 'DEPOSITO SAO JOSE LTDA', documento: '11.222.333/0001-44', codigo_oficial: '21650', matriz_grupo: null },
+      { id: 9021, nome: 'DEPOSITO CENTRAL', documento: null, codigo_oficial: '5569', matriz_grupo: null },
+    ],
+    fichasCnpj: { 9020: { cliente_id: 9020, nome_fantasia: 'CASA DO CONSTRUTOR', municipio: 'MARINGA', uf: 'PR' } },
+  });
+  {
+    const ids = async (q) => ((await req('GET', '/api/clientes?busca=' + encodeURIComponent(q))).body || []).map(c => c.id).join(',');
+    const r = {
+      acento: await ids('joao silva'), ordem: await ids('silva joão'), cnpj: await ids('11222333000144'),
+      codigo: await ids('21650'), fantasia: await ids('casa construtor'), cidade: await ids('deposito maringa'),
+      erro: await ids('depozito sao jose'), nada: await ids('xyzw'),
+    };
+    assert(r.acento === String(clienteId) && r.ordem === String(clienteId) && r.cnpj === '9020' && r.codigo === '9020'
+      && r.fantasia === '9020' && r.cidade === '9020' && r.erro === '9020' && r.nada === '',
+      `busca de cliente: sem acento, qualquer ordem, CNPJ sem pontuação, código do ERP, nome fantasia, cidade e erro de digitação: ${JSON.stringify(r)}`);
+  }
+  {
+    // a busca sem internet (index.html) usa cópia igual do motor do servidor
+    const fsC = require('fs');
+    const trecho = (txt) => {
+      const i = txt.indexOf('// <motor-busca-cliente>'), f = txt.indexOf('// </motor-busca-cliente>');
+      return i >= 0 && f > i ? txt.slice(i, f).split(/\r?\n/).map(l => l.trim()).filter(Boolean).join('\n') : null;
+    };
+    const doServidor = trecho(fsC.readFileSync(path.join(__dirname, '..', 'routes', 'lib', 'buscaCliente.js'), 'utf8'));
+    const doApp = trecho(fsC.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8'));
+    assert(doServidor && doServidor === doApp, 'busca de cliente: o trecho <motor-busca-cliente> do index.html é igual ao de routes/lib/buscaCliente.js');
+  }
   res = await req('GET', '/api/clientes/sync');
   const sincronizado = res.body.clientes.find(c => c.id === 9010);
   assert(
