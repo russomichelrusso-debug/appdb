@@ -54,9 +54,12 @@ module.exports = { gerarMiniatura, MINI_LADO };
 
 // ---- Geração numa thread à parte (worker_threads) ----
 // O processo principal continua atendendo enquanto a miniatura sai. Uma thread
-// só, uma foto por vez (fila de mensagens); se a thread cair, quem esperava
-// recebe null e a próxima chamada abre outra.
+// só, uma foto por vez (fila de mensagens). Resposta: Buffer, null (a foto não
+// dá pra ler - quem chama guarda a falha) ou undefined (a thread caiu ou passou
+// do prazo - não é culpa da foto, tenta de novo depois). Passou do prazo: a
+// thread é encerrada e a próxima chamada abre outra.
 const { Worker, isMainThread, parentPort, workerData } = require('worker_threads');
+const MINI_PRAZO_MS = 15000; // foto que trava o decodificador não segura as outras
 let worker = null;
 let proximoId = 0;
 const esperando = new Map();
@@ -71,7 +74,7 @@ function abrirWorker() {
   });
   const encerrar = () => {
     if (worker === w) worker = null;
-    for (const resolve of esperando.values()) resolve(null);
+    for (const resolve of esperando.values()) resolve(undefined);
     esperando.clear();
   };
   w.on('error', (e) => { console.error('Miniatura: erro na thread', e && e.message); encerrar(); });
@@ -86,9 +89,18 @@ function gerarMiniaturaSemTravar(imagem) {
   return new Promise((resolve) => {
     try {
       if (!worker) worker = abrirWorker();
+      const w = worker;
       const id = ++proximoId;
-      esperando.set(id, resolve);
-      worker.postMessage({ id, imagem });
+      const prazo = setTimeout(() => {
+        if (!esperando.has(id)) return;
+        console.error('Miniatura: passou do prazo, reiniciando a thread');
+        esperando.delete(id);
+        resolve(undefined);
+        w.terminate().catch(() => { });
+      }, MINI_PRAZO_MS);
+      prazo.unref();
+      esperando.set(id, (mini) => { clearTimeout(prazo); resolve(mini); });
+      w.postMessage({ id, imagem });
     } catch (e) {
       // sem worker_threads (não deveria acontecer no Node 18+): gera aqui mesmo
       resolve(gerarMiniatura(imagem));

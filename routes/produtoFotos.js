@@ -72,18 +72,30 @@ router.get('/:sku/variacoes', async (req, res) => {
 
 // ---- Miniaturas pro catálogo sem internet (10/2026) ----
 // A miniatura é gerada na primeira vez que alguém pede e fica no banco; só
-// grava se a foto não foi trocada no meio (mesma versão).
-async function miniaturaGerada(sku, versao) {
+// grava se a foto não foi trocada no meio (mesma versão). Foto que não dá pra
+// ler grava miniatura vazia (0 bytes): não é decodificada de novo a cada
+// pedido (o app fica com a foto cheia); trocar a foto zera. Dois vendedores
+// pedindo a mesma ao mesmo tempo esperam a mesma geração.
+const geracoesEmAndamento = new Map(); // "sku@versão" -> Promise
+function miniaturaGerada(sku, versao) {
+  const chave = `${sku}@${versao}`;
+  if (!geracoesEmAndamento.has(chave)) {
+    const p = gerarEGravarMiniatura(sku, versao).finally(() => geracoesEmAndamento.delete(chave));
+    geracoesEmAndamento.set(chave, p);
+  }
+  return geracoesEmAndamento.get(chave);
+}
+async function gerarEGravarMiniatura(sku, versao) {
   const r = await pool.query(
     `/* FOTOS:IMAGEM_PRA_MINI */ SELECT imagem FROM produto_fotos
      WHERE codigo_sku = $1 AND (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint = $2`, [sku, versao]
   );
   if (!r.rows.length) return null;
   const mini = await gerarMiniaturaSemTravar(r.rows[0].imagem);
-  if (!mini) return null;
+  if (mini === undefined) return null; // thread caiu/passou do prazo: tenta no próximo pedido
   await pool.query(
     `/* FOTOS:MINIATURA_GRAVAR */ UPDATE produto_fotos SET miniatura = $2
-     WHERE codigo_sku = $1 AND (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint = $3`, [sku, mini, versao]
+     WHERE codigo_sku = $1 AND (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint = $3`, [sku, mini || Buffer.alloc(0), versao]
   );
   return mini;
 }
@@ -107,6 +119,7 @@ router.post('/miniaturas', async (req, res) => {
     for (const row of r.rows) {
       const versao = Number(row.versao);
       let mini = row.miniatura;
+      if (mini && mini.length === 0) continue; // ilegível: o app usa a foto cheia
       if (!mini) {
         if (gerar <= 0) { faltam++; continue; }
         gerar--;
@@ -132,10 +145,13 @@ router.get('/:sku/mini', async (req, res) => {
        FROM produto_fotos WHERE codigo_sku = ANY($1::text[])`, [[sku]]
     );
     if (!r.rows.length) return res.status(404).json({ erro: 'Produto sem foto.' });
-    const mini = r.rows[0].miniatura || await miniaturaGerada(sku, Number(r.rows[0].versao));
+    const versao = Number(r.rows[0].versao);
+    const guardada = r.rows[0].miniatura;
+    const mini = guardada && guardada.length ? guardada : (guardada ? null : await miniaturaGerada(sku, versao));
     if (!mini) return res.status(404).json({ erro: 'Não deu pra gerar a miniatura dessa foto.' });
     res.set('Content-Type', 'image/jpeg');
-    res.set('Cache-Control', 'private, max-age=31536000, immutable');
+    // pedido com a versão de antes (foto trocada no meio): não guarda a nova no endereço velho
+    res.set('Cache-Control', String(req.query.v || '') === String(versao) ? 'private, max-age=31536000, immutable' : 'no-store');
     res.send(Buffer.from(mini));
   } catch (e) {
     console.error(e);

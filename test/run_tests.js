@@ -3431,6 +3431,10 @@ async function main() {
       assert(rf.status === 200 && lidaFt3 && lidaFt3.width === 300 && lidaFt3.height === 200 && !rf.body.miniaturas.FT2 && rf.body.faltam === 0,
         `miniatura: 300 px no lado maior, foto ilegível e sem foto ficam de fora: ${JSON.stringify(rf.body && { ...rf.body, miniaturas: Object.keys(rf.body.miniaturas || {}) })} ${lidaFt3 && lidaFt3.width}x${lidaFt3 && lidaFt3.height}`);
       assert(miniFt3.v === mockDb.__getProdutoFotos().FT3.versao && mockDb.__getProdutoFotos().FT3.miniatura, 'miniatura: fica guardada com a versão da foto');
+      const ft2Mini = mockDb.__getProdutoFotos().FT2.miniatura;
+      assert(ft2Mini && ft2Mini.length === 0, 'miniatura: foto ilegível grava miniatura vazia (não decodifica de novo a cada pedido)');
+      rf = await req('GET', '/api/produto-fotos/FT2/mini');
+      assert(rf.status === 404, 'miniatura: foto ilegível responde 404 na rota de uma só');
       rf = await req('GET', '/api/produto-fotos/FT3/mini');
       assert(rf.status === 200 && /image\/jpeg/.test(rf.headers['content-type']), 'miniatura: rota de uma só devolve JPEG');
       rf = await req('PUT', '/api/produto-fotos/FT3', { imagem: jpegReal(500, 500, 3).toString('base64') });

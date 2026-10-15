@@ -1052,10 +1052,14 @@ Supabase, sem PR — não é mudança de código.
   `jpeg-js` em JavaScript puro numa `worker_thread`, sem binário nativo pro Render) na 1ª vez que alguém pede e guarda em
   `produto_fotos.miniatura` (trocar a foto zera). O app baixa **todas** em segundo plano depois das fotos de campanha
   (`baixarMiniaturas`: `POST /api/produto-fotos/miniaturas`, 100 códigos por pedido, o servidor gera até 15 por pedido e
-  responde `faltam`; ~30 MB pro catálogo inteiro; não baixa com "economia de dados") e guarda no `cortag-fotos-v1` em
+  responde `faltam`; ~30 MB pro catálogo inteiro; sozinho só fora da rede móvel — no 4G/"economia de dados" (Android
+  diz o tipo; iPhone não diz e baixa) o topo do catálogo oferece "baixar agora (~N MB)", e depois de tocar uma vez vale
+  sempre, `cortagMiniaturas4g_v1`) e guarda no `cortag-fotos-v1` em
   `…/COD/mini?v=` — o catálogo e a vitrine abrem **sem internet**; o topo do catálogo diz "Fotos pra usar sem internet: N de
   M". Grade, miniaturas e resultados da busca usam a miniatura (`data-foto-mini`); ficha, card e vitrine usam a foto cheia
-  e, sem internet, caem na miniatura. **"Mostrar ao cliente"** (D) abre a vitrine (`#vitrine`, `abrirVitrine`):
+  e, sem internet, caem na miniatura (que não fica no memo da cheia: com internet, baixa a cheia). Foto que o `jpeg-js` não
+  lê grava miniatura vazia (0 bytes, não decodifica de novo); a geração tem prazo de 15 s (reinicia a thread) e dois
+  pedidos da mesma foto esperam a mesma geração. A limpeza do cache de fotos só roda com a lista vinda do servidor. **"Mostrar ao cliente"** (D) abre a vitrine (`#vitrine`, `abrirVitrine`):
   tela cheia, um produto por vez, passar com o dedo/setas, miniaturas, **sem preço nenhum** e selo de campanha **sem o
   nome da regra** (costuma trazer o classificatório, mesma regra da tela do cliente); **sair só segurando o ✕** 0,8 s
   (o celular fica na mão do cliente); "Separar pra proposta" junta produtos e, ao sair, pergunta se vão pro orçamento.
