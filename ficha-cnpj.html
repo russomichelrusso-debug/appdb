@@ -312,7 +312,7 @@
     <div class="card" id="clientPickerCard">
       <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver a ficha cadastral dele.</p>
       <div id="clientPickerSearch">
-        <input type="text" id="clientPickerInput" placeholder="Buscar cliente por nome ou CNPJ…">
+        <input type="text" id="clientPickerInput" placeholder="Nome, fantasia, CNPJ, código ou cidade…">
         <div id="clientPickerResults" style="margin-top:8px;"></div>
       </div>
       <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -613,13 +613,19 @@
       }
     }
 
+    // fantasia igual à razão social a menos de acento/pontuação não repete (mesma régua do app)
+    function semAcentoNemPontuacao(s) {
+      return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+    }
     function renderClientResults(lista) {
       const host = document.getElementById('clientPickerResults');
       if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Nenhum cliente encontrado.</div>'; return; }
       host.innerHTML = lista.map(c => `
         <button type="button" class="clientResultItem" data-id="${c.id}" data-nome="${escapeHtml(c.nome)}" data-doc="${escapeHtml(c.documento || '')}">
           <span class="crName">${escapeHtml(c.nome)}</span>
-          <span class="crDoc">${c.documento ? escapeHtml(formatarDocumento(c.documento)) : 'Sem CNPJ cadastrado'}</span>
+          <span class="crDoc">${[c.nome_fantasia && semAcentoNemPontuacao(c.nome_fantasia) !== semAcentoNemPontuacao(c.nome) ? escapeHtml(c.nome_fantasia) : '',
+            c.documento ? escapeHtml(formatarDocumento(c.documento)) : 'Sem CNPJ cadastrado',
+            c.municipio ? escapeHtml(c.municipio + (c.uf ? '/' + c.uf : '')) : ''].filter(Boolean).join(' · ')}</span>
         </button>`).join('');
       host.querySelectorAll('.clientResultItem').forEach(btn => {
         btn.addEventListener('click', () => selecionarCliente(Number(btn.dataset.id), btn.dataset.nome, btn.dataset.doc));

@@ -1121,6 +1121,16 @@ Supabase, sem PR — não é mudança de código.
   a partir de 700 px, vai até 1280 px em grade (2 colunas em pé, 3 deitado). Detalhes em "Pegadinhas de ambiente"
   › "Rotação do app instalado".
 
+- **Busca de cliente pelo nome fantasia** (10/2026, pedido do usuário: "busca de nome fantasia em todo lugar"): o motor
+  (`routes/lib/buscaCliente.js` = trecho `<motor-busca-cliente>` do `index.html`, servidor e sem internet) já procurava no
+  fantasia da ficha de CNPJ, mas com +1 por palavra e sem o "igual"/"começa com" da razão social. Agora o fantasia vale
+  igual à razão social e palavras vizinhas juntas contam ("wa materiais" acha "W. A. MATS.", "jr" acha "J. R."; com 2
+  letras só a sigla inteira). Na carteira real (15/10/2026: 243 de 418 clientes com fantasia), digitar o fantasia inteiro
+  pôs a loja no topo em 243 de 243 (antes 212), razão social sem mudança (411 de 418). O fantasia aparece em negrito nos
+  resultados (`metaClienteBusca`/`fantasiaDoCliente`), na lista do Painel, no card do cliente selecionado (depois do CNPJ)
+  e na busca da Ficha cadastral. Valem as buscas que usam o motor: seletor de cliente, aba Clientes, Painel, Abrir
+  levantamento, Curva ABC e Ficha cadastral. Cliente sem ficha de CNPJ não tem fantasia (o ERP não manda).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
