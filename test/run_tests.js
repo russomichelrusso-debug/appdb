@@ -3783,7 +3783,7 @@ async function main() {
       if (!ctxB.searchProducts) {
         assert(false, 'busca: trecho <motor-busca> não encontrado no index.html');
       } else {
-        const cods = (q) => ctxB.searchProducts(q).map(p => p.c).join(',');
+        const cods = (q) => ctxB.searchProducts(q).map(p => p.c).sort().join(','); // quais, não a ordem
         assert(cods('Serra copo 50 mm') === '60882,61420' && cods('copo serra 50mm') === '60882,61420',
           'busca: palavras em qualquer ordem, "50mm" = "50 mm", medida exata (sem 150/51 e sem o pacote com 50 un.)');
         assert(cods('sera copo 50') === '60882,61420', 'busca: aceita erro de digitação');
