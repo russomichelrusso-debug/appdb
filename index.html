@@ -7535,6 +7535,56 @@
       font-size: 16px;
     }
 
+    .rotaCidades {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .rotaCidadeChip {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      min-height: 32px;
+      padding: 0 4px 0 12px;
+      border-radius: 999px;
+      background: var(--info-bg);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .rotaCidadeChip:not(:has(button)) {
+      padding-right: 12px;
+    }
+
+    .rotaCidadeChip button {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: none;
+      color: var(--gray);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .rotaCidadeChip button::after {
+      content: '';
+      position: absolute;
+      inset: -8px;
+    }
+
+    .rotaCidadeTitulo {
+      margin: 14px 0 2px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray);
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+
     .pertoRota {
       position: sticky;
       bottom: calc(var(--navH) + 8px);
@@ -20614,15 +20664,21 @@
       // recompra atrasada/da semana, comprou no ano e sem sua visita há 60+ dias
       // ("Visitas × compras"), para reativar. Só monta e abre no Google Maps
       // (nada guardado por dia). A marcação automática vale até o vendedor
-      // mexer nela (as listas chegam do servidor depois da 1ª tela); trocar de
-      // cidade volta pra automática. Ordem das paradas como em "Perto de mim"
-      // (ordenarParadas) pela posição da loja; loja sem posição vai no fim.
+      // mexer nela (as listas chegam do servidor depois da 1ª tela). Ordem das
+      // paradas como em "Perto de mim" (ordenarParadas) pela posição da loja;
+      // loja sem posição vai no fim.
+      // Várias cidades na mesma rota (10/2026, pedido do usuário: "como escolho
+      // clientes de cidades diferentes?"): "+ Adicionar cidade" junta outra
+      // cidade à lista, as lojas aparecem agrupadas por cidade e o que já estava
+      // marcado continua marcado; tirar a cidade (✕) desmarca as lojas dela.
+      // Sem o vendedor ter mexido, as prioritárias são as 10 melhores de todas.
       const ROTA_ABERTO_LS_KEY = 'cortagRotaAberto_v1';
-      const ROTA_CIDADE_LS_KEY = 'cortagRotaCidade_v1';
+      const ROTA_CIDADE_LS_KEY = 'cortagRotaCidade_v1'; // antiga: uma cidade só
+      const ROTA_CIDADES_LS_KEY = 'cortagRotaCidades_v1'; // ['MARINGA|PR', ...]
       const ROTA_POR_PAGINA = 20;
       let rotaSelecionados = new Set();
-      let rotaEditada = false; // o vendedor mexeu na marcação desta cidade
-      let rotaVerTodos = false;
+      let rotaEditada = false; // o vendedor mexeu na marcação
+      const rotaVerTodos = new Set(); // cidades com "Ver mais" aberto
 
       function rotaAberta() {
         try { return localStorage.getItem(ROTA_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
@@ -20639,14 +20695,29 @@
         }
         return porChave;
       }
-      function rotaCidadeEscolhida(cidades) {
-        let chave = '';
-        try { chave = localStorage.getItem(ROTA_CIDADE_LS_KEY) || ''; } catch (e) { }
-        if (cidades.has(chave)) return chave;
-        // 1ª vez: a cidade com mais clientes
+      // Cidades escolhidas, na ordem em que foram adicionadas (só as que ainda
+      // têm cliente). 1ª vez: a cidade da versão antiga ou a com mais clientes.
+      function rotaCidadesEscolhidas(cidades) {
+        let lista = [];
+        try {
+          const salvo = JSON.parse(localStorage.getItem(ROTA_CIDADES_LS_KEY) || 'null');
+          if (Array.isArray(salvo)) lista = salvo.map(String);
+          else {
+            const antiga = localStorage.getItem(ROTA_CIDADE_LS_KEY);
+            if (antiga) lista = [antiga];
+          }
+        } catch (e) { }
+        lista = [...new Set(lista)].filter(k => cidades.has(k));
+        if (lista.length) return lista;
         let melhor = '';
         for (const [k, v] of cidades) if (!melhor || v.clientes.length > cidades.get(melhor).clientes.length) melhor = k;
-        return melhor;
+        return melhor ? [melhor] : [];
+      }
+      function salvarRotaCidades(lista) {
+        try { localStorage.setItem(ROTA_CIDADES_LS_KEY, JSON.stringify(lista)); } catch (e) { }
+      }
+      function ordemPrioridadeRota(a, b) {
+        return b.pontos - a.pontos || b.fat - a.fat || String(a.c.nome).localeCompare(String(b.c.nome));
       }
       // Lojas da cidade com os motivos de prioridade, prioritárias primeiro
       function lojasDaCidade(cidade) {
@@ -20664,11 +20735,12 @@
           // sem rua legível na ficha, a loja com GPS exato vai pela coordenada
           const pos = posicaoDoCliente(c);
           const destino = enderecoParaNavegacao(c.endereco) || (pos && !pos.aprox ? `${pos.lat},${pos.lng}` : '');
-          return { c, id, rec, semVisita, reat, pontos, fat: fatPorId.get(id) || 0, destino };
-        }).sort((a, b) => b.pontos - a.pontos || b.fat - a.fat || String(a.c.nome).localeCompare(String(b.c.nome)));
+          return { c, id, rec, semVisita, reat, pontos, fat: fatPorId.get(id) || 0, destino, cidade: cidade.chave };
+        }).sort(ordemPrioridadeRota);
       }
       function marcarPrioritarias(lojas) {
-        rotaSelecionados = new Set(lojas.filter(l => l.pontos > 0 && l.destino).slice(0, ROTA_MAX_PARADAS).map(l => l.id));
+        rotaSelecionados = new Set(lojas.filter(l => l.pontos > 0 && l.destino).sort(ordemPrioridadeRota)
+          .slice(0, ROTA_MAX_PARADAS).map(l => l.id));
       }
       function montarRotaCidade(lojas) {
         const marcadas = lojas.filter(l => rotaSelecionados.has(l.id) && l.destino);
@@ -20714,32 +20786,46 @@
         const cidades = cidadesDosClientes();
         el.classList.toggle('hidden', !!clienteTabSelected || cidades.size === 0);
         if (!cidades.size) { el.innerHTML = ''; return; }
-        const chave = rotaCidadeEscolhida(cidades);
-        const cidade = cidades.get(chave);
-        const lojas = lojasDaCidade(cidade);
+        const escolhidas = rotaCidadesEscolhidas(cidades).map(k => cidades.get(k));
+        const lojasPorCidade = escolhidas.map(cid => ({ cid, lojas: lojasDaCidade(cid) }));
+        const lojas = lojasPorCidade.flatMap(x => x.lojas);
         if (!rotaEditada) marcarPrioritarias(lojas);
-        // loja que saiu da cidade/da cópia local não entra na rota escondida
+        // loja que saiu das cidades/da cópia local não entra na rota escondida
         const ids = new Set(lojas.map(l => l.id));
         rotaSelecionados.forEach(id => { if (!ids.has(id)) rotaSelecionados.delete(id); });
         const prioritarias = lojas.filter(l => l.pontos > 0).length;
         const marcados = rotaSelecionados.size;
         const aberta = rotaAberta();
-        const resumo = `${cidade.nome}: ${lojas.length} loja${lojas.length === 1 ? '' : 's'}${prioritarias ? ` · ${prioritarias} prioritária${prioritarias === 1 ? '' : 's'}` : ''}`;
+        const nomes = escolhidas.length <= 2 ? escolhidas.map(c => c.nome).join(' + ') : `${escolhidas.length} cidades`;
+        const resumo = `${nomes}: ${lojas.length} loja${lojas.length === 1 ? '' : 's'}${prioritarias ? ` · ${prioritarias} prioritária${prioritarias === 1 ? '' : 's'}` : ''}`;
         let corpo = '';
         if (aberta) {
-          const opcoes = [...cidades.values()].sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
-          const mostrar = rotaVerTodos ? lojas : lojas.slice(0, Math.max(ROTA_POR_PAGINA, prioritarias));
-          const resto = lojas.length - mostrar.length;
-          corpo = `<select class="reativarFiltro" id="rotaCidade" aria-label="Cidade da rota">
-              ${opcoes.map(o => `<option value="${escapeHtml(o.chave)}"${o.chave === chave ? ' selected' : ''}>${escapeHtml(o.nome)} (${o.clientes.length})</option>`).join('')}
-            </select>
-            <p class="recompraHint">Já vêm marcadas até ${ROTA_MAX_PARADAS} prioritárias: recompra atrasada ou da semana, comprou no ano e sem sua visita há ${VISITAS_JANELA_DIAS}+ dias, para reativar. Cidade pela ficha de CNPJ; cliente sem ficha fica de fora.</p>
+          const naRota = new Set(escolhidas.map(c => c.chave));
+          const outras = [...cidades.values()].filter(c => !naRota.has(c.chave)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          const varias = escolhidas.length > 1;
+          const chips = escolhidas.map(c => {
+            const n = lojasPorCidade.find(x => x.cid === c).lojas.filter(l => rotaSelecionados.has(l.id)).length;
+            return `<span class="rotaCidadeChip">${escapeHtml(c.nome)}${n ? ` · ${n}` : ''}${varias ? `<button type="button" data-rota-tirar="${escapeHtml(c.chave)}" aria-label="Tirar ${escapeHtml(c.nome)} da rota">✕</button>` : ''}</span>`;
+          }).join('');
+          const grupos = lojasPorCidade.map(({ cid, lojas: ls }) => {
+            const prio = ls.filter(l => l.pontos > 0).length;
+            const mostrar = rotaVerTodos.has(cid.chave) ? ls : ls.slice(0, Math.max(ROTA_POR_PAGINA, prio));
+            const resto = ls.length - mostrar.length;
+            return (varias ? `<div class="rotaCidadeTitulo">${escapeHtml(cid.nome)} · ${ls.length} loja${ls.length === 1 ? '' : 's'}</div>` : '')
+              + mostrar.map(renderRotaItem).join('')
+              + (resto > 0 ? `<button type="button" class="recompraMais" data-rota-mais="${escapeHtml(cid.chave)}">Ver mais ${resto}${varias ? ` em ${escapeHtml(cid.nome)}` : ''}</button>` : '');
+          }).join('');
+          corpo = `<div class="rotaCidades">${chips}</div>
+            ${outras.length ? `<select class="reativarFiltro" id="rotaAddCidade" aria-label="Adicionar cidade à rota">
+              <option value="">+ Adicionar cidade à rota</option>
+              ${outras.map(o => `<option value="${escapeHtml(o.chave)}">${escapeHtml(o.nome)} (${o.clientes.length})</option>`).join('')}
+            </select>` : ''}
+            <p class="recompraHint">Já vêm marcadas até ${ROTA_MAX_PARADAS} prioritárias: recompra atrasada ou da semana, comprou no ano e sem sua visita há ${VISITAS_JANELA_DIAS}+ dias, para reativar. Pra juntar lojas de outra cidade, use "+ Adicionar cidade": o que já está marcado continua. Cidade pela ficha de CNPJ; cliente sem ficha fica de fora.</p>
             ${marcados ? `<div class="recompraAcoes pertoRota">
               <button type="button" class="recompraBtn recompraBtn--principal" id="rotaMontarBtn">Montar rota no Google Maps · ${marcados} parada${marcados === 1 ? '' : 's'}</button>
               <button type="button" class="recompraBtn" id="rotaLimparBtn">Limpar</button>
             </div>${marcados > 4 ? '<p class="recompraHint">Com mais de 4 lojas, abra no app Google Maps: no navegador do celular o Google pode cortar paradas.</p>' : ''}` : `<p class="recompraHint">Marque as lojas pra montar a rota (até ${ROTA_MAX_PARADAS}).</p>`}
-            ${mostrar.map(renderRotaItem).join('')}
-            ${resto > 0 ? `<button type="button" class="recompraMais" id="rotaMais">Ver mais ${resto}</button>` : ''}`;
+            ${grupos}`;
         }
         el.dataset.cor = prioritarias ? 'azul' : 'cinza';
         el.innerHTML = cabecalhoBloco({
@@ -20748,15 +20834,23 @@
         }) + corpo;
         document.getElementById('rotaToggle').addEventListener('click', () => alternarBlocoCliente(ROTA_ABERTO_LS_KEY));
         if (!aberta) return;
-        document.getElementById('rotaCidade').addEventListener('change', (ev) => {
-          try { localStorage.setItem(ROTA_CIDADE_LS_KEY, ev.target.value); } catch (e) { }
-          rotaEditada = false;
-          rotaVerTodos = false;
+        const chavesEscolhidas = escolhidas.map(c => c.chave);
+        document.getElementById('rotaAddCidade')?.addEventListener('change', (ev) => {
+          const chave = ev.target.value;
+          if (!chave) return;
+          // a marcação de quem já mexeu continua; sem mexer, as prioritárias
+          // são refeitas com a cidade nova junto
+          salvarRotaCidades([...chavesEscolhidas, chave]);
           renderRota();
         });
+        el.querySelectorAll('[data-rota-tirar]').forEach(b => b.addEventListener('click', () => {
+          salvarRotaCidades(chavesEscolhidas.filter(k => k !== b.dataset.rotaTirar));
+          rotaVerTodos.delete(b.dataset.rotaTirar);
+          renderRota();
+        }));
         document.getElementById('rotaMontarBtn')?.addEventListener('click', () => montarRotaCidade(lojas));
         document.getElementById('rotaLimparBtn')?.addEventListener('click', () => { rotaSelecionados.clear(); rotaEditada = true; renderRota(); });
-        document.getElementById('rotaMais')?.addEventListener('click', () => { rotaVerTodos = true; renderRota(); });
+        el.querySelectorAll('[data-rota-mais]').forEach(b => b.addEventListener('click', () => { rotaVerTodos.add(b.dataset.rotaMais); renderRota(); }));
         const porId = new Map(lojas.map(l => [l.id, l.c]));
         el.querySelectorAll('[data-rota-sel]').forEach(cb => cb.addEventListener('change', () => {
           const id = cb.dataset.rotaSel;
