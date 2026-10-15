@@ -664,6 +664,18 @@ async function query(sql, params = []) {
     novas.forEach(c => { produtoFotos[c] = { imagem, tamanho, versao: produtoFotosRelogio }; });
     return { rows: novas.map(codigo_sku => ({ codigo_sku })) };
   }
+  if (s.includes('/* FOTOS:MINIATURAS */')) {
+    return { rows: params[0].filter(c => produtoFotos[c]).map(c => ({ codigo_sku: c, versao: String(produtoFotos[c].versao), miniatura: produtoFotos[c].miniatura || null })) };
+  }
+  if (s.includes('/* FOTOS:IMAGEM_PRA_MINI */')) {
+    const f = produtoFotos[params[0]];
+    return { rows: f && String(f.versao) === String(params[1]) ? [{ imagem: f.imagem }] : [] };
+  }
+  if (s.includes('/* FOTOS:MINIATURA_GRAVAR */')) {
+    const f = produtoFotos[params[0]];
+    if (f && String(f.versao) === String(params[2])) f.miniatura = params[1];
+    return { rows: [] };
+  }
   if (s.includes('/* FOTOS:APAGAR */')) { delete produtoFotos[params[0]]; return { rows: [] }; }
   if (s.includes('/* INADIMPLENCIA:TRAVA */')) return { rows: [] };
   if (s.includes('/* INADIMPLENCIA:CLIENTES */')) {

@@ -3415,6 +3415,39 @@ async function main() {
       assert(rf.status === 200 && !mockDb.__getProdutoFotos().FT1 && mockDb.__getProdutoFotos().FT2, 'fotos: tirar a foto de um não mexe nas variações');
       rf = await req('GET', '/api/produto-fotos/FT1');
       assert(rf.status === 404, 'fotos: produto sem foto responde 404');
+
+      // Miniaturas pro catálogo sem internet: geradas na 1ª vez, guardadas, zeradas ao trocar a foto
+      const jpegJs = require('jpeg-js');
+      const jpegReal = (w, h, semente) => {
+        const d = Buffer.alloc(w * h * 4);
+        for (let i = 0; i < d.length; i += 4) { d[i] = (i * semente) % 251; d[i + 1] = (i >> 3) % 253; d[i + 2] = 90; d[i + 3] = 255; }
+        return jpegJs.encode({ data: d, width: w, height: h }, 80).data;
+      };
+      rf = await req('PUT', '/api/produto-fotos/FT3', { imagem: jpegReal(600, 400, 7).toString('base64') });
+      assert(rf.status === 200, `miniatura: salva foto de verdade (${rf.status} ${JSON.stringify(rf.body)})`);
+      rf = await req('POST', '/api/produto-fotos/miniaturas', { codigos: ['FT2', 'FT3', 'SEM-FOTO'] });
+      const miniFt3 = rf.body && rf.body.miniaturas && rf.body.miniaturas.FT3;
+      const lidaFt3 = miniFt3 && jpegJs.decode(Buffer.from(miniFt3.img, 'base64'));
+      assert(rf.status === 200 && lidaFt3 && lidaFt3.width === 300 && lidaFt3.height === 200 && !rf.body.miniaturas.FT2 && rf.body.faltam === 0,
+        `miniatura: 300 px no lado maior, foto ilegível e sem foto ficam de fora: ${JSON.stringify(rf.body && { ...rf.body, miniaturas: Object.keys(rf.body.miniaturas || {}) })} ${lidaFt3 && lidaFt3.width}x${lidaFt3 && lidaFt3.height}`);
+      assert(miniFt3.v === mockDb.__getProdutoFotos().FT3.versao && mockDb.__getProdutoFotos().FT3.miniatura, 'miniatura: fica guardada com a versão da foto');
+      const ft2Mini = mockDb.__getProdutoFotos().FT2.miniatura;
+      assert(ft2Mini && ft2Mini.length === 0, 'miniatura: foto ilegível grava miniatura vazia (não decodifica de novo a cada pedido)');
+      rf = await req('GET', '/api/produto-fotos/FT2/mini');
+      assert(rf.status === 404, 'miniatura: foto ilegível responde 404 na rota de uma só');
+      rf = await req('GET', '/api/produto-fotos/FT3/mini');
+      assert(rf.status === 200 && /image\/jpeg/.test(rf.headers['content-type']), 'miniatura: rota de uma só devolve JPEG');
+      rf = await req('PUT', '/api/produto-fotos/FT3', { imagem: jpegReal(500, 500, 3).toString('base64') });
+      assert(rf.status === 200 && !mockDb.__getProdutoFotos().FT3.miniatura, 'miniatura: trocar a foto apaga a miniatura velha');
+      rf = await req('POST', '/api/produto-fotos/miniaturas', { codigos: Array.from({ length: 101 }, (_, i) => 'C' + i) });
+      assert(rf.status === 422, 'miniatura: mais de 100 códigos por pedido responde 422');
+      mockDb.__seed({ produtos: Array.from({ length: 17 }, (_, i) => ({ id: 9710 + i, codigo_sku: 'MN' + i, nome: 'PRODUTO MINI ' + i, categoria: null })) });
+      for (let i = 0; i < 17; i++) await req('PUT', '/api/produto-fotos/MN' + i, { imagem: jpegReal(320, 320, i + 2).toString('base64') });
+      rf = await req('POST', '/api/produto-fotos/miniaturas', { codigos: Array.from({ length: 17 }, (_, i) => 'MN' + i) });
+      assert(rf.status === 200 && Object.keys(rf.body.miniaturas).length === 15 && rf.body.faltam === 2,
+        `miniatura: gera no máximo 15 por pedido e diz quantas faltam: ${rf.body && Object.keys(rf.body.miniaturas || {}).length} / ${rf.body && rf.body.faltam}`);
+      rf = await req('POST', '/api/produto-fotos/miniaturas', { codigos: Array.from({ length: 17 }, (_, i) => 'MN' + i) });
+      assert(rf.status === 200 && Object.keys(rf.body.miniaturas).length === 17 && rf.body.faltam === 0, 'miniatura: o pedido seguinte completa (as já geradas vêm do banco)');
     }
 
     // 31c) Inadimplência (routes/inadimplencia.js): "Previa Relatório de

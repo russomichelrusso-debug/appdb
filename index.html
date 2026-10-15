@@ -22112,7 +22112,7 @@
         wrap.innerHTML = encontrados.length
           ? encontrados.map(p => `
       <button type="button" class="clientPickerItem prodResItem" data-prod-cod="${escapeHtml(p.c)}" data-prod-nome="${escapeHtml(p.n)}">
-        ${codigoDaFoto(p.c) ? `<span class="prodResFoto" data-foto-cod="${escapeHtml(p.c)}">${ICONE_CAMERA}</span>` : ''}
+        ${codigoDaFoto(p.c) ? `<span class="prodResFoto" data-foto-mini data-foto-cod="${escapeHtml(p.c)}">${ICONE_CAMERA}</span>` : ''}
         <span class="prodResTexto">
           <div class="cpName">${escapeHtml(p.n)}</div>
           <div class="cpMeta">${renderPrevisaoBadge(p.c)}Cód. ${escapeHtml(p.c)}</div>
@@ -22431,14 +22431,18 @@
       }
       async function carregarFotosProduto() {
         try { FOTOS_PRODUTO = JSON.parse(localStorage.getItem(FOTOS_LS_KEY)) || {}; } catch (e) { FOTOS_PRODUTO = {}; }
+        let listaDoServidor = false;
         try {
           const r = await apiFetch('/api/produto-fotos');
-          if (r && r.fotos && typeof r.fotos === 'object') { FOTOS_PRODUTO = r.fotos; gravarFotosLocais(); }
+          if (r && r.fotos && typeof r.fotos === 'object') { FOTOS_PRODUTO = r.fotos; gravarFotosLocais(); listaDoServidor = true; }
         } catch (e) { /* sem internet: fica com a lista guardada */ }
         if (prodTabSelected) renderProdutoOferta(prodTabSelected);
         else if (!document.getElementById('tabProdutos').classList.contains('hidden')) atualizarProdutosInicio();
-        limparFotosAntigasDoAparelho();
-        setTimeout(baixarFotosDasCampanhas, 15000);
+        // só com a lista do servidor: sem internet e com a lista do aparelho perdida,
+        // FOTOS_PRODUTO vazio apagaria as miniaturas que são justamente pra esse caso
+        if (listaDoServidor) limparFotosAntigasDoAparelho();
+        // primeiro as fotos das campanhas (o que o vendedor manda), depois as miniaturas do catálogo
+        setTimeout(async () => { await baixarFotosDasCampanhas(); baixarMiniaturas(); }, 15000);
       }
       // Foto retirada ou trocada (em outro aparelho) sai do Cache Storage.
       async function limparFotosAntigasDoAparelho() {
@@ -22446,8 +22450,8 @@
         try {
           const cache = await caches.open(CACHE_FOTOS);
           for (const r of await cache.keys()) {
-            const m = /\/api\/produto-fotos\/([^/?]+)\?v=(\d+)$/.exec(r.url);
-            if (!m || String(FOTOS_PRODUTO[decodeURIComponent(m[1])]) !== m[2]) await cache.delete(r);
+            const m = /\/api\/produto-fotos\/([^/?]+)(\/mini)?\?v=(\d+)$/.exec(r.url);
+            if (!m || String(FOTOS_PRODUTO[decodeURIComponent(m[1])]) !== m[3]) await cache.delete(r);
           }
         } catch (e) { }
       }
@@ -22458,44 +22462,63 @@
         const promo = /^P[12]?(.+)$/.exec(c);
         return promo && FOTOS_PRODUTO[promo[1]] ? promo[1] : null;
       }
-      function chaveCacheFoto(cod, versao) {
-        return `${getApiConfig().baseUrl}/api/produto-fotos/${encodeURIComponent(cod)}?v=${versao}`;
+      // mini: a miniatura do catálogo (300 px, routes/lib/miniaturaFoto.js)
+      function chaveCacheFoto(cod, versao, mini) {
+        return `${getApiConfig().baseUrl}/api/produto-fotos/${encodeURIComponent(cod)}${mini ? '/mini' : ''}?v=${versao}`;
       }
-      async function guardarFotoNoAparelho(cod, versao, blob) {
+      async function guardarFotoNoAparelho(cod, versao, blob, mini) {
         if (typeof caches === 'undefined') return;
         try {
           const cache = await caches.open(CACHE_FOTOS);
-          const chave = chaveCacheFoto(cod, versao);
+          const chave = chaveCacheFoto(cod, versao, mini);
           await cache.put(chave, new Response(blob, { headers: { 'Content-Type': 'image/jpeg' } }));
           // versão antiga da mesma foto sai do aparelho
           const prefixo = chave.split('?')[0] + '?';
           for (const r of await cache.keys()) if (r.url.startsWith(prefixo) && r.url !== chave) await cache.delete(r);
         } catch (e) { /* sem espaço/sem Cache Storage: só não fica guardada */ }
       }
-      async function blobDaFoto(cod) {
-        const c = codigoDaFoto(cod);
-        if (!c) return null;
-        const versao = FOTOS_PRODUTO[c];
-        const chave = chaveCacheFoto(c, versao);
-        if (typeof caches !== 'undefined') {
-          try {
-            const guardada = await (await caches.open(CACHE_FOTOS)).match(chave);
-            if (guardada) return await guardada.blob();
-          } catch (e) { }
-        }
+      async function fotoGuardada(chave) {
+        if (typeof caches === 'undefined') return null;
+        try {
+          const guardada = await (await caches.open(CACHE_FOTOS)).match(chave);
+          return guardada ? await guardada.blob() : null;
+        } catch (e) { return null; }
+      }
+      let ultimaFotoFalhouPorRede = false; // pra baixarFotosDasCampanhas parar só quando a internet cai
+      async function baixarFoto(c, versao, mini) {
+        ultimaFotoFalhouPorRede = false;
         const token = getStoredToken();
         // sinal fraco: desiste depois de um tempo (a ficha mostra "foto não baixada")
         const prazo = typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(FOTO_DOWNLOAD_PRAZO_MS) : undefined;
-        const resp = await fetch(chave, { headers: token ? { 'Authorization': 'Bearer ' + token } : {}, signal: prazo });
-        if (!resp.ok) return null;
-        const blob = await resp.blob();
-        await guardarFotoNoAparelho(c, versao, blob);
-        return blob;
+        try {
+          const resp = await fetch(chaveCacheFoto(c, versao, mini), { headers: token ? { 'Authorization': 'Bearer ' + token } : {}, signal: prazo });
+          if (!resp.ok) return null;
+          const blob = await resp.blob();
+          await guardarFotoNoAparelho(c, versao, blob, mini);
+          return blob;
+        } catch (e) { ultimaFotoFalhouPorRede = true; return null; }
       }
-      async function urlDaFoto(cod) {
+      // mini (grade, miniaturas): a miniatura guardada, senão a foto cheia se já
+      // estiver no aparelho, senão baixa a miniatura (e, sem ela, a cheia).
+      // Foto cheia (ficha, card, vitrine): sem internet, cai na miniatura guardada.
+      async function blobDaFoto(cod, mini) {
         const c = codigoDaFoto(cod);
         if (!c) return null;
-        const memo = `${c}@${FOTOS_PRODUTO[c]}`;
+        const versao = FOTOS_PRODUTO[c];
+        if (mini) {
+          return (await fotoGuardada(chaveCacheFoto(c, versao, true))) || (await fotoGuardada(chaveCacheFoto(c, versao)))
+            || (await baixarFoto(c, versao, true)) || (await baixarFoto(c, versao));
+        }
+        const cheia = (await fotoGuardada(chaveCacheFoto(c, versao))) || (await baixarFoto(c, versao));
+        if (cheia) return cheia;
+        const reserva = await fotoGuardada(chaveCacheFoto(c, versao, true));
+        if (reserva) reserva.soMiniatura = true; // urlDaFoto não guarda: com internet, baixa a cheia
+        return reserva;
+      }
+      async function urlDaFoto(cod, mini) {
+        const c = codigoDaFoto(cod);
+        if (!c) return null;
+        const memo = `${c}@${FOTOS_PRODUTO[c]}${mini ? '@mini' : ''}`;
         if (fotoUrlsMemo.has(memo)) {
           const promessa = fotoUrlsMemo.get(memo);
           fotoUrlsMemo.delete(memo); fotoUrlsMemo.set(memo, promessa); // usada agora: vai pro fim da fila
@@ -22503,11 +22526,15 @@
         }
         // a promessa vai pro memo antes do download: chamadas ao mesmo tempo (miniatura
         // + grade + card) usam a mesma URL em vez de uma revogar a da outra
-        const promessa = blobDaFoto(c).then(blob => (blob ? URL.createObjectURL(blob) : null), () => null);
+        let veioMiniatura = false;
+        const promessa = blobDaFoto(c, mini).then(blob => {
+          veioMiniatura = !mini && !!(blob && blob.soMiniatura);
+          return blob ? URL.createObjectURL(blob) : null;
+        }, () => null);
         // versão anterior da mesma foto e as menos usadas saem; a URL só é revogada
         // depois de um tempo (a tela pode estar acabando de usar)
         for (const k of [...fotoUrlsMemo.keys()]) {
-          if (k.startsWith(c + '@') || fotoUrlsMemo.size >= FOTO_URLS_MAX) {
+          if ((k.startsWith(c + '@') && !k.startsWith(`${c}@${FOTOS_PRODUTO[c]}`)) || fotoUrlsMemo.size >= FOTO_URLS_MAX) {
             const velha = fotoUrlsMemo.get(k);
             fotoUrlsMemo.delete(k);
             velha.then(u => { if (u) setTimeout(() => URL.revokeObjectURL(u), 60000); });
@@ -22515,7 +22542,8 @@
         }
         fotoUrlsMemo.set(memo, promessa);
         const url = await promessa;
-        if (!url) fotoUrlsMemo.delete(memo); // sem internet e sem cópia: tenta de novo da próxima vez
+        // sem internet e sem cópia (ou só com a miniatura no lugar da cheia): tenta de novo da próxima vez
+        if ((!url || veioMiniatura) && fotoUrlsMemo.get(memo) === promessa) fotoUrlsMemo.delete(memo);
         return url;
       }
       // Códigos das campanhas ativas (lista de produtos ou produto único).
@@ -22535,9 +22563,86 @@
           for (const c of codigosEmCampanha()) {
             const comFoto = codigoDaFoto(c);
             if (!comFoto || guardadas.has(chaveCacheFoto(comFoto, FOTOS_PRODUTO[comFoto]))) continue;
-            try { await blobDaFoto(comFoto); } catch (e) { break; } // caiu a internet no meio: para
+            await blobDaFoto(comFoto);
+            if (ultimaFotoFalhouPorRede || navigator.onLine === false) break; // caiu a internet no meio: para
           }
         } catch (e) { } finally { baixarFotosDasCampanhas.rodando = false; }
+      }
+
+      // ---- Miniaturas pro catálogo sem internet (10/2026) ----
+      // Todas as miniaturas (~15 KB cada, ~30 MB pro catálogo inteiro) vão pro
+      // aparelho em segundo plano, 100 por pedido; o servidor gera as que faltam
+      // aos poucos ("faltam") e o app pede de novo. Sem internet, a grade do
+      // catálogo e a vitrine usam elas. Não baixa com "economia de dados" ligada.
+      const MINIATURAS_POR_PEDIDO = 100;
+      const MINIATURA_KB = 15; // média, pra dizer quanto falta baixar
+      const MINIATURAS_4G_LS_KEY = 'cortagMiniaturas4g_v1'; // o vendedor tocou em "baixar agora" no 4G
+      let miniaturasStatus = null; // { guardadas, total, esperandoWifi }
+      function atualizarStatusMiniaturas() {
+        const el = document.getElementById('catFotosOffline');
+        if (el) el.innerHTML = textoStatusMiniaturas();
+      }
+      function textoStatusMiniaturas() {
+        const st = miniaturasStatus;
+        if (!st || !st.total) return '';
+        if (st.guardadas >= st.total) return '✓ Fotos guardadas no aparelho: o catálogo abre sem internet';
+        const mb = Math.max(1, Math.round((st.total - st.guardadas) * MINIATURA_KB / 1024));
+        const acao = baixarMiniaturas.rodando ? ' · baixando…'
+          : st.esperandoWifi ? ` · baixa sozinho no Wi-Fi · <button type="button" class="recompraMais" data-baixar-miniaturas style="display:inline;width:auto;padding:0;">baixar agora (~${mb} MB)</button>` : '';
+        return `Fotos pra usar sem internet: <b>${st.guardadas.toLocaleString('pt-BR')}</b> de ${st.total.toLocaleString('pt-BR')}${acao}`;
+      }
+      // agora: o vendedor pediu (vale também no 4G e com "economia de dados")
+      async function baixarMiniaturas(agora) {
+        if (baixarMiniaturas.rodando || typeof caches === 'undefined') return;
+        if (agora) { try { localStorage.setItem(MINIATURAS_4G_LS_KEY, '1'); } catch (e) { } }
+        baixarMiniaturas.rodando = true;
+        try {
+          const cache = await caches.open(CACHE_FOTOS);
+          const guardadas = new Set((await cache.keys()).map(r => r.url));
+          const codigos = Object.keys(FOTOS_PRODUTO);
+          let pendentes = codigos.filter(c => !guardadas.has(chaveCacheFoto(c, FOTOS_PRODUTO[c], true)));
+          // ~30 MB: sozinho só fora da rede móvel (Android diz o tipo; iPhone não diz,
+          // baixa) e sem "economia de dados" - ou depois que o vendedor pediu uma vez
+          const con = navigator.connection;
+          let pediu = false;
+          try { pediu = localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
+          const esperandoWifi = !pediu && !!con && (con.saveData || con.type === 'cellular');
+          miniaturasStatus = { guardadas: codigos.length - pendentes.length, total: codigos.length, esperandoWifi };
+          atualizarStatusMiniaturas();
+          if (!pendentes.length || navigator.onLine === false || esperandoWifi) return;
+          // passa pela lista enquanto o servidor ainda entrega algo novo
+          while (pendentes.length) {
+            const naoVieram = [];
+            let novas = 0;
+            for (let i = 0; i < pendentes.length; i += MINIATURAS_POR_PEDIDO) {
+              const lote = pendentes.slice(i, i + MINIATURAS_POR_PEDIDO);
+              let r;
+              try {
+                r = await apiFetch('/api/produto-fotos/miniaturas', { method: 'POST', body: JSON.stringify({ codigos: lote }) });
+              } catch (e) { return; } // caiu a internet: tenta de novo na próxima abertura
+              const vieram = (r && r.miniaturas) || {};
+              for (const c of lote) {
+                const m = vieram[c];
+                // foto trocada no meio: a versão nova vem na próxima
+                if (!m || String(m.v) !== String(FOTOS_PRODUTO[c])) { naoVieram.push(c); continue; }
+                const bin = atob(m.img);
+                const bytes = new Uint8Array(bin.length);
+                for (let k = 0; k < bin.length; k++) bytes[k] = bin.charCodeAt(k);
+                try {
+                  await cache.put(chaveCacheFoto(c, m.v, true), new Response(new Blob([bytes], { type: 'image/jpeg' }), { headers: { 'Content-Type': 'image/jpeg' } }));
+                } catch (e) { return; } // aparelho sem espaço: para
+                novas++;
+                miniaturasStatus.guardadas++;
+              }
+              atualizarStatusMiniaturas();
+            }
+            if (!novas) break; // servidor não gerou nada novo (foto ilegível): fica com a cheia
+            pendentes = naoVieram;
+          }
+        } catch (e) { } finally {
+          baixarMiniaturas.rodando = false;
+          atualizarStatusMiniaturas();
+        }
       }
 
       // Preço "de/por" do produto no contexto do orçamento (aba Pedido). "De" =
@@ -23128,7 +23233,7 @@
         const tiles = !aberto ? '' : g.campanhas.map(({ regra, produtos }) => {
           const comFoto = produtos.find(p => codigoDaFoto(p.c));
           return `<button type="button" class="campTile" data-campanha="${escapeHtml(String(regra.id))}">
-            <span class="campTileFoto"${comFoto ? ` data-foto-cod="${escapeHtml(comFoto.c)}"` : ''}>${ICONE_CAMERA}</span>
+            <span class="campTileFoto"${comFoto ? ` data-foto-mini data-foto-cod="${escapeHtml(comFoto.c)}"` : ''}>${ICONE_CAMERA}</span>
             <span class="campTilePct">${escapeHtml(pctDaCampanha(regra).texto)}</span>
             <span class="campTileNome">${escapeHtml(nomeDentroDoGrupo(regra.name, g))}</span>
             <span class="campTileDet">${escapeHtml(detalheDaCampanha(regra, produtos.length, !!umaData))}</span>
@@ -23140,7 +23245,7 @@
               <span class="campGrupoNome"><small>${g.especial ? 'CAMPANHA ESPECIAL' : 'TRADE DO MÊS'}</small><b>${escapeHtml(g.titulo)}</b></span>
               <span class="campGrupoSelo">${escapeHtml(pctTexto)}</span>
             </span>
-            ${fotos.length ? `<span class="campGrupoFotos">${fotos.map(c => `<span class="campGrupoFoto" data-foto-cod="${escapeHtml(c)}"></span>`).join('')}</span>` : ''}
+            ${fotos.length ? `<span class="campGrupoFotos">${fotos.map(c => `<span class="campGrupoFoto" data-foto-mini data-foto-cod="${escapeHtml(c)}"></span>`).join('')}</span>` : ''}
             <span class="campGrupoRodape">
               <span class="campGrupoInfo">${escapeHtml(info.join(' · '))}</span>
               <span class="campGrupoVer">${aberto ? 'Fechar ▲' : 'Ver campanhas ▼'}</span>
@@ -23155,7 +23260,7 @@
         el.querySelectorAll('[data-foto-cod]').forEach(carregarFotoEm);
       }
       async function carregarFotoEm(alvo) {
-        const url = await urlDaFoto(alvo.dataset.fotoCod);
+        const url = await urlDaFoto(alvo.dataset.fotoCod, alvo.hasAttribute('data-foto-mini'));
         if (!url || !alvo.isConnected) return;
         alvo.style.backgroundImage = `url('${url}')`;
         alvo.textContent = '';
@@ -23231,7 +23336,7 @@
           const marcado = campanhaSelecionados.includes(p.c);
           return `<div class="campItem${marcado ? ' selecionado' : ''}">
             <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
-              <div class="campItemFoto"${codigoDaFoto(p.c) ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''}>${codigoDaFoto(p.c) ? '' : 'sem foto · tocar pra adicionar'}</div>
+              <div class="campItemFoto"${codigoDaFoto(p.c) ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''}>${codigoDaFoto(p.c) ? '' : 'sem foto · tocar pra adicionar'}</div>
               <div class="campItemInfo">
                 <div class="campItemNome">${escapeHtml(p.n)}</div>
                 <div class="campItemCod">${escapeHtml(p.c)}</div>
@@ -23367,7 +23472,7 @@
           const fotos = f.produtos.filter(p => codigoDaFoto(p.c)).slice(0, 4);
           let pct = 0, bf = false;
           for (const p of f.produtos) { const c = camp.get(p.c); if (c) { pct = Math.max(pct, c.pct); bf = bf || c.bf; } }
-          const tiles = [0, 1, 2, 3].map(i => fotos[i] ? `<span class="catFamFoto" data-foto-cod="${escapeHtml(fotos[i].c)}"></span>` : '<span class="catFamFoto"></span>').join('');
+          const tiles = [0, 1, 2, 3].map(i => fotos[i] ? `<span class="catFamFoto" data-foto-mini data-foto-cod="${escapeHtml(fotos[i].c)}"></span>` : '<span class="catFamFoto"></span>').join('');
           return `<button type="button" class="catFam" data-cat-familia="${escapeHtml(f.chave)}">
             <span class="catFamMosaico">${tiles}</span>
             <span class="catFamNome">${escapeHtml(f.nome)}</span>
@@ -23377,9 +23482,11 @@
         }).join('');
         el.innerHTML = `<div class="clientesSecao" style="margin:14px 0 2px;">Catálogo · ${total.toLocaleString('pt-BR')} produtos · ${familias.length} famílias</div>
           <div class="ofertaCtx">Preço de <b>${escapeHtml(rotuloContextoPreco())}</b> · muda na aba Pedido</div>
+          <div class="ofertaCtx" id="catFotosOffline" style="margin-top:4px;">${textoStatusMiniaturas()}</div>
           <div class="catFamGrade">${cards}</div>`;
         el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => abrirFamiliaDoCatalogo(b.dataset.catFamilia)));
         preencherFotosAoVer(el, 'catalogo');
+        if (!miniaturasStatus || miniaturasStatus.guardadas < miniaturasStatus.total) baixarMiniaturas();
       }
       function abrirFamiliaDoCatalogo(chave) {
         catalogoFamilia = chave;
@@ -23397,7 +23504,7 @@
           const foto = codigoDaFoto(p.c);
           return `<div class="campItem">
             <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
-              <div class="campItemFoto"${foto ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''}>${foto ? '' : 'sem foto'}</div>
+              <div class="campItemFoto"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''}>${foto ? '' : 'sem foto'}</div>
               <div class="campItemInfo catItemInfo">
                 <div class="campItemNome">${escapeHtml(p.n)}</div>
                 <div class="campItemCod">${escapeHtml(p.c)}${Number(p.emb) > 1 ? ` · cx ${escapeHtml(String(p.emb))}` : ''}</div>
@@ -23444,17 +23551,19 @@
         vitrine = { titulo, produtos, i: Math.max(0, Math.min(inicio || 0, produtos.length - 1)), separados: [] };
         document.getElementById('vitrineFam').textContent = titulo;
         const minis = document.getElementById('vitrineMinis');
-        minis.innerHTML = produtos.map((p, i) => `<button type="button" class="vitrineMini" data-vitrine-i="${i}"${codigoDaFoto(p.c) ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''} aria-label="${escapeHtml(p.n)}"></button>`).join('');
+        minis.innerHTML = produtos.map((p, i) => `<button type="button" class="vitrineMini" data-vitrine-i="${i}"${codigoDaFoto(p.c) ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''} aria-label="${escapeHtml(p.n)}"></button>`).join('');
         document.getElementById('vitrine').classList.remove('hidden');
         document.documentElement.classList.add('vitrineAberta');
         preencherFotosAoVer(minis, 'vitrine');
         renderVitrine();
       }
       function seloDaVitrine(p) {
-        const r = campanhasDoCard(p)[0];
+        const camps = campanhasDoCard(p);
+        const r = camps[0];
         if (!r) return null;
         const pct = maiorPctDaRegra(r);
-        const faixas = (r.tiers || []).filter(t => Number(t.pct) > 0).length > 1;
+        // mais de uma faixa ou de uma campanha: o maior é "até"
+        const faixas = camps.length > 1 || (r.tiers || []).filter(t => Number(t.pct) > 0).length > 1;
         // sem o nome da regra: costuma trazer o classificatório ("VIDRO 62796 - Master")
         return { texto: `${ehCampanhaBlackFriday(r) ? 'BLACK FRIDAY' : 'Campanha'} · ${faixas ? 'até ' : ''}-${pctCampanhaTexto(pct)}`, bf: ehCampanhaBlackFriday(r) };
       }
@@ -23529,6 +23638,9 @@
           campanhaAberta = null;
           marcar();
           atualizarProdutosInicio();
+        });
+        document.getElementById('prodCatalogo').addEventListener('click', (e) => {
+          if (e.target.closest('[data-baixar-miniaturas]')) baixarMiniaturas(true);
         });
         document.getElementById('vitrineAntBtn').addEventListener('click', () => irNaVitrine(-1));
         document.getElementById('vitrineProxBtn').addEventListener('click', () => irNaVitrine(1));
