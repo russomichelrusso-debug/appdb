@@ -451,8 +451,9 @@ Supabase, sem PR — não é mudança de código.
     do cliente ganha um card só com o que a aba traz.
   - A NF do título **já aparece na aba Faturamento**, mas o pedido **não foi faturado de fato** (o
     usuário corrigiu: "aparece como faturado, mas não foi"). No card, pedido com pendência à vista
-    mostra "Situação: Aguardando pagamento" + Total, sem "Faturado", selo T/P, transportadora nem
-    "Rastrear entrega". Decisão do usuário: **não conta no faturamento enquanto pendente** —
+    mostra "Situação: Aguardando pagamento" + Total + "NF emitida" (nº e dia da emissão, pedido do usuário
+    em 10/2026: a NF da DEPEL estava na aba Faturamento e o card escondia), sem "Faturado", selo T/P,
+    transportadora nem "Rastrear entrega". Decisão do usuário: **não conta no faturamento enquanto pendente** —
     `sqlFaturadoDeFato` (`routes/lib/faturadoDeFato.js`) no lugar de `status = 'faturado'` no
     classificatório (12 meses, ano, grupo, última compra), Curva ABC, faturamento semanal/trimestral
     e top clientes do Dashboard e acumulado da ficha; volta a contar quando o título some da aba.
