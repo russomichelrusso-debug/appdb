@@ -8782,14 +8782,16 @@
     .clientesGrupo:not(:has(> .recompra:not(.hidden))) {
       display: none;
     }
-    /* ---------- Laptop (10/2026, mockup "telas por aparelho" escolhido pelo
-       usuário) ----------
-       A partir de 1100 px: abas num menu à esquerda, orçamento preso à direita
-       nas abas Pedido e Produtos (body.orcDocado, ligado em
-       atualizarOrcamentoDocado) e cada aba em colunas - cliente e contexto à
-       esquerda (presos ao rolar), produtos/itens no meio. Abaixo disso nada
-       muda (celular; o tablet vem depois). */
-    @media (min-width: 1100px) {
+    /* ---------- Laptop e tablet (10/2026, mockup "telas por aparelho"
+       escolhido pelo usuário) ----------
+       A partir de 900 px (laptop e tablet deitado): abas num menu à esquerda,
+       orçamento preso à direita nas abas Pedido e Produtos (body.orcDocado,
+       ligado em atualizarOrcamentoDocado) e cada aba em colunas - cliente e
+       contexto à esquerda (presos ao rolar), produtos/itens no meio. Os blocos
+       seguintes ajustam: trilho estreito até 1349 px, cliente em faixa no
+       tablet deitado (até 1099 px) e o tablet em pé (700-899 px). Abaixo de
+       700 px (celular) nada muda. */
+    @media (min-width: 900px) {
       :root {
         --navH: 0px;
         --ladoW: 216px;
@@ -8850,11 +8852,6 @@
 
       .tabbtn::after {
         display: none;
-      }
-
-      .tabbtn:hover {
-        color: #fff;
-        background: rgba(255, 255, 255, .06);
       }
 
       .tabbtn.active {
@@ -8998,9 +8995,9 @@
         flex-basis: 100%;
       }
 
-      /* leitura pela câmera no laptop é rara: fica o botão da busca */
-      .scanFab {
-        display: none;
+      /* "Nenhum produto encontrado" ocupa a largura, não uma célula da grade */
+      #resultsList > .empty-state {
+        grid-column: 1 / -1;
       }
 
       /* a folha escondida fica embaixo da tela, mas a sombra dela aparecia */
@@ -9009,10 +9006,25 @@
       }
     }
 
-    /* Laptop pequeno (1100-1349 px, ex.: 1280x800): com o menu largo e
-       o orçamento preso sobravam ~150 px pros produtos. O menu vira trilho
-       (ícone com o nome embaixo) e o orçamento e a coluna do lado afinam. */
-    @media (min-width: 1100px) and (max-width: 1349px) {
+    /* Com mouse (laptop): realce ao passar e sem o botão flutuante de leitura
+       (a câmera do laptop é rara: fica o botão da busca). No tablet (toque)
+       o botão flutuante continua - o levantamento na loja é pela câmera. */
+    @media (min-width: 900px) and (hover: hover) and (pointer: fine) {
+      .tabbtn:hover {
+        color: #fff;
+        background: rgba(255, 255, 255, .06);
+      }
+
+      .scanFab {
+        display: none;
+      }
+    }
+
+    /* Laptop pequeno e tablet deitado (900-1349 px, ex.: 1280x800, iPad
+       deitado): com o menu largo e o orçamento preso sobravam ~150 px pros
+       produtos. O menu vira trilho (ícone com o nome embaixo) e o orçamento e
+       a coluna do lado afinam. */
+    @media (min-width: 900px) and (max-width: 1349px) {
       :root {
         --ladoW: 84px;
         --orcW: 340px;
@@ -9041,6 +9053,94 @@
       #tabLevantamento:not(.hidden),
       #clienteTabDetail:not(.hidden) {
         grid-template-columns: 320px minmax(0, 1fr);
+      }
+    }
+
+    /* Tablet deitado e laptop pequeno (900-1349 px): o Levantamento é o do
+       tablet na loja com o celular de leitor (PRs #247/#248) - a coluna do lado
+       roubava uma coluna de itens (1280 deitado = 3). O cliente vira uma faixa
+       em cima (card à esquerda, salvar/abrir à direita) e a lista usa a largura. */
+    @media (min-width: 900px) and (max-width: 1349px) {
+      #tabLevantamento:not(.hidden) {
+        display: block;
+      }
+
+      .levLado {
+        position: static;
+        max-height: none;
+        overflow: visible;
+        padding-bottom: 0;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+    }
+
+    /* Tablet deitado (900-1099 px, ex.: 1024x768): coluna do lado mais estreita
+       (a busca fica à vista; os produtos numa coluna) */
+    @media (min-width: 900px) and (max-width: 1099px) {
+      :root {
+        --orcW: 320px;
+      }
+
+      #tabPrecos:not(.hidden),
+      #clienteTabDetail:not(.hidden) {
+        grid-template-columns: 290px minmax(0, 1fr);
+      }
+    }
+
+    /* Tablet em pé (700-899 px, ex.: 768, 810, 834): abas embaixo e gaveta do
+       orçamento como no celular, mas usando a largura - card do cliente ao lado
+       do contexto, produtos e blocos da aba Clientes em 2 colunas. */
+    @media (min-width: 700px) and (max-width: 899px) {
+      .wrap,
+      .tabbar,
+      body.abaLev .wrap,
+      body.abaLev .tabbar {
+        max-width: none;
+      }
+
+      .cartbar,
+      body.abaLev .cartbar,
+      .drawer {
+        max-width: 640px;
+      }
+
+      .pedidoLado,
+      .levLado {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      .pedidoLado > .clienteCard {
+        grid-row: 1 / span 2;
+      }
+
+      #resultsList {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      #resultsList > .empty-state {
+        grid-column: 1 / -1;
+      }
+
+      #clientesPainel {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+      }
+
+      #clientesRecentes {
+        grid-column: 1 / -1;
+      }
+
+      .campGrade,
+      .catFamGrade,
+      .campGrupoGrade {
+        grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
       }
     }
   </style>
@@ -12511,25 +12611,38 @@
         ctxPrecoAberto = !ctxPrecoAberto;
         atualizarResumoContexto();
       }
-      // Laptop (10/2026, mockup "telas por aparelho"): a partir de 1100 px o
-      // orçamento fica preso à direita nas abas Pedido e Produtos (body.orcDocado,
-      // CSS no fim do <style>), sem gaveta nem fundo escurecido. Como a gaveta só
-      // era redesenhada ao abrir, toda mudança do carrinho (renderCartBar) pede
-      // um renderCart no próximo quadro enquanto ele está à vista.
-      const MQ_LAPTOP = window.matchMedia('(min-width: 1100px)');
+      // Laptop e tablet deitado (10/2026, mockup "telas por aparelho"): a partir
+      // de 900 px o orçamento fica preso à direita nas abas Pedido e Produtos
+      // (body.orcDocado, CSS no fim do <style>), sem gaveta nem fundo escurecido.
+      // Como a gaveta só era redesenhada ao abrir, toda mudança do carrinho
+      // (renderCartBar) pede um renderCart no próximo quadro enquanto ele está à
+      // vista - menos quando o renderCart acabou de rodar no mesmo toque
+      // (renderCart(); renderCartBar()) ou roda antes do quadro chegar.
+      const MQ_TELA_LARGA = window.matchMedia('(min-width: 900px)');
       let renderCartRodando = false;
       let renderCartAgendado = false;
+      let renderCartNesteToque = false;
+      let renderCartVezes = 0;
+      // só depois de o init() ler o carrinho guardado (initTabs): antes disso,
+      // girar o tablet na tela de login desenhava o carrinho vazio e o
+      // saveCartLocal apagava o orçamento guardado (achado do revisor-cortag)
+      let orcamentoDocadoPronto = false;
       function orcamentoDocado() {
         return document.body.classList.contains('orcDocado');
       }
       function agendarRenderCartDocado() {
-        if (renderCartRodando || renderCartAgendado || !orcamentoDocado()) return;
+        if (renderCartRodando || renderCartNesteToque || renderCartAgendado || !orcamentoDocado()) return;
         renderCartAgendado = true;
-        requestAnimationFrame(() => { renderCartAgendado = false; if (orcamentoDocado()) renderCart(); });
+        const vezes = renderCartVezes;
+        requestAnimationFrame(() => {
+          renderCartAgendado = false;
+          if (orcamentoDocado() && renderCartVezes === vezes) renderCart();
+        });
       }
       function atualizarOrcamentoDocado() {
+        if (!orcamentoDocadoPronto) return;
         const aba = document.body.dataset.aba;
-        const docado = MQ_LAPTOP.matches && (aba === 'precos' || aba === 'produtos');
+        const docado = MQ_TELA_LARGA.matches && (aba === 'precos' || aba === 'produtos');
         const antes = orcamentoDocado();
         if (docado === antes) return;
         // a gaveta aberta numa aba sem o orçamento preso fecha ao entrar/sair dele
@@ -12537,9 +12650,14 @@
         document.body.classList.toggle('orcDocado', docado);
         if (docado) renderCart();
       }
-      MQ_LAPTOP.addEventListener('change', atualizarOrcamentoDocado);
+      MQ_TELA_LARGA.addEventListener('change', atualizarOrcamentoDocado);
       function renderCart() {
         renderCartRodando = true;
+        renderCartVezes++;
+        if (!renderCartNesteToque) {
+          renderCartNesteToque = true;
+          Promise.resolve().then(() => { renderCartNesteToque = false; });
+        }
         try { renderCartCorpo(); } finally { renderCartRodando = false; }
       }
       function renderCartCorpo() {
@@ -14705,13 +14823,14 @@
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
+        orcamentoDocadoPronto = true;
         atualizarOrcamentoDocado();
         // laptop: "/" vai pra busca da aba aberta (como em sites de busca)
         document.addEventListener('keydown', (e) => {
-          if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || !MQ_LAPTOP.matches) return;
+          if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || !MQ_TELA_LARGA.matches) return;
           const alvo = e.target;
           if (alvo && (alvo.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))) return;
-          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden)')) return;
+          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden), .shareSheet:not(.hidden), .scannerModal:not(.hidden), .modoLeitor:not(.hidden)')) return;
           const busca = { precos: 'searchInput', levantamento: 'levInput', produtos: 'prodTabSearch', clientes: 'clienteTabSearch' }[document.body.dataset.aba];
           const campo = busca && document.getElementById(busca);
           if (!campo || campo.offsetParent === null) return;
