@@ -1130,6 +1130,9 @@ Supabase, sem PR — não é mudança de código.
   resultados (`metaClienteBusca`/`fantasiaDoCliente`), na lista do Painel, no card do cliente selecionado (depois do CNPJ)
   e na busca da Ficha cadastral. Valem as buscas que usam o motor: seletor de cliente, aba Clientes, Painel, Abrir
   levantamento, Curva ABC e Ficha cadastral. Cliente sem ficha de CNPJ não tem fantasia (o ERP não manda).
+  Pedido seguinte do usuário: o fantasia também aparece em negrito no começo da linha de detalhes dos blocos da aba
+  Clientes (Recompra, Classificatório, Saldo a cancelar, Inadimplência, Para reativar, Visitas, Perto de mim, Rota por
+  cidade; `fantasiaNaMeta`, pela cópia de clientes do aparelho - funciona sem internet).
 
 ## O que já tentamos e não deu certo
 

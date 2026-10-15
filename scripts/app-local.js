@@ -51,7 +51,7 @@ async function semear() {
     // ficha de CNPJ com endereço: card com "Ficha" e "Waze" (pelo endereço); 103 fica sem os dois
     fichasCnpj: {
       101: {
-        razao_social: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO LTDA', situacao_cadastral: 'ATIVA',
+        razao_social: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO LTDA', nome_fantasia: 'CASA DO CONSTRUTOR', situacao_cadastral: 'ATIVA',
         logradouro: 'COLOMBO', numero: '7266', bairro: 'ZONA 07', municipio: 'MARINGA', uf: 'PR', cep: '87020001',
         telefone: '(44) 3226-0011', email: 'fiscal@contabilmaringa.com.br', // "Receita: ..." na janela Contatos
         dados_brutos: { endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' } },
