@@ -524,7 +524,7 @@
     <div class="card hidden" id="clientPickerCard" style="margin-bottom:14px;">
       <div id="clientPickerSearch">
         <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver o que ele mais e menos compra (mesma classificação A/B/C, só que sobre o histórico faturado desse cliente).</p>
-        <input type="text" id="clientPickerInput" placeholder="Buscar cliente por nome ou CNPJ…" style="font:inherit;font-size:13px;border:1px solid var(--hairline);border-radius:9px;padding:9px 12px;width:100%;background:var(--white);color:var(--ink);">
+        <input type="text" id="clientPickerInput" placeholder="Cliente: nome, CNPJ, código, cidade…" style="font:inherit;font-size:13px;border:1px solid var(--hairline);border-radius:9px;padding:9px 12px;width:100%;background:var(--white);color:var(--ink);">
         <div id="clientPickerResults" style="margin-top:8px;"></div>
       </div>
       <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -567,7 +567,7 @@
             <button data-classe="C">C</button>
           </div>
           <select id="categoriaFiltro"><option value="">Todas as categorias</option></select>
-          <input type="text" id="produtoBusca" placeholder="Buscar por nome ou código…">
+          <input type="text" id="produtoBusca" placeholder="Nome, código ou medida (ex.: serra copo 50)…">
         </div>
         <div class="prodCount" id="prodFiltroCount"></div>
         <div class="prodTableScroll" id="topTableHost"></div>
@@ -868,7 +868,9 @@
       host.innerHTML = lista.map(c => `
         <button type="button" class="clientResultItem" data-id="${c.id}" data-nome="${escapeHtml(c.nome)}">
           <span class="crName">${escapeHtml(c.nome)}</span>
-          <span class="crDoc">${escapeHtml(c.documento || 'Sem CNPJ cadastrado')}</span>
+          <span class="crDoc">${[escapeHtml(c.documento || 'Sem CNPJ cadastrado'),
+            c.municipio ? escapeHtml(c.municipio + (c.uf ? '/' + c.uf : '')) : '',
+            c.nome_fantasia && textoBusca(c.nome_fantasia) !== textoBusca(c.nome) ? escapeHtml(c.nome_fantasia) : ''].filter(Boolean).join(' · ')}</span>
         </button>`).join('');
       host.querySelectorAll('.clientResultItem').forEach(btn => {
         btn.addEventListener('click', () => selecionarCliente(Number(btn.dataset.id), btn.dataset.nome));
@@ -975,7 +977,7 @@
       document.getElementById('produtoBusca').addEventListener('input', (e) => {
         clearTimeout(buscaDebounce);
         const valor = e.target.value;
-        buscaDebounce = setTimeout(() => { state.busca = valor.trim().toLowerCase(); renderProdutos(); }, 150);
+        buscaDebounce = setTimeout(() => { state.busca = valor.trim(); renderProdutos(); }, 150);
       });
       document.querySelector('#periodoSeg button[data-dias=""]').classList.add('active');
       document.querySelector('#campoSeg button[data-campo="faturamento_total"]').classList.add('active');
@@ -1394,11 +1396,44 @@
       return classificados.filter(p => {
         if (state.filtroClasse && p.classe !== state.filtroClasse) return false;
         if (state.filtroCategoria && p.categoria !== state.filtroCategoria) return false;
-        if (state.busca) {
-          const alvo = (p.produto + ' ' + p.codigo_sku).toLowerCase();
-          if (!alvo.includes(state.busca)) return false;
-        }
+        if (state.busca && !bateBusca(p.produto + ' ' + p.codigo_sku, state.busca)) return false;
         return true;
+      });
+    }
+
+    // Busca da lista (produtos ou clientes), mesmas regras da busca do app
+    // (index.html): sem acento, palavras em qualquer ordem, "50mm" = "50 mm",
+    // "4,5" = "4.5", medida exata ("50" não acha 150 nem 51; código com 4+
+    // dígitos vale pelo começo), começo de palavra ("diam" = diamantada) e 1
+    // letra errada em palavra de 4+. "de", "p/", "com"... não contam se faltarem.
+    // A ordem continua a da Curva (o ranking não muda pela busca).
+    function textoBusca(s) {
+      return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+        .replace(/(\d),(\d)/g, '$1.$2')
+        .replace(/[^a-z0-9.]+/g, ' ')
+        .replace(/(\d)([a-z])/g, '$1 $2')
+        .replace(/(^|\s)\.+|\.+(?=\s|$)/g, ' ')
+        .replace(/\s+/g, ' ').trim();
+    }
+    const LIGACAO_BUSCA = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em', 'p', 'para', 'com', 'a', 'o']);
+    function umaLetraDeDiferenca(a, b) {
+      if (Math.abs(a.length - b.length) > 1) return false;
+      let i = 0, j = 0, dif = 0;
+      while (i < a.length && j < b.length) {
+        if (a[i] === b[j]) { i++; j++; continue; }
+        if (++dif > 1) return false;
+        if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; }
+      }
+      return dif + (a.length - i) + (b.length - j) <= 1;
+    }
+    function bateBusca(alvo, busca) {
+      const tokens = textoBusca(alvo).split(' ');
+      const todas = textoBusca(busca).split(' ').filter(Boolean);
+      const palavras = todas.filter(w => !LIGACAO_BUSCA.has(w));
+      return (palavras.length ? palavras : todas).every(w => {
+        if (/^[\d.]+$/.test(w)) return tokens.includes(w) || (w.length >= 4 && tokens.some(t => t.startsWith(w)));
+        return tokens.some(t => t.startsWith(w) || (w.length >= 3 && t.includes(w)))
+          || (w.length >= 4 && tokens.some(t => !/^\d/.test(t) && umaLetraDeDiferenca(w, t)));
       });
     }
 
