@@ -10420,7 +10420,7 @@
       // palavras em qualquer ordem - todas as medidas digitadas têm de estar no
       // nome, e das outras palavras pelo menos metade (cobre "faltou uma
       // palavra" e erro de digitação). Entre eles: menos palavras faltando,
-      // palavras mais certas, a frase seguida no nome, nome mais curto.
+      // palavras mais certas, a frase seguida no nome, ordem natural do nome.
       function searchProducts(qRaw) {
         const termo = String(qRaw || '').trim();
         const termoUpper = termo.toUpperCase();
@@ -10457,9 +10457,10 @@
           resto.push([textos.length - achadas, pen, frase, p]);
         }
 
-        topo.sort((a, b) => a[0] - b[0] || a[1].n.length - b[1].n.length || a[1].n.localeCompare(b[1].n));
-        resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
-          || a[3].n.length - b[3].n.length || a[3].n.localeCompare(b[3].n));
+        // empate: ordem natural do nome (16 mm, 19 mm, 25 mm... 152 mm - não 152 antes de 16)
+        const natural = (x, y) => x._n.localeCompare(y._n, 'pt', { numeric: true }); // _n: sem acento e sem espaço duplo
+        topo.sort((a, b) => a[0] - b[0] || natural(a[1], b[1]));
+        resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || natural(a[3], b[3]));
         return [...topo.map(r => r[1]), ...resto.map(r => r[3])].slice(0, 50);
       }
       // </motor-busca>
@@ -11930,13 +11931,17 @@
         // mostra na própria busca se o item já foi levantado - responde "já
         // contei esse?" sem rolar a lista e sem somar +1 por engano
         const levantados = new Map(state.survey.map(it => [it.cod, it.qty]));
-        wrap.innerHTML = results.slice(0, 8).map(p => `
+        // 20 (a lista rola): com 8, "serra copo" escondia as medidas maiores
+        const mostrados = results.slice(0, 20);
+        const resto = results.length > mostrados.length
+          ? `<div class="lev-noresults">Mostrando ${mostrados.length} de ${results.length >= 50 ? '50+' : results.length} — digite a medida ou mais uma palavra pra achar mais rápido</div>` : '';
+        wrap.innerHTML = mostrados.map(p => `
     <button type="button" class="levsr-item" data-lev-pick="${escapeHtml(p.c)}">
       <span class="levsr-name">${escapeHtml(p.n)}</span>
       <span class="levsr-code">Cód. ${escapeHtml(p.c)}</span>
       ${levantados.has(p.c) ? `<span class="levsr-feito">✓ já levantado · ${levantados.get(p.c)} un.</span>` : ''}
     </button>
-  `).join('');
+  `).join('') + resto;
         wrap.classList.remove('hidden');
         wrap.querySelectorAll('[data-lev-pick]').forEach(b => {
           b.addEventListener('click', () => selectLevSearchResult(b.dataset.levPick));
@@ -12236,7 +12241,7 @@
         const locais = loadSavedSurveysList().map(s => {
           const items = Array.isArray(s.items) ? s.items : [];
           return {
-            chave: 'l:' + s.id, localId: s.id, serverId: s.serverId, idEnvio: s.idEnvio, nome: s.name || '', vendedor: s.vendedor || '',
+            chave: 'l:' + s.id, localId: s.id, serverId: s.serverId, idEnvio: s.idEnvio, clienteId: s.clienteId, nome: s.name || '', vendedor: s.vendedor || '',
             em: Number(s.savedAt) || 0, numProdutos: items.length, unidades: items.reduce((a, i) => a + (Number(i.qty) || 0), 0),
           };
         });
@@ -12254,9 +12259,22 @@
         const wrap = document.getElementById('savedSurveysList');
         let list = levantamentosDaJanela();
         const total = list.length;
-        // busca pelo cliente ou pelo vendedor, sem acento/maiúscula, cada palavra em qualquer ordem
-        const palavras = normalize(filtro).split(/\s+/).filter(Boolean);
-        if (palavras.length) list = list.filter(s => { const t = normalize(s.nome + ' ' + s.vendedor); return palavras.every(p => t.includes(p)); });
+        // Mesmo motor da busca de clientes (pontuarClienteBusca): sem acento, palavras
+        // em qualquer ordem, erro de digitação, CNPJ, código do ERP, nome fantasia e
+        // cidade (da cópia de clientes do aparelho) - e também o vendedor e o dia
+        // ("russo 13/10"), postos no campo de menor peso. A ordem continua a mais nova primeiro.
+        const palavras = String(filtro || '').trim() ? [filtro] : [];
+        if (palavras.length) {
+          const clientesPorId = new Map(loadClientesLocais().map(c => [String(c.id), c]));
+          list = list.filter(s => {
+            const c = (s.clienteId != null && clientesPorId.get(String(s.clienteId))) || {};
+            const dia = s.em ? new Date(s.em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '';
+            return pontuarClienteBusca({
+              nome: s.nome, documento: c.documento, codigo_oficial: c.codigo_oficial, nome_fantasia: c.nome_fantasia,
+              municipio: [c.endereco && c.endereco.municipio, s.vendedor, dia].filter(Boolean).join(' '),
+            }, filtro) !== null;
+          });
+        }
         let situacao = '';
         if (levEquipeErro) {
           situacao = levEquipe
