@@ -1045,13 +1045,16 @@ Supabase, sem PR — não é mudança de código.
   início de antes, com as campanhas). Catálogo = as famílias da Lista de Preços (`productFamilia`, ordem pela numeração
   "01 - …", nome sem o número) em cards com 4 fotos, nº de produtos e selo da maior campanha (A); tocar abre a grade de
   fotos da família com os **chips das famílias presos no topo**, preço do contexto do orçamento (de/por pelo
-  `ofertaDoProduto`), "+" que põe no orçamento e 40 por vez com "Ver mais" (B). Promocionais do Painel (`_promocional`)
+  `ofertaDoProduto`), "+" que põe no orçamento e 40 produtos, mais 80 a cada "Ver mais" (B); o selo do card da família usa a régua da
+  fita (`campanhasDoCard`: classificatório e Preço Fixo do orçamento), não a lista de campanhas. Promocionais do Painel (`_promocional`)
   ficam fora; descontinuado já não está na Lista de Preços. Fotos só quando chegam perto da tela (`preencherFotosAoVer`,
   IntersectionObserver): sem internet aparece só a que já foi vista ou é de campanha — catálogo inteiro offline pediria
   miniaturas geradas no servidor (não feito). **"Mostrar ao cliente"** (D) abre a vitrine (`#vitrine`, `abrirVitrine`):
   tela cheia, um produto por vez, passar com o dedo/setas, miniaturas, **sem preço nenhum** e selo de campanha **sem o
   nome da regra** (costuma trazer o classificatório, mesma regra da tela do cliente); **sair só segurando o ✕** 0,8 s
   (o celular fica na mão do cliente); "Separar pra proposta" junta produtos e, ao sair, pergunta se vão pro orçamento.
+  Arrastar na vitrine não rola a página nem puxa pra atualizar (`html.vitrineAberta`); o gesto de voltar do Android
+  ainda fecha o app (o app não usa `history`).
   Voltar da ficha do produto devolve a grade na mesma altura (`catalogoScroll`).
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas

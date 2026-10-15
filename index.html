@@ -6236,8 +6236,22 @@
     }
 
     .vitrine.hidden,
-    #vitrineSelo.hidden {
+    #vitrineSelo.hidden,
+    .prodModoSeg.hidden {
       display: none;
+    }
+
+    /* arrastar na vitrine não rola a página de trás nem puxa pra atualizar
+       (recarregaria o app com o preço na tela) */
+    html.vitrineAberta,
+    html.vitrineAberta body {
+      overflow: hidden;
+      overscroll-behavior: none;
+    }
+
+    .vitrine,
+    .vitrinePalco {
+      touch-action: none;
     }
 
     .vitrine > * {
@@ -6305,7 +6319,6 @@
       background: #FFFFFF;
       box-shadow: var(--shadow-2);
       overflow: hidden;
-      touch-action: pan-y;
     }
 
     .vitrineFoto {
@@ -6391,6 +6404,7 @@
     }
 
     .vitrineMinis {
+      touch-action: pan-x;
       display: flex;
       gap: 6px;
       overflow-x: auto;
@@ -23167,6 +23181,7 @@
         const busca = document.getElementById('prodTabSearch');
         const temBusca = !!(busca && busca.value.trim());
         const catalogo = prodModo === 'catalogo';
+        document.getElementById('prodModoSeg').classList.toggle('hidden', temBusca);
         document.getElementById('prodTabList').classList.toggle('hidden', !temBusca);
         document.getElementById('prodInicio').classList.toggle('hidden', temBusca || !!campanhaAberta || catalogo);
         document.getElementById('prodCampanha').classList.toggle('hidden', temBusca || !campanhaAberta);
@@ -23291,6 +23306,7 @@
       // descontinuado já não está nela).
       const PROD_MODO_LS_KEY = 'cortagProdModo_v1';
       const CATALOGO_POR_PAGINA = 40;
+      const CATALOGO_VER_MAIS = 80;
       const VITRINE_SEGURAR_MS = 800;
       let prodModo = (() => { try { return localStorage.getItem(PROD_MODO_LS_KEY) === 'catalogo' ? 'catalogo' : 'lista'; } catch (e) { return 'lista'; } })();
       let catalogoFamilia = null; // chave da família aberta (null = cards das famílias)
@@ -23316,16 +23332,18 @@
         const ordem = (x) => { const n = /^\s*(\d+)/.exec(x.chave); return n ? Number(n[1]) : Infinity; };
         return [...m.values()].sort((a, b) => (ordem(a) - ordem(b)) || a.nome.localeCompare(b.nome, 'pt-BR'));
       }
-      // Maior desconto de campanha por código, pro selo do card da família.
+      // Maior desconto de campanha por código, pro selo do card da família - pela
+      // régua da fita do card (campanhasDoCard: classificatório e Preço Fixo do
+      // orçamento), senão o card prometia o -10% do Master a um cliente Premium.
+      // campanhasDaAba só escolhe quem conferir (não varre o catálogo inteiro).
       function campanhaPorCodigo() {
         const m = new Map();
-        for (const { regra, produtos } of campanhasDaAba()) {
-          const pct = maiorPctDaRegra(regra), bf = ehCampanhaBlackFriday(regra);
-          for (const p of produtos) {
-            const atual = m.get(p.c);
-            if (!atual || pct > atual.pct) m.set(p.c, { pct, bf: bf || !!(atual && atual.bf) });
-            else if (bf) atual.bf = true;
-          }
+        const ctx = contextoCampanhas();
+        const candidatos = new Set();
+        for (const { produtos } of campanhasDaAba()) produtos.forEach(p => candidatos.add(p));
+        for (const p of candidatos) {
+          const regras = campanhasDoCard(p, ctx);
+          if (regras.length) m.set(p.c, { pct: maiorPctDaRegra(regras[0]), bf: regras.some(ehCampanhaBlackFriday) });
         }
         return m;
       }
@@ -23372,7 +23390,7 @@
       function renderCatalogoDaFamilia(el, familias, fam) {
         const mostrar = fam.produtos.slice(0, catalogoMostrar);
         const resto = fam.produtos.length - mostrar.length;
-        const chips = `<button type="button" class="catChip" data-cat-familia="">‹ Famílias</button>`
+        const chips = `<button type="button" class="catChip" data-cat-voltar>‹ Famílias</button>`
           + familias.map(f => `<button type="button" class="catChip${f === fam ? ' ativo' : ''}" data-cat-familia="${escapeHtml(f.chave)}">${escapeHtml(f.nome)}</button>`).join('');
         const itens = mostrar.map(p => {
           const of = ofertaDoProduto(p);
@@ -23398,10 +23416,10 @@
           </div>
           <div class="ofertaCtx">${fam.produtos.length} produto${fam.produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
           <div class="campGrade">${itens}</div>
-          ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${resto}</button>` : ''}`;
+          ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
+        el.querySelector('[data-cat-voltar]').addEventListener('click', () => { catalogoFamilia = null; renderCatalogo(); window.scrollTo(0, 0); });
         el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => {
-          if (b.dataset.catFamilia === '') { catalogoFamilia = null; renderCatalogo(); window.scrollTo(0, 0); }
-          else if (b.dataset.catFamilia !== fam.chave) abrirFamiliaDoCatalogo(b.dataset.catFamilia);
+          if (b.dataset.catFamilia !== fam.chave) abrirFamiliaDoCatalogo(b.dataset.catFamilia);
         }));
         // chip da família aberta à vista (só rola a fileira, não a página)
         const faixa = document.getElementById('catChips');
@@ -23409,7 +23427,7 @@
         if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
         document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(fam.nome, fam.produtos, 0));
         document.getElementById('catMaisBtn')?.addEventListener('click', () => {
-          catalogoMostrar += CATALOGO_POR_PAGINA * 2;
+          catalogoMostrar += CATALOGO_VER_MAIS;
           catalogoScroll = window.scrollY;
           renderCatalogo();
         });
@@ -23428,6 +23446,7 @@
         const minis = document.getElementById('vitrineMinis');
         minis.innerHTML = produtos.map((p, i) => `<button type="button" class="vitrineMini" data-vitrine-i="${i}"${codigoDaFoto(p.c) ? ` data-foto-cod="${escapeHtml(p.c)}"` : ''} aria-label="${escapeHtml(p.n)}"></button>`).join('');
         document.getElementById('vitrine').classList.remove('hidden');
+        document.documentElement.classList.add('vitrineAberta');
         preencherFotosAoVer(minis, 'vitrine');
         renderVitrine();
       }
@@ -23488,6 +23507,7 @@
         const separados = vitrine.separados.slice();
         vitrine = null;
         document.getElementById('vitrine').classList.add('hidden');
+        document.documentElement.classList.remove('vitrineAberta');
         if (observadoresDeFoto.vitrine) observadoresDeFoto.vitrine.disconnect();
         document.getElementById('vitrineMinis').innerHTML = '';
         if (!separados.length) return;
