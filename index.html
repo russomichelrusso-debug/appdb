@@ -9370,6 +9370,404 @@
       color: var(--gray);
     }
   </style>
+  <!-- Leaflet 1.9.4 (c) Volodymyr Agafonkin, CloudMade - BSD-2-Clause. Estilo copiado
+       do leaflet.min.css do cdnjs (o CSP do app não carrega folha de estilo de CDN);
+       o script vem da CDN com hash (LEAFLET_URL, sw.js LIBS). Mapa da carteira, aba Clientes. -->
+  <style id="estiloLeaflet">
+.leaflet-image-layer,.leaflet-layer,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-pane,.leaflet-pane>canvas,.leaflet-pane>svg,.leaflet-tile,.leaflet-tile-container,.leaflet-zoom-box{position:absolute;left:0;top:0}.leaflet-container{overflow:hidden}.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-tile{-webkit-user-select:none;-moz-user-select:none;user-select:none;-webkit-user-drag:none}.leaflet-tile::selection{background:0 0}.leaflet-safari .leaflet-tile{image-rendering:-webkit-optimize-contrast}.leaflet-safari .leaflet-tile-container{width:1600px;height:1600px;-webkit-transform-origin:0 0}.leaflet-marker-icon,.leaflet-marker-shadow{display:block}.leaflet-container .leaflet-overlay-pane svg{max-width:none!important;max-height:none!important}.leaflet-container .leaflet-marker-pane img,.leaflet-container .leaflet-shadow-pane img,.leaflet-container .leaflet-tile,.leaflet-container .leaflet-tile-pane img,.leaflet-container img.leaflet-image-layer{max-width:none!important;max-height:none!important;width:auto;padding:0}.leaflet-container img.leaflet-tile{mix-blend-mode:plus-lighter}.leaflet-container.leaflet-touch-zoom{-ms-touch-action:pan-x pan-y;touch-action:pan-x pan-y}.leaflet-container.leaflet-touch-drag{-ms-touch-action:pinch-zoom;touch-action:none;touch-action:pinch-zoom}.leaflet-container.leaflet-touch-drag.leaflet-touch-zoom{-ms-touch-action:none;touch-action:none}.leaflet-container{-webkit-tap-highlight-color:transparent}.leaflet-container a{-webkit-tap-highlight-color:rgba(51,181,229,.4)}.leaflet-tile{filter:inherit;visibility:hidden}.leaflet-tile-loaded{visibility:inherit}.leaflet-zoom-box{width:0;height:0;-moz-box-sizing:border-box;box-sizing:border-box;z-index:800}.leaflet-overlay-pane svg{-moz-user-select:none}.leaflet-pane{z-index:400}.leaflet-tile-pane{z-index:200}.leaflet-overlay-pane{z-index:400}.leaflet-shadow-pane{z-index:500}.leaflet-marker-pane{z-index:600}.leaflet-tooltip-pane{z-index:650}.leaflet-popup-pane{z-index:700}.leaflet-map-pane canvas{z-index:100}.leaflet-map-pane svg{z-index:200}.leaflet-vml-shape{width:1px;height:1px}.lvml{behavior:url(#default#VML);display:inline-block;position:absolute}.leaflet-control{position:relative;z-index:800;pointer-events:visiblePainted;pointer-events:auto}.leaflet-bottom,.leaflet-top{position:absolute;z-index:1000;pointer-events:none}.leaflet-top{top:0}.leaflet-right{right:0}.leaflet-bottom{bottom:0}.leaflet-left{left:0}.leaflet-control{float:left;clear:both}.leaflet-right .leaflet-control{float:right}.leaflet-top .leaflet-control{margin-top:10px}.leaflet-bottom .leaflet-control{margin-bottom:10px}.leaflet-left .leaflet-control{margin-left:10px}.leaflet-right .leaflet-control{margin-right:10px}.leaflet-fade-anim .leaflet-popup{opacity:0;-webkit-transition:opacity .2s linear;-moz-transition:opacity .2s linear;transition:opacity .2s linear}.leaflet-fade-anim .leaflet-map-pane .leaflet-popup{opacity:1}.leaflet-zoom-animated{-webkit-transform-origin:0 0;-ms-transform-origin:0 0;transform-origin:0 0}svg.leaflet-zoom-animated{will-change:transform}.leaflet-zoom-anim .leaflet-zoom-animated{-webkit-transition:-webkit-transform .25s cubic-bezier(0,0,.25,1);-moz-transition:-moz-transform .25s cubic-bezier(0,0,.25,1);transition:transform .25s cubic-bezier(0,0,.25,1)}.leaflet-pan-anim .leaflet-tile,.leaflet-zoom-anim .leaflet-tile{-webkit-transition:none;-moz-transition:none;transition:none}.leaflet-zoom-anim .leaflet-zoom-hide{visibility:hidden}.leaflet-interactive{cursor:pointer}.leaflet-grab{cursor:-webkit-grab;cursor:-moz-grab;cursor:grab}.leaflet-crosshair,.leaflet-crosshair .leaflet-interactive{cursor:crosshair}.leaflet-control,.leaflet-popup-pane{cursor:auto}.leaflet-dragging .leaflet-grab,.leaflet-dragging .leaflet-grab .leaflet-interactive,.leaflet-dragging .leaflet-marker-draggable{cursor:move;cursor:-webkit-grabbing;cursor:-moz-grabbing;cursor:grabbing}.leaflet-image-layer,.leaflet-marker-icon,.leaflet-marker-shadow,.leaflet-pane>svg path,.leaflet-tile-container{pointer-events:none}.leaflet-image-layer.leaflet-interactive,.leaflet-marker-icon.leaflet-interactive,.leaflet-pane>svg path.leaflet-interactive,svg.leaflet-image-layer.leaflet-interactive path{pointer-events:visiblePainted;pointer-events:auto}.leaflet-container{background:#ddd;outline-offset:1px}.leaflet-container a{color:#0078a8}.leaflet-zoom-box{border:2px dotted #38f;background:rgba(255,255,255,.5)}.leaflet-container{font-family:"Helvetica Neue",Arial,Helvetica,sans-serif;font-size:12px;font-size:.75rem;line-height:1.5}.leaflet-bar{box-shadow:0 1px 5px rgba(0,0,0,.65);border-radius:4px}.leaflet-bar a{background-color:#fff;border-bottom:1px solid #ccc;width:26px;height:26px;line-height:26px;display:block;text-align:center;text-decoration:none;color:#000}.leaflet-bar a,.leaflet-control-layers-toggle{background-position:50% 50%;background-repeat:no-repeat;display:block}.leaflet-bar a:focus,.leaflet-bar a:hover{background-color:#f4f4f4}.leaflet-bar a:first-child{border-top-left-radius:4px;border-top-right-radius:4px}.leaflet-bar a:last-child{border-bottom-left-radius:4px;border-bottom-right-radius:4px;border-bottom:none}.leaflet-bar a.leaflet-disabled{cursor:default;background-color:#f4f4f4;color:#bbb}.leaflet-touch .leaflet-bar a{width:30px;height:30px;line-height:30px}.leaflet-touch .leaflet-bar a:first-child{border-top-left-radius:2px;border-top-right-radius:2px}.leaflet-touch .leaflet-bar a:last-child{border-bottom-left-radius:2px;border-bottom-right-radius:2px}.leaflet-control-zoom-in,.leaflet-control-zoom-out{font:bold 18px 'Lucida Console',Monaco,monospace;text-indent:1px}.leaflet-touch .leaflet-control-zoom-in,.leaflet-touch .leaflet-control-zoom-out{font-size:22px}.leaflet-control-layers{box-shadow:0 1px 5px rgba(0,0,0,.4);background:#fff;border-radius:5px}.leaflet-control-layers-toggle{background-image:url(images/layers.png);width:36px;height:36px}.leaflet-retina .leaflet-control-layers-toggle{background-image:url(images/layers-2x.png);background-size:26px 26px}.leaflet-touch .leaflet-control-layers-toggle{width:44px;height:44px}.leaflet-control-layers .leaflet-control-layers-list,.leaflet-control-layers-expanded .leaflet-control-layers-toggle{display:none}.leaflet-control-layers-expanded .leaflet-control-layers-list{display:block;position:relative}.leaflet-control-layers-expanded{padding:6px 10px 6px 6px;color:#333;background:#fff}.leaflet-control-layers-scrollbar{overflow-y:scroll;overflow-x:hidden;padding-right:5px}.leaflet-control-layers-selector{margin-top:2px;position:relative;top:1px}.leaflet-control-layers label{display:block;font-size:13px;font-size:1.08333em}.leaflet-control-layers-separator{height:0;border-top:1px solid #ddd;margin:5px -10px 5px -6px}.leaflet-default-icon-path{background-image:url(images/marker-icon.png)}.leaflet-container .leaflet-control-attribution{background:#fff;background:rgba(255,255,255,.8);margin:0}.leaflet-control-attribution,.leaflet-control-scale-line{padding:0 5px;color:#333;line-height:1.4}.leaflet-control-attribution a{text-decoration:none}.leaflet-control-attribution a:focus,.leaflet-control-attribution a:hover{text-decoration:underline}.leaflet-attribution-flag{display:inline!important;vertical-align:baseline!important;width:1em;height:.6669em}.leaflet-left .leaflet-control-scale{margin-left:5px}.leaflet-bottom .leaflet-control-scale{margin-bottom:5px}.leaflet-control-scale-line{border:2px solid #777;border-top:none;line-height:1.1;padding:2px 5px 1px;white-space:nowrap;-moz-box-sizing:border-box;box-sizing:border-box;background:rgba(255,255,255,.8);text-shadow:1px 1px #fff}.leaflet-control-scale-line:not(:first-child){border-top:2px solid #777;border-bottom:none;margin-top:-2px}.leaflet-control-scale-line:not(:first-child):not(:last-child){border-bottom:2px solid #777}.leaflet-touch .leaflet-bar,.leaflet-touch .leaflet-control-attribution,.leaflet-touch .leaflet-control-layers{box-shadow:none}.leaflet-touch .leaflet-bar,.leaflet-touch .leaflet-control-layers{border:2px solid rgba(0,0,0,.2);background-clip:padding-box}.leaflet-popup{position:absolute;text-align:center;margin-bottom:20px}.leaflet-popup-content-wrapper{padding:1px;text-align:left;border-radius:12px}.leaflet-popup-content{margin:13px 24px 13px 20px;line-height:1.3;font-size:13px;font-size:1.08333em;min-height:1px}.leaflet-popup-content p{margin:17px 0;margin:1.3em 0}.leaflet-popup-tip-container{width:40px;height:20px;position:absolute;left:50%;margin-top:-1px;margin-left:-20px;overflow:hidden;pointer-events:none}.leaflet-popup-tip{width:17px;height:17px;padding:1px;margin:-10px auto 0;pointer-events:auto;-webkit-transform:rotate(45deg);-moz-transform:rotate(45deg);-ms-transform:rotate(45deg);transform:rotate(45deg)}.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#fff;color:#333;box-shadow:0 3px 14px rgba(0,0,0,.4)}.leaflet-container a.leaflet-popup-close-button{position:absolute;top:0;right:0;border:none;text-align:center;width:24px;height:24px;font:16px/24px Tahoma,Verdana,sans-serif;color:#757575;text-decoration:none;background:0 0}.leaflet-container a.leaflet-popup-close-button:focus,.leaflet-container a.leaflet-popup-close-button:hover{color:#585858}.leaflet-popup-scrolled{overflow:auto}.leaflet-oldie .leaflet-popup-content-wrapper{-ms-zoom:1}.leaflet-oldie .leaflet-popup-tip{width:24px;margin:0 auto}.leaflet-oldie .leaflet-control-layers,.leaflet-oldie .leaflet-control-zoom,.leaflet-oldie .leaflet-popup-content-wrapper,.leaflet-oldie .leaflet-popup-tip{border:1px solid #999}.leaflet-div-icon{background:#fff;border:1px solid #666}.leaflet-tooltip{position:absolute;padding:6px;background-color:#fff;border:1px solid #fff;border-radius:3px;color:#222;white-space:nowrap;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.4)}.leaflet-tooltip.leaflet-interactive{cursor:pointer;pointer-events:auto}.leaflet-tooltip-bottom:before,.leaflet-tooltip-left:before,.leaflet-tooltip-right:before,.leaflet-tooltip-top:before{position:absolute;pointer-events:none;border:6px solid transparent;background:0 0;content:""}.leaflet-tooltip-bottom{margin-top:6px}.leaflet-tooltip-top{margin-top:-6px}.leaflet-tooltip-bottom:before,.leaflet-tooltip-top:before{left:50%;margin-left:-6px}.leaflet-tooltip-top:before{bottom:0;margin-bottom:-12px;border-top-color:#fff}.leaflet-tooltip-bottom:before{top:0;margin-top:-12px;margin-left:-6px;border-bottom-color:#fff}.leaflet-tooltip-left{margin-left:-6px}.leaflet-tooltip-right{margin-left:6px}.leaflet-tooltip-left:before,.leaflet-tooltip-right:before{top:50%;margin-top:-6px}.leaflet-tooltip-left:before{right:0;margin-right:-12px;border-left-color:#fff}.leaflet-tooltip-right:before{left:0;margin-left:-12px;border-right-color:#fff}@media print{.leaflet-control{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+  </style>
+  <style>
+    /* ---- Mapa da carteira (aba Clientes, laptop 1250 px ou mais - opção C dos
+       mockups, 10/2026): no lugar do grupo "Pra rodar", Rota por cidade e Perto
+       de mim num mapa preso à direita. Sem o Leaflet (sem internet na 1ª vez) o
+       grupo volta (body.mapaClientesOk só liga com o mapa carregado). ---- */
+    /* Laptop e tablet deitado (900 px ou mais, pedido do usuário 10/2026): os
+       atalhos do "⋯ Atalhos" ficam expostos como ícones no topo, iguais a
+       Dashboard e Ficha (nome no title, ao passar o mouse). No celular continua
+       o menu. */
+    @media (min-width: 900px) {
+      .gearBtn.atalhosBtn {
+        display: none;
+      }
+
+      .atalhosMenu,
+      .atalhosMenu.hidden {
+        position: static;
+        display: flex;
+        align-items: center;
+        gap: 12px; /* o mesmo do .topbar */
+        min-width: 0;
+        padding: 0;
+        background: none;
+        box-shadow: none;
+      }
+
+      .atalhoItem {
+        position: relative;
+        justify-content: center;
+        width: 31px;
+        height: 31px;
+        min-height: 0;
+        padding: 0;
+        margin-left: 2px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, .12);
+        color: #fff;
+      }
+
+      .atalhoItem:hover {
+        background: rgba(255, 255, 255, .22);
+      }
+
+      .atalhoItem svg {
+        width: 17px;
+        height: 17px;
+        color: #fff;
+      }
+
+      .atalhoItem span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+    }
+
+    .clientesMapa {
+      display: none;
+    }
+
+    @media (min-width: 1250px) {
+      body.mapaClientesOk #grupoPraRodar {
+        display: none;
+      }
+
+      /* com o mapa a aba Clientes passa da coluna de 1280 px */
+      body.mapaClientesOk #tabClientes {
+        max-width: 1680px;
+      }
+
+      body.mapaClientesOk #clientesPainel {
+        grid-template-columns: repeat(2, minmax(0, 1fr)) minmax(460px, 1.15fr);
+      }
+
+      body.mapaClientesOk #clientesRecentes {
+        grid-column: 1 / 3;
+      }
+
+      body.mapaClientesOk .clientesMapa {
+        display: flex;
+        flex-direction: column;
+        grid-column: 3;
+        grid-row: 1 / span 3;
+        position: sticky;
+        top: 74px;
+        align-self: start;
+        height: calc(100vh - 150px);
+        min-height: 520px;
+        margin-top: 16px;
+        background: var(--white);
+        border: 1px solid var(--hairline);
+        border-radius: 16px;
+        overflow: hidden;
+      }
+    }
+
+    .cmHead {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .cmLinha {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cmChip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 32px;
+      padding: 0 11px;
+      border: 1.5px solid transparent;
+      border-radius: 999px;
+      background: var(--neutral-2);
+      color: var(--ink);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .cmChip.ativo {
+      border-color: var(--cm-cor, var(--ink));
+      font-weight: 700;
+    }
+
+    .cmChip i {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--cm-cor, var(--gray));
+    }
+
+    .cmChip[data-cat="rec"] { --cm-cor: var(--warning); }
+    .cmChip[data-cat="reat"] { --cm-cor: var(--gold); }
+    .cmChip[data-cat="inad"] { --cm-cor: var(--danger); }
+
+    .cmCidade button {
+      border: none;
+      background: none;
+      color: var(--gray);
+      font: inherit;
+      cursor: pointer;
+      padding: 0 0 0 2px;
+    }
+
+    .cmCidade {
+      cursor: default;
+    }
+
+    .cmHead select {
+      min-height: 32px;
+      border: 1px solid var(--hairline);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--red);
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 700;
+      padding: 0 10px;
+    }
+
+    .cmDica {
+      margin: 0;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .cmMapa {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      background: #e8eae4;
+    }
+
+    #cmLeaflet {
+      position: absolute;
+      inset: 0;
+    }
+
+    .cmVazio {
+      position: absolute;
+      inset: 0;
+      z-index: 500;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 24px;
+      text-align: center;
+      background: rgba(244, 244, 246, .92);
+      color: var(--gray);
+      font-size: 14px;
+    }
+
+    .cmVazio.hidden,
+    .cmCard.hidden {
+      display: none;
+    }
+
+    .cmCard {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 600;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--ink);
+      box-shadow: 0 6px 20px rgba(0, 0, 0, .18);
+    }
+
+    .cmCardTopo {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .cmCardTopo > div {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .cmCardTopo > div > b {
+      display: block;
+      font-size: 14px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cmCardMeta {
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .cmFechar {
+      flex: none;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: var(--neutral-2);
+      color: var(--ink);
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .cmCard .recompraAcoes {
+      padding: 0;
+    }
+
+    .cmPinWrap {
+      background: none;
+      border: none;
+    }
+
+    .cmPin {
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      box-sizing: border-box;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      background: var(--cm-cor, #8e8e93);
+      color: #fff;
+      font: 800 11px/1 system-ui, sans-serif;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, .35);
+      cursor: pointer;
+    }
+
+    .cmPin.rec { --cm-cor: var(--warning); }
+    .cmPin.reat { --cm-cor: var(--gold); }
+    .cmPin.inad { --cm-cor: var(--danger); }
+
+    .cmPin.aprox {
+      border-style: dashed;
+    }
+
+    .cmPin.apagado {
+      width: 14px;
+      height: 14px;
+      margin: 4px;
+      border-width: 2px;
+      opacity: .5;
+      --cm-cor: #8e8e93;
+    }
+
+    .cmPin.ativo {
+      transform: scale(1.3);
+      box-shadow: 0 0 0 4px rgba(26, 115, 232, .35), 0 1px 4px rgba(0, 0, 0, .35);
+    }
+
+    .cmLista {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-height: 200px;
+      overflow: auto;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .cmLista:empty {
+      display: none;
+    }
+
+    .cmLista button {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 40px;
+      padding: 6px 14px;
+      border: none;
+      border-top: 1px solid var(--hairline);
+      background: none;
+      color: var(--ink);
+      font: inherit;
+      font-size: 13.5px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .cmLista li:first-child button {
+      border-top: none;
+    }
+
+    .cmLista button.ativo {
+      background: var(--neutral-2);
+      font-weight: 700;
+    }
+
+    .cmLista .cmNum {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--cm-cor, #8e8e93);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .cmLista .cmNum.rec { --cm-cor: var(--warning); }
+    .cmLista .cmNum.reat { --cm-cor: var(--gold); }
+    .cmLista .cmNum.inad { --cm-cor: var(--danger); }
+
+    .cmLista .cmNome {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cmLista small {
+      color: var(--gray);
+      font-size: 12px;
+    }
+
+    .cmRodape {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 14px;
+      border-top: 1px solid var(--hairline);
+      font-size: 13px;
+    }
+
+    .cmRodape > div {
+      display: flex;
+      gap: 6px;
+    }
+  </style>
 </head>
 
 <body data-aba="precos">
@@ -9893,11 +10291,14 @@
           <div class="recompra hidden" id="inadimplenciaWrap"></div>
           <div class="recompra hidden" id="visitasWrap"></div>
         </div>
-        <div class="clientesGrupo">
+        <div class="clientesGrupo" id="grupoPraRodar">
           <div class="clientesSecao">Pra rodar</div>
           <div class="recompra hidden" id="pertoWrap"></div>
           <div class="recompra hidden" id="rotaWrap"></div>
         </div>
+        <!-- Mapa da carteira (laptop, 1250 px ou mais): Rota por cidade e Perto de
+             mim no mapa, no lugar do grupo "Pra rodar" (renderMapaClientes) -->
+        <aside class="clientesMapa" id="clientesMapa" aria-label="Mapa da carteira"></aside>
       </div>
       <div id="clienteTabListWrap">
         <div class="hist-content" id="clienteTabList"></div>
@@ -10988,6 +11389,7 @@
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs': 'sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD',
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs': 'sha384-Tfvhzz17zRZraaeJSy+9zZprh8OYQHd3NC7yMUa5APLz8buWdx7MloIddcBGa3oW',
         'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js': 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1',
+        'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js': 'sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO',
       };
       // <script> de biblioteca da CDN já com o hash conferido pelo navegador
       function scriptDaCdn(src) {
@@ -20997,6 +21399,7 @@
         const busca = document.getElementById('clienteTabSearch');
         const temBusca = !!(busca && busca.value.trim());
         document.getElementById('clientesPainel').classList.toggle('hidden', !!clienteTabSelected || temBusca);
+        agendarMapaClientes(); // o mapa volta à tela: acerta o tamanho
       }
 
       // ---- Recentes (aba Clientes) ----
@@ -21388,13 +21791,18 @@
         </div>`;
       }
       function renderPerto() {
+        agendarMapaClientes();
         const el = document.getElementById('pertoWrap');
         if (!el) return;
         el.classList.toggle('hidden', !!clienteTabSelected);
         const aberta = pertoAberto();
         // aberto (lembrado de outra vez) sem posição: pega agora - só com a aba
         // Clientes na tela, pra não pedir localização ao abrir o app
-        if (aberta && !pertoPosicao && !pertoBuscando && !pertoErro && !clienteTabSelected
+        // com o mapa da carteira (laptop) o bloco fica escondido: quem pede é a aba
+        // "Perto de mim" do mapa, nunca o bloco que o vendedor não está vendo
+        // (o Leaflet ainda carregando conta como mapa; só falhou = bloco de volta)
+        const blocoNaTela = !MQ_MAPA_CLIENTES.matches || (!window.L && mapaFalhouEm > 0);
+        if (aberta && blocoNaTela && !pertoPosicao && !pertoBuscando && !pertoErro && !clienteTabSelected
           && !document.getElementById('tabClientes').classList.contains('hidden')) { buscarPosicaoPerto(); return; }
         const raio = pertoRaio();
         const todos = clientesComDistancia();
@@ -21595,6 +22003,7 @@
         </div>`;
       }
       function renderRota() {
+        agendarMapaClientes();
         const el = document.getElementById('rotaWrap');
         if (!el) return;
         const cidades = cidadesDosClientes();
@@ -21680,6 +22089,309 @@
         el.querySelectorAll('[data-rota-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.rotaAbrir })));
         el.querySelectorAll('[data-rota-waze]').forEach(b => b.addEventListener('click', () => abrirWazeCliente(porId.get(b.dataset.rotaWaze))));
       }
+      // ---- Mapa da carteira (aba Clientes, laptop 1250 px ou mais) ----
+      // Opção C dos mockups (10/2026, mistura de "mapa preso à direita" com "Pra
+      // rodar vira o mapa"): o grupo "Pra rodar" sai e Rota por cidade / Perto de
+      // mim viram abas de um mapa ao lado dos outros grupos. A seleção das lojas é
+      // a MESMA dos blocos (rotaSelecionados / pertoSelecionados): marcar no mapa
+      // ou no bloco dá no mesmo, e "Montar rota" chama as mesmas funções. Cor do
+      // alfinete = bloco do cliente (recompra, reativar, inadimplência); botões no
+      // topo e passar o mouse num bloco à esquerda mostram só as lojas dele.
+      // Leaflet da CDN com hash (LEAFLET_URL, guardado pelo sw.js pra abrir sem
+      // internet) e mapa do OpenStreetMap: sem internet o fundo não carrega, os
+      // alfinetes e a lista continuam (tudo vem da cópia do /sync). Sem o Leaflet
+      // o grupo "Pra rodar" volta (body.mapaClientesOk).
+      const LEAFLET_URL = 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js';
+      const MQ_MAPA_CLIENTES = window.matchMedia('(min-width: 1250px)');
+      const MAPA_MODO_LS_KEY = 'cortagMapaModo_v1'; // 'rota' | 'perto'
+      const MAPA_CATS = { rec: 'Recompra', reat: 'Reativar', inad: 'Inadimplência' };
+      let mapaLeaflet = null;
+      let mapaCamada = null;
+      let mapaEu = null;
+      let mapaCarregando = null; // Promise do script
+      let mapaFalhouEm = 0;
+      let mapaFiltro = 'todos';
+      let mapaFiltroHover = null;
+      let mapaSelecionado = null; // id do cliente com o cartão aberto
+      let mapaEnquadre = ''; // o que estava no mapa da última vez (refaz o zoom só quando muda)
+      let mapaAgendado = false;
+      let mapaDados = null; // { modo, lojas, ordem } da última pintura (cliques)
+
+      function mapaModo() {
+        try { return localStorage.getItem(MAPA_MODO_LS_KEY) === 'perto' ? 'perto' : 'rota'; } catch (e) { return 'rota'; }
+      }
+      function agendarMapaClientes() {
+        if (mapaAgendado) return;
+        mapaAgendado = true;
+        requestAnimationFrame(() => { mapaAgendado = false; renderMapaClientes(); });
+      }
+      function carregarLeaflet() {
+        if (window.L) return Promise.resolve(true);
+        if (mapaCarregando) return mapaCarregando;
+        // falhou (sem internet e sem cópia): tenta de novo depois de 1 min
+        if (Date.now() - mapaFalhouEm < 60000) return Promise.resolve(false);
+        mapaCarregando = new Promise((resolve) => {
+          const s = scriptDaCdn(LEAFLET_URL);
+          s.onload = () => { mapaCarregando = null; resolve(!!window.L); };
+          s.onerror = () => { mapaCarregando = null; mapaFalhouEm = Date.now(); s.remove(); resolve(false); };
+          document.head.appendChild(s);
+        });
+        return mapaCarregando;
+      }
+      function categoriasDoMapa() {
+        return {
+          rec: new Map(recompraVisiveis().map(r => [String(r.cliente_id), r])),
+          reat: new Map(reativarVisiveis().map(r => [String(r.cliente_id), r])),
+          inad: new Map(((inadDados && inadDados.clientes) || []).filter(c => c.cliente_id != null).map(c => [String(c.cliente_id), c])),
+        };
+      }
+      function categoriaDoCliente(id, cats) {
+        return cats.rec.has(id) ? 'rec' : cats.inad.has(id) ? 'inad' : cats.reat.has(id) ? 'reat' : '';
+      }
+      // Lojas do modo atual: { id, c, pos, destino, dist } + o conjunto marcado
+      function lojasDoMapa(modo) {
+        if (modo === 'perto') {
+          if (!pertoPosicao) return { lojas: [], marcadas: pertoSelecionados };
+          const raio = pertoRaio();
+          const lojas = clientesComDistancia().filter(x => x.dist <= raio)
+            .map(x => ({ id: String(x.c.id), c: x.c, pos: x.pos, destino: true, dist: x.dist }));
+          return { lojas, marcadas: pertoSelecionados };
+        }
+        const cidades = cidadesDosClientes();
+        const lojas = rotaCidadesEscolhidas(cidades).flatMap(k => lojasDaCidade(cidades.get(k)))
+          .map(l => ({ id: l.id, c: l.c, pos: posicaoDoCliente(l.c), destino: !!l.destino, loja: l }));
+        return { lojas, marcadas: rotaSelecionados, cidades };
+      }
+      function ordemDoMapa(modo, lojas, marcadas) {
+        const comPos = lojas.filter(l => marcadas.has(l.id) && l.pos);
+        const semPos = lojas.filter(l => marcadas.has(l.id) && !l.pos);
+        const recente = (p) => p && Date.now() - p.em < 10 * 60000 ? p : null;
+        const origem = modo === 'perto' ? pertoPosicao : (recente(pertoPosicao) || recente(proxPosicao) || (comPos[0] && comPos[0].pos));
+        return [...(comPos.length ? ordenarParadas(origem, comPos) : []), ...semPos];
+      }
+      function criarMapaLeaflet(aside) {
+        aside.innerHTML = `<div class="cmHead" id="cmHead"></div>
+          <div class="cmMapa"><div id="cmLeaflet"></div><div class="cmVazio hidden" id="cmVazio"></div><div class="cmCard hidden" id="cmCard"></div></div>
+          <ol class="cmLista" id="cmLista" aria-label="Paradas da rota"></ol>
+          <div class="cmRodape" id="cmRodape"></div>`;
+        // zoom embaixo: em cima fica o cartão da loja tocada
+        mapaLeaflet = L.map('cmLeaflet', { zoomControl: false, attributionControl: true }).setView([-23.42, -51.93], 12);
+        L.control.zoom({ position: 'bottomright', zoomInTitle: 'Aproximar', zoomOutTitle: 'Afastar' }).addTo(mapaLeaflet);
+        mapaLeaflet.attributionControl.setPrefix('<a href="https://leafletjs.com" target="_blank" rel="noopener">Leaflet</a>');
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          maxZoom: 19,
+          attribution: '© <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+        }).addTo(mapaLeaflet);
+        mapaCamada = L.layerGroup().addTo(mapaLeaflet);
+        aside.addEventListener('click', cliqueNoMapa);
+        aside.addEventListener('change', (ev) => {
+          if (ev.target.id !== 'cmAddCidade' || !ev.target.value) return;
+          const cidades = cidadesDosClientes();
+          salvarRotaCidades([...rotaCidadesEscolhidas(cidades), ev.target.value]);
+          renderRota();
+        });
+        // passar o mouse num bloco à esquerda mostra só as lojas dele
+        [['recompraWrap', 'rec'], ['reativarWrap', 'reat'], ['inadimplenciaWrap', 'inad']].forEach(([id, cat]) => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.addEventListener('mouseenter', () => { mapaFiltroHover = cat; agendarMapaClientes(); });
+          el.addEventListener('mouseleave', () => { mapaFiltroHover = null; agendarMapaClientes(); });
+        });
+      }
+      function alternarNaRotaDoMapa(id) {
+        if (!mapaDados) return;
+        const loja = mapaDados.lojas.find(l => l.id === id);
+        if (!loja) return;
+        const marcadas = mapaDados.modo === 'perto' ? pertoSelecionados : rotaSelecionados;
+        if (marcadas.has(id)) marcadas.delete(id);
+        else {
+          if (!loja.destino) { showToast('Essa loja não tem endereço nem GPS pra entrar na rota'); return; }
+          if (marcadas.size >= ROTA_MAX_PARADAS) { showToast(`Até ${ROTA_MAX_PARADAS} paradas por rota no Google Maps`); return; }
+          marcadas.add(id);
+        }
+        if (mapaDados.modo === 'perto') renderPerto();
+        else { rotaEditada = true; renderRota(); }
+      }
+      function cliqueNoMapa(ev) {
+        const b = ev.target.closest('button');
+        if (!b || !mapaDados) return;
+        const d = b.dataset;
+        if (d.cmModo) {
+          try { localStorage.setItem(MAPA_MODO_LS_KEY, d.cmModo); } catch (e) { }
+          mapaSelecionado = null;
+          if (d.cmModo === 'perto' && (!pertoPosicao || Date.now() - pertoPosicao.em > 5 * 60000)) buscarPosicaoPerto();
+          agendarMapaClientes();
+        } else if (d.cmFiltro) {
+          mapaFiltro = d.cmFiltro;
+          agendarMapaClientes();
+        } else if (d.cmTirarCidade) {
+          salvarRotaCidades(rotaCidadesEscolhidas(cidadesDosClientes()).filter(k => k !== d.cmTirarCidade));
+          renderRota();
+        } else if (d.cmRaio) {
+          try { localStorage.setItem(PERTO_RAIO_LS_KEY, d.cmRaio); } catch (e) { }
+          const raio = Number(d.cmRaio);
+          clientesComDistancia().forEach(x => { if (x.dist > raio) pertoSelecionados.delete(String(x.c.id)); });
+          renderPerto();
+        } else if (d.cmPermitir != null) {
+          buscarPosicaoPerto();
+        } else if (d.cmVer) {
+          mapaSelecionado = d.cmVer;
+          const loja = mapaDados.lojas.find(l => l.id === d.cmVer);
+          if (loja && loja.pos) mapaLeaflet.panTo([loja.pos.lat, loja.pos.lng]);
+          agendarMapaClientes();
+        } else if (d.cmFechar != null) {
+          mapaSelecionado = null;
+          agendarMapaClientes();
+        } else if (d.cmAbrir) {
+          abrirClienteDaRecompra({ cliente_id: d.cmAbrir });
+        } else if (d.cmWaze) {
+          const loja = mapaDados.lojas.find(l => l.id === d.cmWaze);
+          if (loja) abrirWazeCliente(loja.c);
+        } else if (d.cmRota) {
+          alternarNaRotaDoMapa(d.cmRota);
+        } else if (d.cmMontar != null) {
+          if (mapaDados.modo === 'perto') montarRotaPerto();
+          else montarRotaCidade(mapaDados.lojas.map(l => l.loja));
+        } else if (d.cmLimpar != null) {
+          if (mapaDados.modo === 'perto') { pertoSelecionados.clear(); renderPerto(); }
+          else { rotaSelecionados.clear(); rotaEditada = true; renderRota(); }
+        }
+      }
+      function renderMapaClientes() {
+        const aside = document.getElementById('clientesMapa');
+        if (!aside) return;
+        const naAba = !document.getElementById('tabClientes').classList.contains('hidden');
+        if (!MQ_MAPA_CLIENTES.matches || !naAba) return;
+        if (!window.L) {
+          carregarLeaflet().then(ok => {
+            document.body.classList.toggle('mapaClientesOk', ok);
+            if (ok) agendarMapaClientes();
+          });
+          return;
+        }
+        document.body.classList.add('mapaClientesOk');
+        if (aside.offsetParent === null) return; // painel escondido (cliente aberto ou busca)
+        if (!mapaLeaflet) criarMapaLeaflet(aside);
+        mapaLeaflet.invalidateSize();
+
+        const modo = mapaModo();
+        const { lojas, marcadas, cidades } = lojasDoMapa(modo);
+        const ordem = ordemDoMapa(modo, lojas, marcadas);
+        const numero = new Map(ordem.map((l, i) => [l.id, i + 1]));
+        const cats = categoriasDoMapa();
+        const filtro = mapaFiltroHover || mapaFiltro;
+        mapaDados = { modo, lojas };
+        if (mapaSelecionado && !lojas.some(l => l.id === mapaSelecionado)) mapaSelecionado = null;
+
+        // cabeçalho: abas, cidades (rota) ou raio (perto), filtro por bloco
+        const contagem = { rec: 0, reat: 0, inad: 0 };
+        lojas.forEach(l => { for (const k of Object.keys(contagem)) if (cats[k].has(l.id)) contagem[k]++; });
+        let linhaModo = '';
+        if (modo === 'rota' && cidades) {
+          const escolhidas = rotaCidadesEscolhidas(cidades);
+          const varias = escolhidas.length > 1;
+          const outras = [...cidades.values()].filter(c => !escolhidas.includes(c.chave)).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+          linhaModo = escolhidas.map(k => `<span class="cmChip cmCidade">${escapeHtml(cidades.get(k).nome)}${varias ? `<button type="button" data-cm-tirar-cidade="${escapeHtml(k)}" aria-label="Tirar ${escapeHtml(cidades.get(k).nome)} da rota">✕</button>` : ''}</span>`).join('')
+            + (outras.length ? `<select id="cmAddCidade" aria-label="Adicionar cidade à rota"><option value="">+ cidade</option>${outras.map(o => `<option value="${escapeHtml(o.chave)}">${escapeHtml(o.nome)} (${o.clientes.length})</option>`).join('')}</select>` : '');
+        } else if (modo === 'perto') {
+          const raio = pertoRaio();
+          linhaModo = PERTO_RAIOS.map(r => `<button type="button" class="cmChip${r === raio ? ' ativo' : ''}" data-cm-raio="${r}">${formatarDistancia(r)}</button>`).join('');
+        }
+        const chipsFiltro = `<button type="button" class="cmChip${filtro === 'todos' ? ' ativo' : ''}" data-cm-filtro="todos">Todos ${lojas.length}</button>`
+          + Object.keys(MAPA_CATS).filter(k => contagem[k]).map(k => `<button type="button" class="cmChip${filtro === k ? ' ativo' : ''}" data-cat="${k}" data-cm-filtro="${k}"><i></i>${MAPA_CATS[k]} ${contagem[k]}</button>`).join('');
+        document.getElementById('cmHead').innerHTML = `<div class="cmLinha" role="tablist" aria-label="Modo do mapa">
+            <button type="button" role="tab" class="cmChip${modo === 'rota' ? ' ativo' : ''}" aria-selected="${modo === 'rota'}" data-cm-modo="rota">Rota por cidade</button>
+            <button type="button" role="tab" class="cmChip${modo === 'perto' ? ' ativo' : ''}" aria-selected="${modo === 'perto'}" data-cm-modo="perto">Perto de mim</button>
+          </div>
+          ${linhaModo ? `<div class="cmLinha">${linhaModo}</div>` : ''}
+          <div class="cmLinha">${chipsFiltro}</div>
+          <p class="cmDica">Passe o mouse num bloco à esquerda pra ver só as lojas dele. Alfinete tracejado = posição aproximada pelo endereço da ficha.</p>`;
+
+        // aviso por cima do mapa (sem localização / ninguém com posição)
+        const vazio = document.getElementById('cmVazio');
+        let aviso = '';
+        if (modo === 'perto' && !pertoPosicao) {
+          aviso = pertoBuscando ? 'Pegando sua localização…'
+            : `${escapeHtml(pertoErro || 'Precisa da sua localização pra mostrar quem está perto.')}<button type="button" class="recompraBtn recompraBtn--principal" data-cm-permitir>${pertoErro ? 'Tentar de novo' : 'Permitir localização'}</button>`;
+        } else if (!lojas.some(l => l.pos)) {
+          aviso = modo === 'perto' ? `Nenhum cliente com posição em até ${formatarDistancia(pertoRaio())}.` : 'Nenhuma loja dessa cidade tem posição ainda.';
+        }
+        vazio.innerHTML = aviso;
+        vazio.classList.toggle('hidden', !aviso);
+
+        // alfinetes
+        mapaCamada.clearLayers();
+        if (mapaEu) { mapaEu.remove(); mapaEu = null; }
+        const pontos = [];
+        for (const l of lojas) {
+          if (!l.pos) continue;
+          const cat = categoriaDoCliente(l.id, cats);
+          const n = numero.get(l.id);
+          const noFiltro = filtro === 'todos' || cats[filtro].has(l.id);
+          const classes = ['cmPin', noFiltro || n ? cat : '', l.pos.aprox ? 'aprox' : '', !noFiltro && !n ? 'apagado' : '', l.id === mapaSelecionado ? 'ativo' : ''].filter(Boolean).join(' ');
+          const marcador = L.marker([l.pos.lat, l.pos.lng], {
+            icon: L.divIcon({ className: 'cmPinWrap', html: `<span class="${classes}">${n || ''}</span>`, iconSize: [22, 22], iconAnchor: [11, 11] }),
+            title: l.c.nome,
+            alt: l.c.nome,
+            zIndexOffset: n ? 1000 : noFiltro ? 500 : 0,
+            riseOnHover: true,
+          });
+          marcador.on('click', () => { mapaSelecionado = l.id; agendarMapaClientes(); });
+          marcador.addTo(mapaCamada);
+          pontos.push([l.pos.lat, l.pos.lng]);
+        }
+        if (modo === 'perto' && pertoPosicao) {
+          mapaEu = L.circleMarker([pertoPosicao.lat, pertoPosicao.lng], { radius: 8, color: '#fff', weight: 3, fillColor: '#1a73e8', fillOpacity: 1 }).addTo(mapaLeaflet);
+          pontos.push([pertoPosicao.lat, pertoPosicao.lng]);
+        }
+        // zoom de novo só quando muda o que está no mapa (cidade, modo, raio),
+        // não a cada marcação
+        const enquadre = `${modo}|${modo === 'perto' ? pertoRaio() + '|' + (pertoPosicao ? pertoPosicao.em : '') : rotaCidadesEscolhidas(cidades || new Map()).join(',')}|${pontos.length}`;
+        if (enquadre !== mapaEnquadre && pontos.length) {
+          mapaEnquadre = enquadre;
+          mapaLeaflet.fitBounds(pontos, { padding: [40, 40], maxZoom: 15 });
+        }
+
+        // cartão da loja tocada
+        const card = document.getElementById('cmCard');
+        const sel = mapaSelecionado && lojas.find(l => l.id === mapaSelecionado);
+        card.classList.toggle('hidden', !sel);
+        if (sel) {
+          const fantasia = fantasiaNaMeta(sel.c).join('');
+          const meta = [];
+          if (sel.c.endereco && sel.c.endereco.municipio) meta.push(escapeHtml(nomeCidade(sel.c.endereco.municipio)));
+          if (sel.dist != null) meta.push(formatarDistancia(sel.dist));
+          if (!sel.pos) meta.push('sem posição no mapa');
+          else if (sel.pos.aprox) meta.push('posição aproximada');
+          const selos = [];
+          if (cats.rec.has(sel.id)) selos.push(seloRecompra(cats.rec.get(sel.id)));
+          if (cats.reat.has(sel.id)) selos.push(seloReativar(cats.reat.get(sel.id)));
+          if (cats.inad.has(sel.id)) selos.push(`<span class="recompraSelo recompraSelo--fora">${escapeHtml(brlCurto(Number(cats.inad.get(sel.id).total) || 0))} em atraso</span>`);
+          const naRota = marcadas.has(sel.id);
+          card.innerHTML = `<div class="cmCardTopo"><div><b>${escapeHtml(sel.c.nome)}</b><div class="cmCardMeta">${fantasia ? fantasia + ' · ' : ''}${meta.join(' · ')}</div></div>
+              <button type="button" class="cmFechar" data-cm-fechar aria-label="Fechar">✕</button></div>
+            ${selos.length ? `<div class="cmCardMeta">${selos.join(' ')}</div>` : ''}
+            <div class="recompraAcoes">
+              <button type="button" class="recompraBtn recompraBtn--principal" data-cm-abrir="${escapeHtml(sel.id)}">Abrir cliente</button>
+              <button type="button" class="recompraBtn" data-cm-waze="${escapeHtml(sel.id)}">Waze</button>
+              <button type="button" class="recompraBtn" data-cm-rota="${escapeHtml(sel.id)}">${naRota ? 'Tirar da rota' : 'Incluir na rota'}</button>
+            </div>`;
+        }
+
+        // paradas, na ordem da rota
+        document.getElementById('cmLista').innerHTML = ordem.map((l, i) => {
+          const cat = categoriaDoCliente(l.id, cats);
+          const onde = l.dist != null ? formatarDistancia(l.dist)
+            : !l.pos ? 'sem posição' : (l.c.endereco && l.c.endereco.municipio ? nomeCidade(l.c.endereco.municipio) : '');
+          return `<li><button type="button" data-cm-ver="${escapeHtml(l.id)}" class="${l.id === mapaSelecionado ? 'ativo' : ''}">
+            <span class="cmNum ${cat}">${l.pos ? i + 1 : '–'}</span><span class="cmNome">${escapeHtml(l.c.nome)}</span><small>${escapeHtml(onde)}</small></button></li>`;
+        }).join('');
+        document.getElementById('cmRodape').innerHTML = ordem.length
+          ? `<span><b>${ordem.length} parada${ordem.length === 1 ? '' : 's'}</b>${modo === 'rota' && !rotaEditada ? ' · prioritárias' : ''}</span>
+            <div><button type="button" class="recompraBtn" data-cm-limpar>Limpar</button><button type="button" class="recompraBtn recompraBtn--principal" data-cm-montar>Montar rota no Google Maps</button></div>`
+          : `<span class="cmDica">Toque numa loja e em "Incluir na rota" (até ${ROTA_MAX_PARADAS}).</span>`;
+      }
+      MQ_MAPA_CLIENTES.addEventListener('change', agendarMapaClientes);
       // ---- Recompra da semana (topo da aba Clientes) ----
       // Clientes cuja próxima compra, pelo ritmo dos últimos 12 meses, está
       // atrasada ou cai nos próximos 7 dias (cálculo no servidor, GET
@@ -21760,6 +22472,7 @@
         </div>`;
       }
       function renderRecompra() {
+        agendarMapaClientes();
         const el = document.getElementById('recompraWrap');
         if (!el) return;
         const visiveis = recompraVisiveis();
@@ -21886,6 +22599,7 @@
         gravarRecompraAdiados(adiados);
         renderRecompra();
         renderVisitas();
+        renderRota(); // refaz as prioritárias (o bloco e o mapa)
         showToast(`${c.nome} sai da lista por 7 dias`);
         apiFetch(`/api/recompra/${encodeURIComponent(c.cliente_id)}/adiar`,
           { method: 'POST', body: JSON.stringify({ em: hoje }) },
@@ -22132,6 +22846,7 @@
         </div>`;
       }
       function renderInadimplencia() {
+        agendarMapaClientes();
         const el = document.getElementById('inadimplenciaWrap');
         if (!el) return;
         const temRelatorio = !!(inadDados && inadDados.relatorio);
@@ -22313,6 +23028,7 @@
         </div>`;
       }
       function renderReativar() {
+        agendarMapaClientes();
         const el = document.getElementById('reativarWrap');
         if (!el) return;
         const temRelatorio = !!(reativarDados && reativarDados.relatorio);

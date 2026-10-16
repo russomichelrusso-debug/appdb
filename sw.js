@@ -88,6 +88,8 @@ const LIBS = new Map([
   ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs', 'sha384-Tfvhzz17zRZraaeJSy+9zZprh8OYQHd3NC7yMUa5APLz8buWdx7MloIddcBGa3oW'],
   // QR Code do pareamento da tela do cliente (tela-cliente.html)
   ['https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'],
+  // Mapa da carteira (aba Clientes, laptop)
+  ['https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', 'sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO'],
 ]);
 // Baixa a biblioteca conferindo o hash: arquivo diferente = erro (nunca vai pro cache).
 // Em modo CORS mesmo pro <script> sem crossorigin: resposta opaca não deixa
