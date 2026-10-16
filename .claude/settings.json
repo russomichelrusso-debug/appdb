@@ -35,10 +35,17 @@
         "source": "git",
         "url": "https://github.com/Leonxlnx/taste-skill.git"
       }
+    },
+    "effortless": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/HeyCubit/effortless.git"
+      }
     }
   },
   "enabledPlugins": {
     "agent-skills@addy-agent-skills": true,
-    "taste-skill@taste-skill": true
+    "taste-skill@taste-skill": true,
+    "effortless@effortless": true
   }
 }

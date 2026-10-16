@@ -87,6 +87,10 @@ Automação do Claude Code (`.claude/`):
   React/Tailwind: aqui as páginas são HTML sem bundler e o "Padrão visual" do README (tokens de cor,
   tema escuro, botões de modal) vale por cima delas — usar como referência de gosto, não pra trocar
   o padrão do app.
+- Plugin **effortless** (`HeyCubit/effortless`, registrado do mesmo jeito, 10/2026, pedido do usuário):
+  escolhe o esforço de raciocínio de cada mensagem (juiz no Haiku, pelo próprio login do Claude) e mostra
+  uma barra acima do prompt com o uso do contexto, o tempo de cache e Handoff/Compact. Não mexe no código
+  do app; a 1ª sessão abre uma configuração rápida (`/effortless setup` refaz).
 - MCP **Playwright** (`.mcp.json` → `.claude/mcp-playwright.js`): navegador com tela de celular
   (Pixel 7) pra abrir o app e tirar print. Com `scripts/app-local.js` rodando, abrir
   `http://localhost:8080/__entrar`. Na nuvem usa o Chromium de `/opt/pw-browsers` (sem janela,
