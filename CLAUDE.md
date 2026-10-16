@@ -1180,6 +1180,18 @@ Supabase, sem PR — não é mudança de código.
     (`renderInicioPedido`): "Comprados pelo cliente nos últimos 12 meses" (a lista do `comprados-recentes`, `COMPRADOS_CACHE`,
     vale sem internet), da compra mais recente pra mais antiga, até 30, nos mesmos cards/tabela da busca; sem cliente ou sem
     compra, "Produtos vistos por último" (`cortagProdutosRecentes_v1`). No celular continua só a dica.
+  - **Mapa da carteira na aba Clientes** (10/2026, opção "C" escolhida pelo usuário a partir de mockups, mistura de "mapa
+    preso à direita" com "Pra rodar vira o mapa"; **só a partir de 1250 px**): o grupo "Pra rodar" sai e Rota por cidade /
+    Perto de mim viram abas de um mapa ao lado dos outros dois grupos (`renderMapaClientes`, `#clientesMapa`; a aba Clientes
+    vai até 1680 px). A seleção é a **mesma dos blocos** (`rotaSelecionados`/`pertoSelecionados`, "Montar rota" chama
+    `montarRotaCidade`/`montarRotaPerto`); alfinete com a cor do bloco (recompra, inadimplência, reativar), numerado na ordem
+    da rota (`ordenarParadas`), tracejado = posição aproximada; botões de filtro e passar o mouse em Recompra/Para reativar/
+    Inadimplência mostram só as lojas dele; tocar abre o cartão (Abrir cliente, Waze, Incluir/Tirar da rota); lista das
+    paradas embaixo. **Leaflet 1.9.4** da cdnjs com hash (`LEAFLET_URL`, `INTEGRIDADE_CDN`, `LIBS` do `sw.js`) e o estilo
+    dele **copiado num `<style id="estiloLeaflet">`** (o CSP não carrega folha de estilo de CDN); fundo do OpenStreetMap
+    (`tile.openstreetmap.org`, atribuição obrigatória no canto). Sem internet o fundo fica cinza e os alfinetes continuam
+    (cópia do `/sync`); sem o Leaflet (1ª vez sem internet) o grupo "Pra rodar" volta (`body.mapaClientesOk` só liga com o
+    mapa carregado). Os blocos continuam renderizando escondidos: são eles que mantêm a marcação das prioritárias.
 
 ## O que já tentamos e não deu certo
 
