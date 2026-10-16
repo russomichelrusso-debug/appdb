@@ -11558,9 +11558,13 @@
       // Condições de pagamento por canal - Política Comercial rev. 06, itens
       // 11.1 (Atacado/Moderno) e 11.2 (Varejo/Institucional e E-commerce).
       // Construtora é Institucional na política. Ordem: curta pra longa.
+      // 28/42/56/70/84 e 28/42/56/70/84/98/112 (10/2026, pedido do usuário com
+      // prints da lista do Salesforce): estão lá pra todo canal, e o app só
+      // tinha no E-commerce.
       const PRAZOS_VAREJO_INSTITUCIONAL = [
         'A Vista', '14 dias', '28 dias', '42 dias', '56 dias', '28/56 dias', '28/56/84 dias', '28/42/56 dias',
-        '28/56/84/112 dias', '42/56/70/84 dias', '42/56/70/84/112 dias',
+        '28/56/84/112 dias', '42/56/70/84 dias', '28/42/56/70/84 dias', '42/56/70/84/112 dias',
+        '28/42/56/70/84/98/112 dias',
       ];
       const PRAZOS_POR_CANAL = {
         'VAREJO': PRAZOS_VAREJO_INSTITUCIONAL,
@@ -11568,7 +11572,8 @@
         'CONSTRUTORA': PRAZOS_VAREJO_INSTITUCIONAL,
         'ATACADO': [
           'A Vista', '14 dias', '28 dias', '42 dias', '56 dias', '28/56 dias', '28/56/84 dias', '28/42/56 dias',
-          '28/56/84/112 dias', '42/56/70/84 dias', '28/56/84/112/140 dias', '42/56/70/84/112 dias',
+          '28/56/84/112 dias', '42/56/70/84 dias', '28/42/56/70/84 dias', '28/56/84/112/140 dias',
+          '42/56/70/84/112 dias', '28/42/56/70/84/98/112 dias',
         ],
         'E-COMMERCE': [
           'A Vista', '14 dias', '28 dias', '28/56 dias', '28/56/84 dias', '28/42/56 dias',
