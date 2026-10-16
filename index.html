@@ -5892,7 +5892,8 @@
     #prodInicio.hidden,
     #prodCampanha.hidden,
     #prodTabList.hidden,
-    #campBarra.hidden {
+    #campBarra.hidden,
+    #catBarra.hidden {
       display: none;
     }
 
@@ -6032,7 +6033,8 @@
       background: var(--red);
     }
 
-    #campBarra {
+    #campBarra,
+    #catBarra {
       position: sticky;
       bottom: var(--navH);
       display: flex;
@@ -6045,17 +6047,20 @@
       box-shadow: 0 -6px 20px rgba(0, 0, 0, .06);
     }
 
-    #campBarra .txt {
+    #campBarra .txt,
+    #catBarra .txt {
       flex: 1;
       font-size: 13px;
       color: var(--gray);
     }
 
-    #campBarra .recompraBtn {
+    #campBarra .recompraBtn,
+    #catBarra .recompraBtn {
       flex: none;
     }
 
-    #campBarra .recompraBtn--principal {
+    #campBarra .recompraBtn--principal,
+    #catBarra .recompraBtn--principal {
       background: var(--red);
       color: var(--on-accent);
     }
@@ -6226,6 +6231,40 @@
       content: "";
       position: absolute;
       inset: -5px;
+    }
+
+    /* Selecionar vários produtos no Catálogo pra mandar card/encarte */
+    .catSelecionando .catAddBtn {
+      display: none;
+    }
+
+    .catSelecionando .catItemInfo {
+      padding-right: 0;
+    }
+
+    .catChipQtd {
+      margin-left: 6px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 11px;
+    }
+
+    .catChip.ativo .catChipQtd {
+      background: var(--fill);
+      color: var(--ink);
+    }
+
+    #catBarra .txt {
+      white-space: nowrap;
+    }
+
+    #catBarra .catBarraBtns {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     /* Vitrine pro cliente: tela cheia, um produto por vez, sem preço */
@@ -7061,12 +7100,76 @@
       font-size: 17px;
     }
 
-    .cardFormato.hidden {
+    .cardFormato.hidden,
+    .cardTituloBox.hidden {
       display: none;
     }
 
     .cardFormato {
       margin-bottom: 10px;
+    }
+
+    /* Com preço | Sem preço e Conversa | Status na mesma linha */
+    .cardOpcoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .cardOpcoes .segmented {
+      flex: 1 1 140px;
+      margin: 0;
+    }
+
+    .cardCtx {
+      margin: 0 0 10px;
+    }
+
+    .cardTituloSug {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: -4px 0 12px;
+    }
+
+    .cardTituloSug button {
+      min-height: 32px;
+      padding: 0 11px;
+      border: 0.75px solid var(--hairline);
+      border-radius: 999px;
+      background: var(--white);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .cardTituloSug button.ativo {
+      background: var(--ink);
+      border-color: var(--ink);
+      color: var(--fill);
+    }
+
+    /* mais de uma imagem: lado a lado, passando com o dedo */
+    .cardPrevia.varias {
+      justify-content: flex-start;
+      align-items: flex-start;
+      gap: 8px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      background: none;
+    }
+
+    .cardPrevia.varias img {
+      flex: none;
+      width: 86%;
+      scroll-snap-align: center;
+      border: 0.75px solid var(--hairline);
+    }
+
+    .eoTitulo--longo {
+      font-size: 19px;
     }
 
     /* Blocos da aba Clientes (Recompra, Inadimplência, Para reativar,
@@ -10523,9 +10626,21 @@
     <div class="minimodal hidden" id="cardProdutoModal">
       <div class="minimodal-card" style="max-height:88vh;overflow-y:auto;">
         <h3 id="cardProdutoTitulo">Card do produto</h3>
-        <div class="segmented cardFormato hidden" id="cardFormatoSeg" role="group" aria-label="Formato da imagem">
-          <button type="button" data-formato="card" class="active">Conversa</button>
-          <button type="button" data-formato="status">Status</button>
+        <div class="cardOpcoes">
+          <div class="segmented" id="cardPrecoSeg" role="group" aria-label="Preço na imagem">
+            <button type="button" data-preco="com" class="active">Com preço</button>
+            <button type="button" data-preco="sem">Sem preço</button>
+          </div>
+          <div class="segmented cardFormato hidden" id="cardFormatoSeg" role="group" aria-label="Formato da imagem">
+            <button type="button" data-formato="card" class="active">Conversa</button>
+            <button type="button" data-formato="status">Status</button>
+          </div>
+        </div>
+        <div class="ofertaCtx cardCtx" id="cardCtx"></div>
+        <div class="cardTituloBox hidden" id="cardTituloBox">
+          <label for="cardTituloInput">Título do encarte</label>
+          <input type="text" id="cardTituloInput" maxlength="40" autocomplete="off">
+          <div class="cardTituloSug" id="cardTituloSug"></div>
         </div>
         <div class="cardPrevia" id="cardProdutoPrevia"></div>
         <label for="cardTelefone">Seu telefone no card</label>
@@ -24565,9 +24680,14 @@
 
       // ---- Card de oferta e encarte: a imagem é gerada ao abrir (o compartilhar
       // do celular só aceita arquivo logo depois de um toque - por isso "Enviar"
-      // já tem a imagem pronta). Um produto = card 1080×1080; 2 a 6 = encarte. ----
+      // já tem a imagem pronta). Um produto = card 1080×1080; 2 a 6 = encarte;
+      // do Catálogo vêm até 24, em várias imagens de até 6 (vão juntas no
+      // compartilhar - o WhatsApp recebe como álbum). ----
       const ENCARTE_MAX = 6;
-      let cardProduto = { cods: [], campanha: null, formato: 'card', blob: null, previaUrl: null, geracao: 0 };
+      const CARD_MAX_PRODUTOS = 24;
+      // semPreco: só foto, nome e código; titulo: o que o vendedor escreveu (null = automático)
+      let cardProduto = { cods: [], campanha: null, formato: 'card', semPreco: false, titulo: null, blobs: [], previaUrls: [], geracao: 0 };
+      let cardTelDebounce = null, cardTituloDebounce = null; // fechar a janela cancela
       // Logo em branco pro fundo vermelho (card da Black Friday e status): o
       // html2canvas ignora filter, então o logo é pintado de branco num canvas
       // uma vez e guardado.
@@ -24662,31 +24782,36 @@
           <div class="coTexto">
             <div class="coNome">${escapeHtml(p.n)}</div>
             <div class="coCod">Cód. ${escapeHtml(p.c)}</div>
-            <div class="coPreco">${of.regra ? `<span class="coDe">de ${brl(of.de)}</span>` : ''}<span class="coPor">${of.regra ? 'por ' : ''}${brl(of.por)}<small> /un.</small></span></div>
+            ${of.semPreco ? '' : `<div class="coPreco">${of.regra ? `<span class="coDe">de ${brl(of.de)}</span>` : ''}<span class="coPor">${of.regra ? 'por ' : ''}${brl(of.por)}<small> /un.</small></span></div>`}
             ${cond ? `<div class="coCond">${escapeHtml(cond)}</div>` : ''}
           </div>
           ${rodapeDoCard(telefone)}
         </div>`;
       }
-      // Encarte: título pela campanha de onde saiu (Black Friday = visual escuro);
-      // cada item com o seu de/por e a condição (quantidade mínima) quando houver.
-      function htmlDoEncarte(itens, campanha, telefone) {
+      // Encarte: título escolhido na janela (automático: Black Friday, Ofertas,
+      // a família ou "Seleção pra você" - sugestoesTituloDoCard); Black Friday =
+      // visual escuro; cada item com o seu de/por e a condição (quantidade
+      // mínima) quando houver. Sem preço: só foto, nome e código.
+      function htmlDoEncarte(itens, campanha, telefone, opcoes = {}) {
+        const semPreco = !!opcoes.semPreco;
         const bf = itens.some(x => x.of.regra && x.of.blackFriday) || (campanha && /black\s*friday/i.test(campanhaEspecialDaRegra(campanha) || campanha.name || ''));
-        const nomeCampanha = campanha ? String(campanha.name || '').replace(/^\s*black\s*friday\s*[-–·:]\s*/i, '') : '';
+        const nomeCampanha = campanha && !semPreco ? String(campanha.name || '').replace(/^\s*black\s*friday\s*[-–·:]\s*/i, '') : '';
         const validades = itens.map(x => x.of.validoAte).filter(Boolean).sort();
-        const sub = [nomeCampanha, validades.length ? `até ${dataCurtaISO(validades[0])}` : ''].filter(Boolean).join(' · ');
+        const pagina = opcoes.paginas > 1 ? `${opcoes.pagina}/${opcoes.paginas}` : '';
+        const sub = [nomeCampanha, validades.length ? `até ${dataCurtaISO(validades[0])}` : '', semPreco ? 'Peça seu orçamento' : '', pagina].filter(Boolean).join(' · ');
+        const titulo = String(opcoes.titulo || (bf ? 'BLACK FRIDAY' : 'OFERTAS')).toLocaleUpperCase('pt-BR');
         const celulas = itens.map(({ p, of, fotoUrl }) => `<div class="eoItem">
             ${fotoUrl ? `<div class="eoFoto" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : '<div class="eoFoto"></div>'}
             ${of.regra ? `<div class="eoOff">-${of.pct}%</div>` : ''}
             <div class="eoNome">${escapeHtml(p.n)}</div>
             <div class="eoCod">Cód. ${escapeHtml(p.c)}</div>
             ${of.regra ? `<div class="eoDe">de ${brl(of.de)}</div>` : ''}
-            <div class="eoPor">${brl(of.por)}</div>
+            ${semPreco ? '' : `<div class="eoPor">${brl(of.por)}</div>`}
             ${of.regra && of.condicoes.length ? `<div class="eoCond">${escapeHtml(of.condicoes.join(' · '))}</div>` : ''}
           </div>`).join('');
         return `<div class="encarteOferta${bf ? ' encarteOferta--bf' : ''}">
           <div class="eoTopo">
-            <div><div class="eoTitulo">${bf ? 'BLACK <span>FRIDAY</span>' : 'OFERTAS'}</div>${sub ? `<div class="eoSub">${escapeHtml(sub)}</div>` : ''}</div>
+            <div><div class="eoTitulo${titulo.length > 18 ? ' eoTitulo--longo' : ''}">${titulo === 'BLACK FRIDAY' ? 'BLACK <span>FRIDAY</span>' : escapeHtml(titulo)}</div>${sub ? `<div class="eoSub">${escapeHtml(sub)}</div>` : ''}</div>
             <img src="${LOGO_B64}" alt="Cortag">
           </div>
           <div class="eoGrade">${celulas}</div>
@@ -24701,21 +24826,76 @@
       function carregarImagem(url) {
         return new Promise(ok => { if (!url) return ok(); const i = new Image(); i.onload = ok; i.onerror = ok; i.src = url; });
       }
+      const OFERTA_SEM_PRECO = { regra: null, semPreco: true, de: 0, por: 0, pct: 0, condicoes: [], faixas: [] };
+      function ofertaParaOCard(p) {
+        return cardProduto.semPreco ? OFERTA_SEM_PRECO : ofertaDoProduto(p, cardProduto.campanha || undefined);
+      }
+      // Título do encarte: "OFERTAS" só quando todos têm desconto (ou o encarte
+      // saiu de uma campanha) - com produto de preço normal ele prometeria um
+      // desconto que não existe; senão o nome da família (todos da mesma) ou
+      // "SELEÇÃO PRA VOCÊ". O vendedor troca por uma sugestão ou digita outro.
+      function sugestoesTituloDoCard() {
+        const produtos = cardProduto.cods.map(productByCod).filter(Boolean);
+        const ofs = produtos.map(ofertaParaOCard);
+        const camp = cardProduto.campanha;
+        const bf = ofs.some(o => o.regra && o.blackFriday) || !!(camp && /black\s*friday/i.test(campanhaEspecialDaRegra(camp) || camp.name || ''));
+        const todasComOferta = !cardProduto.semPreco && ofs.length > 0 && ofs.every(o => o.regra);
+        const familias = [...new Set(produtos.map(p => productFamilia(p) || ''))];
+        const familia = familias.length === 1 && familias[0] ? nomeDaFamilia(familias[0]).toLocaleUpperCase('pt-BR') : '';
+        const auto = bf ? 'BLACK FRIDAY' : (camp && !cardProduto.semPreco) || todasComOferta ? 'OFERTAS' : familia || 'SELEÇÃO PRA VOCÊ';
+        const algumaOferta = !cardProduto.semPreco && ofs.some(o => o.regra);
+        return { auto, lista: [...new Set([auto, 'SELEÇÃO PRA VOCÊ', familia, algumaOferta ? 'OFERTAS' : '', 'NOVIDADES'].filter(Boolean))] };
+      }
+      function tituloDoCard() {
+        return cardProduto.titulo || sugestoesTituloDoCard().auto;
+      }
+      function renderTituloDoCard() {
+        const varios = cardProduto.cods.length > 1;
+        document.getElementById('cardTituloBox').classList.toggle('hidden', !varios);
+        if (!varios) return;
+        const { auto, lista } = sugestoesTituloDoCard();
+        const atual = (cardProduto.titulo || auto).toLocaleUpperCase('pt-BR');
+        const input = document.getElementById('cardTituloInput');
+        if (document.activeElement !== input) input.value = atual;
+        document.getElementById('cardTituloSug').innerHTML = lista.map(t => `<button type="button" data-titulo="${escapeHtml(t)}"${t === atual ? ' class="ativo"' : ''}>${escapeHtml(t)}</button>`).join('');
+      }
+      // de quem é o preço: o vendedor confere antes de mandar (o classificatório
+      // do orçamento aberto pode ser de outro cliente)
+      function renderContextoDoCard() {
+        document.querySelectorAll('#cardPrecoSeg button').forEach(b => b.classList.toggle('active', (b.dataset.preco === 'sem') === cardProduto.semPreco));
+        const el = document.getElementById('cardCtx');
+        if (cardProduto.semPreco) { el.textContent = 'Só foto, nome e código. O preço vai depois, no orçamento.'; return; }
+        const cli = state.levCliente;
+        el.innerHTML = `Preço de ${cli && cli.nome ? `<b>${escapeHtml(cli.nome)}</b> · ` : ''}<b>${escapeHtml(rotuloContextoPreco())}</b> · muda na aba Pedido`;
+      }
+      // Até 6 por imagem, divididos por igual (7 = 4 + 3, não 6 + 1)
+      function paginasDoCard(itens) {
+        const n = Math.max(1, Math.ceil(itens.length / ENCARTE_MAX));
+        const tam = Math.ceil(itens.length / n);
+        const pags = [];
+        for (let i = 0; i < itens.length; i += tam) pags.push(itens.slice(i, i + tam));
+        return pags;
+      }
+      function soltarPreviasDoCard() {
+        cardProduto.previaUrls.forEach(u => URL.revokeObjectURL(u));
+        cardProduto.previaUrls = [];
+      }
       async function gerarCardProduto() {
         const geracao = ++cardProduto.geracao;
         const previa = document.getElementById('cardProdutoPrevia');
         const enviar = document.getElementById('cardEnviarBtn');
         enviar.disabled = true;
-        cardProduto.blob = null;
+        cardProduto.blobs = [];
         const produtos = cardProduto.cods.map(productByCod).filter(Boolean);
         if (!produtos.length) return;
         if (typeof html2canvas !== 'function') { previa.innerHTML = '<div class="lev-empty">Gerador de imagem não carregou (sem internet?). Tente de novo.</div>'; return; }
+        previa.classList.remove('varias');
         previa.innerHTML = '<div class="lev-empty">Gerando…</div>';
         const itens = [];
         for (const p of produtos) {
           const fotoUrl = await urlDaFoto(p.c);
           await carregarImagem(fotoUrl);
-          itens.push({ p, of: ofertaDoProduto(p, cardProduto.campanha || undefined), fotoUrl });
+          itens.push({ p, of: ofertaParaOCard(p), fotoUrl });
         }
         const logoBranco = await logoBrancoUrl();
         if (geracao !== cardProduto.geracao) return;
@@ -24726,19 +24906,29 @@
         const tpl = document.getElementById('cardOfertaTemplate');
         const telefone = document.getElementById('cardTelefone').value.trim();
         const [um] = itens;
-        tpl.innerHTML = itens.length > 1 ? htmlDoEncarte(itens, cardProduto.campanha, telefone)
-          : cardProduto.formato === 'status' ? htmlDoStatusOferta(um.p, um.of, um.fotoUrl, telefone, logoBranco)
-          : um.of.regra && um.of.blackFriday ? htmlDoCardBlackFriday(um.p, um.of, um.fotoUrl, telefone, logoBranco)
-          : htmlDoCardOferta(um.p, um.of, um.fotoUrl, telefone);
-        await esperarImagens(tpl);
+        const paginas = paginasDoCard(itens);
+        const titulo = tituloDoCard();
+        const blobs = [];
         try {
-          const canvas = await html2canvas(tpl.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
-          const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.92));
-          if (geracao !== cardProduto.geracao || !blob) return;
-          if (cardProduto.previaUrl) URL.revokeObjectURL(cardProduto.previaUrl);
-          cardProduto.blob = blob;
-          cardProduto.previaUrl = URL.createObjectURL(blob);
-          previa.innerHTML = `<img src="${escapeHtml(cardProduto.previaUrl)}" alt="Imagem da oferta"${cardProduto.formato === 'status' ? ' class="cardPrevia--alta"' : ''}>`;
+          for (let i = 0; i < paginas.length; i++) {
+            tpl.innerHTML = itens.length > 1
+              ? htmlDoEncarte(paginas[i], cardProduto.campanha, telefone, { titulo, semPreco: cardProduto.semPreco, pagina: i + 1, paginas: paginas.length })
+              : cardProduto.formato === 'status' ? htmlDoStatusOferta(um.p, um.of, um.fotoUrl, telefone, logoBranco)
+              : um.of.regra && um.of.blackFriday ? htmlDoCardBlackFriday(um.p, um.of, um.fotoUrl, telefone, logoBranco)
+              : htmlDoCardOferta(um.p, um.of, um.fotoUrl, telefone);
+            await esperarImagens(tpl);
+            const canvas = await html2canvas(tpl.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+            const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.92));
+            if (geracao !== cardProduto.geracao) return;
+            if (!blob) throw new Error('imagem vazia');
+            blobs.push(blob);
+          }
+          soltarPreviasDoCard();
+          cardProduto.blobs = blobs;
+          cardProduto.previaUrls = blobs.map(b => URL.createObjectURL(b));
+          previa.classList.toggle('varias', blobs.length > 1);
+          previa.innerHTML = cardProduto.previaUrls.map((u, i) => `<img src="${escapeHtml(u)}" alt="${blobs.length > 1 ? `Imagem ${i + 1} de ${blobs.length}` : 'Imagem da oferta'}"${cardProduto.formato === 'status' ? ' class="cardPrevia--alta"' : ''}>`).join('');
+          enviar.textContent = blobs.length > 1 ? `Enviar ${blobs.length} imagens` : 'Enviar';
           enviar.disabled = false;
         } catch (e) {
           console.error(e);
@@ -24747,22 +24937,52 @@
           if (geracao === cardProduto.geracao) tpl.innerHTML = '';
         }
       }
-      // cods: 1 produto (card) ou 2 a 6 (encarte); campanha = regra de onde saiu (título do encarte)
+      // Várias imagens vão num compartilhar só (o WhatsApp recebe como álbum);
+      // navegador que não compartilha arquivo baixa uma por uma.
+      async function enviarImagensDoCard() {
+        const blobs = cardProduto.blobs;
+        if (!blobs.length) return;
+        const base = `${cardProduto.semPreco ? 'produtos' : 'oferta'}-cortag-${cardProduto.cods.length > 1 ? 'encarte' : cardProduto.cods[0]}${cardProduto.formato === 'status' ? '-status' : ''}`;
+        const titulo = cardProduto.semPreco ? 'Produtos Cortag' : 'Oferta Cortag';
+        if (blobs.length === 1) { shareOrDownloadBlob(blobs[0], base + '.jpg', titulo, 'Imagem salva/baixada'); return; }
+        const files = blobs.map((b, i) => new File([b], `${base}-${i + 1}.jpg`, { type: b.type }));
+        let pode = typeof navigator.share === 'function';
+        if (pode && typeof navigator.canShare === 'function') { try { pode = navigator.canShare({ files }); } catch (e) { pode = false; } }
+        if (pode) {
+          try { await navigator.share({ files, title: titulo }); return; } catch (e) {
+            // fechou a janela de compartilhar sem escolher: não baixa por conta própria
+            if (e && e.name === 'AbortError') return;
+          }
+        }
+        // todas no mesmo toque (depois dele o navegador barra o download)
+        files.forEach(f => baixarBlob(f, f.name));
+        showToast(`${files.length} imagens salvas/baixadas`);
+      }
+      // cods: 1 produto (card), 2 a 6 (encarte) ou até 24 do Catálogo (várias
+      // imagens); campanha = regra de onde saiu (título e subtítulo do encarte)
       function abrirCardProduto(cods, campanha) {
-        cardProduto.cods = (Array.isArray(cods) ? cods : [cods]).slice(0, ENCARTE_MAX);
+        cardProduto.cods = (Array.isArray(cods) ? cods : [cods]).slice(0, CARD_MAX_PRODUTOS);
         cardProduto.campanha = campanha || null;
         cardProduto.formato = 'card';
+        cardProduto.semPreco = false;
+        cardProduto.titulo = null;
         mostrarFormatoDoCard(false);
-        document.getElementById('cardProdutoTitulo').textContent = cardProduto.cods.length > 1
-          ? `Encarte com ${cardProduto.cods.length} produtos` : 'Card do produto';
+        const n = cardProduto.cods.length, imagens = Math.ceil(n / ENCARTE_MAX);
+        document.getElementById('cardProdutoTitulo').textContent = n > 1
+          ? `Encarte com ${n} produtos${imagens > 1 ? ` · ${imagens} imagens` : ''}` : 'Card do produto';
+        document.getElementById('cardEnviarBtn').textContent = 'Enviar';
         document.getElementById('cardTelefone').value = vendedorDoCard().tel;
+        renderContextoDoCard();
+        renderTituloDoCard();
         document.getElementById('cardProdutoModal').classList.remove('hidden');
         gerarCardProduto();
       }
       function fecharCardProduto() {
+        clearTimeout(cardTelDebounce);
+        clearTimeout(cardTituloDebounce);
         cardProduto.geracao++;
-        cardProduto.blob = null;
-        if (cardProduto.previaUrl) { URL.revokeObjectURL(cardProduto.previaUrl); cardProduto.previaUrl = null; }
+        cardProduto.blobs = [];
+        soltarPreviasDoCard();
         document.getElementById('cardProdutoPrevia').innerHTML = '';
         document.getElementById('cardProdutoModal').classList.add('hidden');
       }
@@ -25103,6 +25323,12 @@
       let catalogoMostrar = CATALOGO_POR_PAGINA;
       let catalogoScroll = null;
       let vitrine = null; // { titulo, produtos, i, separados }
+      // Selecionar vários produtos pra mandar um card/encarte (10/2026, mockups
+      // escolhidos pelo usuário): "Selecionar" na família liga; tocar no produto
+      // marca em vez de abrir; a seleção continua ao trocar de família.
+      const CATALOGO_SEL_MAX = 24; // = CARD_MAX_PRODUTOS (4 imagens de 6)
+      let catalogoSelecionando = false;
+      let catalogoSelecionados = [];
       // Voltar do Android (e o gesto de voltar do iPhone) com a vitrine aberta: sem
       // isto fechava o app com o celular na mão do cliente. A vitrine põe uma
       // entrada no histórico ao abrir (no toque de "Mostrar ao cliente"); voltar
@@ -25153,6 +25379,30 @@
         const fam = catalogoFamilia !== null && familias.find(f => f.chave === catalogoFamilia);
         if (!fam) { catalogoFamilia = null; renderCatalogoFamilias(el, familias); }
         else renderCatalogoDaFamilia(el, familias, fam);
+        el.classList.toggle('catSelecionando', catalogoSelecionando);
+        if (catalogoSelecionando) {
+          el.insertAdjacentHTML('beforeend', `<div id="catBarra" class="hidden">
+            <span class="txt"></span>
+            <span class="catBarraBtns">
+              <button type="button" class="recompraBtn" id="catLimparBtn">Limpar</button>
+              <button type="button" class="recompraBtn" id="catOrcamentoBtn">+ Orçamento</button>
+              <button type="button" class="recompraBtn recompraBtn--principal" id="catEnviarBtn"></button>
+            </span>
+          </div>`);
+          document.getElementById('catLimparBtn').addEventListener('click', () => {
+            catalogoSelecionados = [];
+            catalogoScroll = window.scrollY;
+            renderCatalogo();
+          });
+          document.getElementById('catOrcamentoBtn').addEventListener('click', () => {
+            const cods = catalogoSelecionados.filter(c => productByCod(c));
+            cods.forEach(c => addToCart(c, undefined, true));
+            showToast(`${cods.length} produto${cods.length === 1 ? '' : 's'} no orçamento`);
+          });
+          document.getElementById('catEnviarBtn').addEventListener('click', () => abrirCardProduto(catalogoSelecionados.slice()));
+          document.getElementById('catCancelarSelBtn')?.addEventListener('click', alternarSelecaoCatalogo);
+          atualizarSelecaoCatalogo();
+        }
         if (catalogoScroll !== null) {
           const y = catalogoScroll;
           catalogoScroll = null;
@@ -25177,6 +25427,7 @@
         el.innerHTML = `<div class="clientesSecao" style="margin:14px 0 2px;">Catálogo · ${total.toLocaleString('pt-BR')} produtos · ${familias.length} famílias</div>
           <div class="ofertaCtx">Preço de <b>${escapeHtml(rotuloContextoPreco())}</b> · muda na aba Pedido</div>
           <div class="ofertaCtx" id="catFotosOffline" style="margin-top:4px;">${textoStatusMiniaturas()}</div>
+          ${catalogoSelecionando ? `<div class="ofertaCtx" style="margin-top:4px;">Selecionando produtos: abra uma família pra marcar mais. <button type="button" class="priceEditResetLink" id="catCancelarSelBtn">Cancelar</button></div>` : ''}
           <div class="catFamGrade">${cards}</div>`;
         el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => abrirFamiliaDoCatalogo(b.dataset.catFamilia)));
         preencherFotosAoVer(el, 'catalogo');
@@ -25196,7 +25447,8 @@
         const itens = mostrar.map(p => {
           const of = ofertaDoProduto(p);
           const foto = codigoDaFoto(p.c);
-          return `<div class="campItem">
+          const marcado = catalogoSelecionando && catalogoSelecionados.includes(p.c);
+          return `<div class="campItem${marcado ? ' selecionado' : ''}" data-cat-item="${escapeHtml(p.c)}">
             <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
               <div class="campItemFoto"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''}>${foto ? '' : 'sem foto'}</div>
               <div class="campItemInfo catItemInfo">
@@ -25207,15 +25459,19 @@
               </div>
             </button>
             ${of.regra ? `<span class="campItemOff${of.blackFriday ? ' bf' : ''}">-${of.pct}%</span>` : ''}
-            <button type="button" class="catAddBtn" data-add-prod="${escapeHtml(p.c)}" aria-label="Pôr ${escapeHtml(p.n)} no orçamento">+</button>
+            ${catalogoSelecionando
+              ? `<button type="button" class="campMarcar" data-cat-marcar="${escapeHtml(p.c)}" aria-pressed="${marcado}" aria-label="Selecionar ${escapeHtml(p.n)}"><span>${marcado ? '✓' : ''}</span></button>`
+              : `<button type="button" class="catAddBtn" data-add-prod="${escapeHtml(p.c)}" aria-label="Pôr ${escapeHtml(p.n)} no orçamento">+</button>`}
           </div>`;
         }).join('');
         el.innerHTML = `<div class="catChips" id="catChips">${chips}</div>
           <div class="catCabeca">
             <b>${escapeHtml(fam.nome)}</b>
+            <button type="button" class="recompraBtn" id="catSelecionarBtn">${catalogoSelecionando ? 'Cancelar' : 'Selecionar'}</button>
             <button type="button" class="recompraBtn" id="catVitrineBtn">Mostrar ao cliente</button>
           </div>
           <div class="ofertaCtx">${fam.produtos.length} produto${fam.produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
+          ${catalogoSelecionando ? `<div class="ofertaCtx" style="margin-top:4px;">Toque nos produtos pra marcar (até ${CATALOGO_SEL_MAX}). A seleção continua nas outras famílias.</div>` : ''}
           <div class="campGrade">${itens}</div>
           ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
         el.querySelector('[data-cat-voltar]').addEventListener('click', () => { catalogoFamilia = null; renderCatalogo(); window.scrollTo(0, 0); });
@@ -25227,17 +25483,62 @@
         const ativo = faixa.querySelector('.catChip.ativo');
         if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
         document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(fam.nome, fam.produtos, 0));
+        document.getElementById('catSelecionarBtn').addEventListener('click', alternarSelecaoCatalogo);
         document.getElementById('catMaisBtn')?.addEventListener('click', () => {
           catalogoMostrar += CATALOGO_VER_MAIS;
           catalogoScroll = window.scrollY;
           renderCatalogo();
         });
         el.querySelectorAll('[data-abrir-prod]').forEach(b => b.addEventListener('click', () => {
+          if (catalogoSelecionando) { marcarNoCatalogo(b.dataset.abrirProd); return; }
           const p = productByCod(b.dataset.abrirProd);
           if (p) openProdutoDetail(p.c, p.n);
         }));
+        el.querySelectorAll('[data-cat-marcar]').forEach(b => b.addEventListener('click', () => marcarNoCatalogo(b.dataset.catMarcar)));
         el.querySelectorAll('[data-add-prod]').forEach(b => b.addEventListener('click', () => addToCart(b.dataset.addProd)));
         preencherFotosAoVer(el, 'catalogo');
+      }
+      function alternarSelecaoCatalogo() {
+        catalogoSelecionando = !catalogoSelecionando;
+        if (!catalogoSelecionando) catalogoSelecionados = [];
+        catalogoScroll = window.scrollY;
+        renderCatalogo();
+      }
+      // marcar só mexe no item, nos chips e na barra (refazer a grade recarregava as fotos)
+      function marcarNoCatalogo(c) {
+        if (catalogoSelecionados.includes(c)) catalogoSelecionados = catalogoSelecionados.filter(x => x !== c);
+        else if (catalogoSelecionados.length >= CATALOGO_SEL_MAX) { showToast(`Até ${CATALOGO_SEL_MAX} produtos por envio`); return; }
+        else catalogoSelecionados.push(c);
+        const marcado = catalogoSelecionados.includes(c);
+        document.querySelectorAll('#prodCatalogo [data-cat-item]').forEach(item => {
+          if (item.dataset.catItem !== c) return;
+          item.classList.toggle('selecionado', marcado);
+          const b = item.querySelector('[data-cat-marcar]');
+          if (b) { b.setAttribute('aria-pressed', String(marcado)); b.querySelector('span').textContent = marcado ? '✓' : ''; }
+        });
+        atualizarSelecaoCatalogo();
+      }
+      function atualizarSelecaoCatalogo() {
+        const porFam = new Map();
+        for (const c of catalogoSelecionados) {
+          const p = productByCod(c);
+          const f = p ? (productFamilia(p) || '') : '';
+          porFam.set(f, (porFam.get(f) || 0) + 1);
+        }
+        document.querySelectorAll('#prodCatalogo .catChip[data-cat-familia]').forEach(ch => {
+          const n = porFam.get(ch.dataset.catFamilia) || 0;
+          let qtd = ch.querySelector('.catChipQtd');
+          if (!n) { if (qtd) qtd.remove(); return; }
+          if (!qtd) { qtd = document.createElement('span'); qtd.className = 'catChipQtd'; ch.appendChild(qtd); }
+          qtd.textContent = n;
+        });
+        const barra = document.getElementById('catBarra');
+        if (!barra) return;
+        const k = catalogoSelecionados.length;
+        barra.classList.toggle('hidden', !k);
+        barra.querySelector('.txt').innerHTML = `<b>${k}</b> selecionado${k === 1 ? '' : 's'}${porFam.size > 1 ? ` · ${porFam.size} famílias` : ''}`;
+        const imagens = Math.ceil(k / ENCARTE_MAX);
+        document.getElementById('catEnviarBtn').textContent = k === 1 ? 'Enviar card' : imagens > 1 ? `Enviar ${imagens} imagens` : `Enviar encarte (${k})`;
       }
       // ---- Vitrine pro cliente (D) ----
       function abrirVitrine(titulo, produtos, inicio) {
@@ -25404,10 +25705,31 @@
         document.getElementById('fotoSalvarBtn').addEventListener('click', salvarFotoProduto);
         document.getElementById('fotoRemoverBtn').addEventListener('click', removerFotoProduto);
         document.getElementById('cardFecharBtn').addEventListener('click', fecharCardProduto);
-        document.getElementById('cardEnviarBtn').addEventListener('click', () => {
-          if (!cardProduto.blob) return;
-          const nomeArq = `oferta-cortag-${cardProduto.cods.length > 1 ? 'encarte' : cardProduto.cods[0]}${cardProduto.formato === 'status' ? '-status' : ''}.jpg`;
-          shareOrDownloadBlob(cardProduto.blob, nomeArq, 'Oferta Cortag', 'Imagem salva/baixada');
+        document.getElementById('cardEnviarBtn').addEventListener('click', enviarImagensDoCard);
+        document.getElementById('cardPrecoSeg').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-preco]');
+          if (!b || (b.dataset.preco === 'sem') === cardProduto.semPreco) return;
+          cardProduto.semPreco = b.dataset.preco === 'sem';
+          renderContextoDoCard();
+          renderTituloDoCard();
+          gerarCardProduto();
+        });
+        document.getElementById('cardTituloSug').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-titulo]');
+          if (!b) return;
+          cardProduto.titulo = b.dataset.titulo;
+          document.getElementById('cardTituloInput').value = b.dataset.titulo;
+          renderTituloDoCard();
+          gerarCardProduto();
+        });
+        document.getElementById('cardTituloInput').addEventListener('input', (e) => {
+          cardProduto.titulo = e.target.value.trim() || null;
+          // a imagem pronta tem o título velho: "Enviar" espera a nova
+          cardProduto.geracao++;
+          cardProduto.blobs = [];
+          document.getElementById('cardEnviarBtn').disabled = true;
+          clearTimeout(cardTituloDebounce);
+          cardTituloDebounce = setTimeout(() => { renderTituloDoCard(); gerarCardProduto(); }, 600);
         });
         document.getElementById('cardFormatoSeg').addEventListener('click', (e) => {
           const b = e.target.closest('button[data-formato]');
@@ -25415,11 +25737,10 @@
           cardProduto.formato = b.dataset.formato;
           gerarCardProduto();
         });
-        let telDebounce;
         document.getElementById('cardTelefone').addEventListener('input', (e) => {
           try { localStorage.setItem(VENDEDOR_TEL_LS_KEY, e.target.value.trim()); } catch (er) { }
-          clearTimeout(telDebounce);
-          telDebounce = setTimeout(gerarCardProduto, 600);
+          clearTimeout(cardTelDebounce);
+          cardTelDebounce = setTimeout(gerarCardProduto, 600);
         });
       }
       // =================================================================
