@@ -1173,6 +1173,13 @@ Supabase, sem PR — não é mudança de código.
     tabela, ↑↓ troca de linha, Enter põe no orçamento, Esc volta pra busca; quantidade digitada vai pro múltiplo da
     embalagem pra cima (com aviso). Até 1349 px a coluna Desc. some (o desconto fica no orçamento). Tablet (toque) e
     laptop mais estreito continuam com os cards.
+  - **Ajustes de 10/2026** (prints do usuário no laptop 1920 px): as abas começam logo depois do menu (centradas, o card do
+    cliente pulava ~200 px ao trocar Pedido/Levantamento) e o Levantamento não tem mais o teto de 1280 px (sem orçamento preso,
+    usa a largura toda; a grade ganha colunas). Embaixo do card no Levantamento sai só "Não salvo"/"Levantamento aberto" (o nome do cliente
+    aparecia duas vezes; sem cliente, o nome do levantamento aberto continua). **Pedido com a busca vazia, a partir de 900 px**
+    (`renderInicioPedido`): "Comprados pelo cliente nos últimos 12 meses" (a lista do `comprados-recentes`, `COMPRADOS_CACHE`,
+    vale sem internet), da compra mais recente pra mais antiga, até 30, nos mesmos cards/tabela da busca; sem cliente ou sem
+    compra, "Produtos vistos por último" (`cortagProdutosRecentes_v1`). No celular continua só a dica.
 
 ## O que já tentamos e não deu certo
 
