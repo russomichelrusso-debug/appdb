@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
+const { nomesDosProdutos } = require('./lib/cacheTabela');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { codigoBase } = require('./lib/skuNormalizacao');
@@ -200,7 +201,7 @@ router.get('/:clienteId', async (req, res) => {
     // codigo_sku_original pra quem precisar rastrear até a fatura.
     const semProduto = [...new Set(result.rows.filter(it => !it.produto).map(it => it.codigo_sku))];
     if (semProduto.length > 0) {
-      const produtosResult = await pool.query('SELECT codigo_sku, nome FROM produtos');
+      const produtosResult = await nomesDosProdutos();
       const codigosConhecidos = new Set(produtosResult.rows.map(p => p.codigo_sku));
       const nomesPorCodigo = {};
       for (const p of produtosResult.rows) nomesPorCodigo[p.codigo_sku] = p.nome;

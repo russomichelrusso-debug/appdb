@@ -39,6 +39,12 @@ let titulosInadimplentes = []; // routes/inadimplencia.js
 let produtoFotos = {}; // codigo_sku -> { imagem, tamanho, versao } (routes/produtoFotos.js)
 let produtoFotosRelogio = 1760000000000;
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
+let fichasTecnicas = {}; // codigo_sku -> { nome, descricao, foto, specs } (routes/fichasTecnicas.js)
+// Versão das tabelas (routes/lib/cacheTabela.js, pg_stat_user_tables): por
+// padrão muda a cada consulta - o cache nunca acerta e os outros testes podem
+// mexer nos arrays direto. __fixarVersaoTabelas(n) fixa (teste do próprio cache).
+let versaoTabelas = null;
+let versaoTabelasContador = 0;
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
 function reset() {
@@ -53,6 +59,8 @@ function reset() {
   sessoes = [];
   rascunhos = {};
   codigosProduto = {};
+  fichasTecnicas = {};
+  versaoTabelas = null;
   clienteCnpjFicha = {};
   clienteGeocodificacao = {};
   pedidosOficiaisItens = [];
@@ -151,6 +159,9 @@ async function query(sql, params = []) {
   // igual independente de indentação/quebra de linha.
   const s = sql.replace(/\s+/g, ' ').toUpperCase();
   if (s.includes('HEALTH:BANCO')) return { rows: [{ '?column?': 1 }], rowCount: 1 };
+  if (s.includes('/* CACHE-TABELA:VERSAO */')) {
+    return { rows: [{ versao: String(versaoTabelas ?? ++versaoTabelasContador) }] };
+  }
   if (s.includes('/* PRODUTOS:CONTAGEM */')) {
     const noCadastro = new Set(produtos.map(p => String(p.codigo_sku)));
     return { rows: [{ total: produtos.length, catalogo: catalogoPrecos.length,
@@ -1519,6 +1530,19 @@ async function query(sql, params = []) {
     return { rows: clientes.filter(c => c.classificatorio_tipo) };
   }
 
+  // fichas_tecnicas
+  if (s.includes('SELECT CODIGO_SKU, NOME, DESCRICAO, FOTO, SPECS FROM FICHAS_TECNICAS')) {
+    return { rows: Object.entries(fichasTecnicas).map(([codigo_sku, v]) => ({ codigo_sku, ...v })) };
+  }
+  if (s.includes('INTO FICHAS_TECNICAS')) {
+    const [skus, nomes, descs, fotos, specs] = params;
+    skus.forEach((c, i) => { fichasTecnicas[c] = { nome: nomes[i], descricao: descs[i], foto: fotos[i], specs: JSON.parse(specs[i]) }; });
+    return { rows: [] };
+  }
+  if (s.includes('SELECT COUNT(*) FROM FICHAS_TECNICAS')) {
+    return { rows: [{ count: String(Object.keys(fichasTecnicas).length) }] };
+  }
+
   // codigos_produto (EAN-13 / DUN-14)
   if (s.includes('SELECT CODIGO_SKU, EAN13, DUN14 FROM CODIGOS_PRODUTO')) {
     return { rows: Object.entries(codigosProduto).map(([codigo_sku, v]) => ({ codigo_sku, ean13: v.ean13, dun14: v.dun14 })) };
@@ -1630,6 +1654,9 @@ async function query(sql, params = []) {
 
   // catalogo_precos (routes/catalogoPrecos.js) - usado pela geração em
   // lote de produtos promocionais (routes/produtosPromocionais.js).
+  if (s === 'SELECT CODIGO_SKU, NOME, EMB, NCM, IPI, FAMILIA, PRECO_FIXO, CANAIS_FX, PRECOS, PRECOS_SEM_IMPOSTO FROM CATALOGO_PRECOS ORDER BY CODIGO_SKU') {
+    return { rows: [...catalogoPrecos].sort((a, b) => String(a.codigo_sku).localeCompare(String(b.codigo_sku))) };
+  }
   if (s === 'SELECT CODIGO_SKU, NOME FROM CATALOGO_PRECOS') {
     return { rows: catalogoPrecos.map(p => ({ codigo_sku: p.codigo_sku, nome: p.nome })) };
   }
@@ -2326,6 +2353,7 @@ module.exports = {
   __getAvisosCancelamento: () => avisosCancelamento,
   __getPrevisaoEstoque: () => previsaoEstoque,
   __getCatalogoPrecos: () => catalogoPrecos,
+  __fixarVersaoTabelas: (v) => { versaoTabelas = v; },
   __getProdutos: () => produtos,
   __getConfiguracao: (chave) => (configuracoes[chave] ? configuracoes[chave].valor : undefined),
   __setConfiguracao: (chave, valor) => { configuracoes[chave] = { valor, atualizado_em: new Date().toISOString() }; },

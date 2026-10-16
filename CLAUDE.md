@@ -105,6 +105,11 @@ Pegadinhas de ambiente:
   vendedor novo dava 42P10 no `ON CONFLICT (nome)`). O pool (`db.js`) tem `max` 10 (`PG_POOL_MAX`), espera de conexão de
   20 s e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
   andamento (até 25 s) e fecha o pool.
+- **Egress do Supabase** (10/2026, aviso de cota estourada do plano grátis, 5,5 GB/mês): todo dado que sai do banco pro
+  Render conta. Leitura de tabela inteira que todo aparelho faz ao abrir (catálogo de preços ~1,25 MB, fichas, códigos,
+  nomes dos produtos) passa por `routes/lib/cacheTabela.js` (`lerComCache`), que só relê quando os contadores de
+  `pg_stat_user_tables` mudam; importação chama `esquecerTabela` (os contadores chegam com ~1 s de atraso). Leitura
+  grande nova repetida a cada abertura do app: usar o mesmo cache.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
