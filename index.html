@@ -4301,6 +4301,67 @@
       white-space: pre-line;
     }
 
+    /* Saída da vitrine com produtos separados: enviar card, orçamento ou os dois */
+    .vitSepLista {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 10px 0 14px;
+    }
+
+    .vitSepItem {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.25;
+    }
+
+    .vitSepItem small {
+      display: block;
+      color: var(--gray);
+      font-weight: 400;
+    }
+
+    .vitSepFoto {
+      flex: none;
+      width: 44px;
+      height: 44px;
+      border-radius: var(--r-sm);
+      background: var(--fill) center / cover no-repeat;
+    }
+
+    .vitSepBtns {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .vitSepBtns button {
+      min-height: 48px;
+      border-radius: var(--r-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 0.75px solid var(--hairline);
+      background: var(--white);
+      color: var(--ink);
+    }
+
+    .vitSepBtns button.principal {
+      border-color: var(--red);
+      background: var(--red);
+      color: var(--on-accent);
+    }
+
+    .vitSepBtns button.discreto {
+      border: none;
+      background: none;
+      color: var(--gray);
+      min-height: 44px;
+    }
+
     .sugestaoItem {
       padding: 10px 12px;
       background: var(--fill);
@@ -10619,6 +10680,20 @@
         <div class="minimodal-btnrow">
           <button type="button" id="fotoCancelarBtn">Cancelar</button>
           <button type="button" id="fotoSalvarBtn" disabled>Salvar foto</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="minimodal hidden" id="vitrineSeparadosModal">
+      <div class="minimodal-card" style="max-height:88vh;overflow-y:auto;">
+        <h3 id="vitrineSepTitulo">Produtos separados</h3>
+        <div class="ofertaCtx">O cliente marcou estes na vitrine. O que fazer com eles?</div>
+        <div class="vitSepLista" id="vitrineSepLista"></div>
+        <div class="vitSepBtns">
+          <button type="button" class="principal" data-vit-sep="enviar" id="vitrineSepEnviarBtn">Enviar encarte pro cliente</button>
+          <button type="button" data-vit-sep="orcamento">Pôr no orçamento</button>
+          <button type="button" data-vit-sep="ambos">Os dois</button>
+          <button type="button" class="discreto" data-vit-sep="descartar">Descartar seleção</button>
         </div>
       </div>
     </div>
@@ -25623,12 +25698,44 @@
         document.documentElement.classList.remove('vitrineAberta');
         if (observadoresDeFoto.vitrine) observadoresDeFoto.vitrine.disconnect();
         document.getElementById('vitrineMinis').innerHTML = '';
-        if (!separados.length) return;
-        const n = separados.length;
-        const ok = await askConfirm(`O cliente separou ${n} produto${n === 1 ? '' : 's'} na vitrine. Pôr no orçamento?`, 'Pôr no orçamento', { cancelarLabel: 'Agora não' });
-        if (!ok) return;
-        separados.forEach(c => { if (productByCod(c)) addToCart(c, undefined, true); });
-        showToast(`${n} produto${n === 1 ? '' : 's'} no orçamento`);
+        abrirSeparadosDaVitrine(separados);
+      }
+      // Produtos separados na vitrine (2º PR do card de vários produtos, mockup
+      // escolhido pelo usuário): enviar o card/encarte pro cliente, pôr no
+      // orçamento, os dois, ou descartar. O card abre a mesma janela do Catálogo
+      // (até CARD_MAX_PRODUTOS; várias imagens com mais de 6).
+      let vitrineSeparados = [];
+      function abrirSeparadosDaVitrine(separados) {
+        vitrineSeparados = separados.filter(c => productByCod(c));
+        const n = vitrineSeparados.length;
+        if (!n) return;
+        document.getElementById('vitrineSepTitulo').textContent = `${n} produto${n === 1 ? '' : 's'} separado${n === 1 ? '' : 's'}`;
+        const lista = document.getElementById('vitrineSepLista');
+        lista.innerHTML = vitrineSeparados.map(c => {
+          const p = productByCod(c);
+          return `<div class="vitSepItem"><span class="vitSepFoto"${codigoDaFoto(c) ? ` data-foto-mini data-foto-cod="${escapeHtml(c)}"` : ''}></span><span>${escapeHtml(p.n)}<small>Cód. ${escapeHtml(c)}</small></span></div>`;
+        }).join('');
+        const no = Math.min(n, CARD_MAX_PRODUTOS), imagens = Math.ceil(no / ENCARTE_MAX);
+        document.getElementById('vitrineSepEnviarBtn').textContent = no === 1 ? 'Enviar card pro cliente'
+          : imagens > 1 ? `Enviar ${imagens} imagens pro cliente` : 'Enviar encarte pro cliente';
+        document.getElementById('vitrineSeparadosModal').classList.remove('hidden');
+        preencherFotosDe(lista);
+      }
+      function acaoDosSeparadosDaVitrine(acao) {
+        const cods = vitrineSeparados.slice();
+        vitrineSeparados = [];
+        document.getElementById('vitrineSeparadosModal').classList.add('hidden');
+        document.getElementById('vitrineSepLista').innerHTML = '';
+        const n = cods.length;
+        if (!n || acao === 'descartar') return;
+        if (acao === 'orcamento' || acao === 'ambos') {
+          cods.forEach(c => addToCart(c, undefined, true));
+          showToast(`${n} produto${n === 1 ? '' : 's'} no orçamento`);
+        }
+        if (acao === 'enviar' || acao === 'ambos') {
+          if (n > CARD_MAX_PRODUTOS) showToast(`O card leva até ${CARD_MAX_PRODUTOS} produtos: vão os ${CARD_MAX_PRODUTOS} primeiros`);
+          abrirCardProduto(cods);
+        }
       }
       function initModoCatalogo() {
         const seg = document.getElementById('prodModoSeg');
@@ -25645,6 +25752,10 @@
         });
         document.getElementById('prodCatalogo').addEventListener('click', (e) => {
           if (e.target.closest('[data-baixar-miniaturas]')) baixarMiniaturas(true);
+        });
+        document.getElementById('vitrineSeparadosModal').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-vit-sep]');
+          if (b) acaoDosSeparadosDaVitrine(b.dataset.vitSep);
         });
         document.getElementById('vitrineAntBtn').addEventListener('click', () => irNaVitrine(-1));
         document.getElementById('vitrineProxBtn').addEventListener('click', () => irNaVitrine(1));
