@@ -18,6 +18,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { codigoBase } = require('./lib/skuNormalizacao');
+const { nomesDosProdutos } = require('./lib/cacheTabela');
 const { estaDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
@@ -57,7 +58,7 @@ router.get('/', async (req, res) => {
          WHERE ped.cliente_id IS NOT NULL AND ${sqlDiaDoPedido()} > $1::date - $2::int
            AND ${SQL_PEDIDO_APP_VALIDO}`,
         [hoje, JANELA_DIAS]),
-      pool.query('SELECT codigo_sku, nome FROM produtos'),
+      nomesDosProdutos(),
       pool.query('/* recompra:adiamentos */ SELECT cliente_id, ate::text AS ate FROM recompra_adiamentos WHERE ate >= $1::date', [hoje]),
       pool.query('/* recompra:dados-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens'),
     ]);

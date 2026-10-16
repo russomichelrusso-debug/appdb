@@ -1,5 +1,6 @@
 const express = require('express');
 const { esquecerCatalogo } = require('./lib/descontinuado');
+const { lerComCache, esquecerTabela } = require('./lib/cacheTabela');
 const router = express.Router();
 const XLSX = require('@e965/xlsx');
 const { pool, registrarImportacao } = require('../db');
@@ -286,6 +287,8 @@ async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
     if (removidos.rowCount > 0) {
       console.log(`Catálogo de preços: ${removidos.rowCount} produto(s) removido(s) por não estarem mais na planilha.`);
     }
+    esquecerTabela('catalogo_precos');
+    esquecerTabela('produtos'); // a importação também cria produto novo no cadastro
     esquecerCatalogo(); // "Descontinuado" passa a valer pelo catálogo novo na próxima consulta
     await registrarImportacao(usuario?.id, 'catalogo-precos/importar', produtos.length);
     await avisarImportacao('catalogo-precos', quantos(produtos.length, 'produto', 'produtos'));
@@ -306,12 +309,15 @@ async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
 // todo aparelho busca direto do servidor).
 router.get('/', async (req, res) => {
   try {
-    const r = await pool.query('SELECT codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto FROM catalogo_precos ORDER BY codigo_sku');
+    // do cache enquanto a tabela não mudar (routes/lib/cacheTabela.js: ~1,25 MB
+    // por leitura era o maior gasto de egress do Supabase)
+    const rows = await lerComCache('catalogo_precos', 'catalogo_precos',
+      'SELECT codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto FROM catalogo_precos ORDER BY codigo_sku');
     res.json({
       version: 'Catálogo do servidor',
       generatedAt: new Date().toISOString(),
       canais: CANAIS,
-      produtos: r.rows,
+      produtos: rows,
     });
   } catch (e) {
     console.error(e);

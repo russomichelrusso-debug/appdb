@@ -3020,6 +3020,40 @@ async function main() {
     assert(res.status === 200 && res.body.catalogo === 2 && res.body.fora_do_cadastro === 1,
       `contagem de produtos acusa código do catálogo que falta no cadastro: ${JSON.stringify(res.body)}`);
     mockDb.__getCatalogoPrecos().pop();
+
+    // Cache das tabelas lidas inteiras (routes/lib/cacheTabela.js, egress do Supabase): com a
+    // versão da tabela (pg_stat_user_tables) parada, a leitura repetida não vai ao banco
+    const leituras = (re) => mockDb.__queryLog.filter(q => re.test(q.sql)).length;
+    const LE_CATALOGO = /FROM catalogo_precos ORDER BY codigo_sku/;
+    mockDb.__fixarVersaoTabelas(1);
+    const c1 = await req('GET', '/api/catalogo-precos');
+    const n1 = leituras(LE_CATALOGO);
+    const c2 = await req('GET', '/api/catalogo-precos');
+    assert(c1.status === 200 && c2.status === 200 && c1.body.produtos.length === 1 && leituras(LE_CATALOGO) === n1
+      && JSON.stringify(c2.body.produtos) === JSON.stringify(c1.body.produtos),
+      `catálogo de preços: 2ª leitura com a tabela parada sai do cache, sem ir ao banco (${leituras(LE_CATALOGO)} leituras)`);
+    // mudança feita fora do app (SQL direto no Supabase) muda a versão: lê de novo
+    mockDb.__getCatalogoPrecos().push({ codigo_sku: 'CAT99', nome: 'NOVO POR SQL' });
+    mockDb.__fixarVersaoTabelas(2);
+    const c3 = await req('GET', '/api/catalogo-precos');
+    assert(c3.status === 200 && c3.body.produtos.length === 2 && leituras(LE_CATALOGO) === n1 + 1,
+      `catálogo de preços: versão da tabela mudou, lê do banco de novo: ${JSON.stringify(c3.body.produtos)}`);
+    // importação esquece o cache na hora (os contadores do Postgres chegam com atraso)
+    res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05', 'CAT06', 'CAT07'], 50).toString('base64') });
+    const c4 = await req('GET', '/api/catalogo-precos');
+    assert(res.status === 200 && c4.body.produtos.map(p => p.codigo_sku).join() === 'CAT05,CAT06,CAT07',
+      `catálogo de preços: importação aparece na hora mesmo com a versão parada: ${JSON.stringify(c4.body.produtos)}`);
+    const f1 = await req('GET', '/api/fichas-tecnicas');
+    res = await req('POST', '/api/fichas-tecnicas/importar', { fichas: { CAT05: { nome: 'FICHA', desc: 'd', foto: '', specs: { a: 1 } } } });
+    const f2 = await req('GET', '/api/fichas-tecnicas');
+    assert(f1.status === 200 && res.status === 200 && f2.body.valor.CAT05?.nome === 'FICHA' && !f1.body.valor.CAT05,
+      `fichas técnicas: leitura em cache e importação aparecendo na hora: ${JSON.stringify(f2.body)}`);
+    const e1 = await req('GET', '/api/codigos-produto');
+    res = await req('POST', '/api/codigos-produto/importar', { codigos: { CAT05: { ean: '7890000000001', dun14: '' } } });
+    const e2 = await req('GET', '/api/codigos-produto');
+    assert(e1.status === 200 && res.status === 200 && e2.body.valor.CAT05?.ean === '7890000000001' && !e1.body.valor.CAT05,
+      `códigos de produto: leitura em cache e importação aparecendo na hora: ${JSON.stringify(e2.body)}`);
+    mockDb.__fixarVersaoTabelas(null);
   }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
   assert(res.status === 422 && mockDb.__getImportacoesEmail().some(i => i.status === 'falhou' && i.nome_arquivo === 'Repres-21.xlsx'),

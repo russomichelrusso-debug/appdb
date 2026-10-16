@@ -3,6 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE, diaDoBanco } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
+const { nomesDosProdutos } = require('./lib/cacheTabela');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
@@ -122,7 +123,7 @@ async function comprasDoCliente(clienteId) {
        JOIN produtos p ON p.id = pi.produto_id
        WHERE ped.cliente_id = $1 AND ${SQL_PEDIDO_APP_VALIDO}`,
       [clienteId]),
-    pool.query('SELECT codigo_sku, nome FROM produtos'),
+    nomesDosProdutos(),
   ]);
   const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
   const codigosConhecidos = new Set(nomePorCodigo.keys());
@@ -445,7 +446,7 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
          JOIN produtos p ON p.id = pi.produto_id
          WHERE ped.cliente_id = $1 AND ${SQL_PEDIDO_APP_VALIDO}`,
         [req.params.id]),
-      pool.query('SELECT codigo_sku, nome FROM produtos'),
+      nomesDosProdutos(),
     ]);
 
     const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
@@ -536,7 +537,7 @@ router.get('/clientes/:id/comprados-recentes', async (req, res) => {
          JOIN produtos p ON p.id = pi.produto_id
          WHERE ped.cliente_id = $1 AND ${sqlDiaDoPedido()} > ${SQL_HOJE_BR} - $2::int AND ${SQL_PEDIDO_APP_VALIDO}`,
         [req.params.id, COMPRADOS_RECENTES_DIAS]),
-      pool.query('SELECT codigo_sku, nome FROM produtos'),
+      nomesDosProdutos(),
     ]);
 
     const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));

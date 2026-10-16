@@ -1,14 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { lerComCache, esquecerTabela } = require('./lib/cacheTabela');
 
 // Devolve todas as fichas de uma vez, no mesmo formato {codigo: {...}} que o
 // app já usa - qualquer usuário logado pode ler (o balão (i) é pra todo mundo).
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT codigo_sku, nome, descricao, foto, specs FROM fichas_tecnicas');
+    // do cache enquanto a tabela não mudar (routes/lib/cacheTabela.js: egress do Supabase)
+    const rows = await lerComCache('fichas_tecnicas', 'fichas_tecnicas', 'SELECT codigo_sku, nome, descricao, foto, specs FROM fichas_tecnicas');
     const mapa = {};
-    for (const row of result.rows) {
+    for (const row of rows) {
       mapa[row.codigo_sku] = { nome: row.nome, desc: row.descricao, foto: row.foto, specs: row.specs };
     }
     res.json({ valor: mapa });
@@ -45,6 +47,7 @@ router.post('/importar', async (req, res) => {
         codigos.map(c => JSON.stringify(fichas[c].specs || {})),
       ]
     );
+    esquecerTabela('fichas_tecnicas');
     const totalResult = await pool.query('SELECT COUNT(*) FROM fichas_tecnicas');
     console.log(`Fichas técnicas: ${codigos.length} importada(s) por ${req.usuario?.email}. Total agora: ${totalResult.rows[0].count}.`);
     res.json({ ok: true, importadas: codigos.length, total: Number(totalResult.rows[0].count) });
