@@ -8814,12 +8814,20 @@
         max-width: none;
       }
 
+      /* Todas as abas começam no mesmo ponto, logo depois do menu (centradas, o
+         card do cliente pulava de lugar ao trocar Pedido/Levantamento - 10/2026).
+         O Levantamento não tem o orçamento preso ao lado: usa a largura toda e a
+         grade ganha colunas. */
       #tabPrecos,
-      #tabLevantamento,
       #tabProdutos,
       #tabClientes {
         max-width: var(--conteudoMax);
-        margin: 0 auto;
+        margin: 0;
+      }
+
+      #tabLevantamento {
+        max-width: none;
+        margin: 0;
       }
 
       /* Abas: menu lateral com ícone e nome */
@@ -8996,8 +9004,33 @@
       }
 
       /* "Nenhum produto encontrado" ocupa a largura, não uma célula da grade */
-      #resultsList > .empty-state {
+      #resultsList > .empty-state,
+      #resultsList > .inicioPedidoTitulo {
         grid-column: 1 / -1;
+      }
+
+      .inicioPedidoTitulo {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px 4px 8px;
+      }
+
+      .inicioPedidoTitulo b {
+        font-size: 15px;
+        color: var(--ink);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .inicioPedidoTitulo span {
+        font-size: 13px;
+        color: var(--gray);
+      }
+
+      body.abaLev .scanFab {
+        right: 24px;
       }
 
       /* a folha escondida fica embaixo da tela, mas a sombra dela aparecia */
@@ -11727,6 +11760,7 @@
           hint.style.display = 'block';
           addAllBar.classList.add('hidden');
           ultimosResultados = [];
+          renderInicioPedido(list, hint, tabelaAgora(), focoQtd);
           return;
         }
         hint.style.display = 'none';
@@ -11747,9 +11781,42 @@
           ? '50+ produtos — digite a medida pra afinar' : `${items.length} produto${items.length === 1 ? '' : 's'}`;
         document.getElementById('addAllResultsBtn').textContent = items.length === 1
           ? 'Adicionar ao orçamento' : `Adicionar os ${items.length} ao orçamento`;
-        const tabela = MQ_TABELA_PRODUTOS.matches;
+        const tabela = tabelaAgora();
         list.classList.toggle('emTabela', tabela);
         list.innerHTML = tabela ? htmlTabelaProdutos(items) : items.map(p => renderCard(p)).join('');
+        wireProductCardButtons(list);
+        if (tabela) {
+          wireTabelaProdutos(list);
+          const voltar = focoQtd && list.querySelector(`[data-tabela-qtd="${CSS.escape(focoQtd)}"]`);
+          if (voltar) voltar.focus();
+        }
+      }
+      function tabelaAgora() { return window.matchMedia('(min-width: 1250px) and (hover: hover) and (pointer: fine)').matches; }
+      // Pedido no tablet deitado/laptop com a busca vazia (10/2026, pedido do
+      // usuário: o meio da tela ficava vazio): com cliente escolhido, o que ele
+      // comprou nos últimos 12 meses (a mesma lista dos "Comprados e não
+      // contados" do Levantamento, cópia no aparelho - vale sem internet), da
+      // compra mais recente pra mais antiga, com o "+" de sempre. Sem cliente
+      // (ou sem compra), os produtos abertos por último na aba Produtos. No
+      // celular continua só a dica (lá a busca é o que importa na tela).
+      function renderInicioPedido(list, hint, tabela, focoQtd) {
+        if (!window.matchMedia('(min-width: 900px)').matches) return;
+        const cliente = state.levCliente;
+        const comprados = cliente ? (COMPRADOS_CACHE.get(cliente.id) || []) : [];
+        let itens = comprados.slice()
+          .sort((a, b) => String(b.ultima_compra || '').localeCompare(String(a.ultima_compra || '')))
+          .map(c => productByCod(c.codigo_sku)).filter(Boolean);
+        let titulo = cliente && itens.length ? 'Comprados pelo cliente nos últimos 12 meses' : '';
+        if (!itens.length) {
+          itens = lerProdutosRecentes().map(productByCod).filter(Boolean);
+          titulo = itens.length ? 'Produtos vistos por último' : '';
+        }
+        if (!itens.length) return;
+        itens = [...new Map(itens.map(p => [p.c, p])).values()].slice(0, 30);
+        hint.style.display = 'none';
+        list.classList.toggle('emTabela', tabela);
+        list.innerHTML = `<div class="inicioPedidoTitulo"><b>${escapeHtml(titulo)}</b><span>${itens.length} produto${itens.length === 1 ? '' : 's'} · digite pra buscar outro</span></div>`
+          + (tabela ? htmlTabelaProdutos(itens) : itens.map(p => renderCard(p)).join(''));
         wireProductCardButtons(list);
         if (tabela) {
           wireTabelaProdutos(list);
@@ -11959,6 +12026,7 @@
       // continua com os cards, e laptop mais estreito também (não cabe).
       const MQ_TABELA_PRODUTOS = window.matchMedia('(min-width: 1250px) and (hover: hover) and (pointer: fine)');
       MQ_TABELA_PRODUTOS.addEventListener('change', () => renderResults());
+      window.matchMedia('(min-width: 900px)').addEventListener('change', () => renderResults()); // início do Pedido
       function htmlTabelaProdutos(items) {
         return `<table class="prodTabela">
     <thead><tr><th>Código</th><th>Produto</th><th class="tPreco">Preço ${escapeHtml(state.uf || '')}</th><th class="tDesc">Desc.</th><th class="tQtd">Qtd</th><th><span class="srOnly">Adicionar</span></th></tr></thead>
@@ -13379,13 +13447,16 @@
       function refreshLevSaveInfo() {
         const el = document.getElementById('levSaveInfo');
         if (!el) return;
-        // Mostra sempre o cliente do levantamento (pedido do usuário): salvo =
-        // nome em destaque; ainda não salvo = "LOJA X · não salvo".
+        // Com cliente escolhido o nome já está no card logo acima (10/2026, pedido
+        // do usuário: aparecia duas vezes): aqui fica só "Levantamento aberto"/
+        // "Não salvo" ("Salvo" mentiria: mexer na contagem depois de abrir/salvar
+        // não limpa o levLoadedName). Sem cliente, o nome do aberto continua.
+        const nomeCli = state.levCliente && state.levCliente.nome;
         if (state.levLoadedName) {
-          el.textContent = state.levLoadedName;
+          el.textContent = nomeCli && state.levLoadedName === nomeCli ? 'Levantamento aberto' : state.levLoadedName;
           el.classList.add('hasname');
         } else {
-          el.textContent = state.levCliente ? `${state.levCliente.nome} · não salvo` : 'Levantamento não salvo';
+          el.textContent = nomeCli ? 'Não salvo' : 'Levantamento não salvo';
           el.classList.remove('hasname');
         }
         atualizarLembreteLev();
@@ -14473,9 +14544,10 @@
       }
       async function carregarCompradosRecentes(cliente) {
         renderCompradosNaoContados();
+        inicioPedidoMudou();
         if (!cliente || !cliente.id || COMPRADOS_CACHE.has(cliente.id)) return;
         const salvo = lerCompradosLS()[cliente.id];
-        if (Array.isArray(salvo)) { COMPRADOS_CACHE.set(cliente.id, salvo); renderCompradosNaoContados(); }
+        if (Array.isArray(salvo)) { COMPRADOS_CACHE.set(cliente.id, salvo); renderCompradosNaoContados(); inicioPedidoMudou(); }
         let lista;
         try { lista = await apiFetch(`/api/clientes/${cliente.id}/comprados-recentes`); }
         catch (e) { return; } // sem internet: fica com a cópia salva (se houver)
@@ -14487,6 +14559,7 @@
           localStorage.setItem(COMPRADOS_LS_KEY, JSON.stringify(todos));
         } catch (e) { /* sem espaço/localStorage - segue só com a memória */ }
         renderCompradosNaoContados();
+        inicioPedidoMudou();
       }
       function compradosNaoContados() {
         const cliente = state.levCliente;
@@ -14501,6 +14574,11 @@
         }
         saveLevSurvey();
         renderLevList();
+      }
+      // A lista mudou (outro cliente, cópia do aparelho, resposta do servidor):
+      // redesenha o início do Pedido (renderInicioPedido) se a busca está vazia.
+      function inicioPedidoMudou() {
+        if (window.matchMedia('(min-width: 900px)').matches && !document.getElementById('searchInput').value.trim()) renderResults();
       }
       function renderCompradosNaoContados() {
         const el = document.getElementById('levComprados');
