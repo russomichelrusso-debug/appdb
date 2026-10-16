@@ -1192,6 +1192,9 @@ Supabase, sem PR — não é mudança de código.
     (`tile.openstreetmap.org`, atribuição obrigatória no canto). Sem internet o fundo fica cinza e os alfinetes continuam
     (cópia do `/sync`); sem o Leaflet (1ª vez sem internet) o grupo "Pra rodar" volta (`body.mapaClientesOk` só liga com o
     mapa carregado). Os blocos continuam renderizando escondidos: são eles que mantêm a marcação das prioritárias.
+  - **Atalhos do topo expostos** (10/2026, pedido do usuário): a partir de 900 px o "⋯ Atalhos" some e os itens dele
+    (Calculadora, Portal do Cliente, Salesforce, Conectar tablet, Tela do cliente) ficam como ícones redondos no topo, iguais
+    a Dashboard e Ficha (nome no `title`/hover). Só CSS (`.atalhosMenu` estático); no celular continua o menu.
 
 ## O que já tentamos e não deu certo
 

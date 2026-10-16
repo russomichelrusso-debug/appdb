@@ -9381,6 +9381,60 @@
        mockups, 10/2026): no lugar do grupo "Pra rodar", Rota por cidade e Perto
        de mim num mapa preso à direita. Sem o Leaflet (sem internet na 1ª vez) o
        grupo volta (body.mapaClientesOk só liga com o mapa carregado). ---- */
+    /* Laptop e tablet deitado (900 px ou mais, pedido do usuário 10/2026): os
+       atalhos do "⋯ Atalhos" ficam expostos como ícones no topo, iguais a
+       Dashboard e Ficha (nome no title, ao passar o mouse). No celular continua
+       o menu. */
+    @media (min-width: 900px) {
+      .gearBtn.atalhosBtn {
+        display: none;
+      }
+
+      .atalhosMenu,
+      .atalhosMenu.hidden {
+        position: static;
+        display: flex;
+        align-items: center;
+        gap: 12px; /* o mesmo do .topbar */
+        min-width: 0;
+        padding: 0;
+        background: none;
+        box-shadow: none;
+      }
+
+      .atalhoItem {
+        position: relative;
+        justify-content: center;
+        width: 31px;
+        height: 31px;
+        min-height: 0;
+        padding: 0;
+        margin-left: 2px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, .12);
+        color: #fff;
+      }
+
+      .atalhoItem:hover {
+        background: rgba(255, 255, 255, .22);
+      }
+
+      .atalhoItem svg {
+        width: 17px;
+        height: 17px;
+        color: #fff;
+      }
+
+      .atalhoItem span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+    }
+
     .clientesMapa {
       display: none;
     }
