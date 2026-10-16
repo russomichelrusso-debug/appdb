@@ -1078,6 +1078,16 @@ Supabase, sem PR — não é mudança de código.
   Entrada da vitrine que sobrou de um recarregar vira normal (`replaceState`) ao carregar. Único uso de
   `history`/`popstate` no app — tela nova que também precise segurar o voltar tem de conviver com esse listener.
   Voltar da ficha do produto devolve a grade na mesma altura (`catalogoScroll`).
+  - **Vários produtos num card pelo Catálogo** (10/2026, mockups escolhidos pelo usuário; a vitrine "enviar os separados"
+    ficou pro 2º PR): "Selecionar" no cabeçalho da família liga o modo seleção (tocar no produto marca em vez de abrir,
+    o "+" some); a seleção (`catalogoSelecionados`, até 24 = `CARD_MAX_PRODUTOS`) continua ao trocar de família (chips com
+    o número marcado) e a barra de baixo (`#catBarra`) tem Limpar, "+ Orçamento" (todos de uma vez) e Enviar. A janela do
+    card (`abrirCardProduto`, também a da campanha e da ficha) ganhou **"Com preço | Sem preço"** (sem preço = só foto,
+    nome e código, "Peça seu orçamento"), a linha de **qual preço vai** (cliente do orçamento + `rotuloContextoPreco`) e,
+    com 2+ produtos, o **título do encarte** editável com sugestões (`sugestoesTituloDoCard`: "OFERTAS" só quando todos
+    têm desconto ou o encarte saiu de uma campanha, senão o nome da família ou "SELEÇÃO PRA VOCÊ"; Black Friday continua
+    pelo visual escuro). Mais de 6 = várias imagens divididas por igual (`paginasDoCard`: 7 = 4 + 3), "1/2" no subtítulo,
+    enviadas num compartilhar só (o WhatsApp recebe como álbum; sem compartilhar de arquivo, baixa uma por uma).
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
   num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos
