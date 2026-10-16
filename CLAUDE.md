@@ -341,6 +341,9 @@ Supabase, sem PR — não é mudança de código.
     de Preço Fixo no canal, sobre o preço fixo (sem classificatório nem desconto do item), e nunca em item não
     fixo; as demais regras seguem sem bônus em item fixo. As ventosas/máquinas MAC ("20% + classificatório, já
     no preço") são regra comum. Caixas e bolsas (preço em reais) são da Lista de Preços, não de campanha.
+  - **Prazos de pagamento** (`PRAZOS_POR_CANAL`, `index.html`): da política, por canal, mais o que a lista do
+    Salesforce tem pra todo canal (10/2026: 28/42/56/70/84 e 28/42/56/70/84/98/112 dias faltavam no Varejo/Atacado).
+    Prazo com N parcelas só aparece com o orçamento ≥ N × R$ 600 sem impostos (`VALOR_MINIMO_POR_PARCELA`).
   - **Preço fixo é por canal**: o item "PREÇO FIXO" da Lista de Preços só é fixo em Varejo/Atacado/
     E-commerce (`canaisFx`); tudo que trava desconto (campo por item, `setItemDiscount`, campanha) usa
     `isPrecoFixoParaCanal`, nunca o `p.fx` puro (que diz "fixo em algum canal").
