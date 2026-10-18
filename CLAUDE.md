@@ -1294,6 +1294,13 @@ Supabase, sem PR — não é mudança de código.
   cartão dos Contatos. 900 px+: página até 1440 px, Contatos presos à direita e o "Copiar tudo" no cartão do topo. O mapa do
   mockup ficou de fora (precisaria do Leaflet e das coordenadas nesta página): o endereço tem o botão do Waze.
 
+- **Calculadora (`calculadora-materiais.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de
+  mockups, página "Calculadora" do mesmo canvas): dados em 3 passos, com atalhos dos tamanhos de peça e das áreas mais comuns
+  (`PECAS_COMUNS`/`AREAS_COMUNS`, só preenchem os campos) e modelo/junta em botões (`renderBotoesEspacador`; os `<select>`
+  escondidos continuam guardando o valor e só mostram as juntas que existem pro modelo). Resultado num cartão escuro: o número
+  grande, o desenho da peça na proporção com os encaixes de cada lado e a conta explicada (peças no ambiente × encaixes por
+  peça = total), produto sugerido e "Adicionar N ao orçamento". A fórmula não mudou. 900 px+ dados e resultado lado a lado.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
