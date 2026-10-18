@@ -1491,6 +1491,33 @@
       } else destTri.innerHTML = '';
     }
 
+    async function carregarMetaMensal() {
+      try {
+        const result = await apiFetch('/api/configuracoes/meta_mensal_faturamento');
+        return Number(result.valor) || null;
+      } catch (e) { return null; }
+    }
+
+    async function editarMetaMensal() {
+      const atual = await carregarMetaMensal();
+      const digitado = prompt('Objetivo de faturamento do mês (R$):', atual || '');
+      if (digitado == null) return; // cancelou
+      const valor = Number(String(digitado).replace(/\./g, '').replace(',', '.'));
+      if (!Number.isFinite(valor) || valor <= 0) { alert('Digite um valor numérico maior que zero.'); return; }
+      try {
+        await apiFetch('/api/configuracoes/meta_mensal_faturamento', { method: 'POST', body: JSON.stringify({ valor }) });
+        carregarDashboardPrincipal();
+      } catch (e) { alert('Erro ao salvar o objetivo: ' + e.message); }
+    }
+
+    function datasDoMesAtual() {
+      const hoje = new Date();
+      const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+      const ultimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+      const fmt = (d) => d.toISOString().slice(0, 10);
+      return { inicio: fmt(primeiro), fim: fmt(ultimo) };
+    }
+
     // Famílias do mês em barras deitadas (o nome cabe inteiro); as marcadas
     // como foco no admin saem em vermelho com ★ - antes era um 2º gráfico só
     // com elas.
