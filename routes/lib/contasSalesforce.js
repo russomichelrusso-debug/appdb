@@ -6,11 +6,19 @@
 // vendas antigas continuam contando no faturamento (foram do representante).
 const { pool } = require('../../db');
 
-// id do cliente (texto) -> base da conta ('Rodrigo', 'Telemarketing'...)
+// Conta da própria representação (classificatório "Representante": a RUSSO'S,
+// que compra amostras sob a supervisão do gestor) também sai das listas -
+// não é cliente pra quem se vende (pedido do usuário). Valor 'Representação'.
+const REPRESENTACAO = 'Representação';
+
+// id do cliente (texto) -> base da conta ('Rodrigo', 'Telemarketing'...) ou
+// 'Representação': fora das listas de oportunidade
 async function clientesDeOutroVendedor(db = pool) {
   const r = await db.query(
-    `/* contas-sf:outros */ SELECT cliente_id, COALESCE(base, proprietario) AS base FROM contas_salesforce
-     WHERE de_outro_vendedor AND cliente_id IS NOT NULL`);
+    `/* contas-sf:outros */ SELECT cliente_id,
+       CASE WHEN classificatorio ILIKE 'Representante%' THEN '${REPRESENTACAO}' ELSE COALESCE(base, proprietario) END AS base
+     FROM contas_salesforce
+     WHERE (de_outro_vendedor OR classificatorio ILIKE 'Representante%') AND cliente_id IS NOT NULL`);
   return new Map(r.rows.map(l => [String(l.cliente_id), l.base || 'outro vendedor']));
 }
 
@@ -62,4 +70,4 @@ function primeiroTelefone(texto) {
   return null;
 }
 
-module.exports = { clientesDeOutroVendedor, clientesInativosNoSalesforce, proprietarioPrincipal, ehAtivo, primeiroTelefone };
+module.exports = { REPRESENTACAO, clientesDeOutroVendedor, clientesInativosNoSalesforce, proprietarioPrincipal, ehAtivo, primeiroTelefone };

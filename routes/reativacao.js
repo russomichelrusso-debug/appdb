@@ -234,7 +234,7 @@ router.get('/', async (req, res) => {
       // vendedor, dono da conta e telefone (routes/contasSalesforce.js)
       pool.query(
         `/* reativacao:salesforce */
-         SELECT cliente_id, proprietario, base, situacao, de_outro_vendedor, ultima_compra::text AS ultima_compra, telefone, email, cidade, uf
+         SELECT cliente_id, proprietario, base, situacao, de_outro_vendedor, classificatorio, ultima_compra::text AS ultima_compra, telefone, email, cidade, uf
          FROM contas_salesforce WHERE cliente_id IS NOT NULL`),
       pool.query(`/* reativacao:meta */ SELECT valor FROM configuracoes WHERE chave = $1`, [CHAVE_CONTAS_SF]),
       // placar "Recuperados": inativo no Salesforce que pediu a partir do dia em
@@ -267,8 +267,9 @@ router.get('/', async (req, res) => {
     for (const c of clientes.rows) {
       const id = String(c.id);
       const sf = sfPorCliente.get(id);
-      // ativo com outro vendedor: compra, só que não com o representante
-      if (sf && sf.de_outro_vendedor) continue;
+      // ativo com outro vendedor (compra, só que não com o representante) ou a
+      // conta da própria representação (amostras): fora da lista
+      if (sf && (sf.de_outro_vendedor || /^representante/i.test(String(sf.classificatorio || '').trim()))) continue;
       const naFoto = fotoPorCliente.get(id);
       const ultimaSf = sf && sf.ultima_compra ? diaISO(sf.ultima_compra) : null;
       const ultimaConhecida = [c.codigo_oficial ? ultimaOficial.get(String(c.codigo_oficial)) : null, ultimaApp.get(id),

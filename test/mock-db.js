@@ -753,7 +753,9 @@ async function query(sql, params = []) {
 
   // Relatório "Todas Contas" do Salesforce - routes/contasSalesforce.js
   if (s.includes('/* CONTAS-SF:OUTROS */')) {
-    return { rows: contasSalesforce.filter(c => c.de_outro_vendedor && c.cliente_id != null).map(c => ({ cliente_id: c.cliente_id, base: c.base || c.proprietario })) };
+    const rep = (c) => /^representante/i.test(String(c.classificatorio || '').trim());
+    return { rows: contasSalesforce.filter(c => (c.de_outro_vendedor || rep(c)) && c.cliente_id != null)
+      .map(c => ({ cliente_id: c.cliente_id, base: rep(c) ? 'Representação' : (c.base || c.proprietario) })) };
   }
   if (s.includes('/* CONTAS-SF:INATIVOS */')) {
     return { rows: contasSalesforce.filter(c => c.cliente_id != null && c.situacao === 'Inativo').map(c => ({ cliente_id: c.cliente_id })) };

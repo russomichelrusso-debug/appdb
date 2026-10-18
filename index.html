@@ -18759,7 +18759,7 @@
         partes.push(c.documento ? escapeHtml(formatarDocumento(c.documento)) : semDoc);
         if (c.municipio) partes.push(escapeHtml(c.municipio + (c.uf ? '/' + c.uf : '')));
         const outro = outroVendedorDoCliente(c);
-        if (outro) partes.push(`<span class="buscaOutroVendedor">base ${escapeHtml(outro)} · ativa</span>`);
+        if (outro) partes.push(`<span class="buscaOutroVendedor">${outro === 'Representação' ? 'conta da representação' : `base ${escapeHtml(outro)} · ativa`}</span>`);
         return partes.join(' · ');
       }
       // Conta ativa na base de OUTRO vendedor (ou do telemarketing) pelo relatório

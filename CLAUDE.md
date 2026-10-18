@@ -887,7 +887,9 @@ Supabase, sem PR — não é mudança de código.
     vendas antigas continuam no faturamento (foram do representante). Marina (vendas internas) e Vilmar caem na mesma regra.
     Em 18/10/2026 eram 14 clientes do app marcados (10 do Rodrigo - SOLER, R$ 288 mil de histórico, ficaria no topo do Para
     reativar - e 3 da Marina). A conta com classificatório "Representante" é a da própria representação (a RUSSO'S,
-    Sergio e Michel Russo): nunca é "de outro vendedor" nem ganha selo de base. Conta da **gerência** também não (Vilmar,
+    Sergio e Michel Russo, que compram amostras sob a supervisão do gestor - por isso a conta é do Vilmar): nunca é "de outro
+    vendedor" nem ganha selo de base, e **sai das listas de oportunidade** como as de outra base (não é cliente pra quem se
+    vende; pedido do usuário) - `clientesDeOutroVendedor` devolve 'Representação' e a busca mostra "conta da representação". Conta da **gerência** também não (Vilmar,
     gerente de vendas - o nome dele aparece sempre, como gerente regional/supervisor): o proprietário cujo primeiro nome é o do
     "Gestor" da planilha Classificatório do ERP (`cliente_classificatorio_erp.gestor`, "VILMAR HEDLER JUNIOR" em 10/2026). Vale até a próxima importação: quem voltar pra carteira precisa de um
     relatório novo.

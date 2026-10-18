@@ -3449,6 +3449,9 @@ async function main() {
         authToken = tokenAdmin;
         assert(res.status === 403, `contas do Salesforce: só admin importa: ${res.status}`);
       }
+      // a conta da representação já está no app (compra amostras)
+      mockDb.__seed({ clientes: [{ id: 9704, nome: 'REPRESENTACOES DO TESTE LTDA', documento: '97040000000104', codigo_oficial: '9704' }],
+        pedidosOficiaisItens: [{ nr_pedido: '697041', codigo_sku: '60863', cliente_codigo_oficial: '9704', quantidade: 1, valor: 50, data_implantacao: `${mesISO(20)}-05`, data_faturamento: `${mesISO(20)}-06`, status: 'faturado', nota_fiscal: '9704001' }] });
       res = await req('POST', '/api/reativacao/contas-salesforce', lidoSf);
       const novo = mockDb.__getClientes().find(c => c.codigo_oficial === '9701');
       assert(res.status === 200 && res.body.principal === 'SERGIO LUIZ' && res.body.criados === 2 && res.body.deOutroVendedor === 2
@@ -3471,7 +3474,8 @@ async function main() {
       res = await getComoOutro('/api/clientes/sync');
       {
         const porId = (id) => res.body.clientes.find(c => c.id === id);
-        assert(porId(9605).outro_vendedor === 'Rodrigo' && !porId(9601).outro_vendedor && !porId(novo.id).outro_vendedor,
+        assert(porId(9605).outro_vendedor === 'Rodrigo' && !porId(9601).outro_vendedor && !porId(novo.id).outro_vendedor
+          && porId(9704).outro_vendedor === 'Representação',
           `contas do Salesforce: /sync marca o cliente ativo de outro vendedor: ${JSON.stringify([porId(9605), porId(9601)].map(c => c && c.outro_vendedor))}`);
       }
       res = await getComoOutro('/api/reativacao');
@@ -3479,7 +3483,7 @@ async function main() {
         const lista = res.body.clientes || [];
         const por = (id) => lista.find(c => c.cliente_id === id);
         const r = por(novo.id);
-        assert(!por(9605) && r && r.base === 'Rodrigo' && r.mes_ultima_compra === mesISO(30) && r.telefone === '4436641112' && r.email === 'loja@example.com'
+        assert(!por(9605) && !por(9704) && r && r.base === 'Rodrigo' && r.mes_ultima_compra === mesISO(30) && r.telefone === '4436641112' && r.email === 'loja@example.com'
           && por(9606) && por(9606).mes_ultima_compra === mesISO(20) && por(9606).base === null
           && lista.some(c => c.codigo_oficial === '9703' && c.mes_ultima_compra === mesISO(8) && c.base === 'Telemarketing'),
           `contas do Salesforce: Para reativar sem o ativo de outro vendedor, com o inativo novo ("Base Rodrigo"; vendas internas = "Base Telemarketing") e a última compra do Salesforce: ${JSON.stringify(lista)}`);
