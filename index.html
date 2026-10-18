@@ -7546,10 +7546,16 @@
       font-size: 13px;
     }
 
-    /* conta que era de outro vendedor no Salesforce (Para reativar) */
-    .reativarSelo--era {
+    /* conta inativa na base de outro vendedor/telemarketing (Para reativar) */
+    .reativarSelo--base {
       color: var(--gray);
       font-weight: 600;
+    }
+
+    .reativarBaseAviso {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--gray);
     }
 
     /* placar "Recuperados" no topo do Para reativar */
@@ -18753,11 +18759,12 @@
         partes.push(c.documento ? escapeHtml(formatarDocumento(c.documento)) : semDoc);
         if (c.municipio) partes.push(escapeHtml(c.municipio + (c.uf ? '/' + c.uf : '')));
         const outro = outroVendedorDoCliente(c);
-        if (outro) partes.push(`<span class="buscaOutroVendedor">atende: ${escapeHtml(outro)}</span>`);
+        if (outro) partes.push(`<span class="buscaOutroVendedor">base ${escapeHtml(outro)} · ativa</span>`);
         return partes.join(' · ');
       }
-      // Conta ativa de OUTRO vendedor pelo relatório "Todas Contas" do Salesforce
-      // (vem no /sync como outro_vendedor): continua na busca, com "atende: Rodrigo",
+      // Conta ativa na base de OUTRO vendedor (ou do telemarketing) pelo relatório
+      // "Todas Contas" do Salesforce (vem no /sync como outro_vendedor = a base):
+      // continua na busca, com "base Rodrigo · ativa",
       // e sai de Perto de mim, Rota e mapa (o servidor já tira do Para reativar,
       // Visitas, alertas e Dashboard).
       let outroVendedorPorId = null; // refeito quando a cópia de clientes muda (saveClientesLocais)
@@ -23282,7 +23289,7 @@
       }
       function renderReativarItem(c) {
         const meta = fantasiaNaMeta(c, c.cliente_id);
-        if (c.era_de) meta.push(`<span class="recompraSelo reativarSelo--era" title="Conta de ${escapeHtml(c.era_de)} no Salesforce, parada: dá pra trazer pra sua carteira">era do ${escapeHtml(c.era_de)}</span>`);
+        if (c.base) meta.push(`<span class="recompraSelo reativarSelo--base">Base ${escapeHtml(c.base)}</span>`);
         if (c.cidade) meta.push(escapeHtml(c.cidade));
         const valor = textoValorReativar(c);
         if (valor) meta.push(escapeHtml(valor));
@@ -23291,6 +23298,7 @@
         return `<div class="recompraItem">
           <button type="button" class="recompraNome" data-reativar-abrir="${c.cliente_id}"><span>${escapeHtml(c.nome)}</span>${seloReativar(c)}</button>
           <div class="recompraMeta">${meta.join(' · ')}</div>
+          ${c.base ? `<div class="reativarBaseAviso">Inativo na base ${escapeHtml(c.base)}: vendendo, peça pra ativar e transferir pra sua base.</div>` : ''}
           <div class="recompraAcoes">
             <button type="button" class="recompraBtn recompraBtn--principal" data-reativar-abrir="${c.cliente_id}">Abrir cliente</button>
             ${tel ? `<a class="recompraBtn" href="tel:+55${tel}" style="display:flex;align-items:center;justify-content:center;text-decoration:none;" aria-label="Ligar para ${escapeHtml(c.nome)}">Ligar</a>` : ''}
@@ -23315,7 +23323,7 @@
       function htmlPlacarRecuperados(p) {
         if (!p) return '';
         const valor = (v) => (v > 0 ? ` · ${escapeHtml(brlCurto(v))}` : '');
-        const nomes = p.doMes.slice(0, 5).map(c => `<li>${escapeHtml(c.nome)} · pediu ${escapeHtml(dataCurtaISO(c.dia))}${valor(c.valor)}${c.era_de ? ` · era do ${escapeHtml(c.era_de)}` : ''}</li>`).join('');
+        const nomes = p.doMes.slice(0, 5).map(c => `<li>${escapeHtml(c.nome)} · pediu ${escapeHtml(dataCurtaISO(c.dia))}${valor(c.valor)}${c.base ? ` · estava na base ${escapeHtml(c.base)}` : ''}</li>`).join('');
         return `<div class="reativarPlacar"><strong>🏆 Recuperados em ${escapeHtml(mesAnoBr(p.mes))}:</strong> ${p.doMes.length} ${p.doMes.length === 1 ? 'cliente' : 'clientes'}${valor(p.valorMes)}
           <small>Desde ${escapeHtml(formatDateBr(p.desde))}: ${p.total} de ${p.alvos} inativos voltaram a pedir${valor(p.valorTotal)} (valor do pedido no ERP)</small>
           ${nomes ? `<ul>${nomes}</ul>` : ''}</div>`;

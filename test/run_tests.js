@@ -3408,7 +3408,7 @@ async function main() {
       const getComoOutro = async (url) => { const t = authToken; authToken = tokenOutro; const r = await req('GET', url); authToken = t; return r; };
       const cabSf = ['Nome da Empresa', 'Data de criação', 'Cidade', 'Código Região', 'Estado da Conta', 'Código cliente ERP', 'Situação', 'CPF/CNPJ',
         'Classificatório', 'Telefone', 'Email comercial', 'Primeiro nome do proprietário', 'Transportadora', 'Data da última compra', 'Aprovado Gestor'];
-      const contaSf = (nome, cod, sit, cnpj, classi, tel, dono, ultima) => [nome, '05/01/2018', 'Maringá', 'R2', 'PR', cod, sit, cnpj, classi, tel,
+      const contaSf = (nome, cod, sit, cnpj, classi, tel, dono, ultima, regiao = 'R2') => [nome, '05/01/2018', 'Maringá', regiao, 'PR', cod, sit, cnpj, classi, tel,
         'loja@example.com', dono, 'TRD TRANSPORTE', ultima, null];
       const xlsSf = planilha({ 'Todas Contas': [
         ['Todas Contas - Representante (Parceiros Cortag)'],
@@ -3425,14 +3425,14 @@ async function main() {
         contaSf('LOJA ATIVA DO RODRIGO', 9702, 'Ativo', '97.020.000/0001-02', 'Rede', '44 3333 4444', 'Rodrigo', '01/10/2026 08:00'),
         // no app sem histórico: a última compra vem do Salesforce
         // inativa no Salesforce com compra há 8 meses com outro vendedor (fora do relatório do ERP do representante)
-        contaSf('LOJA DA MARINA PARADA', 9703, 'Inativo', '97.030.000/0001-03', 'Varejo Master (20)', '(44) 3333-4444', 'Marina', `${br(`${mesISO(8)}-20`)} 10:00`),
+        contaSf('LOJA DA MARINA PARADA', 9703, 'Inativo', '97.030.000/0001-03', 'Varejo Master (20)', '(44) 3333-4444', 'Marina', `${br(`${mesISO(8)}-20`)} 10:00`, 'VENDAS INTERNAS'),
         contaSf('LOJA SEM HISTORICO', 9606, 'Inativo', '96.060.000/0001-06', 'Sem Classificatório', '(44) 99812-4471', 'SERGIO LUIZ', `${br(`${mesISO(20)}-03`)} 14:00`),
       ] });
       assert(Importadores.detectarTipoPlanilha(XLSXt, xlsSf) === 'contasSalesforce', 'importadores: reconhece o relatório "Todas Contas" do Salesforce (antes do Classificatório)');
       const lidoSf = Importadores.lerContasSalesforce(XLSXt, xlsSf);
       const c9701 = lidoSf.contas.find(c => c.codigo_oficial === '9701');
       assert(lidoSf.contas.length === 7 && c9701.situacao === 'Inativo' && c9701.proprietario === 'Rodrigo' && c9701.ultima_compra === `${mesISO(30)}-15`
-        && c9701.documento === '97.010.000/0001-01' && c9701.classificatorio === 'Varejo Exclusive (15)',
+        && c9701.documento === '97.010.000/0001-01' && c9701.regiao === 'R2' && c9701.classificatorio === 'Varejo Exclusive (15)',
         `importadores: lê as contas do Salesforce (data com hora vira só o dia): ${JSON.stringify(lidoSf.contas.slice(0, 4))}`);
       const { classificatorioDaConta } = require('../routes/contasSalesforce');
       assert(JSON.stringify(classificatorioDaConta('Varejo Exclusive (15)')) === '{"tipo":"Varejo Exclusive","desconto":15}'
@@ -3475,10 +3475,10 @@ async function main() {
         const lista = res.body.clientes || [];
         const por = (id) => lista.find(c => c.cliente_id === id);
         const r = por(novo.id);
-        assert(!por(9605) && r && r.era_de === 'Rodrigo' && r.mes_ultima_compra === mesISO(30) && r.telefone === '4436641112' && r.email === 'loja@example.com'
-          && por(9606) && por(9606).mes_ultima_compra === mesISO(20) && por(9606).era_de === null
-          && lista.some(c => c.codigo_oficial === '9703' && c.mes_ultima_compra === mesISO(8) && c.era_de === 'Marina'),
-          `contas do Salesforce: Para reativar sem o ativo de outro vendedor, com o inativo novo ("era do Rodrigo") e a última compra do Salesforce: ${JSON.stringify(lista)}`);
+        assert(!por(9605) && r && r.base === 'Rodrigo' && r.mes_ultima_compra === mesISO(30) && r.telefone === '4436641112' && r.email === 'loja@example.com'
+          && por(9606) && por(9606).mes_ultima_compra === mesISO(20) && por(9606).base === null
+          && lista.some(c => c.codigo_oficial === '9703' && c.mes_ultima_compra === mesISO(8) && c.base === 'Telemarketing'),
+          `contas do Salesforce: Para reativar sem o ativo de outro vendedor, com o inativo novo ("Base Rodrigo"; vendas internas = "Base Telemarketing") e a última compra do Salesforce: ${JSON.stringify(lista)}`);
         // sem valor conhecido, quem parou há menos tempo vem antes
         const ids = lista.map(c => c.cliente_id);
         assert(ids.indexOf(9606) < ids.indexOf(novo.id), `contas do Salesforce: sem valor, quem parou há menos tempo primeiro: ${JSON.stringify(ids)}`);
@@ -3496,7 +3496,7 @@ async function main() {
       res = await getComoOutro('/api/reativacao');
       {
         const rec = res.body.recuperados.clientes;
-        assert(rec.length === 1 && rec[0].cliente_id === novo.id && rec[0].dia === antesBr(2) && rec[0].valor === 1500 && rec[0].era_de === 'Rodrigo'
+        assert(rec.length === 1 && rec[0].cliente_id === novo.id && rec[0].dia === antesBr(2) && rec[0].valor === 1500 && rec[0].base === 'Rodrigo'
           && !res.body.clientes.some(c => c.cliente_id === novo.id),
           `placar: quem pediu depois de entrar na lista conta como recuperado e sai do Para reativar: ${JSON.stringify(res.body.recuperados)}`);
       }

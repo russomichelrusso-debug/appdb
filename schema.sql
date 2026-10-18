@@ -573,10 +573,12 @@ ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
 -- Relatório "Todas Contas - Representante" do Salesforce (routes/contasSalesforce.js,
 -- importado pelo Painel): foto do ÚLTIMO relatório, trocada inteira. Traz o
 -- proprietário de cada conta e a situação (Ativo = comprou nos últimos ~6
--- meses, com qualquer vendedor). Conta ativa de outro vendedor
--- (de_outro_vendedor) sai das listas de oportunidade; inativa entra no "Para
--- reativar", com a última compra do Salesforce (a do ERP só tem os pedidos do
--- representante). Dados do relatório (dia, proprietário principal) em
+-- meses, com qualquer vendedor). Política da Cortag: conta inativa fica aberta
+-- pra qualquer vendedor (vai pra base de outro representante e, depois, do
+-- telemarketing/vendas internas); quem vender pede pra ativar e transferir pra
+-- sua base. Conta ativa de outro vendedor (de_outro_vendedor) sai das listas de
+-- oportunidade; inativa entra no "Para reativar" com a última compra do
+-- Salesforce (a do ERP só tem os pedidos do representante) e a base em que está. Dados do relatório (dia, proprietário principal) em
 -- configuracoes, chave 'contas_salesforce_relatorio'.
 CREATE TABLE IF NOT EXISTS contas_salesforce (
   codigo_oficial TEXT PRIMARY KEY,
@@ -585,6 +587,8 @@ CREATE TABLE IF NOT EXISTS contas_salesforce (
   nome TEXT,
   documento TEXT,
   proprietario TEXT,
+  regiao TEXT,                     -- "Código Região": 'R2', 'VENDAS INTERNAS' (telemarketing)
+  base TEXT,                       -- de quem é a base: 'Telemarketing' (vendas internas) ou o proprietário
   situacao TEXT,                   -- 'Ativo' | 'Inativo'
   de_outro_vendedor BOOLEAN NOT NULL DEFAULT false,
   ultima_compra DATE,
@@ -601,8 +605,9 @@ ALTER TABLE contas_salesforce ENABLE ROW LEVEL SECURITY;
 
 -- Placar "Recuperados" do Para reativar: cliente que estava inativo no
 -- relatório do Salesforce a partir de `desde` (dia da 1ª importação em que
--- apareceu inativo). Recuperado = pediu depois desse dia. Nunca é apagado
--- pela importação (a foto seguinte já o traz "Ativo").
+-- apareceu inativo). Recuperado = pediu a partir desse dia. Nunca é apagado
+-- pela importação (a foto seguinte já o traz "Ativo"). `proprietario` = a base
+-- em que a conta estava (contas_salesforce.base).
 CREATE TABLE IF NOT EXISTS reativacao_alvos (
   cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
   desde DATE NOT NULL,

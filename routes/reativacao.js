@@ -234,7 +234,7 @@ router.get('/', async (req, res) => {
       // vendedor, dono da conta e telefone (routes/contasSalesforce.js)
       pool.query(
         `/* reativacao:salesforce */
-         SELECT cliente_id, proprietario, situacao, de_outro_vendedor, ultima_compra::text AS ultima_compra, telefone, email, cidade, uf
+         SELECT cliente_id, proprietario, base, situacao, de_outro_vendedor, ultima_compra::text AS ultima_compra, telefone, email, cidade, uf
          FROM contas_salesforce WHERE cliente_id IS NOT NULL`),
       pool.query(`/* reativacao:meta */ SELECT valor FROM configuracoes WHERE chave = $1`, [CHAVE_CONTAS_SF]),
       // placar "Recuperados": inativo no Salesforce que pediu a partir do dia em
@@ -307,8 +307,9 @@ router.get('/', async (req, res) => {
         grupo: naFoto ? naFoto.grupo : null,
         telefone: (naFoto && naFoto.telefone) || (sf && primeiroTelefone(sf.telefone)) || null,
         email: sf ? sf.email || null : null,
-        // conta de outro vendedor no Salesforce, parada: dá pra trazer pra carteira
-        era_de: sf && sf.proprietario && principal && sf.proprietario !== principal ? sf.proprietario : null,
+        // inativa na base de outro vendedor ou do telemarketing (política da Cortag:
+        // inativa fica aberta pra todos): vendendo, pede pra ativar e transferir
+        base: sf && sf.situacao === 'Inativo' && sf.base && principal && sf.base !== principal ? sf.base : null,
         cidade: (naFoto && naFoto.cidade) || c.municipio || (sf && sf.cidade) || null,
         uf: (naFoto && naFoto.uf) || c.uf || (sf && sf.uf) || null,
         adiado_ate: adiamento && adiamento.tipo === 'ja_falei' ? diaISO(adiamento.ate) : null,
@@ -326,7 +327,7 @@ router.get('/', async (req, res) => {
         .filter(d => d && d <= hoje).sort()[0];
       if (!dia) continue;
       recuperadosLista.push({ cliente_id: r.cliente_id, nome: r.nome, desde: diaISO(r.desde), dia,
-        valor: r.valor != null ? Math.round(Number(r.valor) * 100) / 100 : 0, era_de: r.proprietario && principal && r.proprietario !== principal ? r.proprietario : null });
+        valor: r.valor != null ? Math.round(Number(r.valor) * 100) / 100 : 0, base: r.proprietario && principal && r.proprietario !== principal ? r.proprietario : null });
     }
     recuperadosLista.sort((a, b) => b.dia.localeCompare(a.dia));
     const desdeAlvos = recuperados.rows.map(r => diaISO(r.desde)).filter(Boolean).sort()[0] || null;

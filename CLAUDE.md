@@ -869,8 +869,11 @@ Supabase, sem PR — não é mudança de código.
   "Todas Contas - Representante" do Salesforce: nome, código do ERP, CNPJ, situação Ativo/Inativo, **"Primeiro nome do
   proprietário"** = vendedor dono da conta e data da última compra **com qualquer vendedor**). No relatório de 18/10/2026: 542
   contas (373 Sergio Luiz, 159 Rodrigo, 9 Marina/vendas internas, 1 Vilmar), 290 ativas e 252 inativas; "Ativo" = comprou nos
-  últimos ~6 meses (corte entre 195 e 200 dias, com 21 exceções no próprio Salesforce). Decisões do usuário: **Rodrigo é outro
-  vendedor da região - os ativos dele não contam na carteira; os inativos (de qualquer um) estão pro jogo**; ativo de outro
+  últimos ~6 meses (corte entre 195 e 200 dias, com 21 exceções no próprio Salesforce). **Política da Cortag** (explicada pelo
+  usuário): cliente inativo fica aberto pra qualquer vendedor - o da Russo's que para de comprar vai pra **base** do Rodrigo (outro
+  representante da região) e, passado mais tempo, pra base do **telemarketing** (vendas internas da Cortag, região "VENDAS
+  INTERNAS" no relatório; Marina); quem vender pede pra **ativar e transferir a conta pra sua base**. Por isso o tempo sem compra
+  importa. Decisões do usuário: **os ativos de outra base não contam na carteira; os inativos (de qualquer base) estão pro jogo**; ativo de outro
   vendedor **sai das oportunidades e continua na busca**; **todos os inativos fora do app viram cliente**; os inativos aparecem
   no 💤 Para reativar, na Rota/mapa e num **placar "Recuperados"**. Importação pelo Painel (planilha ou CSV, só admin;
   `lerContasSalesforce` em `importadores.js`, `routes/contasSalesforce.js`, `POST /api/reativacao/contas-salesforce`), foto
@@ -880,7 +883,7 @@ Supabase, sem PR — não é mudança de código.
     classificatório e Dashboard (contas sem comprar/ativos por canal) no servidor; `/api/visitas` manda `outro_vendedor` e o app
     tira só das listas de Visitas × compras (a linha "Sua última visita" do card continua); no app vem no `/sync` como
     `outro_vendedor` e sai de Perto de mim, Rota por cidade e mapa (`clientesDaCarteira`, `index.html`; o "Onde" da ficha do
-    produto usa todos os clientes); na busca aparece "atende: Rodrigo". As
+    produto usa todos os clientes); na busca aparece "base Rodrigo · ativa". As
     vendas antigas continuam no faturamento (foram do representante). Marina (vendas internas) e Vilmar caem na mesma regra.
     Em 18/10/2026 eram 14 clientes do app marcados (10 do Rodrigo - SOLER, R$ 288 mil de histórico, ficaria no topo do Para
     reativar - 3 da Marina e a RUSSO'S do Vilmar). Vale até a próxima importação: quem voltar pra carteira precisa de um
@@ -894,7 +897,9 @@ Supabase, sem PR — não é mudança de código.
     outro vendedor fora do app **não** vira cliente.
   - **Para reativar** usa a última compra do Salesforce junto com a do ERP/app (a mais nova): o relatório Sem Compra do ERP só
     tem os pedidos do representante (código 20). Conta Inativa no Salesforce entra mesmo com compra dentro do período do
-    relatório do ERP (foi com outro vendedor). Selo **"era do Rodrigo"**, telefone do Salesforce (`primeiroTelefone`: o 1º
+    relatório do ERP (foi com outro vendedor). Selo **"Base Rodrigo"/"Base Telemarketing"** (`base`: `baseDaConta`, telemarketing
+    pela região; correção do usuário: "não era do Rodrigo, está na base dele") + linha "vendendo, peça pra ativar e transferir pra
+    sua base", junto do selo "N meses sem compra", telefone do Salesforce (`primeiroTelefone`: o 1º
     número com DDD do texto livre) com **WhatsApp** quando é celular; sem valor conhecido, quem parou há menos tempo primeiro.
   - **Placar "Recuperados"** (topo do Para reativar e "🏆 N recuperados" no cabeçalho): `reativacao_alvos` = conta Inativa no
     Salesforce desde o dia da 1ª importação em que apareceu (reimportar não muda); recuperado = pedido a partir desse dia

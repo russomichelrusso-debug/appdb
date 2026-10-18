@@ -678,6 +678,7 @@
     situacao: ['Situação', 'Situacao'],
     documento: ['CPF/CNPJ', 'CNPJ', 'CNPJ/CPF'],
     proprietario: ['Primeiro nome do proprietário', 'Primeiro nome do proprietario', 'Proprietário da conta', 'Proprietario da conta'],
+    regiao: ['Código Região', 'Codigo Regiao', 'Código da Região'],
     ultimaCompra: ['Data da última compra', 'Data da ultima compra'],
     cidade: ['Cidade'],
     uf: ['Estado da Conta', 'Estado'],
@@ -730,6 +731,7 @@
         situacao: texto(r, 'situacao'),
         documento: texto(r, 'documento'),
         proprietario: texto(r, 'proprietario'),
+        regiao: texto(r, 'regiao'),
         // "29/09/2026 12:32": só o dia
         ultima_compra: ultima == null || ultima === '' ? null
           : dataSerialOuTextoISO(XLSX, typeof ultima === 'string' ? ultima.trim().split(/\s+/)[0] : ultima),

@@ -6,12 +6,12 @@
 // vendas antigas continuam contando no faturamento (foram do representante).
 const { pool } = require('../../db');
 
-// id do cliente (texto) -> nome do proprietário
+// id do cliente (texto) -> base da conta ('Rodrigo', 'Telemarketing'...)
 async function clientesDeOutroVendedor(db = pool) {
   const r = await db.query(
-    `/* contas-sf:outros */ SELECT cliente_id, proprietario FROM contas_salesforce
+    `/* contas-sf:outros */ SELECT cliente_id, COALESCE(base, proprietario) AS base FROM contas_salesforce
      WHERE de_outro_vendedor AND cliente_id IS NOT NULL`);
-  return new Map(r.rows.map(l => [String(l.cliente_id), l.proprietario || 'outro vendedor']));
+  return new Map(r.rows.map(l => [String(l.cliente_id), l.base || 'outro vendedor']));
 }
 
 // ids (texto) das contas INATIVAS no Salesforce. As que viraram cliente pela

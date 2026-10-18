@@ -753,7 +753,7 @@ async function query(sql, params = []) {
 
   // Relatório "Todas Contas" do Salesforce - routes/contasSalesforce.js
   if (s.includes('/* CONTAS-SF:OUTROS */')) {
-    return { rows: contasSalesforce.filter(c => c.de_outro_vendedor && c.cliente_id != null).map(c => ({ cliente_id: c.cliente_id, proprietario: c.proprietario })) };
+    return { rows: contasSalesforce.filter(c => c.de_outro_vendedor && c.cliente_id != null).map(c => ({ cliente_id: c.cliente_id, base: c.base || c.proprietario })) };
   }
   if (s.includes('/* CONTAS-SF:INATIVOS */')) {
     return { rows: contasSalesforce.filter(c => c.cliente_id != null && c.situacao === 'Inativo').map(c => ({ cliente_id: c.cliente_id })) };
@@ -786,11 +786,11 @@ async function query(sql, params = []) {
   }
   if (s.includes('/* CONTAS-SF:LIMPAR */')) { contasSalesforce = []; return { rows: [] }; }
   if (s.includes('/* CONTAS-SF:GRAVAR */')) {
-    const [data, codigos, ids, nomes, docs, donos, situacoes, deOutro, ultimas, cidades, ufs, telefones, emails, classis, transps] = params;
+    const [data, codigos, ids, nomes, docs, donos, situacoes, deOutro, ultimas, cidades, ufs, telefones, emails, classis, transps, regioes, bases] = params;
     codigos.forEach((codigo, i) => contasSalesforce.push({
       codigo_oficial: codigo, cliente_id: ids[i], data_relatorio: data, nome: nomes[i], documento: docs[i], proprietario: donos[i],
       situacao: situacoes[i], de_outro_vendedor: deOutro[i], ultima_compra: ultimas[i], cidade: cidades[i], uf: ufs[i],
-      telefone: telefones[i], email: emails[i], classificatorio: classis[i], transportadora: transps[i],
+      telefone: telefones[i], email: emails[i], classificatorio: classis[i], transportadora: transps[i], regiao: regioes[i], base: bases[i],
     }));
     return { rows: [] };
   }

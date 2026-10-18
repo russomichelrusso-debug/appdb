@@ -44,6 +44,14 @@ function hojeBrasil() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 }
 
+// De quem é a base da conta: região "VENDAS INTERNAS" = telemarketing da Cortag
+// (pela política, a conta inativa passa do representante pra outro e, depois,
+// pro telemarketing); senão, o proprietário.
+function baseDaConta(c) {
+  if (/VENDAS\s*INTERNAS/i.test(String(c.regiao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return 'Telemarketing';
+  return c.proprietario || null;
+}
+
 // "Varejo Exclusive (15)" -> { tipo: 'Varejo Exclusive', desconto: 15 } pela
 // política (o número do Salesforce é o da política antiga); "Sem Classificatório",
 // "Representante" e o que não está na política ficam sem classificatório.
@@ -69,6 +77,7 @@ async function importarContasSalesforce(dados, usuario) {
       codigo, nome,
       documento: documentoNormalizado(c.documento),
       proprietario: texto(c.proprietario, 100),
+      regiao: texto(c.regiao, 60),
       situacao: situacaoDaConta(c.situacao),
       ultima: RE_DIA.test(ultima) ? ultima : null,
       cidade: texto(c.cidade, 100), uf: texto(c.uf, 2),
@@ -78,7 +87,10 @@ async function importarContasSalesforce(dados, usuario) {
   }
   if (contas.length === 0) return { status: 400, json: { erro: 'Nenhuma conta válida no relatório.' } };
   const principal = proprietarioPrincipal(contas);
-  for (const c of contas) c.deOutro = c.situacao === 'Ativo' && !!c.proprietario && c.proprietario !== principal;
+  for (const c of contas) {
+    c.deOutro = c.situacao === 'Ativo' && !!c.proprietario && c.proprietario !== principal;
+    c.base = baseDaConta(c);
+  }
   const hoje = hojeBrasil();
 
   let client;
@@ -160,16 +172,16 @@ async function importarContasSalesforce(dados, usuario) {
     await client.query(
       `/* contas-sf:gravar */
        INSERT INTO contas_salesforce (codigo_oficial, cliente_id, data_relatorio, nome, documento, proprietario, situacao,
-         de_outro_vendedor, ultima_compra, cidade, uf, telefone, email, classificatorio, transportadora)
+         de_outro_vendedor, ultima_compra, cidade, uf, telefone, email, classificatorio, transportadora, regiao, base)
        SELECT u.codigo, u.cliente_id, $1::date, u.nome, u.documento, u.proprietario, u.situacao, u.de_outro, u.ultima,
-              u.cidade, u.uf, u.telefone, u.email, u.classificatorio, u.transportadora
+              u.cidade, u.uf, u.telefone, u.email, u.classificatorio, u.transportadora, u.regiao, u.base
        FROM UNNEST($2::text[], $3::int[], $4::text[], $5::text[], $6::text[], $7::text[], $8::bool[], $9::date[],
-                   $10::text[], $11::text[], $12::text[], $13::text[], $14::text[], $15::text[])
-         AS u(codigo, cliente_id, nome, documento, proprietario, situacao, de_outro, ultima, cidade, uf, telefone, email, classificatorio, transportadora)`,
+                   $10::text[], $11::text[], $12::text[], $13::text[], $14::text[], $15::text[], $16::text[], $17::text[])
+         AS u(codigo, cliente_id, nome, documento, proprietario, situacao, de_outro, ultima, cidade, uf, telefone, email, classificatorio, transportadora, regiao, base)`,
       [hoje, contas.map(c => c.codigo), contas.map(c => c.clienteId || null), contas.map(c => c.nome), contas.map(c => c.documento),
         contas.map(c => c.proprietario), contas.map(c => c.situacao), contas.map(c => c.deOutro), contas.map(c => c.ultima),
         contas.map(c => c.cidade), contas.map(c => c.uf), contas.map(c => c.telefone), contas.map(c => c.email),
-        contas.map(c => c.classificatorio), contas.map(c => c.transportadora)]);
+        contas.map(c => c.classificatorio), contas.map(c => c.transportadora), contas.map(c => c.regiao), contas.map(c => c.base)]);
     // placar: inativo entra uma vez só (o "desde" é o da 1ª importação em que apareceu inativo)
     const alvos = contas.filter(c => c.situacao === 'Inativo' && c.clienteId);
     if (alvos.length) {
@@ -179,7 +191,7 @@ async function importarContasSalesforce(dados, usuario) {
          SELECT u.cliente_id, $1::date, u.proprietario, u.ultima
          FROM UNNEST($2::int[], $3::text[], $4::date[]) AS u(cliente_id, proprietario, ultima)
          ON CONFLICT (cliente_id) DO NOTHING`,
-        [hoje, alvos.map(c => c.clienteId), alvos.map(c => c.proprietario), alvos.map(c => c.ultima)]);
+        [hoje, alvos.map(c => c.clienteId), alvos.map(c => c.base), alvos.map(c => c.ultima)]);
     }
     const resumo = {
       data: hoje,
@@ -209,4 +221,4 @@ async function importarContasSalesforce(dados, usuario) {
   }
 }
 
-module.exports = { importarContasSalesforce, classificatorioDaConta, documentoNormalizado, situacaoDaConta, CHAVE_RELATORIO };
+module.exports = { importarContasSalesforce, classificatorioDaConta, baseDaConta, documentoNormalizado, situacaoDaConta, CHAVE_RELATORIO };
