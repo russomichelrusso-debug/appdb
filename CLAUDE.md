@@ -1261,6 +1261,19 @@ Supabase, sem PR — não é mudança de código.
     (Calculadora, Portal do Cliente, Salesforce, Conectar tablet, Tela do cliente) ficam como ícones redondos no topo, iguais
     a Dashboard e Ficha (nome no `title`/hover). Só CSS (`.atalhosMenu` estático); no celular continua o menu.
 
+- **Dashboard (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, com o
+  anel do objetivo da opção "B"; canvas "Cortag · Dashboard laptop e tablet"): a página ocupa até 1680 px na aba Dashboard
+  (`body.abaDash`) e vira grade — celular empilhado, 700 px+ colunas, 900 px+ cartão do mês ao lado dos indicadores e "Pede
+  atenção" em 4 blocos (tablet), 1200 px com mouse = grade de 12 colunas (laptop). Cartão vermelho do mês: entrada, % do
+  objetivo (anel: branco = feito, claro = o que o ritmo ainda traz), "no ritmo atual fecha em" (`diasUteisDoMes`: seg–sex sem
+  feriados, dias passados até ontem, só com 3+), quanto falta e por dia útil; tocar abre a lista de pedidos do mês (mesmo
+  `kpiExpandPanel`). Indicadores com a tendência de 12 meses (`sparkline`); "Pede atenção" (risco/subir/3–5/6–8 meses) abre o
+  mesmo painel. Mensal, pedidos e clientes por mês viraram **um gráfico com abas** (`renderMensal`), barras em HTML
+  (`renderBarras`, altura fixa no CSS — o SVG antigo esticava com a largura), com objetivo e média dos meses fechados.
+  Famílias em barras deitadas com ★ nas de foco (o 2º gráfico "Produtos foco" saiu). As séries semanal/trimestral do
+  servidor **não têm `generate_series`** (só períodos com faturamento): semana/trimestre atual e a comparação do trimestre
+  saem pela data, nunca pela posição na lista.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
