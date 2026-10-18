@@ -1665,12 +1665,19 @@ async function query(sql, params = []) {
     const row = clienteCnpjFicha[params[0]];
     return { rows: row ? [row] : [] };
   }
+  if (s.includes('UPDATE CLIENTE_CNPJ_FICHA SET SOCIOS = $2, SOCIOS_COMPLETADOS_EM')) {
+    const row = clienteCnpjFicha[params[0]];
+    if (!row) return { rows: [] };
+    row.socios = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1];
+    row.socios_completados_em = new Date().toISOString();
+    return { rows: [row] };
+  }
   if (s.includes('INSERT INTO CLIENTE_CNPJ_FICHA')) {
     const [
       cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
       motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
       data_abertura, capital_social, logradouro, numero, complemento, bairro, municipio, uf, cep,
-      telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos,
+      telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos, sociosConferidos,
     ] = params;
     const row = {
       cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
@@ -1680,6 +1687,7 @@ async function query(sql, params = []) {
       socios: typeof socios === 'string' ? JSON.parse(socios) : socios,
       dados_brutos: typeof dados_brutos === 'string' ? JSON.parse(dados_brutos) : dados_brutos,
       atualizado_em: new Date().toISOString(),
+      socios_completados_em: sociosConferidos ? new Date().toISOString() : null,
     };
     clienteCnpjFicha[cliente_id] = row;
     return { rows: [row] };

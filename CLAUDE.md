@@ -1294,6 +1294,23 @@ Supabase, sem PR — não é mudança de código.
   cartão dos Contatos. 900 px+: página até 1440 px, Contatos presos à direita e o "Copiar tudo" no cartão do topo. O mapa do
   mockup ficou de fora (precisaria do Leaflet e das coordenadas nesta página): o endereço tem o botão do Waze.
 
+- **Ficha cadastral: sócios com nome completo e devedor contumaz** (10/2026, opção "C" dos mockups com o detalhe
+  recolhido, canvas "Cortag · Ficha: sócios e devedor contumaz"). **Sócios:** desde 25/09/2026 o radar-cnpj manda a ficha
+  "mascarada" (`dados_brutos.mascarado: true`): sócio "FRANCISCO A. M.", telefone/e-mail com "•" (186 de 302 fichas em
+  18/10/2026). O servidor troca o abreviado pelo nome completo que bate (mesmo 1º nome e iniciais dos outros, sem DE/DA/DOS;
+  `routes/lib/nomesSocios.js`; dois candidatos que batem = fica abreviado) pela **BrasilAPI** (traz o nome inteiro e o
+  quadro atual; 64 de 64 nomes reais casaram). A ficha gravada antes só entra se a BrasilAPI falhar, e com a data de entrada
+  batendo quando as duas têm (senão um ex-sócio com as mesmas iniciais voltava; achado do `revisor-cortag`). Ficha já gravada
+  abreviada se completa ao ser aberta (uma consulta; de novo só 30 dias depois, `cliente_cnpj_ficha.socios_completados_em`;
+  BrasilAPI fora do ar = espera 6 h, em memória, pra não atrasar cada abertura); os `dados_brutos` ficam como vieram. Os sócios também guardam `dataEntrada`/`faixaEtaria` (código da Receita) e a tela mostra "desde
+  DD/MM/AAAA · 31 a 40 anos"; nome que nenhuma fonte completou leva o selo "abreviado na fonte". Telefone/e-mail
+  mascarados **não** são completados (ainda). **Devedor contumaz** (`dados_brutos.devedorContumaz`: `consta`, `conferidoEm`,
+  `lista`; Receita, LC nº 225/2026, só vem nas fichas consultadas a partir de 10/2026 — 1 de 302 em 18/10): consta = cartão
+  do topo com borda vermelha, selo e faixa "⚠ Devedor contumaz" que abre o detalhe (lista, dia conferido, link oficial) ao
+  tocar; não consta = "✓ Não consta como devedor contumaz · conferido em" no rodapé do texto do cartão; ficha sem o campo =
+  "não conferido nesta ficha · toque em Atualizar" (`devedorContumazDaFicha`, `ficha-cnpj.html`). Só na ficha: o card do
+  cliente no Pedido/Levantamento e a atualização automática das fichas antigas ficaram em aberto.
+
 - **Calculadora (`calculadora-materiais.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de
   mockups, página "Calculadora" do mesmo canvas): dados em 3 passos, com atalhos dos tamanhos de peça e das áreas mais comuns
   (`PECAS_COMUNS`/`AREAS_COMUNS`, só preenchem os campos) e modelo/junta em botões (`renderBotoesEspacador`; os `<select>`

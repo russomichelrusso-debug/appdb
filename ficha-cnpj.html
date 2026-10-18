@@ -285,8 +285,28 @@
     .socio { background: var(--fill); border-radius: 12px; padding: 10px 12px; }
     .socioNome { display: block; font-size: 13.5px; font-weight: 700; }
     .socioQual { display: block; font-size: 12px; color: var(--gray); }
+    .socioNome { word-break: break-word; }
+    .socioAbrev { display: inline-block; margin-left: 6px; font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--hairline); color: var(--gray); vertical-align: 1px; }
+    /* Devedor contumaz (lista da Receita, LC nº 225/2026; 10/2026, opção "C" dos mockups com o
+       detalhe recolhido): consta = cartão do topo com borda e faixa vermelhas, detalhe ao tocar
+       na faixa; não consta = uma linha no rodapé do texto do cartão. */
+    .fichaTopo.contumaz { flex-wrap: wrap; border: 2px solid #B3261E; overflow: hidden; padding-top: 0; }
+    .contumazAviso { flex: none; margin: 0 -18px; }
+    .contumazAviso summary { list-style: none; cursor: pointer; background: #B3261E; color: #fff; min-height: 44px; box-sizing: border-box; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; }
+    .contumazAviso summary::-webkit-details-marker { display: none; }
+    .contumazAviso summary::after { content: 'Ver detalhes ▾'; font-size: 11.5px; font-weight: 700; text-transform: none; letter-spacing: 0; opacity: .9; white-space: nowrap; }
+    .contumazAviso[open] summary::after { content: 'Fechar ▴'; }
+    .contumazDetalhe { background: var(--danger-bg); color: var(--ink); padding: 10px 18px; font-size: 12.5px; line-height: 1.45; }
+    .contumazDetalhe a { color: var(--danger); font-weight: 700; }
+    .pilula.contumazPil { background: #B3261E; color: #fff; font-weight: 800; }
+    .contumazLinha { margin-top: 10px; font-size: 12px; color: var(--gray); }
+    .contumazLinha.ok { color: var(--success); font-weight: 700; }
     @media (min-width: 700px) {
+      /* em linha (texto + botões) a faixa ocupa uma linha inteira, de borda a borda */
+      .contumazAviso { flex: 0 0 calc(100% + 48px); margin: 0 -24px; }
+      .contumazAviso summary, .contumazDetalhe { padding-left: 24px; padding-right: 24px; }
       .fichaTopo { flex-direction: row; align-items: center; gap: 22px; padding: 22px 24px; }
+      .fichaTopo.contumaz { padding-top: 0; }
       .topoNome { font-size: 30px; }
       .topoAcoes { width: 230px; flex-shrink: 0; }
       .fichaCartoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -578,6 +598,20 @@
       if (hoje.getMonth() + 1 < Number(m[2]) || (hoje.getMonth() + 1 === Number(m[2]) && hoje.getDate() < Number(m[3]))) anos--;
       return anos >= 0 ? anos : null;
     }
+    // Lista de devedores contumazes da Receita (dados_brutos.devedorContumaz, que o
+    // radar-cnpj passou a mandar em 10/2026). Ficha consultada antes não tem o
+    // campo: 'sem' (não conferido).
+    function devedorContumazDaFicha(ficha) {
+      const d = ficha && ficha.dados_brutos && ficha.dados_brutos.devedorContumaz;
+      if (!d || typeof d !== 'object' || d.consta == null) return { estado: 'sem' };
+      const lista = /^https:\/\//i.test(String(d.lista || '')) ? String(d.lista) : '';
+      return {
+        estado: String(d.consta) === 'true' ? 'consta' : 'nao_consta',
+        conferidoEm: d.conferidoEm || d.referencia || null,
+        fonte: d.fonte || 'Receita Federal — lista de devedores contumazes',
+        lista,
+      };
+    }
     function tituloCase(s) {
       return String(s || '').toLowerCase().replace(/(^|\s)(\S)/g, (_, e, l) => e + l.toUpperCase());
     }
@@ -590,7 +624,9 @@
       const f = state.ficha, c = state.cliente;
       if (!state.clienteId || (!f && !c)) { host.innerHTML = ''; return; }
       const situacao = f ? String(f.situacao_cadastral || '').toUpperCase() : '';
+      const contumaz = f ? devedorContumazDaFicha(f) : { estado: 'sem' };
       const pilulas = [];
+      if (contumaz.estado === 'consta') pilulas.push('<span class="pilula contumazPil">Devedor contumaz</span>');
       if (situacao) {
         const ativa = situacao.includes('ATIVA');
         const desde = f.data_situacao_cadastral ? ` desde ${formatDataBr(f.data_situacao_cadastral)}` : '';
@@ -612,13 +648,24 @@
       if (f && f.municipio) dados.push(`<span><span class="rot">Cidade</span> <strong>${escapeHtml(tituloCase(f.municipio) + (f.uf ? ' – ' + f.uf : ''))}</strong></span>`);
       if (anos != null) dados.push(`<span><span class="rot">Empresa há</span> <strong>${anos} ano${anos === 1 ? '' : 's'}</strong></span>`);
       const urlWaze = f ? urlWazeDaFicha(f) : null;
+      const conferido = contumaz.conferidoEm ? ` · conferido em ${escapeHtml(formatDataBr(contumaz.conferidoEm))}` : '';
+      const avisoContumaz = contumaz.estado === 'consta' ? `
+          <details class="contumazAviso">
+            <summary>⚠ Devedor contumaz</summary>
+            <div class="contumazDetalhe">Este CNPJ está na ${escapeHtml(contumaz.fonte.replace(/^Receita Federal\s*[—-]\s*/, ''))}${conferido}.${contumaz.lista ? ` <a href="${escapeHtml(contumaz.lista)}" target="_blank" rel="noopener">Ver lista oficial</a>` : ''}</div>
+          </details>` : '';
+      const linhaContumaz = !f || contumaz.estado === 'consta' ? ''
+        : contumaz.estado === 'nao_consta' ? `<div class="contumazLinha ok">✓ Não consta como devedor contumaz${conferido}</div>`
+        : '<div class="contumazLinha">Devedor contumaz: não conferido nesta ficha · toque em Atualizar</div>';
       host.innerHTML = `
-        <div class="card fichaTopo">
+        <div class="card fichaTopo${contumaz.estado === 'consta' ? ' contumaz' : ''}">
+          ${avisoContumaz}
           <div class="topoTexto">
             ${pilulas.length ? `<div class="pilulas">${pilulas.join('')}</div>` : ''}
             <div class="topoNome">${escapeHtml(fantasia || razao)}</div>
             ${fantasia ? `<div class="topoRazao">${escapeHtml(razao)}</div>` : ''}
             ${dados.length ? `<div class="topoDados">${dados.join('')}</div>` : ''}
+            ${linhaContumaz}
           </div>
           <div class="topoAcoes">
             <button type="button" class="copiarTudoBtn" id="copiarTudoTopoBtn"${c ? '' : ' disabled'}>Copiar tudo pro Salesforce</button>
@@ -631,6 +678,21 @@
         </div>`;
       if (f) document.getElementById('atualizarFichaBtn').addEventListener('click', () => carregarFicha(true));
       document.getElementById('copiarTudoTopoBtn').addEventListener('click', (e) => { if (state.cliente) copiarTudoSalesforce(e.currentTarget); });
+    }
+
+    // Faixa etária do sócio pelo código da Receita (0 = não se aplica).
+    const FAIXA_ETARIA = { 1: 'até 12 anos', 2: '13 a 20 anos', 3: '21 a 30 anos', 4: '31 a 40 anos', 5: '41 a 50 anos', 6: '51 a 60 anos', 7: '61 a 70 anos', 8: '71 a 80 anos', 9: 'mais de 80 anos' };
+    // Nome inteiro, sem cortar. O servidor troca o abreviado do radar-cnpj
+    // ("FRANCISCO A. M.") pelo completo da BrasilAPI/ficha anterior
+    // (routes/lib/nomesSocios.js); o que nenhuma fonte trouxe leva o selo.
+    function linhaSocio(s) {
+      const abreviado = String(s.nome || '').trim().split(/\s+/).slice(1).some(p => /^[A-Za-zÀ-ÿ]\.$/.test(p));
+      const detalhe = [
+        s.qualificacao,
+        s.dataEntrada ? 'desde ' + formatDataBr(s.dataEntrada) : '',
+        FAIXA_ETARIA[s.faixaEtaria] || '',
+      ].filter(Boolean).join(' · ');
+      return `<div class="socio"><span class="socioNome">${escapeHtml(s.nome || '')}${abreviado ? '<span class="socioAbrev">abreviado na fonte</span>' : ''}</span>${detalhe ? `<span class="socioQual">${escapeHtml(detalhe)}</span>` : ''}</div>`;
     }
 
     function linhaInfo(lbl, val) {
@@ -682,7 +744,7 @@
           ${Array.isArray(ficha.socios) && ficha.socios.length ? `
           <div class="card fichaCartao largo">
             <h2 class="cartaoTit">Quadro societário</h2>
-            <div class="socios">${ficha.socios.map(s => `<div class="socio"><span class="socioNome">${escapeHtml(s.nome || '')}</span>${s.qualificacao ? `<span class="socioQual">${escapeHtml(s.qualificacao)}</span>` : ''}</div>`).join('')}</div>
+            <div class="socios">${ficha.socios.map(linhaSocio).join('')}</div>
           </div>` : ''}
         </div>
         <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + escapeHtml(formatDataBr(ficha.atualizado_em))}.</p>

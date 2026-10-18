@@ -2249,6 +2249,96 @@ async function main() {
     && res.body.hoje.limite === 40 && res.body.janela === '01h–06h',
     'status do preenchimento devolve progresso, limite e janela');
 
+  // 21a) nome completo dos sócios (routes/lib/nomesSocios.js): o radar-cnpj manda
+  // abreviado desde 25/09/2026; a BrasilAPI ou a ficha anterior completam.
+  {
+    const ns = require('../routes/lib/nomesSocios');
+    assert(ns.casaComAbreviado('FRANCISCO A. M.', 'FRANCISCO DE ASSIS MARTINHAGO')
+      && ns.casaComAbreviado('MAICON B. M.', 'MAICON BORTOLOZZO MARTINHAGO')
+      && ns.casaComAbreviado('JOSÉ A. S.', 'JOSE ANTONIO DA SILVA')
+      && !ns.casaComAbreviado('FRANCISCO A. M.', 'FRANCISCA DE ASSIS MARTINHAGO')
+      && !ns.casaComAbreviado('FRANCISCO A. M.', 'FRANCISCO ALVES')
+      && !ns.nomeAbreviado('CIMENTO SUPER LTDA') && ns.nomeAbreviado('ED W. B. M.'),
+      'sócio abreviado casa com o nome completo pelo 1º nome e as iniciais, sem as partículas (DE, DA...)');
+    const amb = ns.completarNomesSocios([{ nome: 'JOSE A. S.' }, { nome: 'EMPRESA X LTDA' }],
+      [{ nome: 'JOSE ANTONIO SILVA' }, { nome: 'JOSE AUGUSTO SOUZA' }]);
+    const um = ns.completarNomesSocios([{ nome: 'JOSE A. S.', qualificacao: 'Sócio' }],
+      [{ nome: 'JOSE ANTONIO SILVA', dataEntrada: '2020-01-02', faixaEtaria: 5 }]);
+    assert(amb[0].nome === 'JOSE A. S.' && amb[1].nome === 'EMPRESA X LTDA'
+      && um[0].nome === 'JOSE ANTONIO SILVA' && um[0].qualificacao === 'Sócio' && um[0].dataEntrada === '2020-01-02' && um[0].faixaEtaria === 5,
+      'dois nomes completos que batem com o mesmo abreviado: fica abreviado; um só: troca e traz entrada/faixa');
+
+    const radarMascarado = { ok: true, data: {
+      razaoSocial: 'DEPEL LTDA', situacao: { label: 'Ativa' }, mascarado: true,
+      socios: [{ nome: 'FRANCISCO A. M.', dataEntrada: '2026-04-22T00:00:00.000Z', faixaEtaria: 8, qualificacao: { descricao: 'Sócio-Administrador' } }],
+    } };
+    const brasilCompleto = { ...respostaBrasilApi, qsa: [
+      { nome_socio: 'FRANCISCO DE ASSIS MARTINHAGO', qualificacao_socio: 'Sócio-Administrador', data_entrada_sociedade: '2026-04-22', codigo_faixa_etaria: 8 },
+    ] };
+    mockDb.__seed({ clientes: [
+      { id: 9311, nome: 'DEPEL', documento: '66496887000169' },
+      { id: 9312, nome: 'DEPEL CACHE', documento: '66496887000240' },
+      { id: 9313, nome: 'DEPEL ANTIGA', documento: '66496887000320' },
+    ] });
+    console.warn = () => {};
+    try {
+      simularFetch({ status: 200, body: radarMascarado }, { status: 200, body: brasilCompleto });
+      res = await req('GET', '/api/clientes/9311/ficha-cnpj');
+      const s0 = res.body.ficha && res.body.ficha.socios[0];
+      assert(res.status === 200 && s0.nome === 'FRANCISCO DE ASSIS MARTINHAGO' && s0.dataEntrada === '2026-04-22' && s0.faixaEtaria === 8
+        && chamadas.join() === 'radar,brasilapi' && res.body.ficha.dados_brutos.socios[0].nome === 'FRANCISCO A. M.',
+        'ficha nova com sócio abreviado: nome completo vem da BrasilAPI (dados brutos ficam como vieram)');
+
+      mockDb.__seed({ fichasCnpj: { 9312: {
+        cliente_id: 9312, razao_social: 'DEPEL LTDA', atualizado_em: new Date().toISOString(), socios_completados_em: null,
+        socios: [{ nome: 'FRANCISCO A. M.', qualificacao: 'Sócio-Administrador' }], dados_brutos: radarMascarado.data,
+      } } });
+      simularFetch(new Error('radar não devia ser chamado'), { status: 200, body: brasilCompleto });
+      res = await req('GET', '/api/clientes/9312/ficha-cnpj');
+      const primeira = res.status === 200 && res.body.fonte === 'cache' && res.body.ficha.socios[0].nome === 'FRANCISCO DE ASSIS MARTINHAGO'
+        && chamadas.join() === 'brasilapi';
+      simularFetch(new Error('não devia consultar'), new Error('não devia consultar'));
+      mockDb.__seed({ fichasCnpj: { 9312: { ...res.body.ficha, socios: [{ nome: 'FRANCISCO A. M.' }] } } });
+      res = await req('GET', '/api/clientes/9312/ficha-cnpj');
+      assert(primeira && res.status === 200 && chamadas.length === 0,
+        'ficha já gravada com sócio abreviado completa pela BrasilAPI uma vez, sem consultar o radar; depois não pergunta de novo');
+
+      mockDb.__seed({ fichasCnpj: { 9313: {
+        cliente_id: 9313, razao_social: 'DEPEL LTDA', atualizado_em: new Date().toISOString(),
+        socios: [{ nome: 'FRANCISCO DE ASSIS MARTINHAGO', qualificacao: 'Sócio-Administrador' }],
+      } } });
+      simularFetch({ status: 200, body: radarMascarado }, new Error('fetch failed'));
+      res = await req('POST', '/api/clientes/9313/ficha-cnpj/atualizar');
+      assert(res.status === 200 && res.body.ficha.socios[0].nome === 'FRANCISCO DE ASSIS MARTINHAGO' && chamadas.join() === 'radar,brasilapi',
+        'atualizar a ficha com a BrasilAPI fora do ar mantém o nome completo da ficha anterior');
+
+      mockDb.__seed({ fichasCnpj: { 9313: {
+        cliente_id: 9313, razao_social: 'DEPEL LTDA', atualizado_em: new Date().toISOString(),
+        socios: [{ nome: 'FRANCISCO ALVES MOURA', qualificacao: 'Sócio-Administrador' }],
+      } } });
+      const brasilSocioNovo = { ...brasilCompleto, qsa: [{ ...brasilCompleto.qsa[0], nome_socio: 'FRANCISCO AUGUSTO MELO' }] };
+      simularFetch({ status: 200, body: radarMascarado }, { status: 200, body: brasilSocioNovo });
+      res = await req('POST', '/api/clientes/9313/ficha-cnpj/atualizar');
+      assert(res.status === 200 && res.body.ficha.socios[0].nome === 'FRANCISCO AUGUSTO MELO',
+        'BrasilAPI vale antes da ficha anterior (ex-sócio com as mesmas iniciais não volta)');
+
+      mockDb.__seed({ clientes: [{ id: 9314, nome: 'SEM BRASILAPI', documento: '66496887000400' }], fichasCnpj: { 9314: {
+        cliente_id: 9314, razao_social: 'X LTDA', atualizado_em: new Date().toISOString(), socios_completados_em: null,
+        socios: [{ nome: 'FRANCISCO A. M.' }], dados_brutos: radarMascarado.data,
+      } } });
+      simularFetch(new Error('radar não devia ser chamado'), { status: 503, body: {} });
+      res = await req('GET', '/api/clientes/9314/ficha-cnpj');
+      const falhou = res.status === 200 && res.body.ficha.socios[0].nome === 'FRANCISCO A. M.' && chamadas.join() === 'brasilapi';
+      chamadas.length = 0;
+      res = await req('GET', '/api/clientes/9314/ficha-cnpj');
+      assert(falhou && res.status === 200 && chamadas.length === 0,
+        'BrasilAPI fora do ar: a ficha abre do cache e a abertura seguinte não espera por ela de novo');
+    } finally {
+      global.fetch = fetchOriginal;
+      console.warn = erroSilencioso;
+    }
+  }
+
   // 21b) posição das lojas pelo endereço da ficha (routes/lib/geocodificacao.js)
   {
     const geo = require('../routes/lib/geocodificacao');
