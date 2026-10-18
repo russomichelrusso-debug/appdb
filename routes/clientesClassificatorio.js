@@ -6,6 +6,7 @@ const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { SQL_HOJE_BR, SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido } = require('./lib/comprasApp');
 const { avisarImportacao, quantos } = require('./lib/novidades');
+const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 
 router.param('id', validarIdInteiro);
 
@@ -713,7 +714,9 @@ router.get('/classificatorio/alertas', async (req, res) => {
          WHERE c.classificatorio_tipo IS NOT NULL`
       ),
     ]);
-    const porId = new Map(clientesResult.rows.map(c => [c.id, c]));
+    // ativo com outro vendedor (Salesforce) não entra nos alertas
+    const outros = await clientesDeOutroVendedor();
+    const porId = new Map(clientesResult.rows.filter(c => !outros.has(String(c.id))).map(c => [c.id, c]));
     const erpPorCliente = new Map(erpResult.rows.map(r => [r.cliente_id, r]));
     const anoAtual = Number(anoResult.rows[0].ano_atual);
     const trimestreAtualIdx = Number(trimResult.rows[0].trimestre_atual_idx);

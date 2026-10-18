@@ -570,6 +570,48 @@ CREATE TABLE IF NOT EXISTS reativacao_adiamentos (
 );
 ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
 
+-- Relatório "Todas Contas - Representante" do Salesforce (routes/contasSalesforce.js,
+-- importado pelo Painel): foto do ÚLTIMO relatório, trocada inteira. Traz o
+-- proprietário de cada conta e a situação (Ativo = comprou nos últimos ~6
+-- meses, com qualquer vendedor). Conta ativa de outro vendedor
+-- (de_outro_vendedor) sai das listas de oportunidade; inativa entra no "Para
+-- reativar", com a última compra do Salesforce (a do ERP só tem os pedidos do
+-- representante). Dados do relatório (dia, proprietário principal) em
+-- configuracoes, chave 'contas_salesforce_relatorio'.
+CREATE TABLE IF NOT EXISTS contas_salesforce (
+  codigo_oficial TEXT PRIMARY KEY,
+  cliente_id INTEGER REFERENCES clientes(id) ON DELETE SET NULL,
+  data_relatorio DATE NOT NULL,
+  nome TEXT,
+  documento TEXT,
+  proprietario TEXT,
+  situacao TEXT,                   -- 'Ativo' | 'Inativo'
+  de_outro_vendedor BOOLEAN NOT NULL DEFAULT false,
+  ultima_compra DATE,
+  cidade TEXT,
+  uf TEXT,
+  telefone TEXT,
+  email TEXT,
+  classificatorio TEXT,
+  transportadora TEXT,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_contas_salesforce_cliente ON contas_salesforce (cliente_id);
+ALTER TABLE contas_salesforce ENABLE ROW LEVEL SECURITY;
+
+-- Placar "Recuperados" do Para reativar: cliente que estava inativo no
+-- relatório do Salesforce a partir de `desde` (dia da 1ª importação em que
+-- apareceu inativo). Recuperado = pediu depois desse dia. Nunca é apagado
+-- pela importação (a foto seguinte já o traz "Ativo").
+CREATE TABLE IF NOT EXISTS reativacao_alvos (
+  cliente_id INTEGER PRIMARY KEY REFERENCES clientes(id) ON DELETE CASCADE,
+  desde DATE NOT NULL,
+  proprietario TEXT,
+  ultima_compra_antes DATE,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE reativacao_alvos ENABLE ROW LEVEL SECURITY;
+
 -- Relatório de Inadimplência (noreply@cortag.com.br, "Previa Relatório de
 -- Inadimplência", sem dia fixo - routes/inadimplencia.js): títulos vencidos e
 -- não pagos. Foto do ÚLTIMO relatório, trocada inteira (sumiu = pago);
@@ -737,5 +779,7 @@ ALTER TABLE titulos_avista_pendentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE catalogo_precos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE clientes_sem_compra ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reativacao_adiamentos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE contas_salesforce ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reativacao_alvos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produto_fotos ENABLE ROW LEVEL SECURITY;

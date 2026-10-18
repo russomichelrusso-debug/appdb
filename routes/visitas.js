@@ -17,6 +17,7 @@ const { pool } = require('../db');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO } = require('./lib/comprasApp');
 const { diaISO, somarDias } = require('./lib/ritmoCompra');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 
 const JANELA_DIAS = 60;
 const COMPRA_DIAS = 365;
@@ -62,7 +63,10 @@ router.get('/', async (req, res) => {
     const desdeCompra = somarDias(hoje, -COMPRA_DIAS);
 
     const lista = [];
+    const outros = await clientesDeOutroVendedor();
     for (const c of clientes.rows) {
+      // ativo com outro vendedor (Salesforce): não é visita a cobrar
+      if (outros.has(String(c.id))) continue;
       const id = String(c.id);
       const visita = visitaPorCliente.get(id);
       const ultimaCompra = [c.codigo_oficial ? ultimaOficial.get(String(c.codigo_oficial)) : null, ultimaApp.get(id)]

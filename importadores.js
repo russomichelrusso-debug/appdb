@@ -662,6 +662,89 @@
     return { periodoInicio, periodoFim, titulos };
   }
 
+  // ---- Relatório "Todas Contas - Representante" do Salesforce (exportado à
+  // mão: planilha ou CSV) ----
+  // Uma linha por conta: Nome da Empresa, Data de criação, Cidade, Código
+  // Região, Estado da Conta, Código cliente ERP, Situação (Ativo/Inativo),
+  // CPF/CNPJ, Classificatório, Telefone, Email comercial, Primeiro nome do
+  // proprietário (o vendedor dono da conta), Transportadora, Data da última
+  // compra ("29/09/2026 12:32") e Aprovado Gestor. Conferido com o relatório de
+  // 18/10/2026 (542 contas: 373 do Sergio Luiz, 159 do Rodrigo, 9 da Marina).
+  // O cabeçalho é procurado nas primeiras linhas (a exportação formatada põe o
+  // nome do relatório e os filtros antes dele).
+  const COLUNAS_CONTAS_SALESFORCE = {
+    nome: ['Nome da Empresa', 'Nome da conta', 'Conta'],
+    codigo: ['Código cliente ERP', 'Codigo cliente ERP', 'Código Cliente ERP'],
+    situacao: ['Situação', 'Situacao'],
+    documento: ['CPF/CNPJ', 'CNPJ', 'CNPJ/CPF'],
+    proprietario: ['Primeiro nome do proprietário', 'Primeiro nome do proprietario', 'Proprietário da conta', 'Proprietario da conta'],
+    ultimaCompra: ['Data da última compra', 'Data da ultima compra'],
+    cidade: ['Cidade'],
+    uf: ['Estado da Conta', 'Estado'],
+    telefone: ['Telefone'],
+    email: ['Email comercial', 'E-mail comercial', 'Email'],
+    classificatorio: ['Classificatório', 'Classificatorio'],
+    transportadora: ['Transportadora'],
+  };
+  function ehCabecalhoContasSalesforce(linha) {
+    const c = (linha || []).map(normalizarRotuloImport);
+    return c.includes('NOME DA EMPRESA') && c.some(x => x.startsWith('CODIGO CLIENTE ERP')) && c.includes('SITUACAO');
+  }
+  function lerContasSalesforce(XLSX, dados) {
+    // raw: no CSV, "03/09/2026" ficaria 9 de março (o SheetJS lê data de texto
+    // como americana); codepage: CSV do Salesforce sai em UTF-8 sem BOM
+    const wb = XLSX.read(dados, { type: 'array', raw: true, codepage: 65001 });
+    let linhas = null;
+    let headerIdx = -1;
+    for (const nome of wb.SheetNames) {
+      const l = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, defval: null, raw: true });
+      const i = l.slice(0, 25).findIndex(ehCabecalhoContasSalesforce);
+      if (i !== -1) { linhas = l; headerIdx = i; break; }
+    }
+    if (headerIdx === -1) throw new Error('Não encontrei o cabeçalho (Nome da Empresa, Código cliente ERP, Situação) — confira se é o relatório "Todas Contas" do Salesforce.');
+    const cabecalhos = linhas[headerIdx];
+    const idx = {};
+    for (const campo of Object.keys(COLUNAS_CONTAS_SALESFORCE)) idx[campo] = acharIndiceColuna(cabecalhos, COLUNAS_CONTAS_SALESFORCE[campo]);
+    const faltando = ['nome', 'codigo', 'situacao', 'proprietario', 'ultimaCompra'].filter(c => idx[c] === -1);
+    if (faltando.length) {
+      throw new Error(`Relatório do Salesforce sem a(s) coluna(s) ${faltando.map(c => COLUNAS_CONTAS_SALESFORCE[c][0]).join(', ')}. `
+        + `Colunas nesta planilha: ${cabecalhos.filter(Boolean).join(', ')}.`);
+    }
+    const texto = (r, campo) => {
+      const v = idx[campo] !== -1 ? r[idx[campo]] : null;
+      return v == null || String(v).trim() === '' ? null : String(v).trim();
+    };
+    const contas = [];
+    const vistos = new Set();
+    for (let i = headerIdx + 1; i < linhas.length; i++) {
+      const r = linhas[i] || [];
+      // "4M MATERIAIS" sem código (linha de total/rodapé da exportação) fica de fora
+      const codigo = String(texto(r, 'codigo') || '').replace(/\.0+$/, '');
+      const nome = texto(r, 'nome');
+      if (!/^\d{1,12}$/.test(codigo) || !nome || vistos.has(codigo)) continue;
+      vistos.add(codigo);
+      const ultima = idx.ultimaCompra !== -1 ? r[idx.ultimaCompra] : null;
+      contas.push({
+        codigo_oficial: codigo,
+        nome,
+        situacao: texto(r, 'situacao'),
+        documento: texto(r, 'documento'),
+        proprietario: texto(r, 'proprietario'),
+        // "29/09/2026 12:32": só o dia
+        ultima_compra: ultima == null || ultima === '' ? null
+          : dataSerialOuTextoISO(XLSX, typeof ultima === 'string' ? ultima.trim().split(/\s+/)[0] : ultima),
+        cidade: texto(r, 'cidade'),
+        uf: texto(r, 'uf'),
+        telefone: texto(r, 'telefone'),
+        email: texto(r, 'email'),
+        classificatorio: texto(r, 'classificatorio'),
+        transportadora: texto(r, 'transportadora'),
+      });
+    }
+    if (contas.length === 0) throw new Error('Nenhuma conta com "Código cliente ERP" no relatório do Salesforce.');
+    return { contas };
+  }
+
   // Lê a planilha de previsão de estoque (relatório tipo ESCE007) e monta um
   // mapa código → dados de previsão. Aceita qualquer nome de arquivo, só
   // espera as colunas: Item, Qt. Disp., Qt. Carteira, Qt. Compra, Previsão, Saldo.
@@ -695,7 +778,7 @@
   // ---- Reconhecimento do tipo de planilha ----
   // Pelas abas e colunas (as mesmas marcas que cada leitor exige), do mais
   // específico pro mais genérico. Devolve 'precos' | 'relatorio' |
-  // 'semcompra' | 'inadimplencia' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
+  // 'semcompra' | 'contasSalesforce' | 'inadimplencia' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
   function normalizarRotuloImport(v) {
     return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
   }
@@ -717,6 +800,8 @@
 
     // antes do Classificatório: o "Base de Clientes x Compra" tem "Classificacao"
     if (tem('MESES SEM COMPRA') && tem('MES ULTIMA COMPRA')) return 'semcompra';
+    // antes do Classificatório: o relatório do Salesforce tem a coluna "Classificatório"
+    if (wb.SheetNames.some(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null }).some(ehCabecalhoContasSalesforce))) return 'contasSalesforce';
     if (tem('MATRIZ') && [...celulas].some(c => c.startsWith('OBJETIVO'))) return 'objetivos';
     if (tem('CLASSIFICATORIO')) return 'classificatorio';
     if (tem('ITEM') && tem('QT. DISP.')) return 'previsao';
@@ -727,7 +812,7 @@
 
   return {
     detectarTipoPlanilha, lerRelatorioOficial, lerClassificatorio, lerPrevisao, dataRelatorioClassificatorio,
-    lerClientesSemCompra, mesAnoISO, lerInadimplencia,
+    lerClientesSemCompra, mesAnoISO, lerInadimplencia, lerContasSalesforce,
     interpretarClassificatorio, paraDataISO, valorParaNumero, normalizarNrPedido,
   };
 });

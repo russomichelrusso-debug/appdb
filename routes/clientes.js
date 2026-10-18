@@ -6,6 +6,7 @@ const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { sqlChaveEndereco } = require('./lib/geocodificacao');
+const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 const { normalizarTelefoneBr, normalizarEmails } = require('./lib/contatosCliente');
 const { ordenarClientesPorBusca } = require('./lib/buscaCliente');
 
@@ -70,6 +71,7 @@ router.get('/', async (req, res) => {
 // o mesmo endereço consultado - "Clientes perto de mim" usa quando não há GPS.
 router.get('/sync', async (req, res) => {
   try {
+    const outros = await clientesDeOutroVendedor();
     const result = await pool.query(
       `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
@@ -100,6 +102,11 @@ router.get('/sync', async (req, res) => {
        LEFT JOIN cliente_geocodificacao g ON g.cliente_id = c.id AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}
        ORDER BY c.nome`
     );
+    // conta ativa de outro vendedor (Salesforce): fica na busca, sai de Perto de mim/Rota
+    for (const c of result.rows) {
+      const dono = outros.get(String(c.id));
+      if (dono) c.outro_vendedor = dono;
+    }
     res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });
   } catch (e) {
     console.error(e);
