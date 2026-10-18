@@ -1274,6 +1274,33 @@ Supabase, sem PR — não é mudança de código.
   servidor **não têm `generate_series`** (só períodos com faturamento): semana/trimestre atual e a comparação do trimestre
   saem pela data, nunca pela posição na lista.
 
+- **Curva ABC (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, página
+  "Curva ABC" do mesmo canvas): página larga também nesta aba (`body.abaAbc`); filtros numa barra com o total à direita
+  (`#abcResumo`); cartão escuro "N produtos fazem 80% do faturamento" com a fatia de cada classe no catálogo e no valor
+  (`#abcDivisao`) e blocos A/B/C que filtram a lista ao tocar (`filtrarClasse`, mesmo filtro do `#classeSeg`; o `#kpiRow`
+  agora são esses blocos). Pareto em barras HTML de altura fixa (`renderChart`: uma barra por produto até 120, acima disso
+  produtos vizinhos somados), com os cortes de 80%/95% e o nº do produto onde cada classe acaba; categorias com a barra
+  dividida por classe. Laptop (1200 px com mouse): gráfico e categorias à esquerda, lista presa à direita com rolagem própria;
+  tablet e celular empilham. Na lista: código, % do total e barrinha do acumulado; "+" com 44 px no toque.
+
+- **Ficha cadastral (`ficha-cnpj.html`) em cartões por assunto** (10/2026, opção "A" escolhida pelo usuário a partir de
+  mockups, página "Ficha cadastral" do mesmo canvas): o formato de "comprovante da Receita" (caixas na ordem do documento)
+  saiu. Cartão do cliente no topo (`#fichaTopo`, `renderTopo`): selos de situação, matriz/filial, regime (`regimeDaFicha`,
+  de `dados_brutos.simples/mei`) e classificatório, nome fantasia grande, razão social, CNPJ, código do ERP, cidade e "empresa
+  há N anos" (`anosDesde`, lendo o texto da data), com Copiar tudo pro Salesforce, Waze e Atualizar. Junta a ficha
+  (`/ficha-cnpj`) com o cadastro (`GET /api/clientes/:id`, que já carregava os Contatos): redesenha quando cada um chega.
+  Embaixo, Endereço (por extenso, com o tipo do logradouro dos dados brutos), Empresa (+ telefone/e-mail da Receita), Atividade
+  (secundárias como etiquetas) e Quadro societário. Celular: Contatos antes da ficha, como antes, e o "Copiar tudo" fica no
+  cartão dos Contatos. 900 px+: página até 1440 px, Contatos presos à direita e o "Copiar tudo" no cartão do topo. O mapa do
+  mockup ficou de fora (precisaria do Leaflet e das coordenadas nesta página): o endereço tem o botão do Waze.
+
+- **Calculadora (`calculadora-materiais.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de
+  mockups, página "Calculadora" do mesmo canvas): dados em 3 passos, com atalhos dos tamanhos de peça e das áreas mais comuns
+  (`PECAS_COMUNS`/`AREAS_COMUNS`, só preenchem os campos) e modelo/junta em botões (`renderBotoesEspacador`; os `<select>`
+  escondidos continuam guardando o valor e só mostram as juntas que existem pro modelo). Resultado num cartão escuro: o número
+  grande, o desenho da peça na proporção com os encaixes de cada lado e a conta explicada (peças no ambiente × encaixes por
+  peça = total), produto sugerido e "Adicionar N ao orçamento". A fórmula não mudou. 900 px+ dados e resultado lado a lado.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

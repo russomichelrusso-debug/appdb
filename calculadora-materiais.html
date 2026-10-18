@@ -171,11 +171,7 @@
       margin: 16px 0 14px;
     }
 
-    .resultBig { text-align: center; padding: 2px 0 4px; }
-    .resultBig .num { font-size: 34px; font-weight: 800; color: var(--red); letter-spacing: -.02em; }
-    .resultBig .label { font-size: 12.5px; color: var(--gray); margin-top: 2px; }
 
-    .detailLine { font-size: 12px; color: var(--gray); text-align: center; margin: 6px 0 0; }
 
     .productSuggestion {
       background: var(--fill);
@@ -242,6 +238,73 @@
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
     .footNote { font-size: 11.5px; color: var(--gray); text-align: center; margin-top: 4px; line-height: 1.5; }
+
+    /* ---------- Calculadora por aparelho (10/2026, opção "A") ----------
+       Celular empilhado (dados e depois o resultado); 700 px+ mais largo; 900 px+ (laptop e tablet
+       deitado) dados e resultado lado a lado. */
+    .calcGrid { display: flex; flex-direction: column; }
+    .atalhos { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+    .atalho, .juntaBtn {
+      border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit;
+      font-size: 14px; font-weight: 700; padding: 9px 13px; border-radius: 999px; cursor: pointer; min-height: 40px;
+    }
+    .atalho.ativo, .juntaBtn.ativo { background: var(--ink); color: var(--white); border-color: var(--ink); }
+    .areaLinha { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 4px; }
+    .areaLinha .field { flex: 1; min-width: 130px; }
+    .areaLinha .atalhos { margin-bottom: 0; }
+    .areaLinha .atalho { border-radius: var(--r-sm); min-height: 42px; }
+    .segBtns { display: flex; background: var(--fill); border-radius: 12px; padding: 3px; gap: 2px; }
+    .segBtns button { flex: 1; border: none; background: transparent; font: inherit; font-size: 14px; font-weight: 700; color: var(--gray); padding: 11px 6px; border-radius: 10px; cursor: pointer; min-height: 44px; }
+    .segBtns button.ativo { background: var(--white); color: var(--ink); box-shadow: var(--shadow-1); }
+    .juntaLbl { font-size: 12px; font-weight: 600; color: var(--gray); margin: 12px 0 6px; }
+    .juntaBtns { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 6px; }
+    .juntaBtn { border-radius: var(--r-sm); padding: 9px 4px; }
+    /* Resultado: cartão escuro (fixo, nos dois temas) */
+    .calcResultado { background: #1D1D1F; color: #fff; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+    html[data-theme="dark"] .calcResultado { background: #000; box-shadow: inset 0 0 0 1px var(--hairline); }
+    .resTopo { display: flex; align-items: center; gap: 18px; }
+    .resTexto { flex: 1; min-width: 0; }
+    .resLbl { font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: #C7C7CC; }
+    .resNum { font-size: 52px; font-weight: 800; letter-spacing: -.04em; line-height: 1; color: #FF5C7A; margin-top: 4px; }
+    .resUn { font-size: 16px; font-weight: 700; margin-top: 2px; }
+    .pecaDesenho { width: 96px; height: 96px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin: 4px 46px 18px 0; }
+    .pecaDesenho:empty { display: none; }
+    .peca { position: relative; background: #3A3A3C; border: 2px solid #8E8E93; border-radius: 4px; }
+    .peca .mx, .peca .my { position: absolute; width: 11px; height: 11px; border-radius: 3px; }
+    .peca .mx { top: -7px; margin-left: -6px; background: #FF5C7A; }
+    .peca .my { left: -7px; margin-top: -6px; background: #F0A54A; }
+    .peca .cotaX { position: absolute; left: 0; right: 0; bottom: -20px; text-align: center; font-size: 11px; color: #C7C7CC; white-space: nowrap; }
+    .peca .cotaY { position: absolute; top: 50%; left: 100%; margin-left: 6px; transform: translateY(-50%); font-size: 11px; color: #C7C7CC; white-space: nowrap; }
+    .conta { background: #2C2C2E; border-radius: 14px; padding: 14px 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+    .conta:empty { display: none; }
+    .conta .cLbl { font-size: 11.5px; color: #C7C7CC; }
+    .conta .cVal { font-size: 20px; font-weight: 800; margin-top: 2px; }
+    .conta .cSub { font-size: 11.5px; color: #C7C7CC; }
+    .conta .sx { color: #FF5C7A; } .conta .sy { color: #F0A54A; }
+    .calcResultado .productSuggestion { background: #fff; color: #1D1D1F; margin-top: 0; border-radius: 14px; }
+    .calcResultado .productSuggestion .psLbl { display: block; font-size: 11.5px; color: #6E6E73; }
+    .calcResultado .productSuggestion b { color: #1D1D1F; font-size: 15px; }
+    .calcResultado .btnRow { margin-top: 0; }
+    .calcResultado .clearBtn { background: #3A3A3C; color: #fff; }
+    .calcResultado .footNote { color: #C7C7CC; margin: 0; }
+    @media (min-width: 700px) {
+      .wrap { max-width: 760px; }
+      .resNum { font-size: 66px; }
+      .pecaDesenho { width: 150px; height: 150px; }
+    }
+    @media (min-width: 900px) {
+      .wrap { max-width: 1280px; padding: 0 28px 40px; }
+      .topbar h1 { font-size: 24px; }
+      .calcGrid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: stretch; }
+      .calcGrid .card { margin-bottom: 0; padding: 22px 24px; }
+      .resNum { font-size: 76px; }
+      .pecaDesenho { width: 190px; height: 190px; }
+      .calcResultado .btnRow { margin-top: auto; }
+      .calcResultado .addBtn, .calcResultado .clearBtn { min-height: 52px; font-size: 16px; }
+    }
+    @media (hover: none), (pointer: coarse) {
+      .atalho, .juntaBtn { min-height: 44px; }
+    }
   </style>
 </head>
 
@@ -257,56 +320,67 @@
       </div>
     </div>
 
-    <div class="card">
-      <p class="fieldset-label">Peça (piso/porcelanato)</p>
-      <div class="fieldRow">
-        <div class="field">
-          <label for="pecaComprimento">Comprimento (cm)</label>
-          <input type="number" id="pecaComprimento" min="1" step="0.1" inputmode="decimal" value="60">
+    <!-- Calculadora por aparelho (10/2026, opção "A" escolhida pelo usuário a partir de mockups):
+         dados em 3 passos com atalhos e o resultado num cartão escuro com o desenho da peça e a
+         conta explicada; 900 px+ lado a lado. -->
+    <div class="calcGrid">
+      <div class="card calcDados">
+        <p class="fieldset-label">1 · Peça (piso/porcelanato)</p>
+        <div class="atalhos" id="pecaAtalhos" role="group" aria-label="Tamanhos de peça mais comuns"></div>
+        <div class="fieldRow">
+          <div class="field">
+            <label for="pecaComprimento">Comprimento (cm)</label>
+            <input type="number" id="pecaComprimento" min="1" step="0.1" inputmode="decimal" value="60">
+          </div>
+          <div class="field">
+            <label for="pecaLargura">Largura (cm)</label>
+            <input type="number" id="pecaLargura" min="1" step="0.1" inputmode="decimal" value="60">
+          </div>
         </div>
-        <div class="field">
-          <label for="pecaLargura">Largura (cm)</label>
-          <input type="number" id="pecaLargura" min="1" step="0.1" inputmode="decimal" value="60">
+
+        <p class="fieldset-label notFirst">2 · Área do ambiente</p>
+        <div class="areaLinha">
+          <div class="field">
+            <label for="ambienteArea">Área (m²)</label>
+            <input type="number" id="ambienteArea" min="0.1" step="0.1" inputmode="decimal" value="12">
+          </div>
+          <div class="atalhos" id="areaAtalhos" role="group" aria-label="Áreas comuns"></div>
         </div>
+
+        <p class="fieldset-label notFirst">3 · Espaçador</p>
+        <div class="segBtns" id="modeloBtns" role="group" aria-label="Modelo do espaçador"></div>
+        <p class="juntaLbl">Junta</p>
+        <div class="juntaBtns" id="juntaBtns" role="group" aria-label="Junta desejada"></div>
+        <!-- os selects continuam como a fonte do valor (os botões só escolhem neles) -->
+        <select id="modeloSelect" hidden aria-hidden="true" tabindex="-1">
+          <option value="standard" selected>Standard</option>
+          <option value="eco">ECO</option>
+          <option value="slim">Slim</option>
+        </select>
+        <select id="juntaSelect" hidden aria-hidden="true" tabindex="-1"></select>
       </div>
 
-      <p class="fieldset-label notFirst">Ambiente e espaçador</p>
-      <div class="fieldRow">
-        <div class="field">
-          <label for="ambienteArea">Área do ambiente (m²)</label>
-          <input type="number" id="ambienteArea" min="0.1" step="0.1" inputmode="decimal" value="12">
+      <div class="card calcResultado">
+        <div class="resTopo">
+          <div class="resTexto">
+            <div class="resLbl">Você vai precisar de</div>
+            <div class="resNum" id="resNiveladores">—</div>
+            <div class="resUn">espaçadores niveladores</div>
+          </div>
+          <div class="pecaDesenho" id="pecaDesenho" aria-hidden="true"></div>
         </div>
-      </div>
-      <div class="fieldRow">
-        <div class="field">
-          <label for="modeloSelect">Modelo do espaçador</label>
-          <select id="modeloSelect">
-            <option value="standard" selected>Standard</option>
-            <option value="eco">ECO</option>
-            <option value="slim">Slim</option>
-          </select>
+        <div class="conta" id="resConta"></div>
+        <div class="productSuggestion">
+          <span class="psLbl">Produto sugerido</span>
+          <b id="resProdutoNome">—</b>
         </div>
-        <div class="field">
-          <label for="juntaSelect">Junta desejada</label>
-          <select id="juntaSelect"></select>
+        <div class="btnRow">
+          <button type="button" class="clearBtn" id="clearBtn">Limpar</button>
+          <button type="button" class="addBtn" id="addBtn">Adicionar ao orçamento</button>
         </div>
+        <p class="footNote">Cálculo calibrado pra bater com a calculadora oficial da Cortag — pode variar um pouco
+          da quantidade real, sempre bom levar uma margem extra pro dia da obra.</p>
       </div>
-
-      <div class="divider"></div>
-      <div class="resultBig">
-        <div class="num" id="resNiveladores">—</div>
-        <div class="label">Espaçadores niveladores</div>
-      </div>
-      <p class="detailLine" id="resDetalhe"></p>
-      <div class="productSuggestion">
-        Produto sugerido: <b id="resProdutoNome">—</b>
-      </div>
-      <div class="btnRow">
-        <button type="button" class="clearBtn" id="clearBtn">Limpar</button>
-        <button type="button" class="addBtn" id="addBtn">Adicionar ao orçamento</button>
-      </div>
-      <p class="footNote">Cálculo calibrado pra bater com a calculadora oficial da Cortag — pode variar um pouco
-        da quantidade real, sempre bom levar uma margem extra pro dia da obra.</p>
     </div>
   </div>
 
@@ -350,6 +424,32 @@
       juntaSelect.innerHTML = juntas.map(j => `<option value="${j}">${juntaLabel(j)}</option>`).join('');
       const preferida = juntas.includes(atual) ? atual : (juntas.includes(1.5) ? 1.5 : juntas[0]);
       juntaSelect.value = String(preferida);
+      renderBotoesEspacador();
+    }
+
+    // Botões de modelo e junta (os selects escondidos guardam o valor; só
+    // aparecem as juntas que existem pro modelo, como no select de antes).
+    function renderBotoesEspacador() {
+      const modelo = document.getElementById('modeloSelect').value;
+      const junta = parseFloat(document.getElementById('juntaSelect').value);
+      document.getElementById('modeloBtns').innerHTML = Object.entries(MODELOS_ESPACADOR).map(([k, m]) =>
+        `<button type="button" data-modelo="${k}" class="${k === modelo ? 'ativo' : ''}" aria-pressed="${k === modelo}">${m.label}</button>`).join('');
+      document.getElementById('juntaBtns').innerHTML = MODELOS_ESPACADOR[modelo].juntas.map(j =>
+        `<button type="button" class="juntaBtn${j === junta ? ' ativo' : ''}" data-junta="${j}" aria-pressed="${j === junta}">${juntaLabel(j)}</button>`).join('');
+    }
+
+    // Atalhos: os tamanhos de peça e as áreas mais comuns só preenchem os
+    // campos (que continuam podendo ser digitados).
+    const PECAS_COMUNS = [[60, 60], [80, 80], [90, 90], [60, 120], [120, 120], [20, 120], [90, 130]];
+    const AREAS_COMUNS = [10, 20, 50];
+    function renderAtalhos() {
+      const c = num('pecaComprimento'), l = num('pecaLargura'), a = num('ambienteArea');
+      document.getElementById('pecaAtalhos').innerHTML = PECAS_COMUNS.map(([pc, pl]) => {
+        const ativo = c === pc && l === pl;
+        return `<button type="button" class="atalho${ativo ? ' ativo' : ''}" data-peca="${pc}x${pl}" aria-pressed="${ativo}">${pc}×${pl}</button>`;
+      }).join('');
+      document.getElementById('areaAtalhos').innerHTML = AREAS_COMUNS.map(ar =>
+        `<button type="button" class="atalho${a === ar ? ' ativo' : ''}" data-area="${ar}" aria-pressed="${a === ar}">${ar} m²</button>`).join('');
     }
 
     // Clipes recomendados por lado da peça - calibrado batendo com 2 exemplos
@@ -376,9 +476,12 @@
       const addBtn = document.getElementById('addBtn');
       if (!pecaC || !pecaL || !areaAmbienteM2) {
         document.getElementById('resNiveladores').textContent = '—';
-        document.getElementById('resDetalhe').textContent = '';
+        document.getElementById('resConta').innerHTML = '';
+        document.getElementById('pecaDesenho').innerHTML = '';
         document.getElementById('resProdutoNome').textContent = '—';
+        addBtn.textContent = 'Adicionar ao orçamento';
         addBtn.disabled = true;
+        renderAtalhos();
         ultimoCalculo = null;
         return;
       }
@@ -388,9 +491,23 @@
       const ladoY = clipsPorLado(pecaL);
       const niveladores = Math.ceil((areaAmbienteM2 / areaPecaM2) * (ladoX + ladoY));
 
-      document.getElementById('resNiveladores').textContent = brNumber(niveladores) + ' un.';
-      document.getElementById('resDetalhe').textContent =
-        `${ladoX} encaixe${ladoX === 1 ? '' : 's'} por lado (X) · ${ladoY} por lado (Y)`;
+      document.getElementById('resNiveladores').textContent = brNumber(niveladores);
+      // A conta explicada, pra mostrar ao cliente de onde sai o número.
+      const pecas = areaAmbienteM2 / areaPecaM2;
+      const br = (v, casas) => v.toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+      document.getElementById('resConta').innerHTML = `
+        <div><div class="cLbl">Peças no ambiente</div><div class="cVal">${br(pecas, 1)}</div><div class="cSub">${br(areaAmbienteM2, areaAmbienteM2 % 1 ? 1 : 0)} m² ÷ ${br(areaPecaM2, 2)} m²</div></div>
+        <div><div class="cLbl">Encaixes por peça</div><div class="cVal">${ladoX + ladoY}</div><div class="cSub"><span class="sx">■</span> ${ladoX} no comprimento · <span class="sy">■</span> ${ladoY} na largura</div></div>
+        <div><div class="cLbl">Total</div><div class="cVal">${brNumber(niveladores)}</div><div class="cSub">arredondado pra cima</div></div>`;
+      // Desenho da peça na proporção, com os encaixes de cada lado.
+      const maior = Math.max(pecaC, pecaL);
+      const w = Math.max(30, Math.round(100 * pecaC / maior)), h = Math.max(30, Math.round(100 * pecaL / maior));
+      const marcas = (n, cls, prop) => Array.from({ length: n }, (_, i) => `<span class="${cls}" style="${prop}:${((i + 1) / (n + 1) * 100).toFixed(1)}%;"></span>`).join('');
+      document.getElementById('pecaDesenho').innerHTML = `
+        <div class="peca" style="width:${w}%;height:${h}%;">${marcas(ladoX, 'mx', 'left')}${marcas(ladoY, 'my', 'top')}
+          <span class="cotaX">${brNumber(pecaC, pecaC % 1 ? 1 : 0)} cm</span><span class="cotaY">${brNumber(pecaL, pecaL % 1 ? 1 : 0)} cm</span></div>`;
+      addBtn.textContent = `Adicionar ${brNumber(niveladores)} ao orçamento`;
+      renderAtalhos();
       const modelo = document.getElementById('modeloSelect').value;
       document.getElementById('resProdutoNome').textContent =
         `Espaçador nivelador ${MODELOS_ESPACADOR[modelo].label} ${juntaLabel(juntaMm)}`;
@@ -404,6 +521,34 @@
     });
     document.getElementById('juntaSelect').addEventListener('change', calcular);
     document.getElementById('modeloSelect').addEventListener('change', () => { popularJuntasDoModelo(); calcular(); });
+    document.getElementById('modeloBtns').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-modelo]');
+      if (!b) return;
+      document.getElementById('modeloSelect').value = b.dataset.modelo;
+      popularJuntasDoModelo();
+      calcular();
+    });
+    document.getElementById('juntaBtns').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-junta]');
+      if (!b) return;
+      document.getElementById('juntaSelect').value = b.dataset.junta;
+      renderBotoesEspacador();
+      calcular();
+    });
+    document.getElementById('pecaAtalhos').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-peca]');
+      if (!b) return;
+      const [c, l] = b.dataset.peca.split('x');
+      document.getElementById('pecaComprimento').value = c;
+      document.getElementById('pecaLargura').value = l;
+      calcular();
+    });
+    document.getElementById('areaAtalhos').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-area]');
+      if (!b) return;
+      document.getElementById('ambienteArea').value = b.dataset.area;
+      calcular();
+    });
     popularJuntasDoModelo();
 
     function showToast(msg) {
