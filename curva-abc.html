@@ -238,13 +238,6 @@
     .segmented button.active { background: var(--white); color: var(--ink); box-shadow: var(--shadow-1); }
 
     /* ---------- KPIs ---------- */
-    .kpiRow {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    @media (max-width: 720px) { .kpiRow { grid-template-columns: repeat(2, 1fr); } }
 
     .kpi { background: var(--white); border-radius: var(--r-md); box-shadow: var(--shadow-1); padding: 13px 15px; }
     .kpi .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin-bottom: 5px; display: block; }
@@ -253,8 +246,6 @@
     .kpiExpandPanel { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; margin: -4px 0 14px; }
     .kpiExpandPanel h3 { margin: 0 0 4px; font-size: 14px; }
     .kpiExpandList { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; margin-top: 8px; }
-    .kpi.classA .val { color: var(--red); }
-    .kpi.classB .val { color: var(--amber); }
 
     /* ---------- chart card ---------- */
     .chartCard { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 18px 18px 12px; margin-bottom: 14px; }
@@ -270,8 +261,6 @@
     .ap-msg.error.inline { text-align: center; }
 
     /* ---------- bottom row ---------- */
-    .bottomRow { display: grid; grid-template-columns: 1fr 1.5fr; gap: 14px; align-items: start; }
-    @media (max-width: 860px) { .bottomRow { grid-template-columns: 1fr; } }
     .card { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; }
     .card h3 { font-size: 13.5px; margin: 0 0 4px; }
     .cardHint { font-size: 11px; color: var(--gray); margin: 0 0 12px; line-height: 1.4; }
@@ -486,6 +475,98 @@
       .dashListas { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
       .dashHero:hover { background: var(--red-deep); }
     }
+    /* ---------- Curva ABC: grade por aparelho (10/2026, opção "A") ----------
+       Celular empilhado. 900 px+: página larga. 1200 px com mouse (laptop): gráfico e categorias
+       à esquerda, lista de produtos presa à direita com rolagem própria. */
+    body.abaAbc .wrap { max-width: 1680px; }
+    @media (min-width: 900px) { body.abaAbc .wrap { padding: 0 28px 40px; } }
+    .abcToolbar { align-items: center; }
+    .abcResumo { margin-left: auto; font-size: 12.5px; color: var(--gray); }
+    .abcResumo strong { color: var(--ink); font-size: 15px; }
+    .abcTopo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+    .abcDivisao { background: #1D1D1F; color: #fff; border-radius: var(--r-lg); padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; }
+    .abcDivisao:empty { display: none; }
+    html[data-theme="dark"] .abcDivisao { background: #000; box-shadow: inset 0 0 0 1px var(--hairline); }
+    .abcDivisao .divLbl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #C7C7CC; }
+    .abcDivisao .divTitulo { font-size: 22px; font-weight: 800; letter-spacing: -.02em; line-height: 1.2; }
+    .abcDivisao .divTitulo b { color: #FF5C7A; }
+    .abcDivisao .divLinha { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 12px; color: #C7C7CC; }
+    .abcDivisao .divBarra { display: flex; height: 20px; border-radius: 6px; overflow: hidden; gap: 2px; }
+    .abcDivisao .divBarra span { display: flex; align-items: center; padding-left: 7px; font-size: 11.5px; font-weight: 800; white-space: nowrap; overflow: hidden; min-width: 0; }
+    .abcDivisao .divRodape { font-size: 12.5px; color: #C7C7CC; }
+    .divA { background: #CC0935; color: #fff; }
+    .divB { background: #F0A54A; color: #1D1D1F; }
+    .divC { background: #48484A; color: #fff; }
+    .abcClasses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .abcClasse {
+      border: none; font: inherit; color: inherit; text-align: left; cursor: pointer; background: var(--white);
+      border-radius: var(--r-md); box-shadow: var(--shadow-1); padding: 14px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+    }
+    .abcClasse.active { box-shadow: 0 0 0 2px var(--red) inset, var(--shadow-1); }
+    .abcClasse .clLetra { width: 32px; height: 32px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; font-weight: 800; margin-bottom: 4px; }
+    .abcClasse[data-classe="A"] .clLetra { background: #CC0935; color: #fff; }
+    .abcClasse[data-classe="B"] .clLetra { background: #F0A54A; color: #1D1D1F; }
+    .abcClasse[data-classe="C"] .clLetra { background: var(--hairline); color: var(--ink); }
+    .abcClasse .clQtd { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
+    .abcClasse .clSub { font-size: 11.5px; color: var(--gray); }
+    .abcClasse .clValor { font-size: 14px; font-weight: 800; margin-top: 4px; }
+    .abcClasse .clAcao { font-size: 11.5px; font-weight: 700; color: var(--blue); margin-top: auto; padding-top: 6px; }
+    .abcClasse.active .clAcao { color: var(--red); }
+    .abcCorpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+    .abcEsq { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+    .abcEsq .chartCard { margin-bottom: 0; }
+    /* Pareto em HTML (o SVG esticava com a largura): barras por produto, ou por grupo de produtos
+       vizinhos quando são muitos; linha do % acumulado por cima. */
+    .pareto { position: relative; height: 200px; border-bottom: 1px solid var(--hairline); margin-top: 6px; }
+    .pareto .parBarras { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 1px; }
+    .pareto .parBarra { flex: 1; min-width: 0; border-radius: 2px 2px 0 0; min-height: 1px; }
+    .pareto .parBarra.A { background: #CC0935; }
+    .pareto .parBarra.B { background: #F0A54A; }
+    .pareto .parBarra.C { background: var(--hairline); }
+    .pareto svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+    .pareto .parCorte { position: absolute; left: 0; right: 0; border-top: 1px dashed; pointer-events: none; }
+    .pareto .parCorte span { position: absolute; top: -17px; font-size: 10.5px; font-weight: 700; background: var(--white); padding: 0 4px; white-space: nowrap; }
+    .pareto .parCorte.a { border-color: var(--red); color: var(--red); }
+    .pareto .parCorte.a span { left: 0; }
+    .pareto .parCorte.b { border-color: var(--amber); color: var(--amber); }
+    .pareto .parCorte.b span { right: 0; }
+    .parEixo { display: flex; justify-content: space-between; font-size: 11px; color: var(--gray); margin-top: 6px; }
+    #catHost { display: grid; grid-template-columns: minmax(0, 1fr); column-gap: 24px; align-items: start; }
+    .catBar .track { display: flex; }
+    .catBar .fillbar.fA { background: #CC0935; border-radius: 0; }
+    .catBar .fillbar.fB { background: #F0A54A; border-radius: 0; }
+    .catBar .fillbar.fC { background: var(--hairline); border-radius: 0; }
+    .catBar .track .fillbar:first-child { border-radius: 4px 0 0 4px; }
+    .prodValPct { display: block; font-size: 10.5px; color: var(--gray); font-weight: 400; }
+    .acumBarra { display: block; height: 4px; background: var(--fill); border-radius: 999px; margin-top: 4px; min-width: 40px; }
+    .acumBarra i { display: block; height: 4px; border-radius: 999px; }
+    .acumBarra i.a { background: #CC0935; } .acumBarra i.b { background: #F0A54A; } .acumBarra i.c { background: var(--gray); }
+    @media (min-width: 700px) {
+      #catHost { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      #catHost .catBar { margin-left: 0; margin-bottom: 8px; }
+      #catHost .catBar .name { width: 150px; }
+      .pareto { height: 220px; }
+    }
+    @media (min-width: 900px) {
+      .abcTopo { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); }
+      .abcDivisao .divTitulo { font-size: 26px; }
+      .abcClasse .clQtd { font-size: 26px; }
+    }
+    @media (hover: none), (pointer: coarse) {
+      .abcLista .addCartBtn { width: 44px; height: 44px; border-radius: 10px; }
+      .abcLista td { padding-top: 10px; padding-bottom: 10px; }
+    }
+    @media (min-width: 1200px) and (hover: hover) and (pointer: fine) {
+      .abcTopo { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+      .abcTopo .abcDivisao { grid-column: span 7; padding: 22px 24px; }
+      .abcTopo .abcClasses { grid-column: span 5; gap: 12px; }
+      .abcCorpo { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+      .abcCorpo .abcEsq { grid-column: span 7; gap: 16px; }
+      .abcCorpo .abcLista { grid-column: span 5; position: sticky; top: 12px; }
+      .abcLista .prodTableScroll { max-height: calc(100vh - 230px); }
+      .abcClasse:hover .clAcao { text-decoration: underline; }
+      .pareto { height: 240px; }
+    }
     .hidden { display: none !important; }
 
     .addCartBtn {
@@ -618,7 +699,10 @@
       </div>
     </section>
     <section id="tabCurvaAbc" class="hidden">
-    <div class="controlsRow">
+    <!-- Curva ABC por aparelho (10/2026, opção "A" escolhida pelo usuário a partir de mockups):
+         celular empilhado; laptop (1200 px com mouse) = gráfico e categorias à esquerda e a
+         lista de produtos presa à direita. -->
+    <div class="controlsRow abcToolbar">
       <div class="segmented" id="verSeg">
         <button data-modo="produtos" class="active">Todos os produtos</button>
         <button data-modo="porCliente">Por cliente</button>
@@ -633,6 +717,7 @@
         <button data-campo="faturamento_total">Faturamento</button>
         <button data-campo="quantidade_total">Quantidade</button>
       </div>
+      <span class="abcResumo" id="abcResumo"></span>
     </div>
 
     <div class="card hidden" id="clientPickerCard" style="margin-bottom:14px;">
@@ -650,27 +735,31 @@
       </div>
     </div>
 
-    <div class="kpiRow" id="kpiRow"></div>
-
-    <div class="chartCard">
-      <div class="head">
-        <div>
-          <h2 id="chartTitle">Curva de Pareto — participação por produto</h2>
-          <p>Ranking decrescente · linha = % acumulado</p>
-        </div>
-        <div class="legend" id="chartLegend"></div>
-      </div>
-      <div class="chartScroll" id="chartHost"></div>
+    <div class="abcTopo">
+      <div class="abcDivisao" id="abcDivisao"></div>
+      <div class="abcClasses" id="kpiRow"></div>
     </div>
 
-    <div class="bottomRow">
-      <div class="card">
-        <h3 id="catCardTitle">Por categoria</h3>
-        <p class="cardHint" id="catCardHint">Toque numa categoria pra filtrar a lista de produtos ao lado.</p>
-        <div id="catHost"></div>
-        <p class="footNote">Fonte: relatório oficial de Faturamento (Painel Administrativo → Relatórios e clientes).</p>
+    <div class="abcCorpo">
+      <div class="abcEsq">
+        <div class="chartCard">
+          <div class="head">
+            <div>
+              <h2 id="chartTitle">Curva de Pareto — participação por produto</h2>
+              <p>Do que mais vende ao que menos vende · linha = % acumulado · passe o mouse pra ver o produto</p>
+            </div>
+            <div class="legend" id="chartLegend"></div>
+          </div>
+          <div id="chartHost"></div>
+        </div>
+        <div class="card">
+          <h3 id="catCardTitle">Por categoria</h3>
+          <p class="cardHint" id="catCardHint">Toque numa categoria pra filtrar a lista de produtos.</p>
+          <div id="catHost"></div>
+          <p class="footNote">Fonte: relatório oficial de Faturamento (Painel Administrativo → Relatórios e clientes).</p>
+        </div>
       </div>
-      <div class="card">
+      <div class="card abcLista">
         <h3 id="itemCardTitle">Produtos</h3>
         <p class="cardHint" id="itemCardHint">Todas as classes ficam disponíveis aqui — use os filtros pra achar o que precisa pra planejar venda ou recomendar ao cliente.</p>
         <div class="prodFilters">
@@ -1080,8 +1169,14 @@
           document.querySelectorAll('#classeSeg button').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           state.filtroClasse = btn.dataset.classe;
+          if (state.classificados.length) renderKPIs(state.classificados); // realça o bloco A/B/C
           renderProdutos();
         });
+      });
+      // Blocos A/B/C do topo (recriados a cada render): um listener no container.
+      document.getElementById('kpiRow').addEventListener('click', (e) => {
+        const bloco = e.target.closest('.abcClasse');
+        if (bloco) filtrarClasse(bloco.dataset.classe);
       });
       document.getElementById('categoriaFiltro').addEventListener('change', (e) => {
         state.filtroCategoria = e.target.value;
@@ -1115,7 +1210,8 @@
       document.querySelectorAll('#tabSegPrincipal button').forEach(b => b.classList.toggle('active', b.dataset.tab === nome));
       document.getElementById('tabDashboardPrincipal').classList.toggle('hidden', nome !== 'dashboard');
       document.getElementById('tabCurvaAbc').classList.toggle('hidden', nome !== 'curvaAbc');
-      document.body.classList.toggle('abaDash', nome === 'dashboard'); // página larga só no Dashboard
+      document.body.classList.toggle('abaDash', nome === 'dashboard'); // página larga nas duas abas
+      document.body.classList.toggle('abaAbc', nome === 'curvaAbc');
       if (nome === 'dashboard') {
         document.getElementById('pageTitle').textContent = 'Dashboard';
         document.getElementById('topSub').textContent = 'Faturamento, metas de classificatório e vendas — visão geral pra ajudar na visita/negociação.';
@@ -1576,7 +1672,7 @@
 
     async function carregarDados() {
       if (state.carregando) return;
-      document.getElementById('kpiRow').innerHTML = '';
+      document.getElementById('kpiRow').innerHTML = ''; document.getElementById('abcDivisao').innerHTML = ''; document.getElementById('abcResumo').innerHTML = '';
       document.getElementById('topTableHost').innerHTML = '';
       document.getElementById('catHost').innerHTML = '';
       // modo "Por cliente" sem cliente escolhido ainda - nada pra buscar.
@@ -1638,7 +1734,7 @@
 
     function render() {
       if (state.raw.length === 0) {
-        document.getElementById('kpiRow').innerHTML = '';
+        document.getElementById('kpiRow').innerHTML = ''; document.getElementById('abcDivisao').innerHTML = ''; document.getElementById('abcResumo').innerHTML = '';
         document.getElementById('chartHost').innerHTML = '<div class="chartEmpty">Ainda não há dados de faturamento oficial suficientes nesse período pra calcular a curva ABC.</div>';
         document.getElementById('topTableHost').innerHTML = '<div class="lev-empty">Sem dados.</div>';
         document.getElementById('catHost').innerHTML = '<div class="lev-empty">Sem dados.</div>';
@@ -1716,112 +1812,98 @@
       else { select.value = ''; state.filtroCategoria = ''; }
     }
 
+    // Topo da Curva ABC: o cartão escuro ("N produtos fazem 80% do faturamento",
+    // com a fatia de cada classe no catálogo e no valor) e os blocos A/B/C, que
+    // filtram a lista ao tocar (o mesmo filtro dos botões Todas/A/B/C da lista).
     function renderKPIs(classificados) {
       const campo = state.campo;
-      const plural = (n) => `${itemLabel}${n === 1 ? '' : 's'}`;
+      const doQue = campo === 'faturamento_total' ? 'faturamento' : 'volume';
       const total = classificados.reduce((s, p) => s + p[campo], 0);
       const porClasse = { A: [], B: [], C: [] };
       classificados.forEach(p => porClasse[p.classe].push(p));
-      const somaClasse = (arr) => arr.reduce((s, p) => s + p[campo], 0);
-      const pctClasse = (arr) => total ? (somaClasse(arr) / total * 100) : 0;
-      const totalLbl = campo === 'faturamento_total' ? 'Faturamento no período' : 'Quantidade no período';
-      const caudaCount = porClasse.B.length + porClasse.C.length;
-      const caudaPct = pctClasse(porClasse.B) + pctClasse(porClasse.C);
-      document.getElementById('kpiRow').innerHTML = `
-        <div class="kpi">
-          <span class="lbl">${totalLbl}</span>
-          <span class="val">${formatValorCompact(total)}</span>
-          <span class="sub">${classificados.length} ${plural(classificados.length)} com faturamento</span>
-        </div>
-        <div class="kpi">
-          <span class="lbl">Produtos ativos</span>
-          <span class="val">${classificados.length}</span>
-          <span class="sub">no período selecionado</span>
-        </div>
-        <div class="kpi classA">
-          <span class="lbl">Classe A</span>
-          <span class="val">${porClasse.A.length} ${plural(porClasse.A.length)}</span>
-          <span class="sub">${pctClasse(porClasse.A).toFixed(0)}% do ${campo === 'faturamento_total' ? 'faturamento' : 'volume'}</span>
-        </div>
-        <div class="kpi classB">
-          <span class="lbl">Cauda (B + C)</span>
-          <span class="val">${caudaCount} ${plural(caudaCount)}</span>
-          <span class="sub">${caudaPct.toFixed(0)}% do ${campo === 'faturamento_total' ? 'faturamento' : 'volume'}</span>
-        </div>`;
+      const soma = (arr) => arr.reduce((s, p) => s + p[campo], 0);
+      const pctValor = (k) => total ? soma(porClasse[k]) / total * 100 : 0;
+      const pctQtd = (k) => classificados.length ? porClasse[k].length / classificados.length * 100 : 0;
+      const n = classificados.length;
+      const fmtPct = (v) => (v > 0 && v < 1 ? v.toFixed(1).replace('.', ',') : Math.round(v)) + '%';
+      const plural = (q) => `${q.toLocaleString('pt-BR')} ${itemLabel}${q === 1 ? '' : 's'}`;
+
+      document.getElementById('abcResumo').innerHTML = `<strong>${escapeHtml(formatValorCompact(total))}</strong> · ${plural(n)} com ${campo === 'faturamento_total' ? 'faturamento' : 'venda'}`;
+      const fatia = (k, pct, rotulo) => pct > 0 ? `<span class="div${k}" style="width:${pct.toFixed(2)}%;" title="Classe ${k}: ${fmtPct(pct)}">${pct >= 9 ? rotulo : ''}</span>` : '';
+      const dono = state.modo === 'porCliente' && state.clienteNome ? ` · ${escapeHtml(state.clienteNome)}` : '';
+      document.getElementById('abcDivisao').innerHTML = `
+        <span class="divLbl">Como o ${doQue} se divide${dono}</span>
+        <div class="divTitulo"><b>${plural(porClasse.A.length)}</b> ${porClasse.A.length === 1 ? 'faz' : 'fazem'} ${fmtPct(pctValor('A'))} do ${doQue}</div>
+        <div class="divLinha"><span>dos ${n.toLocaleString('pt-BR')} ${itemLabel}s</span>
+          <div class="divBarra">${fatia('A', pctQtd('A'), 'A')}${fatia('B', pctQtd('B'), 'B')}${fatia('C', pctQtd('C'), 'C')}</div></div>
+        <div class="divLinha"><span>do ${doQue}</span>
+          <div class="divBarra">${fatia('A', pctValor('A'), 'A · ' + fmtPct(pctValor('A')))}${fatia('B', pctValor('B'), 'B ' + fmtPct(pctValor('B')))}${fatia('C', pctValor('C'), 'C')}</div></div>
+        ${porClasse.C.length ? `<div class="divRodape">Os outros ${plural(porClasse.C.length)} (classe C, ${fmtPct(pctQtd('C'))} dos ${itemLabel}s) somam ${fmtPct(pctValor('C'))}.</div>` : ''}`;
+
+      document.getElementById('kpiRow').innerHTML = ['A', 'B', 'C'].map(k => {
+        const ativo = state.filtroClasse === k;
+        return `
+        <button type="button" class="abcClasse${ativo ? ' active' : ''}" data-classe="${k}" aria-pressed="${ativo}">
+          <span class="clLetra">${k}</span>
+          <span class="clQtd">${porClasse[k].length.toLocaleString('pt-BR')}</span>
+          <span class="clSub">${itemLabel}${porClasse[k].length === 1 ? '' : 's'}</span>
+          <span class="clValor">${escapeHtml(formatValorCompact(soma(porClasse[k])))}</span>
+          <span class="clSub">${fmtPct(pctValor(k))} do ${doQue}</span>
+          <span class="clAcao">${ativo ? '✓ filtrando a lista' : 'ver na lista →'}</span>
+        </button>`;
+      }).join('');
+    }
+
+    // Toque num bloco A/B/C: liga/desliga o filtro de classe da lista.
+    function filtrarClasse(classe) {
+      state.filtroClasse = state.filtroClasse === classe ? '' : classe;
+      document.querySelectorAll('#classeSeg button').forEach(b => b.classList.toggle('active', b.dataset.classe === state.filtroClasse));
+      renderKPIs(state.classificados);
+      renderProdutos();
     }
 
     const CORES_CLASSE = { A: 'var(--red)', B: 'var(--amber)', C: 'var(--hairline)', outros: '#9AA0A6' };
 
+    // Pareto em HTML: uma barra por produto até 120; acima disso, cada barra
+    // junta produtos vizinhos do ranking (a soma deles), na cor da classe do
+    // primeiro. A linha é o % acumulado no fim de cada barra. Altura fixa no
+    // CSS (o SVG antigo crescia com a largura e ficava enorme no laptop).
     function renderChart(classificados) {
       document.getElementById('chartLegend').innerHTML = `
         <span><i class="sw" style="background:var(--red)"></i>Classe A</span>
         <span><i class="sw" style="background:var(--amber)"></i>Classe B</span>
         <span><i class="sw" style="background:var(--hairline)"></i>Classe C</span>
-        <span><i class="ln"></i>Acumulado</span>`;
-
-      const totalGeral = classificados.reduce((s, p) => s + p[state.campo], 0) || 1;
-      const LIMITE = 18;
-      const shown = classificados.slice(0, LIMITE).map(p => ({ label: p.produto, valor: p[state.campo], pct: p.pct, classe: p.classe, cum: p.cumulativoPct }));
-      const tail = classificados.slice(LIMITE);
-      if (tail.length > 0) {
-        const tailValor = tail.reduce((s, p) => s + p[state.campo], 0);
-        shown.push({ label: `+${tail.length} outros`, valor: tailValor, pct: (tailValor / totalGeral) * 100, classe: 'outros', cum: 100, isOutros: true });
+        <span><i class="ln"></i>% acumulado</span>`;
+      const campo = state.campo;
+      const n = classificados.length;
+      const MAX_BARRAS = 120;
+      const porBarra = Math.max(1, Math.ceil(n / MAX_BARRAS));
+      const barras = [];
+      for (let i = 0; i < n; i += porBarra) {
+        const grupo = classificados.slice(i, i + porBarra);
+        barras.push({
+          valor: grupo.reduce((s, p) => s + p[campo], 0),
+          classe: grupo[0].classe,
+          cum: grupo[grupo.length - 1].cumulativoPct,
+          titulo: grupo.length === 1
+            ? `${i + 1}º · ${grupo[0].produto} — ${formatValor(grupo[0][campo])} · Classe ${grupo[0].classe} · ${grupo[0].cumulativoPct.toFixed(0)}% acumulado`
+            : `${i + 1}º a ${i + grupo.length}º (${grupo[0].produto}…) — ${formatValor(grupo.reduce((s, p) => s + p[campo], 0))} · ${grupo[grupo.length - 1].cumulativoPct.toFixed(0)}% acumulado`,
+        });
       }
-
-      const n = shown.length;
-      const slot = 52;
-      const plotLeft = 54, plotRight = plotLeft + n * slot, plotTop = 20, plotBottom = 220;
-      const W = plotRight + 20, H = 258;
-      const alturaUtil = plotBottom - plotTop;
-      const barW = Math.min(24, slot * 0.55);
-
-      const yFor = (pct) => plotBottom - (pct / 100) * alturaUtil;
-
-      const barsSvg = shown.map((b, i) => {
-        const x = plotLeft + i * slot + (slot - barW) / 2;
-        const y = yFor(b.pct);
-        const h = plotBottom - y;
-        const cor = CORES_CLASSE[b.classe] || CORES_CLASSE.C;
-        const titulo = `${b.label} — ${formatValor(b.valor)}${b.isOutros ? '' : ' · Classe ' + b.classe}`;
-        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="4" fill="${cor}"${b.isOutros ? ' opacity="0.75"' : ''}><title>${escapeHtml(titulo)}</title></rect>`;
-      }).join('');
-
-      const pontos = shown.map((b, i) => {
-        const x = plotLeft + i * slot + slot / 2;
-        const y = yFor(b.cum);
-        return `${x.toFixed(1)},${y.toFixed(1)}`;
-      }).join(' ');
-
-      const rotulos = shown.map((b, i) => {
-        if (i >= 6 && !b.isOutros) return '';
-        const x = plotLeft + i * slot + slot / 2;
-        // "Descontinuado · " ocupava os 15 caracteres do rótulo e todas as barras
-        // de produto fora de linha ficavam iguais: no rótulo curto vira "† " (o
-        // nome inteiro continua no title)
-        const curto = String(b.label).replace(/^Descontinuado · /, '† ');
-        const texto = curto.length > 16 ? curto.slice(0, 15) + '…' : curto;
-        return `<text x="${x.toFixed(1)}" y="${(plotBottom + 16).toFixed(1)}" text-anchor="middle" font-size="9.5" fill="var(--gray)"${b.isOutros ? ' font-weight="700" fill="var(--ink)"' : ''}>${escapeHtml(texto)}</text>`;
-      }).join('');
-
-      const y80 = yFor(80), y95 = yFor(95);
-
-      const svg = `
-      <svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W, 640)}px;height:auto;display:block;" role="img" aria-label="Curva de Pareto de produtos">
-        <line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="var(--hairline)" stroke-width="1"/>
-        <line x1="${plotLeft}" y1="${yFor(50)}" x2="${plotRight}" y2="${yFor(50)}" stroke="var(--hairline)" stroke-width="1" opacity="0.5"/>
-        <line x1="${plotLeft}" y1="${plotTop}" x2="${plotRight}" y2="${plotTop}" stroke="var(--hairline)" stroke-width="1" opacity="0.5"/>
-        <text x="${plotLeft - 8}" y="${plotBottom + 3}" text-anchor="end" font-size="10" fill="var(--gray)">0%</text>
-        <text x="${plotLeft - 8}" y="${(yFor(50) + 3).toFixed(1)}" text-anchor="end" font-size="10" fill="var(--gray)">50%</text>
-        <text x="${plotLeft - 8}" y="${plotTop + 3}" text-anchor="end" font-size="10" fill="var(--gray)">100%</text>
-        <line x1="${plotLeft}" y1="${y80.toFixed(1)}" x2="${plotRight}" y2="${y80.toFixed(1)}" stroke="var(--red)" stroke-width="1" stroke-opacity="0.3"/>
-        <text x="${plotRight}" y="${(y80 - 3).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--red)" opacity="0.8">80%</text>
-        <line x1="${plotLeft}" y1="${y95.toFixed(1)}" x2="${plotRight}" y2="${y95.toFixed(1)}" stroke="var(--amber)" stroke-width="1" stroke-opacity="0.3"/>
-        <text x="${plotRight}" y="${(y95 - 3).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--amber)" opacity="0.85">95%</text>
-        ${barsSvg}
-        <polyline fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pontos}"/>
-        ${rotulos}
-      </svg>`;
-      document.getElementById('chartHost').innerHTML = svg;
+      const maior = Math.max(...barras.map(b => b.valor), 1);
+      const colunas = barras.map(b => `<div class="parBarra ${b.classe}" style="height:${(b.valor / maior * 92).toFixed(1)}%;" title="${escapeHtml(b.titulo)}"></div>`).join('');
+      const pontos = barras.map((b, i) => `${((i + 0.5) / barras.length * 100).toFixed(2)},${(100 - b.cum).toFixed(2)}`).join(' ');
+      const fimA = classificados.filter(p => p.classe === 'A').length;
+      const fimB = fimA + classificados.filter(p => p.classe === 'B').length;
+      const ord = (k) => `${k.toLocaleString('pt-BR')}º ${itemLabel}`;
+      document.getElementById('chartHost').innerHTML = `
+        <div class="pareto" role="img" aria-label="Curva de Pareto: ${fimA} de ${n} ${itemLabel}s na classe A">
+          <div class="parBarras">${colunas}</div>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pontos}" fill="none" stroke="var(--ink)" stroke-width="2.5" vector-effect="non-scaling-stroke" stroke-linejoin="round"/></svg>
+          ${fimA ? `<div class="parCorte a" style="top:20%;"><span>80% · fim da classe A (${ord(fimA)})</span></div>` : ''}
+          ${fimB > fimA ? `<div class="parCorte b" style="top:5%;"><span>95% · fim da B (${ord(fimB)})</span></div>` : ''}
+        </div>
+        <div class="parEixo"><span>1º</span>${n > 2 ? `<span>${Math.round(n / 2).toLocaleString('pt-BR')}º</span>` : ''}<span>${n.toLocaleString('pt-BR')}º</span></div>`;
     }
 
     // Mostra TODOS os produtos que passam nos filtros (Classe/Categoria/Busca),
@@ -1846,15 +1928,15 @@
       }
       const linhas = filtrados.map(p => `
         <tr>
-          <td><span class="prodName">${escapeHtml(p.produto)}</span><span class="prodCat">${escapeHtml(p.categoria)}</span></td>
           <td><span class="badge ${p.classe.toLowerCase()}">${p.classe}</span></td>
-          <td class="num">${formatValor(p[state.campo])}</td>
-          <td class="num">${p.cumulativoPct.toFixed(0)}%</td>
+          <td><span class="prodName">${escapeHtml(p.produto)}</span><span class="prodCat">${escapeHtml(p.codigo_sku)} · ${escapeHtml(p.categoria)}</span></td>
+          <td class="num">${formatValor(p[state.campo])}<span class="prodValPct">${p.pct < 0.1 ? '<0,1' : p.pct.toFixed(1).replace('.', ',')}% do total</span></td>
+          <td class="num">${p.cumulativoPct.toFixed(0)}%<span class="acumBarra"><i class="${p.classe.toLowerCase()}" style="width:${p.cumulativoPct.toFixed(1)}%;"></i></span></td>
           <td class="num"><button type="button" class="addCartBtn" data-add-cod="${escapeHtml(p.codigo_sku)}" data-add-nome="${escapeHtml(p.produto)}" aria-label="Adicionar ao orçamento" title="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></td>
         </tr>`).join('');
       document.getElementById('topTableHost').innerHTML = `
         <table>
-          <thead><tr><th>${itemLabelCap}</th><th>Classe</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th><th class="num"></th></tr></thead>
+          <thead><tr><th></th><th>${itemLabelCap}</th><th class="num">${state.campo === 'faturamento_total' ? 'Faturamento' : 'Qtd.'}</th><th class="num">% acum.</th><th class="num"></th></tr></thead>
           <tbody>${linhas}</tbody>
         </table>`;
     }
@@ -1862,17 +1944,23 @@
     function renderCategorias(classificados) {
       const porCategoria = new Map();
       classificados.forEach(p => {
-        const atual = porCategoria.get(p.categoria) || { valor: 0, n: 0 };
+        const atual = porCategoria.get(p.categoria) || { valor: 0, n: 0, porClasse: { A: 0, B: 0, C: 0 } };
         atual.valor += p[state.campo];
+        atual.porClasse[p.classe] += p[state.campo];
         atual.n += 1;
         porCategoria.set(p.categoria, atual);
       });
       const lista = [...porCategoria.entries()].sort((a, b) => b[1].valor - a[1].valor).slice(0, 12);
       const max = Math.max(...lista.map(([, v]) => v.valor), 1);
+      // A barra da categoria vem dividida pela classe dos produtos dela (A/B/C).
+      const fatias = (v) => ['A', 'B', 'C'].map(k => {
+        const w = v.porClasse[k] / max * 100;
+        return w > 0 ? `<div class="fillbar f${k}" style="width:${w.toFixed(2)}%" title="Classe ${k}: ${escapeHtml(formatValor(v.porClasse[k]))}"></div>` : '';
+      }).join('');
       document.getElementById('catHost').innerHTML = lista.map(([nome, v]) => `
         <button type="button" class="catBar catBarBtn${state.filtroCategoria === nome ? ' active' : ''}" data-categoria="${escapeHtml(nome)}">
-          <span class="name" title="${escapeHtml(nome)}">${escapeHtml(nome)}</span>
-          <div class="track"><div class="fillbar" style="width:${Math.max((v.valor / max) * 100, 3).toFixed(1)}%"></div></div>
+          <span class="name" title="${escapeHtml(nome)}">${escapeHtml(String(nome).replace(/^\d+\s*-\s*/, ''))}</span>
+          <div class="track">${fatias(v)}</div>
           <span class="amt">${formatValorCompact(v.valor)}</span>
         </button>`).join('');
       document.querySelectorAll('.catBarBtn').forEach(btn => {

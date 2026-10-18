@@ -1274,6 +1274,15 @@ Supabase, sem PR — não é mudança de código.
   servidor **não têm `generate_series`** (só períodos com faturamento): semana/trimestre atual e a comparação do trimestre
   saem pela data, nunca pela posição na lista.
 
+- **Curva ABC (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, página
+  "Curva ABC" do mesmo canvas): página larga também nesta aba (`body.abaAbc`); filtros numa barra com o total à direita
+  (`#abcResumo`); cartão escuro "N produtos fazem 80% do faturamento" com a fatia de cada classe no catálogo e no valor
+  (`#abcDivisao`) e blocos A/B/C que filtram a lista ao tocar (`filtrarClasse`, mesmo filtro do `#classeSeg`; o `#kpiRow`
+  agora são esses blocos). Pareto em barras HTML de altura fixa (`renderChart`: uma barra por produto até 120, acima disso
+  produtos vizinhos somados), com os cortes de 80%/95% e o nº do produto onde cada classe acaba; categorias com a barra
+  dividida por classe. Laptop (1200 px com mouse): gráfico e categorias à esquerda, lista presa à direita com rolagem própria;
+  tablet e celular empilham. Na lista: código, % do total e barrinha do acumulado; "+" com 44 px no toque.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
