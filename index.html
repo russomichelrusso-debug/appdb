@@ -3326,6 +3326,28 @@
       display: none;
     }
 
+    /* na lista de devedores contumazes da Receita (ficha de CNPJ) - só quando consta */
+    .clienteContumaz {
+      display: block;
+      width: 100%;
+      margin-top: 10px;
+      padding: 6px 10px;
+      border: 0;
+      border-radius: 8px;
+      background: #B3261E;
+      color: #fff;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 1.35;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .clienteContumaz.hidden {
+      display: none;
+    }
+
     /* saldo em carteira com aviso de cancelamento (e-mail das assistentes
        comerciais): ainda dá pra salvar aumentando a quantidade */
     .clienteCancelamento {
@@ -10143,6 +10165,7 @@
             </button>
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
+          <button type="button" class="clienteContumaz hidden" id="precosClientContumaz"></button>
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
           <button type="button" class="clienteCancelamento hidden" id="precosClientCancelamento"></button>
           <div class="clienteInadimplente hidden" id="precosClientInadimplente"></div>
@@ -10293,6 +10316,7 @@
             </button>
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
+          <button type="button" class="clienteContumaz hidden" id="levClientContumaz"></button>
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
           <button type="button" class="clienteCancelamento hidden" id="levClientCancelamento"></button>
           <div class="clienteInadimplente hidden" id="levClientInadimplente"></div>
@@ -14456,12 +14480,27 @@
           progressEl.innerHTML = ''; // limpa na hora - não deixa o progresso do cliente anterior aparecer enquanto busca o novo
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
+        atualizarContumazClienteBar(prefixo, cliente);
         atualizarBloqueioClienteBar(prefixo, cliente);
         atualizarCancelamentoClienteBar(prefixo, cliente);
         atualizarReativarClienteBar(prefixo, cliente);
         atualizarInadimplenciaClienteBar(prefixo, cliente);
         atualizarVisitaClienteBar(prefixo, cliente);
         atualizarWhatsClienteBar(prefixo, cliente);
+      }
+      // Faixa vermelha só quando o CNPJ está na lista de devedores contumazes da
+      // Receita (ficha de CNPJ, dados_brutos.devedorContumaz; vem no /sync como
+      // devedor_contumaz, funciona sem internet). Tocar abre a ficha.
+      function atualizarContumazClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientContumaz');
+        if (!el) return;
+        const local = cliente ? loadClientesLocais().find(c => String(c.id) === String(cliente.id)) : null;
+        const conferido = local ? local.devedor_contumaz : (cliente && cliente.devedor_contumaz);
+        el.classList.toggle('hidden', !conferido);
+        el.textContent = conferido
+          ? `⚠ Devedor contumaz na Receita${/^\d{4}-\d{2}-\d{2}/.test(conferido) ? ' · conferido em ' + formatDateBr(conferido) : ''} · ver ficha`
+          : '';
+        el.onclick = conferido ? () => abrirFichaCnpjCliente(cliente) : null;
       }
       function atualizarBloqueioClienteBar(prefixo, cliente) {
         const bloqueioEl = document.getElementById(prefixo + 'ClientBloqueio');
@@ -19996,7 +20035,10 @@
           marcarStatus(el, `${completando ? '' : '✓ '}${fmt(st.com_ficha)} de ${fmt(st.com_cnpj)}`, completando ? '' : 'ok');
           const detalhe = completando ? `completando de madrugada (${st.hoje.limite}/noite)`
             : (st.desistidos ? `${fmt(st.desistidos)} CNPJ não encontrado(s)` : '');
-          if (sub) { sub.textContent = detalhe; sub.classList.toggle('hidden', !detalhe); }
+          // fichas gravadas antes da conferência de devedor contumaz: atualizadas de madrugada
+          const contumaz = st.sem_conferencia_contumaz ? `${fmt(st.sem_conferencia_contumaz)} sem conferência de devedor contumaz (atualizando de madrugada)` : '';
+          const detalheTudo = [detalhe, contumaz].filter(Boolean).join(' · ');
+          if (sub) { sub.textContent = detalheTudo; sub.classList.toggle('hidden', !detalheTudo); }
         } catch (e) {
           marcarStatus(el, '—');
         }

@@ -285,8 +285,8 @@ Supabase, sem PR — não é mudança de código.
 - **Fichas de CNPJ completadas sozinhas + atalho direto**: o servidor completa de madrugada as
   fichas que faltam (`routes/lib/preenchimentoCnpj.js`, ligado em `server.js`) — decisão do
   usuário: **automático, sem botão**, com folga pras consultas manuais: só 01h–06h de Brasília,
-  máx. 40/noite, 1 a cada 15 s, só quem não tem ficha nenhuma (ficha vencida continua sendo
-  atualizada só ao abrir); 404 tenta até 3 noites e desiste; origem fora do ar/no limite pausa a
+  máx. 40/noite, 1 a cada 15 s, primeiro quem não tem ficha nenhuma (desde 10/2026 o
+  saldo da noite também atualiza fichas antigas, ver "devedor contumaz" abaixo); 404 tenta até 3 noites e desiste; origem fora do ar/no limite pausa a
   noite. Em 24/09 eram 291 clientes com CNPJ, 122 com ficha. Progresso na linha "Fichas de CNPJ"
   do card de status do Painel Administrativo; `PREENCHIMENTO_CNPJ_DESLIGADO=1` no Render desliga.
   Pedido junto do usuário: com cliente selecionado que já tem ficha, o botão **"Ficha cadastral"**
@@ -1293,6 +1293,30 @@ Supabase, sem PR — não é mudança de código.
   (secundárias como etiquetas) e Quadro societário. Celular: Contatos antes da ficha, como antes, e o "Copiar tudo" fica no
   cartão dos Contatos. 900 px+: página até 1440 px, Contatos presos à direita e o "Copiar tudo" no cartão do topo. O mapa do
   mockup ficou de fora (precisaria do Leaflet e das coordenadas nesta página): o endereço tem o botão do Waze.
+
+- **Ficha cadastral: sócios com nome completo, telefone e devedor contumaz** (10/2026, opção "C" dos mockups com o detalhe
+  recolhido, canvas "Cortag · Ficha: sócios e devedor contumaz"). **Ficha "mascarada":** desde 25/09/2026 o radar-cnpj manda
+  `dados_brutos.mascarado: true`: sócio "FRANCISCO A. M.", telefone "(44) 3•••••03", e-mail com "•" (186 de 302 fichas em
+  18/10/2026). O servidor completa pela **BrasilAPI** (traz tudo inteiro): o sócio pelo nome que bate (mesmo 1º nome e iniciais
+  dos outros, sem DE/DA/DOS; `routes/lib/nomesSocios.js`; dois candidatos = fica abreviado; 64 de 64 nomes reais casaram) e o
+  telefone pelo número que bate (DDD, dígitos visíveis e tamanho; `routes/lib/telefoneMascarado.js`; o que não bate fica
+  escondido). A ficha gravada antes só entra se a BrasilAPI falhar, e com a data de entrada batendo quando as duas têm (senão um
+  ex-sócio com as mesmas iniciais voltava; achado do `revisor-cortag`). Ficha já gravada mascarada se completa ao ser aberta (uma
+  consulta; de novo só 30 dias depois, `cliente_cnpj_ficha.mascarado_completado_em`; BrasilAPI fora do ar = espera 6 h, em
+  memória); os `dados_brutos` ficam como vieram. O e-mail mascarado **não** é completado (a BrasilAPI quase nunca tem; o usuário
+  pediu só o telefone). Os sócios guardam `dataEntrada`/`faixaEtaria` (código da Receita): "desde DD/MM/AAAA · 31 a 40 anos";
+  nome que nenhuma fonte completou leva o selo "abreviado na fonte".
+  **Devedor contumaz** (`dados_brutos.devedorContumaz`: `consta`, `conferidoEm`, `lista`; Receita, LC nº 225/2026, só nas fichas
+  consultadas no radar-cnpj a partir de 10/2026): na ficha, consta = cartão do topo com borda vermelha, selo e faixa "⚠ Devedor
+  contumaz" que abre o detalhe (lista, dia, link oficial); não consta = "✓ Não consta… conferido em" no cartão; sem o campo =
+  "não conferido nesta ficha · toque em Atualizar" (`devedorContumazDaFicha`, `ficha-cnpj.html`). No card do cliente
+  (Pedido/Levantamento) **só quando consta** (decisão do usuário): faixa vermelha "⚠ Devedor contumaz na Receita · conferido em
+  DD/MM · ver ficha" (`atualizarContumazClienteBar`, `index.html`; `devedor_contumaz` no `/sync`, sem internet). Ficha atualizada
+  pela BrasilAPI (reserva, sem a lista) mantém a última conferência do radar. **De madrugada** (decisão do usuário), com o saldo
+  das 40 consultas que sobra depois de quem não tem ficha, `routes/lib/preenchimentoCnpj.js` atualiza à força as fichas sem a
+  conferência (gravadas há mais de 3 dias) e as com mais de 30 dias, a mais velha primeiro; origem falhando numa delas pausa a
+  noite e CNPJ que nenhuma origem acha conta falha como na ficha nova (`obterFichaDaRodada`; achado do `revisor-cortag`); o card
+  de status do Painel mostra "N sem conferência de devedor contumaz".
 
 - **Calculadora (`calculadora-materiais.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de
   mockups, página "Calculadora" do mesmo canvas): dados em 3 passos, com atalhos dos tamanhos de peça e das áreas mais comuns

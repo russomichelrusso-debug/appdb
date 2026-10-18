@@ -482,6 +482,10 @@ ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS socios JSONB;
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS complemento TEXT;
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS matriz_filial TEXT;
 ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS cnae_secundario TEXT;
+-- quando a BrasilAPI foi consultada pra completar a ficha "mascarada" do
+-- radar-cnpj: sócio abreviado e telefone escondido (routes/lib/nomesSocios.js,
+-- routes/lib/telefoneMascarado.js); NULL = ainda não
+ALTER TABLE cliente_cnpj_ficha ADD COLUMN IF NOT EXISTS mascarado_completado_em TIMESTAMPTZ;
 -- RLS ligado (mesmo motivo de levantamento_rascunhos acima) - guarda dados
 -- de CNPJ/sócios que não podem ficar públicos via PostgREST.
 ALTER TABLE cliente_cnpj_ficha ENABLE ROW LEVEL SECURITY;

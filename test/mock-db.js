@@ -1121,6 +1121,10 @@ async function query(sql, params = []) {
       whatsapp_comprador: c.whatsapp_comprador || null, whatsapp_comprador_nome: c.whatsapp_comprador_nome || null,
       whatsapp_comprador_em: c.whatsapp_comprador_em || null,
       telefone_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].telefone) || null,
+      devedor_contumaz: (() => {
+        const d = clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].dados_brutos && clienteCnpjFicha[c.id].dados_brutos.devedorContumaz;
+        return d && String(d.consta) === 'true' ? (d.conferidoEm || 'sim') : null;
+      })(),
       telefone_comercial: c.telefone_comercial || null, email_comercial: c.email_comercial || null,
       email_nfe: c.email_nfe || null, contatos_em: c.contatos_em || null,
       email_ficha: (clienteCnpjFicha[c.id] && clienteCnpjFicha[c.id].email) || null,
@@ -1665,12 +1669,20 @@ async function query(sql, params = []) {
     const row = clienteCnpjFicha[params[0]];
     return { rows: row ? [row] : [] };
   }
+  if (s.includes('UPDATE CLIENTE_CNPJ_FICHA SET SOCIOS = $2, TELEFONE = $3, MASCARADO_COMPLETADO_EM')) {
+    const row = clienteCnpjFicha[params[0]];
+    if (!row) return { rows: [] };
+    row.socios = typeof params[1] === 'string' ? JSON.parse(params[1]) : params[1];
+    row.telefone = params[2];
+    row.mascarado_completado_em = new Date().toISOString();
+    return { rows: [row] };
+  }
   if (s.includes('INSERT INTO CLIENTE_CNPJ_FICHA')) {
     const [
       cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
       motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
       data_abertura, capital_social, logradouro, numero, complemento, bairro, municipio, uf, cep,
-      telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos,
+      telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos, sociosConferidos,
     ] = params;
     const row = {
       cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
@@ -1680,6 +1692,7 @@ async function query(sql, params = []) {
       socios: typeof socios === 'string' ? JSON.parse(socios) : socios,
       dados_brutos: typeof dados_brutos === 'string' ? JSON.parse(dados_brutos) : dados_brutos,
       atualizado_em: new Date().toISOString(),
+      mascarado_completado_em: sociosConferidos ? new Date().toISOString() : null,
     };
     clienteCnpjFicha[cliente_id] = row;
     return { rows: [row] };

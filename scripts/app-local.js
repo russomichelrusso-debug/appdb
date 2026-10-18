@@ -54,7 +54,23 @@ async function semear() {
         razao_social: 'DEPOSITO SAO JOSE MATERIAIS DE CONSTRUCAO LTDA', nome_fantasia: 'CASA DO CONSTRUTOR', situacao_cadastral: 'ATIVA',
         logradouro: 'COLOMBO', numero: '7266', bairro: 'ZONA 07', municipio: 'MARINGA', uf: 'PR', cep: '87020001',
         telefone: '(44) 3226-0011', email: 'fiscal@contabilmaringa.com.br', // "Receita: ..." na janela Contatos
-        dados_brutos: { endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' } },
+        // Quadro societário: um completo, um que nenhuma fonte completou ("abreviado na fonte");
+        // devedor contumaz "consta" (faixa vermelha recolhida no topo da ficha)
+        socios: [
+          { nome: 'JOSE ANTONIO DA SILVA', qualificacao: 'Sócio-Administrador', dataEntrada: '2012-03-05', faixaEtaria: 6 },
+          { nome: 'MARIA A. S.', qualificacao: 'Sócio' },
+        ],
+        mascarado_completado_em: hoje.toISOString(),
+        dados_brutos: {
+          endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' },
+          devedorContumaz: { fonte: 'Receita Federal — lista de devedores contumazes (LC nº 225/2026)', consta: true, conferidoEm: '2026-10-16',
+            lista: 'https://www.gov.br/receitafederal/pt-br/acesso-a-informacao/acoes-e-programas/programas-e-atividades/devedor-contumaz/lista-de-devedores-contumazes' },
+        },
+        atualizado_em: hoje.toISOString(),
+      },
+      102: {
+        razao_social: 'CASA DAS FERRAMENTAS LTDA', situacao_cadastral: 'ATIVA', municipio: 'UMUARAMA', uf: 'PR',
+        dados_brutos: { devedorContumaz: { consta: false, conferidoEm: '2026-10-16' } }, // "✓ Não consta" no rodapé do topo
         atualizado_em: hoje.toISOString(),
       },
     },
