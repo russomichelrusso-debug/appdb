@@ -250,8 +250,6 @@
     .kpi .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); margin-bottom: 5px; display: block; }
     .kpi .val { font-size: 20px; font-weight: 700; letter-spacing: -.01em; display: block; }
     .kpi .sub { font-size: 11px; color: var(--gray); margin-top: 2px; display: block; }
-    .kpi.kpiExpandable { cursor: pointer; }
-    .kpi.kpiExpandable.active { box-shadow: 0 0 0 2px var(--red) inset, var(--shadow-1); }
     .kpiExpandPanel { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; margin: -4px 0 14px; }
     .kpiExpandPanel h3 { margin: 0 0 4px; font-size: 14px; }
     .kpiExpandList { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; margin-top: 8px; }
@@ -326,8 +324,6 @@
     .kpi .delta { font-size: 11px; font-weight: 700; }
     .kpi .delta.up { color: #1E8E3E; }
     .kpi .delta.down { color: #B3261E; }
-    .dashRow { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; margin-bottom: 14px; }
-    @media (max-width: 720px) { .dashRow { grid-template-columns: 1fr; } }
     .listaAlerta { display: flex; flex-direction: column; gap: 2px; }
     .listaAlertaItem { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 12.5px; }
     .listaAlertaItem:last-child { border-bottom: none; }
@@ -338,6 +334,158 @@
     .rankItem .pos { width: 20px; height: 20px; border-radius: 6px; background: var(--fill); color: var(--gray); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
     .rankItem .nome { flex: 1; font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .rankItem .valor { font-size: 12.5px; font-weight: 700; flex-shrink: 0; }
+    /* ---------- Dashboard: grade por aparelho (10/2026) ----------
+       Celular: tudo empilhado. 700 px+ (tablet em pé): colunas. 900 px+ (tablet deitado): hero ao lado
+       dos indicadores e a página larga. 1200 px com mouse (laptop): grade de 12 colunas, opção "A". */
+    body.abaDash .wrap { max-width: 1680px; }
+    @media (min-width: 900px) { body.abaDash .wrap { padding: 0 28px 40px; } }
+    .dashGrid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; margin-bottom: 14px; }
+    .dashGrid > * { margin-bottom: 0; min-width: 0; }
+    .dashHero {
+      background: var(--red); color: #fff; border-radius: var(--r-lg); padding: 20px 22px;
+      display: flex; gap: 20px; align-items: center; cursor: pointer;
+    }
+    .dashHero .chartEmpty { color: rgba(255, 255, 255, .9); }
+    .dashHero.active { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .85); }
+    .dashHero:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    .dashHero .heroTexto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .dashHero .heroTopo { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .dashHero .heroLbl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .dashHero .heroPilula { background: rgba(255, 255, 255, .18); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
+    .dashHero .heroValor { font-size: 40px; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
+    .dashHero .heroLinha { font-size: 12.5px; color: rgba(255, 255, 255, .92); line-height: 1.45; }
+    .dashHero .heroLinha strong { color: #fff; }
+    .dashHero .heroNums { display: flex; gap: 22px; border-top: 1px solid rgba(255, 255, 255, .25); padding-top: 10px; margin-top: 2px; flex-wrap: wrap; }
+    .dashHero .heroNums b { display: block; font-size: 19px; font-weight: 800; }
+    .dashHero .heroNums span { font-size: 11.5px; color: rgba(255, 255, 255, .9); }
+    .dashHero .heroLapis { border: none; background: rgba(255, 255, 255, .18); color: #fff; border-radius: 8px; font: inherit; font-size: 12px; font-weight: 700; padding: 5px 9px; cursor: pointer; }
+    .anelObjetivo { position: relative; width: 116px; height: 116px; flex-shrink: 0; }
+    .anelObjetivo svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+    .anelObjetivo .anelCentro { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .anelObjetivo .anelCentro b { font-size: 26px; font-weight: 800; line-height: 1; }
+    .anelObjetivo .anelCentro span { font-size: 10.5px; color: rgba(255, 255, 255, .9); margin-top: 3px; }
+    .dashKpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .dashKpis .kpi { display: flex; flex-direction: column; }
+    .kpi .spark { width: 100%; height: 26px; margin-top: auto; padding-top: 6px; display: block; }
+    .dashAtencao { min-width: 0; }
+    .dashAtencaoTit { display: none; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--gray); margin-bottom: 4px; }
+    .dashAtencaoLista { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .atItem {
+      display: flex; flex-direction: column; align-items: flex-start; gap: 6px; width: 100%; min-height: 88px; text-align: left; cursor: pointer;
+      border: none; font: inherit; color: inherit; background: var(--white); border-radius: var(--r-md);
+      box-shadow: var(--shadow-1); padding: 12px 14px;
+    }
+    .atItem.active { box-shadow: 0 0 0 2px var(--red) inset, var(--shadow-1); }
+    .atItem .atNum { border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; font-size: 28px; line-height: 1; font-weight: 800; flex-shrink: 0; }
+    .atItem .atTexto { flex: 1; min-width: 0; width: 100%; }
+    .atItem .atTit { display: block; font-size: 13px; font-weight: 700; }
+    .atItem .atNomes { display: block; font-size: 11.5px; color: var(--gray); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .atItem .atSeta { display: none; color: var(--gray); }
+    .atItem[data-cor="danger"] .atNum { color: var(--danger); }
+    .atItem[data-cor="success"] .atNum { color: var(--success); }
+    .atItem[data-cor="warning"] .atNum { color: var(--warning); }
+    .dashMensal .head .segmented { flex-shrink: 0; }
+    .dashMensal .legend { margin: 2px 0 8px; }
+    .legend .tr { width: 14px; border-top: 2px dashed var(--ink); display: inline-block; }
+    .legend .md { width: 14px; border-top: 2px dotted var(--blue); display: inline-block; }
+    .dashDestaque { font-size: 12.5px; color: var(--gray); margin: 2px 0 8px; }
+    .dashDestaque strong { font-size: 18px; color: var(--ink); margin-right: 4px; }
+    .dashDestaque strong.up { color: var(--success); }
+    .dashDestaque strong.down { color: var(--danger); }
+    /* Barras em HTML (não SVG esticado): a altura não cresce com a largura da tela. */
+    .barras { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 170px; border-bottom: 1px solid var(--hairline); }
+    .barras .barCol { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
+    .barras .barVal { font-size: 10.5px; font-weight: 700; white-space: nowrap; }
+    .barras .barCol.atual .barVal { color: var(--red); }
+    .barras .bar { width: 72%; max-width: 46px; min-height: 2px; background: var(--accent-bg); border-radius: 5px 5px 2px 2px; box-shadow: inset 0 0 0 1px rgba(204, 9, 53, .18); }
+    .barras .barCol.atual .bar { background: var(--red); box-shadow: none; }
+    .barras .linhaRef { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
+    .barras .linhaRef.meta { border-top: 2px dashed var(--ink); }
+    .barras .linhaRef.media { border-top: 2px dotted var(--blue); }
+    .barras .linhaRef span { position: absolute; right: 0; top: -17px; font-size: 10.5px; font-weight: 700; background: var(--white); padding: 0 4px; }
+    .barras.semValor .barVal { display: none; }
+    .barRotulos { display: flex; gap: 6px; margin-top: 6px; }
+    .barRotulos span { flex: 1; min-width: 0; text-align: center; font-size: 10.5px; color: var(--gray); white-space: nowrap; overflow: hidden; }
+    .barRotulos span.atual { color: var(--ink); font-weight: 800; }
+    .barRotulos i { font-style: normal; }
+    .barRotulos.pontas span { flex: 0 0 auto; }
+    .barRotulos.pontas { justify-content: space-between; }
+    .famLinha { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .famLinha:last-child { margin-bottom: 0; }
+    .famLinha .famNome { width: 160px; font-size: 12.5px; font-weight: 600; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .famLinha .famTrilho { flex: 1; height: 14px; background: var(--fill); border-radius: 4px; overflow: hidden; }
+    .famLinha .famBarra { height: 100%; background: var(--blue); border-radius: 4px; }
+    .famLinha.foco .famBarra { background: var(--red); }
+    .famLinha .famValor { width: 70px; text-align: right; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+    .focoTag { color: var(--red); font-weight: 700; }
+    .rankItem .rankTrilho { flex-basis: 100%; height: 5px; background: var(--fill); border-radius: 999px; margin: 6px 0 0 30px; }
+    .rankItem .rankBarra { height: 100%; background: var(--red); border-radius: 999px; }
+    .dashTop .rankItem { flex-wrap: wrap; }
+    .dashTop .rankItem:first-child .pos { background: var(--red); color: #fff; }
+    .dashListas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+    .dashLista { border-top: 4px solid var(--corLista); }
+    .dashLista h3 { color: var(--corLista); }
+    .dashLinkBtn { margin-top: 10px; border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 600; padding: 9px 14px; border-radius: 9px; cursor: pointer; }
+
+    @media (max-width: 699px) {
+      .barras .barCol:not(.atual) .barVal { display: none; }
+      .barRotulos i { display: none; }
+      /* No celular o anel vai pro canto de cima, sem roubar a largura do texto. */
+      .dashHero { position: relative; }
+      .dashHero:has(.anelObjetivo) .heroTopo, .dashHero:has(.anelObjetivo) .heroValor { padding-right: 84px; }
+      .dashHero .heroValor { font-size: 34px; }
+      .anelObjetivo { position: absolute; top: 16px; right: 16px; width: 76px; height: 76px; }
+      .anelObjetivo .anelCentro b { font-size: 17px; }
+      .anelObjetivo .anelCentro span { font-size: 8.5px; }
+    }
+    @media (min-width: 700px) {
+      .dashGrid { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+      .dashGrid > * { grid-column: span 12; }
+      .dashHero .heroValor { font-size: 50px; }
+      .anelObjetivo { width: 140px; height: 140px; }
+      .anelObjetivo .anelCentro b { font-size: 30px; }
+      .dashKpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .barras { height: 220px; }
+      .barras .barVal { font-size: 11px; }
+      .barRotulos span { font-size: 11.5px; }
+      .dashGrid > .dashSemanal, .dashGrid > .dashTrimestral { grid-column: span 6; }
+      .dashListas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (min-width: 900px) {
+      .dashGrid > .dashHero { grid-column: span 7; }
+      .dashGrid > .dashKpis { grid-column: span 5; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .dashAtencaoLista { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .atItem { min-height: 96px; padding: 14px 16px; }
+      .atItem .atNum { font-size: 32px; }
+      .dashGrid > .dashTop, .dashGrid > .dashFamilias { grid-column: span 6; }
+    }
+    /* Laptop (opção "A"): hero 5 · indicadores 4 · "Pede atenção" 3; mensal 8 · top 4; famílias 5 · semana 4 · trimestre 3. */
+    @media (min-width: 1200px) and (hover: hover) and (pointer: fine) {
+      .dashGrid { gap: 16px; margin-bottom: 16px; }
+      .dashGrid > .dashHero { grid-column: span 5; }
+      .dashGrid > .dashKpis { grid-column: span 4; }
+      .dashGrid > .dashAtencao { grid-column: span 3; background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 16px 16px 8px; }
+      .dashAtencaoTit { display: block; }
+      .dashAtencaoLista { grid-template-columns: minmax(0, 1fr); gap: 0; }
+      .atItem { flex-direction: row; align-items: center; min-height: 60px; padding: 8px 0; gap: 12px; box-shadow: none; border-radius: 0; border-bottom: 1px solid var(--hairline); background: transparent; }
+      .atItem:last-child { border-bottom: none; }
+      .atItem:hover .atTit { color: var(--red); }
+      .atItem.active { box-shadow: none; }
+      .atItem.active .atTit { color: var(--red); }
+      .atItem .atNum { width: 44px; height: 44px; font-size: 20px; }
+      .atItem .atTexto { width: auto; }
+      .atItem[data-cor="danger"] .atNum { background: var(--danger-bg); }
+      .atItem[data-cor="success"] .atNum { background: var(--success-bg); }
+      .atItem[data-cor="warning"] .atNum { background: var(--warning-bg); }
+      .atItem .atSeta { display: inline; }
+      .dashGrid > .dashMensal { grid-column: span 8; }
+      .dashGrid > .dashTop { grid-column: span 4; }
+      .dashGrid > .dashFamilias { grid-column: span 5; }
+      .dashGrid > .dashSemanal { grid-column: span 4; }
+      .dashGrid > .dashTrimestral { grid-column: span 3; }
+      .dashListas { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+      .dashHero:hover { background: var(--red-deep); }
+    }
     .hidden { display: none !important; }
 
     .addCartBtn {
@@ -393,116 +541,82 @@
     </div>
 
     <section id="tabDashboardPrincipal">
-      <div class="kpiRow" id="kpiRowPrincipal"></div>
+      <!-- Grade do Dashboard (10/2026, opção "A" escolhida pelo usuário a partir de mockups,
+           com o anel do objetivo da opção "B"): no celular tudo empilha; a partir de 700 px
+           ganha colunas; no laptop (1200 px com mouse) vira a grade de 12 colunas. -->
+      <div class="dashGrid">
+        <div class="dashHero" id="dashHero"><div class="chartEmpty">Carregando…</div></div>
+        <div class="dashKpis" id="kpiRowPrincipal"></div>
+        <div class="dashAtencao">
+          <span class="dashAtencaoTit">Pede atenção</span>
+          <div class="dashAtencaoLista" id="dashAtencao"></div>
+        </div>
+      </div>
       <div class="kpiExpandPanel hidden" id="kpiExpandPanel"></div>
 
-      <div class="chartCard">
-        <div class="head">
-          <div>
-            <h2>Valor Entrada de Pedidos (Mensal)</h2>
-            <p>Últimos 12 meses · pedidos pela data de implantação (carteira + faturado)</p>
+      <div class="dashGrid">
+        <div class="chartCard dashMensal">
+          <div class="head">
+            <div>
+              <h2 id="mensalTitulo">Entrada de pedidos por mês</h2>
+              <p>Últimos 12 meses · pela data de implantação (carteira + faturado)</p>
+            </div>
+            <div class="segmented" id="mensalSeg">
+              <button type="button" data-serie="valor" class="active">Valor</button>
+              <button type="button" data-serie="pedidos">Pedidos</button>
+              <button type="button" data-serie="clientes">Clientes</button>
+            </div>
           </div>
+          <div class="legend" id="mensalLegenda"></div>
+          <div id="chartMensalHost"></div>
         </div>
-        <div class="chartScroll" id="chartMensalHost"></div>
-      </div>
+        <div class="card dashTop">
+          <h3>Top 5 clientes</h3>
+          <p class="cardHint">Faturado nos últimos 12 meses · relatório oficial de Faturamento.</p>
+          <div id="rankTopClientes"></div>
+        </div>
 
-      <div class="dashRow">
-        <div class="chartCard" style="margin-bottom:0;">
-          <div class="head">
-            <div>
-              <h2>Qtde. Pedidos Mês</h2>
-              <p>Últimos 12 meses · nº de pedidos que entraram no mês</p>
-            </div>
-          </div>
-          <div class="chartScroll" id="chartPedidosMesHost"></div>
+        <div class="card dashFamilias">
+          <h3>Famílias no mês</h3>
+          <p class="cardHint">Faturado no mês atual, todas as famílias · <span class="focoTag">★ foco</span> = marcada como foco no admin.</p>
+          <div id="chartFamiliaHost"></div>
         </div>
-        <div class="chartCard" style="margin-bottom:0;">
-          <div class="head">
-            <div>
-              <h2>Qtde. Clientes Mês</h2>
-              <p>Últimos 12 meses · nº de clientes com pedido no mês</p>
-            </div>
-          </div>
-          <div class="chartScroll" id="chartClientesMesHost"></div>
+        <div class="chartCard dashSemanal">
+          <div class="head"><div><h2>Vendas por semana</h2><p>Últimas 10 semanas · faturado</p></div></div>
+          <div class="dashDestaque" id="semanalDestaque"></div>
+          <div id="chartSemanalHost"></div>
         </div>
-      </div>
-
-      <div class="dashRow">
-        <div class="chartCard" style="margin-bottom:0;">
-          <div class="head">
-            <div>
-              <h2>Vendas semanal</h2>
-              <p>Últimas 10 semanas</p>
-            </div>
-          </div>
-          <div class="chartScroll" id="chartSemanalHost"></div>
-        </div>
-        <div class="chartCard" style="margin-bottom:0;">
-          <div class="head">
-            <div>
-              <h2>Vendas trimestral</h2>
-              <p>Últimos 8 trimestres</p>
-            </div>
-          </div>
-          <div class="chartScroll" id="chartTrimestralHost"></div>
+        <div class="chartCard dashTrimestral">
+          <div class="head"><div><h2>Por trimestre</h2><p>Últimos 8 trimestres · faturado</p></div></div>
+          <div class="dashDestaque" id="trimestralDestaque"></div>
+          <div id="chartTrimestralHost"></div>
         </div>
       </div>
 
-      <div class="dashRow">
-        <div class="card">
-          <h3 style="color:#B3261E;">⚠️ Em risco de cair de faixa</h3>
-          <p class="cardHint">Clientes classificados abaixo do mínimo da própria faixa — risco de perder o desconto negociado.</p>
+      <div class="dashListas">
+        <div class="card dashLista" style="--corLista: var(--danger);">
+          <h3>Em risco de cair de faixa</h3>
+          <p class="cardHint">Abaixo do mínimo da própria faixa — risco de perder o desconto negociado.</p>
           <div class="listaAlerta" id="listaRiscoQueda"></div>
         </div>
-        <div class="card">
-          <h3 style="color:#1E8E3E;">📈 Perto de subir de faixa</h3>
+        <div class="card dashLista" style="--corLista: var(--success);">
+          <h3>Perto de subir de faixa</h3>
           <p class="cardHint">Falta pouco pra promover — boa hora pra empurrar mais um pedido.</p>
           <div class="listaAlerta" id="listaPertoSubir"></div>
         </div>
-      </div>
-
-      <div class="dashRow">
-        <div class="card">
-          <h3 style="color:#B36B00;">🕒 Sem comprar há mais de 60 dias</h3>
-          <p class="cardHint">Clientes classificados que sumiram — vale uma ligação antes que percam a faixa.</p>
+        <div class="card dashLista" style="--corLista: var(--warning);">
+          <h3>Sem comprar há mais de 60 dias</h3>
+          <p class="cardHint">Pelo último pedido — vale uma ligação antes que percam a faixa.</p>
           <div class="listaAlerta" id="listaSemComprar"></div>
         </div>
-        <div class="card">
-          <h3>Top 5 clientes por faturamento</h3>
-          <p class="cardHint">Últimos 12 meses · relatório oficial de Faturamento.</p>
-          <div id="rankTopClientes"></div>
-        </div>
-      </div>
-
-      <div class="card">
-        <h3>Produtos mais vendidos</h3>
-        <p class="cardHint">Top 3 por faturamento no período — veja a curva completa na aba Curva ABC.</p>
-        <div id="rankTopProdutos"></div>
-        <button type="button" id="verCurvaAbcBtn" class="fileBtnLike" style="margin-top:10px;border:1px solid var(--hairline);background:var(--white);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;">Ver Curva ABC completa →</button>
-      </div>
-
-      <div class="dashRow">
-        <div class="chartCard" style="margin-bottom:0;">
-          <div class="head">
-            <div>
-              <h2>Valor Família de Produtos x Mês</h2>
-              <p>Mês atual · todas as famílias, por faturamento</p>
-            </div>
-          </div>
-          <div class="chartScroll" id="chartFamiliaHost"></div>
-        </div>
-        <div class="chartCard" style="margin-bottom:0;">
-          <div class="head">
-            <div>
-              <h2>Valor Produtos Foco (Dash)</h2>
-              <p>Mês atual · famílias marcadas como foco no admin</p>
-            </div>
-          </div>
-          <div class="chartScroll" id="chartFocoHost"></div>
+        <div class="card dashLista" style="--corLista: var(--blue);">
+          <h3>Produtos mais vendidos</h3>
+          <p class="cardHint">Top 3 por faturamento no período.</p>
+          <div id="rankTopProdutos"></div>
+          <button type="button" id="verCurvaAbcBtn" class="dashLinkBtn">Ver Curva ABC completa →</button>
         </div>
       </div>
     </section>
-
     <section id="tabCurvaAbc" class="hidden">
     <div class="controlsRow">
       <div class="segmented" id="verSeg">
@@ -729,12 +843,12 @@
     let kpiExpandAberto = null;
     function toggleKpiExpand(tipo) {
       const panel = document.getElementById('kpiExpandPanel');
-      document.querySelectorAll('.kpi.kpiExpandable').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('#tabDashboardPrincipal [data-kpi-tipo]').forEach(el => el.classList.remove('active'));
       if (kpiExpandAberto === tipo) { panel.classList.add('hidden'); kpiExpandAberto = null; return; }
       kpiExpandAberto = tipo;
       const cfg = kpiExpandData[tipo];
       if (!cfg) return;
-      document.querySelector(`[data-kpi-tipo="${tipo}"]`)?.classList.add('active');
+      document.querySelector(`#tabDashboardPrincipal [data-kpi-tipo="${tipo}"]`)?.classList.add('active');
       panel.classList.remove('hidden');
       panel.innerHTML = `
         <h3>${escapeHtml(cfg.titulo)}</h3>
@@ -987,6 +1101,9 @@
         btn.addEventListener('click', () => ativarTabPrincipal(btn.dataset.tab));
       });
       document.getElementById('verCurvaAbcBtn').addEventListener('click', () => ativarTabPrincipal('curvaAbc'));
+      document.querySelectorAll('#mensalSeg button').forEach(btn => {
+        btn.addEventListener('click', () => { dashMensal.serie = btn.dataset.serie; renderMensal(); });
+      });
     }
 
     // Alterna entre a aba "Dashboard" (visão geral) e "Curva ABC" (o que já
@@ -998,6 +1115,7 @@
       document.querySelectorAll('#tabSegPrincipal button').forEach(b => b.classList.toggle('active', b.dataset.tab === nome));
       document.getElementById('tabDashboardPrincipal').classList.toggle('hidden', nome !== 'dashboard');
       document.getElementById('tabCurvaAbc').classList.toggle('hidden', nome !== 'curvaAbc');
+      document.body.classList.toggle('abaDash', nome === 'dashboard'); // página larga só no Dashboard
       if (nome === 'dashboard') {
         document.getElementById('pageTitle').textContent = 'Dashboard';
         document.getElementById('topSub').textContent = 'Faturamento, metas de classificatório e vendas — visão geral pra ajudar na visita/negociação.';
@@ -1038,43 +1156,43 @@
       return `T${Math.floor((mes - 1) / 3) + 1}/${ano}`;
     }
 
-    // Gráfico de barras genérico pra série temporal (mensal/semanal/
-    // trimestral) - mesma linguagem visual do renderChart() da Curva ABC
-    // (SVG inline, barra por período), só que sem a linha de acumulado/
-    // classes A/B/C, que não fazem sentido aqui.
-    function renderBarrasSerieTemporal(hostId, pontos, opts) {
+    // Gráfico de barras do Dashboard (mensal/semanal/trimestral). Em HTML, não
+    // num SVG esticado: o SVG crescia com a largura e no laptop o gráfico
+    // mensal ficava com ~400 px de altura e letras grandes (10/2026). A altura
+    // vem do CSS (.barras); a barra do período atual sai em vermelho cheio e as
+    // fechadas em vermelho claro. opts: rotulo, valorKey, formatarValor (texto
+    // em cima da barra), atual(p) (período em andamento), meta (linha
+    // tracejada), media (linha pontilhada da média dos períodos fechados),
+    // pontas (rótulo só do 1º e do último), semValor, msgVazio.
+    function renderBarras(hostId, pontos, opts) {
       const host = document.getElementById(hostId);
-      const dados = (pontos || []).map(p => ({ data: p.periodo, valor: Number(p[opts.valorKey]) || 0 }));
-      const formatarValor = opts.formatarValor || brl;
+      const dados = (pontos || []).map(p => ({ periodo: p.periodo, valor: Number(p[opts.valorKey]) || 0, atual: opts.atual ? opts.atual(p) : false }));
       if (!dados.length || !dados.some(d => d.valor > 0)) {
         host.innerHTML = `<div class="chartEmpty">${opts.msgVazio || 'Sem faturamento suficiente nesse período ainda.'}</div>`;
         return;
       }
-      const n = dados.length;
-      const slot = opts.slot || 46;
-      const plotLeft = 40, plotRight = plotLeft + n * slot, plotTop = 14, plotBottom = 150;
-      const W = plotRight + 12, H = 176;
-      const alturaUtil = plotBottom - plotTop;
-      const barW = Math.min(28, slot * 0.6);
-      const maxValor = Math.max(...dados.map(d => d.valor), 1) * 1.15;
-      const yFor = (v) => plotBottom - (v / maxValor) * alturaUtil;
-      const barras = dados.map((d, i) => {
-        const x = plotLeft + i * slot + (slot - barW) / 2;
-        const y = yFor(d.valor);
-        const h = plotBottom - y;
-        const titulo = `${opts.rotulo(d.data)} — ${formatarValor(d.valor)}`;
-        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${Math.max(h, 1).toFixed(1)}" rx="3" fill="var(--red)"><title>${escapeHtml(titulo)}</title></rect>`;
-      }).join('');
-      const rotulos = dados.map((d, i) => {
-        const x = plotLeft + i * slot + slot / 2;
-        return `<text x="${x.toFixed(1)}" y="${(plotBottom + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--gray)">${escapeHtml(opts.rotulo(d.data))}</text>`;
-      }).join('');
-      host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="min-width:${Math.min(W, 520)}px;height:auto;display:block;" role="img" aria-label="Gráfico de vendas">
-        <line x1="${plotLeft}" y1="${plotBottom}" x2="${plotRight}" y2="${plotBottom}" stroke="var(--hairline)" stroke-width="1"/>
-        ${barras}${rotulos}
-      </svg>`;
+      const formatarValor = opts.formatarValor || (v => formatCompact(v));
+      const formatarTitulo = opts.formatarTitulo || brl;
+      // mediaSemPrimeiro: a 1ª semana da série costuma vir cortada (o filtro do servidor é "hoje - 10 semanas").
+      const fechados = dados.filter((d, i) => !d.atual && !(opts.mediaSemPrimeiro && i === 0 && dados.length > 2));
+      const media = opts.media && fechados.length ? fechados.reduce((s, d) => s + d.valor, 0) / fechados.length : null;
+      const max = Math.max(...dados.map(d => d.valor), opts.meta || 0, 1) * 1.15;
+      const pct = v => Math.min(100, (v / max) * 100).toFixed(1) + '%';
+      const linhaMeta = opts.meta ? `<div class="linhaRef meta" style="bottom:${pct(opts.meta)};"><span>objetivo ${escapeHtml(formatCompact(opts.meta, true))}</span></div>` : '';
+      const linhaMedia = media ? `<div class="linhaRef media" style="bottom:${pct(media)};"></div>` : '';
+      const colunas = dados.map(d => `
+        <div class="barCol${d.atual ? ' atual' : ''}" title="${escapeHtml(`${opts.rotulo(d.periodo)} — ${formatarTitulo(d.valor)}`)}">
+          <span class="barVal">${d.valor ? escapeHtml(formatarValor(d.valor)) : ''}</span>
+          <div class="bar" style="height:${pct(d.valor)};"></div>
+        </div>`).join('');
+      const rotulos = opts.pontas
+        ? `<span>${escapeHtml(opts.rotulo(dados[0].periodo))}</span><span>${escapeHtml(opts.rotulo(dados[dados.length - 1].periodo))}</span>`
+        // "nov/25": o ano vai num <i> que some no celular (12 rótulos não cabem inteiros).
+        : dados.map(d => `<span${d.atual ? ' class="atual"' : ''}>${escapeHtml(opts.rotulo(d.periodo)).replace('/', '<i>/') + (opts.rotulo(d.periodo).includes('/') ? '</i>' : '')}</span>`).join('');
+      host.innerHTML = `
+        <div class="barras${opts.semValor ? ' semValor' : ''}" role="img" aria-label="${escapeHtml(opts.ariaLabel || 'Gráfico de vendas')}">${linhaMeta}${linhaMedia}${colunas}</div>
+        <div class="barRotulos${opts.pontas ? ' pontas' : ''}">${rotulos}</div>`;
     }
-
     function renderListaAlerta(hostId, lista, detalheFn) {
       const host = document.getElementById(hostId);
       if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Nenhum cliente nessa situação agora.</div>'; return; }
@@ -1088,11 +1206,13 @@
     function renderRankTopClientes(lista) {
       const host = document.getElementById('rankTopClientes');
       if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Sem dados suficientes.</div>'; return; }
+      const maior = Math.max(...lista.map(c => Number(c.faturamento) || 0), 1);
       host.innerHTML = lista.map((c, i) => `
         <div class="rankItem">
           <span class="pos">${i + 1}</span>
           <span class="nome">${escapeHtml(c.nome)}</span>
           <span class="valor">${brl(c.faturamento)}</span>
+          <span class="rankTrilho"><span class="rankBarra" style="display:block;width:${((Number(c.faturamento) || 0) / maior * 100).toFixed(1)}%;"></span></span>
         </div>`).join('');
     }
 
@@ -1113,6 +1233,48 @@
       }
     }
 
+    // Dias úteis do mês (segunda a sexta, sem feriados) e quantos já passaram
+    // até ontem - a entrada de pedidos vem do relatório da madrugada, que vai
+    // até o dia anterior. Base do "no ritmo atual fecha em" do cartão do mês.
+    function diasUteisDoMes(hoje) {
+      const ano = hoje.getFullYear(), mes = hoje.getMonth();
+      const ultimo = new Date(ano, mes + 1, 0).getDate();
+      let total = 0, passados = 0;
+      for (let d = 1; d <= ultimo; d++) {
+        const dia = new Date(ano, mes, d).getDay();
+        if (dia === 0 || dia === 6) continue;
+        total++;
+        if (d < hoje.getDate()) passados++;
+      }
+      return { total, passados, restantes: total - passados };
+    }
+
+    // Linha de tendência dos últimos 12 meses no rodapé do cartão.
+    function sparkline(valores) {
+      const v = valores.filter(x => Number.isFinite(x));
+      if (v.length < 2) return '';
+      const max = Math.max(...v), min = Math.min(...v);
+      const pontos = v.map((x, i) => `${(i / (v.length - 1) * 100).toFixed(1)},${(24 - ((x - min) / ((max - min) || 1)) * 22).toFixed(1)}`).join(' ');
+      return `<svg class="spark" viewBox="0 0 100 26" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pontos}" fill="none" stroke="var(--red)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
+    }
+
+    // Anel do objetivo (opção "B" dos mockups, pedido do usuário junto da "A"):
+    // branco = entrada até agora, branco mais claro = o que o ritmo atual ainda
+    // deve trazer até o fim do mês.
+    function anelObjetivo(pct, pctRitmo) {
+      const C = 2 * Math.PI * 66;
+      const feito = Math.min(100, Math.max(0, pct)) / 100 * C;
+      const ritmo = pctRitmo == null ? 0 : Math.max(0, Math.min(100, pctRitmo) / 100 * C - feito);
+      return `<div class="anelObjetivo">
+        <svg viewBox="0 0 160 160" role="img" aria-label="${pct}% do objetivo do mês">
+          <circle cx="80" cy="80" r="66" fill="none" stroke="rgba(255,255,255,.22)" stroke-width="16"/>
+          ${ritmo > 0 ? `<circle cx="80" cy="80" r="66" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="16" stroke-dasharray="0 ${feito.toFixed(1)} ${ritmo.toFixed(1)} ${C.toFixed(1)}"/>` : ''}
+          ${feito > 0 ? `<circle cx="80" cy="80" r="66" fill="none" stroke="#fff" stroke-width="16" stroke-linecap="round" stroke-dasharray="${feito.toFixed(1)} ${C.toFixed(1)}"/>` : ''}
+        </svg>
+        <div class="anelCentro"><b>${pct}%</b><span>do objetivo</span></div>
+      </div>`;
+    }
+
     function renderKpisPrincipal(resumo, alertas, metaMensal) {
       // Procura o mês corrente pela data, não pela última linha da série: no
       // dia 1º, sem pedido importado ainda, a última linha era o mês passado
@@ -1127,6 +1289,7 @@
       // SQL_ENTRADA_PEDIDOS_MENSAL em routes/relatorios.js), não faturamento.
       const fatAtual = atual ? Number(atual.valor) || 0 : 0;
       const pedidosAtual = atual ? Number(atual.pedidos) || 0 : 0;
+      const clientesAtual = atual ? Number(atual.clientes) || 0 : 0;
       // Compara com o mesmo período do mês anterior (1º até o mesmo dia de
       // hoje - SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE): contra o mês anterior
       // inteiro, todo começo de mês dava "↓ 100%". Servidor ainda sem esse
@@ -1143,7 +1306,7 @@
       }
       const deltaPct = fatAnterior ? ((fatAtual - fatAnterior) / fatAnterior) * 100 : null;
       const ticketMedio = pedidosAtual ? fatAtual / pedidosAtual : 0;
-      const deltaHtml = deltaPct == null ? `${rotuloComparacao} — sem pedido` : `<span class="delta ${deltaPct >= 0 ? 'up' : 'down'}">${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1)}%</span> ${rotuloComparacao}`;
+      const deltaTxt = deltaPct == null ? `${rotuloComparacao} — sem pedido` : `${deltaPct >= 0 ? '↑' : '↓'} ${Math.abs(deltaPct).toFixed(1).replace('.', ',')}% ${rotuloComparacao}`;
 
       const canal = resumo.clientesAtivosPorCanal || { total: 0, porCanal: {} };
       const contas = resumo.contasSemComprar || { de3a5Meses: 0, de6a8Meses: 0 };
@@ -1170,109 +1333,186 @@
       document.getElementById('kpiExpandPanel').classList.add('hidden'); // reabre sob demanda no próximo clique
       kpiExpandAberto = null;
 
-      const metaPct = metaMensal ? Math.round((fatAtual / metaMensal) * 100) : null;
+      // ---- cartão do mês (vermelho) ----
       const lapisMeta = usuarioAtual?.is_admin
-        ? `<button type="button" onclick="editarMetaMensal()" title="Editar objetivo do mês" style="border:none;background:none;cursor:pointer;font-size:12px;padding:0 0 0 4px;vertical-align:middle;">✏️</button>`
+        ? `<button type="button" class="heroLapis" onclick="event.stopPropagation(); editarMetaMensal()" title="Editar objetivo do mês">✏️ objetivo</button>`
         : '';
+      const nomeMes = hoje.toLocaleDateString('pt-BR', { month: 'long' });
+      const uteis = diasUteisDoMes(hoje);
+      // Com menos de 3 dias úteis passados o ritmo ainda não diz nada.
+      const projecao = uteis.passados >= 3 ? fatAtual / uteis.passados * uteis.total : null;
+      let linhaMeta, numerosHtml, anel = '';
+      if (metaMensal) {
+        const metaPct = Math.round((fatAtual / metaMensal) * 100);
+        const falta = Math.max(0, metaMensal - fatAtual);
+        const pctRitmo = projecao == null ? null : Math.round((projecao / metaMensal) * 100);
+        anel = anelObjetivo(metaPct, pctRitmo);
+        linhaMeta = `<strong>${metaPct}%</strong> do objetivo de <strong>${escapeHtml(formatCompact(metaMensal, true))}</strong>`
+          + (projecao == null ? '' : ` · no ritmo atual fecha em ~<strong>${escapeHtml(formatCompact(projecao, true))}</strong> (${pctRitmo}%)`);
+        numerosHtml = falta === 0
+          ? `<div><b>Objetivo batido</b><span>${escapeHtml(formatCompact(fatAtual - metaMensal, true))} acima</span></div>`
+          : `<div><b>${escapeHtml(formatCompact(falta, true))}</b><span>faltam</span></div>`
+            + (uteis.restantes > 0 ? `<div><b>${escapeHtml(formatCompact(falta / uteis.restantes, true))}</b><span>por dia útil</span></div>` : '');
+      } else {
+        linhaMeta = 'Objetivo do mês ainda não definido'
+          + (projecao == null ? '' : ` · no ritmo atual fecha em ~<strong>${escapeHtml(formatCompact(projecao, true))}</strong>`);
+        numerosHtml = `<div><b>${pedidosAtual}</b><span>pedido${pedidosAtual === 1 ? '' : 's'}</span></div>`;
+      }
+      numerosHtml += `<div><b>${uteis.passados} de ${uteis.total}</b><span>dias úteis</span></div>`;
+      const hero = document.getElementById('dashHero');
+      hero.dataset.kpiTipo = 'entradaPedidos';
+      hero.setAttribute('role', 'button');
+      hero.tabIndex = 0;
+      hero.onclick = () => toggleKpiExpand('entradaPedidos');
+      hero.onkeydown = (e) => { if (e.target !== hero) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleKpiExpand('entradaPedidos'); } };
+      hero.innerHTML = `
+        <div class="heroTexto">
+          <div class="heroTopo">
+            <span class="heroLbl">Entrada de pedidos · ${escapeHtml(nomeMes)} ▸</span>
+            <span class="heroPilula">${escapeHtml(deltaTxt)}</span>
+          </div>
+          <div class="heroValor">${escapeHtml(formatCompact(fatAtual, true))}</div>
+          <div class="heroLinha">${linhaMeta} ${lapisMeta}</div>
+          <div class="heroNums">${numerosHtml}</div>
+        </div>
+        ${anel}`;
 
+      // ---- indicadores com a tendência dos 12 meses ----
+      const serie = (chave) => mensal.map(m => Number(m[chave]) || 0);
+      const tickets = mensal.map(m => (Number(m.pedidos) || 0) ? (Number(m.valor) || 0) / Number(m.pedidos) : NaN);
+      const pedidosAnt = anterior ? Number(anterior.pedidos) || 0 : null;
+      // Mês passado INTEIRO (a série não tem o "até o mesmo dia") - o rótulo diz isso.
+      const nomeMesAnt = new Date(hoje.getFullYear(), hoje.getMonth() - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
+      const clientesAnt = anterior ? Number(anterior.clientes) || 0 : null;
       document.getElementById('kpiRowPrincipal').innerHTML = `
-        <div class="kpi">
-          <span class="lbl">Objetivo Mês${lapisMeta}</span>
-          <span class="val">${metaMensal ? formatCompact(metaMensal, true) : '—'}</span>
-          <span class="sub">${metaPct == null ? 'Meta ainda não definida' : `${metaPct}% do objetivo`}</span>
-        </div>
-        <div class="kpi kpiExpandable" data-kpi-tipo="entradaPedidos" onclick="toggleKpiExpand('entradaPedidos')">
-          <span class="lbl">Valor Entrada de Pedidos Mês ▸</span>
-          <span class="val">${formatCompact(fatAtual, true)}</span>
-          <span class="sub">${deltaHtml}</span>
-        </div>
         <div class="kpi">
           <span class="lbl">Ticket médio</span>
           <span class="val">${formatCompact(ticketMedio, true)}</span>
           <span class="sub">${pedidosAtual} pedido${pedidosAtual === 1 ? '' : 's'} no mês</span>
+          ${sparkline(tickets)}
         </div>
         <div class="kpi">
           <span class="lbl">Clientes Ativos por Canal</span>
           <span class="val">${canal.total || 0}</span>
           <span class="sub">Varejo: ${canal.porCanal.Varejo || 0} · Atacado: ${canal.porCanal.Atacado || 0} · Rede: ${canal.porCanal.Rede || 0}</span>
         </div>
-        <div class="kpi kpiExpandable" data-kpi-tipo="de3a5" onclick="toggleKpiExpand('de3a5')">
-          <span class="lbl">Contas - 3 a 5 Meses Sem Compra ▸</span>
-          <span class="val" style="color:#B36B00;">${contas.de3a5Meses || 0}</span>
-          <span class="sub">contas classificadas ou não</span>
+        <div class="kpi">
+          <span class="lbl">Pedidos no mês</span>
+          <span class="val">${pedidosAtual}</span>
+          <span class="sub">${pedidosAnt == null ? 'últimos 12 meses' : `${nomeMesAnt} inteiro: ${pedidosAnt}`}</span>
+          ${sparkline(serie('pedidos'))}
         </div>
-        <div class="kpi kpiExpandable" data-kpi-tipo="de6a8" onclick="toggleKpiExpand('de6a8')">
-          <span class="lbl">Contas - 6 a 8 Meses Sem Compra ▸</span>
-          <span class="val" style="color:#B3261E;">${contas.de6a8Meses || 0}</span>
-          <span class="sub">contas classificadas ou não</span>
-        </div>
-        <div class="kpi kpiExpandable" data-kpi-tipo="riscoQueda" onclick="toggleKpiExpand('riscoQueda')">
-          <span class="lbl">Em risco de queda ▸</span>
-          <span class="val" style="color:#B3261E;">${(alertas.riscoDeQueda || []).length}</span>
-          <span class="sub">clientes classificados</span>
-        </div>
-        <div class="kpi kpiExpandable" data-kpi-tipo="pertoSubir" onclick="toggleKpiExpand('pertoSubir')">
-          <span class="lbl">Perto de subir ▸</span>
-          <span class="val" style="color:#1E8E3E;">${(alertas.pertoDeSubir || []).length}</span>
-          <span class="sub">oportunidade de promover</span>
+        <div class="kpi">
+          <span class="lbl">Clientes no mês</span>
+          <span class="val">${clientesAtual}</span>
+          <span class="sub">${clientesAnt == null ? 'com pedido no mês' : `${nomeMesAnt} inteiro: ${clientesAnt}`}</span>
+          ${sparkline(serie('clientes'))}
         </div>`;
+
+      // ---- "Pede atenção": toque abre a lista (mesmo painel de antes) ----
+      const nomes = (lista, extra) => {
+        const l = lista || [];
+        if (!l.length) return extra || 'ninguém agora';
+        return l.slice(0, 2).map(c => c.nome).join(', ') + (l.length > 2 ? ` +${l.length - 2}` : '');
+      };
+      const itens = [
+        { tipo: 'riscoQueda', cor: 'danger', n: (alertas.riscoDeQueda || []).length, titulo: 'Em risco de cair de faixa', nomes: nomes(alertas.riscoDeQueda) },
+        { tipo: 'pertoSubir', cor: 'success', n: (alertas.pertoDeSubir || []).length, titulo: 'Perto de subir de faixa', nomes: nomes(alertas.pertoDeSubir) },
+        { tipo: 'de3a5', cor: 'warning', n: contas.de3a5Meses || 0, titulo: '3 a 5 meses sem compra', nomes: nomes(contas.clientesDe3a5Meses, 'contas classificadas ou não') },
+        { tipo: 'de6a8', cor: 'danger', n: contas.de6a8Meses || 0, titulo: '6 a 8 meses sem compra', nomes: nomes(contas.clientesDe6a8Meses, 'contas classificadas ou não') },
+      ];
+      document.getElementById('dashAtencao').innerHTML = itens.map(it => `
+        <button type="button" class="atItem" data-cor="${it.cor}" data-kpi-tipo="${it.tipo}" onclick="toggleKpiExpand('${it.tipo}')">
+          <span class="atNum">${it.n}</span>
+          <span class="atTexto"><span class="atTit">${escapeHtml(it.titulo)}</span><span class="atNomes">${escapeHtml(it.nomes)}</span></span>
+          <span class="atSeta" aria-hidden="true">›</span>
+        </button>`).join('');
     }
 
-    async function carregarMetaMensal() {
-      try {
-        const result = await apiFetch('/api/configuracoes/meta_mensal_faturamento');
-        return Number(result.valor) || null;
-      } catch (e) { return null; }
-    }
-
-    async function editarMetaMensal() {
-      const atual = await carregarMetaMensal();
-      const digitado = prompt('Objetivo de faturamento do mês (R$):', atual || '');
-      if (digitado == null) return; // cancelou
-      const valor = Number(String(digitado).replace(/\./g, '').replace(',', '.'));
-      if (!Number.isFinite(valor) || valor <= 0) { alert('Digite um valor numérico maior que zero.'); return; }
-      try {
-        await apiFetch('/api/configuracoes/meta_mensal_faturamento', { method: 'POST', body: JSON.stringify({ valor }) });
-        carregarDashboardPrincipal();
-      } catch (e) { alert('Erro ao salvar o objetivo: ' + e.message); }
-    }
-
-    function datasDoMesAtual() {
+    // Gráfico mensal com as abas Valor/Pedidos/Clientes (eram 3 gráficos).
+    // Objetivo só na aba Valor; média pontilhada dos meses fechados.
+    let dashMensal = { resumo: null, meta: null, serie: 'valor' };
+    function renderMensal() {
+      const { resumo, meta, serie } = dashMensal;
+      if (!resumo) return;
       const hoje = new Date();
-      const primeiro = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-      const ultimo = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
-      const fmt = (d) => d.toISOString().slice(0, 10);
-      return { inicio: fmt(primeiro), fim: fmt(ultimo) };
+      const chaveAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`;
+      const cfg = {
+        valor: { titulo: 'Entrada de pedidos por mês', formatarValor: v => formatCompact(v), formatarTitulo: brl, meta },
+        pedidos: { titulo: 'Pedidos por mês', formatarValor: v => String(Math.round(v)), formatarTitulo: v => `${Math.round(v)} pedidos` },
+        clientes: { titulo: 'Clientes com pedido por mês', formatarValor: v => String(Math.round(v)), formatarTitulo: v => `${Math.round(v)} clientes` },
+      }[serie];
+      document.getElementById('mensalTitulo').textContent = cfg.titulo;
+      document.querySelectorAll('#mensalSeg button').forEach(b => b.classList.toggle('active', b.dataset.serie === serie));
+      document.getElementById('mensalLegenda').innerHTML = `
+        <span><span class="sw" style="background:var(--red);"></span>Mês atual (parcial)</span>
+        <span><span class="sw" style="background:var(--accent-bg);box-shadow:inset 0 0 0 1px rgba(204,9,53,.25);"></span>Meses fechados</span>
+        ${cfg.meta ? '<span><span class="tr"></span>Objetivo do mês</span>' : ''}
+        <span><span class="md"></span>Média dos meses fechados</span>`;
+      renderBarras('chartMensalHost', resumo.mensal, {
+        rotulo: rotuloMes, valorKey: serie, formatarValor: cfg.formatarValor, formatarTitulo: cfg.formatarTitulo,
+        atual: p => String(p.periodo).slice(0, 7) === chaveAtual, meta: cfg.meta || null, media: true, ariaLabel: cfg.titulo,
+      });
     }
 
-    // Agrupa por família (categoria) e renderiza os dois gráficos que
-    // dependem dessa mesma busca do mês atual: todas as famílias, e só as
-    // marcadas como "foco" no admin - um fetch só, duas visões derivadas.
-    function renderGraficosProdutosMes(produtosMes, categoriasFoco) {
+    // Semana e trimestre. As séries do servidor só trazem período com
+    // faturamento (sem generate_series): o período "atual" e a comparação do
+    // trimestre saem pela data, nunca pela posição na lista.
+    function renderSemanaTrimestre(resumo) {
+      const hoje = new Date();
+      const doisDig = n => String(n).padStart(2, '0');
+      const segunda = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate() - ((hoje.getDay() + 6) % 7));
+      const chaveSemana = `${segunda.getFullYear()}-${doisDig(segunda.getMonth() + 1)}-${doisDig(segunda.getDate())}`;
+      const semanal = resumo.semanal || [];
+      const ehSemanaAtual = p => String(p.periodo).slice(0, 10) === chaveSemana;
+      renderBarras('chartSemanalHost', semanal, { rotulo: rotuloSemana, valorKey: 'faturamento', atual: ehSemanaAtual, media: true, mediaSemPrimeiro: true, pontas: true, semValor: true, ariaLabel: 'Vendas por semana' });
+      const destSem = document.getElementById('semanalDestaque');
+      if (semanal.length) {
+        const daSemana = semanal.find(ehSemanaAtual);
+        const fechadas = semanal.filter((s, i) => !ehSemanaAtual(s) && !(i === 0 && semanal.length > 2)).map(s => Number(s.faturamento) || 0);
+        const media = fechadas.length ? fechadas.reduce((a, b) => a + b, 0) / fechadas.length : 0;
+        destSem.innerHTML = `<strong>${escapeHtml(formatCompact(daSemana ? Number(daSemana.faturamento) || 0 : 0, true))}</strong>esta semana até agora${media ? ` · média ${escapeHtml(formatCompact(media, true))}` : ''}`;
+      } else destSem.innerHTML = '';
+
+      const tri = resumo.trimestral || [];
+      const triDe = (ano, t) => tri.find(p => { const { ano: a, mes } = partesDoPeriodo(p.periodo); return a === ano && Math.floor((mes - 1) / 3) + 1 === t; });
+      const triAtual = Math.floor(hoje.getMonth() / 3) + 1;
+      const atualP = triDe(hoje.getFullYear(), triAtual);
+      renderBarras('chartTrimestralHost', tri, { rotulo: rotuloTrimestre, valorKey: 'faturamento', atual: p => p === atualP, pontas: true, semValor: true, ariaLabel: 'Vendas por trimestre' });
+      // Último trimestre fechado contra o mesmo trimestre do ano anterior.
+      const anoF = triAtual === 1 ? hoje.getFullYear() - 1 : hoje.getFullYear();
+      const tF = triAtual === 1 ? 4 : triAtual - 1;
+      const fechado = triDe(anoF, tF), anoAntes = triDe(anoF - 1, tF);
+      const destTri = document.getElementById('trimestralDestaque');
+      const vF = fechado ? Number(fechado.faturamento) || 0 : 0, vA = anoAntes ? Number(anoAntes.faturamento) || 0 : 0;
+      if (vF && vA) {
+        const d = (vF - vA) / vA * 100;
+        destTri.innerHTML = `<strong class="${d >= 0 ? 'up' : 'down'}">${d >= 0 ? '↑' : '↓'} ${Math.abs(d).toFixed(1).replace('.', ',')}%</strong>${escapeHtml(rotuloTrimestre(fechado.periodo))} vs ${escapeHtml(rotuloTrimestre(anoAntes.periodo))}`;
+      } else destTri.innerHTML = '';
+    }
+
+    // Famílias do mês em barras deitadas (o nome cabe inteiro); as marcadas
+    // como foco no admin saem em vermelho com ★ - antes era um 2º gráfico só
+    // com elas.
+    function renderFamiliasMes(produtosMes, categoriasFoco) {
+      const host = document.getElementById('chartFamiliaHost');
       const porCategoria = new Map();
-      for (const p of produtosMes) {
-        const atual = porCategoria.get(p.categoria) || 0;
-        porCategoria.set(p.categoria, atual + p.faturamento_total);
-      }
-      // Eixo categórico (nome da família) em vez de datas - precisa de mais
-      // espaço por barra que o padrão de 46px usado nos gráficos de tempo
-      // (rótulos de data são sempre curtos, "out/25"), senão os nomes se
-      // sobrepõem.
-      const truncar = (c) => c.length > 12 ? c.slice(0, 11) + '…' : c;
-      const todasOrdenadas = [...porCategoria.entries()].sort((a, b) => b[1] - a[1]);
-      renderBarrasSerieTemporal('chartFamiliaHost', todasOrdenadas.map(([categoria, valor]) => ({ periodo: categoria, valor })), {
-        rotulo: truncar, valorKey: 'valor', msgVazio: 'Sem faturamento no mês ainda.', slot: 90,
-      });
+      for (const p of produtosMes) porCategoria.set(p.categoria, (porCategoria.get(p.categoria) || 0) + p.faturamento_total);
+      const ordenadas = [...porCategoria.entries()].filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+      if (!ordenadas.length) { host.innerHTML = '<div class="chartEmpty">Sem faturamento no mês ainda.</div>'; return; }
       const foco = new Set(categoriasFoco || []);
-      const focoOrdenado = todasOrdenadas.filter(([categoria]) => foco.has(categoria));
-      renderBarrasSerieTemporal('chartFocoHost', focoOrdenado.map(([categoria, valor]) => ({ periodo: categoria, valor })), {
-        rotulo: truncar, valorKey: 'valor', msgVazio: 'Nenhuma família marcada como foco (configure no painel admin).', slot: 90,
-      });
+      const maior = ordenadas[0][1];
+      host.innerHTML = ordenadas.map(([categoria, valor]) => `
+        <div class="famLinha${foco.has(categoria) ? ' foco' : ''}" title="${escapeHtml(`${categoria} — ${brl(valor)}`)}">
+          <span class="famNome">${escapeHtml(String(categoria).replace(/^\d+\s*-\s*/, ''))}${foco.has(categoria) ? ' ★' : ''}</span>
+          <span class="famTrilho"><span class="famBarra" style="display:block;width:${(valor / maior * 100).toFixed(1)}%;"></span></span>
+          <span class="famValor">${escapeHtml(formatCompact(valor, true))}</span>
+        </div>`).join('');
     }
 
     async function carregarDashboardPrincipal() {
-      const kpiHost = document.getElementById('kpiRowPrincipal');
-      kpiHost.innerHTML = '<div class="chartEmpty" style="grid-column:1/-1;">Carregando…</div>';
+      const hero = document.getElementById('dashHero');
+      hero.innerHTML = '<div class="chartEmpty">Carregando…</div>';
       try {
         const { inicio, fim } = datasDoMesAtual();
         const [resumo, alertas, metaMensal, produtosMesRaw, focoCfg] = await Promise.all([
@@ -1283,19 +1523,17 @@
           apiFetch('/api/configuracoes/produtos_foco_categorias').catch(() => ({ valor: [] })),
         ]);
         renderKpisPrincipal(resumo, alertas, metaMensal);
-        renderBarrasSerieTemporal('chartMensalHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'valor' });
-        renderBarrasSerieTemporal('chartPedidosMesHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'pedidos', formatarValor: v => String(Math.round(v)) });
-        renderBarrasSerieTemporal('chartClientesMesHost', resumo.mensal, { rotulo: rotuloMes, valorKey: 'clientes', formatarValor: v => String(Math.round(v)) });
-        renderBarrasSerieTemporal('chartSemanalHost', resumo.semanal, { rotulo: rotuloSemana, valorKey: 'faturamento' });
-        renderBarrasSerieTemporal('chartTrimestralHost', resumo.trimestral, { rotulo: rotuloTrimestre, valorKey: 'faturamento' });
+        dashMensal = { ...dashMensal, resumo, meta: metaMensal };
+        renderMensal();
+        renderSemanaTrimestre(resumo);
         renderListaAlerta('listaRiscoQueda', alertas.riscoDeQueda, c => `Faltam ${brl(c.faltaPraManter)}`);
         renderListaAlerta('listaPertoSubir', alertas.pertoDeSubir, c => `Faltam ${brl(c.faltaPraProximaFaixa)}`);
         renderListaAlerta('listaSemComprar', alertas.semComprarRecente, c => `${c.diasSemComprar} dias`);
         renderRankTopClientes(resumo.topClientes);
         carregarTopProdutos();
-        renderGraficosProdutosMes((produtosMesRaw || []).map(mapProdutoRow), focoCfg.valor);
+        renderFamiliasMes((produtosMesRaw || []).map(mapProdutoRow), focoCfg.valor);
       } catch (e) {
-        kpiHost.innerHTML = `<div class="ap-msg error inline" style="grid-column:1/-1;">${escapeHtml(e.message)}</div>`;
+        hero.innerHTML = `<div class="ap-msg error inline" style="margin:0;flex:1;">${escapeHtml(e.message)}</div>`;
       }
     }
 
