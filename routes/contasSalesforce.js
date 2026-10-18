@@ -44,10 +44,15 @@ function hojeBrasil() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 }
 
+function ehContaDoRepresentante(c) {
+  return /^REPRESENTANTE/i.test(String(c.classificatorio || '').trim());
+}
+
 // De quem é a base da conta: região "VENDAS INTERNAS" = telemarketing da Cortag
 // (pela política, a conta inativa passa do representante pra outro e, depois,
 // pro telemarketing); senão, o proprietário.
 function baseDaConta(c) {
+  if (ehContaDoRepresentante(c)) return null;
   if (/VENDAS\s*INTERNAS/i.test(String(c.regiao || '').normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return 'Telemarketing';
   return c.proprietario || null;
 }
@@ -88,7 +93,9 @@ async function importarContasSalesforce(dados, usuario) {
   if (contas.length === 0) return { status: 400, json: { erro: 'Nenhuma conta válida no relatório.' } };
   const principal = proprietarioPrincipal(contas);
   for (const c of contas) {
-    c.deOutro = c.situacao === 'Ativo' && !!c.proprietario && c.proprietario !== principal;
+    // classificatório "Representante" = a conta da própria representação (a
+    // RUSSO'S, dona Vilmar no Salesforce): nunca é "de outro vendedor"
+    c.deOutro = c.situacao === 'Ativo' && !!c.proprietario && c.proprietario !== principal && !ehContaDoRepresentante(c);
     c.base = baseDaConta(c);
   }
   const hoje = hojeBrasil();

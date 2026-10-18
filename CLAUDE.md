@@ -886,7 +886,8 @@ Supabase, sem PR — não é mudança de código.
     produto usa todos os clientes); na busca aparece "base Rodrigo · ativa". As
     vendas antigas continuam no faturamento (foram do representante). Marina (vendas internas) e Vilmar caem na mesma regra.
     Em 18/10/2026 eram 14 clientes do app marcados (10 do Rodrigo - SOLER, R$ 288 mil de histórico, ficaria no topo do Para
-    reativar - 3 da Marina e a RUSSO'S do Vilmar). Vale até a próxima importação: quem voltar pra carteira precisa de um
+    reativar - e 3 da Marina). A conta com classificatório "Representante" é a da própria representação (a RUSSO'S,
+    Sergio e Michel Russo, dona Vilmar no Salesforce): nunca é "de outro vendedor" nem ganha selo de base. Vale até a próxima importação: quem voltar pra carteira precisa de um
     relatório novo.
   - **Inativa** fora do app vira cliente (código, CNPJ, nome; classificatório pela política, `classificatorioDaConta`;
     "Sem Classificatório" fica sem; `classificatorio_atualizado_em` NULL pra qualquer relatório do ERP ter prioridade; fora dos

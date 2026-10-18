@@ -3412,7 +3412,7 @@ async function main() {
         'loja@example.com', dono, 'TRD TRANSPORTE', ultima, null];
       const xlsSf = planilha({ 'Todas Contas': [
         ['Todas Contas - Representante (Parceiros Cortag)'],
-        ['Exibindo registros 1 - 7'],
+        ['Exibindo registros 1 - 8'],
         [],
         cabSf,
         contaSf('LOJA AMARELA', 9601, 'Ativo', '96.010.000/0001-01', 'Varejo Master (20)', '44 3333 4444', 'SERGIO LUIZ', '10/09/2026 10:00'),
@@ -3426,12 +3426,14 @@ async function main() {
         // no app sem histórico: a última compra vem do Salesforce
         // inativa no Salesforce com compra há 8 meses com outro vendedor (fora do relatório do ERP do representante)
         contaSf('LOJA DA MARINA PARADA', 9703, 'Inativo', '97.030.000/0001-03', 'Varejo Master (20)', '(44) 3333-4444', 'Marina', `${br(`${mesISO(8)}-20`)} 10:00`, 'VENDAS INTERNAS'),
+        // a conta da própria representação (dona outra pessoa no Salesforce) não é de outro vendedor
+        contaSf('REPRESENTACOES DO TESTE LTDA', 9704, 'Ativo', '97.040.000/0001-04', 'Representante', '(44) 3333-4444', 'Vilmar', '01/10/2026 08:00'),
         contaSf('LOJA SEM HISTORICO', 9606, 'Inativo', '96.060.000/0001-06', 'Sem Classificatório', '(44) 99812-4471', 'SERGIO LUIZ', `${br(`${mesISO(20)}-03`)} 14:00`),
       ] });
       assert(Importadores.detectarTipoPlanilha(XLSXt, xlsSf) === 'contasSalesforce', 'importadores: reconhece o relatório "Todas Contas" do Salesforce (antes do Classificatório)');
       const lidoSf = Importadores.lerContasSalesforce(XLSXt, xlsSf);
       const c9701 = lidoSf.contas.find(c => c.codigo_oficial === '9701');
-      assert(lidoSf.contas.length === 7 && c9701.situacao === 'Inativo' && c9701.proprietario === 'Rodrigo' && c9701.ultima_compra === `${mesISO(30)}-15`
+      assert(lidoSf.contas.length === 8 && c9701.situacao === 'Inativo' && c9701.proprietario === 'Rodrigo' && c9701.ultima_compra === `${mesISO(30)}-15`
         && c9701.documento === '97.010.000/0001-01' && c9701.regiao === 'R2' && c9701.classificatorio === 'Varejo Exclusive (15)',
         `importadores: lê as contas do Salesforce (data com hora vira só o dia): ${JSON.stringify(lidoSf.contas.slice(0, 4))}`);
       const { classificatorioDaConta } = require('../routes/contasSalesforce');
