@@ -20184,9 +20184,8 @@
         }
 
         // CSV: só o relatório de contas do Salesforce (exportação "Detalhes apenas")
-        if (/\.csv$/i.test(nome)) {
-          try { CortagImportadores.lerContasSalesforce(await loadSheetJs(), await lerArquivoComoArrayBuffer(file)); return 'contasSalesforce'; } catch (e) { return null; }
-        }
+        // (o leitor diz o que falta se não for)
+        if (/\.csv$/i.test(nome)) return 'contasSalesforce';
         if (!/\.xlsx?$/i.test(nome)) return null;
         // planilhas: importadores.js (mesmo reconhecimento da importação por e-mail)
         return CortagImportadores.detectarTipoPlanilha(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
@@ -22171,9 +22170,11 @@
         try { return localStorage.getItem(ROTA_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
       }
       // 'MARINGA|PR' -> clientes da cidade, pelo município da ficha
-      function cidadesDosClientes() {
+      // lista: Rota/mapa usam só a carteira (sem conta de outro vendedor); o "Onde"
+      // da ficha do produto passa todos os clientes
+      function cidadesDosClientes(lista = clientesDaCarteira()) {
         const porChave = new Map();
-        for (const c of clientesDaCarteira()) {
+        for (const c of lista) {
           const e = c.endereco;
           if (!e || !e.municipio) continue;
           const chave = `${chaveCidade(e.municipio)}|${String(e.uf || '').trim().toUpperCase()}`;
@@ -23518,7 +23519,8 @@
         const hoje = hojeLocalISO();
         const limite = somarDiasISO(hoje, -VISITAS_JANELA_DIAS);
         const desdeCompra = somarDiasISO(hoje, -VISITAS_COMPRA_DIAS);
-        const todos = visitasClientes();
+        // conta ativa de outro vendedor (Salesforce) não entra nas listas
+        const todos = visitasClientes().filter(c => !c.outro_vendedor);
         const semCompra = todos.filter(c => c.ultima_visita && c.ultima_visita >= limite && !(c.ultima_compra && c.ultima_compra >= c.ultima_visita))
           .sort((a, b) => a.ultima_visita.localeCompare(b.ultima_visita) || String(a.nome).localeCompare(String(b.nome)));
         const semVisita = todos.filter(c => c.ultima_compra && c.ultima_compra > desdeCompra && !(c.ultima_visita && c.ultima_visita >= limite))
@@ -24179,7 +24181,7 @@
       function aplicarProdLocal(lista) {
         const clientes = loadClientesLocais();
         const carteira = new Map(clientes.map(x => [String(x.id), x]));
-        const cidades = cidadesDosClientes();
+        const cidades = cidadesDosClientes(clientes);
         const f = prodLocalFiltro();
         const nomeDaCidade = (c) => { const k = chaveCidadeDoCliente(c); return k && cidades.has(k) ? cidades.get(k).nome : ''; };
         const base = lista.map(r => {

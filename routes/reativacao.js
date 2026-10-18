@@ -237,7 +237,7 @@ router.get('/', async (req, res) => {
          SELECT cliente_id, proprietario, situacao, de_outro_vendedor, ultima_compra::text AS ultima_compra, telefone, email, cidade, uf
          FROM contas_salesforce WHERE cliente_id IS NOT NULL`),
       pool.query(`/* reativacao:meta */ SELECT valor FROM configuracoes WHERE chave = $1`, [CHAVE_CONTAS_SF]),
-      // placar "Recuperados": inativo no Salesforce que pediu depois do dia em
+      // placar "Recuperados": inativo no Salesforce que pediu a partir do dia em
       // que entrou na lista (entrada do pedido sem a série de 7 dígitos, ou
       // pedido do app); valor = o que entrou no ERP depois desse dia
       pool.query(
@@ -245,12 +245,12 @@ router.get('/', async (req, res) => {
          SELECT a.cliente_id, c.nome, a.desde::text AS desde, a.proprietario,
                 (SELECT min(COALESCE(p.data_implantacao, p.data_faturamento)) FROM pedidos_oficiais_itens p
                  WHERE p.cliente_codigo_oficial = c.codigo_oficial AND length(p.nr_pedido) <= 6
-                   AND COALESCE(p.data_implantacao, p.data_faturamento) > a.desde)::text AS primeira_oficial,
+                   AND COALESCE(p.data_implantacao, p.data_faturamento) >= a.desde)::text AS primeira_oficial,
                 (SELECT sum(p.valor) FROM pedidos_oficiais_itens p
                  WHERE p.cliente_codigo_oficial = c.codigo_oficial AND length(p.nr_pedido) <= 6
-                   AND COALESCE(p.data_implantacao, p.data_faturamento) > a.desde) AS valor,
+                   AND COALESCE(p.data_implantacao, p.data_faturamento) >= a.desde) AS valor,
                 (SELECT min(${sqlDiaDoPedido()}) FROM pedidos ped
-                 WHERE ped.cliente_id = a.cliente_id AND ${SQL_PEDIDO_APP_VALIDO} AND ${sqlDiaDoPedido()} > a.desde)::text AS primeira_app
+                 WHERE ped.cliente_id = a.cliente_id AND ${SQL_PEDIDO_APP_VALIDO} AND ${sqlDiaDoPedido()} >= a.desde)::text AS primeira_app
          FROM reativacao_alvos a JOIN clientes c ON c.id = a.cliente_id`),
     ]);
 

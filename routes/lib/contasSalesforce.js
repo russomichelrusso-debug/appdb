@@ -14,6 +14,15 @@ async function clientesDeOutroVendedor(db = pool) {
   return new Map(r.rows.map(l => [String(l.cliente_id), l.proprietario || 'outro vendedor']));
 }
 
+// ids (texto) das contas INATIVAS no Salesforce. As que viraram cliente pela
+// importação vêm com classificatório e sem compra no app: quem chama tira dos
+// alertas de classificatório só as que ainda não compraram (estão no Para reativar)
+async function clientesInativosNoSalesforce(db = pool) {
+  const r = await db.query(
+    `/* contas-sf:inativos */ SELECT cliente_id FROM contas_salesforce WHERE cliente_id IS NOT NULL AND situacao = 'Inativo'`);
+  return new Set(r.rows.map(l => String(l.cliente_id)));
+}
+
 // Proprietário principal = o que tem mais contas ativas no relatório (o dono da
 // carteira que exportou); empate pelo total de contas.
 function proprietarioPrincipal(contas) {
@@ -53,4 +62,4 @@ function primeiroTelefone(texto) {
   return null;
 }
 
-module.exports = { clientesDeOutroVendedor, proprietarioPrincipal, ehAtivo, primeiroTelefone };
+module.exports = { clientesDeOutroVendedor, clientesInativosNoSalesforce, proprietarioPrincipal, ehAtivo, primeiroTelefone };

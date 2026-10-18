@@ -3404,6 +3404,8 @@ async function main() {
     // cliente e entra no Para reativar com a última compra do Salesforce;
     // placar "Recuperados". Layout do relatório real de 18/10/2026.
     {
+      // leituras com o outro usuário: o limite de 40/min das rotas de carteira é por usuário
+      const getComoOutro = async (url) => { const t = authToken; authToken = tokenOutro; const r = await req('GET', url); authToken = t; return r; };
       const cabSf = ['Nome da Empresa', 'Data de criação', 'Cidade', 'Código Região', 'Estado da Conta', 'Código cliente ERP', 'Situação', 'CPF/CNPJ',
         'Classificatório', 'Telefone', 'Email comercial', 'Primeiro nome do proprietário', 'Transportadora', 'Data da última compra', 'Aprovado Gestor'];
       const contaSf = (nome, cod, sit, cnpj, classi, tel, dono, ultima) => [nome, '05/01/2018', 'Maringá', 'R2', 'PR', cod, sit, cnpj, classi, tel,
@@ -3449,13 +3451,26 @@ async function main() {
         && novo && novo.nome === 'LOJA DO RODRIGO PARADA' && novo.classificatorio_tipo === 'Varejo Exclusive' && Number(novo.classificatorio_desconto) === 15
         && !mockDb.__getClientes().some(c => c.codigo_oficial === '9702'),
         `contas do Salesforce: cria só o inativo fora do app, com classificatório pela política: ${JSON.stringify(res.body)}`);
-      res = await req('GET', '/api/clientes/sync');
+      res = await getComoOutro('/api/clientes/classificatorio/alertas');
+      assert(res.status === 200 && !res.body.riscoDeQueda.some(c => c.id === novo.id),
+        `contas do Salesforce: cliente criado de conta inativa (com classificatório, sem compra) não entra em "risco de queda": ${JSON.stringify(res.body.riscoDeQueda.map(c => c.id))}`);
+      {
+        const { documentoNormalizado, situacaoDaConta } = require('../routes/contasSalesforce');
+        assert(documentoNormalizado(1234567000190) === '01.234.567/0001-90' && documentoNormalizado('012.345.678-90') === '012.345.678-90'
+          && documentoNormalizado('123') === null && situacaoDaConta(' inativo ') === 'Inativo' && situacaoDaConta('Prospect') === null && situacaoDaConta('') === null,
+          'contas do Salesforce: CNPJ que veio como número volta com o zero; situação só Ativo/Inativo');
+        const antes = mockDb.__getClientes().length;
+        res = await req('POST', '/api/reativacao/contas-salesforce', { contas: [...lidoSf.contas, { codigo_oficial: '9799', nome: 'LOJA PROSPECT', situacao: 'Prospect', proprietario: 'SERGIO LUIZ' }] });
+        assert(res.status === 200 && mockDb.__getClientes().length === antes && res.body.principal === 'SERGIO LUIZ' && res.body.inativos === 3,
+          `contas do Salesforce: situação desconhecida não cria cliente: ${JSON.stringify(res.body)}`);
+      }
+      res = await getComoOutro('/api/clientes/sync');
       {
         const porId = (id) => res.body.clientes.find(c => c.id === id);
         assert(porId(9605).outro_vendedor === 'Rodrigo' && !porId(9601).outro_vendedor && !porId(novo.id).outro_vendedor,
           `contas do Salesforce: /sync marca o cliente ativo de outro vendedor: ${JSON.stringify([porId(9605), porId(9601)].map(c => c && c.outro_vendedor))}`);
       }
-      res = await req('GET', '/api/reativacao');
+      res = await getComoOutro('/api/reativacao');
       {
         const lista = res.body.clientes || [];
         const por = (id) => lista.find(c => c.cliente_id === id);
@@ -3478,7 +3493,7 @@ async function main() {
       mockDb.__seed({ pedidosOficiaisItens: [
         { nr_pedido: '697011', codigo_sku: '60863', cliente_codigo_oficial: '9701', quantidade: 2, valor: 1500, data_implantacao: antesBr(2), data_faturamento: null, status: 'carteira' },
       ] });
-      res = await req('GET', '/api/reativacao');
+      res = await getComoOutro('/api/reativacao');
       {
         const rec = res.body.recuperados.clientes;
         assert(rec.length === 1 && rec[0].cliente_id === novo.id && rec[0].dia === antesBr(2) && rec[0].valor === 1500 && rec[0].era_de === 'Rodrigo'

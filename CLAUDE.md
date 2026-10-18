@@ -876,25 +876,29 @@ Supabase, sem PR — não é mudança de código.
   `lerContasSalesforce` em `importadores.js`, `routes/contasSalesforce.js`, `POST /api/reativacao/contas-salesforce`), foto
   trocada inteira em `contas_salesforce`:
   - **Principal** = proprietário com mais contas ativas no arquivo (quem exportou). Conta **Ativa** de outro proprietário =
-    `de_outro_vendedor` (`clientesDeOutroVendedor`, `routes/lib/contasSalesforce.js`): sai do Para reativar, Visitas, alertas de
-    classificatório e Dashboard (contas sem comprar/ativos por canal) no servidor; no app vem no `/sync` como `outro_vendedor` e
-    sai de Perto de mim, Rota por cidade e mapa (`clientesDaCarteira`, `index.html`); na busca aparece "atende: Rodrigo". As
+    `de_outro_vendedor` (`clientesDeOutroVendedor`, `routes/lib/contasSalesforce.js`): sai do Para reativar, Recompra, alertas de
+    classificatório e Dashboard (contas sem comprar/ativos por canal) no servidor; `/api/visitas` manda `outro_vendedor` e o app
+    tira só das listas de Visitas × compras (a linha "Sua última visita" do card continua); no app vem no `/sync` como
+    `outro_vendedor` e sai de Perto de mim, Rota por cidade e mapa (`clientesDaCarteira`, `index.html`; o "Onde" da ficha do
+    produto usa todos os clientes); na busca aparece "atende: Rodrigo". As
     vendas antigas continuam no faturamento (foram do representante). Marina (vendas internas) e Vilmar caem na mesma regra.
     Em 18/10/2026 eram 14 clientes do app marcados (10 do Rodrigo - SOLER, R$ 288 mil de histórico, ficaria no topo do Para
     reativar - 3 da Marina e a RUSSO'S do Vilmar). Vale até a próxima importação: quem voltar pra carteira precisa de um
     relatório novo.
   - **Inativa** fora do app vira cliente (código, CNPJ, nome; classificatório pela política, `classificatorioDaConta`;
-    "Sem Classificatório" fica sem) - 133 em 18/10/2026, quase todos do Rodrigo parados há 3+ anos. Liga pelo código, depois
+    "Sem Classificatório" fica sem; `classificatorio_atualizado_em` NULL pra qualquer relatório do ERP ter prioridade; fora dos
+    alertas de classificatório enquanto não comprar, `clientesInativosNoSalesforce`) - 133 em 18/10/2026, quase todos do Rodrigo parados há 3+ anos. Liga pelo código, depois
     CNPJ (o cliente ganha o código), depois nome só de cliente sem código e sem CNPJ e só se for um (filiais). Cliente sem CNPJ
-    ganha o do Salesforce. A ficha de CNPJ (40/noite) e a posição pelo endereço se completam sozinhas de madrugada. Ativa de
+    ganha o do Salesforce (CNPJ que veio como número volta com o zero da frente, `documentoNormalizado`). Situação que
+    não é "Ativo"/"Inativo" (vazia, "Prospect") fica sem situação: não cria cliente nem entra no placar. A ficha de CNPJ (40/noite) e a posição pelo endereço se completam sozinhas de madrugada. Ativa de
     outro vendedor fora do app **não** vira cliente.
   - **Para reativar** usa a última compra do Salesforce junto com a do ERP/app (a mais nova): o relatório Sem Compra do ERP só
     tem os pedidos do representante (código 20). Conta Inativa no Salesforce entra mesmo com compra dentro do período do
     relatório do ERP (foi com outro vendedor). Selo **"era do Rodrigo"**, telefone do Salesforce (`primeiroTelefone`: o 1º
     número com DDD do texto livre) com **WhatsApp** quando é celular; sem valor conhecido, quem parou há menos tempo primeiro.
   - **Placar "Recuperados"** (topo do Para reativar e "🏆 N recuperados" no cabeçalho): `reativacao_alvos` = conta Inativa no
-    Salesforce desde o dia da 1ª importação em que apareceu (reimportar não muda); recuperado = pedido depois desse dia
-    (implantação no ERP sem a série de 7 dígitos, ou pedido do app); valor = entrada no ERP depois do dia. Mês = o de hoje.
+    Salesforce desde o dia da 1ª importação em que apareceu (reimportar não muda); recuperado = pedido a partir desse dia
+    (implantação no ERP sem a série de 7 dígitos, ou pedido do app); valor = entrada no ERP a partir do dia. Mês = o de hoje.
   - Sem data no arquivo: a foto vale pelo dia da importação. Em aberto: as 8 inativas que nunca compraram não entram no Para
     reativar (sem data); as 21 "Ativo" sem compra há mais de 6 meses são erro de cadastro do Salesforce.
 

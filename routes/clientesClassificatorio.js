@@ -6,7 +6,7 @@ const { descontoPelaPolitica, chaveTipo } = require('./lib/politicaComercial');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { SQL_HOJE_BR, SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido } = require('./lib/comprasApp');
 const { avisarImportacao, quantos } = require('./lib/novidades');
-const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
+const { clientesDeOutroVendedor, clientesInativosNoSalesforce } = require('./lib/contasSalesforce');
 
 router.param('id', validarIdInteiro);
 
@@ -716,6 +716,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
     ]);
     // ativo com outro vendedor (Salesforce) não entra nos alertas
     const outros = await clientesDeOutroVendedor();
+    const inativosSf = await clientesInativosNoSalesforce();
     const porId = new Map(clientesResult.rows.filter(c => !outros.has(String(c.id))).map(c => [c.id, c]));
     const erpPorCliente = new Map(erpResult.rows.map(r => [r.cliente_id, r]));
     const anoAtual = Number(anoResult.rows[0].ano_atual);
@@ -735,6 +736,9 @@ router.get('/classificatorio/alertas', async (req, res) => {
     for (const row of result.rows) {
       const cliente = porId.get(row.cliente_id);
       if (!cliente) continue;
+      // conta inativa que veio do Salesforce com classificatório e nunca comprou
+      // no app: está no Para reativar, não tem faixa a perder
+      if (inativosSf.has(String(row.cliente_id)) && !diaDoBanco(row.ultimo_pedido) && !diaDoBanco(row.ultima_compra)) continue;
       const ritmo = calcularRitmoTrimestral({
         tipo: cliente.classificatorio_tipo,
         pic: cliente.classificatorio_pic,

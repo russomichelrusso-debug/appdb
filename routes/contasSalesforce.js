@@ -15,12 +15,28 @@
 const { pool, registrarImportacao } = require('../db');
 const { limparNomeCliente } = require('../clientMatcher');
 const { classificatorioDaPolitica } = require('./lib/politicaComercial');
-const { proprietarioPrincipal, ehAtivo } = require('./lib/contasSalesforce');
+const { proprietarioPrincipal } = require('./lib/contasSalesforce');
 
 const CHAVE_RELATORIO = 'contas_salesforce_relatorio';
 const MAX_CONTAS = 5000;
 const RE_DIA = /^\d{4}-\d{2}-\d{2}$/;
 const soDigitos = (s) => String(s || '').replace(/\D/g, '');
+// CNPJ/CPF sem máscara vem como NÚMERO na planilha e perde o zero da frente
+// ("01234567000190" -> 1234567000190): completa e formata; só 11 ou 14 dígitos
+function documentoNormalizado(texto) {
+  let d = soDigitos(texto);
+  if (d.length === 12 || d.length === 13) d = d.padStart(14, '0');
+  else if (d.length === 9 || d.length === 10) d = d.padStart(11, '0');
+  if (d.length === 14) return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+  if (d.length === 11) return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
+  return null;
+}
+// só "Ativo" e "Inativo" valem; outro texto (vazio, "Prospect"...) fica sem
+// situação: não cria cliente, não entra no placar nem vira "outro vendedor"
+function situacaoDaConta(texto) {
+  const t = String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase();
+  return t === 'ATIVO' ? 'Ativo' : t === 'INATIVO' ? 'Inativo' : null;
+}
 // mesma normalização do clientMatcher (comparação tolerante: sem pontuação)
 const chaveNome = (s) => limparNomeCliente(s).toUpperCase().replace(/[.,\s]+/g, ' ').trim();
 
@@ -51,9 +67,9 @@ async function importarContasSalesforce(dados, usuario) {
     const ultima = String((c && c.ultima_compra) || '');
     contas.push({
       codigo, nome,
-      documento: texto(c.documento, 30),
+      documento: documentoNormalizado(c.documento),
       proprietario: texto(c.proprietario, 100),
-      situacao: ehAtivo(c.situacao) ? 'Ativo' : 'Inativo',
+      situacao: situacaoDaConta(c.situacao),
       ultima: RE_DIA.test(ultima) ? ultima : null,
       cidade: texto(c.cidade, 100), uf: texto(c.uf, 2),
       telefone: texto(c.telefone, 100), email: texto(c.email, 200),
@@ -129,12 +145,12 @@ async function importarContasSalesforce(dados, usuario) {
       const novos = await client.query(
         `/* contas-sf:criar */
          INSERT INTO clientes (nome, documento, codigo_oficial, classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em)
-         SELECT u.nome, u.documento, u.codigo, u.tipo, u.desconto, CASE WHEN u.tipo IS NULL THEN NULL ELSE $6::date END
+         SELECT u.nome, u.documento, u.codigo, u.tipo, u.desconto, NULL::date
          FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::numeric[]) AS u(nome, documento, codigo, tipo, desconto)
          ON CONFLICT DO NOTHING
          RETURNING id, codigo_oficial`,
-        [criar.map(c => c.nome), criar.map(c => (soDigitos(c.documento).length >= 11 ? c.documento : null)), criar.map(c => c.codigo),
-          classi.map(x => (x ? x.tipo : null)), classi.map(x => (x ? x.desconto : null)), hoje]);
+        [criar.map(c => c.nome), criar.map(c => c.documento), criar.map(c => c.codigo),
+          classi.map(x => (x ? x.tipo : null)), classi.map(x => (x ? x.desconto : null))]);
       const idPorCodigo = new Map(novos.rows.map(r => [String(r.codigo_oficial), r.id]));
       for (const c of criar) c.clienteId = idPorCodigo.get(c.codigo) || null;
     }
@@ -193,4 +209,4 @@ async function importarContasSalesforce(dados, usuario) {
   }
 }
 
-module.exports = { importarContasSalesforce, classificatorioDaConta, CHAVE_RELATORIO };
+module.exports = { importarContasSalesforce, classificatorioDaConta, documentoNormalizado, situacaoDaConta, CHAVE_RELATORIO };

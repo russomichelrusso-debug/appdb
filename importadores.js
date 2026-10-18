@@ -801,7 +801,7 @@
     // antes do Classificatório: o "Base de Clientes x Compra" tem "Classificacao"
     if (tem('MESES SEM COMPRA') && tem('MES ULTIMA COMPRA')) return 'semcompra';
     // antes do Classificatório: o relatório do Salesforce tem a coluna "Classificatório"
-    if (wb.SheetNames.some(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null }).some(ehCabecalhoContasSalesforce))) return 'contasSalesforce';
+    if (wb.SheetNames.some(n => XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, defval: null }).slice(0, 25).some(ehCabecalhoContasSalesforce))) return 'contasSalesforce';
     if (tem('MATRIZ') && [...celulas].some(c => c.startsWith('OBJETIVO'))) return 'objetivos';
     if (tem('CLASSIFICATORIO')) return 'classificatorio';
     if (tem('ITEM') && tem('QT. DISP.')) return 'previsao';

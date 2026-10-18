@@ -755,6 +755,9 @@ async function query(sql, params = []) {
   if (s.includes('/* CONTAS-SF:OUTROS */')) {
     return { rows: contasSalesforce.filter(c => c.de_outro_vendedor && c.cliente_id != null).map(c => ({ cliente_id: c.cliente_id, proprietario: c.proprietario })) };
   }
+  if (s.includes('/* CONTAS-SF:INATIVOS */')) {
+    return { rows: contasSalesforce.filter(c => c.cliente_id != null && c.situacao === 'Inativo').map(c => ({ cliente_id: c.cliente_id })) };
+  }
   if (s.includes('/* CONTAS-SF:TRAVA */')) return { rows: [] };
   if (s.includes('/* CONTAS-SF:CLIENTES */')) {
     return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, codigo_oficial: c.codigo_oficial || null, documento: c.documento || null, doc: String(c.documento || '').replace(/\D/g, '') })) };
@@ -810,9 +813,9 @@ async function query(sql, params = []) {
       const c = clientes.find(x => x.id === a.cliente_id);
       if (!c) return null;
       const oficiais = pedidosOficiaisItens.filter(p => c.codigo_oficial && p.cliente_codigo_oficial === c.codigo_oficial && String(p.nr_pedido).length <= 6
-        && String(p.data_implantacao || p.data_faturamento || '').slice(0, 10) > a.desde);
+        && String(p.data_implantacao || p.data_faturamento || '').slice(0, 10) >= a.desde);
       const datas = oficiais.map(p => String(p.data_implantacao || p.data_faturamento).slice(0, 10)).sort();
-      const app = pedidos.filter(p => p.cliente_id === a.cliente_id && p.origem !== 'faturamento').map(p => diaDoPedidoBr(p.data_pedido)).filter(d => d > a.desde).sort();
+      const app = pedidos.filter(p => p.cliente_id === a.cliente_id && p.origem !== 'faturamento').map(p => diaDoPedidoBr(p.data_pedido)).filter(d => d >= a.desde).sort();
       return { cliente_id: a.cliente_id, nome: c.nome, desde: a.desde, proprietario: a.proprietario,
         primeira_oficial: datas[0] || null, valor: oficiais.length ? oficiais.reduce((t, p) => t + Number(p.valor || 0), 0) : null, primeira_app: app[0] || null };
     }).filter(Boolean) };

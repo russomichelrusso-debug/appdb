@@ -65,8 +65,6 @@ router.get('/', async (req, res) => {
     const lista = [];
     const outros = await clientesDeOutroVendedor();
     for (const c of clientes.rows) {
-      // ativo com outro vendedor (Salesforce): não é visita a cobrar
-      if (outros.has(String(c.id))) continue;
       const id = String(c.id);
       const visita = visitaPorCliente.get(id);
       const ultimaCompra = [c.codigo_oficial ? ultimaOficial.get(String(c.codigo_oficial)) : null, ultimaApp.get(id)]
@@ -82,6 +80,9 @@ router.get('/', async (req, res) => {
         visitas: visita ? visita.total : 0,
         ultima_compra: compra,
         fat_12m: (c.codigo_oficial && fat12m.get(String(c.codigo_oficial))) || 0,
+        // ativo com outro vendedor (Salesforce): o app tira das listas de
+        // Visitas × compras, mas a linha "Sua última visita" do card continua
+        outro_vendedor: outros.get(String(c.id)) || null,
       });
     }
     res.json({ hoje, janelaDias: JANELA_DIAS, clientes: lista });
