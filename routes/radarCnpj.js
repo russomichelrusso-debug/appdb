@@ -5,6 +5,7 @@ const { pool } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { buscarNaBrasilApi } = require('./lib/cnpjBrasilApi');
 const { completarNomesSocios, temSocioAbreviado } = require('./lib/nomesSocios');
+const { telefoneMascarado, completarTelefone } = require('./lib/telefoneMascarado');
 const { statusPreenchimento } = require('./lib/preenchimentoCnpj');
 const { statusGeocodificacao } = require('./lib/geocodificacao');
 
@@ -129,15 +130,17 @@ function mapearFicha(data) {
   };
 }
 
-// Nome completo dos sócios (routes/lib/nomesSocios.js): o radar-cnpj manda
-// abreviado desde 25/09/2026. A BrasilAPI (nome inteiro, quadro atual) vale
-// primeiro; a ficha gravada antes só entra se ela falhar - sozinha ela poria o
-// nome de um ex-sócio com as mesmas iniciais no lugar do sócio novo, por isso
-// ali a data de entrada também tem de bater quando as duas têm.
+// Ficha "mascarada" do radar-cnpj (desde 25/09/2026): sócio abreviado
+// ("FRANCISCO A. M.", routes/lib/nomesSocios.js) e telefone escondido
+// ("(44) 3•••••03", routes/lib/telefoneMascarado.js). A BrasilAPI traz os dois
+// inteiros e vale primeiro; a ficha gravada antes só entra se ela falhar - sozinha
+// ela poria o nome de um ex-sócio com as mesmas iniciais no lugar do sócio novo,
+// por isso ali a data de entrada também tem de bater quando as duas têm.
 // conferidos: true = a BrasilAPI respondeu (ou não tem o CNPJ), não pergunta de
-// novo por 30 dias; false = falhou, espera SOCIOS_ESPERA_FALHA_MS.
-const falhaSociosEm = new Map(); // clienteId -> quando a BrasilAPI falhou (em memória)
-const SOCIOS_ESPERA_FALHA_MS = 6 * 60 * 60 * 1000;
+// novo por 30 dias; false = falhou, espera ESPERA_FALHA_MS.
+const falhaBrasilApiEm = new Map(); // clienteId -> quando a BrasilAPI falhou (em memória)
+const ESPERA_FALHA_MS = 6 * 60 * 60 * 1000;
+const RECONFERIR_DIAS = 30;
 
 function anterioresCompativeis(socios, anteriores) {
   if (!Array.isArray(anteriores)) return [];
@@ -146,40 +149,55 @@ function anterioresCompativeis(socios, anteriores) {
     && String(s.nome).split(/\s+/)[0] === String(a.nome).split(/\s+/)[0])));
 }
 
-async function sociosComNomeCompleto(clienteId, cnpj, socios, sociosAnteriores, veioDaBrasilApi) {
-  if (!temSocioAbreviado(socios) || veioDaBrasilApi) return { socios, conferidos: !!veioDaBrasilApi };
+function fichaMascarada(socios, telefone) {
+  return temSocioAbreviado(socios) || telefoneMascarado(telefone);
+}
+
+// atual: {socios, telefone} da ficha nova; anterior: {socios, telefone} da gravada.
+async function completarFichaMascarada(clienteId, cnpj, atual, anterior, veioDaBrasilApi) {
+  const { socios, telefone } = atual;
+  if (!fichaMascarada(socios, telefone) || veioDaBrasilApi) return { socios, telefone, conferidos: !!veioDaBrasilApi };
+  const pelaFichaAnterior = () => ({
+    socios: completarNomesSocios(socios, anterioresCompativeis(socios, anterior && anterior.socios)),
+    telefone: completarTelefone(telefone, [anterior && anterior.telefone]),
+  });
   try {
     const brasil = await buscarNaBrasilApi(cnpj);
-    falhaSociosEm.delete(String(clienteId));
-    return { socios: completarNomesSocios(socios, mapearFicha(brasil).socios), conferidos: true };
+    falhaBrasilApiEm.delete(String(clienteId));
+    const contato = brasil.contato || {};
+    return {
+      socios: completarNomesSocios(socios, mapearFicha(brasil).socios),
+      telefone: completarTelefone(telefone, [contato.telefone1, contato.telefone2]),
+      conferidos: true,
+    };
   } catch (e) {
-    if (e.naoEncontrado) return { socios: completarNomesSocios(socios, anterioresCompativeis(socios, sociosAnteriores)), conferidos: true };
-    falhaSociosEm.set(String(clienteId), Date.now());
-    return { socios: completarNomesSocios(socios, anterioresCompativeis(socios, sociosAnteriores)), conferidos: false };
+    if (e.naoEncontrado) return { ...pelaFichaAnterior(), conferidos: true };
+    falhaBrasilApiEm.set(String(clienteId), Date.now());
+    return { ...pelaFichaAnterior(), conferidos: false };
   }
 }
 
-const SOCIOS_RECONFERIR_DIAS = 30;
-function sociosPrecisamConferir(row) {
-  if (!row || !temSocioAbreviado(row.socios)) return false;
-  const falhou = falhaSociosEm.get(String(row.cliente_id));
-  if (falhou && Date.now() - falhou < SOCIOS_ESPERA_FALHA_MS) return false;
-  if (!row.socios_completados_em) return true;
-  return Date.now() - new Date(row.socios_completados_em).getTime() > SOCIOS_RECONFERIR_DIAS * 24 * 60 * 60 * 1000;
+function mascaradaPrecisaConferir(row) {
+  if (!row || !fichaMascarada(row.socios, row.telefone)) return false;
+  const falhou = falhaBrasilApiEm.get(String(row.cliente_id));
+  if (falhou && Date.now() - falhou < ESPERA_FALHA_MS) return false;
+  if (!row.mascarado_completado_em) return true;
+  return Date.now() - new Date(row.mascarado_completado_em).getTime() > RECONFERIR_DIAS * 24 * 60 * 60 * 1000;
 }
 
-// socios: a lista já com o nome completo (sociosComNomeCompleto); sem ela, a da ficha.
-// sociosConferidos: true = a BrasilAPI respondeu na consulta dos nomes (marca a hora),
+// completado: {socios, telefone, conferidos} de completarFichaMascarada; sem ele,
+// o que veio na ficha. conferidos: true = a BrasilAPI respondeu (marca a hora),
 // false = não respondeu (limpa a marca), null = não mexe na marca.
-async function salvarFichaEmCache(clienteId, ficha, dadosBrutos, socios, sociosConferidos) {
+async function salvarFichaEmCache(clienteId, ficha, dadosBrutos, completado) {
   const campos = mapearFicha(ficha);
-  if (socios !== undefined) campos.socios = socios;
+  if (completado) { campos.socios = completado.socios; campos.telefone = completado.telefone; }
+  const conferidos = completado && completado.conferidos != null ? !!completado.conferidos : null;
   const result = await pool.query(
     `INSERT INTO cliente_cnpj_ficha (
        cliente_id, razao_social, nome_fantasia, situacao_cadastral, data_situacao_cadastral,
        motivo_situacao, cnae_principal_codigo, cnae_principal_descricao, natureza_juridica, porte,
        data_abertura, capital_social, logradouro, numero, complemento, bairro, municipio, uf, cep,
-       telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos, atualizado_em, socios_completados_em
+       telefone, email, matriz_filial, cnae_secundario, socios, dados_brutos, atualizado_em, mascarado_completado_em
      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25, now(),
        CASE WHEN $26::boolean THEN now() END)
      ON CONFLICT (cliente_id) DO UPDATE SET
@@ -192,15 +210,15 @@ async function salvarFichaEmCache(clienteId, ficha, dadosBrutos, socios, sociosC
        bairro = EXCLUDED.bairro, municipio = EXCLUDED.municipio, uf = EXCLUDED.uf, cep = EXCLUDED.cep,
        telefone = EXCLUDED.telefone, email = EXCLUDED.email, matriz_filial = EXCLUDED.matriz_filial,
        cnae_secundario = EXCLUDED.cnae_secundario, socios = EXCLUDED.socios, dados_brutos = EXCLUDED.dados_brutos,
-       atualizado_em = now(), socios_completados_em = CASE WHEN $26::boolean IS NULL
-         THEN cliente_cnpj_ficha.socios_completados_em ELSE EXCLUDED.socios_completados_em END
+       atualizado_em = now(), mascarado_completado_em = CASE WHEN $26::boolean IS NULL
+         THEN cliente_cnpj_ficha.mascarado_completado_em ELSE EXCLUDED.mascarado_completado_em END
      RETURNING *`,
     [
       clienteId, campos.razao_social, campos.nome_fantasia, campos.situacao_cadastral, campos.data_situacao_cadastral,
       campos.motivo_situacao, campos.cnae_principal_codigo, campos.cnae_principal_descricao, campos.natureza_juridica, campos.porte,
       campos.data_abertura, campos.capital_social, campos.logradouro, campos.numero, campos.complemento, campos.bairro, campos.municipio,
       campos.uf, campos.cep, campos.telefone, campos.email, campos.matriz_filial, campos.cnae_secundario,
-      campos.socios ? JSON.stringify(campos.socios) : null, JSON.stringify(dadosBrutos), sociosConferidos == null ? null : !!sociosConferidos,
+      campos.socios ? JSON.stringify(campos.socios) : null, JSON.stringify(dadosBrutos), conferidos,
     ]
   );
   return result.rows[0];
@@ -238,21 +256,26 @@ async function obterFicha(clienteId, forcarAtualizacao) {
   // a partir do dado bruto já salvo (sem gastar uma nova chamada à origem) e
   // corrige sozinho, sem esperar os 30 dias de validade do cache vencerem.
   if (cache && cache.dados_brutos && pareceCacheComBugAntigo(cache)) {
-    const socios = completarNomesSocios(mapearFicha(cache.dados_brutos).socios, cache.socios);
-    const corrigida = await salvarFichaEmCache(clienteId, cache.dados_brutos, cache.dados_brutos, socios, null);
+    const m = mapearFicha(cache.dados_brutos);
+    const corrigida = await salvarFichaEmCache(clienteId, cache.dados_brutos, cache.dados_brutos, {
+      socios: completarNomesSocios(m.socios, cache.socios),
+      telefone: completarTelefone(m.telefone, [cache.telefone]),
+      conferidos: null,
+    });
     if (!forcarAtualizacao) return { ficha: corrigida, fonte: 'cache' };
   }
 
   if (!forcarAtualizacao && fichaEstaFresca(cache)) {
-    // Ficha gravada com os sócios abreviados: completa pela BrasilAPI uma vez
-    // (de novo só depois de 30 dias), sem esperar a ficha vencer.
-    if (sociosPrecisamConferir(cache)) {
-      const base = (cache.dados_brutos && mapearFicha(cache.dados_brutos).socios) || cache.socios;
-      const { socios, conferidos } = await sociosComNomeCompleto(clienteId, cnpj, base, cache.socios, false);
-      if (conferidos) {
+    // Ficha gravada mascarada (sócio abreviado, telefone escondido): completa
+    // pela BrasilAPI uma vez (de novo só depois de 30 dias), sem esperar a ficha vencer.
+    if (mascaradaPrecisaConferir(cache)) {
+      const m = cache.dados_brutos ? mapearFicha(cache.dados_brutos) : {};
+      const r0 = await completarFichaMascarada(clienteId, cnpj,
+        { socios: m.socios || cache.socios, telefone: cache.telefone }, cache, false);
+      if (r0.conferidos) {
         const r = await pool.query(
-          'UPDATE cliente_cnpj_ficha SET socios = $2, socios_completados_em = now() WHERE cliente_id = $1 RETURNING *',
-          [clienteId, JSON.stringify(socios)]
+          'UPDATE cliente_cnpj_ficha SET socios = $2, telefone = $3, mascarado_completado_em = now() WHERE cliente_id = $1 RETURNING *',
+          [clienteId, r0.socios ? JSON.stringify(r0.socios) : null, r0.telefone]
         );
         return { ficha: r.rows[0] || cache, fonte: 'cache' };
       }
@@ -262,15 +285,21 @@ async function obterFicha(clienteId, forcarAtualizacao) {
 
   try {
     const dados = await buscarFichaNaOrigem(cnpj);
-    const { socios, conferidos } = await sociosComNomeCompleto(
-      clienteId, cnpj, mapearFicha(dados).socios, cache && cache.socios, dados.origem === 'brasilapi'
+    // A BrasilAPI (reserva) não tem a lista de devedores contumazes: fica a
+    // última conferência do radar, em vez de a ficha voltar a "não conferido".
+    const contumazAnterior = cache && cache.dados_brutos && cache.dados_brutos.devedorContumaz;
+    if (dados.origem === 'brasilapi' && !dados.devedorContumaz && contumazAnterior) dados.devedorContumaz = contumazAnterior;
+    const m = mapearFicha(dados);
+    const completado = await completarFichaMascarada(
+      clienteId, cnpj, { socios: m.socios, telefone: m.telefone }, cache, dados.origem === 'brasilapi'
     );
-    const salva = await salvarFichaEmCache(clienteId, dados, dados, socios, conferidos);
+    const salva = await salvarFichaEmCache(clienteId, dados, dados, completado);
     return { ficha: salva, fonte: 'origem' };
   } catch (erroOrigem) {
     // Sem internet ou origem fora do ar - se já tem algo em cache (mesmo
     // vencido), devolve isso em vez de deixar a tela vazia.
-    if (cache) return { ficha: cache, fonte: 'cache_vencido', aviso: erroOrigem.message };
+    // naoEncontrado: a atualização da madrugada (preenchimentoCnpj.js) registra a falha do cliente
+    if (cache) return { ficha: cache, fonte: 'cache_vencido', aviso: erroOrigem.message, naoEncontrado: !!erroOrigem.naoEncontrado };
     if (erroOrigem.naoEncontrado) { const e = new Error(erroOrigem.message); e.status = 404; throw e; }
     const e = new Error('Não foi possível consultar o CNPJ agora: ' + erroOrigem.message);
     e.status = 502;

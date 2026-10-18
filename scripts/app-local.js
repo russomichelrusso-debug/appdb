@@ -60,7 +60,7 @@ async function semear() {
           { nome: 'JOSE ANTONIO DA SILVA', qualificacao: 'Sócio-Administrador', dataEntrada: '2012-03-05', faixaEtaria: 6 },
           { nome: 'MARIA A. S.', qualificacao: 'Sócio' },
         ],
-        socios_completados_em: hoje.toISOString(),
+        mascarado_completado_em: hoje.toISOString(),
         dados_brutos: {
           endereco: { tipoLogradouro: 'AVENIDA', logradouro: 'COLOMBO', numero: '7266', municipio: 'MARINGA', uf: 'PR' },
           devedorContumaz: { fonte: 'Receita Federal — lista de devedores contumazes (LC nº 225/2026)', consta: true, conferidoEm: '2026-10-16',

@@ -84,6 +84,10 @@ router.get('/sync', async (req, res) => {
               END AS regime_tributario,
               c.latitude, c.longitude,
               f.nome_fantasia, -- a busca sem internet também acha pelo nome fantasia
+              -- na lista de devedores contumazes da Receita (ficha de CNPJ): o dia da
+              -- conferência, ou 'sim' sem ele; null = não consta/não conferido
+              CASE WHEN f.dados_brutos->'devedorContumaz'->>'consta' = 'true'
+                THEN coalesce(f.dados_brutos->'devedorContumaz'->>'conferidoEm', 'sim') END AS devedor_contumaz,
               CASE WHEN f.cliente_id IS NOT NULL THEN json_build_object(
                 'tipo', f.dados_brutos->'endereco'->>'tipoLogradouro', 'logradouro', f.logradouro,
                 'numero', f.numero, 'municipio', f.municipio, 'uf', f.uf

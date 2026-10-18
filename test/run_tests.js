@@ -2220,6 +2220,28 @@ async function main() {
   r = await preench.rodarRodada(fd);
   assert(r.consultas === 0 && r.motivo === 'pausado_hoje', 'depois de pausar, não tenta de novo na mesma noite');
 
+  fd = fakeDeps({ pendentes: [1, { id: 2, atualizar: true }] });
+  const pedidos = [];
+  const obterOriginal = fd.obterFicha;
+  fd.obterFicha = async (id, atualizar) => { pedidos.push(`${id}:${!!atualizar}`); return obterOriginal(id); };
+  r = await preench.rodarRodada(fd);
+  assert(pedidos.join() === '1:false,2:true' && r.consultas === 2,
+    'madrugada: cliente sem ficha consulta normal; ficha antiga (sem devedor contumaz/30 dias) é atualizada à força');
+
+  {
+    const respostas = { 1: { fonte: 'cache_vencido', aviso: 'radar-cnpj respondeu 429; reserva: BrasilAPI respondeu 503' },
+      2: { fonte: 'cache_vencido', aviso: 'CNPJ não encontrado', naoEncontrado: true }, 3: { fonte: 'origem' } };
+    const pela = preench.obterFichaDaRodada(async (id) => respostas[id]);
+    const erroDe = async (id, atualizar) => { try { await pela(id, atualizar); return null; } catch (e) { return e; } };
+    const e1 = await erroDe(1, true), e2 = await erroDe(2, true), e3 = await erroDe(3, true), e4 = await erroDe(1, false);
+    assert(e1 && !e1.status && e2 && e2.status === 404 && !e3 && !e4,
+      'madrugada: atualizar ficha com a origem falhando vira erro (pausa a noite; CNPJ não achado registra falha)');
+    fd = fakeDeps({ pendentes: [{ id: 1, atualizar: true }, { id: 2, atualizar: true }] });
+    fd.obterFicha = pela;
+    r = await preench.rodarRodada(fd);
+    assert(r.motivo === 'origem_indisponivel' && r.consultas === 1, 'atualização com as origens fora do ar pausa a noite');
+  }
+
   fd = fakeDeps({ pendentes: muitos, agora: '2026-09-25T15:00:00Z' });
   r = await preench.rodarRodada(fd);
   assert(r.consultas === 0 && r.motivo === 'fora_da_janela' && fd.consultados.length === 0, 'fora da madrugada não consulta nada');
@@ -2268,11 +2290,21 @@ async function main() {
       && um[0].nome === 'JOSE ANTONIO SILVA' && um[0].qualificacao === 'Sócio' && um[0].dataEntrada === '2020-01-02' && um[0].faixaEtaria === 5,
       'dois nomes completos que batem com o mesmo abreviado: fica abreviado; um só: troca e traz entrada/faixa');
 
+    const tm = require('../routes/lib/telefoneMascarado');
+    assert(tm.completarTelefone('(44) 3•••••03', ['(44) 35681404', '(44) 35681403']) === '(44) 35681403'
+      && tm.completarTelefone('(44) 9•••••21', ['(44) 98282121']) === '(44) 98282121'
+      && tm.completarTelefone('(44) 3•••••03', ['(43) 35681403', '(44) 3568140']) === '(44) 3•••••03'
+      && tm.completarTelefone('(44) 3•••••03', []) === '(44) 3•••••03'
+      && tm.completarTelefone('(44) 32321234', ['(44) 99999999']) === '(44) 32321234',
+      'telefone escondido ("(44) 3•••••03") só é trocado pelo que bate: DDD, dígitos visíveis e tamanho');
+
     const radarMascarado = { ok: true, data: {
       razaoSocial: 'DEPEL LTDA', situacao: { label: 'Ativa' }, mascarado: true,
+      contato: { telefone1: '(44) 9•••••21', email: 'd••••••@g••••.com' },
+      devedorContumaz: { consta: true, conferidoEm: '2026-10-16', fonte: 'Receita Federal — lista de devedores contumazes' },
       socios: [{ nome: 'FRANCISCO A. M.', dataEntrada: '2026-04-22T00:00:00.000Z', faixaEtaria: 8, qualificacao: { descricao: 'Sócio-Administrador' } }],
     } };
-    const brasilCompleto = { ...respostaBrasilApi, qsa: [
+    const brasilCompleto = { ...respostaBrasilApi, ddd_telefone_1: '4498282121', ddd_telefone_2: '000000000000', qsa: [
       { nome_socio: 'FRANCISCO DE ASSIS MARTINHAGO', qualificacao_socio: 'Sócio-Administrador', data_entrada_sociedade: '2026-04-22', codigo_faixa_etaria: 8 },
     ] };
     mockDb.__seed({ clientes: [
@@ -2288,9 +2320,14 @@ async function main() {
       assert(res.status === 200 && s0.nome === 'FRANCISCO DE ASSIS MARTINHAGO' && s0.dataEntrada === '2026-04-22' && s0.faixaEtaria === 8
         && chamadas.join() === 'radar,brasilapi' && res.body.ficha.dados_brutos.socios[0].nome === 'FRANCISCO A. M.',
         'ficha nova com sócio abreviado: nome completo vem da BrasilAPI (dados brutos ficam como vieram)');
+      assert(res.body.ficha.telefone === '(44) 98282121', 'telefone escondido pelo radar-cnpj é completado pela BrasilAPI');
+      res = await req('GET', '/api/clientes/sync');
+      const noSync = ((res.body && res.body.clientes) || []).find((c) => c.id === 9311);
+      assert(res.status === 200 && noSync && noSync.devedor_contumaz === '2026-10-16',
+        '/api/clientes/sync manda devedor_contumaz (dia da conferência) quando o CNPJ consta na lista');
 
       mockDb.__seed({ fichasCnpj: { 9312: {
-        cliente_id: 9312, razao_social: 'DEPEL LTDA', atualizado_em: new Date().toISOString(), socios_completados_em: null,
+        cliente_id: 9312, razao_social: 'DEPEL LTDA', atualizado_em: new Date().toISOString(), mascarado_completado_em: null,
         socios: [{ nome: 'FRANCISCO A. M.', qualificacao: 'Sócio-Administrador' }], dados_brutos: radarMascarado.data,
       } } });
       simularFetch(new Error('radar não devia ser chamado'), { status: 200, body: brasilCompleto });
@@ -2322,8 +2359,18 @@ async function main() {
       assert(res.status === 200 && res.body.ficha.socios[0].nome === 'FRANCISCO AUGUSTO MELO',
         'BrasilAPI vale antes da ficha anterior (ex-sócio com as mesmas iniciais não volta)');
 
+      mockDb.__seed({ fichasCnpj: { 9313: {
+        cliente_id: 9313, razao_social: 'DEPEL LTDA', atualizado_em: new Date().toISOString(),
+        dados_brutos: { devedorContumaz: { consta: true, conferidoEm: '2026-10-16' } },
+      } } });
+      simularFetch({ status: 429, body: { ok: false } }, { status: 200, body: brasilCompleto });
+      res = await req('POST', '/api/clientes/9313/ficha-cnpj/atualizar');
+      assert(res.status === 200 && res.body.ficha.dados_brutos.origem === 'brasilapi'
+        && res.body.ficha.dados_brutos.devedorContumaz && res.body.ficha.dados_brutos.devedorContumaz.consta === true,
+        'ficha atualizada pela BrasilAPI (sem a lista) mantém a última conferência de devedor contumaz');
+
       mockDb.__seed({ clientes: [{ id: 9314, nome: 'SEM BRASILAPI', documento: '66496887000400' }], fichasCnpj: { 9314: {
-        cliente_id: 9314, razao_social: 'X LTDA', atualizado_em: new Date().toISOString(), socios_completados_em: null,
+        cliente_id: 9314, razao_social: 'X LTDA', atualizado_em: new Date().toISOString(), mascarado_completado_em: null,
         socios: [{ nome: 'FRANCISCO A. M.' }], dados_brutos: radarMascarado.data,
       } } });
       simularFetch(new Error('radar não devia ser chamado'), { status: 503, body: {} });
