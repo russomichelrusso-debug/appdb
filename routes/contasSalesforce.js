@@ -44,6 +44,10 @@ function hojeBrasil() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 }
 
+function primeiroNome(nome) {
+  return String(nome || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toUpperCase().split(/\s+/)[0] || '';
+}
+
 function ehContaDoRepresentante(c) {
   return /^REPRESENTANTE/i.test(String(c.classificatorio || '').trim());
 }
@@ -92,11 +96,20 @@ async function importarContasSalesforce(dados, usuario) {
   }
   if (contas.length === 0) return { status: 400, json: { erro: 'Nenhuma conta válida no relatório.' } };
   const principal = proprietarioPrincipal(contas);
+  // Gerência (gerente de vendas/regional, supervisor - Vilmar em 10/2026) também
+  // aparece como proprietário no Salesforce e não é outro vendedor: é quem está
+  // na coluna "Gestor" da planilha Classificatório do ERP (primeiro nome)
+  let gestores = new Set();
+  try {
+    const g = await pool.query(`/* contas-sf:gestores */ SELECT DISTINCT gestor FROM cliente_classificatorio_erp WHERE gestor IS NOT NULL`);
+    gestores = new Set(g.rows.map(r => primeiroNome(r.gestor)).filter(Boolean));
+  } catch (e) { console.error('Gestores do Classificatório:', e.message); }
   for (const c of contas) {
     // classificatório "Representante" = a conta da própria representação (a
-    // RUSSO'S, dona Vilmar no Salesforce): nunca é "de outro vendedor"
-    c.deOutro = c.situacao === 'Ativo' && !!c.proprietario && c.proprietario !== principal && !ehContaDoRepresentante(c);
-    c.base = baseDaConta(c);
+    // RUSSO'S): nunca é "de outro vendedor"; nem conta da gerência
+    c.daGestao = !!c.proprietario && gestores.has(primeiroNome(c.proprietario));
+    c.deOutro = c.situacao === 'Ativo' && !!c.proprietario && c.proprietario !== principal && !ehContaDoRepresentante(c) && !c.daGestao;
+    c.base = c.daGestao ? null : baseDaConta(c);
   }
   const hoje = hojeBrasil();
 

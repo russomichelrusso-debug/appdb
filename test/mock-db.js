@@ -758,6 +758,9 @@ async function query(sql, params = []) {
   if (s.includes('/* CONTAS-SF:INATIVOS */')) {
     return { rows: contasSalesforce.filter(c => c.cliente_id != null && c.situacao === 'Inativo').map(c => ({ cliente_id: c.cliente_id })) };
   }
+  if (s.includes('/* CONTAS-SF:GESTORES */')) {
+    return { rows: [...new Set(Object.values(classificatorioErp).map(e => e.gestor).filter(Boolean))].map(gestor => ({ gestor })) };
+  }
   if (s.includes('/* CONTAS-SF:TRAVA */')) return { rows: [] };
   if (s.includes('/* CONTAS-SF:CLIENTES */')) {
     return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, codigo_oficial: c.codigo_oficial || null, documento: c.documento || null, doc: String(c.documento || '').replace(/\D/g, '') })) };
