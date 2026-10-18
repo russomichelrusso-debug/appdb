@@ -245,24 +245,73 @@
     a.fileBtnLike { display: inline-block; text-decoration: none; }
     .fichaHeadAcoes { display: flex; gap: 8px; flex-wrap: wrap; }
 
-    /* Layout em caixas/linhas evocando o Comprovante de Inscrição e de
-       Situação Cadastral oficial (CNPJ.gov) - mesma distribuição espacial
-       dos campos, sem replicar o brasão/título/rodapé regulatório do
-       documento em si (a página continua sendo do app, não um comprovante
-       emitido por nós). */
-    .formTable { border: 1px solid var(--hairline); border-radius: 10px; overflow: hidden; margin-bottom: 14px; }
-    .formRow { display: flex; border-bottom: 1px solid var(--hairline); }
-    .formRow:last-child { border-bottom: none; }
-    @media (max-width: 560px) { .formRow { flex-direction: column; } }
-    .fichaField { flex: 1; padding: 8px 10px; border-right: 1px solid var(--hairline); min-width: 0; }
-    .fichaField:last-child { border-right: none; }
-    @media (max-width: 560px) { .fichaField { border-right: none; border-bottom: 1px solid var(--hairline); } .fichaField:last-child { border-bottom: none; } }
-    .fichaField .lbl { font-size: 9.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 3px; }
-    .fichaField .val { font-size: 13px; word-break: break-word; }
-    .quadroSocietario { padding: 4px 0 0; }
-    .quadroSocietario .lbl { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--gray); display: block; margin-bottom: 4px; }
-    .quadroSocietario .val { font-size: 13px; }
-
+    /* Ficha em cartões por assunto (10/2026, opção "A" dos mockups): cartão do cliente no topo
+       (#fichaTopo) e Endereço / Empresa / Atividade / Quadro societário. Celular empilhado, com os
+       Contatos antes da ficha (como antes); 900 px+ página larga; laptop e tablet deitado com os
+       Contatos à direita. */
+    .pilulas { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+    .pilula { background: var(--fill); color: var(--ink); font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 999px; }
+    .pilula.ok { background: var(--success-bg); color: var(--success); font-weight: 800; }
+    .pilula.ruim { background: var(--danger-bg); color: var(--danger); font-weight: 800; }
+    .pilula.classi { background: var(--accent-bg); color: var(--red-deep); }
+    html[data-theme="dark"] .pilula.classi { color: #FF8FA3; }
+    .fichaTopo { display: flex; flex-direction: column; gap: 14px; padding: 18px 18px; }
+    .topoTexto { min-width: 0; flex: 1; }
+    .topoNome { font-size: 24px; font-weight: 800; letter-spacing: -.02em; line-height: 1.15; word-break: break-word; }
+    .topoRazao { font-size: 13.5px; color: var(--gray); margin-top: 4px; }
+    .topoDados { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 10px; font-size: 13.5px; }
+    .rot { color: var(--gray); }
+    .topoAcoes { display: flex; flex-direction: column; gap: 8px; }
+    .topoAcoes .copiarTudoBtn { margin-top: 0; }
+    .topoBtns { display: flex; gap: 8px; }
+    .topoBtns > * { flex: 1; text-align: center; min-height: 42px; display: flex; align-items: center; justify-content: center; }
+    .topoFonte { font-size: 11px; color: var(--gray); text-align: center; }
+    /* No celular o "Copiar tudo" fica no cartão dos Contatos (logo abaixo); o do topo some. */
+    .fichaTopo #copiarTudoTopoBtn { display: none; }
+    .fichaGrid { display: flex; flex-direction: column; }
+    .fichaCartoes { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
+    .fichaCartoes .card { margin-bottom: 0; }
+    .cartaoTit { font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--gray); margin: 0 0 10px; }
+    .enderecoTxt { font-size: 16px; font-weight: 700; line-height: 1.35; }
+    .enderecoSub { font-size: 12.5px; color: var(--gray); margin-top: 4px; }
+    .infoLinha { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px; }
+    .infoLinha strong { text-align: right; word-break: break-word; }
+    .daReceita { margin-top: 10px; font-size: 12.5px; word-break: break-word; }
+    .daReceita .rot { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
+    .atividadePrincipal { font-size: 15px; font-weight: 700; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chip { background: var(--fill); font-size: 12px; padding: 5px 9px; border-radius: 999px; }
+    .socios { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+    .socio { background: var(--fill); border-radius: 12px; padding: 10px 12px; }
+    .socioNome { display: block; font-size: 13.5px; font-weight: 700; }
+    .socioQual { display: block; font-size: 12px; color: var(--gray); }
+    @media (min-width: 700px) {
+      .fichaTopo { flex-direction: row; align-items: center; gap: 22px; padding: 22px 24px; }
+      .topoNome { font-size: 30px; }
+      .topoAcoes { width: 230px; flex-shrink: 0; }
+      .fichaCartoes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .fichaCartao.largo { grid-column: span 2; }
+      .socios { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (min-width: 900px) {
+      .wrap { max-width: 1440px; padding: 0 28px 40px; }
+      .fichaTopo #copiarTudoTopoBtn { display: block; }
+      #contatosHost .copiarTudoBtn { display: none; }
+      .fichaGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+      #clientPickerCard { max-width: 640px; }
+      .fichaGrid #fichaHost { grid-column: 1; grid-row: 1; min-width: 0; }
+      .fichaGrid #contatosHost { grid-column: 2; grid-row: 1; position: sticky; top: 12px; }
+      .fichaGrid #contatosHost .card { margin-bottom: 0; }
+      .topoNome { font-size: 34px; }
+    }
+    @media (min-width: 1200px) and (hover: hover) and (pointer: fine) {
+      .fichaGrid { grid-template-columns: minmax(0, 2fr) minmax(340px, 1fr); }
+    }
+    @media (hover: none), (pointer: coarse) {
+      .copiarBtn { min-height: 44px; min-width: 70px; }
+      .topoBtns > * { min-height: 46px; }
+      .topoAcoes .copiarTudoBtn { min-height: 48px; }
+    }
     .fonteNota { font-size: 10.5px; color: var(--gray); margin-top: 14px; line-height: 1.5; }
     .avisoCache { background: var(--warning-bg); color: var(--amber); border-radius: 10px; padding: 10px 12px; font-size: 12px; margin-bottom: 12px; }
     .hidden { display: none !important; }
@@ -324,8 +373,11 @@
       </div>
     </div>
 
-    <div id="contatosHost"></div>
-    <div id="fichaHost"></div>
+    <div id="fichaTopo"></div>
+    <div class="fichaGrid">
+      <div id="contatosHost"></div>
+      <div id="fichaHost"></div>
+    </div>
   </div>
 
   <script>
@@ -471,7 +523,7 @@
     // =================================================================
     // ------------------------------ Página -----------------------------
     // =================================================================
-    const state = { clienteId: null, clienteNome: '', clienteDoc: '' };
+    const state = { clienteId: null, clienteNome: '', clienteDoc: '', ficha: null, fichaFonte: '', cliente: null };
 
     function formatDataBr(v) {
       if (!v) return '—';
@@ -486,10 +538,6 @@
       const n = Number(v);
       if (Number.isNaN(n)) return String(v);
       return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-    }
-
-    function campo(lbl, val) {
-      return `<div class="fichaField"><span class="lbl">${escapeHtml(lbl)}</span><span class="val">${val}</span></div>`;
     }
 
     // Rota até a loja no Waze, pelo endereço da ficha - mesma montagem do
@@ -510,87 +558,139 @@
       return `https://waze.com/ul?q=${encodeURIComponent(endereco)}&navigate=yes`;
     }
 
+    // Ficha em cartões por assunto (10/2026, opção "A" escolhida pelo usuário a
+    // partir de mockups, no lugar do formato de comprovante da Receita): cartão
+    // do cliente no topo (renderTopo) + Endereço, Empresa, Atividade e Quadro
+    // societário. No laptop os Contatos ficam presos à direita.
+    function regimeDaFicha(ficha) {
+      const b = (ficha && ficha.dados_brutos) || {};
+      if (b.mei && String(b.mei.optante) === 'true') return 'MEI';
+      if (b.simples && String(b.simples.optante) === 'true') return 'Simples Nacional';
+      if (b.simples && String(b.simples.optante) === 'false') return 'Regime normal';
+      return '';
+    }
+    // "AAAA-MM-DD" lido do texto (data sem hora não passa por new Date()).
+    function anosDesde(v) {
+      const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (!m) return null;
+      const hoje = new Date();
+      let anos = hoje.getFullYear() - Number(m[1]);
+      if (hoje.getMonth() + 1 < Number(m[2]) || (hoje.getMonth() + 1 === Number(m[2]) && hoje.getDate() < Number(m[3]))) anos--;
+      return anos >= 0 ? anos : null;
+    }
+    function tituloCase(s) {
+      return String(s || '').toLowerCase().replace(/(^|\s)(\S)/g, (_, e, l) => e + l.toUpperCase());
+    }
+
+    // Cartão do cliente: junta a ficha (situação, nomes, cidade, abertura,
+    // regime) com o cadastro do cliente (código do ERP, classificatório), que
+    // chegam em consultas separadas - redesenha quando cada uma chega.
+    function renderTopo() {
+      const host = document.getElementById('fichaTopo');
+      const f = state.ficha, c = state.cliente;
+      if (!state.clienteId || (!f && !c)) { host.innerHTML = ''; return; }
+      const situacao = f ? String(f.situacao_cadastral || '').toUpperCase() : '';
+      const pilulas = [];
+      if (situacao) {
+        const ativa = situacao.includes('ATIVA');
+        const desde = f.data_situacao_cadastral ? ` desde ${formatDataBr(f.data_situacao_cadastral)}` : '';
+        pilulas.push(`<span class="pilula ${ativa ? 'ok' : 'ruim'}">● ${escapeHtml(situacao)}${escapeHtml(desde)}</span>`);
+      }
+      if (f && f.matriz_filial) pilulas.push(`<span class="pilula">${escapeHtml(String(f.matriz_filial).toUpperCase())}</span>`);
+      const regime = regimeDaFicha(f);
+      if (regime) pilulas.push(`<span class="pilula">${escapeHtml(regime)}</span>`);
+      if (c && c.classificatorio_tipo) {
+        const pct = c.classificatorio_desconto != null && c.classificatorio_desconto !== '' ? ` ${Number(c.classificatorio_desconto)}%` : '';
+        pilulas.push(`<span class="pilula classi">${escapeHtml(c.classificatorio_tipo + pct)}</span>`);
+      }
+      const razao = (f && f.razao_social) || (c && c.nome) || state.clienteNome;
+      const fantasia = f && f.nome_fantasia && semAcentoNemPontuacao(f.nome_fantasia) !== semAcentoNemPontuacao(razao) ? f.nome_fantasia : '';
+      const anos = f ? anosDesde(f.data_abertura) : null;
+      const dados = [];
+      if (state.clienteDoc) dados.push(`<span><span class="rot">CNPJ</span> <strong>${escapeHtml(formatarDocumento(state.clienteDoc))}</strong></span>`);
+      if (c && c.codigo_oficial) dados.push(`<span><span class="rot">Código ERP</span> <strong>${escapeHtml(c.codigo_oficial)}</strong></span>`);
+      if (f && f.municipio) dados.push(`<span><span class="rot">Cidade</span> <strong>${escapeHtml(tituloCase(f.municipio) + (f.uf ? ' – ' + f.uf : ''))}</strong></span>`);
+      if (anos != null) dados.push(`<span><span class="rot">Empresa há</span> <strong>${anos} ano${anos === 1 ? '' : 's'}</strong></span>`);
+      const urlWaze = f ? urlWazeDaFicha(f) : null;
+      host.innerHTML = `
+        <div class="card fichaTopo">
+          <div class="topoTexto">
+            ${pilulas.length ? `<div class="pilulas">${pilulas.join('')}</div>` : ''}
+            <div class="topoNome">${escapeHtml(fantasia || razao)}</div>
+            ${fantasia ? `<div class="topoRazao">${escapeHtml(razao)}</div>` : ''}
+            ${dados.length ? `<div class="topoDados">${dados.join('')}</div>` : ''}
+          </div>
+          <div class="topoAcoes">
+            <button type="button" class="copiarTudoBtn" id="copiarTudoTopoBtn"${c ? '' : ' disabled'}>Copiar tudo pro Salesforce</button>
+            ${f ? `<div class="topoBtns">
+              ${urlWaze ? `<a class="fileBtnLike" href="${escapeHtml(urlWaze)}" target="_blank" rel="noopener" aria-label="Abrir a rota até esse endereço no Waze">Abrir no Waze</a>` : ''}
+              <button type="button" class="fileBtnLike" id="atualizarFichaBtn">Atualizar</button>
+            </div>
+            <span class="topoFonte">Receita Federal · ${state.fichaFonte === 'origem' ? 'consultado agora' : 'salvo em ' + escapeHtml(formatDataBr(f.atualizado_em))}</span>` : ''}
+          </div>
+        </div>`;
+      if (f) document.getElementById('atualizarFichaBtn').addEventListener('click', () => carregarFicha(true));
+      document.getElementById('copiarTudoTopoBtn').addEventListener('click', (e) => { if (state.cliente) copiarTudoSalesforce(e.currentTarget); });
+    }
+
+    function linhaInfo(lbl, val) {
+      return `<div class="infoLinha"><span class="rot">${escapeHtml(lbl)}</span><strong>${val}</strong></div>`;
+    }
+
     function renderFicha(ficha, fonte, aviso) {
       const host = document.getElementById('fichaHost');
+      state.ficha = ficha; state.fichaFonte = fonte;
+      renderTopo();
       const situacao = (ficha.situacao_cadastral || '').toUpperCase();
-      const ehAtiva = situacao.includes('ATIVA');
-      const situacaoCor = situacao ? (ehAtiva ? 'var(--green)' : 'var(--red-deep)') : 'inherit';
       const motivoRelevante = ficha.motivo_situacao && ficha.motivo_situacao.trim().toUpperCase() !== 'SEM MOTIVO';
 
-      // Mesma distribuição espacial do Comprovante de Inscrição e de
-      // Situação Cadastral oficial (Receita Federal): campos em
-      // caixas/linhas na mesma ordem e agrupamento do documento - sem
-      // replicar o brasão, título ou rodapé regulatório dele, já que essa
-      // página é do app, não um comprovante emitido por nós.
-      const linhas = [
-        [
-          campo('Nº de inscrição', `${escapeHtml(formatarDocumento(state.clienteDoc))}${ficha.matriz_filial ? `<br><span style="font-size:11px;color:var(--gray);">${escapeHtml(ficha.matriz_filial.toUpperCase())}</span>` : ''}`),
-          campo('Data de abertura', escapeHtml(formatDataBr(ficha.data_abertura))),
-        ],
-        [campo('Nome empresarial', escapeHtml(ficha.razao_social || state.clienteNome))],
-        [
-          campo('Nome de fantasia', escapeHtml(ficha.nome_fantasia || '—')),
-          campo('Porte', escapeHtml(ficha.porte || '—')),
-        ],
-        [campo('Atividade econômica principal', escapeHtml([ficha.cnae_principal_codigo, ficha.cnae_principal_descricao].filter(Boolean).join(' — ') || '—'))],
-      ];
-      if (ficha.cnae_secundario) {
-        linhas.push([campo('Atividades econômicas secundárias', escapeHtml(ficha.cnae_secundario.split(',').join(', ')))]);
-      }
-      linhas.push(
-        [campo('Natureza jurídica', escapeHtml(ficha.natureza_juridica || '—'))],
-        [
-          campo('Logradouro', escapeHtml(ficha.logradouro || '—')),
-          campo('Número', escapeHtml(ficha.numero || '—')),
-          campo('Complemento', escapeHtml(ficha.complemento || '—')),
-        ],
-        [
-          campo('CEP', escapeHtml(ficha.cep || '—')),
-          campo('Bairro/Distrito', escapeHtml(ficha.bairro || '—')),
-          campo('Município', escapeHtml(ficha.municipio || '—')),
-          campo('UF', escapeHtml(ficha.uf || '—')),
-        ],
-        [
-          campo('Endereço eletrônico', escapeHtml(ficha.email || '—')),
-          campo('Telefone', escapeHtml(ficha.telefone || '—')),
-        ],
-        [
-          campo('Situação cadastral', situacao ? `<b style="color:${situacaoCor};">${escapeHtml(situacao)}</b>` : '—'),
-          campo('Data da situação cadastral', escapeHtml(formatDataBr(ficha.data_situacao_cadastral))),
-        ],
-      );
-      if (motivoRelevante) {
-        linhas.push([campo('Motivo de situação cadastral', escapeHtml(ficha.motivo_situacao))]);
-      }
-      linhas.push([campo('Capital social', escapeHtml(formatMoedaBr(ficha.capital_social)))]);
+      const bruto = (ficha.dados_brutos && ficha.dados_brutos.endereco) || {};
+      const tipo = String(bruto.tipoLogradouro || '').trim();
+      const rua = [tipo && !String(ficha.logradouro || '').toUpperCase().startsWith(tipo.toUpperCase() + ' ') ? tipo : '', ficha.logradouro].filter(Boolean).join(' ');
+      const linha1 = [tituloCase(rua), ficha.numero].filter(Boolean).join(', ');
+      const linha2 = [tituloCase(ficha.bairro), [tituloCase(ficha.municipio), ficha.uf].filter(Boolean).join(' – ')].filter(Boolean).join(' · ');
+      const cep = String(ficha.cep || '').replace(/\D/g, '');
+      const cepFmt = cep.length === 8 ? cep.replace(/(\d{5})(\d{3})/, '$1-$2') : (ficha.cep || '');
 
-      const formTableHtml = linhas.map(cols => `<div class="formRow">${cols.join('')}</div>`).join('');
-      const urlWaze = urlWazeDaFicha(ficha);
+      const secundarias = String(ficha.cnae_secundario || '').split(',').map(s => s.trim()).filter(Boolean);
+      const principal = [ficha.cnae_principal_codigo, ficha.cnae_principal_descricao].filter(Boolean).join(' · ');
 
       host.innerHTML = `
-        <div class="card">
-          ${aviso ? `<div class="avisoCache">Não consegui atualizar agora — mostrando o último dado salvo. (${escapeHtml(aviso)})</div>` : ''}
-          <div class="fichaHead">
-            <h2>Dados cadastrais</h2>
-            <div class="fichaHeadAcoes">
-              ${urlWaze ? `<a class="fileBtnLike" href="${escapeHtml(urlWaze)}" target="_blank" rel="noopener" aria-label="Abrir a rota até esse endereço no Waze">Abrir no Waze</a>` : ''}
-              <button type="button" class="fileBtnLike" id="atualizarFichaBtn">Atualizar agora</button>
-            </div>
+        ${aviso ? `<div class="avisoCache">Não consegui atualizar agora — mostrando o último dado salvo. (${escapeHtml(aviso)})</div>` : ''}
+        <div class="fichaCartoes">
+          <div class="card fichaCartao">
+            <h2 class="cartaoTit">Endereço</h2>
+            <div class="enderecoTxt">${escapeHtml(linha1 || '—')}${linha2 ? `<br>${escapeHtml(linha2)}` : ''}</div>
+            <div class="enderecoSub">${cepFmt ? `CEP ${escapeHtml(cepFmt)}` : ''}${ficha.complemento ? ` · ${escapeHtml(ficha.complemento)}` : ''}</div>
           </div>
-          <div class="formTable">${formTableHtml}</div>
+          <div class="card fichaCartao">
+            <h2 class="cartaoTit">Empresa</h2>
+            ${linhaInfo('Abertura', escapeHtml(formatDataBr(ficha.data_abertura)))}
+            ${linhaInfo('Porte', escapeHtml(ficha.porte || '—'))}
+            ${linhaInfo('Natureza jurídica', escapeHtml(ficha.natureza_juridica || '—'))}
+            ${linhaInfo('Capital social', escapeHtml(formatMoedaBr(ficha.capital_social)))}
+            ${linhaInfo('Situação', situacao ? `${escapeHtml(situacao)}${ficha.data_situacao_cadastral ? ' desde ' + escapeHtml(formatDataBr(ficha.data_situacao_cadastral)) : ''}` : '—')}
+            ${motivoRelevante ? linhaInfo('Motivo da situação', escapeHtml(ficha.motivo_situacao)) : ''}
+            ${ficha.telefone || ficha.email ? `<div class="daReceita"><span class="rot">Da Receita (costuma ser do contador)</span>${escapeHtml([ficha.telefone, ficha.email].filter(Boolean).join(' · '))}</div>` : ''}
+          </div>
+          <div class="card fichaCartao largo">
+            <h2 class="cartaoTit">Atividade</h2>
+            <div class="atividadePrincipal">${escapeHtml(principal || '—')}</div>
+            ${secundarias.length ? `<div class="enderecoSub" style="margin-top:12px;">Atividades secundárias</div>
+            <div class="chips">${secundarias.map(s => `<span class="chip">${escapeHtml(s)}</span>`).join('')}</div>` : ''}
+          </div>
           ${Array.isArray(ficha.socios) && ficha.socios.length ? `
-          <div class="quadroSocietario">
-            <span class="lbl">Quadro Societário</span>
-            <span class="val">${ficha.socios.map(s => escapeHtml([s.nome, s.qualificacao].filter(Boolean).join(' - '))).join('<br>')}</span>
+          <div class="card fichaCartao largo">
+            <h2 class="cartaoTit">Quadro societário</h2>
+            <div class="socios">${ficha.socios.map(s => `<div class="socio"><span class="socioNome">${escapeHtml(s.nome || '')}</span>${s.qualificacao ? `<span class="socioQual">${escapeHtml(s.qualificacao)}</span>` : ''}</div>`).join('')}</div>
           </div>` : ''}
-          <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + formatDataBr(ficha.atualizado_em)}.</p>
-          ${ficha.dados_brutos ? `
-          <details style="margin-top:10px;">
-            <summary style="cursor:pointer;font-size:11px;color:var(--gray);">Ver dados técnicos (resposta original da consulta)</summary>
-            <pre style="white-space:pre-wrap;word-break:break-word;font-size:10.5px;background:var(--fill);border-radius:8px;padding:10px;margin-top:8px;max-height:280px;overflow-y:auto;">${escapeHtml(JSON.stringify(ficha.dados_brutos, null, 2))}</pre>
-          </details>` : ''}
-        </div>`;
-      document.getElementById('atualizarFichaBtn').addEventListener('click', () => carregarFicha(true));
+        </div>
+        <p class="fonteNota">Fonte: Receita Federal, via radar-cnpj.com · ${fonte === 'origem' ? 'consultado agora' : 'do cache salvo em ' + escapeHtml(formatDataBr(ficha.atualizado_em))}.</p>
+        ${ficha.dados_brutos ? `
+        <details style="margin-top:10px;">
+          <summary style="cursor:pointer;font-size:11px;color:var(--gray);">Ver dados técnicos (resposta original da consulta)</summary>
+          <pre style="white-space:pre-wrap;word-break:break-word;font-size:10.5px;background:var(--white);border-radius:8px;padding:10px;margin-top:8px;max-height:280px;overflow-y:auto;">${escapeHtml(JSON.stringify(ficha.dados_brutos, null, 2))}</pre>
+        </details>` : ''}`;
     }
 
     // Cada consulta leva um número: com o servidor lento, a ficha do cliente
@@ -599,6 +699,7 @@
     async function carregarFicha(forcar) {
       const host = document.getElementById('fichaHost');
       host.innerHTML = '<div class="card"><div class="lev-empty">Consultando…</div></div>';
+      if (!forcar) { state.ficha = null; renderTopo(); }
       const req = ++fichaReq;
       const clienteId = state.clienteId;
       const velha = () => req !== fichaReq || state.clienteId !== clienteId;
@@ -656,13 +757,7 @@
     }
     function renderContatos(c) {
       const host = document.getElementById('contatosHost');
-      const campos = [
-        ['Telefone comercial', c.telefone_comercial ? formatarTelefoneBr(c.telefone_comercial) : ''],
-        ['E-mail comercial', c.email_comercial || ''],
-        ['E-mail NF/XML', c.email_nfe || ''],
-        ['Comprador', c.whatsapp_comprador_nome || ''],
-        ['Telefone do comprador', c.whatsapp_comprador ? formatarTelefoneBr(c.whatsapp_comprador) : ''],
-      ];
+      const campos = camposDeContato(c);
       const preenchidos = campos.filter(([, v]) => v).length;
       host.innerHTML = `
         <div class="card">
@@ -675,12 +770,25 @@
           <p class="cardHint" style="margin:10px 0 0;">Pra preencher ou mudar: no app, card do cliente (Pedido ou Levantamento) › Contatos.</p>
         </div>`;
       host.querySelectorAll('[data-copiar]').forEach(b => b.addEventListener('click', () => copiarTexto(campos[Number(b.dataset.copiar)][1], b)));
-      document.getElementById('copiarTudoBtn').addEventListener('click', (e) => {
-        const linhas = [c.nome || state.clienteNome];
-        if (state.clienteDoc) linhas.push(`CNPJ: ${formatarDocumento(state.clienteDoc)}`);
-        campos.forEach(([rot, v]) => { if (v) linhas.push(`${rot}: ${v}`); });
-        copiarTexto(linhas.join('\n'), e.currentTarget);
-      });
+      document.getElementById('copiarTudoBtn').addEventListener('click', (e) => copiarTudoSalesforce(e.currentTarget));
+    }
+    // Texto com rótulos pra colar no Salesforce (botão do cartão do cliente e
+    // o dos Contatos, que no laptop fica escondido).
+    function camposDeContato(c) {
+      return [
+        ['Telefone comercial', c.telefone_comercial ? formatarTelefoneBr(c.telefone_comercial) : ''],
+        ['E-mail comercial', c.email_comercial || ''],
+        ['E-mail NF/XML', c.email_nfe || ''],
+        ['Comprador', c.whatsapp_comprador_nome || ''],
+        ['Telefone do comprador', c.whatsapp_comprador ? formatarTelefoneBr(c.whatsapp_comprador) : ''],
+      ];
+    }
+    function copiarTudoSalesforce(btn) {
+      const c = state.cliente || {};
+      const linhas = [c.nome || state.clienteNome];
+      if (state.clienteDoc) linhas.push(`CNPJ: ${formatarDocumento(state.clienteDoc)}`);
+      camposDeContato(c).forEach(([rot, v]) => { if (v) linhas.push(`${rot}: ${v}`); });
+      copiarTexto(linhas.join('\n'), btn);
     }
     async function carregarContatos() {
       const host = document.getElementById('contatosHost');
@@ -691,7 +799,9 @@
       try {
         const c = await apiFetch(`/api/clientes/${clienteId}`);
         if (velha()) return;
-        renderContatos(c || {});
+        state.cliente = c || {};
+        renderContatos(state.cliente);
+        renderTopo();
       } catch (e) {
         if (velha()) return;
         host.innerHTML = `<div class="card"><div class="ap-msg error inline">Contatos: ${escapeHtml(e.message)}</div></div>`;
@@ -701,6 +811,8 @@
     function selecionarCliente(id, nome, doc) {
       fichaReq++; // a consulta em andamento (outro cliente) não aparece mais
       state.clienteId = id; state.clienteNome = nome; state.clienteDoc = doc;
+      state.ficha = null; state.cliente = null;
+      renderTopo();
       carregarContatos();
       document.getElementById('clientPickerNome').textContent = nome;
       document.getElementById('clientPickerSelected').classList.remove('hidden');
@@ -718,7 +830,8 @@
       fichaReq++;
       contatosReq++;
       document.getElementById('contatosHost').innerHTML = '';
-      state.clienteId = null; state.clienteNome = ''; state.clienteDoc = '';
+      state.clienteId = null; state.clienteNome = ''; state.clienteDoc = ''; state.ficha = null; state.cliente = null;
+      renderTopo();
       document.getElementById('clientPickerSelected').classList.add('hidden');
       document.getElementById('clientPickerSearch').classList.remove('hidden');
       document.getElementById('fichaHost').innerHTML = '';
