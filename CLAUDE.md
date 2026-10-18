@@ -865,6 +865,53 @@ Supabase, sem PR — não é mudança de código.
   de 15 dias, "pode já ter sido pago" — o relatório não chega em dia fixo. Lista guardada no aparelho
   (`cortagInadimplencia_v1`).
 
+- **Contas do Salesforce: inativos de outros vendedores "pro jogo"** (10/2026, pedido do usuário a partir do relatório
+  "Todas Contas - Representante" do Salesforce: nome, código do ERP, CNPJ, situação Ativo/Inativo, **"Primeiro nome do
+  proprietário"** = vendedor dono da conta e data da última compra **com qualquer vendedor**). No relatório de 18/10/2026: 542
+  contas (373 Sergio Luiz, 159 Rodrigo, 9 Marina/vendas internas, 1 Vilmar), 290 ativas e 252 inativas; "Ativo" = comprou nos
+  últimos ~6 meses (corte entre 195 e 200 dias, com 21 exceções no próprio Salesforce). **Política da Cortag** (explicada pelo
+  usuário): cliente inativo fica aberto pra qualquer vendedor - o da Russo's que para de comprar vai pra **base** do Rodrigo (outro
+  representante da região) e, passado mais tempo, pra base do **telemarketing** (vendas internas da Cortag, região "VENDAS
+  INTERNAS" no relatório; Marina); quem vender pede pra **ativar e transferir a conta pra sua base**. Por isso o tempo sem compra
+  importa. Decisões do usuário: **os ativos de outra base não contam na carteira; os inativos (de qualquer base) estão pro jogo**; ativo de outro
+  vendedor **sai das oportunidades e continua na busca**; **todos os inativos fora do app viram cliente**; os inativos aparecem
+  no 💤 Para reativar, na Rota/mapa e num **placar "Recuperados"**. Importação pelo Painel (planilha ou CSV, só admin;
+  `lerContasSalesforce` em `importadores.js`, `routes/contasSalesforce.js`, `POST /api/reativacao/contas-salesforce`), foto
+  trocada inteira em `contas_salesforce`:
+  - **Principal** = proprietário com mais contas ativas no arquivo (quem exportou). Conta **Ativa** de outro proprietário =
+    `de_outro_vendedor` (`clientesDeOutroVendedor`, `routes/lib/contasSalesforce.js`): sai do Para reativar, Recompra, alertas de
+    classificatório e Dashboard (contas sem comprar/ativos por canal) no servidor; `/api/visitas` manda `outro_vendedor` e o app
+    tira só das listas de Visitas × compras (a linha "Sua última visita" do card continua); no app vem no `/sync` como
+    `outro_vendedor` e sai de Perto de mim, Rota por cidade e mapa (`clientesDaCarteira`, `index.html`; o "Onde" da ficha do
+    produto usa todos os clientes); na busca aparece "base Rodrigo · ativa". As
+    vendas antigas continuam no faturamento (foram do representante). Marina (vendas internas) e Vilmar caem na mesma regra.
+    Em 18/10/2026 eram 14 clientes do app marcados (10 do Rodrigo - SOLER, R$ 288 mil de histórico, ficaria no topo do Para
+    reativar - e 3 da Marina). A conta com classificatório "Representante" é a da própria representação (a RUSSO'S,
+    Sergio e Michel Russo, que compram amostras sob a supervisão do gestor - por isso a conta é do Vilmar): nunca é "de outro
+    vendedor" nem ganha selo de base, e **sai das listas de oportunidade** como as de outra base (não é cliente pra quem se
+    vende; pedido do usuário) - `clientesDeOutroVendedor` devolve 'Representação' e a busca mostra "conta da representação". Conta da **gerência** também não (Vilmar,
+    gerente de vendas - o nome dele aparece sempre, como gerente regional/supervisor): o proprietário cujo primeiro nome é o do
+    "Gestor" da planilha Classificatório do ERP (`cliente_classificatorio_erp.gestor`, "VILMAR HEDLER JUNIOR" em 10/2026). Vale até a próxima importação: quem voltar pra carteira precisa de um
+    relatório novo.
+  - **Inativa** fora do app vira cliente (código, CNPJ, nome; classificatório pela política, `classificatorioDaConta`;
+    "Sem Classificatório" fica sem; `classificatorio_atualizado_em` NULL pra qualquer relatório do ERP ter prioridade; fora dos
+    alertas de classificatório enquanto não comprar, `clientesInativosNoSalesforce`) - 133 em 18/10/2026, quase todos do Rodrigo parados há 3+ anos. Liga pelo código, depois
+    CNPJ (o cliente ganha o código), depois nome só de cliente sem código e sem CNPJ e só se for um (filiais). Cliente sem CNPJ
+    ganha o do Salesforce (CNPJ que veio como número volta com o zero da frente, `documentoNormalizado`). Situação que
+    não é "Ativo"/"Inativo" (vazia, "Prospect") fica sem situação: não cria cliente nem entra no placar. A ficha de CNPJ (40/noite) e a posição pelo endereço se completam sozinhas de madrugada. Ativa de
+    outro vendedor fora do app **não** vira cliente.
+  - **Para reativar** usa a última compra do Salesforce junto com a do ERP/app (a mais nova): o relatório Sem Compra do ERP só
+    tem os pedidos do representante (código 20). Conta Inativa no Salesforce entra mesmo com compra dentro do período do
+    relatório do ERP (foi com outro vendedor). Selo **"Base Rodrigo"/"Base Telemarketing"** (`base`: `baseDaConta`, telemarketing
+    pela região; correção do usuário: "não era do Rodrigo, está na base dele") + linha "vendendo, peça pra ativar e transferir pra
+    sua base", junto do selo "N meses sem compra", telefone do Salesforce (`primeiroTelefone`: o 1º
+    número com DDD do texto livre) com **WhatsApp** quando é celular; sem valor conhecido, quem parou há menos tempo primeiro.
+  - **Placar "Recuperados"** (topo do Para reativar e "🏆 N recuperados" no cabeçalho): `reativacao_alvos` = conta Inativa no
+    Salesforce desde o dia da 1ª importação em que apareceu (reimportar não muda); recuperado = pedido a partir desse dia
+    (implantação no ERP sem a série de 7 dígitos, ou pedido do app); valor = entrada no ERP a partir do dia. Mês = o de hoje.
+  - Sem data no arquivo: a foto vale pelo dia da importação. Em aberto: as 8 inativas que nunca compraram não entram no Para
+    reativar (sem data); as 21 "Ativo" sem compra há mais de 6 meses são erro de cadastro do Salesforce.
+
 - **Aba Clientes redesenhada** (10/2026, opção "A" escolhida pelo usuário a partir de mockups): **busca no topo**;
   abaixo dela "Recentes" (últimos 8 clientes abertos neste aparelho, `cortagClientesRecentes_v1`) e "Oportunidades de
   hoje" (`#clientesPainel`, some com cliente aberto ou texto na busca — o resultado fica logo abaixo dela). Os blocos
@@ -1272,6 +1319,8 @@ Supabase, sem PR — não é mudança de código.
     externa de empresas por região, normalmente paga ou limitada.
 - **Vendedor cadastrado vê só os clientes dele — etapa futura, sem data** (pedido do usuário, 10/2026).
   Hoje todo vendedor logado vê a carteira inteira; a base de clientes compartilhada é decisão assumida.
+  Um passo já dado (10/2026): o relatório "Todas Contas" do Salesforce traz o proprietário de cada conta
+  (`contas_salesforce.proprietario`) e esconde das oportunidades a conta ativa de outro vendedor - dá pra partir dele.
   A ideia é o app reconhecer o vendedor e mostrar só os clientes dele. As planilhas oficiais trazem o
   vendedor como "Nome (código)" — ex.: "Sergio Luiz Russo (20)", sendo 20 o código dele no ERP — e esse
   código é o elo previsto entre `usuarios` e a carteira. Hoje o importador do relatório oficial **não lê**

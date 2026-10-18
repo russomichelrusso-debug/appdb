@@ -17,6 +17,7 @@ const { pool } = require('../db');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO } = require('./lib/comprasApp');
 const { diaISO, somarDias } = require('./lib/ritmoCompra');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 
 const JANELA_DIAS = 60;
 const COMPRA_DIAS = 365;
@@ -62,6 +63,7 @@ router.get('/', async (req, res) => {
     const desdeCompra = somarDias(hoje, -COMPRA_DIAS);
 
     const lista = [];
+    const outros = await clientesDeOutroVendedor();
     for (const c of clientes.rows) {
       const id = String(c.id);
       const visita = visitaPorCliente.get(id);
@@ -78,6 +80,9 @@ router.get('/', async (req, res) => {
         visitas: visita ? visita.total : 0,
         ultima_compra: compra,
         fat_12m: (c.codigo_oficial && fat12m.get(String(c.codigo_oficial))) || 0,
+        // ativo com outro vendedor (Salesforce): o app tira das listas de
+        // Visitas × compras, mas a linha "Sua última visita" do card continua
+        outro_vendedor: outros.get(String(c.id)) || null,
       });
     }
     res.json({ hoje, janelaDias: JANELA_DIAS, clientes: lista });

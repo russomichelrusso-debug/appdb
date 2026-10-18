@@ -18,6 +18,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { codigoBase } = require('./lib/skuNormalizacao');
+const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 const { nomesDosProdutos } = require('./lib/cacheTabela');
 const { estaDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
@@ -66,9 +67,12 @@ router.get('/', async (req, res) => {
     const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));
     const codigosConhecidos = new Set(nomePorCodigo.keys());
     const skuDe = (l) => codigoBase(String(l.codigo_sku), codigosConhecidos);
+    // ativo com outro vendedor (Salesforce): o ritmo dele com o representante acabou
+    const outros = await clientesDeOutroVendedor();
+    const daCarteira = clientes.rows.filter(c => !outros.has(String(c.id)));
     const clientePorCodigo = new Map();
-    for (const c of clientes.rows) if (c.codigo_oficial) clientePorCodigo.set(String(c.codigo_oficial), c);
-    const clientePorId = new Map(clientes.rows.map(c => [String(c.id), c]));
+    for (const c of daCarteira) if (c.codigo_oficial) clientePorCodigo.set(String(c.codigo_oficial), c);
+    const clientePorId = new Map(daCarteira.map(c => [String(c.id), c]));
     const adiadoAte = new Map(adiamentos.rows.map(a => [String(a.cliente_id), diaISO(a.ate)]));
 
     // pedido do app já no relatório oficial (implantado ou faturado na janela

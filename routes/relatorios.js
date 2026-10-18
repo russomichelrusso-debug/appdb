@@ -8,6 +8,7 @@ const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
+const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 const { marcarDescontinuados, estaDescontinuado, grupoDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 
 router.param('id', validarIdInteiro);
@@ -786,6 +787,7 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
 // padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
 router.get('/dashboard/resumo', async (req, res) => {
   try {
+    const outrosVendedores = await clientesDeOutroVendedor();
     const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente] = await Promise.all([
       pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
       pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
@@ -824,6 +826,8 @@ router.get('/dashboard/resumo', async (req, res) => {
     const clientesDe3a5Meses = [];
     const clientesDe6a8Meses = [];
     for (const row of porCliente.rows) {
+      // ativo com outro vendedor (Salesforce): nem "ativo" da carteira nem "conta sem comprar"
+      if (outrosVendedores.has(String(row.id))) continue;
       const canal = canalDoCliente(row.classificatorio_tipo);
       // último pedido (carteira e app inclusive), não só a última nota: quem
       // já pediu de novo não é "conta sem comprar"

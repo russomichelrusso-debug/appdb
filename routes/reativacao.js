@@ -25,6 +25,8 @@ const { diaISO, somarDias, diasEntre } = require('./lib/ritmoCompra');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { avisarImportacao } = require('./lib/novidades');
 const { validarIdInteiro } = require('../middleware/validarId');
+const { importarContasSalesforce, CHAVE_RELATORIO: CHAVE_CONTAS_SF } = require('./contasSalesforce');
+const { primeiroTelefone } = require('./lib/contasSalesforce');
 
 router.param('id', validarIdInteiro);
 
@@ -58,6 +60,14 @@ const soDigitos = (s) => String(s || '').replace(/\D/g, '');
 router.post('/importar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar o relatório de clientes sem compra.' });
   const r = await importarClientesSemCompra(req.body || {}, req.usuario);
+  res.status(r.status).json(r.json);
+});
+
+// Relatório "Todas Contas" do Salesforce (routes/contasSalesforce.js): só
+// admin - cria cliente e marca conta de outro vendedor pra todo mundo.
+router.post('/contas-salesforce', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar o relatório de contas do Salesforce.' });
+  const r = await importarContasSalesforce(req.body || {}, req.usuario);
   res.status(r.status).json(r.json);
 });
 
@@ -190,7 +200,7 @@ router.get('/', async (req, res) => {
     // sem período no título: os 12 meses antes do relatório
     const inicioPeriodo = relatorio.periodo_inicio || somarDias(relatorio.data, -365);
 
-    const [clientes, foto, oficial, app, fatAnterior, adiamentos] = await Promise.all([
+    const [clientes, foto, oficial, app, fatAnterior, adiamentos, salesforce, metaSf, recuperados] = await Promise.all([
       pool.query(
         `/* reativacao:clientes */
          SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.classificatorio_tipo, f.municipio, f.uf
@@ -220,6 +230,28 @@ router.get('/', async (req, res) => {
          WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento > u.ultima - 365
          GROUP BY 1`),
       pool.query('/* reativacao:adiamentos */ SELECT cliente_id, tipo, desde::text AS desde, ate::text AS ate FROM reativacao_adiamentos'),
+      // relatório "Todas Contas" do Salesforce: última compra com QUALQUER
+      // vendedor, dono da conta e telefone (routes/contasSalesforce.js)
+      pool.query(
+        `/* reativacao:salesforce */
+         SELECT cliente_id, proprietario, base, situacao, de_outro_vendedor, classificatorio, ultima_compra::text AS ultima_compra, telefone, email, cidade, uf
+         FROM contas_salesforce WHERE cliente_id IS NOT NULL`),
+      pool.query(`/* reativacao:meta */ SELECT valor FROM configuracoes WHERE chave = $1`, [CHAVE_CONTAS_SF]),
+      // placar "Recuperados": inativo no Salesforce que pediu a partir do dia em
+      // que entrou na lista (entrada do pedido sem a série de 7 dígitos, ou
+      // pedido do app); valor = o que entrou no ERP depois desse dia
+      pool.query(
+        `/* reativacao:recuperados */
+         SELECT a.cliente_id, c.nome, a.desde::text AS desde, a.proprietario,
+                (SELECT min(COALESCE(p.data_implantacao, p.data_faturamento)) FROM pedidos_oficiais_itens p
+                 WHERE p.cliente_codigo_oficial = c.codigo_oficial AND length(p.nr_pedido) <= 6
+                   AND COALESCE(p.data_implantacao, p.data_faturamento) >= a.desde)::text AS primeira_oficial,
+                (SELECT sum(p.valor) FROM pedidos_oficiais_itens p
+                 WHERE p.cliente_codigo_oficial = c.codigo_oficial AND length(p.nr_pedido) <= 6
+                   AND COALESCE(p.data_implantacao, p.data_faturamento) >= a.desde) AS valor,
+                (SELECT min(${sqlDiaDoPedido()}) FROM pedidos ped
+                 WHERE ped.cliente_id = a.cliente_id AND ${SQL_PEDIDO_APP_VALIDO} AND ${sqlDiaDoPedido()} >= a.desde)::text AS primeira_app
+         FROM reativacao_alvos a JOIN clientes c ON c.id = a.cliente_id`),
     ]);
 
     const ultimaOficial = new Map(oficial.rows.map(l => [String(l.codigo), l.ultima && diaISO(l.ultima)]));
@@ -227,14 +259,21 @@ router.get('/', async (req, res) => {
     const fatUltimoAno = new Map(fatAnterior.rows.map(l => [String(l.codigo), Number(l.total)]));
     const fotoPorCliente = new Map(foto.rows.map(l => [String(l.cliente_id), l]));
     const adiamentoPorCliente = new Map(adiamentos.rows.map(a => [String(a.cliente_id), a]));
+    const sfPorCliente = new Map(salesforce.rows.map(l => [String(l.cliente_id), l]));
+    const principal = metaSf.rows[0] && metaSf.rows[0].valor ? metaSf.rows[0].valor.principal : null;
     const mesHoje = indiceMes(hoje);
 
     const lista = [];
     for (const c of clientes.rows) {
       const id = String(c.id);
+      const sf = sfPorCliente.get(id);
+      // ativo com outro vendedor (compra, só que não com o representante) ou a
+      // conta da própria representação (amostras): fora da lista
+      if (sf && (sf.de_outro_vendedor || /^representante/i.test(String(sf.classificatorio || '').trim()))) continue;
       const naFoto = fotoPorCliente.get(id);
-      const ultimaConhecida = [c.codigo_oficial ? ultimaOficial.get(String(c.codigo_oficial)) : null, ultimaApp.get(id)]
-        .filter(Boolean).sort().pop() || null;
+      const ultimaSf = sf && sf.ultima_compra ? diaISO(sf.ultima_compra) : null;
+      const ultimaConhecida = [c.codigo_oficial ? ultimaOficial.get(String(c.codigo_oficial)) : null, ultimaApp.get(id),
+        ultimaSf && ultimaSf <= hoje ? ultimaSf : null].filter(Boolean).sort().pop() || null;
       let mes;
       if (naFoto) {
         mes = naFoto.mes;
@@ -244,8 +283,10 @@ router.get('/', async (req, res) => {
         // representante) e comprou antes do período - sem compra conhecida não
         // dá pra dizer há quanto tempo, e compra dentro do período sem estar no
         // relatório é outro caso (cliente novo depois do relatório, outro
-        // representante)
-        if (!c.codigo_oficial || !ultimaConhecida || ultimaConhecida >= inicioPeriodo) continue;
+        // representante) - a não ser que o Salesforce diga que a conta está
+        // Inativa (a compra no período foi com outro vendedor)
+        const inativaNoSf = sf && sf.situacao === 'Inativo';
+        if (!c.codigo_oficial || !ultimaConhecida || (ultimaConhecida >= inicioPeriodo && !inativaNoSf)) continue;
         mes = ultimaConhecida.slice(0, 7);
       }
       const faixa = faixaDosMeses(mesHoje - indiceMes(mes));
@@ -265,17 +306,34 @@ router.get('/', async (req, res) => {
         fat: naFoto ? (naFoto.fat_12m != null ? Number(naFoto.fat_12m) : null) : (fatUltimoAno.get(String(c.codigo_oficial)) || null),
         fat_origem: naFoto ? 'erp_12m' : 'ultimo_ano',
         grupo: naFoto ? naFoto.grupo : null,
-        telefone: naFoto ? naFoto.telefone : null,
-        cidade: (naFoto && naFoto.cidade) || c.municipio || null,
-        uf: (naFoto && naFoto.uf) || c.uf || null,
+        telefone: (naFoto && naFoto.telefone) || (sf && primeiroTelefone(sf.telefone)) || null,
+        email: sf ? sf.email || null : null,
+        // inativa na base de outro vendedor ou do telemarketing (política da Cortag:
+        // inativa fica aberta pra todos): vendendo, pede pra ativar e transferir
+        base: sf && sf.situacao === 'Inativo' && sf.base && principal && sf.base !== principal ? sf.base : null,
+        cidade: (naFoto && naFoto.cidade) || c.municipio || (sf && sf.cidade) || null,
+        uf: (naFoto && naFoto.uf) || c.uf || (sf && sf.uf) || null,
         adiado_ate: adiamento && adiamento.tipo === 'ja_falei' ? diaISO(adiamento.ate) : null,
       });
     }
-    // dentro da faixa, quem comprava mais primeiro (vale mais reativar)
+    // dentro da faixa, quem comprava mais primeiro (vale mais reativar); sem
+    // valor conhecido (conta que era de outro vendedor), quem parou há menos tempo
     lista.sort((a, b) => ORDEM_FAIXA[faixaDosMeses(mesHoje - indiceMes(a.mes_ultima_compra))]
       - ORDEM_FAIXA[faixaDosMeses(mesHoje - indiceMes(b.mes_ultima_compra))]
-      || (b.fat || 0) - (a.fat || 0) || String(a.nome).localeCompare(String(b.nome)));
-    res.json({ hoje, relatorio, clientes: lista });
+      || (b.fat || 0) - (a.fat || 0) || String(b.mes_ultima_compra).localeCompare(String(a.mes_ultima_compra))
+      || String(a.nome).localeCompare(String(b.nome)));
+    const recuperadosLista = [];
+    for (const r of recuperados.rows) {
+      const dia = [r.primeira_oficial && diaISO(r.primeira_oficial), r.primeira_app && diaISO(r.primeira_app)]
+        .filter(d => d && d <= hoje).sort()[0];
+      if (!dia) continue;
+      recuperadosLista.push({ cliente_id: r.cliente_id, nome: r.nome, desde: diaISO(r.desde), dia,
+        valor: r.valor != null ? Math.round(Number(r.valor) * 100) / 100 : 0, base: r.proprietario && principal && r.proprietario !== principal ? r.proprietario : null });
+    }
+    recuperadosLista.sort((a, b) => b.dia.localeCompare(a.dia));
+    const desdeAlvos = recuperados.rows.map(r => diaISO(r.desde)).filter(Boolean).sort()[0] || null;
+    res.json({ hoje, relatorio, clientes: lista,
+      recuperados: { desde: desdeAlvos, alvos: recuperados.rows.length, clientes: recuperadosLista } });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao montar a lista de clientes para reativar.' });

@@ -35,6 +35,8 @@ let nextPushId = 1;
 let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
 let clientesSemCompra = []; // routes/reativacao.js (foto do Relatório de Clientes Sem Compra)
 let reativacaoAdiamentos = []; // routes/reativacao.js ("Já falei"/"Não reativar")
+let contasSalesforce = []; // routes/contasSalesforce.js (foto do relatório "Todas Contas")
+let reativacaoAlvos = []; // placar "Recuperados" (reativacao_alvos)
 let titulosInadimplentes = []; // routes/inadimplencia.js
 let produtoFotos = {}; // codigo_sku -> { imagem, tamanho, versao } (routes/produtoFotos.js)
 let produtoFotosRelogio = 1760000000000;
@@ -72,6 +74,8 @@ function reset() {
   recompraAdiamentos = [];
   clientesSemCompra = [];
   reativacaoAdiamentos = [];
+  contasSalesforce = [];
+  reativacaoAlvos = [];
   titulosInadimplentes = [];
   produtoFotos = {};
   novidades = [];
@@ -745,6 +749,81 @@ async function query(sql, params = []) {
       total.set(it.cliente_codigo_oficial, (total.get(it.cliente_codigo_oficial) || 0) + Number(it.valor || 0));
     }
     return { rows: [...total].map(([codigo, t]) => ({ codigo, total: t })) };
+  }
+
+  // Relatório "Todas Contas" do Salesforce - routes/contasSalesforce.js
+  if (s.includes('/* CONTAS-SF:OUTROS */')) {
+    const rep = (c) => /^representante/i.test(String(c.classificatorio || '').trim());
+    return { rows: contasSalesforce.filter(c => (c.de_outro_vendedor || rep(c)) && c.cliente_id != null)
+      .map(c => ({ cliente_id: c.cliente_id, base: rep(c) ? 'Representação' : (c.base || c.proprietario) })) };
+  }
+  if (s.includes('/* CONTAS-SF:INATIVOS */')) {
+    return { rows: contasSalesforce.filter(c => c.cliente_id != null && c.situacao === 'Inativo').map(c => ({ cliente_id: c.cliente_id })) };
+  }
+  if (s.includes('/* CONTAS-SF:GESTORES */')) {
+    return { rows: [...new Set(Object.values(classificatorioErp).map(e => e.gestor).filter(Boolean))].map(gestor => ({ gestor })) };
+  }
+  if (s.includes('/* CONTAS-SF:TRAVA */')) return { rows: [] };
+  if (s.includes('/* CONTAS-SF:CLIENTES */')) {
+    return { rows: clientes.map(c => ({ id: c.id, nome: c.nome, codigo_oficial: c.codigo_oficial || null, documento: c.documento || null, doc: String(c.documento || '').replace(/\D/g, '') })) };
+  }
+  if (s.includes('/* CONTAS-SF:CODIGO */')) {
+    const c = clientes.find(x => String(x.id) === String(params[1]) && !x.codigo_oficial);
+    if (c) c.codigo_oficial = params[0];
+    return { rows: [], rowCount: c ? 1 : 0 };
+  }
+  if (s.includes('/* CONTAS-SF:DOCUMENTO */')) {
+    const c = clientes.find(x => String(x.id) === String(params[1]) && !x.documento);
+    if (c) c.documento = params[0];
+    return { rows: [], rowCount: c ? 1 : 0 };
+  }
+  if (s.includes('/* CONTAS-SF:CRIAR */')) {
+    const [nomes, docs, codigos, tipos, descontos, dia] = params;
+    const rows = [];
+    nomes.forEach((nome, i) => {
+      const doc = String(docs[i] || '').replace(/\D/g, '');
+      if (clientes.some(c => c.codigo_oficial === codigos[i] || (doc && String(c.documento || '').replace(/\D/g, '') === doc))) return;
+      const id = nextId.clientes++;
+      clientes.push({ id, nome, documento: docs[i], codigo_oficial: codigos[i], classificatorio_tipo: tipos[i], classificatorio_desconto: descontos[i], classificatorio_atualizado_em: tipos[i] ? dia : null });
+      rows.push({ id, codigo_oficial: codigos[i] });
+    });
+    return { rows };
+  }
+  if (s.includes('/* CONTAS-SF:LIMPAR */')) { contasSalesforce = []; return { rows: [] }; }
+  if (s.includes('/* CONTAS-SF:GRAVAR */')) {
+    const [data, codigos, ids, nomes, docs, donos, situacoes, deOutro, ultimas, cidades, ufs, telefones, emails, classis, transps, regioes, bases] = params;
+    codigos.forEach((codigo, i) => contasSalesforce.push({
+      codigo_oficial: codigo, cliente_id: ids[i], data_relatorio: data, nome: nomes[i], documento: docs[i], proprietario: donos[i],
+      situacao: situacoes[i], de_outro_vendedor: deOutro[i], ultima_compra: ultimas[i], cidade: cidades[i], uf: ufs[i],
+      telefone: telefones[i], email: emails[i], classificatorio: classis[i], transportadora: transps[i], regiao: regioes[i], base: bases[i],
+    }));
+    return { rows: [] };
+  }
+  if (s.includes('/* CONTAS-SF:ALVOS */')) {
+    const [desde, ids, donos, ultimas] = params;
+    ids.forEach((id, i) => {
+      if (!reativacaoAlvos.some(a => a.cliente_id === id)) reativacaoAlvos.push({ cliente_id: id, desde, proprietario: donos[i], ultima_compra_antes: ultimas[i] });
+    });
+    return { rows: [] };
+  }
+  if (s.includes('/* CONTAS-SF:GRAVAR-META */')) {
+    configuracoes[params[0]] = { valor: JSON.parse(params[1]), atualizado_em: new Date().toISOString() };
+    return { rows: [] };
+  }
+  if (s.includes('/* REATIVACAO:SALESFORCE */')) {
+    return { rows: contasSalesforce.filter(c => c.cliente_id != null).map(c => ({ ...c })) };
+  }
+  if (s.includes('/* REATIVACAO:RECUPERADOS */')) {
+    return { rows: reativacaoAlvos.map(a => {
+      const c = clientes.find(x => x.id === a.cliente_id);
+      if (!c) return null;
+      const oficiais = pedidosOficiaisItens.filter(p => c.codigo_oficial && p.cliente_codigo_oficial === c.codigo_oficial && String(p.nr_pedido).length <= 6
+        && String(p.data_implantacao || p.data_faturamento || '').slice(0, 10) >= a.desde);
+      const datas = oficiais.map(p => String(p.data_implantacao || p.data_faturamento).slice(0, 10)).sort();
+      const app = pedidos.filter(p => p.cliente_id === a.cliente_id && p.origem !== 'faturamento').map(p => diaDoPedidoBr(p.data_pedido)).filter(d => d >= a.desde).sort();
+      return { cliente_id: a.cliente_id, nome: c.nome, desde: a.desde, proprietario: a.proprietario,
+        primeira_oficial: datas[0] || null, valor: oficiais.length ? oficiais.reduce((t, p) => t + Number(p.valor || 0), 0) : null, primeira_app: app[0] || null };
+    }).filter(Boolean) };
   }
 
   // Para reativar - routes/reativacao.js
@@ -2341,6 +2420,8 @@ module.exports = {
   __reset: reset,
   __seed: seed,
   __getClientes: () => clientes,
+  __getContasSalesforce: () => contasSalesforce,
+  __getReativacaoAlvos: () => reativacaoAlvos,
   __getLevantamentos: () => levantamentos,
   __getPedidoItens: () => pedidoItens,
   __getPedidos: () => pedidos,

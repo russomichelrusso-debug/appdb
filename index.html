@@ -7546,6 +7546,47 @@
       font-size: 13px;
     }
 
+    /* conta inativa na base de outro vendedor/telemarketing (Para reativar) */
+    .reativarSelo--base {
+      color: var(--gray);
+      font-weight: 600;
+    }
+
+    .reativarBaseAviso {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    /* placar "Recuperados" no topo do Para reativar */
+    .reativarPlacar {
+      margin: 6px 0 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--hairline);
+      border-left: 3px solid var(--success);
+      border-radius: var(--r-sm);
+      font-size: 13px;
+      color: var(--ink);
+    }
+
+    .reativarPlacar small {
+      display: block;
+      margin-top: 2px;
+      color: var(--gray);
+      font-size: 12px;
+    }
+
+    .reativarPlacar ul {
+      margin: 6px 0 0;
+      padding-left: 18px;
+      font-size: 12px;
+    }
+
+    .buscaOutroVendedor {
+      color: var(--gray);
+      font-style: italic;
+    }
+
     .reativarNao {
       background: none;
       border: none;
@@ -11148,7 +11189,7 @@
             </svg>
             <div class="pdfDropzoneTitle">Arraste ou toque pra escolher arquivos</div>
             <div class="pdfDropzoneSub">O app reconhece sozinho o que é cada arquivo — vários de uma vez</div>
-            <input type="file" id="apImportFileInput" accept=".xlsx,.xls,.json,application/json,application/pdf,.pdf" multiple style="display:none;">
+            <input type="file" id="apImportFileInput" accept=".xlsx,.xls,.csv,text/csv,.json,application/json,application/pdf,.pdf" multiple style="display:none;">
           </div>
           <div id="relatorioOficialStatus" class="ap-hint" style="margin:10px 0 0;">Carregando status do relatório oficial…</div>
           <details class="ap-tiposAceitos">
@@ -18049,6 +18090,19 @@
           + `${r.semCliente ? ` · ${r.semCliente} ainda fora do app (entram quando o relatório oficial trouxer)` : ''}.`;
       }
 
+      // Relatório "Todas Contas - Representante" do Salesforce (exportado à mão,
+      // planilha ou CSV): leitura em importadores.js, gravação em
+      // routes/contasSalesforce.js. Conta ativa de outro vendedor sai das
+      // oportunidades; inativa (de qualquer vendedor) entra no Para reativar.
+      async function importarContasSalesforceArquivo(file) {
+        const dados = CortagImportadores.lerContasSalesforce(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
+        const r = await apiFetch('/api/reativacao/contas-salesforce', { method: 'POST', body: JSON.stringify(dados) });
+        syncClientesLocais().then(() => { renderPerto(); renderRota(); });
+        carregarReativar(true);
+        return `${r.total} conta(s) de ${r.principal || '?'} e outros · ${r.inativos} inativa(s) no Para reativar`
+          + `${r.criados ? ` (${r.criados} cliente(s) novo(s) no app)` : ''} · ${r.deOutroVendedor} ativa(s) de outro vendedor fora das oportunidades.`;
+      }
+
       // Relatório de Inadimplência do ERP (normalmente chega sozinho pela
       // importação por e-mail): leitura em importadores.js.
       async function importarInadimplenciaArquivo(file) {
@@ -18520,6 +18574,7 @@
       }
       function saveClientesLocais(clientes) {
         fantasiaLocalPorId = null;
+        outroVendedorPorId = null;
         try { localStorage.setItem(CLIENTES_LOCAIS_LS_KEY, JSON.stringify({ clientes, updatedAt: Date.now() })); }
         catch (e) { console.warn('Não foi possível salvar a cópia local de clientes:', e); }
       }
@@ -18703,7 +18758,24 @@
         if (fantasia) partes.push(`<b>${escapeHtml(fantasia)}</b>`);
         partes.push(c.documento ? escapeHtml(formatarDocumento(c.documento)) : semDoc);
         if (c.municipio) partes.push(escapeHtml(c.municipio + (c.uf ? '/' + c.uf : '')));
+        const outro = outroVendedorDoCliente(c);
+        if (outro) partes.push(`<span class="buscaOutroVendedor">${outro === 'Representação' ? 'conta da representação' : `base ${escapeHtml(outro)} · ativa`}</span>`);
         return partes.join(' · ');
+      }
+      // Conta ativa na base de OUTRO vendedor (ou do telemarketing) pelo relatório
+      // "Todas Contas" do Salesforce (vem no /sync como outro_vendedor = a base):
+      // continua na busca, com "base Rodrigo · ativa",
+      // e sai de Perto de mim, Rota e mapa (o servidor já tira do Para reativar,
+      // Visitas, alertas e Dashboard).
+      let outroVendedorPorId = null; // refeito quando a cópia de clientes muda (saveClientesLocais)
+      function outroVendedorDoCliente(c) {
+        if (!c) return '';
+        if (c.outro_vendedor !== undefined) return c.outro_vendedor || '';
+        if (!outroVendedorPorId) outroVendedorPorId = new Map(loadClientesLocais().filter(x => x.outro_vendedor).map(x => [String(x.id), x.outro_vendedor]));
+        return outroVendedorPorId.get(String(c.id)) || '';
+      }
+      function clientesDaCarteira() {
+        return loadClientesLocais().filter(c => !c.outro_vendedor);
       }
       // Nome fantasia (da ficha de CNPJ) só quando é diferente da razão social -
       // o vendedor conhece a loja por ele. Cliente sem o campo (levantamento
@@ -20091,6 +20163,7 @@
         classificatorio: { rotulo: 'Classificatório do ERP', importar: (f) => importarClassificatorioErp(f) },
         semcompra: { rotulo: 'Clientes sem compra (ERP)', importar: (f) => importarClientesSemCompraArquivo(f) },
         inadimplencia: { rotulo: 'Inadimplência (ERP)', importar: (f) => importarInadimplenciaArquivo(f) },
+        contasSalesforce: { rotulo: 'Contas do Salesforce', importar: (f) => importarContasSalesforceArquivo(f) },
         previsao: { rotulo: 'Previsão de estoque', importar: (f) => importarPrevisaoEstoque(f) },
         videos: { rotulo: 'Vídeos de produto', importar: (f) => importarVideosProduto(f) },
         linkSite: { rotulo: 'Link do site oficial', importar: (f) => importarLinksSite(f) },
@@ -20117,6 +20190,9 @@
           return null;
         }
 
+        // CSV: só o relatório de contas do Salesforce (exportação "Detalhes apenas")
+        // (o leitor diz o que falta se não for)
+        if (/\.csv$/i.test(nome)) return 'contasSalesforce';
         if (!/\.xlsx?$/i.test(nome)) return null;
         // planilhas: importadores.js (mesmo reconhecimento da importação por e-mail)
         return CortagImportadores.detectarTipoPlanilha(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
@@ -21889,7 +21965,7 @@
       // Todos os clientes com posição, do mais perto pro mais longe.
       function clientesComDistancia() {
         if (!pertoPosicao) return [];
-        return loadClientesLocais().map(c => {
+        return clientesDaCarteira().map(c => {
           const pos = posicaoDoCliente(c);
           return pos ? { c, pos, dist: distanciaM(pertoPosicao, pos) } : null;
         }).filter(Boolean).sort((a, b) => a.dist - b.dist);
@@ -22002,7 +22078,7 @@
         const raio = pertoRaio();
         const todos = clientesComDistancia();
         const noRaio = todos.filter(x => x.dist <= raio);
-        const semPosicao = loadClientesLocais().filter(c => !posicaoDoCliente(c)).length;
+        const semPosicao = clientesDaCarteira().filter(c => !posicaoDoCliente(c)).length;
         const reativarPorId = new Map(reativarVisiveis().map(r => [String(r.cliente_id), r]));
         const exClientes = noRaio.filter(x => reativarPorId.has(String(x.c.id))).length;
         const resumo = pertoBuscando ? 'pegando sua localização…'
@@ -22101,9 +22177,11 @@
         try { return localStorage.getItem(ROTA_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
       }
       // 'MARINGA|PR' -> clientes da cidade, pelo município da ficha
-      function cidadesDosClientes() {
+      // lista: Rota/mapa usam só a carteira (sem conta de outro vendedor); o "Onde"
+      // da ficha do produto passa todos os clientes
+      function cidadesDosClientes(lista = clientesDaCarteira()) {
         const porChave = new Map();
-        for (const c of loadClientesLocais()) {
+        for (const c of lista) {
           const e = c.endereco;
           if (!e || !e.municipio) continue;
           const chave = `${chaveCidade(e.municipio)}|${String(e.uf || '').trim().toUpperCase()}`;
@@ -23204,8 +23282,14 @@
         const d = String(c.telefone || '').replace(/\D/g, '');
         return d.length >= 10 && d.length <= 11 ? d : null;
       }
+      // celular (DDD + 9 + 8 dígitos): dá pra chamar no WhatsApp
+      function celularParaWhats(c) {
+        const d = telefoneParaLigar(c);
+        return d && d.length === 11 && d[2] === '9' ? d : null;
+      }
       function renderReativarItem(c) {
         const meta = fantasiaNaMeta(c, c.cliente_id);
+        if (c.base) meta.push(`<span class="recompraSelo reativarSelo--base">Base ${escapeHtml(c.base)}</span>`);
         if (c.cidade) meta.push(escapeHtml(c.cidade));
         const valor = textoValorReativar(c);
         if (valor) meta.push(escapeHtml(valor));
@@ -23214,13 +23298,35 @@
         return `<div class="recompraItem">
           <button type="button" class="recompraNome" data-reativar-abrir="${c.cliente_id}"><span>${escapeHtml(c.nome)}</span>${seloReativar(c)}</button>
           <div class="recompraMeta">${meta.join(' · ')}</div>
+          ${c.base ? `<div class="reativarBaseAviso">Inativo na base ${escapeHtml(c.base)}: vendendo, peça pra ativar e transferir pra sua base.</div>` : ''}
           <div class="recompraAcoes">
             <button type="button" class="recompraBtn recompraBtn--principal" data-reativar-abrir="${c.cliente_id}">Abrir cliente</button>
             ${tel ? `<a class="recompraBtn" href="tel:+55${tel}" style="display:flex;align-items:center;justify-content:center;text-decoration:none;" aria-label="Ligar para ${escapeHtml(c.nome)}">Ligar</a>` : ''}
+            ${celularParaWhats(c) ? `<a class="recompraBtn" href="https://wa.me/55${celularParaWhats(c)}" target="_blank" rel="noopener" style="display:flex;align-items:center;justify-content:center;text-decoration:none;" aria-label="WhatsApp de ${escapeHtml(c.nome)}">WhatsApp</a>` : ''}
             <button type="button" class="recompraBtn" data-reativar-adiar="${c.cliente_id}">Já falei</button>
           </div>
           <button type="button" class="reativarNao" data-reativar-nao="${c.cliente_id}">Não reativar (fechou, mudou de ramo…)</button>
         </div>`;
+      }
+      // Placar "Recuperados": inativo do relatório do Salesforce que voltou a pedir
+      // depois de entrar na lista (GET /api/reativacao -> recuperados). O mês é o
+      // de hoje no aparelho (funciona com a cópia guardada).
+      function placarRecuperados() {
+        const r = reativarDados && reativarDados.recuperados;
+        if (!r || !r.alvos) return null;
+        const mes = hojeLocalISO().slice(0, 7);
+        const lista = Array.isArray(r.clientes) ? r.clientes : [];
+        const doMes = lista.filter(c => String(c.dia).slice(0, 7) === mes);
+        const soma = (l) => l.reduce((t, c) => t + (Number(c.valor) || 0), 0);
+        return { mes, desde: r.desde, alvos: r.alvos, doMes, valorMes: soma(doMes), total: lista.length, valorTotal: soma(lista) };
+      }
+      function htmlPlacarRecuperados(p) {
+        if (!p) return '';
+        const valor = (v) => (v > 0 ? ` · ${escapeHtml(brlCurto(v))}` : '');
+        const nomes = p.doMes.slice(0, 5).map(c => `<li>${escapeHtml(c.nome)} · pediu ${escapeHtml(dataCurtaISO(c.dia))}${valor(c.valor)}${c.base ? ` · estava na base ${escapeHtml(c.base)}` : ''}</li>`).join('');
+        return `<div class="reativarPlacar"><strong>🏆 Recuperados em ${escapeHtml(mesAnoBr(p.mes))}:</strong> ${p.doMes.length} ${p.doMes.length === 1 ? 'cliente' : 'clientes'}${valor(p.valorMes)}
+          <small>Desde ${escapeHtml(formatDateBr(p.desde))}: ${p.total} de ${p.alvos} inativos voltaram a pedir${valor(p.valorTotal)} (valor do pedido no ERP)</small>
+          ${nomes ? `<ul>${nomes}</ul>` : ''}</div>`;
       }
       function renderReativar() {
         agendarMapaClientes();
@@ -23248,6 +23354,8 @@
           ? Object.keys(REATIVAR_FAIXAS).map(f => [f, visiveis.filter(c => c.faixa === f).length]).filter(([, n]) => n)
             .map(([f, n]) => `<span class="reativarLegenda"><i style="background:${REATIVAR_FAIXAS[f].ponto};"></i><strong>${n}</strong> ${REATIVAR_FAIXAS[f].curto}</span>`).join('')
           : 'ninguém há 3 meses ou mais sem compra';
+        const placar = placarRecuperados();
+        const resumoPlacar = placar && placar.doMes.length ? `<span class="reativarLegenda">🏆 <strong>${placar.doMes.length}</strong> recuperados</span>` : '';
         el.dataset.cor = visiveis.length ? 'amarelo' : 'cinza';
         let corpo = '';
         if (aberta) {
@@ -23262,7 +23370,8 @@
               + (resto > 0 ? `<button type="button" class="recompraMais" data-reativar-mais="${faixa}">Ver mais ${resto}</button>` : '');
           };
           const rel = reativarDados.relatorio;
-          corpo = `<p class="recompraHint">Relatório de clientes sem compra do ERP de ${escapeHtml(formatDateBr(rel.data))}, atualizado com os pedidos que entraram depois. Quem comprava mais vem primeiro.</p>`
+          corpo = htmlPlacarRecuperados(placar)
+            + `<p class="recompraHint">Relatório de clientes sem compra do ERP de ${escapeHtml(formatDateBr(rel.data))}, atualizado com os pedidos que entraram depois${placar ? ' e com a última compra do Salesforce (inclusive com outro vendedor)' : ''}. Quem comprava mais vem primeiro.</p>`
             + (cidades.length > 1 ? `<select class="reativarFiltro" id="reativarCidade" aria-label="Filtrar por cidade">
                 <option value="">Todas as cidades</option>
                 ${cidades.map(([chave, nome]) => `<option value="${escapeHtml(chave)}"${chave === reativarCidade ? ' selected' : ''}>${escapeHtml(nome)}</option>`).join('')}
@@ -23271,7 +23380,7 @@
             + (filtrados.length ? '' : '<div class="lev-empty">Nenhum cliente há 3 meses ou mais sem compra.</div>');
         }
         el.innerHTML = cabecalhoBloco({
-          id: 'reativarToggle', aberta, icone: 'reativar', titulo: 'Para reativar', resumo,
+          id: 'reativarToggle', aberta, icone: 'reativar', titulo: 'Para reativar', resumo: resumo + resumoPlacar,
           numero: visiveis.length || null, rotulo: visiveis.length === 1 ? 'cliente' : 'clientes',
         }) + corpo;
         const porId = new Map(visiveis.map(c => [String(c.cliente_id), c]));
@@ -23418,7 +23527,8 @@
         const hoje = hojeLocalISO();
         const limite = somarDiasISO(hoje, -VISITAS_JANELA_DIAS);
         const desdeCompra = somarDiasISO(hoje, -VISITAS_COMPRA_DIAS);
-        const todos = visitasClientes();
+        // conta ativa de outro vendedor (Salesforce) não entra nas listas
+        const todos = visitasClientes().filter(c => !c.outro_vendedor);
         const semCompra = todos.filter(c => c.ultima_visita && c.ultima_visita >= limite && !(c.ultima_compra && c.ultima_compra >= c.ultima_visita))
           .sort((a, b) => a.ultima_visita.localeCompare(b.ultima_visita) || String(a.nome).localeCompare(String(b.nome)));
         const semVisita = todos.filter(c => c.ultima_compra && c.ultima_compra > desdeCompra && !(c.ultima_visita && c.ultima_visita >= limite))
@@ -24079,7 +24189,7 @@
       function aplicarProdLocal(lista) {
         const clientes = loadClientesLocais();
         const carteira = new Map(clientes.map(x => [String(x.id), x]));
-        const cidades = cidadesDosClientes();
+        const cidades = cidadesDosClientes(clientes);
         const f = prodLocalFiltro();
         const nomeDaCidade = (c) => { const k = chaveCidadeDoCliente(c); return k && cidades.has(k) ? cidades.get(k).nome : ''; };
         const base = lista.map(r => {
