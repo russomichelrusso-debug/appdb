@@ -721,7 +721,11 @@ async function main() {
   // só desce, pelo ano fechado; subir é pedido ao gerente quando o acumulado
   // do ano bate a faixa. Abaixo do mínimo só é risco atrás do ritmo pro ano.
   // Faixas de todos os canais. Teste direto na função pura.
-  const { calcularStatusClassificatorio, fracaoDoAnoPeloDia } = require('../routes/clientesClassificatorio');
+  const { calcularStatusClassificatorio, fracaoDoAnoPeloDia, degrausDaFaixa } = require('../routes/clientesClassificatorio');
+  const deg = degrausDaFaixa('Varejo Premium');
+  assert(deg.map(d => `${d.tipo}:${d.min}${d.atual ? '*' : ''}`).join(',') === 'Varejo Exclusive:0,Varejo Premium:30000*,Varejo Master:50000',
+    'degraus da régua do card: as faixas do canal em ordem, com a atual marcada');
+  assert(degrausDaFaixa('Locação').length === 0, 'tipo sem faixa não tem régua');
   let s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 55000, faturamentoAnoCorrente: 26482, atrasadoNoRitmo: false, fracaoDoAno: 0.8 });
   assert(
     s.jaQualificaProximaFaixa !== true && s.faltaPraManter === 3518 && s.faltaPraProximaFaixa === 23518 && s.faturamentoFaixa === 26482 && s.emRiscoDeQueda === false,

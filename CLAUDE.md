@@ -321,6 +321,12 @@ Supabase, sem PR — não é mudança de código.
   10/2026) fica **sem veredito de faixa** na ficha, no card compacto e nos alertas (a Diferenca do ERP é de 12 meses); vale o
   tile "Acumulado · matriz" do ERP. Também corrigido: os alertas liam `trimestre_atual_idx` das linhas de trimestre (NaN), e
   nenhum PIC entrava como "atrasado".
+  **Topo do card = régua da faixa** (opção "A" com o valor por mês da "C", escolhida pelo usuário a partir de mockups, canvas
+  "Cortag · Faixa do classificatório no card"; `renderReguaFaixa`, `index.html`): "Faturado em 2026" grande, a régua com as
+  faixas do canal (`degraus` da API, `degrausDaFaixa`; a última com 28% da largura) e um marcador, e dois cartões "↓ Pra não
+  cair R$ X até 31/12" (laranja; vermelho em risco) e "↑ Pra Master R$ Y no ano", cada um com "≈ R$ Z/mês" até 31/12 (no
+  último mês, "em N dias"). Sem texto de "peça ao gerente". "Oficial do ERP" e "Detalhes do faturamento" (ao vivo, conciliação)
+  ficam recolhidos embaixo (`.clsDobra`). Rede, PIC, matriz com empresas fora do app e servidor antigo continuam no card antigo.
 - **Política Comercial rev. 06** (PVEN, 04/2026), em 2 PRs:
   - **No pedido** (PR #125): classificatório por canal, canal automático pelo classificatório do
     cliente, desconto por prazo, prazos por canal e pedido mínimo CIF por região (detalhes em

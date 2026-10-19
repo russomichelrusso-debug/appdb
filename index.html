@@ -1433,6 +1433,173 @@
       margin-top: 10px;
     }
 
+    /* Régua da faixa no topo do card (opção "A" + valor por mês da "C",
+       escolhida pelo usuário a partir de mockups, 10/2026) */
+    .clsRegua {
+      margin-top: 14px;
+    }
+
+    .clsReguaTopo {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .clsReguaTopo span {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .clsReguaTopo b {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--ink);
+    }
+
+    .clsReguaBarra {
+      position: relative;
+      display: flex;
+      height: 14px;
+      margin-top: 12px;
+      border-radius: 7px;
+      overflow: hidden;
+    }
+
+    .clsReguaSeg--abaixo { background: color-mix(in srgb, var(--warning) 38%, transparent); }
+    .clsReguaSeg--atual { background: color-mix(in srgb, var(--red) 30%, transparent); }
+    .clsReguaSeg--acima { background: color-mix(in srgb, var(--success) 38%, transparent); }
+
+    .clsReguaMarca {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 4px;
+      margin-left: -2px;
+      border-radius: 2px;
+      background: var(--ink);
+    }
+
+    .clsReguaBarraCaixa {
+      position: relative;
+      padding: 4px 0;
+    }
+
+    .clsReguaNomes {
+      display: flex;
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--gray);
+    }
+
+    .clsReguaNomes span {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding-left: 4px;
+      border-left: 1px solid var(--hairline);
+    }
+
+    .clsReguaNomes span:first-child {
+      padding-left: 0;
+      border-left: 0;
+    }
+
+    .clsReguaCartoes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .clsReguaCartao {
+      border-radius: var(--r-sm);
+      padding: 10px 12px;
+      min-width: 0;
+      background: var(--fill);
+      color: var(--ink);
+    }
+
+    .clsReguaCartao:only-child {
+      grid-column: 1 / -1;
+    }
+
+    .clsReguaCartao small {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .clsReguaCartao b {
+      display: block;
+      font-size: 21px;
+      font-weight: 800;
+      margin-top: 2px;
+      white-space: nowrap;
+    }
+
+    .clsReguaCartao span {
+      display: block;
+      font-size: 12px;
+      margin-top: 1px;
+      opacity: .85;
+    }
+
+    .clsReguaCartao--manter { background: var(--warning-bg); color: var(--warning); }
+    .clsReguaCartao--risco { background: var(--danger-bg); color: var(--danger); }
+    .clsReguaCartao--ok { background: var(--success-bg); color: var(--success); }
+
+    .clsDobra {
+      margin-top: 12px;
+      border-top: 0.75px solid var(--hairline);
+    }
+
+    .clsDobra + .clsDobra {
+      margin-top: 0;
+    }
+
+    .clsDobra > summary {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      min-height: 44px;
+      cursor: pointer;
+      list-style: none;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--ink);
+    }
+
+    .clsDobra > summary::-webkit-details-marker {
+      display: none;
+    }
+
+    .clsDobra > summary span {
+      font-weight: 500;
+      color: var(--gray);
+    }
+
+    .clsDobra > summary::after {
+      content: '›';
+      font-size: 20px;
+      color: var(--gray);
+      transition: transform .15s;
+    }
+
+    .clsDobra[open] > summary::after {
+      transform: rotate(90deg);
+    }
+
+    .clsDobra > .clsSec {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+
     .clsConcTit {
       font-size: 11px;
       font-weight: 700;
@@ -19051,6 +19218,13 @@
           ${status.ehRede ? `<p class="ap-hint" style="margin-top:6px;">Acordo bilateral com a rede/cooperativa — o desconto vale
             independente do faturamento deste cliente, não tem faixa pra subir ou cair.</p>` : ''}`);
 
+        // Régua da faixa no topo (ano fiscal, servidor novo); o ERP e o
+        // detalhe do faturamento vão recolhidos logo abaixo dela.
+        const semFaixaAoVivo = !status.ehRede && !!status.erp && status.erp.fat12mOutrasEmpresas > 0;
+        const regua = !semFaixaAoVivo && status.faltaPraMeta == null ? renderReguaFaixa(status) : '';
+        if (regua) partes.push(regua);
+        const inicioDetalhes = partes.length;
+
         if (status.erp) partes.push(renderClassificatorioErp(status));
 
         // Ao vivo no app: soma o faturamento importado até hoje (12 meses
@@ -19074,16 +19248,24 @@
 
         if (status.erp && status.erp.conciliacao) partes.push(renderConciliacaoErp(status));
 
+        if (regua) {
+          // ERP e "ao vivo" viram duas linhas recolhidas (só abre quem tocar)
+          const [erpHtml, ...aoVivo] = status.erp ? partes.splice(inicioDetalhes) : [null, ...partes.splice(inicioDetalhes)];
+          const dataErp = status.erp && (status.erp.apuradoAte || status.erp.dataRelatorio);
+          const apurado = dataErp ? ` <span>· até ${formatDateBr(dataErp).slice(0, 5)}</span>` : '';
+          if (erpHtml) partes.push(`<details class="clsDobra"><summary><div>Oficial do ERP${apurado}</div></summary>${erpHtml}</details>`);
+          partes.push(`<details class="clsDobra"><summary><div>Detalhes do faturamento</div></summary>${aoVivo.join('')}</details>`);
+        }
+
         // Matriz com empresas fora do app (filiais de outros representantes):
         // a soma ao vivo fica abaixo da real e "vai cair"/"falta pra subir"
         // estariam errados - não mostra veredito de faixa ao vivo, só avisa.
-        const semFaixaAoVivo = !status.ehRede && !!status.erp && status.erp.fat12mOutrasEmpresas > 0;
         if (semFaixaAoVivo) {
           partes.push(`<div class="clsTileSub" style="margin-top:8px;">A matriz também compra por outras empresas que não estão no app
             (${brl(status.erp.fat12mOutrasEmpresas)} em 12 meses no ERP). Por isso o app não calcula a faixa ao vivo — vale o acumulado da matriz no ERP, acima.</div>`);
         }
 
-        if (!semFaixaAoVivo && !status.ehRede && status.faixaMin != null && status.faixaMax != null) {
+        if (!regua && !semFaixaAoVivo && !status.ehRede && status.faixaMin != null && status.faixaMax != null) {
           // faturamentoFaixa: o valor que a API comparou com a faixa (o
           // acumulado do ano fiscal) - a barra usa o mesmo.
           const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
@@ -19094,8 +19276,8 @@
             </div>`);
         }
 
-        if (semFaixaAoVivo) {
-          // sem veredito de faixa (ver acima)
+        if (semFaixaAoVivo || regua) {
+          // sem veredito de faixa (ver acima) ou já na régua do topo
         } else if (status.faltaPraMeta != null) {
           partes.push(`<div style="margin-top:8px;font-size:13px;">Meta individual negociada: <b>${brl(status.metaIndividual)}</b> — faltam <b>${brl(status.faltaPraMeta)}</b>.</div>`);
         } else if (status.regraFaixa !== 'ano_fiscal' || status.fonteFaixa === 'erp') {
@@ -19218,6 +19400,57 @@
 
         content.innerHTML = partes.join('');
         if (!status.ehRede) initClienteGrupoUI(status);
+      }
+
+      // Régua da faixa no topo do card: faturado no ano, as faixas do canal
+      // com um marcador e dois cartões - quanto falta pra não cair em 01/01
+      // e pra próxima faixa, com quanto por mês até 31/12. Só com o servidor
+      // da regra do ano fiscal (`degraus`); sem ela, o card antigo.
+      function renderReguaFaixa(status) {
+        const degraus = status.degraus;
+        if (status.regraFaixa !== 'ano_fiscal' || status.ehRede || !Array.isArray(degraus) || degraus.length < 2) return '';
+        const fat = Number(status.faturamentoFaixa) || 0;
+        const nome = t => escapeHtml(NOME_CURTO_FAIXA[t] || t || '');
+        const valorMil = v => (v >= 1000000 ? `${(v / 1000000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi` : `${Math.round(v / 1000)} mil`);
+        const reais = v => `R$ ${Math.ceil(v).toLocaleString('pt-BR')}`;
+        // a última faixa (sem teto) fica com 28% da régua - cabe o nome
+        const topo = degraus[degraus.length - 1].min / 0.72 || 1;
+        const idxAtual = Math.max(0, degraus.findIndex(d => d.atual));
+        const segs = degraus.map((d, i) => {
+          const fim = i + 1 < degraus.length ? degraus[i + 1].min : topo;
+          return { d, i, larg: Math.max(0, fim - d.min) / topo * 100 };
+        });
+        const barra = segs.map(({ i, larg }) => `<i class="clsReguaSeg--${i < idxAtual ? 'abaixo' : i === idxAtual ? 'atual' : 'acima'}" style="flex:0 0 ${larg}%"></i>`).join('');
+        const nomes = segs.map(({ d, larg }) => `<span style="flex:0 0 ${larg}%">${nome(d.tipo)}${d.min > 0 ? ` · ${valorMil(d.min)}` : ''}</span>`).join('');
+        const marca = Math.min(100, fat / topo * 100);
+        // quanto por mês até 31/12 (dia de Brasília)
+        const ano = Number(status.anoCorrente) || Number(hojeBrasiliaISO().slice(0, 4));
+        const dias = Math.max(1, diasEntreISO(hojeBrasiliaISO(), `${ano}-12-31`) + 1);
+        const ritmo = falta => (dias > 31 ? `≈ ${brlCurto(falta / (dias / 30.44))}/mês` : `em ${dias} dia${dias > 1 ? 's' : ''}`);
+        const cartoes = [];
+        if (status.faltaPraManter != null) {
+          cartoes.push(`<div class="clsReguaCartao clsReguaCartao--${status.emRiscoDeQueda ? 'risco' : 'manter'}">
+            <small>↓ Pra não cair</small><b>${reais(status.faltaPraManter)}</b><span>até 31/12</span><span>${ritmo(status.faltaPraManter)}</span></div>`);
+        } else if (degraus[idxAtual].min > 0) {
+          cartoes.push(`<div class="clsReguaCartao clsReguaCartao--ok"><small>✓ ${nome(degraus[idxAtual].tipo)}</small><b>garantido</b><span>no ano</span></div>`);
+        }
+        if (status.faltaPraProximaFaixa != null) {
+          cartoes.push(`<div class="clsReguaCartao">
+            <small>↑ Pra ${nome(status.proximaFaixa)}</small><b>${reais(status.faltaPraProximaFaixa)}</b><span>no ano</span><span>${ritmo(status.faltaPraProximaFaixa)}</span></div>`);
+        } else if (status.jaQualificaProximaFaixa) {
+          cartoes.push(`<div class="clsReguaCartao clsReguaCartao--ok"><small>✓ Bateu ${nome(status.proximaFaixa)}</small><b>no ano</b><span>dá pra pedir a subida</span></div>`);
+        } else if (idxAtual === degraus.length - 1) {
+          cartoes.push(`<div class="clsReguaCartao clsReguaCartao--ok"><small>✓ Faixa máxima</small><b>${nome(degraus[idxAtual].tipo)}</b></div>`);
+        }
+        return `<div class="clsRegua">
+          <div class="clsReguaTopo"><span>Faturado em ${escapeHtml(String(ano))}</span><b>${fat >= 1000000 ? `R$ ${valorMil(fat)}` : brlCurto(fat)}</b></div>
+          <div class="clsReguaBarraCaixa">
+            <div class="clsReguaBarra">${barra}</div>
+            <div class="clsReguaMarca" style="left:${marca}%" title="${brl(fat)}"></div>
+          </div>
+          <div class="clsReguaNomes">${nomes}</div>
+          ${cartoes.length ? `<div class="clsReguaCartoes">${cartoes.join('')}</div>` : ''}
+        </div>`;
       }
 
       // "Por que é diferente do ERP?" - conciliação dos números ao vivo com os
