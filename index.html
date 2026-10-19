@@ -19267,9 +19267,21 @@
           // O "faltam" é da apuração do ERP (ex.: até 31/08); o que faturou
           // depois dela não está no número - sem isso o card dizia "faltam
           // R$ X" de quem já tinha comprado mais que isso (6 clientes em 14/10/2026).
-          const depois = erp.conciliacao && erp.conciliacao.doze ? Number(erp.conciliacao.doze.depoisApuracao) || 0 : 0;
-          if (ld.falta > 0 && depois > 0) {
-            const desde = formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5);
+          // E o contrário: o que o ERP ainda conta e já saiu dos 12 meses de
+          // hoje (ex.: set-out/2025 num relatório até 31/08) - o card dizia
+          // "faltam R$ 3,7 mil" em cima e "faltam R$ 12 mil" no ao vivo.
+          const conc = erp.conciliacao;
+          const depois = conc && conc.doze ? Number(conc.doze.depoisApuracao) || 0 : 0;
+          const saiu = conc && conc.doze ? Number(conc.doze.foraDaJanelaApp) || 0 : 0;
+          const desde = formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5);
+          if (ld.falta > 0 && saiu >= 0.01 && (ld.situacao === 'subir' || ld.situacao === 'manter')) {
+            const hoje = ld.falta - depois + saiu;
+            const motivos = [`${brl(saiu)} vendidos de ${formatDateBr(conc.periodoErp.inicio)} a ${formatDateBr(conc.fimForaDaJanelaApp)} já saíram dos 12 meses`];
+            if (depois > 0) motivos.push(`faturou ${brl(depois)} depois de ${desde}`);
+            aviso += `<div class="clsTileSub" style="margin:4px 0 0;">Contando até hoje, ${hoje > 0
+              ? `faltam <b>${brl(hoje)}</b>`
+              : 'pode já ter resolvido'} (${motivos.join('; ')}; o ERP acerta na próxima apuração).</div>`;
+          } else if (ld.falta > 0 && depois > 0) {
             aviso += `<div class="clsTileSub" style="margin:4px 0 0;">${depois >= ld.falta
               ? `Depois de ${desde} já faturou ${brl(depois)} — pode já ter resolvido; confira "Ao vivo no app" abaixo.`
               : `Depois de ${desde} já faturou ${brl(depois)} (não entra nesse número).`}</div>`;
