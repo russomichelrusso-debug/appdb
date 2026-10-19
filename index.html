@@ -22990,12 +22990,22 @@
         await apagarRascunhoOcorrencia(registro.chave);
         if (oc && oc.chave === registro.chave) { oc = null; fecharOcorrencia(); }
         const { chave, ...payload } = registro;
+        const filaInfo = { tipo: 'ocorrencia', descricao: `Ocorrência NF ${registro.nota_fiscal}` };
+        const options = { method: 'POST', body: JSON.stringify(payload) };
         try {
-          await apiFetch('/api/ocorrencias', { method: 'POST', body: JSON.stringify(payload) },
-            { tipo: 'ocorrencia', descricao: `Ocorrência NF ${registro.nota_fiscal}` });
-          showToast('Ocorrência registrada no pedido');
+          const r = await apiFetch('/api/ocorrencias', options, filaInfo);
+          showToast(r && r.__filaOffline ? 'Sem internet: a ocorrência fica salva e vai pro pedido quando a conexão voltar' : 'Ocorrência registrada no pedido');
         } catch (e) {
-          showToast('A ocorrência não foi registrada no pedido: ' + e.message, 'erro');
+          if (e.recusado) {
+            // recusa de verdade: nada a reenviar, o selo local sai
+            gravarListaLS(OC_LOCAIS_LS_KEY, lerListaLS(OC_LOCAIS_LS_KEY).filter(o => o.id_envio !== registro.id_envio));
+            showToast('A ocorrência não foi registrada no pedido: ' + e.message, 'erro');
+          } else {
+            // servidor fora do ar/acordando (5xx): a fila tenta de novo com o mesmo id_envio
+            const fila = loadSyncQueue();
+            fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path: '/api/ocorrencias', options, criadoEm: Date.now(), ...filaInfo });
+            showToast(saveSyncQueueList(fila) ? 'Servidor indisponível: a ocorrência vai pro pedido sozinha depois' : 'A ocorrência não foi registrada no pedido: ' + e.message, 'erro');
+          }
         }
         if (clienteTabSelected && clienteTabView === 'pedidosoficiais') loadClienteDetailView();
       }
@@ -23003,7 +23013,9 @@
         const registro = {
           chave: oc.chave, cliente_id: oc.clienteId, nr_pedido: oc.nrPedido, nota_fiscal: String(oc.dados.nf), tipo: oc.tipo || 'outros',
           resumo: (tipoOcorrencia(oc.tipo || 'outros').itens ? ocItensEscolhidos().map(it => `${it.afetada}× ${it.codigo} ${it.nome}`).join(' · ') : '').slice(0, 300),
-          id_envio: novoIdEnvio(), enviado_em: new Date().toISOString(),
+          // hora do toque + enviado_em (carimbado pelo apiFetch a cada envio): o
+          // servidor desconta a espera na fila (routes/ocorrencias.js)
+          id_envio: novoIdEnvio(), hora_toque: new Date().toISOString(), enviado_em: new Date().toISOString(),
         };
         const para = (oc.para || '').trim();
         try { if (para) localStorage.setItem(OC_PARA_LS_KEY, para); } catch (e) { }
@@ -23107,6 +23119,11 @@
       // dele (fila offline); a local sai quando o servidor devolve o mesmo id_envio.
       function ocorrenciasDoCliente(clienteId, doServidor) {
         const ids = new Set((doServidor || []).map(o => o.id_envio).filter(Boolean));
+        // a fila recusou o envio (cliente apagado, dado inválido): não vai mais chegar
+        for (const r of loadFilaRecusados()) {
+          if (r.path !== '/api/ocorrencias') continue;
+          try { ids.add(JSON.parse(r.options.body).id_envio); } catch (e) { }
+        }
         const locais = lerListaLS(OC_LOCAIS_LS_KEY);
         const pendentes = locais.filter(o => !ids.has(o.id_envio));
         if (pendentes.length !== locais.length) gravarListaLS(OC_LOCAIS_LS_KEY, pendentes);
@@ -23138,8 +23155,9 @@
           if (resolver && !await askConfirm('Marcar a ocorrência como resolvida?', 'Resolvida')) return;
           btn.disabled = true;
           try {
-            await apiFetch(`/api/ocorrencias/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ resolvida: resolver }) },
+            const r = await apiFetch(`/api/ocorrencias/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ resolvida: resolver }) },
               { tipo: 'ocorrencia-resolver', descricao: resolver ? 'Ocorrência resolvida' : 'Ocorrência reaberta' });
+            if (r && r.__filaOffline) showToast('Sem internet: fica salvo e muda no pedido quando a conexão voltar');
           } catch (e) { showToast(e.message, 'erro'); }
           loadClienteDetailView();
         }));

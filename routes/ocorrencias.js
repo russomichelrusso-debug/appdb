@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { horaDoPedidoDoApp } = require('./pedidos');
 
 // Ocorrência no Pós-Vendas da Cortag (botão "Abrir ocorrência" no card do
 // pedido oficial com NF). O e-mail com as fotos sai do celular do vendedor
@@ -12,21 +13,20 @@ const { pool } = require('../db');
 
 // Mesmos tipos do e-mail "ABERTURA DE OCORRÊNCIAS - PADRÃO ENVIO DE E-MAILS"
 // do Pós-Vendas (10/2026) - os rótulos ficam no app (TIPOS_OCORRENCIA).
+// Nr.Pedido e NF como o importador grava (normalmente só dígitos, mas texto que
+// não é número passa como veio, ex.: "245118-1")
+const NUMERO_DOC = /^[0-9A-Za-z./-]{1,20}$/;
 const TIPOS = ['faltando_item', 'faltando_volume', 'avariado', 'trocado', 'desacordo', 'atraso', 'outros'];
-const DIA_MS = 86400000;
 
 function texto(v, max) {
   return String(v == null ? '' : v).trim().slice(0, max);
 }
 
-// Hora do toque em "Enviei" (a fila offline pode mandar dias depois); vale até
-// 30 dias pra trás e nunca no futuro - fora disso, a hora do servidor.
-function horaDoEnvio(v) {
-  const t = Date.parse(v);
-  const agora = Date.now();
-  return Number.isFinite(t) && t <= agora + 60000 && agora - t <= 30 * DIA_MS ? new Date(Math.min(t, agora)).toISOString() : new Date(agora).toISOString();
-}
-
+// Hora do toque em "Enviei": a fila offline pode mandar dias depois. O app manda
+// a hora do toque (`hora_toque`) e o apiFetch carimba `enviado_em` em cada envio;
+// a espera entre as duas, descontada do relógio do servidor, dá a hora certa sem
+// depender do relógio do celular (mesma conta do pedido do app, horaDoPedidoDoApp).
+// Sem elas: agora.
 router.post('/', async (req, res) => {
   try {
     const b = req.body || {};
@@ -35,7 +35,7 @@ router.post('/', async (req, res) => {
     const notaFiscal = texto(b.nota_fiscal, 20);
     const tipo = texto(b.tipo, 30);
     const idEnvio = texto(b.id_envio, 64);
-    if (!Number.isInteger(clienteId) || clienteId <= 0 || !/^\d{1,20}$/.test(nrPedido) || !/^\d{1,20}$/.test(notaFiscal)
+    if (!Number.isInteger(clienteId) || clienteId <= 0 || !NUMERO_DOC.test(nrPedido) || !NUMERO_DOC.test(notaFiscal)
         || !TIPOS.includes(tipo) || !/^[A-Za-z0-9_-]{8,64}$/.test(idEnvio)) {
       return res.status(422).json({ erro: 'Ocorrência com dados inválidos.' });
     }
@@ -47,7 +47,7 @@ router.post('/', async (req, res) => {
        INSERT INTO ocorrencias_pos_venda (cliente_id, nr_pedido, nota_fiscal, tipo, resumo, enviado_em, usuario_id, id_envio)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        ON CONFLICT (id_envio) DO NOTHING`,
-      [clienteId, nrPedido, notaFiscal, tipo, texto(b.resumo, 300) || null, horaDoEnvio(b.enviado_em), req.usuario ? req.usuario.id : null, idEnvio]);
+      [clienteId, nrPedido, notaFiscal, tipo, texto(b.resumo, 300) || null, horaDoPedidoDoApp(b.hora_toque, b.enviado_em) || new Date().toISOString(), req.usuario ? req.usuario.id : null, idEnvio]);
     const r = await pool.query(
       `/* ocorrencias:por-envio */
        SELECT id, cliente_id, nr_pedido, nota_fiscal, tipo, resumo, enviado_em, resolvida_em, id_envio

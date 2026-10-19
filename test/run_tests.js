@@ -2943,6 +2943,14 @@ async function main() {
     const invalido = await req('POST', '/api/ocorrencias', { ...base, tipo: 'qualquer', id_envio: 'oc-teste-0002' });
     const semCliente = await req('POST', '/api/ocorrencias', { ...base, cliente_id: 99999, id_envio: 'oc-teste-0003' });
     const futuro = await req('POST', '/api/ocorrencias', { ...base, id_envio: 'oc-teste-0004', enviado_em: new Date(Date.now() + 5 * 86400000).toISOString() });
+    // feita sem internet: 3 dias na fila, contados pelo relógio do aparelho e descontados do servidor
+    const envio = new Date(Date.now() + 2 * 86400000); // relógio do celular adiantado 2 dias
+    const fila = await req('POST', '/api/ocorrencias', { ...base, nr_pedido: '677304-1', id_envio: 'oc-teste-0005',
+      hora_toque: new Date(envio.getTime() - 3 * 86400000).toISOString(), enviado_em: envio.toISOString() });
+    const atraso = (Date.now() - Date.parse(fila.body.enviado_em)) / 86400000;
+    assert(fila.status === 200 && atraso > 2.9 && atraso < 3.1,
+      `ocorrência feita sem internet fica com a hora do toque, sem o relógio errado do celular: ${JSON.stringify([fila.status, fila.body, atraso])}`);
+    mockDb.__getOcorrencias().splice(mockDb.__getOcorrencias().findIndex(o => o.id_envio === 'oc-teste-0005'), 1);
     const lista = await req('GET', '/api/pedidos-oficiais/9407');
     assert(r1.status === 200 && r1.body.id && r2.status === 200 && r2.body.id === r1.body.id && r2.body.resumo === '2 un. 62796'
       && invalido.status === 422 && semCliente.status === 404 && futuro.status === 200 && Date.parse(futuro.body.enviado_em) <= Date.now()
