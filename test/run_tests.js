@@ -668,9 +668,9 @@ async function main() {
   });
   res = await req('GET', '/api/clientes/9001/classificatorio/status');
   assert(
-    res.status === 200 && res.body.faturamento12m === 500000 && res.body.faturamentoFaixa === 500000
-      && res.body.periodoReferencia?.janela === 'ultimos_12_meses' && !res.body.proximaRevisao,
-    'classificatório soma os últimos 12 meses (conta a venda de 200 dias, ignora a de 400 dias)'
+    res.status === 200 && res.body.faturamento12m === 500000 && res.body.faturamentoFaixa === res.body.faturamentoAnoCorrente
+      && res.body.regraFaixa === 'ano_fiscal' && res.body.periodoReferencia?.janela === 'ano_fiscal' && !res.body.proximaRevisao,
+    'classificatório soma os últimos 12 meses (conta a venda de 200 dias, ignora a de 400 dias); a faixa compara o acumulado do ano'
   );
   const esperadoAnoCorrente = dataPC2 >= `${anoFechado + 1}-01-01` ? 500000 : 0;
   assert(
@@ -717,31 +717,35 @@ async function main() {
     `gráfico trimestral mostra a janela móvel recente (tem a venda de 200 dias, não a de 400 dias): ${somaTrimestres}`
   );
 
-  // 14b) Política Comercial rev. 06: a faixa é decidida pelos últimos 12
-  // meses - sobe assim que bater o teto (apuração mensal) e ficar abaixo do
-  // mínimo da própria faixa é risco de queda, sem depender do ritmo
-  // trimestral. Faixas de todos os canais. Teste direto na função pura.
-  const { calcularStatusClassificatorio } = require('../routes/clientesClassificatorio');
-  let s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 55000, faturamentoAnoCorrente: 1000, atrasadoNoRitmo: false });
+  // 14b) Faixa pelo ANO FISCAL jan-dez (regra do usuário, 10/2026): em 01/01
+  // só desce, pelo ano fechado; subir é pedido ao gerente quando o acumulado
+  // do ano bate a faixa. Abaixo do mínimo só é risco atrás do ritmo pro ano.
+  // Faixas de todos os canais. Teste direto na função pura.
+  const { calcularStatusClassificatorio, fracaoDoAnoPeloDia } = require('../routes/clientesClassificatorio');
+  let s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 55000, faturamentoAnoCorrente: 26482, atrasadoNoRitmo: false, fracaoDoAno: 0.8 });
   assert(
-    s.jaQualificaProximaFaixa === true && s.faltaPraProximaFaixa == null && s.faturamentoFaixa === 55000,
-    'sobe de faixa quando os últimos 12 meses batem o teto (independe do acumulado do ano)'
+    s.jaQualificaProximaFaixa !== true && s.faltaPraManter === 3518 && s.faltaPraProximaFaixa === 23518 && s.faturamentoFaixa === 26482 && s.emRiscoDeQueda === false,
+    'caso REAL DEPOSITO: 12 meses acima do teto não sobe; vale o acumulado do ano (3.518 pra manter Premium, 23.518 pro Master, no ritmo)'
   );
-  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 10000, atrasadoNoRitmo: true });
-  assert(s.emRiscoDeQueda === false, 'últimos 12 meses acima do mínimo da faixa não é risco de queda');
-  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 40000, faturamentoAnoCorrente: 90000, atrasadoNoRitmo: false });
-  assert(
-    s.emRiscoDeQueda === true && s.faltaPraManter === 10000 && s.faixaAnterior === 'Varejo Premium',
-    'últimos 12 meses abaixo do mínimo (40 mil < 50 mil) é risco de queda: faltam R$10.000'
-  );
-  s = calcularStatusClassificatorio({ tipo: 'Atacado Premium', faturamento12m: 800000 });
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Premium', faturamento12m: 40000, faturamentoAnoCorrente: 51000, fracaoDoAno: 0.5 });
+  assert(s.jaQualificaProximaFaixa === true && s.proximaFaixa === 'Varejo Master', 'acumulado do ano bateu o teto: já dá pra pedir a subida');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 30000, fracaoDoAno: 0.5 });
+  assert(s.emRiscoDeQueda === false && s.faltaPraManter === 20000 && s.faixaAnterior === 'Varejo Premium', 'abaixo do mínimo no ritmo do ano (30 mil na metade, mínimo 50 mil): falta pra manter, sem risco');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamento12m: 60000, faturamentoAnoCorrente: 30000, fracaoDoAno: 0.8 });
+  assert(s.emRiscoDeQueda === true && s.faltaPraManter === 20000, 'atrás do ritmo pro mínimo (30 mil com 80% do ano) é risco de queda');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamentoAnoCorrente: 0, fracaoDoAno: 10 / 365 });
+  assert(s.emRiscoDeQueda === false && s.faltaPraManter === 50000, 'janeiro sem nota no ano: falta pra manter, mas ainda não é risco (1º trimestre)');
+  s = calcularStatusClassificatorio({ tipo: 'Varejo Master', faturamentoAnoCorrente: 40000 });
+  assert(s.emRiscoDeQueda === true && s.faltaPraManter === 10000, 'sem fração do ano conta como ano inteiro');
+  s = calcularStatusClassificatorio({ tipo: 'Atacado Premium', faturamentoAnoCorrente: 800000 });
   assert(s.faltaPraProximaFaixa === 200000 && s.proximaFaixa === 'Atacado Master', 'Atacado Premium com 800 mil: faltam 200 mil pra Master (1 milhão)');
-  s = calcularStatusClassificatorio({ tipo: 'E-Commerce Exclusive', faturamento12m: 150000 });
+  s = calcularStatusClassificatorio({ tipo: 'E-Commerce Exclusive', faturamentoAnoCorrente: 150000 });
   assert(s.faltaPraProximaFaixa === 50000 && s.proximaFaixa === 'E-commerce Premium', 'E-commerce Exclusive com 150 mil: faltam 50 mil pra Premium (nome do ERP com outra grafia resolve a faixa)');
-  s = calcularStatusClassificatorio({ tipo: 'Home Center Premium', faturamento12m: 100000 });
-  assert(s.emRiscoDeQueda === true && s.faltaPraManter === 20000, 'Home Center Premium abaixo de 120 mil é risco de queda');
-  s = calcularStatusClassificatorio({ tipo: 'Locação', faturamento12m: 5000 });
+  s = calcularStatusClassificatorio({ tipo: 'Home Center Premium', faturamentoAnoCorrente: 100000 });
+  assert(s.emRiscoDeQueda === true && s.faltaPraManter === 20000, 'Home Center Premium abaixo de 120 mil no fim do ano é risco de queda');
+  s = calcularStatusClassificatorio({ tipo: 'Locação', faturamentoAnoCorrente: 5000 });
   assert(s.classificado === true && s.semFaixaDefinida === true, 'Locação (Institucional) é fixo, sem faixa');
+  assert(fracaoDoAnoPeloDia(183, 2026) === 183 / 365 && fracaoDoAnoPeloDia(366, 2028) === 1 && fracaoDoAnoPeloDia(null, 2026) === null, 'fracaoDoAnoPeloDia: dia do ano / dias do ano (bissexto), sem dia = null');
   s = calcularStatusClassificatorio({ tipo: 'Varejo Master', pic: true, vlAcordo: 80000, faturamento12m: 90000, faturamentoAnoCorrente: 30000, atrasadoNoRitmo: true });
   assert(s.faltaPraMeta === 50000 && s.emRiscoDeQueda === true && s.faturamentoFaixa === 30000, 'meta individual (PIC) continua contra o acumulado do ano, com risco pelo ritmo');
 

@@ -95,18 +95,32 @@ async function calcularEntradaTrimestralPeriodo(pool, cliente, periodoInicio, pe
 }
 
 // Calcula o status de classificatório (quanto falta pra subir/cair) de um
-// cliente. Política Comercial rev. 06 (item 4): a faixa é decidida pelo
-// faturamento líquido dos ÚLTIMOS 12 MESES (régua móvel) - apuração mensal,
-// pode subir em qualquer mês que bater o teto; ficar abaixo do mínimo da
-// própria faixa é risco real de queda (a Cortag ajusta pra baixo em 01/01 e
-// 01/07). Meta individual (PIC/Vl.Acordo) continua contra o acumulado do
-// ano corrente, com o risco decidido pelo ritmo trimestral.
+// cliente. Regra explicada pelo usuário (10/2026): a faixa vale pelo ANO
+// FISCAL jan-dez - em 01/01 ela só desce, pelo ano fechado; subir é pedido
+// ao gerente quando o acumulado do ano já bateu a faixa (a nova vale até
+// junho do ano seguinte). Antes a conta era pelos 12 meses móveis (política
+// rev. 06) e o card dizia "faltam R$ 12 mil" de quem precisava de R$ 23,5
+// mil no ano (as vendas do ano anterior saem da conta em 01/01).
+// Abaixo do mínimo da faixa só é risco de queda quando o acumulado está
+// atrás do ritmo pra chegar nele até 31/12 (`fracaoDoAno` = parte do ano já
+// passada; sem ela, conta como ano inteiro). Meta individual (PIC/Vl.Acordo)
+// também é contra o acumulado, com o risco decidido pelo ritmo trimestral.
 // `faturamentoFaixa` na resposta = o valor que foi comparado com a faixa
 // (a barra de progresso do app usa esse).
 // Função pura - sem acesso a banco - pra ser testável direto.
-function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, faturamentoAnoCorrente, atrasadoNoRitmo }) {
+// Parte do ano já passada (0-1) pelo dia do ano de Brasília vindo do banco.
+function fracaoDoAnoPeloDia(diaDoAno, ano) {
+  const dia = Number(diaDoAno);
+  if (!Number.isFinite(dia) || dia <= 0) return null;
+  const a = Number(ano);
+  const bissexto = Number.isFinite(a) && ((a % 4 === 0 && a % 100 !== 0) || a % 400 === 0);
+  return Math.min(1, dia / (bissexto ? 366 : 365));
+}
+
+function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, faturamentoAnoCorrente, atrasadoNoRitmo, fracaoDoAno }) {
   const fat12m = Number(faturamento12m) || 0;
   const fatAnoCorrente = Number(faturamentoAnoCorrente) || 0;
+  const fracao = Number.isFinite(Number(fracaoDoAno)) && fracaoDoAno != null ? Math.min(1, Math.max(0, Number(fracaoDoAno))) : 1;
   if (!tipo) return { classificado: false };
 
   const base = { classificado: true, tipo, faturamento12m: fat12m };
@@ -126,16 +140,24 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, fa
   const faixa = faixaDoTipo(tipo);
   if (!faixa) return { ...base, semFaixaDefinida: true };
 
-  const fat = fat12m;
+  const fat = fatAnoCorrente;
   base.faturamentoFaixa = fat;
+  // o app escolhe o texto por isto (app novo com servidor antigo, de 12
+  // meses, mostraria o número velho como "até 31/12")
+  base.regraFaixa = 'ano_fiscal';
   if (fat < faixa.min) {
-    // Abaixo do mínimo da própria faixa nos últimos 12 meses - risco real
-    // de cair no próximo ajuste (01/01 ou 01/07).
+    // Abaixo do mínimo da própria faixa no ano: cai em 01/01 se não chegar
+    // nele até 31/12 - risco quando está atrás do ritmo pra isso.
     return {
       ...base,
-      emRiscoDeQueda: true,
+      // no 1º trimestre ainda não é risco: o 1º faturamento do ano costuma
+      // sair em meados de janeiro e a carteira inteira entraria nos alertas
+      emRiscoDeQueda: fracao >= 0.25 && fat < faixa.min * fracao,
       faixaAnterior: faixa.faixaAnterior || null,
       faltaPraManter: faixa.min - fat,
+      // e quanto falta no ano pra pedir a próxima (o card mostra as duas)
+      proximaFaixa: faixa.proximaFaixa || null,
+      faltaPraProximaFaixa: faixa.proximaFaixa && faixa.max != null ? faixa.max - fat : null,
       faixaMin: 0,
       faixaMax: faixa.min,
     };
@@ -151,8 +173,8 @@ function calcularStatusClassificatorio({ tipo, pic, vlAcordo, faturamento12m, fa
       faixaMax: faixa.max,
     };
   }
-  // Já bateu o teto da faixa este ano (ou a faixa não tem teto definido) -
-  // qualifica pra subir agora mesmo, não precisa esperar o fim do ano.
+  // Já bateu o teto da faixa no ano (ou a faixa não tem teto definido) -
+  // dá pra pedir a subida ao gerente agora, sem esperar o fim do ano.
   return { ...base, emRiscoDeQueda: false, jaQualificaProximaFaixa: !!faixa.proximaFaixa, proximaFaixa: faixa.proximaFaixa || null };
 }
 
@@ -188,6 +210,9 @@ function interpretarDiferencaErp({ tipo, pic, vlAcordo, fat12mMatriz, diferenca 
 // aí a soma ao vivo fica abaixo da real e "vai cair"/"falta pra subir" sairiam
 // errados. Mesma regra do card compacto do app (statusComFaixaOficialErp em
 // index.html). Sem barra (faixaMin/faixaMax), que é calculada com o ao vivo.
+// Desde a faixa pelo ano fiscal (10/2026) a Diferenca (12 meses da apuração)
+// não decide mais: os alertas chamam com leitura null (sem veredito de faixa)
+// e só a meta do PIC continua valendo.
 function aplicarLeituraErp(status, leitura) {
   const s = { ...status, emRiscoDeQueda: false, faltaPraManter: null, faltaPraProximaFaixa: null, faltaPraMeta: null,
     jaQualificaProximaFaixa: false, faixaMin: null, faixaMax: null, fonteFaixa: 'erp' };
@@ -365,7 +390,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     const fatResult = await pool.query(
       `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
               EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual,
-              EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx
+              EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx,
+              EXTRACT(DOY FROM ${SQL_HOJE_BR})::int AS dia_do_ano
        FROM (${ehRede ? SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
@@ -431,6 +457,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       faturamento12m,
       faturamentoAnoCorrente,
       atrasadoNoRitmo: ritmo.situacao === 'atrasado',
+      fracaoDoAno: fracaoDoAnoPeloDia(fatResult.rows[0] && fatResult.rows[0].dia_do_ano, anoAtual),
     });
 
     // Objetivo trimestral customizado (vindo do relatório oficial do ERP,
@@ -605,8 +632,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       vlAcordo: cliente.classificatorio_vl_acordo != null ? Number(cliente.classificatorio_vl_acordo) : null,
       erp,
       trimestral: ritmo,
-      periodoReferencia: { janela: 'ultimos_12_meses', anoAnterior: anoPeriodo },
-      revisao: 'Apuração mensal · ajuste pra baixo em 01/01 e 01/07',
+      periodoReferencia: { janela: 'ano_fiscal', anoAnterior: anoPeriodo },
+      revisao: 'Ano fiscal jan–dez · em 01/01 só desce, pelo ano fechado · subir: pedir ao gerente quando o acumulado do ano bater a faixa',
       anoCorrente: anoPeriodo + 1,
       faturamentoAnoCorrente,
       faturamentoMesmoPeriodoAnoAnterior,
@@ -684,7 +711,7 @@ router.get('/classificatorio/alertas', async (req, res) => {
         `SELECT id, nome, documento, classificatorio_tipo, classificatorio_pic, classificatorio_vl_acordo, matriz_grupo
          FROM clientes WHERE classificatorio_tipo IS NOT NULL`
       ),
-      pool.query(`SELECT EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual, EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx`),
+      pool.query(`SELECT EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual, EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx, EXTRACT(DOY FROM ${SQL_HOJE_BR})::int AS dia_do_ano`),
       // Mesma janela móvel de 4 trimestres do status individual, mas pra
       // TODOS os clientes classificados de uma vez só (não N+1) - usada pra
       // saber quem está com o ritmo "atrasado" (ver comentário em
@@ -720,7 +747,10 @@ router.get('/classificatorio/alertas', async (req, res) => {
     const porId = new Map(clientesResult.rows.filter(c => !outros.has(String(c.id))).map(c => [c.id, c]));
     const erpPorCliente = new Map(erpResult.rows.map(r => [r.cliente_id, r]));
     const anoAtual = Number(anoResult.rows[0].ano_atual);
-    const trimestreAtualIdx = Number(trimResult.rows[0].trimestre_atual_idx);
+    // (era trimResult.rows[0] - linhas de trimestre, sem esse campo: NaN, e
+    // nenhum PIC entrava como "atrasado" nos alertas; sem linha, erro 500)
+    const trimestreAtualIdx = Number(anoResult.rows[0].trimestre_atual_idx);
+    const fracaoDoAno = fracaoDoAnoPeloDia(anoResult.rows[0].dia_do_ano, anoAtual);
     const trimestresPorCliente = new Map();
     for (const r of trimResult.rows) {
       const lista = trimestresPorCliente.get(r.cliente_id) || [];
@@ -754,17 +784,19 @@ router.get('/classificatorio/alertas', async (req, res) => {
         faturamento12m: Number(row.faturamento_12m),
         faturamentoAnoCorrente: Number(row.faturamento_ano_corrente),
         atrasadoNoRitmo: ritmo.situacao === 'atrasado',
+        fracaoDoAno,
       });
       // Matriz com empresas fora do app: vale o veredito oficial do ERP.
       const erp = erpPorCliente.get(cliente.id);
       if (erp && !status.ehRede && Number(erp.fat_12m_outras_empresas) > 1) {
-        status = aplicarLeituraErp(status, interpretarDiferencaErp({
+        const leitura = interpretarDiferencaErp({
           tipo: cliente.classificatorio_tipo,
           pic: cliente.classificatorio_pic,
           vlAcordo: cliente.classificatorio_vl_acordo,
           fat12mMatriz: erp.fat_12m_matriz,
           diferenca: erp.diferenca,
-        }));
+        });
+        status = aplicarLeituraErp(status, leitura && leitura.situacao === 'meta' ? leitura : null);
       }
       const item = { id: cliente.id, nome: cliente.nome, documento: cliente.documento, ...status };
 
@@ -1002,6 +1034,7 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
 
 module.exports = router;
 module.exports.calcularStatusClassificatorio = calcularStatusClassificatorio;
+module.exports.fracaoDoAnoPeloDia = fracaoDoAnoPeloDia;
 module.exports.calcularRitmoTrimestral = calcularRitmoTrimestral;
 module.exports.FAIXAS = FAIXAS;
 module.exports.faixaDoTipo = faixaDoTipo;
