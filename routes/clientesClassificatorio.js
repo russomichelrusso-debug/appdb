@@ -33,6 +33,24 @@ function faixaDoTipo(tipo) {
   return FAIXAS_POR_CHAVE.get(chaveTipo(tipo)) || null;
 }
 
+// Degraus da régua do card (do menor pro maior), andando pela faixa anterior
+// e pela próxima a partir da do cliente: [{ tipo, min, atual }].
+function degrausDaFaixa(tipo) {
+  const inicio = faixaDoTipo(tipo);
+  if (!inicio) return [];
+  const nomeDe = f => Object.keys(FAIXAS).find(k => FAIXAS[k] === f);
+  const lista = [{ tipo: nomeDe(inicio), min: inicio.min, atual: true }];
+  for (let f = inicio, n = 0; f.faixaAnterior && FAIXAS[f.faixaAnterior] && n < 6; n++) {
+    f = FAIXAS[f.faixaAnterior];
+    lista.unshift({ tipo: nomeDe(f), min: f.min });
+  }
+  for (let f = inicio, n = 0; f.proximaFaixa && FAIXAS[f.proximaFaixa] && n < 6; n++) {
+    f = FAIXAS[f.proximaFaixa];
+    lista.push({ tipo: nomeDe(f), min: f.min });
+  }
+  return lista;
+}
+
 const LIMIAR_PERTO_DE_SUBIR = 0.15; // falta <= 15% do tamanho da faixa conta como "perto"
 // Coluna DATE: o pg entrega como Date à meia-noite LOCAL (sem setTypeParser no
 // projeto) e o mock como texto 'AAAA-MM-DD' - String(d).slice(0, 10) de um Date
@@ -625,6 +643,8 @@ router.get('/:id/classificatorio/status', async (req, res) => {
 
     res.json({
       ...status,
+      // régua do card (só aqui: os alertas não usam e ficam guardados no aparelho)
+      degraus: status.regraFaixa ? degrausDaFaixa(cliente.classificatorio_tipo) : undefined,
       ultimaCompra,
       ultimoPedido,
       matrizGrupo: cliente.matriz_grupo,
@@ -1035,6 +1055,7 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
 module.exports = router;
 module.exports.calcularStatusClassificatorio = calcularStatusClassificatorio;
 module.exports.fracaoDoAnoPeloDia = fracaoDoAnoPeloDia;
+module.exports.degrausDaFaixa = degrausDaFaixa;
 module.exports.calcularRitmoTrimestral = calcularRitmoTrimestral;
 module.exports.FAIXAS = FAIXAS;
 module.exports.faixaDoTipo = faixaDoTipo;
