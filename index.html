@@ -22676,6 +22676,10 @@
       const RESSARCIMENTOS_OCORRENCIA = ['Desconto em duplicata', 'Material bonificado', 'Devolução do material mediante emissão de Nota Fiscal', 'Outro'];
       const FRASES_OCORRENCIA = ['Caixa master amassada', 'Produto quebrado', 'Embalagem rasgada', 'Etiqueta diferente da NF', 'Caixa lacrada com item faltando'];
       const OC_PARA_LS_KEY = 'cortagOcorrenciaPara_v1';
+      // Pós-Vendas no quadro de atendimento da Cortag (10/2026: Anna Laura Mello -
+      // Devoluções, Divergências/Extravios, Ocorrências). Vem preenchido quando o
+      // vendedor ainda não usou outro e fica como atalho embaixo do campo.
+      const OC_POSVENDAS_EMAIL = 'posvendas03@cortag.com';
       const OC_RASCUNHOS_LS_KEY = 'cortagOcorrenciaRascunhos_v1'; // chaves dos rascunhos guardados (rótulo do botão sem abrir o IndexedDB)
       const OC_LOCAIS_LS_KEY = 'cortagOcorrenciasLocais_v1'; // enviadas daqui que o servidor ainda não devolveu (fila offline)
       const OC_PASSOS = 5; // 4 etapas + revisão
@@ -22926,7 +22930,7 @@
             ${oc.ressarcimento === 'Outro' ? `<label for="ocRessOutro">Qual?</label><input type="text" id="ocRessOutro" data-oc-campo="ressarcimentoOutro" value="${escapeHtml(oc.ressarcimentoOutro)}" autocomplete="off">` : ''}`;
         } else {
           let para = '';
-          try { para = oc.para != null ? oc.para : (localStorage.getItem(OC_PARA_LS_KEY) || ''); } catch (e) { }
+          try { para = oc.para != null ? oc.para : (localStorage.getItem(OC_PARA_LS_KEY) || OC_POSVENDAS_EMAIL); } catch (e) { para = oc.para != null ? oc.para : OC_POSVENDAS_EMAIL; }
           oc.para = para;
           const faltam = pendenciasOcorrencia();
           const arquivos = arquivosOcorrencia();
@@ -22934,6 +22938,7 @@
           const podeArquivos = arquivos.length > 0 && !!(navigator.canShare && navigator.canShare({ files: arquivos }));
           corpo = `<label for="ocPara">Para (e-mail da assistente)</label>
             <div class="ocLinhaCampo"><input type="email" id="ocPara" data-oc-campo="para" inputmode="email" autocomplete="off" value="${escapeHtml(para)}" placeholder="nome@cortag.com"><button type="button" class="restoreBtn compacto" data-oc-copiar="para">Copiar</button></div>
+            ${para.trim().toLowerCase() !== OC_POSVENDAS_EMAIL ? `<div class="ocFrases"><button type="button" data-oc-para="${OC_POSVENDAS_EMAIL}">Pós-Vendas · ${OC_POSVENDAS_EMAIL}</button></div>` : ''}
             <label for="ocAssunto">Assunto</label>
             <div class="ocLinhaCampo"><input type="text" id="ocAssunto" readonly value="${escapeHtml(assuntoOcorrencia())}"><button type="button" class="restoreBtn compacto" data-oc-copiar="assunto">Copiar</button></div>
             <div class="ocTituloLinha"><span class="ocTitulo">Texto do e-mail</span><button type="button" class="restoreBtn compacto" data-oc-copiar="texto">Copiar texto</button></div>
@@ -23082,6 +23087,7 @@
             const ta = document.getElementById('ocDescricao');
             if (ta) ta.value = oc.descricao;
           } else if (b.dataset.ocCarta) { oc.cartaCorrecao = b.dataset.ocCarta; renderOcorrencia(); }
+          else if (b.dataset.ocPara) { oc.para = b.dataset.ocPara; renderOcorrencia(); }
           else if (b.dataset.ocRessarc) { oc.ressarcimento = b.dataset.ocRessarc; renderOcorrencia(); }
           else if (b.dataset.ocTirar) { delete oc.anexos[b.dataset.ocTirar]; renderOcorrencia(); }
           else if (b.dataset.ocCopiar) {

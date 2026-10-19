@@ -624,7 +624,8 @@ Supabase, sem PR — não é mudança de código.
   data, fotos/documentos por espaço (NF sempre; produto, caixa, caixa master e etiqueta obrigatórios nos tipos com produto; CTe
   opcional) e ressarcimento em botões (opção da tela "B"). Decisões do usuário: **e-mail pelo compartilhar do celular** com as fotos
   **no tamanho original** (padrão do Gmail; o mailto não leva anexo; "Só o texto" abre o e-mail sem fotos); **destinatário em campo
-  livre** (depende da assistente; lembra o último, `cortagOcorrenciaPara_v1`, e é copiado ao tocar em Enviar pra colar no "Para");
+  livre** (depende da assistente; lembra o último, `cortagOcorrenciaPara_v1`, e é copiado ao tocar em Enviar pra colar no "Para";
+  sem último usado vem o Pós-Vendas do quadro de atendimento, `OC_POSVENDAS_EMAIL` = posvendas03@cortag.com, que fica de atalho);
   **checklist incompleto só avisa**; texto do e-mail **sem os títulos "Etapa 1, 2…"**; **rascunho com as fotos no aparelho**
   (IndexedDB `cortag-ocorrencias`, chaves em `cortagOcorrenciaRascunhos_v1`, botão vira "Continuar ocorrência"; apagado no logout);
   o selo **"⚠ Ocorrência aberta"** (tabela `ocorrencias_pos_venda`, `routes/ocorrencias.js`, vem em `GET /api/pedidos-oficiais/:id`
