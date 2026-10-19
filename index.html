@@ -5869,6 +5869,113 @@
       border: 0.75px solid var(--hairline);
     }
 
+    /* Ficha técnica recolhida na ficha do produto (opção "A" dos mockups) */
+    .fichaTec {
+      margin-top: 10px;
+      background: var(--white);
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-md);
+    }
+
+    .fichaTecBtn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 48px;
+      padding: 10px 12px;
+      border: none;
+      background: none;
+      color: var(--ink);
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .fichaTecBtn svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      color: var(--red);
+    }
+
+    .fichaTecTitulo {
+      font-size: 14px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .fichaTecResumo {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 13px;
+      color: var(--gray);
+      text-align: right;
+    }
+
+    .fichaTecBtn .fichaTecSeta {
+      color: var(--gray);
+      transition: transform .15s;
+    }
+
+    .fichaTec.aberta .fichaTecSeta {
+      transform: rotate(180deg);
+    }
+
+    .fichaTec.aberta .fichaTecResumo {
+      visibility: hidden;
+    }
+
+    .fichaTecCorpo {
+      display: none;
+      padding: 0 12px 12px;
+    }
+
+    .fichaTec.aberta .fichaTecCorpo {
+      display: block;
+    }
+
+    .fichaTecDesc {
+      margin: 0 0 8px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--gray);
+    }
+
+    .fichaTecLinhas .fichaSpecRow {
+      padding: 8px 0;
+      border-top: 0.75px solid var(--hairline);
+    }
+
+    .fichaTecLinks {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    .fichaTecLinks a {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      border: 0.75px solid var(--hairline);
+      border-radius: var(--r-md);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .fichaTecNota {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
     .ofertaAcoes .recompraBtn--principal {
       background: var(--red);
       border-color: var(--red);
@@ -7009,6 +7116,53 @@
       padding: 10px 22px 12px;
     }
 
+    /* Legenda da ficha técnica na foto do card (opção "E" dos mockups) */
+    .coFicha,
+    .cbf .cbfFicha {
+      position: absolute;
+      display: flex;
+      gap: 6px;
+    }
+
+    .coFicha {
+      left: 0;
+      bottom: 0;
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .cbf .cbfFicha {
+      left: 24px;
+      top: 282px;
+    }
+
+    .cfItem {
+      padding: 6px 11px 7px;
+      border-radius: 10px;
+      background: #1D1D1F;
+      color: #FFFFFF;
+      line-height: 1.1;
+    }
+
+    .cbf .cfItem {
+      background: #FFFFFF;
+      color: #1D1D1F;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, .25);
+    }
+
+    .cfItem b {
+      display: block;
+      font-size: 19px;
+      font-weight: 900;
+    }
+
+    .cfItem span {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      opacity: .75;
+    }
+
     .coNome {
       font-size: 19px;
       font-weight: 700;
@@ -7351,6 +7505,7 @@
     }
 
     .cardFormato.hidden,
+    .cardFichaSeg.hidden,
     .cardTituloBox.hidden {
       display: none;
     }
@@ -10942,6 +11097,10 @@
             <button type="button" data-formato="card" class="active">Conversa</button>
             <button type="button" data-formato="status">Status</button>
           </div>
+          <div class="segmented cardFichaSeg hidden" id="cardFichaSeg" role="group" aria-label="Legenda da ficha técnica na foto">
+            <button type="button" data-ficha="com">Com ficha</button>
+            <button type="button" data-ficha="sem" class="active">Sem ficha</button>
+          </div>
         </div>
         <div class="ofertaCtx cardCtx" id="cardCtx"></div>
         <div class="cardTituloBox hidden" id="cardTituloBox">
@@ -12496,25 +12655,45 @@
           SITE_LINK_MAP = (result && result.valor) || {};
         } catch (e) { /* sem link cadastrado ainda, ou sem rede - sem problema */ }
       }
+      // Rótulo de cada campo da ficha técnica, na ordem em que aparece: o que mais
+      // diz do produto primeiro (os primeiros vão no resumo da ficha do produto e
+      // na legenda do card). Campo fora da lista não aparece (descrição repetida,
+      // EAN/DUN, referência interna). Até 10/2026 a lista não tinha capacidadeCarga,
+      // comprimento, material, qtdeEmbalagem... e a ficha mostrava "Sem especificações".
+      const ROTULOS_FICHA = {
+        carga: 'Capacidade de carga', capacidadeCarga: 'Capacidade de carga', corte: 'Capacidade de corte',
+        diagonal: 'Corte diagonal', capacidade: 'Capacidade', potencia: 'Potência', voltagem: 'Voltagem',
+        rotacao: 'Rotação', velocidade: 'Velocidade', disco: 'Disco', diametro: 'Diâmetro', medida: 'Medida',
+        modelo: 'Modelo', tamanho: 'Tamanho', comprimento: 'Comprimento', largura: 'Largura', altura: 'Altura',
+        espessura: 'Espessura máxima', faixaEspessura: 'Faixa de espessura', espessuraEspacador: 'Espessura do espaçador',
+        dentes: 'Dentes', dente: 'Dente', grao: 'Grão', cobertura: 'Cobertura', conteudo: 'Conteúdo', kit: 'Kit',
+        tipo: 'Tipo', tipo_corte: 'Tipo de corte', aplicacao: 'Aplicação', encaixe: 'Encaixe',
+        roscaEncaixe: 'Rosca de encaixe', haste: 'Haste', furo: 'Furo', lamina: 'Lâmina', material: 'Material',
+        cor: 'Cor', peso: 'Peso', frequencia: 'Frequência', rpmAco: 'Rotação no aço', rpmInox: 'Rotação no inox',
+        rpmCobre: 'Rotação no cobre', rpmAluminio: 'Rotação no alumínio', marca: 'Marca', composicao: 'Composição',
+        qtd: 'Quantidade', qtde: 'Quantidade', qtdeEmbalagem: 'Qtd. na embalagem', qtdeCaixa: 'Qtd. por caixa',
+        embalagem: 'Embalagem', tipoEmbalagem: 'Tipo de embalagem', tipoemb: 'Tipo de embalagem',
+      };
+      function specsDaFicha(cod) {
+        const specs = (FICHAS_MAP[cod] && FICHAS_MAP[cod].specs) || {};
+        const vistos = new Set();
+        return Object.keys(ROTULOS_FICHA)
+          .map(k => ({ rotulo: ROTULOS_FICHA[k], valor: String(specs[k] == null ? '' : specs[k]).trim() }))
+          .filter(x => {
+            // carga e capacidadeCarga são o mesmo campo em fichas diferentes
+            if (!x.valor || x.valor === '-' || vistos.has(x.rotulo)) return false;
+            vistos.add(x.rotulo);
+            return true;
+          });
+      }
       function openFichaTecnica(cod) {
         const ficha = FICHAS_MAP[cod];
         if (!ficha) return;
         document.getElementById('fichaTecnicaNome').textContent = ficha.nome;
         document.getElementById('fichaTecnicaDesc').textContent = ficha.desc || '';
         const specsEl = document.getElementById('fichaTecnicaSpecs');
-        const rotulos = {
-          corte: 'Capacidade de corte', diagonal: 'Corte diagonal', espessura: 'Espessura máxima',
-          modelo: 'Modelo', medida: 'Medida', carga: 'Capacidade de carga', aplicacao: 'Aplicação',
-          voltagem: 'Voltagem', potencia: 'Potência', disco: 'Disco',
-          tipo: 'Tipo', cor: 'Cor', diametro: 'Diâmetro', haste: 'Haste', embalagem: 'Embalagem',
-          altura: 'Altura', largura: 'Largura', dentes: 'Dentes', kit: 'Kit', tamanho: 'Tamanho',
-          cobertura: 'Cobertura', conteudo: 'Conteúdo', encaixe: 'Encaixe', grao: 'Grão', peso: 'Peso',
-          tipo_corte: 'Tipo de corte', material: 'Material', lamina: 'Lâmina',
-          velocidade: 'Velocidade', capacidade: 'Capacidade', rotacao: 'Rotação', frequencia: 'Frequência',
-        };
-        const specs = ficha.specs || {};
-        specsEl.innerHTML = Object.keys(specs).filter(k => rotulos[k]).map(k =>
-          `<div class="fichaSpecRow"><span>${rotulos[k]}</span><b>${escapeHtml(String(specs[k]))}</b></div>`
+        specsEl.innerHTML = specsDaFicha(cod).map(x =>
+          `<div class="fichaSpecRow"><span>${x.rotulo}</span><b>${escapeHtml(x.valor)}</b></div>`
         ).join('') || '<div class="fichaSpecRow" style="color:var(--gray);">Sem especificações adicionais.</div>';
         document.getElementById('fichaTecnicaOverlay').classList.remove('hidden');
         document.getElementById('fichaTecnicaModal').classList.remove('hidden');
@@ -24619,6 +24798,7 @@
         // volta pro mesmo ponto da grade do catálogo ao fechar a ficha
         catalogoScroll = prodModo === 'catalogo' && !campanhaAberta && !document.getElementById('prodTabSearch').value.trim() ? window.scrollY : null;
         prodTabSelected = codigo;
+        fichaTecnicaAberta = false; // cada produto abre com a ficha técnica recolhida
         guardarProdutoRecente(codigo);
         document.getElementById('prodDetailName').textContent = nome;
         document.getElementById('prodTabListWrap').classList.add('hidden');
@@ -24986,6 +25166,36 @@
         if (prev.qtCompra) partes.push(`em compra ${prev.qtCompra}`);
         return `<div class="ofertaEstoque">${renderPrevisaoBadge(cod)}${escapeHtml(partes.join(' · '))}</div>`;
       }
+      // Ficha técnica na ficha do produto (opção "A" dos mockups, recolhida - pedido
+      // do usuário: "mantendo limpo"): fechada mostra só o resumo (2 primeiros
+      // campos); aberta, a descrição, os campos, o EAN e os links de vídeo/site.
+      // Aberta, o "Enviar card" já vem com a legenda da ficha na foto (opção "E").
+      let fichaTecnicaAberta = false;
+      const ICONE_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+      function htmlFichaTecnicaDoProduto(p) {
+        const ficha = FICHAS_MAP[p.c];
+        const specs = specsDaFicha(p.c);
+        const v = VIDEOS_MAP[p.c] || {};
+        const links = [[urlHttpsOuVazio(v.youtube), 'Vídeo'], [urlHttpsOuVazio(v.instagram), 'Reels'], [urlHttpsOuVazio(SITE_LINK_MAP[p.c]), 'Site Cortag']]
+          .filter(l => l[0]);
+        const desc = ficha && ficha.desc ? String(ficha.desc).trim() : '';
+        if (!desc && !specs.length && !links.length) return '';
+        const linhas = specs.concat(p.e ? [{ rotulo: 'EAN', valor: String(p.e) }] : [])
+          .map(x => `<div class="fichaSpecRow"><span>${x.rotulo}</span><b>${escapeHtml(x.valor)}</b></div>`).join('');
+        return `<div class="fichaTec${fichaTecnicaAberta ? ' aberta' : ''}">
+          <button type="button" class="fichaTecBtn" id="fichaTecBtn" aria-expanded="${fichaTecnicaAberta}" aria-controls="fichaTecCorpo">
+            ${ICONE_INFO}<span class="fichaTecTitulo">Ficha técnica</span>
+            <span class="fichaTecResumo">${escapeHtml(specs.slice(0, 2).map(x => x.valor).join(' · '))}</span>
+            <svg class="fichaTecSeta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+          </button>
+          <div class="fichaTecCorpo" id="fichaTecCorpo">
+            ${desc ? `<p class="fichaTecDesc">${escapeHtml(desc)}</p>` : ''}
+            ${linhas ? `<div class="fichaTecLinhas">${linhas}</div>` : ''}
+            ${links.length ? `<div class="fichaTecLinks">${links.map(([url, rotulo]) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${rotulo}</a>`).join('')}</div>` : ''}
+            ${specs.length ? '<div class="fichaTecNota">Com a ficha aberta, o card enviado leva a legenda na foto.</div>' : ''}
+          </div>
+        </div>`;
+      }
       async function renderProdutoOferta(cod) {
         const el = document.getElementById('prodOferta');
         if (!el) return;
@@ -25009,9 +25219,15 @@
           <div class="ofertaAcoes">
             <button type="button" class="recompraBtn recompraBtn--principal" id="ofertaCardBtn">Enviar card</button>
             <button type="button" class="recompraBtn" id="ofertaOrcBtn">+ Orçamento</button>
-          </div>`;
+          </div>
+          ${htmlFichaTecnicaDoProduto(p)}`;
         document.getElementById('ofertaAddFoto')?.addEventListener('click', () => abrirFotoProduto(cod));
-        document.getElementById('ofertaCardBtn').addEventListener('click', () => abrirCardProduto(cod));
+        document.getElementById('fichaTecBtn')?.addEventListener('click', (e) => {
+          fichaTecnicaAberta = !fichaTecnicaAberta;
+          e.currentTarget.parentElement.classList.toggle('aberta', fichaTecnicaAberta);
+          e.currentTarget.setAttribute('aria-expanded', String(fichaTecnicaAberta));
+        });
+        document.getElementById('ofertaCardBtn').addEventListener('click', () => abrirCardProduto(cod, null, { comFicha: fichaTecnicaAberta }));
         document.getElementById('ofertaOrcBtn').addEventListener('click', () => addToCart(cod));
         if (!temFoto) return;
         const url = await urlDaFoto(cod);
@@ -25154,7 +25370,7 @@
       const ENCARTE_MAX = 6;
       const CARD_MAX_PRODUTOS = 24;
       // semPreco: só foto, nome e código; titulo: o que o vendedor escreveu (null = automático)
-      let cardProduto = { cods: [], campanha: null, formato: 'card', semPreco: false, titulo: null, blobs: [], previaUrls: [], geracao: 0 };
+      let cardProduto = { cods: [], campanha: null, formato: 'card', semPreco: false, comFicha: false, titulo: null, blobs: [], previaUrls: [], geracao: 0 };
       let cardTelDebounce = null, cardTituloDebounce = null; // fechar a janela cancela
       // Logo em branco pro fundo vermelho (card da Black Friday e status): o
       // html2canvas ignora filter, então o logo é pintado de branco num canvas
@@ -25193,6 +25409,14 @@
         document.getElementById('cardFormatoSeg').classList.toggle('hidden', !visivel);
         document.querySelectorAll('#cardFormatoSeg button').forEach(b => b.classList.toggle('active', b.dataset.formato === cardProduto.formato));
       }
+      // Com ficha | Sem ficha: só com 1 produto que tem ficha que cabe no card; o
+      // status do WhatsApp não leva a legenda
+      function mostrarFichaDoCard() {
+        const seg = document.getElementById('cardFichaSeg');
+        const pode = cardProduto.cods.length === 1 && cardProduto.formato !== 'status' && legendaDoCard(cardProduto.cods[0], 1).length > 0;
+        seg.classList.toggle('hidden', !pode);
+        seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', (b.dataset.ficha === 'com') === cardProduto.comFicha));
+      }
       function vendedorDoCard() {
         let tel = '';
         try { tel = localStorage.getItem(VENDEDOR_TEL_LS_KEY) || ''; } catch (e) { }
@@ -25202,12 +25426,22 @@
         const { nome } = vendedorDoCard();
         return `<div class="coRodape"><span>${nome ? `Fale comigo: <b>${escapeHtml(nome)}</b>` : 'Fale com seu representante Cortag'}</span><b>${escapeHtml(telefone)}</b></div>`;
       }
+      // Legenda da ficha técnica na foto do card (opção "E" dos mockups): os
+      // primeiros campos da ficha, só os curtos (valor longo não cabe na etiqueta).
+      function legendaDoCard(cod, max) {
+        return specsDaFicha(cod).filter(x => x.valor.length <= 18 && x.rotulo.length <= 22).slice(0, max);
+      }
+      function htmlLegendaDoCard(legenda, classe) {
+        if (!legenda || !legenda.length) return '';
+        return `<div class="${classe}">${legenda.map(x => `<div class="cfItem"><b>${escapeHtml(x.valor)}</b><span>${escapeHtml(x.rotulo)}</span></div>`).join('')}</div>`;
+      }
       // Card da Black Friday (opção "B" dos mockups): etiqueta de preço sobre o vermelho
-      function htmlDoCardBlackFriday(p, of, fotoUrl, telefone, logoBranco) {
+      function htmlDoCardBlackFriday(p, of, fotoUrl, telefone, logoBranco, legenda) {
         const cond = condicoesDaOferta(of, false);
         return `<div class="cbf">
           <div class="cbfTopo"><img src="${logoBranco}" alt="Cortag"><span class="cbfSelo">BLACK FRIDAY</span></div>
           ${fotoUrl ? `<div class="cbfCirculo" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : `<div class="cbfSemFoto">${escapeHtml(nomeCurtoDoCard(p.n))}</div>`}
+          ${htmlLegendaDoCard(legenda && legenda.slice(0, 2), 'cbfFicha')}
           <div class="cbfTag">
             <span class="cbfFuro"></span>
             <div class="cbfPct">-${of.pct}%</div>
@@ -25238,7 +25472,7 @@
           ${rodapeDoCard(telefone)}
         </div>`;
       }
-      function htmlDoCardOferta(p, of, fotoUrl, telefone) {
+      function htmlDoCardOferta(p, of, fotoUrl, telefone, legenda) {
         const selo = of.regra ? (of.blackFriday ? 'BLACK FRIDAY' : 'OFERTA') : '';
         const cond = of.regra ? condicoesDaOferta(of, false) : '';
         return `<div class="cardOferta">
@@ -25246,6 +25480,7 @@
           <div class="coFoto">
             ${fotoUrl ? `<div class="coImg" style="background-image:url('${escapeHtml(fotoUrl)}')"></div>` : `<div class="coSemFoto">${escapeHtml(p.n)}</div>`}
             ${of.regra ? `<div class="coOff">-${of.pct}%<small>OFF</small></div>` : ''}
+            ${htmlLegendaDoCard(legenda, 'coFicha')}
           </div>
           <div class="coTexto">
             <div class="coNome">${escapeHtml(p.n)}</div>
@@ -25374,6 +25609,8 @@
         const tpl = document.getElementById('cardOfertaTemplate');
         const telefone = document.getElementById('cardTelefone').value.trim();
         const [um] = itens;
+        mostrarFichaDoCard();
+        const legenda = itens.length === 1 && cardProduto.comFicha ? legendaDoCard(um.p.c, 3) : [];
         const paginas = paginasDoCard(itens);
         const titulo = tituloDoCard();
         const blobs = [];
@@ -25382,8 +25619,8 @@
             tpl.innerHTML = itens.length > 1
               ? htmlDoEncarte(paginas[i], cardProduto.campanha, telefone, { titulo, semPreco: cardProduto.semPreco, pagina: i + 1, paginas: paginas.length })
               : cardProduto.formato === 'status' ? htmlDoStatusOferta(um.p, um.of, um.fotoUrl, telefone, logoBranco)
-              : um.of.regra && um.of.blackFriday ? htmlDoCardBlackFriday(um.p, um.of, um.fotoUrl, telefone, logoBranco)
-              : htmlDoCardOferta(um.p, um.of, um.fotoUrl, telefone);
+              : um.of.regra && um.of.blackFriday ? htmlDoCardBlackFriday(um.p, um.of, um.fotoUrl, telefone, logoBranco, legenda)
+              : htmlDoCardOferta(um.p, um.of, um.fotoUrl, telefone, legenda);
             await esperarImagens(tpl);
             const canvas = await html2canvas(tpl.firstElementChild, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
             const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.92));
@@ -25428,13 +25665,16 @@
       }
       // cods: 1 produto (card), 2 a 6 (encarte) ou até 24 do Catálogo (várias
       // imagens); campanha = regra de onde saiu (título e subtítulo do encarte)
-      function abrirCardProduto(cods, campanha) {
+      // opcoes.comFicha: a ficha técnica estava aberta na ficha do produto (legenda na foto)
+      function abrirCardProduto(cods, campanha, opcoes = {}) {
         cardProduto.cods = (Array.isArray(cods) ? cods : [cods]).slice(0, CARD_MAX_PRODUTOS);
         cardProduto.campanha = campanha || null;
         cardProduto.formato = 'card';
         cardProduto.semPreco = false;
+        cardProduto.comFicha = !!opcoes.comFicha;
         cardProduto.titulo = null;
         mostrarFormatoDoCard(false);
+        mostrarFichaDoCard();
         const n = cardProduto.cods.length, imagens = Math.ceil(n / ENCARTE_MAX);
         document.getElementById('cardProdutoTitulo').textContent = n > 1
           ? `Encarte com ${n} produtos${imagens > 1 ? ` · ${imagens} imagens` : ''}` : 'Card do produto';
@@ -26234,6 +26474,12 @@
           document.getElementById('cardEnviarBtn').disabled = true;
           clearTimeout(cardTituloDebounce);
           cardTituloDebounce = setTimeout(() => { renderTituloDoCard(); gerarCardProduto(); }, 600);
+        });
+        document.getElementById('cardFichaSeg').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-ficha]');
+          if (!b || (b.dataset.ficha === 'com') === cardProduto.comFicha) return;
+          cardProduto.comFicha = b.dataset.ficha === 'com';
+          gerarCardProduto();
         });
         document.getElementById('cardFormatoSeg').addEventListener('click', (e) => {
           const b = e.target.closest('button[data-formato]');

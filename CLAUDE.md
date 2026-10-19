@@ -1119,6 +1119,14 @@ Supabase, sem PR — não é mudança de código.
   pela cópia do `/sync` (funciona sem internet): centro da cidade = mediana das posições das lojas dela na carteira
   (`centroDaCidade`, não há coordenada de município); loja da cidade entra sempre, de outra cidade só com posição dentro do
   raio (`aplicarProdLocal`, `index.html`); lista por distância, "N de M" nas abas, escolha guardada em `cortagProdLocal_v1`.
+- **Ficha técnica na ficha do produto** (10/2026, opção "A" recolhida + "E" dos mockups, canvas "Cortag · Ficha técnica na
+  ficha do produto"; antes a ficha técnica só aparecia no balão ⓘ da busca): abaixo de "Enviar card"/"+ Orçamento", um botão
+  "Ficha técnica" **recolhido** com o resumo (2 primeiros campos, "30 kg · Simples"); aberto mostra descrição, campos, EAN e
+  Vídeo/Reels/Site Cortag (`htmlFichaTecnicaDoProduto`, `index.html`; cada produto abre recolhido). Com a ficha **aberta**, o
+  "Enviar card" já vem com a **legenda na foto** (até 3 campos curtos, `legendaDoCard`; 2 no card da Black Friday) e a janela do
+  card ganhou "Com ficha | Sem ficha" (só 1 produto; o Status não leva). Campos e rótulos em `ROTULOS_FICHA` (ordem = prioridade),
+  lidos por `specsDaFicha` - também no balão ⓘ: a lista antiga não tinha `capacidadeCarga`, `comprimento`, `material`,
+  `qtdeEmbalagem`… (em 10/2026: 1.812 fichas, 60 campos diferentes) e várias fichas apareciam "Sem especificações".
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
 - **Modo Catálogo na aba Produtos** (10/2026, combinação A + B + D escolhida pelo usuário a partir de mockups, depois
