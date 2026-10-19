@@ -33,6 +33,8 @@ let nextNovidadeId = 1;
 let pushInscricoes = []; // push_inscricoes
 let nextPushId = 1;
 let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
+let ocorrencias = []; // ocorrencias_pos_venda (routes/ocorrencias.js)
+let nextOcorrenciaId = 1;
 let clientesSemCompra = []; // routes/reativacao.js (foto do Relatório de Clientes Sem Compra)
 let reativacaoAdiamentos = []; // routes/reativacao.js ("Já falei"/"Não reativar")
 let contasSalesforce = []; // routes/contasSalesforce.js (foto do relatório "Todas Contas")
@@ -72,6 +74,8 @@ function reset() {
   configuracoes = {};
   catalogoPrecos = [];
   recompraAdiamentos = [];
+  ocorrencias = [];
+  nextOcorrenciaId = 1;
   clientesSemCompra = [];
   reativacaoAdiamentos = [];
   contasSalesforce = [];
@@ -205,6 +209,30 @@ async function query(sql, params = []) {
   }
   if (s.includes('/* IMPORTACAO-EMAIL:BLOQUEIO-ATIVO */')) {
     return { rows: bloqueiosAtivos().filter(b => b.nr_pedido === params[0]).map(() => ({ '?column?': 1 })) };
+  }
+  if (s.includes('/* PEDIDOS-OFICIAIS:OCORRENCIAS */')) {
+    const limite = Date.now() - 120 * 86400000;
+    return { rows: ocorrencias.filter(o => String(o.cliente_id) === String(params[0]) && (!o.resolvida_em || Date.parse(o.resolvida_em) > limite))
+      .sort((a, b) => String(b.enviado_em).localeCompare(String(a.enviado_em)))
+      .map(o => ({ ...o, usuario: (usuarios.find(u => u.id === o.usuario_id) || {}).nome || null })) };
+  }
+  if (s.includes('/* OCORRENCIAS:GRAVAR */')) {
+    const [clienteId, nr, nf, tipo, resumo, enviado, usuarioId, idEnvio] = params;
+    if (!ocorrencias.some(o => o.id_envio === idEnvio)) {
+      ocorrencias.push({ id: nextOcorrenciaId++, cliente_id: clienteId, nr_pedido: nr, nota_fiscal: nf, tipo, resumo, enviado_em: enviado,
+        resolvida_em: null, usuario_id: usuarioId, id_envio: idEnvio });
+    }
+    return { rows: [] };
+  }
+  if (s.includes('/* OCORRENCIAS:POR-ENVIO */')) {
+    return { rows: ocorrencias.filter(o => o.id_envio === params[0]).map(o => { const { usuario_id, ...r } = o; return r; }) };
+  }
+  if (s.includes('/* OCORRENCIAS:RESOLVER */')) {
+    const o = ocorrencias.find(x => x.id === params[0]);
+    if (!o) return { rows: [] };
+    o.resolvida_em = params[1] ? (o.resolvida_em || new Date().toISOString()) : null;
+    const { usuario_id, ...r } = o;
+    return { rows: [r] };
   }
   if (s.includes('/* PEDIDOS-OFICIAIS:BLOQUEADOS */')) {
     return { rows: bloqueiosAtivos().filter(b => b.cliente_codigo_oficial === params[0]).map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em })) };
@@ -2442,6 +2470,7 @@ module.exports = {
   __getPedidos: () => pedidos,
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __getRecompraAdiamentos: () => recompraAdiamentos,
+  __getOcorrencias: () => ocorrencias,
   __getNovidades: () => novidades,
   __getProdutoFotos: () => produtoFotos,
   __getImportacoesEmail: () => importacoesEmail,

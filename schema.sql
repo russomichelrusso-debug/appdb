@@ -760,6 +760,28 @@ CREATE TABLE IF NOT EXISTS produto_fotos (
 -- na primeira vez que o app pede (routes/lib/miniaturaFoto.js); trocar a foto zera.
 ALTER TABLE produto_fotos ADD COLUMN IF NOT EXISTS miniatura BYTEA;
 
+-- Ocorrência no Pós-Vendas (botão "Abrir ocorrência" no card do pedido oficial
+-- com NF, routes/ocorrencias.js). O e-mail sai do celular do vendedor (o app só
+-- monta o texto e as fotos); aqui fica só o registro, gravado quando ele confirma
+-- "Enviei", pro selo "Ocorrência aberta" aparecer pra todos os vendedores até
+-- alguém marcar resolvida. `id_envio` (gerado no aparelho) = reenvio da fila
+-- offline devolve o já gravado.
+CREATE TABLE IF NOT EXISTS ocorrencias_pos_venda (
+  id SERIAL PRIMARY KEY,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+  nr_pedido TEXT NOT NULL,
+  nota_fiscal TEXT NOT NULL,
+  tipo TEXT NOT NULL,
+  resumo TEXT,
+  enviado_em TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolvida_em TIMESTAMPTZ,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  id_envio TEXT,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ocorrencias_id_envio ON ocorrencias_pos_venda (id_envio);
+CREATE INDEX IF NOT EXISTS idx_ocorrencias_cliente ON ocorrencias_pos_venda (cliente_id);
+
 -- RLS em TODAS as tabelas do schema (verificador do Supabase: rls_disabled_in_public).
 -- Mesmo motivo do bloco de levantamento_rascunhos acima: fecha o acesso pela API
 -- REST pública do Supabase (PostgREST, roles anon/authenticated); sem política =
@@ -792,3 +814,4 @@ ALTER TABLE contas_salesforce ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reativacao_alvos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produto_fotos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ocorrencias_pos_venda ENABLE ROW LEVEL SECURITY;

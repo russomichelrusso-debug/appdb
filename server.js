@@ -25,6 +25,7 @@ const radarCnpjRoutes = require('./routes/radarCnpj');
 const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio');
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
 const recompraRoutes = require('./routes/recompra');
+const ocorrenciasRoutes = require('./routes/ocorrencias');
 const reativacaoRoutes = require('./routes/reativacao');
 const visitasRoutes = require('./routes/visitas');
 const inadimplenciaRoutes = require('./routes/inadimplencia');
@@ -169,6 +170,7 @@ app.use('/api/assistente', requireAuth, limiteRotasPesadas, assistenteRoutes);
 app.use('/api/catalogo-precos', requireAuth, limiteRotasPesadas, catalogoPrecosRoutes);
 app.use('/api/produtos-promocionais', requireAuth, limiteRotasPesadas, produtosPromocionaisRoutes);
 app.use('/api/recompra', requireAuth, limiteRotasPesadas, recompraRoutes);
+app.use('/api/ocorrencias', requireAuth, limiteRotasPesadas, ocorrenciasRoutes); // ocorrência no Pós-Vendas (selo no pedido)
 app.use('/api/reativacao', requireAuth, limiteRotasPesadas, reativacaoRoutes);
 app.use('/api/visitas', requireAuth, limiteRotasPesadas, visitasRoutes);
 app.use('/api/inadimplencia', requireAuth, limiteRotasPesadas, inadimplenciaRoutes);
