@@ -308,6 +308,19 @@ Supabase, sem PR — não é mudança de código.
   também desliga o levantamento aberto, como o antigo botão fazia). Sem cliente, o card vira um
   botão tracejado "+ Selecionar cliente" (sai o rótulo "Cliente (opcional)").
 
+- **Faixa pelo ano fiscal jan–dez** (10/2026, regra explicada pelo usuário, troca a régua dos 12 meses móveis do PR #126
+  abaixo): em 01/01 a faixa **só desce**, pelo ano fechado; **subir é pedido ao gerente** quando o acumulado do ano já bateu
+  a próxima faixa (a nova vale até junho do ano seguinte). `calcularStatusClassificatorio` compara o **acumulado do ano**
+  (grupo) com a faixa: abaixo do mínimo = "faltam R$ X até 31/12 pra não cair em 01/01" (risco de queda só atrás do ritmo,
+  `fracaoDoAno` = dia do ano de Brasília, e nunca no 1º trimestre), e ainda quanto falta no ano pra próxima; bateu = "dá pra
+  pedir a subida ao gerente". A resposta leva `regraFaixa: 'ano_fiscal'` (o app escolhe o texto por ele: app e servidor podem
+  estar em versões diferentes).
+  O "Faltam R$ X" da coluna Diferenca do ERP (12 meses da apuração) saiu do card; o tile que decide é o Acumulado. Caso que
+  levou à troca: REAL DEPOSITO em 19/10/2026, 12 meses R$ 38 mil (card: "faltam 12 mil pro Master"), mas só R$ 26,5 mil em
+  2026 — faltavam R$ 3,5 mil pra **manter** Premium e R$ 23,5 mil pro Master. Matriz com empresas fora do app (1 cliente em
+  10/2026) fica **sem veredito de faixa** na ficha, no card compacto e nos alertas (a Diferenca do ERP é de 12 meses); vale o
+  tile "Acumulado · matriz" do ERP. Também corrigido: os alertas liam `trimestre_atual_idx` das linhas de trimestre (NaN), e
+  nenhum PIC entrava como "atrasado".
 - **Política Comercial rev. 06** (PVEN, 04/2026), em 2 PRs:
   - **No pedido** (PR #125): classificatório por canal, canal automático pelo classificatório do
     cliente, desconto por prazo, prazos por canal e pedido mínimo CIF por região (detalhes em

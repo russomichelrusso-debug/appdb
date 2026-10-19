@@ -14620,10 +14620,15 @@
         const s = { ...status, emRiscoDeQueda: false, faltaPraManter: null, faltaPraProximaFaixa: null, faltaPraMeta: null,
           jaQualificaProximaFaixa: false, faixaMin: null, faixaMax: null, trimestral: null };
         if (!ld) return s;
-        if (ld.situacao === 'manter') Object.assign(s, { emRiscoDeQueda: true, faltaPraManter: ld.falta, faixaAnterior: ld.faixaAnterior });
-        else if (ld.situacao === 'subir') Object.assign(s, { faltaPraProximaFaixa: ld.falta, proximaFaixa: ld.proximaFaixa });
-        else if (ld.situacao === 'qualifica') Object.assign(s, { jaQualificaProximaFaixa: true, proximaFaixa: ld.proximaFaixa });
-        else if (ld.situacao === 'meta') Object.assign(s, { faltaPraMeta: ld.falta });
+        // a Diferenca é dos 12 meses da apuração e a faixa vale pelo ano
+        // fiscal: sem veredito de faixa (igual à ficha e aos alertas), só a
+        // meta do PIC. Servidor antigo (sem regraFaixa): como antes.
+        if (status.regraFaixa !== 'ano_fiscal') {
+          if (ld.situacao === 'manter') Object.assign(s, { emRiscoDeQueda: true, faltaPraManter: ld.falta, faixaAnterior: ld.faixaAnterior });
+          else if (ld.situacao === 'subir') Object.assign(s, { faltaPraProximaFaixa: ld.falta, proximaFaixa: ld.proximaFaixa });
+          else if (ld.situacao === 'qualifica') Object.assign(s, { jaQualificaProximaFaixa: true, proximaFaixa: ld.proximaFaixa });
+        }
+        if (ld.situacao === 'meta') Object.assign(s, { faltaPraMeta: ld.falta });
         return s;
       }
       function renderBarraProgressoCompacta(statusOriginal) {
@@ -14677,21 +14682,26 @@
           rotulo = 'Meta individual';
           valor = `faltam ${brlCurto(status.faltaPraMeta)}`;
           titulo = `Faltam ${brl(status.faltaPraMeta)} pra meta individual`;
+        } else if (status.faltaPraManter != null) {
+          // abaixo do mínimo da faixa no ano, mas no ritmo de chegar até 31/12
+          rotulo = `Pra manter ${nomeFaixa(status.tipo)} no ano`;
+          valor = `faltam ${brlCurto(status.faltaPraManter)}`;
+          titulo = `Faltam ${brl(status.faltaPraManter)} até 31/12 pra não cair em 01/01`;
         } else if (status.faltaPraProximaFaixa != null) {
           rotulo = `Próxima faixa: ${nomeFaixa(status.proximaFaixa)}`;
           valor = `faltam ${brlCurto(status.faltaPraProximaFaixa)}`;
-          titulo = `Faltam ${brl(status.faltaPraProximaFaixa)} pra ${nomeFaixa(status.proximaFaixa)}`;
+          titulo = `Faltam ${brl(status.faltaPraProximaFaixa)} no ano pra ${nomeFaixa(status.proximaFaixa)}`;
         } else if (status.jaQualificaProximaFaixa) {
           rotulo = `Faixa ${nomeFaixa(status.proximaFaixa)}`;
-          valor = '✓ já qualifica';
+          valor = '✓ bateu no ano · pedir ao gerente';
           classeValor = 'ok';
         }
         if (rotulo) {
           partes.push(`<div class="clienteObjetivo" title="${titulo}"><span>${rotulo}</span><b class="${classeValor}">${valor}</b></div>`);
         }
         if (status.faixaMin != null && status.faixaMax != null) {
-          // faturamentoFaixa: o valor que a API comparou com a faixa (12
-          // meses móveis; no PIC, o acumulado do ano) - a barra usa o mesmo.
+          // faturamentoFaixa: o valor que a API comparou com a faixa (o
+          // acumulado do ano fiscal) - a barra usa o mesmo.
           const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           partes.push(`<div class="clienteBarra"><i class="${status.emRiscoDeQueda ? 'risco' : (classeValor === 'ok' ? 'ok' : '')}" style="width:${pct}%"></i></div>`);
         }
@@ -19055,7 +19065,7 @@
               <div style="font-weight:700;font-size:18px;margin-top:2px;">${brl(status.faturamento12m)}</div>
             </div>
             ${status.anoCorrente ? `<div>
-              <div class="hist-clientLabel">Acumulado ${escapeHtml(String(status.anoCorrente))}${sufixoGrupo}</div>
+              <div class="hist-clientLabel">Acumulado ${escapeHtml(String(status.anoCorrente))}${sufixoGrupo}${status.ehRede ? '' : ' · decide a faixa'}</div>
               <div style="font-weight:700;font-size:18px;margin-top:2px;color:${corAcumuladoAnoCorrente(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior)};">${brl(status.faturamentoAnoCorrente)}</div>
               ${status.periodoReferencia ? `<div style="font-size:11px;color:var(--gray);margin-top:2px;">${textoComparativoAnoAnterior(status.faturamentoAnoCorrente, status.faturamentoMesmoPeriodoAnoAnterior, status.periodoReferencia.anoAnterior)}</div>` : ''}
             </div>` : ''}
@@ -19070,12 +19080,12 @@
         const semFaixaAoVivo = !status.ehRede && !!status.erp && status.erp.fat12mOutrasEmpresas > 0;
         if (semFaixaAoVivo) {
           partes.push(`<div class="clsTileSub" style="margin-top:8px;">A matriz também compra por outras empresas que não estão no app
-            (${brl(status.erp.fat12mOutrasEmpresas)} em 12 meses no ERP). Por isso o app não calcula a faixa ao vivo — vale o oficial acima.</div>`);
+            (${brl(status.erp.fat12mOutrasEmpresas)} em 12 meses no ERP). Por isso o app não calcula a faixa ao vivo — vale o acumulado da matriz no ERP, acima.</div>`);
         }
 
         if (!semFaixaAoVivo && !status.ehRede && status.faixaMin != null && status.faixaMax != null) {
-          // faturamentoFaixa: o valor que a API comparou com a faixa (12
-          // meses móveis; no PIC, o acumulado do ano) - a barra usa o mesmo.
+          // faturamentoFaixa: o valor que a API comparou com a faixa (o
+          // acumulado do ano fiscal) - a barra usa o mesmo.
           const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           const cor = status.emRiscoDeQueda ? 'var(--danger)' : 'var(--red)';
           partes.push(`
@@ -19086,14 +19096,25 @@
 
         if (semFaixaAoVivo) {
           // sem veredito de faixa (ver acima)
-        } else if (status.emRiscoDeQueda) {
-          partes.push(`<div style="margin-top:8px;color:var(--danger);font-weight:600;font-size:13px;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}.</div>`);
         } else if (status.faltaPraMeta != null) {
           partes.push(`<div style="margin-top:8px;font-size:13px;">Meta individual negociada: <b>${brl(status.metaIndividual)}</b> — faltam <b>${brl(status.faltaPraMeta)}</b>.</div>`);
-        } else if (status.faltaPraProximaFaixa != null) {
-          partes.push(`<div style="margin-top:8px;font-size:13px;">Faltam <b>${brl(status.faltaPraProximaFaixa)}</b> pra subir pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}.</div>`);
-        } else if (status.jaQualificaProximaFaixa) {
-          partes.push(`<div style="margin-top:8px;color:var(--success);font-size:13px;">✓ Já qualifica pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa)}.</div>`);
+        } else if (status.regraFaixa !== 'ano_fiscal' || status.fonteFaixa === 'erp') {
+          // servidor antigo (12 meses) ou veredito do ERP: texto de antes
+          if (status.emRiscoDeQueda) partes.push(`<div style="margin-top:8px;color:var(--danger);font-weight:600;font-size:13px;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}.</div>`);
+          else if (status.faltaPraProximaFaixa != null) partes.push(`<div style="margin-top:8px;font-size:13px;">Faltam <b>${brl(status.faltaPraProximaFaixa)}</b> pra subir pra ${escapeHtml(NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa || 'a próxima faixa')}.</div>`);
+        } else {
+          // Ano fiscal jan-dez (regra do usuário): em 01/01 a faixa só desce,
+          // pelo ano fechado; subir é pedido ao gerente quando o acumulado do
+          // ano bate a próxima faixa.
+          const nomeF = f => escapeHtml(NOME_CURTO_FAIXA[f] || f || 'a próxima faixa');
+          if (status.faltaPraManter != null) {
+            partes.push(`<div style="margin-top:8px;font-size:13px;${status.emRiscoDeQueda ? 'color:var(--danger);font-weight:600;' : ''}">${status.emRiscoDeQueda ? '⚠️ ' : ''}Faltam <b>${brl(status.faltaPraManter)}</b> até 31/12 pra não cair${status.faixaAnterior ? ` pra ${nomeF(status.faixaAnterior)}` : ''} em 01/01${status.emRiscoDeQueda ? ' — abaixo do ritmo do ano' : ''}.</div>`);
+          }
+          if (status.faltaPraProximaFaixa != null) {
+            partes.push(`<div style="margin-top:6px;font-size:13px;">Faltam <b>${brl(status.faltaPraProximaFaixa)}</b> no ano pra bater ${nomeF(status.proximaFaixa)} — batendo, peça a subida ao gerente.</div>`);
+          } else if (status.jaQualificaProximaFaixa) {
+            partes.push(`<div style="margin-top:8px;color:var(--success);font-weight:600;font-size:13px;">✓ Já bateu ${nomeF(status.proximaFaixa)} no ano — dá pra pedir a subida ao gerente.</div>`);
+          }
         }
 
         // pelo último PEDIDO (em carteira ou do app, ainda sem nota, também
@@ -19254,39 +19275,10 @@
         const nomeGrupo = status.ehRede ? 'rede' : 'matriz';
         const anoApuracao = Number(String(erp.apuradoAte || erp.dataRelatorio).slice(0, 4));
         const valor = v => (v == null ? '—' : brl(v));
-        const ld = erp.leituraDiferenca;
-        const nomeFaixa = t => escapeHtml(NOME_CURTO_FAIXA[t] || t || '');
-        let aviso = '';
-        if (ld) {
-          if (ld.situacao === 'manter') aviso = `<div class="clsAviso clsAviso--risco">⚠️ Faltam ${brl(ld.falta)} pra manter ${nomeFaixa(status.tipo)}${ld.faixaAnterior ? ` (senão cai pra ${nomeFaixa(ld.faixaAnterior)})` : ''}</div>`;
-          else if (ld.situacao === 'subir') aviso = `<div class="clsAviso clsAviso--subir">↑ Faltam ${brl(ld.falta)} pra subir pra ${nomeFaixa(ld.proximaFaixa)}</div>`;
-          else if (ld.situacao === 'qualifica') aviso = `<div class="clsAviso clsAviso--ok">✓ Já qualifica pra ${nomeFaixa(ld.proximaFaixa)}</div>`;
-          else if (ld.situacao === 'topo') aviso = `<div class="clsAviso clsAviso--ok">✓ Na faixa máxima (${nomeFaixa(status.tipo)})</div>`;
-          else if (ld.situacao === 'meta') aviso = `<div class="clsAviso clsAviso--subir">Faltam ${brl(ld.falta)} pra meta do acordo (${brl(ld.meta)})</div>`;
-          else aviso = `<div class="clsAviso clsAviso--subir">Diferença classificatória: ${brl(ld.falta)}</div>`;
-          // O "faltam" é da apuração do ERP (ex.: até 31/08); o que faturou
-          // depois dela não está no número - sem isso o card dizia "faltam
-          // R$ X" de quem já tinha comprado mais que isso (6 clientes em 14/10/2026).
-          // E o contrário: o que o ERP ainda conta e já saiu dos 12 meses de
-          // hoje (ex.: set-out/2025 num relatório até 31/08) - o card dizia
-          // "faltam R$ 3,7 mil" em cima e "faltam R$ 12 mil" no ao vivo.
-          const conc = erp.conciliacao;
-          const depois = conc && conc.doze ? Number(conc.doze.depoisApuracao) || 0 : 0;
-          const saiu = conc && conc.doze ? Number(conc.doze.foraDaJanelaApp) || 0 : 0;
-          const desde = formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5);
-          if (ld.falta > 0 && saiu >= 0.01 && (ld.situacao === 'subir' || ld.situacao === 'manter')) {
-            const hoje = ld.falta - depois + saiu;
-            const motivos = [`${brl(saiu)} vendidos de ${formatDateBr(conc.periodoErp.inicio)} a ${formatDateBr(conc.fimForaDaJanelaApp)} já saíram dos 12 meses`];
-            if (depois > 0) motivos.push(`faturou ${brl(depois)} depois de ${desde}`);
-            aviso += `<div class="clsTileSub" style="margin:4px 0 0;">Contando até hoje, ${hoje > 0
-              ? `faltam <b>${brl(hoje)}</b>`
-              : 'pode já ter resolvido'} (${motivos.join('; ')}; o ERP acerta na próxima apuração).</div>`;
-          } else if (ld.falta > 0 && depois > 0) {
-            aviso += `<div class="clsTileSub" style="margin:4px 0 0;">${depois >= ld.falta
-              ? `Depois de ${desde} já faturou ${brl(depois)} — pode já ter resolvido; confira "Ao vivo no app" abaixo.`
-              : `Depois de ${desde} já faturou ${brl(depois)} (não entra nesse número).`}</div>`;
-          }
-        }
+        // Sem o "Faltam R$ X" da coluna Diferenca (pedido do usuário): ela é
+        // dos 12 meses da apuração e a faixa vale pelo ano fiscal jan-dez -
+        // o veredito fica em "Ao vivo no app", pelo acumulado do ano.
+        const aviso = '';
         const local = [erp.cidade, erp.uf].filter(Boolean).join('/');
         const info = [
           // a da planilha para na apuração do ERP; faturado depois dela (que o
@@ -19302,10 +19294,9 @@
         return `<div class="clsSec">
           <div class="clsSecTit">Oficial do ERP <span>apuração até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio)} · relatório de ${formatDateBr(erp.dataRelatorio)}</span></div>
           <div class="clsGrid">
-            <div class="clsTile${status.ehRede ? '' : ' clsTile--destaque'}">
+            <div class="clsTile">
               <div class="clsTileLbl">12 meses · ${nomeGrupo}</div>
               <div class="clsTileVal">${valor(erp.fat12mMatriz)}</div>
-              ${status.ehRede ? '' : '<div class="clsTileSub">decide a faixa</div>'}
             </div>
             <div class="clsTile">
               <div class="clsTileLbl">12 meses · cliente</div>
@@ -19317,10 +19308,10 @@
               <div class="clsTileVal">${valor(erp.fatAnoAnterior)}</div>
               <div class="clsTileSub">ano fechado</div>
             </div>
-            <div class="clsTile">
+            <div class="clsTile${status.ehRede ? '' : ' clsTile--destaque'}">
               <div class="clsTileLbl">Acumulado ${anoApuracao} · ${nomeGrupo}</div>
               <div class="clsTileVal">${valor(erp.fatAcumulado)}</div>
-              <div class="clsTileSub">até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5)}</div>
+              <div class="clsTileSub">até ${formatDateBr(erp.apuradoAte || erp.dataRelatorio).slice(0, 5)}${status.ehRede ? '' : ' · decide a faixa'}</div>
             </div>
           </div>
           ${aviso}

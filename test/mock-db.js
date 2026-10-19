@@ -1295,13 +1295,14 @@ async function query(sql, params = []) {
       cliente_id: Number(params[0]), faturamento_12m, faturamento_ano_corrente, faturamento_mesmo_periodo_ano_anterior,
       ultima_compra: comoDateDoPg(ultima_compra), ultimo_pedido: comoDateDoPg(ultimo_pedido),
       ano_fechado: anoClassificatorioFechado(), ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora(),
+      dia_do_ano: diaDoAnoAgora(),
     }] };
   }
   // Ano/trimestre atual "de verdade" (não o ano fechado da faixa) - usado
   // pela rota de alertas em lote pra alimentar calcularRitmoTrimestral de
   // cada cliente com a mesma referência que a rota individual usa.
-  if (s.startsWith('SELECT EXTRACT(YEAR FROM (NOW() AT TIME ZONE ') && s.endsWith('AS TRIMESTRE_ATUAL_IDX')) {
-    return { rows: [{ ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora() }] };
+  if (s.startsWith('SELECT EXTRACT(YEAR FROM (NOW() AT TIME ZONE ') && s.endsWith('AS DIA_DO_ANO')) {
+    return { rows: [{ ano_atual: anoAtual(), trimestre_atual_idx: trimestreAtualIdxAgora(), dia_do_ano: diaDoAnoAgora() }] };
   }
   // Trimestres recentes de TODOS os clientes classificados de uma vez
   // (janela móvel de 4 trimestres, mesma lógica da rota individual) -
@@ -2327,6 +2328,7 @@ function inicioJanela12m() {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear() - 1, d.getUTCMonth(), d.getUTCDate())).toISOString().slice(0, 10);
 }
+function diaDoAnoAgora() { const d = new Date(); return Math.floor((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 86400000) + 1; }
 function trimestreAtualIdxAgora() { return Math.floor(new Date().getUTCMonth() / 3); } // 0-3
 // Início (YYYY-MM-DD) do trimestre civil de 3 trimestres atrás, contando do
 // trimestre em andamento agora - mesma janela de `date_trunc('quarter',
