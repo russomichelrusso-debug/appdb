@@ -936,6 +936,42 @@
       color: #FFD400;
     }
 
+    /* Busca pela ficha técnica: seção abaixo dos resultados pelo nome */
+    .buscaFichaTitulo {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      grid-column: 1 / -1;
+      margin: 14px 0 4px;
+      padding: 10px 2px 0;
+      border-top: 0.75px solid var(--hairline);
+    }
+
+    .buscaFichaTitulo b {
+      font-size: 15px;
+      color: var(--ink);
+    }
+
+    .buscaFichaTitulo span {
+      font-size: 12.5px;
+      color: var(--gray);
+    }
+
+    .buscaFichaFamilia {
+      grid-column: 1 / -1;
+      margin: 10px 2px 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .4px;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .buscaFichaFamilia span {
+      margin-left: 4px;
+      font-weight: 600;
+    }
+
     .prodResMais {
       padding: 4px 4px 12px;
       font-size: 12.5px;
@@ -12618,19 +12654,91 @@
         resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || natural(a[3], b[3]));
         return [...topo.map(r => r[1]), ...resto.map(r => r[3])].slice(0, 50);
       }
+      // Busca pela ficha técnica (10/2026, pedido do usuário: "pesquisar mármore ou
+      // pedras naturais e ver qual disco ou broca corta"): pra que o produto serve
+      // está na descrição da ficha ("cortes precisos em mármore, granito e pedras
+      // decorativas"), não no nome. Cada palavra de 3+ letras da busca tem de estar
+      // no nome ou na ficha, e pelo menos uma só na ficha (o que tem tudo no nome a
+      // busca normal já achou); medida digitada só vale no nome. Plural e singular
+      // contam igual ("pedra natural" = "pedras naturais").
+      function radicalBusca(w) {
+        if (w.length <= 3) return w;
+        return w.replace(/[oa]es$/, 'ao').replace(/ais$/, 'al').replace(/eis$/, 'el').replace(/s$/, '');
+      }
+      const CAMPOS_FICHA_BUSCA = ['aplicacao', 'tipo', 'tipo_corte', 'material', 'descricao', 'composicao'];
+      const radicaisDaFicha = new WeakMap();
+      function radicaisFicha(f) {
+        let r = radicaisDaFicha.get(f);
+        if (!r) {
+          const specs = f.specs || {};
+          const texto = [f.nome, f.desc, ...CAMPOS_FICHA_BUSCA.map(k => specs[k])].filter(Boolean).join(' ');
+          r = normalizarBusca(texto).split(' ').filter(Boolean).map(radicalBusca);
+          radicaisDaFicha.set(f, r);
+        }
+        return r;
+      }
+      function searchProductsPelaFicha(qRaw, fichas, jaAchados) {
+        const q = normalizarBusca(String(qRaw || ''));
+        if (!q || !fichas) return [];
+        const todas = q.split(' ').filter(w => !PALAVRAS_LIGACAO.has(w));
+        const numeros = todas.filter(ehNumeroBusca);
+        const palavras = todas.filter(w => !ehNumeroBusca(w) && w.length >= 3).map(radicalBusca);
+        if (!palavras.length) return [];
+        const fora = new Set((jaAchados || []).map(p => p.c));
+        const bate = (w, toks) => toks.some(t => t === w || t.startsWith(w));
+        const achados = [];
+        for (const p of DB.products) {
+          const f = fichas[p.c];
+          if (!f || typeof f !== 'object' || fora.has(p.c)) continue;
+          if (!p._tok) prepararProdutoParaBusca(p);
+          if (!numeros.every(w => p._tok.includes(w))) continue;
+          if (!p._rad) p._rad = p._tok.map(radicalBusca);
+          const daFicha = radicaisFicha(f);
+          let soNaFicha = 0, ok = true;
+          for (const w of palavras) {
+            if (bate(w, p._rad)) continue;
+            if (bate(w, daFicha)) soNaFicha++; else { ok = false; break; }
+          }
+          if (ok && soNaFicha) achados.push(p);
+        }
+        return achados.slice(0, 60);
+      }
       // </motor-busca>
 
       // ---------------- Fichas técnicas (balão de informação) ----------------
       // Carregado em segundo plano, sem bloquear a abertura do app - a maioria
       // dos produtos não tem ficha (só os que já apareceram em catálogo), então
       // não faz sentido atrasar o boot esperando isso.
+      // Cópia no aparelho (~270 KB em 10/2026): a ficha e a busca pela ficha valem
+      // na loja sem internet. Dado de catálogo, não sai no logout.
+      const FICHAS_LS_KEY = 'cortagFichasTecnicas_v1';
       let FICHAS_MAP = {};
+      try { FICHAS_MAP = JSON.parse(localStorage.getItem(FICHAS_LS_KEY)) || {}; } catch (e) { FICHAS_MAP = {}; }
       async function loadFichasTecnicas() {
         try {
           const result = await apiFetch('/api/fichas-tecnicas');
           FICHAS_MAP = (result && result.valor) || {};
+          try { localStorage.setItem(FICHAS_LS_KEY, JSON.stringify(FICHAS_MAP)); } catch (e) { /* sem espaço: fica só na memória */ }
           renderResults(); // reaplica pra mostrar os balões (i) que já podem se aplicar
+          if (document.getElementById('prodTabSearch')?.value.trim()) searchProdutoTabList(document.getElementById('prodTabSearch').value);
         } catch (e) { /* sem ficha tecnica disponivel ainda, ou sem rede - sem problema */ }
+      }
+      // Resultados da busca pela ficha agrupados por família (ordem da Lista de
+      // Preços: "01 - …", "02 - …"), pra responder "qual disco, qual broca".
+      function familiasDaBuscaPelaFicha(produtos) {
+        const grupos = new Map();
+        for (const p of produtos) {
+          const f = productFamilia(p);
+          if (!grupos.has(f)) grupos.set(f, []);
+          grupos.get(f).push(p);
+        }
+        return [...grupos.entries()]
+          .sort((a, b) => a[0].localeCompare(b[0], 'pt', { numeric: true }))
+          .map(([familia, itens]) => ({ nome: nomeDaFamilia(familia), itens }));
+      }
+      function htmlTituloBuscaPelaFicha(termo, n) {
+        return `<div class="buscaFichaTitulo"><b>Pela ficha técnica · “${escapeHtml(termo.trim())}”</b>`
+          + `<span>${n} produto${n === 1 ? '' : 's'} que a ficha diz que serve${n === 1 ? '' : 'm'} · veja a ficha no ⓘ ou abrindo o produto</span></div>`;
       }
       // Links de vídeo (YouTube/Instagram) por código de produto - mesmo
       // mecanismo de FICHAS_MAP, chave "produtos_videos" em configuracoes.
@@ -12773,7 +12881,17 @@
         }
         hint.style.display = 'none';
         const items = searchProducts(q);
+        const pelaFicha = searchProductsPelaFicha(q, FICHAS_MAP, items);
         ultimosResultados = items;
+        if (items.length === 0 && pelaFicha.length) {
+          addAllBar.classList.add('hidden');
+          const tabelaF = tabelaAgora();
+          list.classList.toggle('emTabela', tabelaF);
+          list.innerHTML = htmlBuscaPelaFicha(q, pelaFicha, tabelaF);
+          wireProductCardButtons(list);
+          if (tabelaF) wireTabelaProdutos(list);
+          return;
+        }
         if (items.length === 0) {
           list.innerHTML = `<div class="empty-state">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
@@ -12791,13 +12909,19 @@
           ? 'Adicionar ao orçamento' : `Adicionar os ${items.length} ao orçamento`;
         const tabela = tabelaAgora();
         list.classList.toggle('emTabela', tabela);
-        list.innerHTML = tabela ? htmlTabelaProdutos(items) : items.map(p => renderCard(p)).join('');
+        list.innerHTML = (tabela ? htmlTabelaProdutos(items) : items.map(p => renderCard(p)).join(''))
+          + (pelaFicha.length ? htmlBuscaPelaFicha(q, pelaFicha, tabela) : '');
         wireProductCardButtons(list);
         if (tabela) {
           wireTabelaProdutos(list);
           const voltar = focoQtd && list.querySelector(`[data-tabela-qtd="${CSS.escape(focoQtd)}"]`);
           if (voltar) voltar.focus();
         }
+      }
+      function htmlBuscaPelaFicha(termo, produtos, tabela) {
+        return htmlTituloBuscaPelaFicha(termo, produtos.length) + familiasDaBuscaPelaFicha(produtos).map(g =>
+          `<div class="buscaFichaFamilia">${escapeHtml(g.nome)} <span>${g.itens.length}</span></div>`
+          + (tabela ? htmlTabelaProdutos(g.itens) : g.itens.map(p => renderCard(p)).join(''))).join('');
       }
       function tabelaAgora() { return window.matchMedia('(min-width: 1250px) and (hover: hover) and (pointer: fine)').matches; }
       // Pedido no tablet deitado/laptop com a busca vazia (10/2026, pedido do
@@ -18604,7 +18728,10 @@
       // bloqueado): quem põe item novo na fila precisa saber que ele não ficou guardado
       function saveSyncQueueList(queue) {
         let ok = true;
-        try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) { ok = false; }
+        try { localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e) {
+          // sem espaço: a cópia das fichas técnicas (~270 KB, volta na próxima abertura) cede lugar pro pedido
+          try { localStorage.removeItem(FICHAS_LS_KEY); localStorage.setItem(SYNC_QUEUE_LS_KEY, JSON.stringify(queue)); } catch (e2) { ok = false; }
+        }
         refreshSyncQueueBadge();
         return ok;
       }
@@ -24546,6 +24673,7 @@
         if (!t) { wrap.innerHTML = ''; return; }
         const todos = searchProducts(term); // mesma busca do Pedido: palavras em qualquer ordem, medida exata, erro de digitação
         const encontrados = todos.slice(0, 30);
+        const pelaFicha = searchProductsPelaFicha(term, FICHAS_MAP, todos);
         const ctxCamp = contextoCampanhas();
         // selo de campanha (só texto: o item inteiro já é um botão) com o maior desconto, como a fita do Pedido
         const seloCampanha = (p) => {
@@ -24556,8 +24684,7 @@
         };
         const mais = todos.length > encontrados.length
           ? `<div class="prodResMais">Mostrando ${encontrados.length} de ${todos.length >= 50 ? '50+' : todos.length} — digite a medida ou mais uma palavra pra achar mais rápido</div>` : '';
-        wrap.innerHTML = encontrados.length
-          ? encontrados.map(p => `
+        const item = (p) => `
       <button type="button" class="clientPickerItem prodResItem" data-prod-cod="${escapeHtml(p.c)}" data-prod-nome="${escapeHtml(p.n)}">
         ${codigoDaFoto(p.c) ? `<span class="prodResFoto" data-foto-mini data-foto-cod="${escapeHtml(p.c)}">${ICONE_CAMERA}</span>` : ''}
         <span class="prodResTexto">
@@ -24565,7 +24692,11 @@
           <div class="cpMeta">${renderPrevisaoBadge(p.c)}Cód. ${escapeHtml(p.c)}</div>
           ${seloCampanha(p)}
         </span>
-      </button>`).join('') + mais
+      </button>`;
+        const secaoFicha = pelaFicha.length ? htmlTituloBuscaPelaFicha(term, pelaFicha.length) + familiasDaBuscaPelaFicha(pelaFicha)
+          .map(g => `<div class="buscaFichaFamilia">${escapeHtml(g.nome)} <span>${g.itens.length}</span></div>` + g.itens.map(item).join('')).join('') : '';
+        wrap.innerHTML = encontrados.length || pelaFicha.length
+          ? encontrados.map(item).join('') + mais + secaoFicha
           : `<div class="lev-empty">Nenhum produto encontrado para "${escapeHtml(term.trim())}".<br>Tente só o começo das palavras (ex.: "serra cop 50") ou o código.</div>`;
         wrap.querySelectorAll('[data-prod-cod]').forEach(btn => {
           btn.addEventListener('click', () => openProdutoDetail(btn.dataset.prodCod, btn.dataset.prodNome));
