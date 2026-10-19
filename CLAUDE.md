@@ -1127,6 +1127,13 @@ Supabase, sem PR — não é mudança de código.
   card ganhou "Com ficha | Sem ficha" (só 1 produto; o Status não leva). Campos e rótulos em `ROTULOS_FICHA` (ordem = prioridade),
   lidos por `specsDaFicha` - também no balão ⓘ: a lista antiga não tinha `capacidadeCarga`, `comprimento`, `material`,
   `qtdeEmbalagem`… (em 10/2026: 1.812 fichas, 60 campos diferentes) e várias fichas apareciam "Sem especificações".
+  - **Busca pela ficha técnica** (10/2026, pedido do usuário: "pesquisar mármore ou pedras naturais e achar qual disco ou
+    broca corta"): pra que o produto serve está na descrição da ficha ("corte de mármore, granito e pedras decorativas"), não
+    no nome. A busca do Pedido e da aba Produtos ganhou, abaixo dos resultados pelo nome, a seção **"Pela ficha técnica ·
+    'termo'"** agrupada por família (`searchProductsPelaFicha` no `<motor-busca>`, testado): cada palavra de 3+ letras no nome
+    ou na ficha (nome, descrição, aplicação, tipo, material…) e ao menos uma só na ficha ("disco mármore" = disco no nome +
+    mármore na ficha); medida só no nome; plural = singular (`radicalBusca`). "Adicionar todos" continua só com os do nome.
+    As fichas ficam no aparelho (`cortagFichasTecnicas_v1`, ~270 KB): busca, balão ⓘ e ficha do produto valem sem internet.
 - **Campanha no card do item** (10/2026, opção "D" escolhida pelo usuário entre 4 mockups — selo, de/por com barrinha, faixas tocáveis, fita): no Pedido (busca e Lista de preços, `renderCard`) e no Levantamento (`renderLevList`), produto que faz parte de uma campanha ganha borda e uma **fita no topo** com o nome e o maior desconto ("até -10%", "-15% no fixo", "+1" com mais de uma); preta com amarelo na Black Friday (`ehCampanhaBlackFriday`, mesma régua do card de oferta). Tocar abre `#campanhaItemModal` (`abrirCampanhaDoItem`): faixas, se conta a família/lista inteira, se soma com os outros descontos, teto do pedido, lançamentos, classificatório, validade e, com o item no orçamento, "✓ -N% aplicado" ou o motivo de não ter valido. Quais campanhas = `campanhasDoItem` (no `<motor-campanhas>`, testado): vale no contexto do orçamento (canal, estado, classificatório, data), alvo + exclusões, Preço Fixo só com `soNoPrecoFixo`; **sem olhar a quantidade** (a fita diz "faz parte", o desconto continua saindo do `cartTotals`); "pedido todo" fica de fora (marcaria todo card). O preço do card não muda.
 
 - **Modo Catálogo na aba Produtos** (10/2026, combinação A + B + D escolhida pelo usuário a partir de mockups, depois

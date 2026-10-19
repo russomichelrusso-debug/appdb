@@ -4156,6 +4156,17 @@ async function main() {
         assert(cods('sera copo 50') === '60882,61420', 'busca: aceita erro de digitação');
         assert(cods('broca 4.5') === '62438' && cods('broca 4,5mm') === '62438', 'busca: vírgula e ponto decimal iguais');
         assert(cods('argamasa') === '60876' && cods('60882') === '60882', 'busca: erro de digitação numa palavra só e código exato');
+        // busca pela ficha técnica: "mármore"/"pedras naturais" acham o que a ficha diz que corta
+        const fichas = {
+          '60882': { nome: 'Serra Copo', desc: 'Furos precisos em porcelanato e mármore.', specs: { diametro: '50 mm' } },
+          '62438': { nome: 'Broca', desc: 'Furação em aço.', specs: {} },
+          '62857': { nome: 'Supra', desc: 'Espaçadores para granitos, mármores e pedras naturais.', specs: {} },
+        };
+        const ficha = (q, ja) => ctxB.searchProductsPelaFicha(q, fichas, ja || []).map(p => p.c).sort().join(',');
+        assert(ficha('marmore') === '60882,62857' && ficha('pedra natural') === '62857' && ficha('serra copo marmore') === '60882',
+          'busca pela ficha: acha pela descrição, com plural/singular e palavras do nome junto');
+        assert(ficha('serra copo') === '' && ficha('marmore 51') === '' && ficha('marmore', [{ c: '60882' }]) === '62857',
+          'busca pela ficha: nada quando tudo está no nome, medida só no nome, e sem repetir o que a busca normal achou');
       }
     }
 
