@@ -2933,6 +2933,39 @@ async function main() {
     `pedidos oficiais do cliente trazem o saldo mínimo pela UF da ficha: ${JSON.stringify([minimoSemFicha, oficiais9407.body.saldo_minimo])}`
   );
 
+  // 29b) Ocorrência no Pós-Vendas (routes/ocorrencias.js): grava quando o
+  // vendedor confirma "Enviei", reenvio do mesmo id_envio não duplica, vem nos
+  // pedidos oficiais do cliente e qualquer vendedor marca resolvida.
+  {
+    const base = { cliente_id: 9407, nr_pedido: '677304', nota_fiscal: '245118', tipo: 'avariado', resumo: '2 un. 62796', id_envio: 'oc-teste-0001' };
+    const r1 = await req('POST', '/api/ocorrencias', base);
+    const r2 = await req('POST', '/api/ocorrencias', { ...base, resumo: 'reenvio' });
+    const invalido = await req('POST', '/api/ocorrencias', { ...base, tipo: 'qualquer', id_envio: 'oc-teste-0002' });
+    const semCliente = await req('POST', '/api/ocorrencias', { ...base, cliente_id: 99999, id_envio: 'oc-teste-0003' });
+    const futuro = await req('POST', '/api/ocorrencias', { ...base, id_envio: 'oc-teste-0004', enviado_em: new Date(Date.now() + 5 * 86400000).toISOString() });
+    // feita sem internet: 3 dias na fila, contados pelo relógio do aparelho e descontados do servidor
+    const envio = new Date(Date.now() + 2 * 86400000); // relógio do celular adiantado 2 dias
+    const fila = await req('POST', '/api/ocorrencias', { ...base, nr_pedido: '677304-1', id_envio: 'oc-teste-0005',
+      hora_toque: new Date(envio.getTime() - 3 * 86400000).toISOString(), enviado_em: envio.toISOString() });
+    const atraso = (Date.now() - Date.parse(fila.body.enviado_em)) / 86400000;
+    assert(fila.status === 200 && atraso > 2.9 && atraso < 3.1,
+      `ocorrência feita sem internet fica com a hora do toque, sem o relógio errado do celular: ${JSON.stringify([fila.status, fila.body, atraso])}`);
+    mockDb.__getOcorrencias().splice(mockDb.__getOcorrencias().findIndex(o => o.id_envio === 'oc-teste-0005'), 1);
+    const lista = await req('GET', '/api/pedidos-oficiais/9407');
+    assert(r1.status === 200 && r1.body.id && r2.status === 200 && r2.body.id === r1.body.id && r2.body.resumo === '2 un. 62796'
+      && invalido.status === 422 && semCliente.status === 404 && futuro.status === 200 && Date.parse(futuro.body.enviado_em) <= Date.now()
+      && mockDb.__getOcorrencias().length === 2
+      && Array.isArray(lista.body.ocorrencias) && lista.body.ocorrencias.length === 2 && lista.body.ocorrencias.every(o => o.nr_pedido === '677304'),
+      `ocorrência: grava, reenvio não duplica, tipo inválido 422, cliente que não existe 404, data futura vira agora, vem nos pedidos oficiais: ${JSON.stringify([r1.status, r2.body, invalido.status, semCliente.status, lista.body.ocorrencias])}`);
+    const resolvida = await req('PATCH', `/api/ocorrencias/${r1.body.id}`, { resolvida: true });
+    const reaberta = await req('PATCH', `/api/ocorrencias/${futuro.body.id}`, { resolvida: false });
+    const naoExiste = await req('PATCH', '/api/ocorrencias/9999', { resolvida: true });
+    const semCampo = await req('PATCH', `/api/ocorrencias/${r1.body.id}`, {});
+    assert(resolvida.status === 200 && resolvida.body.resolvida_em && reaberta.status === 200 && reaberta.body.resolvida_em === null
+      && naoExiste.status === 404 && semCampo.status === 422,
+      `ocorrência: marcar resolvida/reabrir, 404 sem a ocorrência, 422 sem o campo: ${JSON.stringify([resolvida.body, reaberta.body, naoExiste.status, semCampo.status])}`);
+  }
+
   // 30) Avisos de importação (routes/lib/novidades.js + routes/novidades.js)
   const nov = require('../routes/lib/novidades');
   {

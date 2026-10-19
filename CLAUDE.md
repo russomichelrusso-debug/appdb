@@ -615,6 +615,23 @@ Supabase, sem PR — não é mudança de código.
     DD/MM", também no selo) e ele vai pro fim da seção, sem sair da lista; a marca fica no aparelho
     (`cortagCancelamentoMarcas_v1`, por pedido + data do aviso). Quem está no bloco sai de "Visitas × compras".
 
+- **Abrir ocorrência no Pós-Vendas** (10/2026, a partir do e-mail "ABERTURA DE OCORRÊNCIAS - PADRÃO ENVIO DE E-MAILS" do
+  Pós-Vendas, vendas@cortag.com, 19/10/2026; mockups "Cortag · Abrir ocorrência", opção "A"). Botão **"Abrir ocorrência"** só no card
+  do pedido oficial **com NF** (aba Clientes › Pedidos oficiais). Assistente em 4 passos + revisão (`abrirOcorrencia`/`renderOcorrencia`,
+  `index.html`): dados da compra já preenchidos (NF, cliente, contato do comprador, e-mail comercial, CNPJ, transportadora; NF de
+  devolução opcional), tipo (os 7 do e-mail; defeito vai pra Assistência Técnica), itens da NF com quantidade afetada (só nos tipos
+  por item; "Faltando volumes" pede volumes NF × recebidos e carta de correção, "Atraso" a previsão), descrição com frases prontas,
+  data, fotos/documentos por espaço (NF sempre; produto, caixa, caixa master e etiqueta obrigatórios nos tipos com produto; CTe
+  opcional) e ressarcimento em botões (opção da tela "B"). Decisões do usuário: **e-mail pelo compartilhar do celular** com as fotos
+  **no tamanho original** (padrão do Gmail; o mailto não leva anexo; "Só o texto" abre o e-mail sem fotos); **destinatário em campo
+  livre** (depende da assistente; lembra o último, `cortagOcorrenciaPara_v1`, e é copiado ao tocar em Enviar pra colar no "Para");
+  **checklist incompleto só avisa**; texto do e-mail **sem os títulos "Etapa 1, 2…"**; **rascunho com as fotos no aparelho**
+  (IndexedDB `cortag-ocorrencias`, chaves em `cortagOcorrenciaRascunhos_v1`, botão vira "Continuar ocorrência"; apagado no logout);
+  o selo **"⚠ Ocorrência aberta"** (tabela `ocorrencias_pos_venda`, `routes/ocorrencias.js`, vem em `GET /api/pedidos-oficiais/:id`
+  como `ocorrencias`) **todos os vendedores veem** e só é gravado quando o vendedor responde **"Enviei"** ao voltar pro app (mesmo
+  jeito do "Pedir aumento"); pela fila offline com `id_envio` (enviada sem internet fica em `cortagOcorrenciasLocais_v1` até o
+  servidor devolver). **"Marcar resolvida"** guarda só a data ("resolvida em DD/MM", some depois de 120 dias; "reabrir" desfaz).
+
 - **Reabrir pedido salvo pra alterar** (10/2026): o cliente pedia pra mudar quantidade ou incluir
   produto num pedido já fechado e o vendedor fechava outro (vários pedidos do mesmo cliente, mais um
   CSV). Agora o pedido reabre no orçamento e "Finalizar pedido" vira **"Atualizar pedido"**, que troca

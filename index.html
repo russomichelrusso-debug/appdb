@@ -4427,6 +4427,490 @@
       color: var(--danger);
     }
 
+    /* ---------- Ocorrência no Pós-Vendas (card do pedido oficial) ---------- */
+    .histCard .hcOcorrencia {
+      margin-top: 6px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .histCard .hcOcorrencia small {
+      font-weight: 500;
+    }
+
+    .histCard .hcOcorrencia .restoreBtn {
+      margin-top: 6px;
+    }
+
+    .histCard .hcOcorrencia.resolvida {
+      background: var(--fill);
+      color: var(--gray);
+    }
+
+    .histCard .hcOcorrBtn {
+      margin-top: 10px;
+    }
+
+    .ocPendente {
+      font-weight: 500;
+    }
+
+    .ocLink {
+      background: none;
+      border: none;
+      padding: 0;
+      min-height: 32px;
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    #ocorrenciaModal {
+      padding: 12px;
+    }
+
+    #ocorrenciaModal .ocCard {
+      max-width: 520px;
+      height: calc(100vh - 24px);
+      height: calc(100dvh - 24px);
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .ocTopo {
+      padding: 12px 8px 10px 18px;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .ocTopo .ocTopoLinha {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .ocTopo h3 {
+      margin: 0;
+    }
+
+    .ocTopo .ocFechar {
+      width: 44px;
+      height: 44px;
+      border: none;
+      background: none;
+      color: var(--gray);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .ocPassos {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+      margin: 4px 10px 8px 0;
+    }
+
+    .ocPassos span {
+      height: 4px;
+      border-radius: 2px;
+      background: var(--hairline);
+    }
+
+    .ocPassos span.feito {
+      background: var(--red);
+    }
+
+    .minimodal-card .ocSub {
+      font-size: 12px;
+      margin: 0;
+    }
+
+    .ocCorpo {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 18px;
+    }
+
+    .ocCorpo select,
+    .ocCorpo textarea,
+    .minimodal-card .ocCorpo input[type="number"],
+    .minimodal-card .ocCorpo input[type="date"] {
+      width: 100%;
+      border: none;
+      border-radius: var(--r-sm);
+      padding: 12px 13px;
+      font: inherit;
+      font-size: 15px;
+      margin-bottom: 14px;
+      color: var(--ink);
+      background: var(--fill);
+    }
+
+    .minimodal-card .ocCorpo input {
+      margin-bottom: 14px;
+    }
+
+    .ocCorpo textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .ocTitulo {
+      font-size: 15px;
+      font-weight: 700;
+      margin: 2px 0 10px;
+    }
+
+    .minimodal-card label.ocTituloLabel {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .ocTituloLinha {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .ocTituloLinha .ocTitulo {
+      margin: 0;
+    }
+
+    .ocTituloLinha .falta {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--warning);
+    }
+
+    .ocTituloLinha .ok {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .ocRotulo {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray);
+      margin-bottom: 6px;
+    }
+
+    .minimodal-card p.ocDica {
+      font-size: 12px;
+      margin: -4px 0 12px;
+    }
+
+    .ocLinhaAcoes {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .ocTipos {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .minimodal-card label.ocTipo {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin: 0;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1.5px solid var(--hairline);
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 400;
+      cursor: pointer;
+    }
+
+    .minimodal-card label.ocTipo.marcado {
+      border-color: var(--red);
+      background: var(--accent-bg);
+    }
+
+    .minimodal-card .ocTipo input {
+      width: 20px;
+      height: 20px;
+      margin: 1px 0 0;
+      flex: none;
+      accent-color: var(--red);
+    }
+
+    .ocTipo span {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .ocTipo small {
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .ocAviso {
+      margin-bottom: 12px;
+      padding: 9px 11px;
+      border-radius: 10px;
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .ocAviso.ok {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .ocAviso.info {
+      background: var(--info-bg);
+      color: var(--ink);
+      font-weight: 500;
+    }
+
+    .ocItens {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+
+    .ocItem {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      background: var(--fill);
+    }
+
+    .minimodal-card .ocItem input[type="checkbox"] {
+      width: 20px;
+      height: 20px;
+      margin: 0;
+      flex: none;
+      accent-color: var(--red);
+    }
+
+    .minimodal-card .ocItem label {
+      flex: 1;
+      min-width: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      color: var(--ink);
+      font-weight: 400;
+      font-size: 13px;
+    }
+
+    .ocItem label b {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ocItem label small {
+      color: var(--gray);
+      font-size: 12px;
+    }
+
+    .minimodal-card .ocCorpo .ocItem input[type="number"] {
+      width: 72px;
+      margin: 0;
+      padding: 10px 8px;
+      background: var(--white);
+      text-align: center;
+    }
+
+    .ocVazio {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .ocDuas {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .ocBotoes {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .ocBotoes button,
+    .ocFrases button {
+      min-height: 44px;
+      padding: 8px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--hairline);
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .ocBotoes button.marcado {
+      border: 1.5px solid var(--red);
+      background: var(--accent-bg);
+      color: var(--red);
+      font-weight: 600;
+    }
+
+    .ocFrases {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+
+    .ocFrases button {
+      min-height: 36px;
+      border-radius: 999px;
+      font-size: 12px;
+    }
+
+    .ocAnexos {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .ocAnexo {
+      position: relative;
+    }
+
+    .minimodal-card label.ocAnexoBtn {
+      display: flex;
+      align-items: flex-end;
+      height: 88px;
+      margin: 0;
+      padding: 6px;
+      border-radius: 12px;
+      border: 1.5px dashed var(--hairline);
+      background: var(--white) center / cover no-repeat;
+      color: var(--gray);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      overflow: hidden;
+    }
+
+    .ocAnexo.obrig .ocAnexoBtn {
+      border-color: var(--red);
+      background-color: var(--accent-bg);
+      color: var(--red);
+    }
+
+    .ocAnexo.tem .ocAnexoBtn {
+      border-style: solid;
+      border-color: var(--success);
+      color: var(--ink);
+    }
+
+    .ocAnexoBtn span {
+      background: var(--white);
+      border-radius: 6px;
+      padding: 2px 5px;
+      line-height: 1.3;
+    }
+
+    .ocAnexoBtn input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+    }
+
+    .ocAnexoTirar {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 32px;
+      height: 32px;
+      border: none;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, .55);
+      color: #fff;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .ocLinhaCampo {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+
+    .ocLinhaCampo input {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .ocLinhaCampo .restoreBtn {
+      flex: none;
+      min-height: 44px;
+    }
+
+    .ocPrevia {
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      background: var(--fill);
+      color: var(--ink);
+      border-radius: 10px;
+      padding: 10px;
+      margin: 0 0 14px;
+    }
+
+    .ocEnvio {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .ocEnviar {
+      min-height: 48px;
+      border: none;
+      border-radius: var(--r-sm);
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .ocRodape {
+      padding: 10px 18px 14px;
+      border-top: 1px solid var(--hairline);
+    }
+
+    .ocRodape button:disabled {
+      opacity: .45;
+    }
+
     /* ---------- Mini modal ---------- */
     .minimodal {
       position: fixed;
@@ -11281,6 +11765,22 @@
           <button type="button" id="pedidosSalvosFecharBtn">Fechar</button>
           <button type="button" id="pedidoCsvAbrirBtn">📂 Abrir arquivo CSV</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Ocorrência no Pós-Vendas: assistente em 4 passos + revisão (initOcorrencia) -->
+    <div class="minimodal hidden" id="ocorrenciaModal">
+      <div class="minimodal-card ocCard" role="dialog" aria-modal="true" aria-labelledby="ocTituloModal">
+        <div class="ocTopo">
+          <div class="ocTopoLinha">
+            <h3 id="ocTituloModal">Abrir ocorrência</h3>
+            <button type="button" class="ocFechar" id="ocFecharBtn" aria-label="Fechar (o rascunho fica guardado)">✕</button>
+          </div>
+          <div class="ocPassos" id="ocPassos"></div>
+          <p class="ocSub" id="ocSub"></p>
+        </div>
+        <div class="ocCorpo" id="ocCorpo"></div>
+        <div class="ocRodape minimodal-btnrow" id="ocRodape"></div>
       </div>
     </div>
 
@@ -22048,7 +22548,7 @@
         const regiao = saldoMinimo && saldoMinimo.regiao ? ` (${escapeHtml(saldoMinimo.regiao)})` : '';
         return `<div class="hcSaldoMinimo">⚠ Saldo abaixo do mínimo de ${brl(minimo)}${regiao} · faltam ${brl(falta)} · pode ser cancelado. ${acao}</div>`;
       }
-      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo, bloqueado, avisoCancelamento) {
+      function renderPedidoOficialGrupo(nrPedido, itens, pendente, titulos, saldoMinimo, bloqueado, avisoCancelamento, ocorrencias, cliente) {
         // À vista sem pagamento (aba "Aguardando Pagamento" ou título em aberto
         // na "Pendentes à Vista"): o ERP já lista a NF na aba Faturamento, mas
         // o pedido não saiu - nada de "Faturado", selo T/P, transportadora nem
@@ -22125,7 +22625,7 @@
       ${botaoRastreio}
     </div>
     <div class="hcCode">${qtdProdutos} produto${qtdProdutos === 1 ? '' : 's'}</div>
-    ${renderSeloBloqueado(bloqueado)}${renderSeloCancelamento(avisoCancelamento)}${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}
+    ${renderSeloBloqueado(bloqueado)}${renderSeloCancelamento(avisoCancelamento)}${renderSeloAguardandoPagamento(pendente)}${renderSeloTitulosAvista(titulos)}${renderSeloOcorrencias(ocorrencias)}
     <div class="hcStats">
       <div class="hcStat">Pedido<b>${formatDateBr(primeiro.data_implantacao)}</b></div>
       ${aguardandoPagamento
@@ -22136,7 +22636,531 @@
       ${nfTransp ? `<div class="hcStat">NF / Transportadora<b>${escapeHtml(nfTransp)}</b></div>` : ''}`}
     </div>
     ${listaProdutos}
+    ${itemFaturado && notasDoPedido.length ? botaoOcorrencia(cliente, nrPedido) : ''}
   </div>`;
+      }
+      // ---- Ocorrência no Pós-Vendas (card do pedido oficial com NF) ----
+      // Modelo do e-mail "ABERTURA DE OCORRÊNCIAS - PADRÃO ENVIO DE E-MAILS" do
+      // Pós-Vendas (vendas@cortag.com, 19/10/2026): dados da compra, tipo,
+      // descrição, preferência de ressarcimento e as fotos/documentos
+      // obrigatórios. Decisões do usuário (mockups "Cortag · Abrir ocorrência"):
+      // assistente em 4 passos + revisão; o e-mail sai pelo compartilhar do
+      // celular (fotos + texto, no tamanho original - o navegador não anexa
+      // arquivo num mailto); destinatário em campo livre (depende da
+      // assistente; o app lembra o último); checklist incompleto só avisa;
+      // rascunho com as fotos fica no aparelho (IndexedDB) até enviar; o selo
+      // "Ocorrência aberta" (routes/ocorrencias.js, todos os vendedores veem)
+      // só é gravado quando o vendedor responde "Enviei" ao voltar pro app.
+      // Texto do e-mail sem os títulos "Etapa 1, 2…" (pedido do usuário).
+      const TIPOS_OCORRENCIA = [
+        { v: 'faltando_item', nome: 'Produto faltando dentro dos volumes', dica: 'Caixas certas, item faltando em caixa lacrada', itens: true, fotos: true },
+        { v: 'faltando_volume', nome: 'Faltando volumes', dica: 'Menos caixas que a NF · confira se há carta de correção', volumes: true },
+        { v: 'avariado', nome: 'Produto avariado/danificado', dica: 'Produto ou embalagem com avaria · fotos obrigatórias', itens: true, fotos: true },
+        { v: 'trocado', nome: 'Produto trocado', dica: 'Diferente do que está na NF · fotos das etiquetas', itens: true, fotos: true },
+        { v: 'desacordo', nome: 'Produto em desacordo', dica: 'Diferente da Ordem de Compra do cliente', itens: true, fotos: true },
+        { v: 'atraso', nome: 'Atraso na entrega', dica: '', atraso: true },
+        { v: 'outros', nome: 'Outros', dica: '', itens: true },
+      ];
+      // Fotos e documentos: o que o e-mail pede (NF sempre; produto, caixa do
+      // item, caixa master e etiqueta Cortag quando há produto com problema; CTe
+      // com ressalva "quando aplicável").
+      const ANEXOS_OCORRENCIA = [
+        { v: 'nf', nome: 'NF de origem', doc: true, mostra: () => true, obrig: () => true },
+        { v: 'produto', nome: 'Produto', mostra: t => t.itens, obrig: t => !!t.fotos },
+        { v: 'caixa', nome: 'Caixa do item', mostra: t => t.itens, obrig: t => !!t.fotos },
+        { v: 'master', nome: 'Caixa master', mostra: t => t.itens || t.volumes, obrig: t => !!t.fotos },
+        { v: 'etiqueta', nome: 'Etiqueta Cortag', mostra: t => t.itens, obrig: t => !!t.fotos },
+        { v: 'cte', nome: 'CTe com ressalva', doc: true, mostra: t => !t.atraso, obrig: () => false },
+        { v: 'outras', nome: 'Outras fotos', mostra: () => true, obrig: () => false },
+      ];
+      const RESSARCIMENTOS_OCORRENCIA = ['Desconto em duplicata', 'Material bonificado', 'Devolução do material mediante emissão de Nota Fiscal', 'Outro'];
+      const FRASES_OCORRENCIA = ['Caixa master amassada', 'Produto quebrado', 'Embalagem rasgada', 'Etiqueta diferente da NF', 'Caixa lacrada com item faltando'];
+      const OC_PARA_LS_KEY = 'cortagOcorrenciaPara_v1';
+      const OC_RASCUNHOS_LS_KEY = 'cortagOcorrenciaRascunhos_v1'; // chaves dos rascunhos guardados (rótulo do botão sem abrir o IndexedDB)
+      const OC_LOCAIS_LS_KEY = 'cortagOcorrenciasLocais_v1'; // enviadas daqui que o servidor ainda não devolveu (fila offline)
+      const OC_PASSOS = 5; // 4 etapas + revisão
+      let oc = null; // ocorrência aberta no modal
+      let ocSalvarTimer = null;
+      const ocPedidosDoCard = new Map(); // nr_pedido -> itens, do último card de pedidos oficiais desenhado
+      function tipoOcorrencia(v) { return TIPOS_OCORRENCIA.find(t => t.v === v) || null; }
+      function lerListaLS(chave) {
+        try { const v = JSON.parse(localStorage.getItem(chave)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
+      }
+      function gravarListaLS(chave, lista) {
+        try { localStorage.setItem(chave, JSON.stringify(lista)); } catch (e) { }
+      }
+      // Rascunho com as fotos (File/Blob) no IndexedDB - não cabe no localStorage
+      function ocBanco() {
+        return new Promise((ok, falha) => {
+          const r = indexedDB.open('cortag-ocorrencias', 1);
+          r.onupgradeneeded = () => r.result.createObjectStore('rascunhos', { keyPath: 'chave' });
+          r.onsuccess = () => ok(r.result);
+          r.onerror = () => falha(r.error);
+        });
+      }
+      async function ocBancoOp(modo, fazer) {
+        const db = await ocBanco();
+        try {
+          return await new Promise((ok, falha) => {
+            const tx = db.transaction('rascunhos', modo);
+            const r = fazer(tx.objectStore('rascunhos'));
+            tx.oncomplete = () => ok(r && r.result);
+            tx.onerror = () => falha(tx.error);
+            tx.onabort = () => falha(tx.error);
+          });
+        } finally { db.close(); }
+      }
+      async function lerRascunhoOcorrencia(chave) {
+        try { return await ocBancoOp('readonly', s => s.get(chave)) || null; } catch (e) { return null; }
+      }
+      async function gravarRascunhoOcorrencia() {
+        if (!oc) return;
+        const chaves = lerListaLS(OC_RASCUNHOS_LS_KEY);
+        if (!chaves.includes(oc.chave)) gravarListaLS(OC_RASCUNHOS_LS_KEY, [...chaves, oc.chave]);
+        const copia = { ...oc }; // fechar o modal zera o `oc` antes de o banco abrir
+        try { await ocBancoOp('readwrite', s => s.put(copia)); }
+        catch (e) { console.warn('Rascunho da ocorrência não ficou no aparelho:', e); }
+      }
+      function agendarRascunhoOcorrencia() {
+        clearTimeout(ocSalvarTimer);
+        ocSalvarTimer = setTimeout(gravarRascunhoOcorrencia, 600);
+      }
+      async function apagarRascunhoOcorrencia(chave) {
+        gravarListaLS(OC_RASCUNHOS_LS_KEY, lerListaLS(OC_RASCUNHOS_LS_KEY).filter(c => c !== chave));
+        try { await ocBancoOp('readwrite', s => s.delete(chave)); } catch (e) { }
+      }
+      // logout: fotos e dados do cliente não ficam no aparelho de quem saiu
+      async function apagarOcorrenciasDoAparelho() {
+        try { localStorage.removeItem(OC_RASCUNHOS_LS_KEY); localStorage.removeItem(OC_LOCAIS_LS_KEY); } catch (e) { }
+        try { await ocBancoOp('readwrite', s => s.clear()); } catch (e) { }
+      }
+      // Itens de uma NF do pedido (um por código, quantidade somada)
+      function itensDaNfOcorrencia(itens, nf) {
+        const porCodigo = new Map();
+        for (const it of itens) {
+          if (it.status !== 'faturado' || String(it.nota_fiscal) !== String(nf)) continue;
+          const cod = String(it.codigo_sku);
+          const atual = porCodigo.get(cod) || { codigo: cod, nome: it.produto || ('Cód. ' + cod), qt: 0 };
+          atual.qt += Number(it.quantidade) || 0;
+          porCodigo.set(cod, atual);
+        }
+        return [...porCodigo.values()];
+      }
+      async function abrirOcorrencia(cliente, nrPedido, itens) {
+        if (!cliente) return;
+        const chave = `${cliente.id}|${nrPedido}`;
+        const notas = [...new Set(itens.filter(it => it.status === 'faturado' && it.nota_fiscal).map(it => String(it.nota_fiscal)))];
+        if (!notas.length) { showToast('Esse pedido ainda não tem NF emitida', 'erro'); return; }
+        const itensPorNf = {};
+        for (const nf of notas) itensPorNf[nf] = itensDaNfOcorrencia(itens, nf);
+        const rascunho = await lerRascunhoOcorrencia(chave);
+        if (rascunho) {
+          oc = { ...rascunho, notas, itensPorNf };
+        } else {
+          const comprador = whatsCompradorDoCliente(cliente);
+          const contatos = contatosDoCliente(cliente);
+          const transp = (itens.find(it => it.status === 'faturado' && String(it.nota_fiscal) === notas[0] && it.transportadora) || {}).transportadora || '';
+          oc = {
+            chave, clienteId: cliente.id, nrPedido: String(nrPedido), notas, itensPorNf, passo: 1,
+            dados: {
+              nf: notas[0], cliente: cliente.nome || '',
+              contato: comprador ? [comprador.nome, formatarWhatsBr(comprador.numero)].filter(Boolean).join(' · ') : (contatos.tel ? formatarWhatsBr(contatos.tel) : ''),
+              email: contatos.email || '', cnpj: cliente.documento || '', transportadora: transp, nfDevolucao: '',
+            },
+            tipo: '', itens: {}, descricao: '', data: hojeLocalISO(), volumesNf: '', volumesRecebidos: '', cartaCorrecao: '', dataPrevista: '',
+            ressarcimento: '', ressarcimentoOutro: '', anexos: {},
+          };
+        }
+        if (!oc.notas.includes(oc.dados.nf)) oc.dados.nf = oc.notas[0];
+        document.getElementById('ocorrenciaModal').classList.remove('hidden');
+        renderOcorrencia();
+      }
+      function fecharOcorrencia() {
+        if (oc) { clearTimeout(ocSalvarTimer); gravarRascunhoOcorrencia(); }
+        document.getElementById('ocorrenciaModal').classList.add('hidden');
+        ocUrlsFotos.forEach(u => URL.revokeObjectURL(u));
+        ocUrlsFotos.length = 0;
+        oc = null;
+        if (clienteTabSelected && clienteTabView === 'pedidosoficiais') loadClienteDetailView(); // rótulo "Continuar ocorrência"
+      }
+      const ocUrlsFotos = [];
+      function ocUrlDaFoto(f) {
+        const u = URL.createObjectURL(f);
+        ocUrlsFotos.push(u);
+        return u;
+      }
+      function ocItensEscolhidos() {
+        const lista = (oc.itensPorNf[oc.dados.nf] || []);
+        return lista.filter(it => oc.itens[it.codigo] > 0).map(it => ({ ...it, afetada: Math.min(oc.itens[it.codigo], it.qt || oc.itens[it.codigo]) }));
+      }
+      // O que o checklist do Pós-Vendas pede e ainda falta (só avisa)
+      function pendenciasOcorrencia() {
+        const t = tipoOcorrencia(oc.tipo);
+        const faltam = [];
+        if (!oc.dados.nf) faltam.push('número da NF');
+        if (!t) { faltam.push('tipo da ocorrência'); return faltam; }
+        if (t.itens && !ocItensEscolhidos().length) faltam.push('itens envolvidos');
+        if (!oc.descricao.trim()) faltam.push('descrição');
+        for (const a of ANEXOS_OCORRENCIA) {
+          if (a.mostra(t) && a.obrig(t) && !(oc.anexos[a.v] || []).length) faltam.push(a.doc ? a.nome : 'foto: ' + a.nome.toLowerCase());
+        }
+        return faltam;
+      }
+      function arquivosOcorrencia() {
+        const t = tipoOcorrencia(oc.tipo) || {};
+        return ANEXOS_OCORRENCIA.filter(a => a.mostra(t)).flatMap(a => (oc.anexos[a.v] || []));
+      }
+      function assuntoOcorrencia() {
+        const t = tipoOcorrencia(oc.tipo);
+        return ['Ocorrência', `NF ${oc.dados.nf}`, oc.dados.cliente, t && t.nome].filter(Boolean).join(' · ');
+      }
+      function textoOcorrencia() {
+        const t = tipoOcorrencia(oc.tipo);
+        const d = oc.dados;
+        const linhas = ['Olá, segue ocorrência para análise.', '',
+          `Número da Nota fiscal: ${d.nf}`, `Cliente: ${d.cliente}`, `Contato do cliente: ${d.contato}`, `Email do cliente: ${d.email}`,
+          `CNPJ: ${d.cnpj}`, `Transportadora: ${d.transportadora}`];
+        if (d.nfDevolucao.trim()) linhas.push(`Nota fiscal de Devolução: ${d.nfDevolucao.trim()}`);
+        linhas.push(`Pedido: ${oc.nrPedido}`, '', `Tipo de ocorrência: ${t ? t.nome : ''}`, '', 'Descrição da ocorrência:');
+        if (oc.descricao.trim()) linhas.push(oc.descricao.trim());
+        if (t && t.itens) {
+          const itens = ocItensEscolhidos();
+          if (itens.length) {
+            linhas.push('Itens envolvidos:');
+            for (const it of itens) linhas.push(`- ${it.codigo} ${it.nome} · quantidade afetada: ${it.afetada}${it.qt ? ` (${it.qt} na NF)` : ''}`);
+          }
+        }
+        if (t && t.volumes) {
+          linhas.push(`Volumes na NF: ${oc.volumesNf || '?'} · volumes recebidos: ${oc.volumesRecebidos || '?'}`);
+          if (oc.cartaCorrecao) linhas.push(`Carta de correção: ${oc.cartaCorrecao === 'sim' ? 'sim' : 'não'}`);
+        }
+        if (t && t.atraso && oc.dataPrevista) linhas.push(`Previsão de entrega: ${formatDateBr(oc.dataPrevista)}`);
+        if (oc.data) linhas.push(`Data da ocorrência: ${formatDateBr(oc.data)}`);
+        if (oc.ressarcimento) {
+          linhas.push('', `Preferência de ressarcimento: ${oc.ressarcimento === 'Outro' ? (oc.ressarcimentoOutro.trim() || 'Outro') : oc.ressarcimento}`);
+        }
+        const anexos = ANEXOS_OCORRENCIA.filter(a => a.mostra(t || {}) && (oc.anexos[a.v] || []).length)
+          .map(a => { const n = oc.anexos[a.v].length; return n > 1 ? `${a.nome} (${n})` : a.nome; });
+        if (anexos.length) linhas.push('', `Anexos: ${anexos.join(', ')}`);
+        linhas.push('', 'Att,', state.seller || (state.currentUser && state.currentUser.nome) || '');
+        return linhas.join('\n');
+      }
+      function ocCampo(id, rotulo, valor, extra) {
+        return `<label for="${id}">${escapeHtml(rotulo)}</label><input type="text" id="${id}" data-oc-dado="${id.replace('ocDado_', '')}" value="${escapeHtml(valor || '')}" autocomplete="off"${extra || ''}>`;
+      }
+      function renderOcorrencia() {
+        if (!oc) return;
+        const t = tipoOcorrencia(oc.tipo);
+        const passo = oc.passo;
+        document.getElementById('ocPassos').innerHTML = [1, 2, 3, 4].map(n => `<span class="${n <= passo ? 'feito' : ''}"></span>`).join('');
+        document.getElementById('ocSub').textContent = (passo <= 4 ? `Passo ${passo} de 4` : 'Revisar e enviar') + ` · Pedido ${oc.nrPedido} · NF ${oc.dados.nf}`;
+        ocUrlsFotos.forEach(u => URL.revokeObjectURL(u));
+        ocUrlsFotos.length = 0;
+        let corpo = '';
+        if (passo === 1) {
+          const d = oc.dados;
+          corpo = `<div class="ocTitulo">Dados da compra</div>
+            ${oc.notas.length > 1
+              ? `<label for="ocDado_nf">Número da Nota fiscal</label><select id="ocDado_nf" data-oc-dado="nf">${oc.notas.map(n => `<option value="${escapeHtml(n)}"${n === d.nf ? ' selected' : ''}>NF ${escapeHtml(n)}</option>`).join('')}</select>`
+              : ocCampo('ocDado_nf', 'Número da Nota fiscal', d.nf, ' readonly')}
+            ${ocCampo('ocDado_cliente', 'Cliente', d.cliente)}
+            ${ocCampo('ocDado_contato', 'Contato do cliente', d.contato, ' placeholder="Nome e telefone"')}
+            ${ocCampo('ocDado_email', 'E-mail do cliente', d.email, ' inputmode="email"')}
+            ${ocCampo('ocDado_cnpj', 'CNPJ', d.cnpj)}
+            ${ocCampo('ocDado_transportadora', 'Transportadora', d.transportadora)}
+            ${ocCampo('ocDado_nfDevolucao', 'Nota fiscal de devolução (se houver)', d.nfDevolucao, ' inputmode="numeric"')}
+            <div class="ocLinhaAcoes"><button type="button" class="restoreBtn compacto" data-oc-copiar-dados>Copiar dados</button>
+            <button type="button" class="ocLink" data-oc-descartar>Descartar ocorrência</button></div>`;
+        } else if (passo === 2) {
+          corpo = `<div class="ocTitulo">O que aconteceu?</div>
+            <div class="ocTipos">${TIPOS_OCORRENCIA.map(x => `<label class="ocTipo${oc.tipo === x.v ? ' marcado' : ''}">
+              <input type="radio" name="ocTipo" value="${x.v}"${oc.tipo === x.v ? ' checked' : ''} data-oc-tipo>
+              <span><b>${escapeHtml(x.nome)}</b>${x.dica ? `<small>${escapeHtml(x.dica)}</small>` : ''}</span></label>`).join('')}</div>
+            <div class="ocAviso info">Produto com defeito de funcionamento ou fabricação não é ocorrência: vai pra Assistência Técnica.</div>`;
+        } else if (passo === 3) {
+          let detalhe = '';
+          if (t && t.itens) {
+            const lista = oc.itensPorNf[oc.dados.nf] || [];
+            detalhe = `<div class="ocTitulo">Quais itens da NF?</div>
+              <div class="ocItens">${lista.length ? lista.map(it => {
+                const marcado = oc.itens[it.codigo] > 0;
+                return `<div class="ocItem">
+                  <input type="checkbox" id="ocIt_${escapeHtml(it.codigo)}" data-oc-item="${escapeHtml(it.codigo)}"${marcado ? ' checked' : ''}>
+                  <label for="ocIt_${escapeHtml(it.codigo)}"><b>${escapeHtml(it.codigo)} · ${escapeHtml(it.nome)}</b><small>${it.qt} na NF</small></label>
+                  ${marcado ? `<input type="number" min="1"${it.qt ? ` max="${it.qt}"` : ''} inputmode="numeric" aria-label="Quantidade afetada de ${escapeHtml(it.nome)}" data-oc-qt="${escapeHtml(it.codigo)}" value="${oc.itens[it.codigo]}">` : ''}
+                </div>`;
+              }).join('') : '<div class="ocVazio">Os itens dessa NF não vieram no relatório importado — descreva abaixo.</div>'}</div>`;
+          } else if (t && t.volumes) {
+            detalhe = `<div class="ocTitulo">Volumes</div>
+              <div class="ocDuas"><div><label for="ocVolNf">Volumes na NF</label><input type="number" min="0" inputmode="numeric" id="ocVolNf" data-oc-campo="volumesNf" value="${escapeHtml(oc.volumesNf)}"></div>
+              <div><label for="ocVolRec">Volumes recebidos</label><input type="number" min="0" inputmode="numeric" id="ocVolRec" data-oc-campo="volumesRecebidos" value="${escapeHtml(oc.volumesRecebidos)}"></div></div>
+              <div class="ocRotulo">Tem carta de correção?</div>
+              <div class="ocBotoes">${[['sim', 'Sim'], ['nao', 'Não']].map(([v, n]) => `<button type="button" class="${oc.cartaCorrecao === v ? 'marcado' : ''}" data-oc-carta="${v}">${n}</button>`).join('')}</div>`;
+          } else if (t && t.atraso) {
+            detalhe = `<label for="ocPrevista">Previsão de entrega que o cliente recebeu</label><input type="date" id="ocPrevista" data-oc-campo="dataPrevista" value="${escapeHtml(oc.dataPrevista)}">`;
+          }
+          const anexos = ANEXOS_OCORRENCIA.filter(a => a.mostra(t || {}));
+          const obrig = anexos.filter(a => a.obrig(t || {}));
+          const feitos = obrig.filter(a => (oc.anexos[a.v] || []).length).length;
+          corpo = `${detalhe}
+            <label for="ocDescricao" class="ocTituloLabel">Descrição</label>
+            <div class="ocFrases">${(t && t.itens ? FRASES_OCORRENCIA : []).map(f => `<button type="button" data-oc-frase="${escapeHtml(f)}">${escapeHtml(f)}</button>`).join('')}</div>
+            <textarea id="ocDescricao" data-oc-campo="descricao" rows="3" placeholder="O que ocorreu, de forma clara e objetiva">${escapeHtml(oc.descricao)}</textarea>
+            <label for="ocData">Data da ocorrência</label><input type="date" id="ocData" data-oc-campo="data" value="${escapeHtml(oc.data)}">
+            <div class="ocTituloLinha"><span class="ocTitulo">Fotos e documentos</span>${obrig.length ? `<span class="${feitos === obrig.length ? 'ok' : 'falta'}">${feitos} de ${obrig.length} obrigatórios</span>` : ''}</div>
+            <div class="ocAnexos">${anexos.map(a => {
+              const fotos = oc.anexos[a.v] || [];
+              const capa = fotos.find(f => /^image\//.test(f.type));
+              return `<div class="ocAnexo${fotos.length ? ' tem' : a.obrig(t || {}) ? ' obrig' : ''}">
+                <label class="ocAnexoBtn"${capa ? ` style="background-image:url('${ocUrlDaFoto(capa)}')"` : ''}>
+                  <input type="file" ${a.doc ? 'accept="image/*,application/pdf"' : 'accept="image/*"'} multiple data-oc-anexo="${a.v}">
+                  <span>${fotos.length ? '✓ ' : '+ '}${escapeHtml(a.nome)}${fotos.length > 1 ? ` (${fotos.length})` : fotos.length && !capa ? ' (PDF)' : ''}</span>
+                </label>
+                ${fotos.length ? `<button type="button" class="ocAnexoTirar" data-oc-tirar="${a.v}" aria-label="Tirar ${escapeHtml(a.nome)}">✕</button>` : ''}
+              </div>`;
+            }).join('')}</div>`;
+        } else if (passo === 4) {
+          corpo = `<div class="ocTitulo">Preferência de ressarcimento</div>
+            <p class="ocDica">Caso a ocorrência seja considerada procedente após a análise da Cortag.</p>
+            <div class="ocBotoes ocRessarc">${RESSARCIMENTOS_OCORRENCIA.map(r => `<button type="button" class="${oc.ressarcimento === r ? 'marcado' : ''}" data-oc-ressarc="${escapeHtml(r)}">${escapeHtml(r === RESSARCIMENTOS_OCORRENCIA[2] ? 'Devolução com NF' : r === 'Outro' ? 'Outro…' : r)}</button>`).join('')}</div>
+            ${oc.ressarcimento === 'Outro' ? `<label for="ocRessOutro">Qual?</label><input type="text" id="ocRessOutro" data-oc-campo="ressarcimentoOutro" value="${escapeHtml(oc.ressarcimentoOutro)}" autocomplete="off">` : ''}`;
+        } else {
+          let para = '';
+          try { para = oc.para != null ? oc.para : (localStorage.getItem(OC_PARA_LS_KEY) || ''); } catch (e) { }
+          oc.para = para;
+          const faltam = pendenciasOcorrencia();
+          const arquivos = arquivosOcorrencia();
+          const mb = arquivos.reduce((s, f) => s + (f.size || 0), 0) / 1048576;
+          const podeArquivos = arquivos.length > 0 && !!(navigator.canShare && navigator.canShare({ files: arquivos }));
+          corpo = `<label for="ocPara">Para (e-mail da assistente)</label>
+            <div class="ocLinhaCampo"><input type="email" id="ocPara" data-oc-campo="para" inputmode="email" autocomplete="off" value="${escapeHtml(para)}" placeholder="nome@cortag.com"><button type="button" class="restoreBtn compacto" data-oc-copiar="para">Copiar</button></div>
+            <label for="ocAssunto">Assunto</label>
+            <div class="ocLinhaCampo"><input type="text" id="ocAssunto" readonly value="${escapeHtml(assuntoOcorrencia())}"><button type="button" class="restoreBtn compacto" data-oc-copiar="assunto">Copiar</button></div>
+            <div class="ocTituloLinha"><span class="ocTitulo">Texto do e-mail</span><button type="button" class="restoreBtn compacto" data-oc-copiar="texto">Copiar texto</button></div>
+            <pre class="ocPrevia">${escapeHtml(textoOcorrencia())}</pre>
+            <div class="ocTitulo">Anexos · ${arquivos.length} arquivo${arquivos.length === 1 ? '' : 's'}${mb >= 0.1 ? ` · ${mb.toFixed(1).replace('.', ',')} MB` : ''}</div>
+            ${mb > 25 ? '<div class="ocAviso">Passa de 25 MB: o Gmail manda as fotos maiores como link do Google Drive.</div>' : ''}
+            ${faltam.length ? `<div class="ocAviso">Faltam: ${escapeHtml(faltam.join(', '))}. Dá pra enviar assim mesmo.</div>` : '<div class="ocAviso ok">✓ Checklist do Pós-Vendas completo</div>'}
+            ${arquivos.length && !podeArquivos ? '<div class="ocAviso info">Este navegador não compartilha arquivos: use "Abrir e-mail" e anexe as fotos pelo app de e-mail.</div>' : ''}
+            <div class="ocEnvio">
+              ${podeArquivos || !arquivos.length ? `<button type="button" class="ocEnviar" data-oc-enviar="share">${arquivos.length ? 'Enviar com as fotos (compartilhar › Gmail)' : 'Enviar (compartilhar › Gmail)'}</button>` : ''}
+              <button type="button" class="restoreBtn" data-oc-enviar="mailto">Só o texto (abrir e-mail)</button>
+            </div>
+            <p class="ocDica">No compartilhar, escolha o Gmail. O e-mail da assistente é copiado ao tocar: cole no "Para".</p>`;
+        }
+        document.getElementById('ocCorpo').innerHTML = corpo;
+        document.getElementById('ocCorpo').scrollTop = 0;
+        const voltar = passo > 1 ? '<button type="button" data-oc-passo="-1">Voltar</button>' : '<button type="button" data-oc-fechar>Fechar</button>';
+        const proximos = { 1: 'Próximo: tipo', 2: 'Próximo: itens e fotos', 3: 'Próximo: ressarcimento', 4: 'Revisar e enviar' };
+        document.getElementById('ocRodape').innerHTML = passo < OC_PASSOS
+          ? `${voltar}<button type="button" data-oc-passo="1"${passo === 2 && !oc.tipo ? ' disabled' : ''}>${proximos[passo]}</button>`
+          : voltar;
+      }
+      // Pergunta "Enviou?" quando o app volta (o e-mail abriu em outro app) - o
+      // compartilhar/mailto não diz se o e-mail saiu. Mesmo jeito do "Pedir
+      // aumento" (perguntarSeEnviouEmail).
+      let ocEnvioPendente = null;
+      function perguntarSeEnviouOcorrencia(registro) {
+        const pendente = { registro, saiu: false };
+        ocEnvioPendente = pendente;
+        const saiu = () => { pendente.saiu = true; };
+        const voltou = () => { if (pendente.saiu && document.visibilityState === 'visible') perguntar(); };
+        const aoMudar = () => { if (document.visibilityState === 'hidden') saiu(); else voltou(); };
+        const limpar = () => {
+          document.removeEventListener('visibilitychange', aoMudar);
+          window.removeEventListener('blur', saiu);
+          window.removeEventListener('focus', voltou);
+          clearTimeout(timer);
+        };
+        async function perguntar() {
+          limpar();
+          if (ocEnvioPendente !== pendente) return;
+          ocEnvioPendente = null;
+          const enviou = await askConfirm(`Você enviou a ocorrência da NF ${registro.nota_fiscal}?`, 'Enviei', { cancelarLabel: 'Ainda não' });
+          if (enviou) registrarOcorrenciaEnviada(registro);
+        }
+        document.addEventListener('visibilitychange', aoMudar);
+        window.addEventListener('blur', saiu);
+        window.addEventListener('focus', voltou);
+        const timer = setTimeout(() => { if (!pendente.saiu) perguntar(); }, 3000);
+        return () => { limpar(); if (ocEnvioPendente === pendente) ocEnvioPendente = null; };
+      }
+      async function registrarOcorrenciaEnviada(registro) {
+        gravarListaLS(OC_LOCAIS_LS_KEY, [...lerListaLS(OC_LOCAIS_LS_KEY), registro]);
+        await apagarRascunhoOcorrencia(registro.chave);
+        if (oc && oc.chave === registro.chave) { oc = null; fecharOcorrencia(); }
+        const { chave, ...payload } = registro;
+        const filaInfo = { tipo: 'ocorrencia', descricao: `Ocorrência NF ${registro.nota_fiscal}` };
+        const options = { method: 'POST', body: JSON.stringify(payload) };
+        try {
+          const r = await apiFetch('/api/ocorrencias', options, filaInfo);
+          showToast(r && r.__filaOffline ? 'Sem internet: a ocorrência fica salva e vai pro pedido quando a conexão voltar' : 'Ocorrência registrada no pedido');
+        } catch (e) {
+          if (e.recusado) {
+            // recusa de verdade: nada a reenviar, o selo local sai
+            gravarListaLS(OC_LOCAIS_LS_KEY, lerListaLS(OC_LOCAIS_LS_KEY).filter(o => o.id_envio !== registro.id_envio));
+            showToast('A ocorrência não foi registrada no pedido: ' + e.message, 'erro');
+          } else {
+            // servidor fora do ar/acordando (5xx): a fila tenta de novo com o mesmo id_envio
+            const fila = loadSyncQueue();
+            fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path: '/api/ocorrencias', options, criadoEm: Date.now(), ...filaInfo });
+            showToast(saveSyncQueueList(fila) ? 'Servidor indisponível: a ocorrência vai pro pedido sozinha depois' : 'A ocorrência não foi registrada no pedido: ' + e.message, 'erro');
+          }
+        }
+        if (clienteTabSelected && clienteTabView === 'pedidosoficiais') loadClienteDetailView();
+      }
+      function enviarOcorrencia(como) {
+        const registro = {
+          chave: oc.chave, cliente_id: oc.clienteId, nr_pedido: oc.nrPedido, nota_fiscal: String(oc.dados.nf), tipo: oc.tipo || 'outros',
+          resumo: (tipoOcorrencia(oc.tipo || 'outros').itens ? ocItensEscolhidos().map(it => `${it.afetada}× ${it.codigo} ${it.nome}`).join(' · ') : '').slice(0, 300),
+          // hora do toque + enviado_em (carimbado pelo apiFetch a cada envio): o
+          // servidor desconta a espera na fila (routes/ocorrencias.js)
+          id_envio: novoIdEnvio(), hora_toque: new Date().toISOString(), enviado_em: new Date().toISOString(),
+        };
+        const para = (oc.para || '').trim();
+        try { if (para) localStorage.setItem(OC_PARA_LS_KEY, para); } catch (e) { }
+        gravarRascunhoOcorrencia();
+        if (como === 'mailto') {
+          perguntarSeEnviouOcorrencia(registro);
+          const params = 'subject=' + encodeURIComponent(assuntoOcorrencia()) + '&body=' + encodeURIComponent(textoOcorrencia());
+          window.location.href = `mailto:${encodeURIComponent(para).replace(/%40/g, '@')}?${params}`;
+          return;
+        }
+        // o compartilhar só abre logo depois do toque: nada de await antes dele
+        if (para && navigator.clipboard) navigator.clipboard.writeText(para).catch(() => { });
+        const arquivos = arquivosOcorrencia();
+        const dados = { title: assuntoOcorrencia(), text: textoOcorrencia() };
+        if (arquivos.length) dados.files = arquivos;
+        if (!navigator.share) { showToast('Este navegador não abre o compartilhar — use "Só o texto"', 'erro'); return; }
+        const cancelar = perguntarSeEnviouOcorrencia(registro);
+        navigator.share(dados).then(() => { if (para) showToast('E-mail da assistente copiado: cole no "Para"'); })
+          .catch(e => {
+            cancelar();
+            if (e && e.name !== 'AbortError') showToast('Não foi possível compartilhar: ' + (e.message || e), 'erro');
+          });
+      }
+      function initOcorrencia() {
+        const modal = document.getElementById('ocorrenciaModal');
+        document.getElementById('ocFecharBtn').addEventListener('click', fecharOcorrencia);
+        const corpo = document.getElementById('ocCorpo');
+        corpo.addEventListener('input', (e) => {
+          if (!oc) return;
+          const el = e.target;
+          if (el.dataset.ocDado) { oc.dados[el.dataset.ocDado] = el.value; }
+          else if (el.dataset.ocCampo) { oc[el.dataset.ocCampo] = el.value; }
+          else if (el.dataset.ocQt) {
+            const it = (oc.itensPorNf[oc.dados.nf] || []).find(x => x.codigo === el.dataset.ocQt);
+            const n = Math.max(1, Math.floor(Number(el.value) || 1));
+            oc.itens[el.dataset.ocQt] = it && it.qt ? Math.min(n, it.qt) : n;
+          } else return;
+          agendarRascunhoOcorrencia();
+        });
+        corpo.addEventListener('change', (e) => {
+          if (!oc) return;
+          const el = e.target;
+          if (el.dataset.ocDado === 'nf') { oc.dados.nf = el.value; oc.itens = {}; renderOcorrencia(); }
+          else if (el.dataset.ocTipo != null) { oc.tipo = el.value; renderOcorrencia(); }
+          else if (el.dataset.ocItem) {
+            const it = (oc.itensPorNf[oc.dados.nf] || []).find(x => x.codigo === el.dataset.ocItem);
+            if (el.checked) oc.itens[el.dataset.ocItem] = 1; else delete oc.itens[el.dataset.ocItem];
+            renderOcorrencia();
+            if (el.checked && it) { const q = corpo.querySelector(`[data-oc-qt="${CSS.escape(it.codigo)}"]`); if (q) q.focus(); }
+          } else if (el.dataset.ocAnexo) {
+            const novos = [...(el.files || [])];
+            if (!novos.length) return;
+            oc.anexos[el.dataset.ocAnexo] = [...(oc.anexos[el.dataset.ocAnexo] || []), ...novos];
+            renderOcorrencia();
+          } else return;
+          agendarRascunhoOcorrencia();
+        });
+        corpo.addEventListener('click', async (e) => {
+          if (!oc) return;
+          const b = e.target.closest('button');
+          if (!b) return;
+          if (b.dataset.ocFrase) {
+            oc.descricao = (oc.descricao.trim() ? oc.descricao.trim() + '. ' : '') + b.dataset.ocFrase;
+            const ta = document.getElementById('ocDescricao');
+            if (ta) ta.value = oc.descricao;
+          } else if (b.dataset.ocCarta) { oc.cartaCorrecao = b.dataset.ocCarta; renderOcorrencia(); }
+          else if (b.dataset.ocRessarc) { oc.ressarcimento = b.dataset.ocRessarc; renderOcorrencia(); }
+          else if (b.dataset.ocTirar) { delete oc.anexos[b.dataset.ocTirar]; renderOcorrencia(); }
+          else if (b.dataset.ocCopiar) {
+            const v = b.dataset.ocCopiar;
+            copiarTexto(v === 'para' ? (oc.para || '').trim() : v === 'assunto' ? assuntoOcorrencia() : textoOcorrencia(), v === 'para' ? 'E-mail' : v === 'assunto' ? 'Assunto' : 'Texto');
+            return;
+          } else if (b.dataset.ocCopiarDados != null) {
+            copiarTexto(textoOcorrencia().split('\n\nTipo de ocorrência')[0].replace(/^.*\n\n/, ''), 'Dados');
+            return;
+          } else if (b.dataset.ocEnviar) { enviarOcorrencia(b.dataset.ocEnviar); return; }
+          else if (b.dataset.ocDescartar != null) {
+            if (!await askConfirm('Descartar esta ocorrência e as fotos dela?', 'Descartar', { perigo: true })) return;
+            const chave = oc.chave;
+            oc = null;
+            await apagarRascunhoOcorrencia(chave);
+            fecharOcorrencia();
+            return;
+          } else return;
+          agendarRascunhoOcorrencia();
+        });
+        document.getElementById('ocRodape').addEventListener('click', (e) => {
+          const b = e.target.closest('button');
+          if (!b || !oc) return;
+          if (b.dataset.ocFechar != null) { fecharOcorrencia(); return; }
+          const passo = Number(b.dataset.ocPasso);
+          if (!passo) return;
+          oc.passo = Math.min(OC_PASSOS, Math.max(1, oc.passo + passo));
+          renderOcorrencia();
+          agendarRascunhoOcorrencia();
+        });
+        modal.addEventListener('click', (e) => { if (e.target === modal) fecharOcorrencia(); });
+      }
+      // ---- Selo da ocorrência no card do pedido ----
+      // Servidor (resp.ocorrencias) + as enviadas daqui que ainda não voltaram
+      // dele (fila offline); a local sai quando o servidor devolve o mesmo id_envio.
+      function ocorrenciasDoCliente(clienteId, doServidor) {
+        const ids = new Set((doServidor || []).map(o => o.id_envio).filter(Boolean));
+        // a fila recusou o envio (cliente apagado, dado inválido): não vai mais chegar
+        for (const r of loadFilaRecusados()) {
+          if (r.path !== '/api/ocorrencias') continue;
+          try { ids.add(JSON.parse(r.options.body).id_envio); } catch (e) { }
+        }
+        const locais = lerListaLS(OC_LOCAIS_LS_KEY);
+        const pendentes = locais.filter(o => !ids.has(o.id_envio));
+        if (pendentes.length !== locais.length) gravarListaLS(OC_LOCAIS_LS_KEY, pendentes);
+        return [...(doServidor || []), ...pendentes.filter(o => String(o.cliente_id) === String(clienteId)).map(o => ({ ...o, pendente: true }))];
+      }
+      function renderSeloOcorrencias(lista) {
+        if (!lista || !lista.length) return '';
+        const dia = (v) => new Date(v).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        return lista.map(o => {
+          const tipo = (tipoOcorrencia(o.tipo) || { nome: 'Ocorrência' }).nome;
+          if (o.resolvida_em) {
+            return `<div class="hcOcorrencia resolvida">✓ Ocorrência resolvida em ${dia(o.resolvida_em)} · ${escapeHtml(tipo)} · NF ${escapeHtml(String(o.nota_fiscal))}${o.id ? ` <button type="button" class="ocLink" data-ocorr-reabrir="${o.id}">reabrir</button>` : ''}</div>`;
+          }
+          const quem = o.usuario ? ` por ${escapeHtml(String(o.usuario).split(' ')[0])}` : '';
+          const acao = o.id ? `<button type="button" class="restoreBtn compacto" data-ocorr-resolver="${o.id}">Marcar resolvida</button>` : '<span class="ocPendente">registrando…</span>';
+          return `<div class="hcOcorrencia">⚠ Ocorrência aberta · ${escapeHtml(tipo)} · NF ${escapeHtml(String(o.nota_fiscal))} · enviada ${dia(o.enviado_em)}${quem}${o.resumo ? `<br><small>${escapeHtml(o.resumo)}</small>` : ''}<br>${acao}</div>`;
+        }).join('');
+      }
+      function botaoOcorrencia(cliente, nrPedido) {
+        const rascunho = cliente && lerListaLS(OC_RASCUNHOS_LS_KEY).includes(`${cliente.id}|${nrPedido}`);
+        return `<button type="button" class="restoreBtn compacto hcOcorrBtn" data-ocorr-pedido="${escapeHtml(String(nrPedido))}">${rascunho ? 'Continuar ocorrência (rascunho)' : 'Abrir ocorrência'}</button>`;
+      }
+      function ligarOcorrenciasDoCard(content, cliente) {
+        content.querySelectorAll('[data-ocorr-pedido]').forEach(btn => btn.addEventListener('click', () =>
+          abrirOcorrencia(cliente, btn.dataset.ocorrPedido, ocPedidosDoCard.get(btn.dataset.ocorrPedido) || [])));
+        content.querySelectorAll('[data-ocorr-resolver], [data-ocorr-reabrir]').forEach(btn => btn.addEventListener('click', async () => {
+          const resolver = btn.dataset.ocorrResolver != null;
+          const id = resolver ? btn.dataset.ocorrResolver : btn.dataset.ocorrReabrir;
+          if (resolver && !await askConfirm('Marcar a ocorrência como resolvida?', 'Resolvida')) return;
+          btn.disabled = true;
+          try {
+            const r = await apiFetch(`/api/ocorrencias/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ resolvida: resolver }) },
+              { tipo: 'ocorrencia-resolver', descricao: resolver ? 'Ocorrência resolvida' : 'Ocorrência reaberta' });
+            if (r && r.__filaOffline) showToast('Sem internet: fica salvo e muda no pedido quando a conexão voltar');
+          } catch (e) { showToast(e.message, 'erro'); }
+          loadClienteDetailView();
+        }));
       }
       function renderRecuperarCard(item) {
         const dias = item.ultima_compra ? Math.floor((Date.now() - new Date(item.ultima_compra).getTime()) / 86400000) : null;
@@ -24570,6 +25594,12 @@
             const pendentesPorPedido = new Map((resp.pendentes_pagamento || []).map(p => [String(p.nr_pedido), p]));
             const bloqueadosPorPedido = new Map((resp.bloqueados || []).map(b => [String(b.nr_pedido), b]));
             const cancelamentosPorPedido = new Map(gruposAvisoCancelamento(resp.avisos_cancelamento).map(g => [g.nr_pedido, g]));
+            const ocorrenciasPorPedido = new Map();
+            for (const o of ocorrenciasDoCliente(cliente.id, resp.ocorrencias)) {
+              const nr = String(o.nr_pedido);
+              if (!ocorrenciasPorPedido.has(nr)) ocorrenciasPorPedido.set(nr, []);
+              ocorrenciasPorPedido.get(nr).push(o);
+            }
             const titulosPorNf = new Map();
             for (const t of (resp.titulos_avista || [])) {
               if (!titulosPorNf.has(String(t.titulo))) titulosPorNf.set(String(t.titulo), []);
@@ -24605,13 +25635,16 @@
               };
               const nfsNosPedidos = new Set(resp.itens.map(it => it.nota_fiscal).filter(Boolean).map(String));
               const soTitulos = [...titulosPorNf.entries()].filter(([nf]) => !nfsNosPedidos.has(nf));
+              ocPedidosDoCard.clear();
+              for (const [nr, its] of porPedido) ocPedidosDoCard.set(String(nr), its);
               content.innerHTML = soCancelamentos.map(renderPedidoSoCancelamento).join('') + soBloqueados.map(b => renderPedidoSoBloqueado(b, cancelamentosPorPedido.get(String(b.nr_pedido)))).join('')
                 + soTitulos.map(([nf, ts]) => renderTituloSoPendente(nf, ts)).join('')
                 + soPendentes.map(p => renderPedidoSoPendente(p, bloqueadosPorPedido.get(String(p.nr_pedido)), cancelamentosPorPedido.get(String(p.nr_pedido)))).join('') + Array.from(porPedido.entries())
                 .map(([nrPedido, itens]) => renderPedidoOficialGrupo(nrPedido, itens, pendentesPorPedido.get(String(nrPedido)), titulosDoPedido(itens), resp.saldo_minimo,
-                  bloqueadosPorPedido.get(String(nrPedido)), cancelamentosPorPedido.get(String(nrPedido))))
+                  bloqueadosPorPedido.get(String(nrPedido)), cancelamentosPorPedido.get(String(nrPedido)), ocorrenciasPorPedido.get(String(nrPedido)), cliente))
                 .join('');
               ligarMarcasCancelamento(content);
+              ligarOcorrenciasDoCard(content, cliente);
               content.querySelectorAll('[data-rastrear-nf]').forEach(btn => btn.addEventListener('click', () =>
                 abrirRastreio(cliente, btn.dataset.rastrearNf, btn.dataset.rastrearTransp)));
             }
@@ -28734,6 +29767,7 @@
         await desconectarSegundaTela(); // o tablet não fica mostrando o orçamento de quem saiu
         desconectarLeitorTablet(); // nem somando leituras num levantamento depois do logout
         if (leitorCelular) { const id = leitorCelular.id; sairDoModoLeitor(); apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { }); }
+        await apagarOcorrenciasDoAparelho(); // rascunhos com fotos de cliente não ficam no aparelho
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
@@ -28878,6 +29912,7 @@
           initSugestoesRecompra();
           initCampanhaDoItem();
           initRastreio();
+          initOcorrencia();
           initImportacaoUnificada();
           document.getElementById('exportCodigosFaltantesBtn').addEventListener('click', exportarProdutosSemCodigos);
           renderPromoProdutosList();

@@ -256,11 +256,21 @@ router.get('/:clienteId', async (req, res) => {
        ORDER BY acs.data_aviso DESC, acs.nr_pedido, acs.codigo_sku`,
       [codigoOficial]
     );
+    // Ocorrências abertas no Pós-Vendas (routes/ocorrencias.js) - as abertas e
+    // as resolvidas nos últimos 120 dias (o card mostra "resolvida em DD/MM")
+    const ocorrencias = await pool.query(
+      `/* pedidos-oficiais:ocorrencias */
+       SELECT o.id, o.nr_pedido, o.nota_fiscal, o.tipo, o.resumo, o.enviado_em, o.resolvida_em, o.id_envio, u.nome AS usuario
+       FROM ocorrencias_pos_venda o LEFT JOIN usuarios u ON u.id = o.usuario_id
+       WHERE o.cliente_id = $1 AND (o.resolvida_em IS NULL OR o.resolvida_em > now() - interval '120 days')
+       ORDER BY o.enviado_em DESC`,
+      [req.params.clienteId]
+    );
     // Mínimo do saldo em carteira antes do cancelamento - R$ 600 se a ficha de
     // CNPJ diz que o cliente é do Norte/Nordeste (ver lib/saldoMinimo.js).
     const ficha = await pool.query('SELECT uf FROM cliente_cnpj_ficha WHERE cliente_id = $1', [req.params.clienteId]);
     res.json({ vinculado: true, itens: result.rows, pendentes_pagamento: pendentes.rows, titulos_avista: titulos.rows,
-               bloqueados: bloqueados.rows, avisos_cancelamento: cancelamentos.rows.map(r => r.aviso), saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
+               bloqueados: bloqueados.rows, ocorrencias: ocorrencias.rows, avisos_cancelamento: cancelamentos.rows.map(r => r.aviso), saldo_minimo: saldoMinimoDaUf(ficha.rows[0]?.uf) });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar pedidos oficiais.' });
