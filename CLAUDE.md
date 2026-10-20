@@ -201,6 +201,9 @@ Cada mudança vira um PR próprio contra `main`, numa branch criada de `origin/m
 branch de trabalho já teve um PR mergeado, recriá-la de `origin/main` antes da próxima mudança):
 
 1. `node test/run_tests.js` e a checagem de sintaxe dos `<script>` — só segue se passar.
+   **Antes de todo PR grande** (pedido do usuário, 10/2026): rodar `/simplify` e depois `/code-review` no diff e
+   aplicar o que fizer sentido — a correção que vier deles entra no mesmo PR, não num PR de limpeza depois do merge.
+   Correção pontual de uma ou duas linhas pode pular.
 2. Commit, push, abrir PR **draft** contra `main` e `subscribe_pr_activity` pra acompanhar
    CI/comentários.
 3. Depois do merge, trazer a branch de trabalho de volta pra `origin/main`.
