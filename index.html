@@ -4797,14 +4797,8 @@
     }
 
     .ocParaAtalho button {
-      min-height: 36px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      border: 1px dashed var(--hairline);
+      border-style: dashed;
       background: transparent;
-      color: var(--ink);
-      font-size: 12px;
-      cursor: pointer;
     }
 
     .ocAnexos {
@@ -22796,6 +22790,12 @@
           };
         }
         if (!oc.notas.includes(oc.dados.nf)) oc.dados.nf = oc.notas[0];
+        // Vazio = sem valor: rascunho gravado antes do padrão do Pós-Vendas tem para: ''.
+        if (!oc.para) {
+          let ultimo = null;
+          try { ultimo = localStorage.getItem(OC_PARA_LS_KEY); } catch (e) {}
+          oc.para = ultimo || OC_POSVENDAS_EMAIL;
+        }
         document.getElementById('ocorrenciaModal').classList.remove('hidden');
         renderOcorrencia();
       }
@@ -22949,17 +22949,14 @@
             <div class="ocBotoes ocRessarc">${RESSARCIMENTOS_OCORRENCIA.map(r => `<button type="button" class="${oc.ressarcimento === r ? 'marcado' : ''}" data-oc-ressarc="${escapeHtml(r)}">${escapeHtml(r === RESSARCIMENTOS_OCORRENCIA[2] ? 'Devolução com NF' : r === 'Outro' ? 'Outro…' : r)}</button>`).join('')}</div>
             ${oc.ressarcimento === 'Outro' ? `<label for="ocRessOutro">Qual?</label><input type="text" id="ocRessOutro" data-oc-campo="ressarcimentoOutro" value="${escapeHtml(oc.ressarcimentoOutro)}" autocomplete="off">` : ''}`;
         } else {
-          let para = '';
-          // Vazio = sem valor: rascunho gravado antes do padrão do Pós-Vendas tem para: ''.
-          try { para = oc.para ? oc.para : (localStorage.getItem(OC_PARA_LS_KEY) || OC_POSVENDAS_EMAIL); } catch (e) { para = oc.para ? oc.para : OC_POSVENDAS_EMAIL; }
-          oc.para = para;
+          const para = oc.para || '';
           const faltam = pendenciasOcorrencia();
           const arquivos = arquivosOcorrencia();
           const mb = arquivos.reduce((s, f) => s + (f.size || 0), 0) / 1048576;
           const podeArquivos = arquivos.length > 0 && !!(navigator.canShare && navigator.canShare({ files: arquivos }));
           corpo = `<label for="ocPara">Para (e-mail da assistente)</label>
             <div class="ocLinhaCampo"><input type="email" id="ocPara" data-oc-campo="para" inputmode="email" autocomplete="off" value="${escapeHtml(para)}" placeholder="nome@cortag.com"><button type="button" class="restoreBtn compacto" data-oc-copiar="para">Copiar</button></div>
-            <div class="ocParaAtalho${ehParaPosVendas(para) ? ' hidden' : ''}" id="ocParaAtalho"><button type="button" data-oc-para="${OC_POSVENDAS_EMAIL}">Pós-Vendas · ${OC_POSVENDAS_EMAIL}</button></div>
+            <div class="ocFrases ocParaAtalho${ehParaPosVendas(para) ? ' hidden' : ''}" id="ocParaAtalho"><button type="button" data-oc-para="${OC_POSVENDAS_EMAIL}">Pós-Vendas · ${OC_POSVENDAS_EMAIL}</button></div>
             <label for="ocAssunto">Assunto</label>
             <div class="ocLinhaCampo"><input type="text" id="ocAssunto" readonly value="${escapeHtml(assuntoOcorrencia())}"><button type="button" class="restoreBtn compacto" data-oc-copiar="assunto">Copiar</button></div>
             <div class="ocTituloLinha"><span class="ocTitulo">Texto do e-mail</span><button type="button" class="restoreBtn compacto" data-oc-copiar="texto">Copiar texto</button></div>
