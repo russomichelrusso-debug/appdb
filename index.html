@@ -4788,6 +4788,25 @@
       font-size: 12px;
     }
 
+    .ocParaAtalho {
+      margin: -4px 0 12px;
+    }
+
+    #ocParaAtalho.hidden {
+      display: none;
+    }
+
+    .ocParaAtalho button {
+      min-height: 36px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px dashed var(--hairline);
+      background: transparent;
+      color: var(--ink);
+      font-size: 12px;
+      cursor: pointer;
+    }
+
     .ocAnexos {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -22680,6 +22699,7 @@
       // Devoluções, Divergências/Extravios, Ocorrências). Vem preenchido quando o
       // vendedor ainda não usou outro e fica como atalho embaixo do campo.
       const OC_POSVENDAS_EMAIL = 'posvendas03@cortag.com';
+      function ehParaPosVendas(para) { return String(para || '').trim().toLowerCase() === OC_POSVENDAS_EMAIL; }
       const OC_RASCUNHOS_LS_KEY = 'cortagOcorrenciaRascunhos_v1'; // chaves dos rascunhos guardados (rótulo do botão sem abrir o IndexedDB)
       const OC_LOCAIS_LS_KEY = 'cortagOcorrenciasLocais_v1'; // enviadas daqui que o servidor ainda não devolveu (fila offline)
       const OC_PASSOS = 5; // 4 etapas + revisão
@@ -22930,7 +22950,8 @@
             ${oc.ressarcimento === 'Outro' ? `<label for="ocRessOutro">Qual?</label><input type="text" id="ocRessOutro" data-oc-campo="ressarcimentoOutro" value="${escapeHtml(oc.ressarcimentoOutro)}" autocomplete="off">` : ''}`;
         } else {
           let para = '';
-          try { para = oc.para != null ? oc.para : (localStorage.getItem(OC_PARA_LS_KEY) || OC_POSVENDAS_EMAIL); } catch (e) { para = oc.para != null ? oc.para : OC_POSVENDAS_EMAIL; }
+          // Vazio = sem valor: rascunho gravado antes do padrão do Pós-Vendas tem para: ''.
+          try { para = oc.para ? oc.para : (localStorage.getItem(OC_PARA_LS_KEY) || OC_POSVENDAS_EMAIL); } catch (e) { para = oc.para ? oc.para : OC_POSVENDAS_EMAIL; }
           oc.para = para;
           const faltam = pendenciasOcorrencia();
           const arquivos = arquivosOcorrencia();
@@ -22938,7 +22959,7 @@
           const podeArquivos = arquivos.length > 0 && !!(navigator.canShare && navigator.canShare({ files: arquivos }));
           corpo = `<label for="ocPara">Para (e-mail da assistente)</label>
             <div class="ocLinhaCampo"><input type="email" id="ocPara" data-oc-campo="para" inputmode="email" autocomplete="off" value="${escapeHtml(para)}" placeholder="nome@cortag.com"><button type="button" class="restoreBtn compacto" data-oc-copiar="para">Copiar</button></div>
-            ${para.trim().toLowerCase() !== OC_POSVENDAS_EMAIL ? `<div class="ocFrases"><button type="button" data-oc-para="${OC_POSVENDAS_EMAIL}">Pós-Vendas · ${OC_POSVENDAS_EMAIL}</button></div>` : ''}
+            <div class="ocParaAtalho${ehParaPosVendas(para) ? ' hidden' : ''}" id="ocParaAtalho"><button type="button" data-oc-para="${OC_POSVENDAS_EMAIL}">Pós-Vendas · ${OC_POSVENDAS_EMAIL}</button></div>
             <label for="ocAssunto">Assunto</label>
             <div class="ocLinhaCampo"><input type="text" id="ocAssunto" readonly value="${escapeHtml(assuntoOcorrencia())}"><button type="button" class="restoreBtn compacto" data-oc-copiar="assunto">Copiar</button></div>
             <div class="ocTituloLinha"><span class="ocTitulo">Texto do e-mail</span><button type="button" class="restoreBtn compacto" data-oc-copiar="texto">Copiar texto</button></div>
@@ -23052,7 +23073,13 @@
           if (!oc) return;
           const el = e.target;
           if (el.dataset.ocDado) { oc.dados[el.dataset.ocDado] = el.value; }
-          else if (el.dataset.ocCampo) { oc[el.dataset.ocCampo] = el.value; }
+          else if (el.dataset.ocCampo) {
+            oc[el.dataset.ocCampo] = el.value;
+            if (el.dataset.ocCampo === 'para') {
+              const atalho = document.getElementById('ocParaAtalho');
+              if (atalho) atalho.classList.toggle('hidden', ehParaPosVendas(el.value));
+            }
+          }
           else if (el.dataset.ocQt) {
             const it = (oc.itensPorNf[oc.dados.nf] || []).find(x => x.codigo === el.dataset.ocQt);
             const n = Math.max(1, Math.floor(Number(el.value) || 1));
