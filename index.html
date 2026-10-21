@@ -4383,6 +4383,7 @@
       font-size: 13px;
       width: auto;
       flex: 1;
+      min-width: 0; /* nome comprido (subfamília) não empurra a qtd. mín. pra fora */
     }
 
     .basketItemRow input[type=text] {
@@ -14184,7 +14185,7 @@
       //   basis: "self" | "combo",
       //   selfMetric: "qty" | "value" | "skus",  // usado só quando basis === "self"; "skus" = nº de itens diferentes
       //   tiers: [{min:40, pct:5}, ...],          // usado só quando basis === "self"
-      //   basketItems: [{type:"category"|"product", value:"...", minQty:1}, ...], // usado só quando basis === "combo"
+      //   basketItems: [{type:"category"|"subfamilia"|"product", value:"...", minQty:1}, ...], // usado só quando basis === "combo"
       //   comboPct: 15,                           // usado só quando basis === "combo"
       //   stacks: true, // true = soma com desconto manual do item; false = usa o maior dos dois
       //   canais: ["VAREJO", ...], // canais em que vale; regra sem o campo (as criadas antes) = só Varejo
@@ -14528,7 +14529,8 @@
       function faixasDaCampanhaTexto(r) {
         if (r.basis === 'combo') {
           const itens = (r.basketItems || []).map(i => {
-            const nome = i.type === 'product' ? (productByCod(i.value) || {}).n || `cód. ${i.value}` : i.value;
+            const nome = i.type === 'product' ? (productByCod(i.value) || {}).n || `cód. ${i.value}`
+              : i.type === 'subfamilia' ? nomeDaSubfamilia(i.value) : i.value;
             return `${nome}${(Number(i.minQty) || 1) > 1 ? ` (mín. ${i.minQty})` : ''}`;
           });
           const modo = r.basketMode === 'atLeast' ? `pelo menos ${r.basketMinCount || itens.length} de: ` : '';
@@ -28918,13 +28920,18 @@
       // lista, no select do alvo (campanha e desconto por classificatório). A da regra
       // aberta fica mesmo se sumiu do catálogo; catálogo do aparelho que não veio do
       // servidor (planilha local, precos.json) não tem subfamília: o select diz isso.
-      function preencherSelectSubfamilias(selectId, rule) {
+      // curto: rótulo sem a família ("Cabo plástico"), pra caber na linha da cesta
+      function opcoesSubfamilias(atual, curto) {
         const subs = new Map();
         for (const p of DB.products || []) if (p.subfamilia && !subs.has(p.subfamilia.codigo)) subs.set(p.subfamilia.codigo, p.subfamilia);
-        if (rule && rule.targetType === 'subfamilia' && !subs.has(rule.targetValue)) subs.set(rule.targetValue, { codigo: rule.targetValue, nome: rule.targetValue, ordem: -1 });
-        document.getElementById(selectId).innerHTML = subs.size
-          ? [...subs.values()].sort((a, b) => a.ordem - b.ordem).map(sf => `<option value="${escapeHtml(sf.codigo)}">${escapeHtml(sf.nome)}</option>`).join('')
+        if (atual && !subs.has(atual)) subs.set(atual, { codigo: atual, nome: atual, ordem: -1 });
+        return subs.size
+          ? [...subs.values()].sort((a, b) => a.ordem - b.ordem)
+            .map(sf => `<option value="${escapeHtml(sf.codigo)}"${sf.codigo === atual ? ' selected' : ''}>${escapeHtml((curto && sf.curto) || sf.nome)}</option>`).join('')
           : '<option value="">Sem subfamílias no catálogo deste aparelho (só no baixado do servidor)</option>';
+      }
+      function preencherSelectSubfamilias(selectId, rule) {
+        document.getElementById(selectId).innerHTML = opcoesSubfamilias(rule && rule.targetType === 'subfamilia' ? rule.targetValue : '');
       }
       function setTargetType(type) {
         document.getElementById('targetTypeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === type));
@@ -28950,6 +28957,7 @@
       <div class="biTop">
         <select data-basket-type="${i}">
           <option value="category"${it.type === 'category' ? ' selected' : ''}>Categoria</option>
+          <option value="subfamilia"${it.type === 'subfamilia' ? ' selected' : ''}>Subfamília</option>
           <option value="product"${it.type === 'product' ? ' selected' : ''}>Produto (código)</option>
         </select>
         <button type="button" class="rmBasket" data-rm-basket="${i}" aria-label="Remover item">&times;</button>
@@ -28957,6 +28965,7 @@
       <div class="biBottom">
         ${it.type === 'product'
             ? `<input type="text" data-basket-prod="${i}" placeholder="código do produto" value="${escapeHtml(it.value || '')}">`
+            : it.type === 'subfamilia' ? `<select data-basket-sub="${i}">${opcoesSubfamilias(it.value, true)}</select>`
             : `<select data-basket-cat="${i}">${DB.familias.map(c => `<option value="${escapeHtml(c)}"${it.value === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`
           }
         <span class="biQtyLbl">qtd. mín.</span>
@@ -28992,6 +29001,7 @@
           const type = wrap.querySelector(`[data-basket-type="${i}"]`).value;
           const value = type === 'product'
             ? (wrap.querySelector(`[data-basket-prod="${i}"]`)?.value || '').trim()
+            : type === 'subfamilia' ? (wrap.querySelector(`[data-basket-sub="${i}"]`)?.value || '')
             : (wrap.querySelector(`[data-basket-cat="${i}"]`)?.value || '');
           const minQty = parseInt(wrap.querySelector(`[data-basket-minqty="${i}"]`).value, 10) || 1;
           return { type, value, minQty };

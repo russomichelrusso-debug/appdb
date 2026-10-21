@@ -4297,6 +4297,14 @@ async function main() {
           && Object.keys(pouco).length === 0
           && campanhasDoItem([regraSub], rows[1].p, ctx(), false).length === 1 && campanhasDoItem([regraSub], rows[2].p, ctx(), false).length === 0,
           'campanha: alvo subfamília soma só os produtos dela (outra subfamília da mesma família fica de fora)');
+        // cesta com item "subfamília": 12 emborrachadas completam; plástico não conta
+        const cestaSub = { id: 'cs', name: 'Cesta colher + desemp.', active: true, basis: 'combo', targetType: 'category', targetValue: 'Desemp',
+          basketItems: [{ type: 'subfamilia', value: 'S265', minQty: 12 }], comboPct: 5 };
+        const desemp = { p: { c: '70001', n: '70001', familia: 'Desemp' }, it: { qty: 1 }, lineTotal: 20 };
+        const comCesta = avaliar([cestaSub], rows.concat(desemp)).bonuses;
+        const semCesta = avaliar([cestaSub], [colher('60160', 'S265', 6), colher('62535', 'S42', 24), desemp]).bonuses;
+        assert(bestBonusForProduct(comCesta, desemp.p) && bestBonusForProduct(comCesta, desemp.p).pct === 5 && Object.keys(semCesta).length === 0,
+          'campanha: cesta com item de subfamília completa só com os produtos dela');
       }
       // 1b) barra do orçamento: próxima faixa da campanha mais perto (só com item do
       // alvo no orçamento, faltando até metade da faixa; cesta fica de fora)

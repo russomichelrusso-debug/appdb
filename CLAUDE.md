@@ -1219,8 +1219,9 @@ Supabase, sem PR — não é mudança de código.
   subfamília juntas e vale na fita do card, na campanha aberta da aba Produtos e no texto de condições. O promocional
   P/P1/P2 do Painel herda a subfamília do base (`mergeProdutosPromocionais`). **Desconto por classificatório** (pedido
   seguinte): o mesmo alvo "Subfamília" no formulário (`classiTargetSub`; o `autoFillClassificatorioDiscount` já passa por
-  `scopeMatchesProduct`); os dois formulários enchem o select por `preencherSelectSubfamilias`. A cesta continua só com
-  categoria/produto.
+  `scopeMatchesProduct`); os dois formulários enchem o select por `preencherSelectSubfamilias`. **Cesta** (pedido seguinte):
+  item da cesta do tipo "Subfamília" (`data-basket-sub`, rótulo curto "Cabo plástico" pra caber na linha; `scopeTotals` já
+  soma pela subfamília; o texto da campanha usa `nomeDaSubfamilia`).
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
   num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos
