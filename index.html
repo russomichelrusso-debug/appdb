@@ -13006,6 +13006,7 @@
         if (sel && sel.value !== canal) sel.value = canal;
         state.channelDiscount = classiPadraoDoCanal(canal);
         renderChannelSeg();
+        state.cart.forEach(i => autoFillClassificatorioDiscount(i.cod));
         renderResults();
         renderPriceList(); // preço e fita de campanha mudam com o canal
         renderLevList();
@@ -13016,6 +13017,7 @@
         function setActive(v) {
           state.channelDiscount = v;
           marcarClassiAtivo();
+          state.cart.forEach(i => autoFillClassificatorioDiscount(i.cod)); // desconto por classificatório segue o botão
           renderResults();
           renderPriceList(); // preço e fita de campanha mudam com o classificatório
           renderLevList();
@@ -15070,7 +15072,10 @@
           && !state.classiAutoFilledCods.has(cod);
         if (jaTemValorManual) return;
 
-        const tipo = state.levCliente && state.levCliente.classificatorio_tipo;
+        // vale o classificatório escolhido no orçamento (o botão); o do cadastro só
+        // sem botão de faixa marcado. Antes valia só o do cadastro: cliente sem
+        // classificatório nunca ganhava o desconto, qualquer que fosse o botão (10/2026)
+        const tipo = classiTiposDoOrcamento()[0] || (state.levCliente && state.levCliente.classificatorio_tipo);
         let pctEncontrado = 0;
         if (tipo) {
           for (const regra of (state.classiDiscountRules || [])) {

@@ -378,6 +378,10 @@ Supabase, sem PR — não é mudança de código.
   - O orçamento guardado no aparelho leva o contexto junto (`cortagCartContexto_v1`, mesmo formato do
     `contexto` do pedido) e volta na abertura; o `cortagCart_v1` continua só a lista de itens (a Curva
     ABC lê). As parcelas disponíveis contam o total **sem** o desconto do próprio prazo.
+  - **Desconto por classificatório** (Painel, chave `descontos_por_classificatorio_categoria`: Niveladores, Passa fio,
+    Desempenadeiras, Juntas…; `autoFillClassificatorioDiscount`) segue o **botão de classificatório do orçamento**, e o do
+    cadastro só sem botão de faixa marcado (10/2026, relato do usuário: cliente sem classificatório nunca ganhava o desconto,
+    qualquer botão que escolhesse). Trocar o botão ou o canal refaz o desconto dos itens do orçamento.
   - Fora de propósito: Home Center Master e Trading ("a consultar"/lista específica — o vendedor
     usa o "Desc. adicional"); Institucional, Construtora e Atacarejo não têm faixa.
 
