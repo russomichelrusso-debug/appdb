@@ -292,6 +292,10 @@
       border-radius: 8px; cursor: pointer; font: inherit; color: inherit; text-align: left;
     }
     .catBar:last-child { margin-bottom: 0; }
+    /* subfamílias de marketing embaixo da categoria aberta (routes/lib/subfamilias.js) */
+    .catBar.catSub { padding-left: 10px; }
+    .catBar.catSub .name { width: 116px; font-size: 11px; font-weight: 500; color: var(--gray); }
+    .catBar.catSub.active .name { color: var(--ink); font-weight: 700; }
     .catBarBtn:hover { background: var(--fill); }
     .catBarBtn.active { background: var(--accent-bg); box-shadow: inset 0 0 0 1.5px rgba(204, 9, 53, .35); }
     .catBar .name { width: 108px; font-size: 11.5px; font-weight: 600; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -770,6 +774,7 @@
             <button data-classe="C">C</button>
           </div>
           <select id="categoriaFiltro"><option value="">Todas as categorias</option></select>
+          <select id="subfamiliaFiltro" class="hidden"><option value="">Todas as subfamílias</option></select>
           <input type="text" id="produtoBusca" placeholder="Nome, código ou medida (ex.: serra copo 50)…">
         </div>
         <div class="prodCount" id="prodFiltroCount"></div>
@@ -1005,6 +1010,9 @@
         codigo_sku: r.codigo_sku,
         produto: r.produto || r.codigo_sku,
         categoria: r.categoria || 'Sem categoria',
+        // subfamília de marketing (routes/lib/subfamilias.js): só nos produtos que a têm
+        subfamilia: r.subfamilia ? (r.subfamilia.curto || r.subfamilia.nome) : '',
+        subfamiliaOrdem: r.subfamilia ? Number(r.subfamilia.ordem) || 0 : Infinity,
         num_pedidos: Number(r.num_pedidos) || 0,
         quantidade_total: Number(r.quantidade_total) || 0,
         faturamento_total: r.faturamento_total != null ? Number(r.faturamento_total) : 0,
@@ -1040,7 +1048,7 @@
       modo: 'produtos',
       campo: 'faturamento_total', dias: null, raw: [], carregando: false,
       classificados: [], // cache da última classificação (KPIs/gráfico/categorias usam sempre a lista inteira)
-      filtroClasse: '', filtroCategoria: '', busca: '',
+      filtroClasse: '', filtroCategoria: '', filtroSubfamilia: '', busca: '',
       clienteId: null, clienteNome: '',
     };
 
@@ -1116,7 +1124,7 @@
           state.modo = btn.dataset.modo;
           // troca de modo reseta os filtros da lista - "Classe B" ou uma busca
           // de produto não fazem sentido carregados sozinhos pro outro modo.
-          state.filtroClasse = ''; state.filtroCategoria = ''; state.busca = '';
+          state.filtroClasse = ''; state.filtroCategoria = ''; state.filtroSubfamilia = ''; state.busca = '';
           document.querySelectorAll('#classeSeg button').forEach(b => b.classList.remove('active'));
           document.querySelector('#classeSeg button[data-classe=""]').classList.add('active');
           document.getElementById('produtoBusca').value = '';
@@ -1180,6 +1188,14 @@
       });
       document.getElementById('categoriaFiltro').addEventListener('change', (e) => {
         state.filtroCategoria = e.target.value;
+        state.filtroSubfamilia = '';
+        renderCategorias(state.classificados);
+        renderSubfamiliaFiltro(state.classificados);
+        renderProdutos();
+      });
+      document.getElementById('subfamiliaFiltro').addEventListener('change', (e) => {
+        state.filtroSubfamilia = e.target.value;
+        renderCategorias(state.classificados);
         renderProdutos();
       });
       let buscaDebounce;
@@ -1748,6 +1764,7 @@
       renderKPIs(state.classificados);
       renderChart(state.classificados);
       renderCategoriaFiltroOptions(state.classificados);
+      renderSubfamiliaFiltro(state.classificados);
       renderCategorias(state.classificados);
       renderProdutos();
     }
@@ -1759,6 +1776,7 @@
       return classificados.filter(p => {
         if (state.filtroClasse && p.classe !== state.filtroClasse) return false;
         if (state.filtroCategoria && p.categoria !== state.filtroCategoria) return false;
+        if (state.filtroSubfamilia && (p.subfamilia || 'Outros') !== state.filtroSubfamilia) return false;
         if (state.busca && !bateBusca(p.produto + ' ' + p.codigo_sku, state.busca)) return false;
         return true;
       });
@@ -1810,6 +1828,34 @@
       if (categorias.includes(atual)) select.value = atual;
       else if (categorias.includes(state.filtroCategoria)) select.value = state.filtroCategoria;
       else { select.value = ''; state.filtroCategoria = ''; }
+    }
+
+    // Subfamílias da categoria escolhida, na ordem da lista de subfamílias, com o
+    // valor somado; produto sem subfamília numa categoria que tem vira "Outros".
+    // Menos de 2 = categoria sem subfamília (lista vazia).
+    function subfamiliasDaCategoria(classificados, categoria) {
+      if (!categoria) return [];
+      const m = new Map();
+      for (const p of classificados) {
+        if (p.categoria !== categoria) continue;
+        const nome = p.subfamilia || 'Outros';
+        const atual = m.get(nome) || { nome, ordem: p.subfamilia ? p.subfamiliaOrdem : Infinity, valor: 0, n: 0, porClasse: { A: 0, B: 0, C: 0 } };
+        atual.valor += p[state.campo];
+        atual.porClasse[p.classe] += p[state.campo];
+        atual.n += 1;
+        m.set(nome, atual);
+      }
+      const lista = [...m.values()].sort((a, b) => a.ordem - b.ordem);
+      return lista.length > 1 ? lista : [];
+    }
+    function renderSubfamiliaFiltro(classificados) {
+      const select = document.getElementById('subfamiliaFiltro');
+      const subs = subfamiliasDaCategoria(classificados, state.filtroCategoria);
+      select.classList.toggle('hidden', !subs.length);
+      select.innerHTML = '<option value="">Todas as subfamílias</option>' +
+        subs.map(s => `<option value="${escapeHtml(s.nome)}">${escapeHtml(s.nome)}</option>`).join('');
+      if (!subs.some(s => s.nome === state.filtroSubfamilia)) state.filtroSubfamilia = '';
+      select.value = state.filtroSubfamilia;
     }
 
     // Topo da Curva ABC: o cartão escuro ("N produtos fazem 80% do faturamento",
@@ -1917,6 +1963,7 @@
       const partesFiltro = [];
       if (state.filtroClasse) partesFiltro.push(`Classe ${state.filtroClasse}`);
       if (state.filtroCategoria) partesFiltro.push(escapeHtml(state.filtroCategoria));
+      if (state.filtroSubfamilia) partesFiltro.push(escapeHtml(state.filtroSubfamilia));
       if (state.busca) partesFiltro.push(`"${escapeHtml(state.busca)}"`);
       document.getElementById('prodFiltroCount').textContent = partesFiltro.length
         ? `${filtrados.length} de ${total} produtos — ${partesFiltro.join(' · ')}`
@@ -1929,7 +1976,7 @@
       const linhas = filtrados.map(p => `
         <tr>
           <td><span class="badge ${p.classe.toLowerCase()}">${p.classe}</span></td>
-          <td><span class="prodName">${escapeHtml(p.produto)}</span><span class="prodCat">${escapeHtml(p.codigo_sku)} · ${escapeHtml(p.categoria)}</span></td>
+          <td><span class="prodName">${escapeHtml(p.produto)}</span><span class="prodCat">${escapeHtml(p.codigo_sku)} · ${escapeHtml(p.categoria)}${p.subfamilia ? ` · ${escapeHtml(p.subfamilia)}` : ''}</span></td>
           <td class="num">${formatValor(p[state.campo])}<span class="prodValPct">${p.pct < 0.1 ? '<0,1' : p.pct.toFixed(1).replace('.', ',')}% do total</span></td>
           <td class="num">${p.cumulativoPct.toFixed(0)}%<span class="acumBarra"><i class="${p.classe.toLowerCase()}" style="width:${p.cumulativoPct.toFixed(1)}%;"></i></span></td>
           <td class="num"><button type="button" class="addCartBtn" data-add-cod="${escapeHtml(p.codigo_sku)}" data-add-nome="${escapeHtml(p.produto)}" aria-label="Adicionar ao orçamento" title="Adicionar ao orçamento"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button></td>
@@ -1957,18 +2004,37 @@
         const w = v.porClasse[k] / max * 100;
         return w > 0 ? `<div class="fillbar f${k}" style="width:${w.toFixed(2)}%" title="Classe ${k}: ${escapeHtml(formatValor(v.porClasse[k]))}"></div>` : '';
       }).join('');
+      // categoria aberta com subfamílias: uma barra por subfamília logo abaixo dela
+      const subs = subfamiliasDaCategoria(classificados, state.filtroCategoria);
+      const barrasSub = subs.map(s => `
+        <button type="button" class="catBar catBarBtn catSub${state.filtroSubfamilia === s.nome ? ' active' : ''}" data-subfamilia="${escapeHtml(s.nome)}">
+          <span class="name" title="${escapeHtml(s.nome)}">${escapeHtml(s.nome)}</span>
+          <div class="track">${fatias(s)}</div>
+          <span class="amt">${formatValorCompact(s.valor)}</span>
+        </button>`).join('');
       document.getElementById('catHost').innerHTML = lista.map(([nome, v]) => `
-        <button type="button" class="catBar catBarBtn${state.filtroCategoria === nome ? ' active' : ''}" data-categoria="${escapeHtml(nome)}">
+        <button type="button" class="catBar catBarBtn${state.filtroCategoria === nome && !state.filtroSubfamilia ? ' active' : ''}" data-categoria="${escapeHtml(nome)}">
           <span class="name" title="${escapeHtml(nome)}">${escapeHtml(String(nome).replace(/^\d+\s*-\s*/, ''))}</span>
           <div class="track">${fatias(v)}</div>
           <span class="amt">${formatValorCompact(v.valor)}</span>
-        </button>`).join('');
-      document.querySelectorAll('.catBarBtn').forEach(btn => {
+        </button>${state.filtroCategoria === nome ? barrasSub : ''}`).join('');
+      document.querySelectorAll('.catBarBtn[data-categoria]').forEach(btn => {
         btn.addEventListener('click', () => {
           const nome = btn.dataset.categoria;
-          state.filtroCategoria = state.filtroCategoria === nome ? '' : nome;
+          state.filtroCategoria = state.filtroCategoria === nome && !state.filtroSubfamilia ? '' : nome;
+          state.filtroSubfamilia = '';
           document.getElementById('categoriaFiltro').value = state.filtroCategoria;
+          renderSubfamiliaFiltro(state.classificados);
           renderCategorias(state.classificados); // pra realçar/desrealçar o botão clicado
+          renderProdutos();
+        });
+      });
+      document.querySelectorAll('.catBarBtn[data-subfamilia]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const nome = btn.dataset.subfamilia;
+          state.filtroSubfamilia = state.filtroSubfamilia === nome ? '' : nome;
+          document.getElementById('subfamiliaFiltro').value = state.filtroSubfamilia;
+          renderCategorias(state.classificados);
           renderProdutos();
         });
       });

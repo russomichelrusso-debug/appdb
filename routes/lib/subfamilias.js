@@ -38,4 +38,12 @@ function subfamiliaDoProduto(codigo) {
   return (m && POR_CODIGO.get(m[1])) || null;
 }
 
-module.exports = { SUBFAMILIAS, subfamiliaDoProduto };
+// linhas com codigo_sku (Curva ABC) -> as mesmas, com `subfamilia` nas que têm
+function comSubfamilia(linhas) {
+  return linhas.map(l => {
+    const sub = subfamiliaDoProduto(l.codigo_sku);
+    return sub ? { ...l, subfamilia: sub } : l;
+  });
+}
+
+module.exports = { SUBFAMILIAS, subfamiliaDoProduto, comSubfamilia };

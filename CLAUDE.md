@@ -1210,7 +1210,10 @@ Supabase, sem PR — não é mudança de código.
   Catálogo mostra, dentro da família com 2+ subfamílias, chips "Todas · N / Cabo plástico · 8…" (`subfamiliasDaFamilia`,
   `catalogoSubfamilia`; sem subfamília = "Outros"); a vitrine abre só a subfamília escolhida. Nova planilha DE × PARA =
   editar a lista no arquivo. Em 10/2026, das 54 colheres da planilha, 31 estavam na Lista de Preços (as "- EXP" e as
-  forjadas não). Curva ABC e campanhas ainda não usam a subfamília.
+  forjadas não). **Curva ABC** (pedido seguinte do usuário): `produtos-abc-geral` e `clientes/:id/produtos-abc` mandam a mesma
+  `subfamilia` (`comSubfamilia`); em `curva-abc.html`, com uma categoria escolhida que tem subfamílias, aparece o filtro "Todas as
+  subfamílias" ao lado do de categoria e, no cartão "Por categoria", uma barra por subfamília embaixo dela (tocar filtra a lista;
+  `subfamiliasDaCategoria`). Campanhas ainda não usam a subfamília.
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
   num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos

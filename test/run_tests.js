@@ -2668,6 +2668,20 @@ async function main() {
     `produto fora da tabela de preços aparece com a Descrição do relatório (histórico e curva ABC): ${JSON.stringify((histDesc.body || []).filter(r => r.codigo_sku === '99110'))}`
   );
 
+  // 24b) Curva ABC leva a subfamília de marketing (routes/lib/subfamilias.js) do produto
+  mockDb.__seed({ clientes: [{ id: 9405, nome: 'LOJA COLHER', codigo_oficial: 'COD9405' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'SF9405', codigo_sku: '62535', cliente_codigo_oficial: 'COD9405', cliente_nome: 'LOJA COLHER', status: 'faturado',
+      valor: 300, quantidade: 12, data_implantacao: '2025-10-01', data_faturamento: '2025-10-03' }],
+  });
+  const abcSub = await req('GET', '/api/produtos-abc-geral');
+  const abcSubCli = await req('GET', '/api/clientes/9405/produtos-abc');
+  const colherAbc = (abcSub.body || []).find(r => r.codigo_sku === '62535');
+  assert(res.status < 300 && colherAbc && colherAbc.subfamilia && colherAbc.subfamilia.curto === 'Cabo plástico'
+    && (abcSubCli.body || []).some(r => r.codigo_sku === '62535' && r.subfamilia && r.subfamilia.codigo === 'S42')
+    && !(abcSub.body || []).find(r => r.codigo_sku === '99110').subfamilia,
+    `curva ABC (geral e do cliente) leva a subfamília de marketing: ${JSON.stringify(colherAbc)}`);
+
   // 25) Aba de pedidos à vista aguardando pagamento: a importação troca a
   // lista inteira (o pedido que saiu da aba foi pago), relatório sem a aba
   // não mexe, e o histórico do cliente devolve os pendentes dele - também
