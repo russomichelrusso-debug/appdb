@@ -27653,7 +27653,7 @@
       function subfamiliasDaFamilia(fam) {
         const m = new Map();
         for (const p of fam.produtos) {
-          const s = p.subfamilia || { codigo: '', curto: 'Outros', ordem: Infinity };
+          const s = p.subfamilia || { codigo: '_outros', curto: 'Outros', ordem: Infinity };
           if (!m.has(s.codigo)) m.set(s.codigo, { codigo: s.codigo, nome: s.curto || s.nome, ordem: s.ordem, produtos: [] });
           m.get(s.codigo).produtos.push(p);
         }
@@ -28993,8 +28993,10 @@
         const subs = new Map();
         for (const p of DB.products || []) if (p.subfamilia && !subs.has(p.subfamilia.codigo)) subs.set(p.subfamilia.codigo, p.subfamilia);
         if (rule && rule.targetType === 'subfamilia' && !subs.has(rule.targetValue)) subs.set(rule.targetValue, { codigo: rule.targetValue, nome: rule.targetValue, ordem: -1 });
-        document.getElementById('promoTargetSub').innerHTML = [...subs.values()].sort((a, b) => a.ordem - b.ordem)
-          .map(sf => `<option value="${escapeHtml(sf.codigo)}">${escapeHtml(sf.nome)}</option>`).join('');
+        // catálogo do aparelho que não veio do servidor (planilha local, precos.json) não tem subfamília
+        document.getElementById('promoTargetSub').innerHTML = subs.size
+          ? [...subs.values()].sort((a, b) => a.ordem - b.ordem).map(sf => `<option value="${escapeHtml(sf.codigo)}">${escapeHtml(sf.nome)}</option>`).join('')
+          : '<option value="">Sem subfamílias no catálogo deste aparelho (só no baixado do servidor)</option>';
         if (targetType === 'category') {
           document.getElementById('promoTargetCat').value = rule ? rule.targetValue : (DB.familias[0] || '');
         } else if (targetType === 'subfamilia') {
