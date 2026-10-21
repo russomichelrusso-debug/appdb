@@ -4283,6 +4283,21 @@ async function main() {
           && nomes(false, { canal: 'ATACADO' }) === '' && campanhasDoItem(regras, { c: '70001', n: '70001', familia: 'Brocas' }, ctx(), false).length === 0,
           'campanha: fita do card lista as campanhas do item no contexto (sem pedido todo, exclusão, inativa; Preço Fixo só com soNoPrecoFixo), maior % primeiro');
       }
+      // 1a') alvo "Subfamília" (routes/lib/subfamilias.js): conta as colheres da subfamília
+      // juntas e não pega as da mesma família em outra subfamília
+      {
+        const sub = (codigo) => ({ codigo, nome: codigo, curto: codigo, ordem: 0 });
+        const colher = (c, s, qty) => ({ p: { c, n: c, familia: 'Colheres', subfamilia: sub(s) }, it: { qty }, lineTotal: qty * 10 });
+        const regraSub = { id: 'sf', name: 'Emborrachadas', active: true, targetType: 'subfamilia', targetValue: 'S265', basis: 'self', selfMetric: 'qty', tiers: [{ min: 12, pct: 8 }] };
+        const rows = [colher('60160', 'S265', 6), colher('60162', 'S265', 6), colher('62535', 'S42', 24)];
+        const bonus = avaliar([regraSub], rows).bonuses;
+        const pouco = avaliar([regraSub], [colher('60160', 'S265', 6), colher('62535', 'S42', 24)]).bonuses;
+        assert(bonus['subfamilia|S265'] && bonus['subfamilia|S265'].pct === 8
+          && bestBonusForProduct(bonus, rows[0].p).pct === 8 && bestBonusForProduct(bonus, rows[2].p) === null
+          && Object.keys(pouco).length === 0
+          && campanhasDoItem([regraSub], rows[1].p, ctx(), false).length === 1 && campanhasDoItem([regraSub], rows[2].p, ctx(), false).length === 0,
+          'campanha: alvo subfamília soma só os produtos dela (outra subfamília da mesma família fica de fora)');
+      }
       // 1b) barra do orçamento: próxima faixa da campanha mais perto (só com item do
       // alvo no orçamento, faltando até metade da faixa; cesta fica de fora)
       const prox = (regras, rows, extra) => proximaFaixaCampanha(regras, rows, ctx(extra));

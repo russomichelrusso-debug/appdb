@@ -699,6 +699,15 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
     }
 
+    /* alvo da campanha: 5 opções, em 2 linhas no celular */
+    #targetTypeSeg {
+      flex-wrap: wrap;
+    }
+
+    #targetTypeSeg button {
+      flex: 1 1 30%;
+    }
+
     .classiSeg {
       align-items: stretch;
     }
@@ -5747,6 +5756,7 @@
     #fotoRemoverBtn.hidden,
     #clienteTabList.hidden,
     #targetCatWrap.hidden,
+    #targetSubWrap.hidden,
     #selfWrap.hidden,
     #promoProdutoOriginalSelecionado.hidden,
     #classiTargetCatWrap.hidden,
@@ -12391,12 +12401,16 @@
         <label>O desconto vale pra…</label>
         <div class="segmented" id="targetTypeSeg" style="margin-bottom:12px;">
           <button type="button" data-v="category" class="active">Categoria</button>
+          <button type="button" data-v="subfamilia">Subfamília</button>
           <button type="button" data-v="product">Produto</button>
           <button type="button" data-v="skuList">Grupo de produtos</button>
           <button type="button" data-v="all">Pedido todo</button>
         </div>
         <div id="targetCatWrap">
           <select id="promoTargetCat" style="margin-bottom:16px;"></select>
+        </div>
+        <div id="targetSubWrap" class="hidden">
+          <select id="promoTargetSub" style="margin-bottom:16px;"></select>
         </div>
         <div id="targetProdWrap" class="hidden">
           <input type="text" id="promoTargetProd" placeholder="Código do produto (ex: 60863)"
@@ -14155,8 +14169,8 @@
       // Formato de cada regra (salva em state.promoRules):
       // {
       //   id, name, active,
-      //   targetType: "category" | "product" | "skuList" | "all",  // "all" = todos os itens do pedido
-      //   targetValue: "nome da categoria", "código do produto", "cód1,cód2" ou "" (all),
+      //   targetType: "category" | "subfamilia" | "product" | "skuList" | "all",  // "all" = todos os itens do pedido
+      //   targetValue: "nome da categoria", "código da subfamília" (S265), "código do produto", "cód1,cód2" ou "" (all),
       //   basis: "self" | "combo",
       //   selfMetric: "qty" | "value" | "skus",  // usado só quando basis === "self"; "skus" = nº de itens diferentes
       //   tiers: [{min:40, pct:5}, ...],          // usado só quando basis === "self"
@@ -14234,6 +14248,8 @@
         if (type === 'all') return true;
         if (type === 'product') return p.c === value;
         if (type === 'skuList') return value.split(',').map(s => s.trim()).includes(p.c);
+        // subfamília de marketing (routes/lib/subfamilias.js, vem no catálogo)
+        if (type === 'subfamilia') return !!(p.subfamilia && p.subfamilia.codigo === value);
         return productFamilia(p) === value;
       }
       function scopeTotals(rows, type, value) {
@@ -14257,7 +14273,13 @@
           const codes = value.split(',').map(s => s.trim()).filter(Boolean);
           return `grupo de ${codes.length} produtos (${codes.join(', ')})`;
         }
+        if (type === 'subfamilia') return `subfamília ${nomeDaSubfamilia(value)}`;
         return value;
+      }
+      // "S265" -> "Colheres de pedreiro cabo emborrachado" (pelo catálogo carregado)
+      function nomeDaSubfamilia(codigo) {
+        const p = (DB.products || []).find(x => x.subfamilia && x.subfamilia.codigo === codigo);
+        return p ? p.subfamilia.nome : codigo;
       }
       // Regra que atingiu o degrau mas não pode valer por uma condição do
       // próprio pedido (teto do alvo, % mínimo de lançamentos) - devolve o
@@ -14347,6 +14369,8 @@
         let best = bonuses['product|' + p.c] || null;
         const cat = bonuses['category|' + productFamilia(p)];
         if (cat && (!best || cat.pct > best.pct)) best = cat;
+        const sub = p.subfamilia ? bonuses['subfamilia|' + p.subfamilia.codigo] : null;
+        if (sub && (!best || sub.pct > best.pct)) best = sub;
         for (const key in bonuses) {
           if (!key.startsWith('skuList|')) continue;
           const value = key.slice('skuList|'.length);
@@ -14511,6 +14535,7 @@
       function condicoesDaCampanhaTexto(r) {
         const partes = [];
         if (r.targetType === 'category') partes.push(`Conta a família ${r.targetValue} inteira no orçamento`);
+        else if (r.targetType === 'subfamilia') partes.push(`Conta a subfamília ${nomeDaSubfamilia(r.targetValue)} inteira no orçamento`);
         else if (r.targetType === 'skuList') {
           const n = listaDaRegra(r.targetValue).length;
           if (n > 1) partes.push(`Conta os ${n} produtos da campanha juntos no orçamento`);
@@ -27039,8 +27064,8 @@
       // Produtos da regra, na ordem da lista da campanha.
       function produtosDaCampanha(r) {
         const excluirCodigos = listaDaRegra(r.excluirCodigos), excluirFamilias = listaDaRegra(r.excluirFamilias);
-        const lista = r.targetType === 'category'
-          ? DB.products.filter(p => scopeMatchesProduct('category', String(r.targetValue || ''), p))
+        const lista = r.targetType === 'category' || r.targetType === 'subfamilia'
+          ? DB.products.filter(p => scopeMatchesProduct(r.targetType, String(r.targetValue || ''), p))
           : listaDaRegra(r.targetValue).map(productByCod).filter(Boolean);
         return lista.filter(p => !produtoNaListaDaRegra(p, excluirCodigos, excluirFamilias));
       }
@@ -28591,6 +28616,11 @@
         for (const p of lista) {
           if (DB.productIndex[p.c]) continue; // já existe (evita duplicar ao recarregar)
           p._promocional = true; // fora do catalogo_precos: não entra na comparação do Painel
+          if (!p.subfamilia) { // os cadastrados antes não guardaram: herda do código base
+            const base = /^P[12]?(.+)$/.exec(p.c);
+            const orig = base && DB.productIndex[base[1]];
+            if (orig && orig.subfamilia) p.subfamilia = orig.subfamilia;
+          }
           prepararProdutoParaBusca(p);
           DB.products.push(p);
           DB.productIndex[p.c] = p;
@@ -28877,6 +28907,7 @@
       function setTargetType(type) {
         document.getElementById('targetTypeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === type));
         document.getElementById('targetCatWrap').classList.toggle('hidden', type !== 'category');
+        document.getElementById('targetSubWrap').classList.toggle('hidden', type !== 'subfamilia');
         document.getElementById('targetProdWrap').classList.toggle('hidden', type !== 'product');
         document.getElementById('targetSkuListWrap').classList.toggle('hidden', type !== 'skuList');
       }
@@ -28958,8 +28989,16 @@
 
         const targetType = rule ? rule.targetType : 'category';
         setTargetType(targetType);
+        // subfamílias do catálogo carregado (routes/lib/subfamilias.js), pela ordem da lista
+        const subs = new Map();
+        for (const p of DB.products || []) if (p.subfamilia && !subs.has(p.subfamilia.codigo)) subs.set(p.subfamilia.codigo, p.subfamilia);
+        if (rule && rule.targetType === 'subfamilia' && !subs.has(rule.targetValue)) subs.set(rule.targetValue, { codigo: rule.targetValue, nome: rule.targetValue, ordem: -1 });
+        document.getElementById('promoTargetSub').innerHTML = [...subs.values()].sort((a, b) => a.ordem - b.ordem)
+          .map(sf => `<option value="${escapeHtml(sf.codigo)}">${escapeHtml(sf.nome)}</option>`).join('');
         if (targetType === 'category') {
           document.getElementById('promoTargetCat').value = rule ? rule.targetValue : (DB.familias[0] || '');
+        } else if (targetType === 'subfamilia') {
+          document.getElementById('promoTargetSub').value = rule.targetValue;
         } else if (targetType === 'skuList') {
           document.getElementById('promoTargetSkuList').value = rule ? rule.targetValue : '';
           resolveSkuListDisplay(rule ? rule.targetValue : '', document.getElementById('targetSkuListResolve'));
@@ -29070,6 +29109,7 @@
         let targetValue;
         if (targetType === 'all') targetValue = '';
         else if (targetType === 'category') targetValue = document.getElementById('promoTargetCat').value;
+        else if (targetType === 'subfamilia') targetValue = document.getElementById('promoTargetSub').value;
         else if (targetType === 'skuList') targetValue = document.getElementById('promoTargetSkuList').value.trim();
         else targetValue = document.getElementById('promoTargetProd').value.trim();
         const basis = document.getElementById('basisSeg').querySelector('button.active').dataset.v;
