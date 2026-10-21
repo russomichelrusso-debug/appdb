@@ -22252,6 +22252,16 @@
           .map(normalizarTextoBusca).filter(Boolean)
           .some(p => ` ${alvo} `.includes(` ${p} `))) || null;
       }
+      // O relatório abrevia o nome ("EXPRESSO S M"); na ocorrência pro Pós-Vendas
+      // vai o nome por extenso. Mesma comparação por palavra do acharTransportadora.
+      const NOMES_COMPLETOS_TRANSPORTADORA = [
+        { padrao: 'EXPRESSO S M', nome: 'EXPRESSO SAO MIGUEL' },
+      ];
+      function nomeCompletoTransportadora(nomeNoRelatorio) {
+        const alvo = normalizarTextoBusca(nomeNoRelatorio);
+        const t = alvo && NOMES_COMPLETOS_TRANSPORTADORA.find(n => ` ${alvo} `.includes(` ${normalizarTextoBusca(n.padrao)} `));
+        return t ? t.nome : String(nomeNoRelatorio || '');
+      }
       function abrirRastreio(cliente, nf, nomeTransportadora) {
         const cnpjDigitos = String((cliente && cliente.documento) || '').replace(/\D/g, '');
         const transp = acharTransportadora(nomeTransportadora);
@@ -22777,7 +22787,7 @@
         } else {
           const comprador = whatsCompradorDoCliente(cliente);
           const contatos = contatosDoCliente(cliente);
-          const transp = (itens.find(it => it.status === 'faturado' && String(it.nota_fiscal) === notas[0] && it.transportadora) || {}).transportadora || '';
+          const transp = nomeCompletoTransportadora((itens.find(it => it.status === 'faturado' && String(it.nota_fiscal) === notas[0] && it.transportadora) || {}).transportadora || '');
           oc = {
             chave, clienteId: cliente.id, nrPedido: String(nrPedido), notas, itensPorNf, passo: 1,
             dados: {
