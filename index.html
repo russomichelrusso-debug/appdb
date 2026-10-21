@@ -6779,6 +6779,35 @@
       padding: 0 16px 16px;
     }
 
+    /* Mix inicial: só com o orçamento vazio (body.temOrcamento vem do renderCartBar) */
+    .mixInicialBtn {
+      display: block;
+      width: 100%;
+      margin: 10px 0 0;
+      padding: 12px 14px;
+      background: var(--white);
+      color: var(--ink);
+      border: 1px dashed var(--hairline);
+      border-radius: var(--r-lg);
+      font-size: 14px;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .mixInicialBtn span {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      font-weight: 400;
+      color: var(--gray);
+    }
+
+    body.temOrcamento #mixInicialBtn,
+    #mixInicialBtn.buscando {
+      display: none;
+    }
+
     #prodInicio.hidden,
     #prodCampanha.hidden,
     #prodTabList.hidden,
@@ -11130,6 +11159,7 @@
           </div>
         </div>
         <div class="hint" id="searchHint">Digite ao menos 2 caracteres para buscar.</div>
+        <button type="button" class="mixInicialBtn" id="mixInicialBtn">✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>
       </div>
 
       <div class="priceListSection hidden" id="priceListSection">
@@ -13381,6 +13411,7 @@
         const ativo = document.activeElement;
         const focoQtd = ativo && ativo.dataset ? ativo.dataset.tabelaQtd : null;
         list.classList.remove('emTabela');
+        document.getElementById('mixInicialBtn').classList.toggle('buscando', q.trim().length >= 2);
         // ✕ da busca também quando o app limpa o campo sozinho (código que entrou na lista de preços)
         const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
         if (limpar) limpar.classList.toggle('hidden', !q);
@@ -14706,7 +14737,9 @@
         refreshPaymentTermOptions(totalSemDescontoDePrazo);
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
-          body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>`;
+          body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>
+            <button type="button" class="mixInicialBtn" data-mix-inicial>✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>`;
+          body.querySelector('[data-mix-inicial]').addEventListener('click', montarMixInicial);
         } else {
           body.innerHTML = rows.map(({ p, it, cp, lineTotal, campaignPct, campaignName }, idx) => `
       <div class="cartitem">
@@ -27101,6 +27134,186 @@
         if (temBusca) return;
         if (campanhaAberta) renderCampanhaAberta(); else if (catalogo) renderCatalogo(); else renderProdutosInicio();
       }
+      // ---------------- Mix inicial / Mais vendidos ----------------
+      // Cliente novo pede "um orçamento dos produtos que mais vendem" pra avaliar
+      // (10/2026, decisões do usuário em entrevista): ranking = produtos comprados
+      // pelo maior número de LOJAS do mesmo canal do orçamento em 12 meses
+      // (GET /api/mix-inicial, routes/lib/mixInicial.js); cada produto entra na
+      // medida mais vendida que pode entrar - fora o Preço Fixo no canal e o item
+      // sem previsão de chegada; com cliente escolhido, sai o que ele já compra
+      // (comprados nos 12 meses, COMPRADOS_CACHE). Duas portas: "Montar mix inicial"
+      // no orçamento vazio (1 embalagem de cada até o valor digitado, sem impostos)
+      // e o card "Mais vendidos" na aba Produtos (marca e manda pro orçamento ou
+      // card/encarte). Cópia no aparelho (cortagMixInicial_v1): vale sem internet.
+      const MIX_LS_KEY = 'cortagMixInicial_v1';
+      const MIX_VALIDADE_MS = 12 * 60 * 60 * 1000;
+      const MIX_MIN_LOJAS_CANAL = 5; // canal com menos lojas usa a carteira inteira
+      const MAIS_VENDIDOS = '__maisVendidos'; // campanhaAberta = a grade dos mais vendidos
+      let mixInicialDados;
+      let mixInicialBuscando = null;
+      function lerMixInicialLS() {
+        try { return JSON.parse(localStorage.getItem(MIX_LS_KEY)) || null; } catch (e) { return null; }
+      }
+      // Devolve o que houver (memória, aparelho) e busca de novo quando a cópia
+      // passou de 12 h; `esperar` = espera a resposta quando não há cópia nenhuma.
+      async function carregarMixInicial(esperar) {
+        if (mixInicialDados === undefined) mixInicialDados = lerMixInicialLS();
+        const velho = !mixInicialDados || !(Date.now() - new Date(mixInicialDados.geradoEm).getTime() < MIX_VALIDADE_MS);
+        if (velho && !mixInicialBuscando) {
+          mixInicialBuscando = apiFetch('/api/mix-inicial').then(dados => {
+            if (!dados || !dados.canais) return;
+            mixInicialDados = dados;
+            try { localStorage.setItem(MIX_LS_KEY, JSON.stringify(dados)); } catch (e) { /* sem espaço: fica só na memória */ }
+            if (document.getElementById('prodInicio') && !document.getElementById('prodTabSearch').value.trim()) atualizarProdutosInicio();
+          }).catch(() => { /* sem internet: fica com a cópia */ }).finally(() => { mixInicialBuscando = null; });
+        }
+        if (!mixInicialDados && esperar && mixInicialBuscando) await mixInicialBuscando;
+        return mixInicialDados;
+      }
+      // Lista do contexto do orçamento (canal, estado, cliente): [{ p, lojas }]
+      function rankingMixInicial(dados) {
+        const canalProprio = (dados.canais || {})[state.canal] || [];
+        const lojasCanal = Number((dados.lojas || {})[state.canal]) || 0;
+        const todos = lojasCanal < MIX_MIN_LOJAS_CANAL;
+        const lista = todos ? (dados.canais || {}).TODOS || [] : canalProprio;
+        const cliente = state.levCliente;
+        const jaLeva = new Set((cliente ? COMPRADOS_CACHE.get(cliente.id) || [] : []).map(c => String(c.codigo_sku)));
+        const itens = [];
+        let tirados = 0;
+        for (const item of lista) {
+          const doGrupo = (dados.grupos || {})[item.g] || item.skus;
+          if (doGrupo.some(c => jaLeva.has(String(c)))) { tirados++; continue; }
+          const p = item.skus.map(productByCod)
+            .find(p => p && !p._promocional && !isPrecoFixoParaCanal(p) && !itemSemPrevisaoDeChegada(p.c));
+          if (p) itens.push({ p, lojas: item.lojas });
+        }
+        return { itens, todos, lojas: todos ? Number((dados.lojas || {}).TODOS) || 0 : lojasCanal, tirados, cliente: jaLeva.size ? cliente : null };
+      }
+      function origemDoMix(r) {
+        const lojas = `${r.lojas} loja${r.lojas === 1 ? '' : 's'}`;
+        const quem = r.todos ? `${lojas} da carteira` : `${lojas} do canal ${NOME_CANAL[state.canal] || state.canal}`;
+        return `comprados pelo maior número de lojas em 12 meses (${quem})${r.cliente ? `, sem o que ${r.cliente.nome} já compra` : ''}`;
+      }
+      async function montarMixInicial() {
+        const dados = await carregarMixInicial(true);
+        if (!dados) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
+        const r = rankingMixInicial(dados);
+        if (!r.itens.length) { showToast('Nenhum produto pra montar o mix nesse canal.', 'erro'); return; }
+        const municipio = state.levCliente ? (FICHA_CNPJ_INFO.get(state.levCliente.id) || {}).municipio : null;
+        const minimo = pedidoMinimoCif(state.uf, municipio).valor;
+        const txt = await askText(`Mix inicial com os produtos ${origemDoMix(r)}. Uma embalagem de cada, até o valor (sem impostos):`,
+          String(minimo), 'Montar orçamento');
+        if (txt == null) return;
+        const alvo = Number(String(txt).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
+        if (!(alvo > 0)) { showToast('Digite um valor, ex.: 1500', 'erro'); return; }
+        let soma = 0, n = 0;
+        for (const { p } of r.itens) {
+          if (soma >= alvo) break;
+          if (state.cart.some(i => i.cod === p.c)) continue;
+          const qtd = packStep(p);
+          const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, false, 0);
+          if (!(unit > 0)) continue;
+          addToCart(p.c, qtd, true);
+          soma += unit * qtd;
+          n++;
+        }
+        if (!n) { showToast('Nenhum produto do mix coube no orçamento.', 'erro'); return; }
+        showToast(`Mix inicial: ${n} produto${n === 1 ? '' : 's'} · ≈ ${brl(soma)} sem impostos${soma < alvo ? ' (acabaram os mais vendidos)' : ''}`, 'longo');
+        renderResults();
+        openDrawer();
+      }
+      function renderCardMaisVendidos() {
+        if (!mixInicialDados) return '';
+        const r = rankingMixInicial(mixInicialDados);
+        if (!r.itens.length) return '';
+        const fotos = r.itens.filter(({ p }) => codigoDaFoto(p.c)).slice(0, 5).map(({ p }) => p.c);
+        return `<div class="campGrupo">
+          <button type="button" class="campGrupoCab" data-mais-vendidos>
+            <span class="campGrupoTopo">
+              <span class="campGrupoNome"><small>MAIS VENDIDOS · ${escapeHtml(r.todos ? 'CARTEIRA' : String(NOME_CANAL[state.canal] || state.canal).toUpperCase())}</small><b>Os que mais lojas compram</b></span>
+            </span>
+            ${fotos.length ? `<span class="campGrupoFotos">${fotos.map(c => `<span class="campGrupoFoto" data-foto-mini data-foto-cod="${escapeHtml(c)}"></span>`).join('')}</span>` : ''}
+            <span class="campGrupoRodape">
+              <span class="campGrupoInfo">${r.itens.length} produto${r.itens.length === 1 ? '' : 's'} · ${r.lojas} loja${r.lojas === 1 ? '' : 's'} · 12 meses</span>
+              <span class="campGrupoVer">Ver ▶</span>
+            </span>
+          </button>
+        </div>`;
+      }
+      function renderMaisVendidos() {
+        const el = document.getElementById('prodCampanha');
+        const r = mixInicialDados ? rankingMixInicial(mixInicialDados) : null;
+        if (!r || !r.itens.length) { campanhaAberta = null; atualizarProdutosInicio(); return; }
+        const produtos = r.itens.map(x => x.p);
+        const lojasDe = new Map(r.itens.map(x => [x.p.c, x.lojas]));
+        campanhaSelecionados = campanhaSelecionados.filter(c => produtos.some(p => p.c === c));
+        const mostrar = campanhaVerTodos ? produtos : produtos.slice(0, CAMPANHA_POR_PAGINA);
+        const resto = produtos.length - mostrar.length;
+        const itens = mostrar.map((p, i) => {
+          const of = ofertaDoProduto(p);
+          const marcado = campanhaSelecionados.includes(p.c);
+          return `<div class="campItem${marcado ? ' selecionado' : ''}">
+            <button type="button" class="campItemAbrir" data-abrir-prod="${escapeHtml(p.c)}">
+              <div class="campItemFoto"${codigoDaFoto(p.c) ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''}>${codigoDaFoto(p.c) ? '' : 'sem foto · tocar pra adicionar'}</div>
+              <div class="campItemInfo">
+                <div class="campItemNome">${i + 1}º · ${escapeHtml(p.n)}</div>
+                <div class="campItemCod">${escapeHtml(p.c)} · ${lojasDe.get(p.c)} loja${lojasDe.get(p.c) === 1 ? '' : 's'}</div>
+                ${of.regra ? `<div class="campItemDe">${brl(of.de)}</div>` : ''}
+                <div class="campItemPor">${brl(of.por)}</div>
+              </div>
+            </button>
+            ${of.regra ? `<span class="campItemOff">-${of.pct}%</span>` : ''}
+            <button type="button" class="campMarcar" data-marcar-prod="${escapeHtml(p.c)}" aria-pressed="${marcado}" aria-label="Selecionar ${escapeHtml(p.n)}"><span>${marcado ? '✓' : ''}</span></button>
+          </div>`;
+        }).join('');
+        el.innerHTML = `<div class="campCabeca">
+            <button type="button" class="restoreBtn compacto" id="campVoltarBtn">‹ Voltar</button>
+            <b>Mais vendidos</b>
+          </div>
+          <div class="ofertaCtx">Produtos ${escapeHtml(origemDoMix(r))} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b> · muda na aba Pedido</div>
+          <div class="ofertaCtx" style="margin-top:4px;">Marque os produtos pra pôr no orçamento ou mandar um card/encarte (até ${CARD_MAX_PRODUTOS}).</div>
+          <div class="campGrade">${itens}</div>
+          ${resto > 0 ? `<button type="button" class="recompraMais" id="campMaisBtn">Ver mais ${resto}</button>` : ''}
+          <div id="campBarra"${campanhaSelecionados.length ? '' : ' class="hidden"'}>
+            <span class="txt" id="campBarraTxt"></span>
+            <button type="button" class="recompraBtn" id="campLimparBtn">Limpar</button>
+            <button type="button" class="recompraBtn" id="campOrcamentoBtn">+ Orçamento</button>
+            <button type="button" class="recompraBtn recompraBtn--principal" id="campEnviarBtn"></button>
+          </div>`;
+        const atualizarBarra = () => {
+          const k = campanhaSelecionados.length;
+          document.getElementById('campBarra').classList.toggle('hidden', !k);
+          document.getElementById('campBarraTxt').innerHTML = `<b>${k}</b> marcado${k === 1 ? '' : 's'}`;
+          document.getElementById('campEnviarBtn').textContent = k > 1 ? `Encarte` : 'Card';
+        };
+        atualizarBarra();
+        document.getElementById('campVoltarBtn').addEventListener('click', () => { campanhaAberta = null; atualizarProdutosInicio(); });
+        document.getElementById('campMaisBtn')?.addEventListener('click', () => { campanhaVerTodos = true; renderMaisVendidos(); });
+        document.getElementById('campLimparBtn').addEventListener('click', () => { campanhaSelecionados = []; renderMaisVendidos(); });
+        document.getElementById('campOrcamentoBtn').addEventListener('click', () => {
+          const cods = campanhaSelecionados.filter(c => productByCod(c) && !state.cart.some(i => i.cod === c));
+          cods.forEach(c => addToCart(c, undefined, true));
+          showToast(`${cods.length} produto${cods.length === 1 ? '' : 's'} no orçamento`);
+        });
+        document.getElementById('campEnviarBtn').addEventListener('click', () => abrirCardProduto(campanhaSelecionados.slice()));
+        el.querySelectorAll('[data-abrir-prod]').forEach(b => b.addEventListener('click', () => {
+          const p = productByCod(b.dataset.abrirProd);
+          if (p) openProdutoDetail(p.c, p.n);
+        }));
+        el.querySelectorAll('[data-marcar-prod]').forEach(b => b.addEventListener('click', () => {
+          const c = b.dataset.marcarProd;
+          const i = campanhaSelecionados.indexOf(c);
+          if (i >= 0) campanhaSelecionados.splice(i, 1);
+          else if (campanhaSelecionados.length >= CARD_MAX_PRODUTOS) { showToast(`Até ${CARD_MAX_PRODUTOS} produtos`, 'erro'); return; }
+          else campanhaSelecionados.push(c);
+          const marcado = i < 0;
+          b.setAttribute('aria-pressed', String(marcado));
+          b.querySelector('span').textContent = marcado ? '✓' : '';
+          b.closest('.campItem').classList.toggle('selecionado', marcado);
+          atualizarBarra();
+        }));
+        preencherFotosDe(el);
+      }
       function renderProdutosInicio() {
         const el = document.getElementById('prodInicio');
         const campanhas = campanhasDaAba();
@@ -27109,10 +27322,18 @@
         // um grupo só já vem aberto (até o vendedor fechar); com mais, abre o que ele tocou
         const aberto = g => (grupoCampanhaAberto === undefined ? grupos.length === 1 : g.chave === grupoCampanhaAberto);
         const linhas = grupos.map(g => renderGrupoCampanhas(g, aberto(g))).join('');
-        el.innerHTML = `<div class="clientesSecao" style="margin:14px 0 2px;">Campanhas ativas · ${escapeHtml(NOME_CANAL[state.canal] || state.canal || '')} · ${escapeHtml(state.uf || '')}</div>
+        carregarMixInicial(); // redesenha sozinho quando a cópia nova chega
+        el.innerHTML = `${renderCardMaisVendidos()}<div class="clientesSecao" style="margin:14px 0 2px;">Campanhas ativas · ${escapeHtml(NOME_CANAL[state.canal] || state.canal || '')} · ${escapeHtml(state.uf || '')}</div>
           ${linhas || '<div class="lev-empty">Nenhuma campanha ativa nesse canal e estado.</div>'}
           ${recentes.length ? `<div class="clientesSecao" style="margin:16px 0 6px;">Recentes</div>
             <div class="clientesRecentes" style="padding:2px 0 4px;">${recentes.map(p => `<button type="button" class="clienteRecenteChip" data-recente-prod="${escapeHtml(p.c)}">${escapeHtml(p.c)} · ${escapeHtml(p.n)}</button>`).join('')}</div>` : ''}`;
+        el.querySelector('[data-mais-vendidos]')?.addEventListener('click', () => {
+          campanhaAberta = MAIS_VENDIDOS;
+          campanhaSelecionados = [];
+          campanhaVerTodos = false;
+          atualizarProdutosInicio();
+          window.scrollTo(0, 0);
+        });
         el.querySelectorAll('[data-grupo-campanha]').forEach(b => b.addEventListener('click', () => {
           grupoCampanhaAberto = b.getAttribute('aria-expanded') === 'true' ? null : b.dataset.grupoCampanha;
           renderProdutosInicio();
@@ -27131,6 +27352,7 @@
         preencherFotosDe(el);
       }
       function renderCampanhaAberta() {
+        if (campanhaAberta === MAIS_VENDIDOS) { renderMaisVendidos(); return; }
         const el = document.getElementById('prodCampanha');
         const achada = campanhasDaAba().find(x => String(x.regra.id) === String(campanhaAberta));
         if (!achada) { campanhaAberta = null; atualizarProdutosInicio(); return; }
@@ -29442,6 +29664,7 @@
           return;
         }
         document.getElementById('micBtnSearch').addEventListener('click', () => startVoiceRecognition('searchInput'));
+        document.getElementById('mixInicialBtn').addEventListener('click', montarMixInicial);
         document.getElementById('micBtnLev').addEventListener('click', () => startVoiceRecognition('levInput'));
       }
 

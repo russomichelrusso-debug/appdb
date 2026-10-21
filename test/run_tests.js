@@ -4845,6 +4845,67 @@ async function main() {
     authToken = tokenAntes;
   }
 
+  // GET /api/mix-inicial: produtos comprados pelo maior número de LOJAS
+  // em 12 meses, por canal (classificatório da política; sem = Varejo), medidas
+  // do mesmo produto juntas (a mais vendida primeiro), promocional = base, loja
+  // que comprou no ERP e no app conta uma vez, fora da Lista de Preços não entra,
+  // compra de mais de 1 ano não conta, conta da representação não é loja.
+  require('../routes/relatorios').esquecerMixInicial();
+  mockDb.__seed({
+    catalogoPrecos: [
+      { codigo_sku: '81001', nome: 'DISCO MIXTESTE TURBO 110 mm' },
+      { codigo_sku: '81002', nome: 'DISCO MIXTESTE TURBO 180 mm' },
+      { codigo_sku: '81003', nome: 'TRENA MIXTESTE 5 m' },
+      { codigo_sku: '81004', nome: 'LIXA MIXTESTE GRÃO 80' },
+    ],
+    produtos: [{ id: 98103, codigo_sku: '81003', nome: 'TRENA MIXTESTE 5 m', categoria: '21' }],
+    clientes: [
+      { id: 98121, nome: 'MIX A', codigo_oficial: 'MXA' },
+      { id: 98122, nome: 'MIX B', codigo_oficial: 'MXB', classificatorio_tipo: 'Varejo Master' },
+      { id: 98123, nome: 'MIX C', codigo_oficial: 'MXC', classificatorio_tipo: 'Varejo Exclusive' },
+      { id: 98124, nome: 'MIX D', codigo_oficial: 'MXD', classificatorio_tipo: 'Atacado Premium' },
+      { id: 98125, nome: 'MIX E (só app)' },
+      { id: 98126, nome: 'RUSSOS (representação)', codigo_oficial: 'MXR' },
+    ],
+    pedidosOficiaisItens: [
+      { nr_pedido: 'M1', codigo_sku: '81001', cliente_codigo_oficial: 'MXA', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(20), status: 'faturado' },
+      { nr_pedido: 'M2', codigo_sku: '81001', cliente_codigo_oficial: 'MXB', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(40), status: 'faturado' },
+      { nr_pedido: 'M3', codigo_sku: '81002', cliente_codigo_oficial: 'MXC', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(50), status: 'faturado' },
+      { nr_pedido: 'M4', codigo_sku: 'P81003', cliente_codigo_oficial: 'MXA', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(60), status: 'faturado' },
+      { nr_pedido: 'M5', codigo_sku: '81004', cliente_codigo_oficial: 'MXD', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(70), status: 'faturado' },
+      // mais de 1 ano: não conta; representação: não é loja; fora da Lista de Preços: não entra
+      { nr_pedido: 'M6', codigo_sku: '81004', cliente_codigo_oficial: 'MXA', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(400), status: 'faturado' },
+      { nr_pedido: 'M7', codigo_sku: '81004', cliente_codigo_oficial: 'MXR', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(10), status: 'faturado' },
+      { nr_pedido: 'M8', codigo_sku: '89999', cliente_codigo_oficial: 'MXA', quantidade: 1, valor: 10, data_faturamento: diasAtrasISO(10), status: 'faturado' },
+    ],
+    contasSalesforce: [{ cliente_id: 98126, classificatorio: 'Representante', situacao: 'Ativo' }],
+    // trena pelo app: a loja A (já contada pelo ERP) e a E (só no app)
+    pedidos: [
+      { id: 98921, cliente_id: 98121, data_pedido: new Date(Date.now() - 5 * 86400000).toISOString() },
+      { id: 98922, cliente_id: 98125, data_pedido: new Date(Date.now() - 5 * 86400000).toISOString() },
+    ],
+    pedidoItens: [
+      { id: 98923, pedido_id: 98921, produto_id: 98103, quantidade: 1, preco_unitario: 10 },
+      { id: 98924, pedido_id: 98922, produto_id: 98103, quantidade: 1, preco_unitario: 10 },
+    ],
+  });
+  res = await req('GET', '/api/mix-inicial');
+  {
+    const doCanal = (canal, nome) => ((res.body && res.body.canais && res.body.canais[canal]) || []).find(x => x.nome === nome);
+    const disco = doCanal('VAREJO', 'Disco Mixteste Turbo');
+    const trena = doCanal('VAREJO', 'Trena Mixteste');
+    const lixaAtac = doCanal('ATACADO', 'Lixa Mixteste Grão');
+    const lixaTodos = doCanal('TODOS', 'Lixa Mixteste Grão');
+    assert(
+      res.status === 200 && disco && disco.lojas === 3 && disco.skus.join() === '81001,81002'
+        && trena && trena.lojas === 2 && trena.skus.join() === '81003'
+        && !doCanal('VAREJO', 'Lixa Mixteste Grão') && lixaAtac && lixaAtac.lojas === 1 && lixaTodos && lixaTodos.lojas === 1
+        && res.body.grupos[disco.g].slice().sort().join() === '81001,81002'
+        && !JSON.stringify(res.body.canais).includes('89999'),
+      `mix-inicial: lojas por canal, medidas juntas, P = base, ERP + app uma vez: ${JSON.stringify(res.body && res.body.canais && res.body.canais.VAREJO)}`
+    );
+  }
+
   {
     // Limite de requisições nas rotas de leitura pesadas (middleware/limiteRotasPesadas.js):
     // por usuário, só GET, contado uma vez mesmo passando por vários app.use('/api…')
