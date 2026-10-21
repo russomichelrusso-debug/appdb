@@ -1380,6 +1380,20 @@ Supabase, sem PR — não é mudança de código.
   grande, o desenho da peça na proporção com os encaixes de cada lado e a conta explicada (peças no ambiente × encaixes por
   peça = total), produto sugerido e "Adicionar N ao orçamento". A fórmula não mudou. 900 px+ dados e resultado lado a lado.
 
+- **Mix inicial / Mais vendidos** (10/2026, pedido do usuário: "cliente novo pede um orçamento dos produtos que mais vendem
+  pra avaliar"; decisões em entrevista). `GET /api/mix-inicial` (`routes/relatorios.js`, cálculo puro em
+  `routes/lib/mixInicial.js`, guardado 30 min no servidor): produtos comprados pelo **maior número de lojas** nos últimos 12
+  meses (faturado oficial pelo código do ERP + pedido do app; a loja conta uma vez, então não precisa da regra de "pedido do
+  app já faturado"), **por canal** (classificatório da política, sem = Varejo; canal com menos de 5 lojas usa a carteira toda,
+  `TODOS`), agrupado por `grupoDoProduto` com as medidas na ordem de lojas; promocional = base; fora da Lista de Preços não
+  entra; conta da representação não é loja. No app (`montarMixInicial`/`rankingMixInicial`, `index.html`; cópia em
+  `cortagMixInicial_v1`, vale sem internet, busca de novo depois de 12 h): cada produto entra na **medida mais vendida que pode
+  entrar** - fora o Preço Fixo no canal e o item sem previsão de chegada - e, com cliente escolhido, **sai o que ele já compra**
+  (comprados dos 12 meses, `COMPRADOS_CACHE`). Duas portas: **"✨ Montar mix inicial"** com o orçamento vazio (abaixo da busca do
+  Pedido e na gaveta vazia): pergunta o valor (vem o pedido mínimo CIF da região) e põe **1 embalagem de cada** até ele, sem
+  impostos (preço com classificatório, sem campanha; embalagem que passaria mais de 10% do valor é pulada); e o card **"Mais vendidos"** no início da aba Produtos, que abre a grade
+  (mesmo visual da campanha aberta, `campanhaAberta = MAIS_VENDIDOS`) com seleção, "+ Orçamento" e card/encarte (até 24).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

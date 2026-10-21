@@ -33,6 +33,7 @@ const ROTAS_CARTEIRA = [
   /^\/api\/pedidos\/exportar$/,
   /^\/api\/produtos\/[^/]+\/clientes$/,
   /^\/api\/levantamentos\/recentes$/,
+  /^\/api\/mix-inicial$/,
 ];
 const ROTAS_CLIENTE = [
   /^\/api\/clientes\/[^/]+\/(historico|rotatividade|recuperar|sugestoes-recompra|comprados-recentes|produtos-abc|levantamentos)$/,

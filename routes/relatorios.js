@@ -8,7 +8,8 @@ const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
-const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
+const { clientesDeOutroVendedor, REPRESENTACAO } = require('./lib/contasSalesforce');
+const { rankingMixInicial, canalDaLoja } = require('./lib/mixInicial');
 const { marcarDescontinuados, estaDescontinuado, grupoDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 
 router.param('id', validarIdInteiro);
@@ -667,6 +668,69 @@ router.get('/produtos-abc-geral', async (req, res) => {
     res.status(500).json({ erro: 'Erro ao calcular curva ABC geral.' });
   }
 });
+
+// Mix inicial (routes/lib/mixInicial.js): os produtos comprados pelo maior
+// número de lojas nos últimos 12 meses, por canal. O app guarda a resposta no
+// aparelho (vale sem internet) e monta o orçamento com ela. Mesmo resultado pra
+// todo mundo: guardado 30 min no servidor (importação nova aparece em até 30 min).
+const MIX_DIAS = 365;
+const MIX_CACHE_MS = 30 * 60 * 1000;
+let mixCache = null; // { em, json }
+router.get('/mix-inicial', async (req, res) => {
+  try {
+    if (mixCache && Date.now() - mixCache.em < MIX_CACHE_MS) return res.json(mixCache.json);
+    const [oficial, app, clientes, catalogo, deOutro] = await Promise.all([
+      pool.query(
+        `/* mix-inicial:oficial */
+         SELECT DISTINCT codigo_sku, cliente_codigo_oficial AS codigo
+         FROM pedidos_oficiais_itens
+         WHERE status = 'faturado' AND cliente_codigo_oficial IS NOT NULL
+           AND data_faturamento > ${SQL_HOJE_BR} - $1::int`,
+        [MIX_DIAS]),
+      pool.query(
+        `/* mix-inicial:app */
+         SELECT DISTINCT p.codigo_sku, ped.cliente_id
+         FROM pedidos ped
+         JOIN pedido_itens pi ON pi.pedido_id = ped.id
+         JOIN produtos p ON p.id = pi.produto_id
+         WHERE ped.cliente_id IS NOT NULL AND ${sqlDiaDoPedido()} > ${SQL_HOJE_BR} - $1::int AND ${SQL_PEDIDO_APP_VALIDO}`,
+        [MIX_DIAS]),
+      pool.query('/* mix-inicial:clientes */ SELECT id, codigo_oficial, classificatorio_tipo FROM clientes'),
+      pool.query('SELECT codigo_sku, nome FROM catalogo_precos'),
+      clientesDeOutroVendedor(),
+    ]);
+    // conta da própria representação (amostras) não é loja
+    const representacao = new Set([...deOutro].filter(([, base]) => base === REPRESENTACAO).map(([id]) => id));
+    const porCodigo = new Map();
+    const porId = new Map();
+    for (const c of clientes.rows) {
+      if (representacao.has(String(c.id))) continue;
+      const loja = { loja: c.codigo_oficial ? `erp:${c.codigo_oficial}` : `app:${c.id}`, canal: canalDaLoja(c.classificatorio_tipo) };
+      porId.set(String(c.id), loja);
+      if (c.codigo_oficial && !porCodigo.has(String(c.codigo_oficial))) porCodigo.set(String(c.codigo_oficial), loja);
+    }
+    const compras = [];
+    for (const l of oficial.rows) {
+      const loja = porCodigo.get(String(l.codigo));
+      if (loja) compras.push({ ...loja, codigo_sku: l.codigo_sku });
+    }
+    for (const l of app.rows) {
+      const loja = porId.get(String(l.cliente_id));
+      if (loja) compras.push({ ...loja, codigo_sku: l.codigo_sku });
+    }
+    // Lista de Preços ainda não importada (banco novo): vale o cadastro de produtos,
+    // como em descontinuado.js (catálogo vazio não tira nada)
+    const produtos = catalogo.rows.length ? catalogo.rows : (await nomesDosProdutos()).rows;
+    const json = { geradoEm: new Date().toISOString(), dias: MIX_DIAS, ...rankingMixInicial(compras, produtos) };
+    mixCache = { em: Date.now(), json };
+    res.json(json);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao montar o mix inicial.' });
+  }
+});
+// Teste: cada cenário semeia o banco de novo
+router.esquecerMixInicial = () => { mixCache = null; };
 
 // Curva ABC "por cliente" - mesma classificação de Pareto da geral, mas
 // escopada a UM cliente: responde "o que esse cliente mais compra e o que

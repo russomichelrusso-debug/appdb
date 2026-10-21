@@ -109,6 +109,7 @@ function seed(partial) {
   if (partial.fichasCnpj) Object.assign(clienteCnpjFicha, partial.fichasCnpj);
   if (partial.geocodificacao) Object.assign(clienteGeocodificacao, partial.geocodificacao);
   if (partial.avisosCancelamento) avisosCancelamento.push(...partial.avisosCancelamento);
+  if (partial.contasSalesforce) contasSalesforce.push(...partial.contasSalesforce);
 }
 
 // Reproduz sqlChaveEndereco (routes/lib/geocodificacao.js)
@@ -994,6 +995,35 @@ async function query(sql, params = []) {
       }
     }
     return { rows };
+  }
+
+  // GET /api/mix-inicial - routes/relatorios.js
+  if (s.includes('/* MIX-INICIAL:OFICIAL */')) {
+    const limite = diasAntes(hojeBr(), Number(params[0]));
+    const vistos = new Set();
+    const rows = [];
+    for (const it of pedidosOficiaisItens) {
+      if (it.status !== 'faturado' || !it.cliente_codigo_oficial || !it.data_faturamento || String(it.data_faturamento).slice(0, 10) <= limite) continue;
+      const k = `${it.codigo_sku}|${it.cliente_codigo_oficial}`;
+      if (vistos.has(k)) continue;
+      vistos.add(k);
+      rows.push({ codigo_sku: it.codigo_sku, codigo: it.cliente_codigo_oficial });
+    }
+    return { rows };
+  }
+  if (s.includes('/* MIX-INICIAL:APP */')) {
+    const limite = diasAntes(hojeBr(), Number(params[0]));
+    const rows = [];
+    for (const ped of pedidos.filter(p => p.cliente_id != null && diaDoPedidoBr(p.data_pedido) > limite && p.origem !== 'faturamento')) {
+      for (const it of pedidoItens.filter(i => i.pedido_id === ped.id)) {
+        const prod = produtos.find(p => p.id === it.produto_id);
+        if (prod) rows.push({ codigo_sku: prod.codigo_sku, cliente_id: ped.cliente_id });
+      }
+    }
+    return { rows };
+  }
+  if (s.includes('/* MIX-INICIAL:CLIENTES */')) {
+    return { rows: clientes.map(c => ({ id: c.id, codigo_oficial: c.codigo_oficial || null, classificatorio_tipo: c.classificatorio_tipo || null })) };
   }
 
   // GET /api/produtos/:codigo/clientes ("Já compraram" / "Levantamento" da
