@@ -3221,6 +3221,16 @@ async function main() {
     const c4 = await req('GET', '/api/catalogo-precos');
     assert(res.status === 200 && c4.body.produtos.map(p => p.codigo_sku).join() === 'CAT05,CAT06,CAT07',
       `catálogo de preços: importação aparece na hora mesmo com a versão parada: ${JSON.stringify(c4.body.produtos)}`);
+    // subfamília de marketing (routes/lib/subfamilias.js) vai junto do produto no catálogo
+    const { subfamiliaDoProduto } = require('../routes/lib/subfamilias');
+    mockDb.__getCatalogoPrecos().push({ codigo_sku: '60160', nome: 'COLHER DI OVAL 07' });
+    mockDb.__fixarVersaoTabelas(3);
+    const c5 = await req('GET', '/api/catalogo-precos');
+    const colher = c5.body.produtos.find(p => p.codigo_sku === '60160');
+    assert(colher && colher.subfamilia && colher.subfamilia.codigo === 'S265' && !c5.body.produtos.find(p => p.codigo_sku === 'CAT05').subfamilia
+      && subfamiliaDoProduto('P62535').codigo === 'S42' && subfamiliaDoProduto('63593').curto === 'Forjadas' && subfamiliaDoProduto('99999') === null,
+      `catálogo de preços: subfamília de marketing pelo código (promocional cai no base): ${JSON.stringify(colher)}`);
+    mockDb.__getCatalogoPrecos().pop();
     const f1 = await req('GET', '/api/fichas-tecnicas');
     res = await req('POST', '/api/fichas-tecnicas/importar', { fichas: { CAT05: { nome: 'FICHA', desc: 'd', foto: '', specs: { a: 1 } } } });
     const f2 = await req('GET', '/api/fichas-tecnicas');

@@ -7104,6 +7104,41 @@
       color: var(--fill);
     }
 
+    /* subfamílias de marketing dentro da família aberta (routes/lib/subfamilias.js) */
+    .catSubs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      margin: 2px -16px 8px;
+      padding: 0 16px;
+    }
+
+    .catSubs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .catSub {
+      flex: none;
+      white-space: nowrap;
+      min-height: 36px;
+      padding: 0 12px;
+      border: 0.75px solid var(--hairline);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--gray);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .catSub.ativo {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--white);
+    }
+
     .catCabeca {
       display: flex;
       align-items: center;
@@ -27466,6 +27501,7 @@
       const VITRINE_SEGURAR_MS = 800;
       let prodModo = (() => { try { return localStorage.getItem(PROD_MODO_LS_KEY) === 'catalogo' ? 'catalogo' : 'lista'; } catch (e) { return 'lista'; } })();
       let catalogoFamilia = null; // chave da família aberta (null = cards das famílias)
+      let catalogoSubfamilia = null; // código da subfamília escolhida na família aberta (null = todas)
       let catalogoMostrar = CATALOGO_POR_PAGINA;
       let catalogoScroll = null;
       let vitrine = null; // { titulo, produtos, i, separados }
@@ -27581,13 +27617,32 @@
       }
       function abrirFamiliaDoCatalogo(chave) {
         catalogoFamilia = chave;
+        catalogoSubfamilia = null;
         catalogoMostrar = CATALOGO_POR_PAGINA;
         renderCatalogo();
         window.scrollTo(0, 0);
       }
+      // Subfamílias de marketing da família (p.subfamilia, routes/lib/subfamilias.js),
+      // na ordem da lista; produto sem subfamília numa família que tem vira "Outros".
+      // Menos de 2 = sem chips.
+      function subfamiliasDaFamilia(fam) {
+        const m = new Map();
+        for (const p of fam.produtos) {
+          const s = p.subfamilia || { codigo: '', curto: 'Outros', ordem: Infinity };
+          if (!m.has(s.codigo)) m.set(s.codigo, { codigo: s.codigo, nome: s.curto || s.nome, ordem: s.ordem, produtos: [] });
+          m.get(s.codigo).produtos.push(p);
+        }
+        const subs = [...m.values()].sort((a, b) => a.ordem - b.ordem);
+        return subs.length > 1 ? subs : [];
+      }
       function renderCatalogoDaFamilia(el, familias, fam) {
-        const mostrar = fam.produtos.slice(0, catalogoMostrar);
-        const resto = fam.produtos.length - mostrar.length;
+        const subs = subfamiliasDaFamilia(fam);
+        const sub = catalogoSubfamilia !== null ? subs.find(s => s.codigo === catalogoSubfamilia) : null;
+        if (!sub) catalogoSubfamilia = null;
+        const produtos = sub ? sub.produtos : fam.produtos;
+        const titulo = sub ? `${fam.nome} · ${sub.nome}` : fam.nome;
+        const mostrar = produtos.slice(0, catalogoMostrar);
+        const resto = produtos.length - mostrar.length;
         const chips = `<button type="button" class="catChip" data-cat-voltar>‹ Famílias</button>`
           + familias.map(f => `<button type="button" class="catChip${f === fam ? ' ativo' : ''}" data-cat-familia="${escapeHtml(f.chave)}">${escapeHtml(f.nome)}</button>`).join('');
         const itens = mostrar.map(p => {
@@ -27616,7 +27671,11 @@
             <button type="button" class="recompraBtn" id="catSelecionarBtn">${catalogoSelecionando ? 'Cancelar' : 'Selecionar'}</button>
             <button type="button" class="recompraBtn" id="catVitrineBtn">Mostrar ao cliente</button>
           </div>
-          <div class="ofertaCtx">${fam.produtos.length} produto${fam.produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
+          ${subs.length ? `<div class="catSubs">
+            <button type="button" class="catSub${sub ? '' : ' ativo'}" data-cat-sub="">Todas · ${fam.produtos.length}</button>
+            ${subs.map(s => `<button type="button" class="catSub${s === sub ? ' ativo' : ''}" data-cat-sub="${escapeHtml(s.codigo)}">${escapeHtml(s.nome)} · ${s.produtos.length}</button>`).join('')}
+          </div>` : ''}
+          <div class="ofertaCtx">${produtos.length} produto${produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
           ${catalogoSelecionando ? `<div class="ofertaCtx" style="margin-top:4px;">Toque nos produtos pra marcar (até ${CATALOGO_SEL_MAX}). A seleção continua nas outras famílias.</div>` : ''}
           <div class="campGrade">${itens}</div>
           ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
@@ -27628,7 +27687,15 @@
         const faixa = document.getElementById('catChips');
         const ativo = faixa.querySelector('.catChip.ativo');
         if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
-        document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(fam.nome, fam.produtos, 0));
+        const subAtivo = el.querySelector('.catSubs .catSub.ativo');
+        if (subAtivo) subAtivo.parentElement.scrollLeft = subAtivo.offsetLeft - subAtivo.parentElement.offsetLeft - 16;
+        el.querySelectorAll('[data-cat-sub]').forEach(b => b.addEventListener('click', () => {
+          catalogoSubfamilia = b.dataset.catSub || null;
+          catalogoMostrar = CATALOGO_POR_PAGINA;
+          catalogoScroll = window.scrollY;
+          renderCatalogo();
+        }));
+        document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(titulo, produtos, 0));
         document.getElementById('catSelecionarBtn').addEventListener('click', alternarSelecaoCatalogo);
         document.getElementById('catMaisBtn')?.addEventListener('click', () => {
           catalogoMostrar += CATALOGO_VER_MAIS;
@@ -28437,6 +28504,7 @@
               emb: p.emb,
               ipi: Number(p.ipi) || 0,
               familia: p.familia,
+              subfamilia: p.subfamilia || null,
               fx: p.preco_fixo ? 1 : 0,
               canaisFx: p.canais_fx || [],
               precos: p.precos,
