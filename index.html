@@ -27180,6 +27180,7 @@
         const jaLeva = new Set((cliente ? COMPRADOS_CACHE.get(cliente.id) || [] : []).map(c => String(c.codigo_sku)));
         const itens = [];
         let tirados = 0;
+        const semConferir = !!(cliente && !COMPRADOS_CACHE.has(cliente.id));
         for (const item of lista) {
           const doGrupo = (dados.grupos || {})[item.g] || item.skus;
           if (doGrupo.some(c => jaLeva.has(String(c)))) { tirados++; continue; }
@@ -27187,16 +27188,19 @@
             .find(p => p && !p._promocional && !isPrecoFixoParaCanal(p) && !itemSemPrevisaoDeChegada(p.c));
           if (p) itens.push({ p, lojas: item.lojas });
         }
-        return { itens, todos, lojas: todos ? Number((dados.lojas || {}).TODOS) || 0 : lojasCanal, tirados, cliente: jaLeva.size ? cliente : null };
+        return { itens, todos, lojas: todos ? Number((dados.lojas || {}).TODOS) || 0 : lojasCanal, tirados, cliente: jaLeva.size ? cliente : null, semConferir: semConferir ? cliente : null };
       }
       function origemDoMix(r) {
         const lojas = `${r.lojas} loja${r.lojas === 1 ? '' : 's'}`;
         const quem = r.todos ? `${lojas} da carteira` : `${lojas} do canal ${NOME_CANAL[state.canal] || state.canal}`;
-        return `comprados pelo maior número de lojas em 12 meses (${quem})${r.cliente ? `, sem o que ${r.cliente.nome} já compra` : ''}`;
+        const filtro = r.cliente ? `, sem o que ${r.cliente.nome} já compra`
+          : r.semConferir ? `, sem conferir o que ${r.semConferir.nome} já compra (sem a lista dele no aparelho)` : '';
+        return `comprados pelo maior número de lojas em 12 meses (${quem})${filtro}`;
       }
       async function montarMixInicial() {
         const dados = await carregarMixInicial(true);
         if (!dados) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
+        if (state.levCliente) await carregarCompradosRecentes(state.levCliente); // o que ele já compra sai do mix
         const r = rankingMixInicial(dados);
         if (!r.itens.length) { showToast('Nenhum produto pra montar o mix nesse canal.', 'erro'); return; }
         const municipio = state.levCliente ? (FICHA_CNPJ_INFO.get(state.levCliente.id) || {}).municipio : null;
@@ -27206,13 +27210,16 @@
         if (txt == null) return;
         const alvo = Number(String(txt).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
         if (!(alvo > 0)) { showToast('Digite um valor, ex.: 1500', 'erro'); return; }
+        // "até o valor": item cuja embalagem passaria mais de 10% do valor fica de
+        // fora e o próximo da lista é tentado (embalagem de 24 x R$ 30 no fim estourava)
+        const teto = alvo * 1.1;
         let soma = 0, n = 0;
         for (const { p } of r.itens) {
           if (soma >= alvo) break;
           if (state.cart.some(i => i.cod === p.c)) continue;
           const qtd = packStep(p);
           const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, false, 0);
-          if (!(unit > 0)) continue;
+          if (!(unit > 0) || soma + unit * qtd > teto) continue;
           addToCart(p.c, qtd, true);
           soma += unit * qtd;
           n++;

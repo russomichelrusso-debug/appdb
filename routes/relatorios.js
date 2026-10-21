@@ -672,7 +672,7 @@ router.get('/produtos-abc-geral', async (req, res) => {
 // Mix inicial (routes/lib/mixInicial.js): os produtos comprados pelo maior
 // número de lojas nos últimos 12 meses, por canal. O app guarda a resposta no
 // aparelho (vale sem internet) e monta o orçamento com ela. Mesmo resultado pra
-// todo mundo: guardado 30 min no servidor (só muda com importação).
+// todo mundo: guardado 30 min no servidor (importação nova aparece em até 30 min).
 const MIX_DIAS = 365;
 const MIX_CACHE_MS = 30 * 60 * 1000;
 let mixCache = null; // { em, json }
