@@ -1217,8 +1217,10 @@ Supabase, sem PR — não é mudança de código.
   'subfamilia'`, `targetValue` = código, ex. "S265"; select com as subfamílias do catálogo carregado): `scopeMatchesProduct`
   compara `p.subfamilia.codigo`, a chave do bônus é `subfamilia|S265` (`bestBonusForProduct`), conta as colheres da
   subfamília juntas e vale na fita do card, na campanha aberta da aba Produtos e no texto de condições. O promocional
-  P/P1/P2 do Painel herda a subfamília do base (`mergeProdutosPromocionais`). O "Desconto por classificatório" e a cesta
-  continuam só com categoria/produto.
+  P/P1/P2 do Painel herda a subfamília do base (`mergeProdutosPromocionais`). **Desconto por classificatório** (pedido
+  seguinte): o mesmo alvo "Subfamília" no formulário (`classiTargetSub`; o `autoFillClassificatorioDiscount` já passa por
+  `scopeMatchesProduct`); os dois formulários enchem o select por `preencherSelectSubfamilias`. A cesta continua só com
+  categoria/produto.
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
   num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos
