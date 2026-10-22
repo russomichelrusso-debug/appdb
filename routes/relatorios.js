@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE, diaDoBanco } = require('./clientesClassificatorio');
+const { SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE, diaDoBanco } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
 const { nomesDosProdutos } = require('./lib/cacheTabela');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
@@ -65,15 +65,28 @@ function canalDoCliente(classificatorioTipo) {
   return 'Varejo';
 }
 
-// Faixas de dias sem comprar usadas nos cartões "Contas - X a Y Meses Sem
-// Compra" do Dashboard - meses tratados como blocos de 30 dias, com o limite
-// superior de cada faixa excluindo o dia em que o próximo bloco começa (ex:
-// "até 5 meses" para antes do dia 180, quando começam os 6 meses). Limiar
-// diferente do DIAS_SEM_COMPRAR_ALERTA=60 já usado no alerta de
-// classificatório (routes/clientesClassificatorio.js) - documentado aqui
-// pra não os dois divergirem em silêncio se um dia precisar mudar.
-const FAIXA_3_A_5_MESES = [90, 179];
-const FAIXA_6_A_8_MESES = [180, 269];
+// Faixas dos cartões "Contas - X a Y Meses Sem Compra" do Dashboard, na régua
+// do painel do Salesforce (conferida em 22/10/2026 contra o relatório "Todas
+// Contas"): meses de calendário contados de hoje pra trás - "3 a 5" = último
+// pedido entre hoje - 5 meses e hoje - 3 meses, "6 a 8" = entre - 8 e - 6
+// (os dois limites entram). Quem está entre 5 e 6 meses (ou 8 e 9) não entra
+// em nenhum: é assim no Salesforce - com faixas emendadas o 3-5 dava 79 e o
+// 6-8, 32 (painel: 61 e 24; com este corte, 62 e 24). Antes eram blocos de 30
+// dias (90-179/180-269). Limiar diferente do
+// DIAS_SEM_COMPRAR_ALERTA=60 do alerta de classificatório.
+const FAIXA_3_A_5_MESES = [3, 5];
+const FAIXA_6_A_8_MESES = [6, 8];
+
+// "AAAA-MM-DD" de N meses antes do dia dado, como o "- interval 'N months'" do
+// Postgres: dia que não existe no mês de destino vira o último dele (31/07 - 5
+// meses = 28/02).
+function mesesAntes(diaISO, n) {
+  const [a, m, d] = diaISO.split('-').map(Number);
+  const alvo = new Date(Date.UTC(a, m - 1 - n, 1));
+  const ultimo = new Date(Date.UTC(alvo.getUTCFullYear(), alvo.getUTCMonth() + 1, 0)).getUTCDate();
+  alvo.setUTCDate(Math.min(d, ultimo));
+  return alvo.toISOString().slice(0, 10);
+}
 
 // Produto entregue em mais de uma nota fiscal do mesmo pedido (faturado em
 // parte, o saldo saiu depois) vira uma linha por nota em
@@ -853,7 +866,7 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
 router.get('/dashboard/resumo', async (req, res) => {
   try {
     const outrosVendedores = await clientesDeOutroVendedor();
-    const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente] = await Promise.all([
+    const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente, contasSf, entradaAte] = await Promise.all([
       pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
       pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
       pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
@@ -873,39 +886,84 @@ router.get('/dashboard/resumo', async (req, res) => {
          WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '12 months'
          GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
       ),
-      // Canal + inatividade (cartões "Clientes Ativos por Canal" e "Contas
-      // sem comprar") - precisa de TODOS os clientes, não só os já
-      // classificados (sem classificatorio_tipo = canal "Varejo" por
-      // padrão), por isso não reaproveita /clientes/classificatorio/alertas
-      // (que filtra por classificatorio_tipo IS NOT NULL) e usa a mesma
-      // subconsulta de faturamento 12m sem filtro nenhum de cliente.
+      // Canal + último pedido de TODOS os clientes (não só os classificados;
+      // sem classificatorio_tipo = canal "Varejo"), cada um POR CONTA (sem
+      // somar a matriz_grupo): o painel do Salesforce conta conta por conta.
       pool.query(
-        `SELECT c.id, c.nome, c.classificatorio_tipo, base.ultima_compra, base.ultimo_pedido
+        `SELECT c.id, c.nome, c.codigo_oficial, c.classificatorio_tipo, base.ultima_compra, base.ultimo_pedido
          FROM clientes c
-         JOIN (${SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
+         JOIN (${SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
       ),
+      // Foto do relatório "Todas Contas" do Salesforce (routes/contasSalesforce.js).
+      pool.query(
+        `/* contas-sf:dashboard */ SELECT codigo_oficial, cliente_id, nome, situacao, classificatorio,
+           ultima_compra::text AS ultima_compra, data_relatorio::text AS data_relatorio, de_outro_vendedor
+         FROM contas_salesforce`
+      ),
+      pool.query(`/* dashboard:entrada-ate */ SELECT MAX(data_implantacao)::text AS dia FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6`),
     ]);
 
-    const hoje = new Date();
-    let ativosPorCanal = { Varejo: 0, Atacado: 0, Rede: 0 };
-    const clientesDe3a5Meses = [];
-    const clientesDe6a8Meses = [];
+    // Régua do painel do Salesforce (conferida em 22/10/2026: app 300 × SF 290
+    // ativos, 57 × 61 e 20 × 24 nas contas sem compra):
+    //  - "Clientes Ativos por Canal" = contas com situação "Ativo" no relatório
+    //    Todas Contas (comprou em ~6 meses, com exceções que o próprio
+    //    Salesforce mantém), inclusive as de outra base - o painel conta todas
+    //    as contas que o representante enxerga. Quem pediu depois da foto
+    //    também é ativo. Conta fora do relatório (ou sem relatório importado):
+    //    pedido nos últimos 6 meses. Antes era 12 meses.
+    //  - "Meses sem compra" pelo último pedido da conta (implantação no ERP,
+    //    nota ou app - o "Última compra" do Salesforce é a implantação) ou o do
+    //    Salesforce, o mais novo (comprou com outro vendedor). Ativas de outra
+    //    base e a conta da representação ficam fora das listas: não são de
+    //    quem vende (decisão de 10/2026) - por isso pode faltar 1 ou 2 em
+    //    relação ao painel.
+    const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const ativoAte = mesesAntes(hojeBr, 6);
+    const faixas = [
+      { lista: [], de: mesesAntes(hojeBr, FAIXA_3_A_5_MESES[1]), ate: mesesAntes(hojeBr, FAIXA_3_A_5_MESES[0]) },
+      { lista: [], de: mesesAntes(hojeBr, FAIXA_6_A_8_MESES[1]), ate: mesesAntes(hojeBr, FAIXA_6_A_8_MESES[0]) },
+    ];
+    const contas = new Map(); // chave: id do cliente, ou "sf:<código>" pra conta que não está no app
+    const idPorCodigo = new Map();
     for (const row of porCliente.rows) {
-      // ativo com outro vendedor (Salesforce): nem "ativo" da carteira nem "conta sem comprar"
-      if (outrosVendedores.has(String(row.id))) continue;
-      const canal = canalDoCliente(row.classificatorio_tipo);
-      // último pedido (carteira e app inclusive), não só a última nota: quem
-      // já pediu de novo não é "conta sem comprar"
-      const ultimoPedido = diaDoBanco(row.ultimo_pedido) || diaDoBanco(row.ultima_compra);
-      if (!ultimoPedido) continue;
-      const diasSemComprar = Math.floor((hoje - new Date(`${ultimoPedido}T00:00:00Z`)) / (1000 * 60 * 60 * 24));
-      if (diasSemComprar <= 365) ativosPorCanal[canal] = (ativosPorCanal[canal] || 0) + 1;
-      if (diasSemComprar >= FAIXA_3_A_5_MESES[0] && diasSemComprar <= FAIXA_3_A_5_MESES[1]) {
-        clientesDe3a5Meses.push({ id: row.id, nome: row.nome, diasSemComprar });
-      } else if (diasSemComprar >= FAIXA_6_A_8_MESES[0] && diasSemComprar <= FAIXA_6_A_8_MESES[1]) {
-        clientesDe6a8Meses.push({ id: row.id, nome: row.nome, diasSemComprar });
-      }
+      if (row.codigo_oficial) idPorCodigo.set(String(row.codigo_oficial), String(row.id));
+      contas.set(String(row.id), {
+        id: row.id, nome: row.nome, classificatorio: row.classificatorio_tipo,
+        ultimo: diaDoBanco(row.ultimo_pedido) || diaDoBanco(row.ultima_compra), sf: null,
+      });
     }
+    for (const sf of contasSf.rows) {
+      // sem cliente_id (ativa de outra base gravada antes de o cliente existir no
+      // app): liga pelo código, senão a conta contava duas vezes
+      const chave = sf.cliente_id != null ? String(sf.cliente_id) : (idPorCodigo.get(String(sf.codigo_oficial)) || `sf:${sf.codigo_oficial}`);
+      const conta = contas.get(chave) || { id: null, nome: sf.nome, classificatorio: sf.classificatorio, ultimo: null };
+      conta.sf = sf;
+      contas.set(chave, conta);
+    }
+    const ativosPorCanal = { Varejo: 0, Atacado: 0, Rede: 0 };
+    let ativosDeOutrasBases = 0;
+    for (const [chave, conta] of contas) {
+      const sf = conta.sf;
+      const doApp = conta.ultimo;
+      const ultimo = [doApp, sf && diaDoBanco(sf.ultima_compra)].filter(Boolean).sort().pop() || null;
+      const ativo = sf
+        ? (sf.situacao === 'Ativo' || (!!doApp && doApp > sf.data_relatorio))
+        : (!!ultimo && ultimo >= ativoAte);
+      const base = outrosVendedores.get(chave);
+      const deOutraBase = !!base || !!(sf && sf.de_outro_vendedor);
+      if (ativo) {
+        const canal = canalDoCliente(conta.classificatorio);
+        ativosPorCanal[canal] = (ativosPorCanal[canal] || 0) + 1;
+        if (deOutraBase && base !== REPRESENTACAO) ativosDeOutrasBases++;
+      }
+      // ativa com outro vendedor / representação, ou conta fora do app: não entra nas listas
+      if (deOutraBase || conta.id == null || !ultimo) continue;
+      const faixa = faixas.find(f => ultimo >= f.de && ultimo <= f.ate);
+      if (!faixa) continue;
+      const diasSemComprar = Math.round((Date.parse(`${hojeBr}T00:00:00Z`) - Date.parse(`${ultimo}T00:00:00Z`)) / 86400000);
+      faixa.lista.push({ id: conta.id, nome: conta.nome, diasSemComprar });
+    }
+    const [clientesDe3a5Meses, clientesDe6a8Meses] = faixas.map(f => f.lista);
     // Mais tempo sem comprar primeiro - é quem mais precisa de atenção.
     clientesDe3a5Meses.sort((a, b) => b.diasSemComprar - a.diasSemComprar);
     clientesDe6a8Meses.sort((a, b) => b.diasSemComprar - a.diasSemComprar);
@@ -918,7 +976,10 @@ router.get('/dashboard/resumo', async (req, res) => {
       semanal: semanal.rows,
       trimestral: trimestral.rows,
       topClientes: topClientes.rows,
-      clientesAtivosPorCanal: { total: totalAtivos, porCanal: ativosPorCanal },
+      clientesAtivosPorCanal: { total: totalAtivos, porCanal: ativosPorCanal, deOutrasBases: ativosDeOutrasBases },
+      // último dia de implantação importado: o painel do Salesforce é ao vivo, o
+      // relatório do ERP chega de madrugada sem os pedidos da véspera
+      entradaAte: (entradaAte.rows[0] && entradaAte.rows[0].dia) || null,
       contasSemComprar: {
         de3a5Meses: clientesDe3a5Meses.length,
         de6a8Meses: clientesDe6a8Meses.length,
