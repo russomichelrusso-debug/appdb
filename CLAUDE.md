@@ -1202,6 +1202,26 @@ Supabase, sem PR — não é mudança de código.
     enviadas num compartilhar só (o WhatsApp recebe como álbum; sem compartilhar de arquivo, baixa uma por uma).
     **Saída da vitrine com separados** (2º PR): no lugar do "Pôr no orçamento?" abre `#vitrineSeparadosModal` com a lista
     e "Enviar card/encarte pro cliente" (a mesma janela, até 24), "Pôr no orçamento", "Os dois" ou "Descartar seleção".
+- **Subfamílias de marketing no Catálogo** (10/2026, a partir da planilha "CORREÇÃO SUBFAMÍLIAS COLHERES DE PEDREIRO" da
+  Cortag, DE × PARA da "Sub-Fam MKT"; decisão do usuário: **sem tela no Painel**). A Lista de Preços só traz a família
+  ("16 - COLHERES DE PEDREIRO"); a subfamília fica à mão em `routes/lib/subfamilias.js` (código do produto → S265 cabo
+  emborrachado, S42 cabo plástico, S171 cabo de madeira, S266 forjadas, S173 azulejista, S188 inglesas; promocional P/P1/P2
+  cai no base), vai junto de cada produto no `GET /api/catalogo-precos` (`subfamilia`, por cima da linha do cache) e o modo
+  Catálogo mostra, dentro da família com 2+ subfamílias, chips "Todas · N / Cabo plástico · 8…" (`subfamiliasDaFamilia`,
+  `catalogoSubfamilia`; sem subfamília = "Outros"); a vitrine abre só a subfamília escolhida. Nova planilha DE × PARA =
+  editar a lista no arquivo. Em 10/2026, das 54 colheres da planilha, 31 estavam na Lista de Preços (as "- EXP" e as
+  forjadas não). **Curva ABC** (pedido seguinte do usuário): `produtos-abc-geral` e `clientes/:id/produtos-abc` mandam a mesma
+  `subfamilia` (`comSubfamilia`); em `curva-abc.html`, com uma categoria escolhida que tem subfamílias, aparece o filtro "Todas as
+  subfamílias" ao lado do de categoria e, no cartão "Por categoria", uma barra por subfamília embaixo dela (tocar filtra a lista;
+  `subfamiliasDaCategoria`). **Campanhas** (pedido seguinte): alvo novo **"Subfamília"** na regra do Painel (`targetType:
+  'subfamilia'`, `targetValue` = código, ex. "S265"; select com as subfamílias do catálogo carregado): `scopeMatchesProduct`
+  compara `p.subfamilia.codigo`, a chave do bônus é `subfamilia|S265` (`bestBonusForProduct`), conta as colheres da
+  subfamília juntas e vale na fita do card, na campanha aberta da aba Produtos e no texto de condições. O promocional
+  P/P1/P2 do Painel herda a subfamília do base (`mergeProdutosPromocionais`). **Desconto por classificatório** (pedido
+  seguinte): o mesmo alvo "Subfamília" no formulário (`classiTargetSub`; o `autoFillClassificatorioDiscount` já passa por
+  `scopeMatchesProduct`); os dois formulários enchem o select por `preencherSelectSubfamilias`. **Cesta** (pedido seguinte):
+  item da cesta do tipo "Subfamília" (`data-basket-sub`, rótulo curto "Cabo plástico" pra caber na linha; `scopeTotals` já
+  soma pela subfamília; o texto da campanha usa `nomeDaSubfamilia`).
 - **Dois aparelhos** (PR #245, 10/2026): o usuário pediu ideias de integração tablet + celular / tablet + laptop
   ("uma segunda tela? um acompanhamento?"); das sugestões, escolheu as duas abaixo a partir de mockups e pediu as duas
   num PR só. Ficaram de fora, como ideias pra depois: laptop como "mesa de planejamento" que manda rota/orçamentos

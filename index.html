@@ -699,6 +699,20 @@
       box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
     }
 
+    /* alvo da campanha (5 opções) e do desconto por classificatório (4): 2 linhas no celular */
+    #targetTypeSeg,
+    #classiTargetTypeSeg {
+      flex-wrap: wrap;
+    }
+
+    #targetTypeSeg button {
+      flex: 1 1 30%;
+    }
+
+    #classiTargetTypeSeg button {
+      flex: 1 1 45%;
+    }
+
     .classiSeg {
       align-items: stretch;
     }
@@ -4369,6 +4383,7 @@
       font-size: 13px;
       width: auto;
       flex: 1;
+      min-width: 0; /* nome comprido (subfamília) não empurra a qtd. mín. pra fora */
     }
 
     .basketItemRow input[type=text] {
@@ -5747,9 +5762,11 @@
     #fotoRemoverBtn.hidden,
     #clienteTabList.hidden,
     #targetCatWrap.hidden,
+    #targetSubWrap.hidden,
     #selfWrap.hidden,
     #promoProdutoOriginalSelecionado.hidden,
     #classiTargetCatWrap.hidden,
+    #classiTargetSubWrap.hidden,
     #classiTargetProdWrap.hidden,
     #classiTargetSkuListWrap.hidden,
     #clienteClassificatorioCard.hidden,
@@ -7102,6 +7119,41 @@
       background: var(--ink);
       border-color: var(--ink);
       color: var(--fill);
+    }
+
+    /* subfamílias de marketing dentro da família aberta (routes/lib/subfamilias.js) */
+    .catSubs {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      margin: 2px -16px 8px;
+      padding: 0 16px;
+    }
+
+    .catSubs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .catSub {
+      flex: none;
+      white-space: nowrap;
+      min-height: 36px;
+      padding: 0 12px;
+      border: 0.75px solid var(--hairline);
+      border-radius: 10px;
+      background: transparent;
+      color: var(--gray);
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .catSub.ativo {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--white);
     }
 
     .catCabeca {
@@ -12356,12 +12408,16 @@
         <label>O desconto vale pra…</label>
         <div class="segmented" id="targetTypeSeg" style="margin-bottom:12px;">
           <button type="button" data-v="category" class="active">Categoria</button>
+          <button type="button" data-v="subfamilia">Subfamília</button>
           <button type="button" data-v="product">Produto</button>
           <button type="button" data-v="skuList">Grupo de produtos</button>
           <button type="button" data-v="all">Pedido todo</button>
         </div>
         <div id="targetCatWrap">
           <select id="promoTargetCat" style="margin-bottom:16px;"></select>
+        </div>
+        <div id="targetSubWrap" class="hidden">
+          <select id="promoTargetSub" style="margin-bottom:16px;"></select>
         </div>
         <div id="targetProdWrap" class="hidden">
           <input type="text" id="promoTargetProd" placeholder="Código do produto (ex: 60863)"
@@ -12488,11 +12544,15 @@
         <label>O desconto vale pra…</label>
         <div class="segmented" id="classiTargetTypeSeg" style="margin-bottom:12px;">
           <button type="button" data-v="category" class="active">Categoria</button>
+          <button type="button" data-v="subfamilia">Subfamília</button>
           <button type="button" data-v="product">Produto</button>
           <button type="button" data-v="skuList">Grupo de produtos</button>
         </div>
         <div id="classiTargetCatWrap">
           <select id="classiTargetCat" style="margin-bottom:16px;"></select>
+        </div>
+        <div id="classiTargetSubWrap" class="hidden">
+          <select id="classiTargetSub" style="margin-bottom:16px;"></select>
         </div>
         <div id="classiTargetProdWrap" class="hidden">
           <input type="text" id="classiTargetProd" placeholder="Código do produto (ex: 60863)" style="margin-bottom:4px;">
@@ -14120,12 +14180,12 @@
       // Formato de cada regra (salva em state.promoRules):
       // {
       //   id, name, active,
-      //   targetType: "category" | "product" | "skuList" | "all",  // "all" = todos os itens do pedido
-      //   targetValue: "nome da categoria", "código do produto", "cód1,cód2" ou "" (all),
+      //   targetType: "category" | "subfamilia" | "product" | "skuList" | "all",  // "all" = todos os itens do pedido
+      //   targetValue: "nome da categoria", "código da subfamília" (S265), "código do produto", "cód1,cód2" ou "" (all),
       //   basis: "self" | "combo",
       //   selfMetric: "qty" | "value" | "skus",  // usado só quando basis === "self"; "skus" = nº de itens diferentes
       //   tiers: [{min:40, pct:5}, ...],          // usado só quando basis === "self"
-      //   basketItems: [{type:"category"|"product", value:"...", minQty:1}, ...], // usado só quando basis === "combo"
+      //   basketItems: [{type:"category"|"subfamilia"|"product", value:"...", minQty:1}, ...], // usado só quando basis === "combo"
       //   comboPct: 15,                           // usado só quando basis === "combo"
       //   stacks: true, // true = soma com desconto manual do item; false = usa o maior dos dois
       //   canais: ["VAREJO", ...], // canais em que vale; regra sem o campo (as criadas antes) = só Varejo
@@ -14199,6 +14259,8 @@
         if (type === 'all') return true;
         if (type === 'product') return p.c === value;
         if (type === 'skuList') return value.split(',').map(s => s.trim()).includes(p.c);
+        // subfamília de marketing (routes/lib/subfamilias.js, vem no catálogo)
+        if (type === 'subfamilia') return !!(p.subfamilia && p.subfamilia.codigo === value);
         return productFamilia(p) === value;
       }
       function scopeTotals(rows, type, value) {
@@ -14222,7 +14284,13 @@
           const codes = value.split(',').map(s => s.trim()).filter(Boolean);
           return `grupo de ${codes.length} produtos (${codes.join(', ')})`;
         }
+        if (type === 'subfamilia') return `subfamília ${nomeDaSubfamilia(value)}`;
         return value;
+      }
+      // "S265" -> "Colheres de pedreiro cabo emborrachado" (pelo catálogo carregado)
+      function nomeDaSubfamilia(codigo) {
+        const p = (DB.products || []).find(x => x.subfamilia && x.subfamilia.codigo === codigo);
+        return p ? p.subfamilia.nome : codigo;
       }
       // Regra que atingiu o degrau mas não pode valer por uma condição do
       // próprio pedido (teto do alvo, % mínimo de lançamentos) - devolve o
@@ -14312,6 +14380,8 @@
         let best = bonuses['product|' + p.c] || null;
         const cat = bonuses['category|' + productFamilia(p)];
         if (cat && (!best || cat.pct > best.pct)) best = cat;
+        const sub = p.subfamilia ? bonuses['subfamilia|' + p.subfamilia.codigo] : null;
+        if (sub && (!best || sub.pct > best.pct)) best = sub;
         for (const key in bonuses) {
           if (!key.startsWith('skuList|')) continue;
           const value = key.slice('skuList|'.length);
@@ -14459,7 +14529,8 @@
       function faixasDaCampanhaTexto(r) {
         if (r.basis === 'combo') {
           const itens = (r.basketItems || []).map(i => {
-            const nome = i.type === 'product' ? (productByCod(i.value) || {}).n || `cód. ${i.value}` : i.value;
+            const nome = i.type === 'product' ? (productByCod(i.value) || {}).n || `cód. ${i.value}`
+              : i.type === 'subfamilia' ? nomeDaSubfamilia(i.value) : i.value;
             return `${nome}${(Number(i.minQty) || 1) > 1 ? ` (mín. ${i.minQty})` : ''}`;
           });
           const modo = r.basketMode === 'atLeast' ? `pelo menos ${r.basketMinCount || itens.length} de: ` : '';
@@ -14476,6 +14547,7 @@
       function condicoesDaCampanhaTexto(r) {
         const partes = [];
         if (r.targetType === 'category') partes.push(`Conta a família ${r.targetValue} inteira no orçamento`);
+        else if (r.targetType === 'subfamilia') partes.push(`Conta a subfamília ${nomeDaSubfamilia(r.targetValue)} inteira no orçamento`);
         else if (r.targetType === 'skuList') {
           const n = listaDaRegra(r.targetValue).length;
           if (n > 1) partes.push(`Conta os ${n} produtos da campanha juntos no orçamento`);
@@ -27004,8 +27076,8 @@
       // Produtos da regra, na ordem da lista da campanha.
       function produtosDaCampanha(r) {
         const excluirCodigos = listaDaRegra(r.excluirCodigos), excluirFamilias = listaDaRegra(r.excluirFamilias);
-        const lista = r.targetType === 'category'
-          ? DB.products.filter(p => scopeMatchesProduct('category', String(r.targetValue || ''), p))
+        const lista = r.targetType === 'category' || r.targetType === 'subfamilia'
+          ? DB.products.filter(p => scopeMatchesProduct(r.targetType, String(r.targetValue || ''), p))
           : listaDaRegra(r.targetValue).map(productByCod).filter(Boolean);
         return lista.filter(p => !produtoNaListaDaRegra(p, excluirCodigos, excluirFamilias));
       }
@@ -27466,6 +27538,7 @@
       const VITRINE_SEGURAR_MS = 800;
       let prodModo = (() => { try { return localStorage.getItem(PROD_MODO_LS_KEY) === 'catalogo' ? 'catalogo' : 'lista'; } catch (e) { return 'lista'; } })();
       let catalogoFamilia = null; // chave da família aberta (null = cards das famílias)
+      let catalogoSubfamilia = null; // código da subfamília escolhida na família aberta (null = todas)
       let catalogoMostrar = CATALOGO_POR_PAGINA;
       let catalogoScroll = null;
       let vitrine = null; // { titulo, produtos, i, separados }
@@ -27581,13 +27654,32 @@
       }
       function abrirFamiliaDoCatalogo(chave) {
         catalogoFamilia = chave;
+        catalogoSubfamilia = null;
         catalogoMostrar = CATALOGO_POR_PAGINA;
         renderCatalogo();
         window.scrollTo(0, 0);
       }
+      // Subfamílias de marketing da família (p.subfamilia, routes/lib/subfamilias.js),
+      // na ordem da lista; produto sem subfamília numa família que tem vira "Outros".
+      // Menos de 2 = sem chips.
+      function subfamiliasDaFamilia(fam) {
+        const m = new Map();
+        for (const p of fam.produtos) {
+          const s = p.subfamilia || { codigo: '_outros', curto: 'Outros', ordem: Infinity };
+          if (!m.has(s.codigo)) m.set(s.codigo, { codigo: s.codigo, nome: s.curto || s.nome, ordem: s.ordem, produtos: [] });
+          m.get(s.codigo).produtos.push(p);
+        }
+        const subs = [...m.values()].sort((a, b) => a.ordem - b.ordem);
+        return subs.length > 1 ? subs : [];
+      }
       function renderCatalogoDaFamilia(el, familias, fam) {
-        const mostrar = fam.produtos.slice(0, catalogoMostrar);
-        const resto = fam.produtos.length - mostrar.length;
+        const subs = subfamiliasDaFamilia(fam);
+        const sub = catalogoSubfamilia !== null ? subs.find(s => s.codigo === catalogoSubfamilia) : null;
+        if (!sub) catalogoSubfamilia = null;
+        const produtos = sub ? sub.produtos : fam.produtos;
+        const titulo = sub ? `${fam.nome} · ${sub.nome}` : fam.nome;
+        const mostrar = produtos.slice(0, catalogoMostrar);
+        const resto = produtos.length - mostrar.length;
         const chips = `<button type="button" class="catChip" data-cat-voltar>‹ Famílias</button>`
           + familias.map(f => `<button type="button" class="catChip${f === fam ? ' ativo' : ''}" data-cat-familia="${escapeHtml(f.chave)}">${escapeHtml(f.nome)}</button>`).join('');
         const itens = mostrar.map(p => {
@@ -27616,7 +27708,11 @@
             <button type="button" class="recompraBtn" id="catSelecionarBtn">${catalogoSelecionando ? 'Cancelar' : 'Selecionar'}</button>
             <button type="button" class="recompraBtn" id="catVitrineBtn">Mostrar ao cliente</button>
           </div>
-          <div class="ofertaCtx">${fam.produtos.length} produto${fam.produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
+          ${subs.length ? `<div class="catSubs">
+            <button type="button" class="catSub${sub ? '' : ' ativo'}" data-cat-sub="">Todas · ${fam.produtos.length}</button>
+            ${subs.map(s => `<button type="button" class="catSub${s === sub ? ' ativo' : ''}" data-cat-sub="${escapeHtml(s.codigo)}">${escapeHtml(s.nome)} · ${s.produtos.length}</button>`).join('')}
+          </div>` : ''}
+          <div class="ofertaCtx">${produtos.length} produto${produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
           ${catalogoSelecionando ? `<div class="ofertaCtx" style="margin-top:4px;">Toque nos produtos pra marcar (até ${CATALOGO_SEL_MAX}). A seleção continua nas outras famílias.</div>` : ''}
           <div class="campGrade">${itens}</div>
           ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
@@ -27628,7 +27724,15 @@
         const faixa = document.getElementById('catChips');
         const ativo = faixa.querySelector('.catChip.ativo');
         if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
-        document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(fam.nome, fam.produtos, 0));
+        const subAtivo = el.querySelector('.catSubs .catSub.ativo');
+        if (subAtivo) subAtivo.parentElement.scrollLeft = subAtivo.offsetLeft - subAtivo.parentElement.offsetLeft - 16;
+        el.querySelectorAll('[data-cat-sub]').forEach(b => b.addEventListener('click', () => {
+          catalogoSubfamilia = b.dataset.catSub || null;
+          catalogoMostrar = CATALOGO_POR_PAGINA;
+          catalogoScroll = window.scrollY;
+          renderCatalogo();
+        }));
+        document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(titulo, produtos, 0));
         document.getElementById('catSelecionarBtn').addEventListener('click', alternarSelecaoCatalogo);
         document.getElementById('catMaisBtn')?.addEventListener('click', () => {
           catalogoMostrar += CATALOGO_VER_MAIS;
@@ -28437,6 +28541,7 @@
               emb: p.emb,
               ipi: Number(p.ipi) || 0,
               familia: p.familia,
+              subfamilia: p.subfamilia || null,
               fx: p.preco_fixo ? 1 : 0,
               canaisFx: p.canais_fx || [],
               precos: p.precos,
@@ -28523,6 +28628,11 @@
         for (const p of lista) {
           if (DB.productIndex[p.c]) continue; // já existe (evita duplicar ao recarregar)
           p._promocional = true; // fora do catalogo_precos: não entra na comparação do Painel
+          if (!p.subfamilia) { // os cadastrados antes não guardaram: herda do código base
+            const base = /^P[12]?(.+)$/.exec(p.c);
+            const orig = base && DB.productIndex[base[1]];
+            if (orig && orig.subfamilia) p.subfamilia = orig.subfamilia;
+          }
           prepararProdutoParaBusca(p);
           DB.products.push(p);
           DB.productIndex[p.c] = p;
@@ -28806,9 +28916,27 @@
         return codes;
       }
 
+      // Subfamílias do catálogo carregado (routes/lib/subfamilias.js), pela ordem da
+      // lista, no select do alvo (campanha e desconto por classificatório). A da regra
+      // aberta fica mesmo se sumiu do catálogo; catálogo do aparelho que não veio do
+      // servidor (planilha local, precos.json) não tem subfamília: o select diz isso.
+      // curto: rótulo sem a família ("Cabo plástico"), pra caber na linha da cesta
+      function opcoesSubfamilias(atual, curto) {
+        const subs = new Map();
+        for (const p of DB.products || []) if (p.subfamilia && !subs.has(p.subfamilia.codigo)) subs.set(p.subfamilia.codigo, p.subfamilia);
+        if (atual && !subs.has(atual)) subs.set(atual, { codigo: atual, nome: atual, ordem: -1 });
+        return subs.size
+          ? [...subs.values()].sort((a, b) => a.ordem - b.ordem)
+            .map(sf => `<option value="${escapeHtml(sf.codigo)}"${sf.codigo === atual ? ' selected' : ''}>${escapeHtml((curto && sf.curto) || sf.nome)}</option>`).join('')
+          : '<option value="">Sem subfamílias no catálogo deste aparelho (só no baixado do servidor)</option>';
+      }
+      function preencherSelectSubfamilias(selectId, rule) {
+        document.getElementById(selectId).innerHTML = opcoesSubfamilias(rule && rule.targetType === 'subfamilia' ? rule.targetValue : '');
+      }
       function setTargetType(type) {
         document.getElementById('targetTypeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === type));
         document.getElementById('targetCatWrap').classList.toggle('hidden', type !== 'category');
+        document.getElementById('targetSubWrap').classList.toggle('hidden', type !== 'subfamilia');
         document.getElementById('targetProdWrap').classList.toggle('hidden', type !== 'product');
         document.getElementById('targetSkuListWrap').classList.toggle('hidden', type !== 'skuList');
       }
@@ -28829,6 +28957,7 @@
       <div class="biTop">
         <select data-basket-type="${i}">
           <option value="category"${it.type === 'category' ? ' selected' : ''}>Categoria</option>
+          <option value="subfamilia"${it.type === 'subfamilia' ? ' selected' : ''}>Subfamília</option>
           <option value="product"${it.type === 'product' ? ' selected' : ''}>Produto (código)</option>
         </select>
         <button type="button" class="rmBasket" data-rm-basket="${i}" aria-label="Remover item">&times;</button>
@@ -28836,6 +28965,7 @@
       <div class="biBottom">
         ${it.type === 'product'
             ? `<input type="text" data-basket-prod="${i}" placeholder="código do produto" value="${escapeHtml(it.value || '')}">`
+            : it.type === 'subfamilia' ? `<select data-basket-sub="${i}">${opcoesSubfamilias(it.value, true)}</select>`
             : `<select data-basket-cat="${i}">${DB.familias.map(c => `<option value="${escapeHtml(c)}"${it.value === c ? ' selected' : ''}>${escapeHtml(c)}</option>`).join('')}</select>`
           }
         <span class="biQtyLbl">qtd. mín.</span>
@@ -28871,6 +29001,7 @@
           const type = wrap.querySelector(`[data-basket-type="${i}"]`).value;
           const value = type === 'product'
             ? (wrap.querySelector(`[data-basket-prod="${i}"]`)?.value || '').trim()
+            : type === 'subfamilia' ? (wrap.querySelector(`[data-basket-sub="${i}"]`)?.value || '')
             : (wrap.querySelector(`[data-basket-cat="${i}"]`)?.value || '');
           const minQty = parseInt(wrap.querySelector(`[data-basket-minqty="${i}"]`).value, 10) || 1;
           return { type, value, minQty };
@@ -28890,8 +29021,11 @@
 
         const targetType = rule ? rule.targetType : 'category';
         setTargetType(targetType);
+        preencherSelectSubfamilias('promoTargetSub', rule);
         if (targetType === 'category') {
           document.getElementById('promoTargetCat').value = rule ? rule.targetValue : (DB.familias[0] || '');
+        } else if (targetType === 'subfamilia') {
+          document.getElementById('promoTargetSub').value = rule.targetValue;
         } else if (targetType === 'skuList') {
           document.getElementById('promoTargetSkuList').value = rule ? rule.targetValue : '';
           resolveSkuListDisplay(rule ? rule.targetValue : '', document.getElementById('targetSkuListResolve'));
@@ -29002,6 +29136,7 @@
         let targetValue;
         if (targetType === 'all') targetValue = '';
         else if (targetType === 'category') targetValue = document.getElementById('promoTargetCat').value;
+        else if (targetType === 'subfamilia') targetValue = document.getElementById('promoTargetSub').value;
         else if (targetType === 'skuList') targetValue = document.getElementById('promoTargetSkuList').value.trim();
         else targetValue = document.getElementById('promoTargetProd').value.trim();
         const basis = document.getElementById('basisSeg').querySelector('button.active').dataset.v;
@@ -29010,7 +29145,7 @@
         const msg = document.getElementById('promoFormMsg');
 
         if (!name) { msg.innerHTML = '<div class="ap-msg error">Dê um nome pra essa regra.</div>'; return; }
-        if (!targetValue && targetType !== 'all') { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, produto ou grupo que recebe o desconto.</div>'; return; }
+        if (!targetValue && targetType !== 'all') { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, subfamília, produto ou grupo que recebe o desconto.</div>'; return; }
         if (!canais.length) { msg.innerHTML = '<div class="ap-msg error">Marque ao menos um canal em que a campanha vale.</div>'; return; }
         if (targetType === 'product' && !productByCod(targetValue)) {
           msg.innerHTML = '<div class="ap-msg error">Código de produto não encontrado — confira o código.</div>';
@@ -29397,6 +29532,7 @@
       function setClassiTargetType(type) {
         document.getElementById('classiTargetTypeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.v === type));
         document.getElementById('classiTargetCatWrap').classList.toggle('hidden', type !== 'category');
+        document.getElementById('classiTargetSubWrap').classList.toggle('hidden', type !== 'subfamilia');
         document.getElementById('classiTargetProdWrap').classList.toggle('hidden', type !== 'product');
         document.getElementById('classiTargetSkuListWrap').classList.toggle('hidden', type !== 'skuList');
       }
@@ -29441,8 +29577,11 @@
         document.getElementById('classiDiscountLabel').value = rule ? rule.label : '';
         const targetType = rule ? rule.targetType : 'category';
         setClassiTargetType(targetType);
+        preencherSelectSubfamilias('classiTargetSub', rule);
         if (targetType === 'category') {
           document.getElementById('classiTargetCat').value = rule ? rule.targetValue : (DB.familias[0] || '');
+        } else if (targetType === 'subfamilia') {
+          document.getElementById('classiTargetSub').value = rule.targetValue;
         } else if (targetType === 'skuList') {
           document.getElementById('classiTargetSkuList').value = rule ? rule.targetValue : '';
           resolveSkuListDisplay(rule ? rule.targetValue : '', document.getElementById('classiTargetSkuListResolve'));
@@ -29465,12 +29604,13 @@
         const targetType = document.getElementById('classiTargetTypeSeg').querySelector('button.active').dataset.v;
         let targetValue;
         if (targetType === 'category') targetValue = document.getElementById('classiTargetCat').value;
+        else if (targetType === 'subfamilia') targetValue = document.getElementById('classiTargetSub').value;
         else if (targetType === 'skuList') targetValue = document.getElementById('classiTargetSkuList').value.trim();
         else targetValue = document.getElementById('classiTargetProd').value.trim();
         const msg = document.getElementById('classiDiscountFormMsg');
 
         if (!label) { msg.innerHTML = '<div class="ap-msg error">Dê um nome pra essa regra.</div>'; return; }
-        if (!targetValue) { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, produto ou grupo.</div>'; return; }
+        if (!targetValue) { msg.innerHTML = '<div class="ap-msg error">Informe a categoria, subfamília, produto ou grupo.</div>'; return; }
         if (targetType === 'product' && !productByCod(targetValue)) {
           msg.innerHTML = '<div class="ap-msg error">Código de produto não encontrado — confira o código.</div>';
           return;

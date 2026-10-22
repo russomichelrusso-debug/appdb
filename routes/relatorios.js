@@ -10,6 +10,7 @@ const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { clientesDeOutroVendedor, REPRESENTACAO } = require('./lib/contasSalesforce');
 const { rankingMixInicial, canalDaLoja } = require('./lib/mixInicial');
+const { comSubfamilia } = require('./lib/subfamilias');
 const { marcarDescontinuados, estaDescontinuado, grupoDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 
 router.param('id', validarIdInteiro);
@@ -662,7 +663,7 @@ router.get('/produtos-abc-geral', async (req, res) => {
     );
     const reconciliado = await reconciliarProdutosPorCodigoBase(result.rows, { inicio, fim });
     reconciliado.sort((a, b) => b.faturamento_total - a.faturamento_total);
-    res.json(await marcarDescontinuados(pool, reconciliado, 'produto'));
+    res.json(comSubfamilia(await marcarDescontinuados(pool, reconciliado, 'produto')));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular curva ABC geral.' });
@@ -770,7 +771,7 @@ router.get('/clientes/:id/produtos-abc', async (req, res) => {
     );
     const reconciliado = await reconciliarProdutosPorCodigoBase(result.rows, { inicio, fim, clienteCodigo: codigoOficial });
     reconciliado.sort((a, b) => b.faturamento_total - a.faturamento_total);
-    res.json(await marcarDescontinuados(pool, reconciliado, 'produto'));
+    res.json(comSubfamilia(await marcarDescontinuados(pool, reconciliado, 'produto')));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao calcular curva ABC do cliente.' });

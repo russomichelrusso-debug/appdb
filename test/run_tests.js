@@ -2668,6 +2668,20 @@ async function main() {
     `produto fora da tabela de preços aparece com a Descrição do relatório (histórico e curva ABC): ${JSON.stringify((histDesc.body || []).filter(r => r.codigo_sku === '99110'))}`
   );
 
+  // 24b) Curva ABC leva a subfamília de marketing (routes/lib/subfamilias.js) do produto
+  mockDb.__seed({ clientes: [{ id: 9405, nome: 'LOJA COLHER', codigo_oficial: 'COD9405' }] });
+  res = await req('POST', '/api/pedidos-oficiais/importar', {
+    itens: [{ nr_pedido: 'SF9405', codigo_sku: '62535', cliente_codigo_oficial: 'COD9405', cliente_nome: 'LOJA COLHER', status: 'faturado',
+      valor: 300, quantidade: 12, data_implantacao: '2025-10-01', data_faturamento: '2025-10-03' }],
+  });
+  const abcSub = await req('GET', '/api/produtos-abc-geral');
+  const abcSubCli = await req('GET', '/api/clientes/9405/produtos-abc');
+  const colherAbc = (abcSub.body || []).find(r => r.codigo_sku === '62535');
+  assert(res.status < 300 && colherAbc && colherAbc.subfamilia && colherAbc.subfamilia.curto === 'Cabo plástico'
+    && (abcSubCli.body || []).some(r => r.codigo_sku === '62535' && r.subfamilia && r.subfamilia.codigo === 'S42')
+    && !(abcSub.body || []).find(r => r.codigo_sku === '99110').subfamilia,
+    `curva ABC (geral e do cliente) leva a subfamília de marketing: ${JSON.stringify(colherAbc)}`);
+
   // 25) Aba de pedidos à vista aguardando pagamento: a importação troca a
   // lista inteira (o pedido que saiu da aba foi pago), relatório sem a aba
   // não mexe, e o histórico do cliente devolve os pendentes dele - também
@@ -3221,6 +3235,16 @@ async function main() {
     const c4 = await req('GET', '/api/catalogo-precos');
     assert(res.status === 200 && c4.body.produtos.map(p => p.codigo_sku).join() === 'CAT05,CAT06,CAT07',
       `catálogo de preços: importação aparece na hora mesmo com a versão parada: ${JSON.stringify(c4.body.produtos)}`);
+    // subfamília de marketing (routes/lib/subfamilias.js) vai junto do produto no catálogo
+    const { subfamiliaDoProduto } = require('../routes/lib/subfamilias');
+    mockDb.__getCatalogoPrecos().push({ codigo_sku: '60160', nome: 'COLHER DI OVAL 07' });
+    mockDb.__fixarVersaoTabelas(3);
+    const c5 = await req('GET', '/api/catalogo-precos');
+    const colher = c5.body.produtos.find(p => p.codigo_sku === '60160');
+    assert(colher && colher.subfamilia && colher.subfamilia.codigo === 'S265' && !c5.body.produtos.find(p => p.codigo_sku === 'CAT05').subfamilia
+      && subfamiliaDoProduto('P62535').codigo === 'S42' && subfamiliaDoProduto('63593').curto === 'Forjadas' && subfamiliaDoProduto('99999') === null,
+      `catálogo de preços: subfamília de marketing pelo código (promocional cai no base): ${JSON.stringify(colher)}`);
+    mockDb.__getCatalogoPrecos().pop();
     const f1 = await req('GET', '/api/fichas-tecnicas');
     res = await req('POST', '/api/fichas-tecnicas/importar', { fichas: { CAT05: { nome: 'FICHA', desc: 'd', foto: '', specs: { a: 1 } } } });
     const f2 = await req('GET', '/api/fichas-tecnicas');
@@ -4258,6 +4282,29 @@ async function main() {
         assert(nomes(false) === 'Lista,Discos' && nomes(true) === 'BF fixo' && nomes(false, { uf: 'SP' }) === 'Só SP,Lista,Discos'
           && nomes(false, { canal: 'ATACADO' }) === '' && campanhasDoItem(regras, { c: '70001', n: '70001', familia: 'Brocas' }, ctx(), false).length === 0,
           'campanha: fita do card lista as campanhas do item no contexto (sem pedido todo, exclusão, inativa; Preço Fixo só com soNoPrecoFixo), maior % primeiro');
+      }
+      // 1a') alvo "Subfamília" (routes/lib/subfamilias.js): conta as colheres da subfamília
+      // juntas e não pega as da mesma família em outra subfamília
+      {
+        const sub = (codigo) => ({ codigo, nome: codigo, curto: codigo, ordem: 0 });
+        const colher = (c, s, qty) => ({ p: { c, n: c, familia: 'Colheres', subfamilia: sub(s) }, it: { qty }, lineTotal: qty * 10 });
+        const regraSub = { id: 'sf', name: 'Emborrachadas', active: true, targetType: 'subfamilia', targetValue: 'S265', basis: 'self', selfMetric: 'qty', tiers: [{ min: 12, pct: 8 }] };
+        const rows = [colher('60160', 'S265', 6), colher('60162', 'S265', 6), colher('62535', 'S42', 24)];
+        const bonus = avaliar([regraSub], rows).bonuses;
+        const pouco = avaliar([regraSub], [colher('60160', 'S265', 6), colher('62535', 'S42', 24)]).bonuses;
+        assert(bonus['subfamilia|S265'] && bonus['subfamilia|S265'].pct === 8
+          && bestBonusForProduct(bonus, rows[0].p).pct === 8 && bestBonusForProduct(bonus, rows[2].p) === null
+          && Object.keys(pouco).length === 0
+          && campanhasDoItem([regraSub], rows[1].p, ctx(), false).length === 1 && campanhasDoItem([regraSub], rows[2].p, ctx(), false).length === 0,
+          'campanha: alvo subfamília soma só os produtos dela (outra subfamília da mesma família fica de fora)');
+        // cesta com item "subfamília": 12 emborrachadas completam; plástico não conta
+        const cestaSub = { id: 'cs', name: 'Cesta colher + desemp.', active: true, basis: 'combo', targetType: 'category', targetValue: 'Desemp',
+          basketItems: [{ type: 'subfamilia', value: 'S265', minQty: 12 }], comboPct: 5 };
+        const desemp = { p: { c: '70001', n: '70001', familia: 'Desemp' }, it: { qty: 1 }, lineTotal: 20 };
+        const comCesta = avaliar([cestaSub], rows.concat(desemp)).bonuses;
+        const semCesta = avaliar([cestaSub], [colher('60160', 'S265', 6), colher('62535', 'S42', 24), desemp]).bonuses;
+        assert(bestBonusForProduct(comCesta, desemp.p) && bestBonusForProduct(comCesta, desemp.p).pct === 5 && Object.keys(semCesta).length === 0,
+          'campanha: cesta com item de subfamília completa só com os produtos dela');
       }
       // 1b) barra do orçamento: próxima faixa da campanha mais perto (só com item do
       // alvo no orçamento, faltando até metade da faixa; cesta fica de fora)
