@@ -11891,6 +11891,10 @@
           <div><span class="rastreioRotulo">Nota fiscal</span><b id="rastreioNf"></b></div>
           <button type="button" class="restoreBtn compacto" data-copiar="rastreioNf">Copiar</button>
         </div>
+        <div class="rastreioCampo">
+          <div><span class="rastreioRotulo">CNPJ da Cortag (remetente)</span><b id="rastreioCnpjCortag"></b></div>
+          <button type="button" class="restoreBtn compacto" data-copiar="rastreioCnpjCortag">Copiar</button>
+        </div>
         <a class="btnPrimary hidden" id="rastreioAbrirBtn" href="#" target="_blank" rel="noopener"
           style="text-decoration:none;margin-top:6px;">Abrir site da transportadora</a>
         <p class="ap-hint hidden" id="rastreioSemLink" style="margin:6px 0 0;">Essa transportadora ainda não tem
@@ -22330,8 +22334,8 @@
       }
       // ---------------- Rastreio de entrega (pedidos faturados) ----------------
       // A maioria dos portais de transportadora não aceita os dados pelo link,
-      // então o caminho que sempre funciona é: mostrar CNPJ do cliente e NF com
-      // botão de copiar + abrir o site certo. Qual site: pelo nome da
+      // então o caminho que sempre funciona é: mostrar CNPJ do cliente, NF e
+      // CNPJ da Cortag (remetente) com botão de copiar + abrir o site certo. Qual site: pelo nome da
       // transportadora que vem no relatório oficial, casando com "padrao".
       // Lista editável no Painel (config "transportadoras_rastreio"); estas são
       // as que valem enquanto ninguém salvou uma lista.
@@ -22381,6 +22385,9 @@
         document.getElementById('rastreioCnpj').dataset.valor = cnpjDigitos;
         document.getElementById('rastreioNf').textContent = nf;
         document.getElementById('rastreioNf').dataset.valor = nf;
+        // Alguns portais rastreiam pelo CNPJ de quem enviou, não pelo do cliente.
+        document.getElementById('rastreioCnpjCortag').textContent = formatarDocumento(CORTAG_CNPJ_DIGITS);
+        document.getElementById('rastreioCnpjCortag').dataset.valor = CORTAG_CNPJ_DIGITS;
         const abrirBtn = document.getElementById('rastreioAbrirBtn');
         const urlTransp = transp ? urlHttpsOuVazio(transp.url) : '';
         const linkRastreio = urlTransp
@@ -22413,7 +22420,7 @@
         document.getElementById('rastreioFecharBtn').addEventListener('click', () => modal.classList.add('hidden'));
         modal.querySelectorAll('[data-copiar]').forEach(btn => btn.addEventListener('click', () => {
           const el = document.getElementById(btn.dataset.copiar);
-          copiarTexto(el.dataset.valor, btn.dataset.copiar === 'rastreioCnpj' ? 'CNPJ' : 'Nota fiscal');
+          copiarTexto(el.dataset.valor, { rastreioCnpj: 'CNPJ', rastreioCnpjCortag: 'CNPJ da Cortag' }[btn.dataset.copiar] || 'Nota fiscal');
         }));
         // Admin: lista de transportadoras. O mesmo formulário adiciona ou,
         // depois de tocar no lápis de um item, salva a alteração daquele item.
