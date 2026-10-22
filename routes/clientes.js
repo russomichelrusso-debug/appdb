@@ -9,6 +9,7 @@ const { sqlChaveEndereco } = require('./lib/geocodificacao');
 const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 const { normalizarTelefoneBr, normalizarEmails } = require('./lib/contatosCliente');
 const { ordenarClientesPorBusca } = require('./lib/buscaCliente');
+const { clientesComDescontoCortadores } = require('./lib/campanhaCortadores');
 
 router.param('id', validarIdInteiro);
 
@@ -69,9 +70,13 @@ router.get('/', async (req, res) => {
 // latitude_aprox/longitude_aprox/localizacao_nivel: posição aproximada pelo
 // endereço da ficha (routes/lib/geocodificacao.js), só enquanto a ficha tiver
 // o mesmo endereço consultado - "Clientes perto de mim" usa quando não há GPS.
+// desconto_cortadores ({ate, primeira, valor12m}): cliente com o desconto extra
+// da campanha de cortadores manuais valendo (routes/lib/campanhaCortadores.js).
 router.get('/sync', async (req, res) => {
   try {
     const outros = await clientesDeOutroVendedor();
+    // campanha dos cortadores manuais (5% no preço fixo na 1ª compra): falha aqui não derruba o sync
+    const cortadores = await clientesComDescontoCortadores(pool).catch(e => { console.error('campanha cortadores:', e.message); return new Map(); });
     const result = await pool.query(
       `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
@@ -110,6 +115,8 @@ router.get('/sync', async (req, res) => {
     for (const c of result.rows) {
       const dono = outros.get(String(c.id));
       if (dono) c.outro_vendedor = dono;
+      const cort = c.codigo_oficial ? cortadores.get(String(c.codigo_oficial)) : null;
+      if (cort) c.desconto_cortadores = cort;
     }
     res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });
   } catch (e) {
