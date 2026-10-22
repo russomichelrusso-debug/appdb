@@ -472,6 +472,14 @@ Supabase, sem PR — não é mudança de código.
   (regime desconhecido, recado sem a frase do regime). **O preço em si não muda sozinho** — em
   01/10 o catálogo precisa vir sem ST nesses itens (LISTA PADRÃO nova ou correção no banco).
 
+- **IPI programado por data** (10/2026, comunicado da Adm. de Vendas de 22/10/2026: Bloco de Espuma 60950 com IPI de 3,25%
+  em pedidos implantados e faturados a partir de 01/11/2026; no catálogo estava com IPI 0). `IPI_PROGRAMADO` (`index.html`):
+  a partir de `desde` (dia de Brasília) `listPrice`/`fatorImposto`/`separarImpostosDaLinha` usam o IPI novo (`ipiDoProduto`,
+  preço do catálogo × (1+novo)/(1+atual)); promocional P/P1/P2 segue o base; quando a Lista de Preços vier com o IPI certo, nada
+  muda. Antes da data o PDF, a imagem e o texto do orçamento marcam o item com (\*\*) e avisam que a nota faturada depois sai com
+  o IPI (`avisoIpiProgramado`, junto do recado de ST em `avisosDoOrcamento`); depois, até `avisoAte`, dizem que já está incluído.
+  Comunicado novo de IPI = uma linha a mais no `IPI_PROGRAMADO`.
+
 - **Pagamento à vista pendente** (09/2026, PRs #145 e seguinte): o relatório oficial tem **duas abas**
   (formato conferido com o relatório real de 30/09/2026), reconhecidas pelo nome em `index.html`:
   - **"Aguardando Pagamento"** (`ehAbaAguardandoPagamento`): **pedidos** não liberados, mesmo layout
