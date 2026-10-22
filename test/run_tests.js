@@ -4421,8 +4421,57 @@ async function main() {
           && bonusDaCampanhaNoItem(avaliar([regraFixo], rowsBf).bonuses, cortador, false) === null
           && /bonus\.stacks \|\| bonus\.soNoPrecoFixo/.test(html),
           'campanha: soNoPrecoFixo vale só no item de Preço Fixo, sem mexer nas regras comuns');
+        // 8a) cortadores 5% na 1ª compra (regraCortadoresDoCliente) junto com a Black
+        // Friday 15%: "não acumulativo" = vale a maior; o cortador fora da BF fica com 5%
+        const regraCort = { id: 'cortadores-1a-compra', name: 'Cortadores manuais 5% · 1ª compra', active: true, targetType: 'category',
+          targetValue: 'Cortadores', basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 5 }], canais: ['VAREJO'], soNoPrecoFixo: true, validoAte: '2026-11-30' };
+        const rowsC = [linha('61366', 'Cortadores', 1, 100), linha('61400', 'Cortadores', 1, 100)];
+        const rc = avaliar([regraFixo, regraCort], rowsC);
+        const rcAtacado = avaliar([regraCort], rowsC, { canal: 'ATACADO' });
+        const rcDepois = avaliar([regraCort], rowsC, { hoje: '2026-12-01' });
+        assert(bonusDaCampanhaNoItem(rc.bonuses, rowsC[0].p, true)?.pct === 15
+          && bonusDaCampanhaNoItem(rc.bonuses, rowsC[1].p, true)?.pct === 5
+          && bonusDaCampanhaNoItem(rc.bonuses, rowsC[1].p, false) === null
+          && Object.keys(rcAtacado.bonuses).length === 0 && Object.keys(rcDepois.bonuses).length === 0
+          && /function regraCortadoresDoCliente[\s\S]*soNoPrecoFixo: true/.test(html)
+          && /avaliarCampanhas\(regrasDoOrcamento\(\), baseRows/.test(html),
+          'campanha dos cortadores 5% (1ª compra): só no preço fixo, só Varejo e até o fim; com a Black Friday vale a maior');
       }
     }
+  }
+
+  {
+    // Campanha dos cortadores manuais (routes/lib/campanhaCortadores.js): até
+    // quando o desconto vale pro cliente da lista - sem compra = até 30/11; com
+    // compra = até o fim do mês da 1ª compra; fora do período, nada.
+    const cc = require('../routes/lib/campanhaCortadores');
+    assert(cc.CODIGOS.size === 243 && cc.CODIGOS.has('13556') && cc.CODIGOS.has('215724')
+      && cc.validoAteDoCliente(null, '2026-10-22') === '2026-11-30'
+      && cc.validoAteDoCliente('2026-10-08', '2026-10-22') === '2026-10-31'
+      && cc.validoAteDoCliente('2026-09-24', '2026-10-22') === null
+      && cc.validoAteDoCliente('2026-11-03', '2026-11-30') === '2026-11-30'
+      && cc.validoAteDoCliente(null, '2026-12-01') === null && cc.validoAteDoCliente(null, '2026-08-31') === null
+      && cc.fimDoMes('2026-02-10') === '2026-02-28',
+      'campanha cortadores: desconto vale até 30/11 sem compra e até o fim do mês da 1ª compra');
+    // monta o Map pelas respostas do banco (o SQL em si foi conferido no Supabase:
+    // o mock não fala ANY/regexp_replace); a 2ª chamada usa o cache
+    const consultas = [];
+    const poolFalso = { query: async (sql) => {
+      consultas.push(sql);
+      if (/AS hoje/.test(sql)) return { rows: [{ hoje: '2026-10-22' }] };
+      if (/min\(dia\)/.test(sql)) return { rows: [{ cod: '13556', primeira: '2026-10-08' }, { cod: '222171', primeira: '2026-09-24' }] };
+      return { rows: [{ cod: '13556', valor: '1234.567' }] };
+    } };
+    cc.esquecerCacheCortadores();
+    const m = await cc.clientesComDescontoCortadores(poolFalso);
+    const m2 = await cc.clientesComDescontoCortadores(poolFalso);
+    cc.esquecerCacheCortadores();
+    const a = m.get('13556'), semCompra = m.get('288056');
+    assert(m === m2 && consultas.length === 3 && m.size === 242 && !m.has('222171')
+      && a && a.ate === '2026-10-31' && a.primeira === '2026-10-08' && a.valor12m === 1234.57
+      && semCompra && semCompra.ate === '2026-11-30' && semCompra.primeira === null && semCompra.valor12m === 0
+      && consultas.some(q => /sqlFaturadoDeFato|status = 'faturado'/.test(q)) && consultas.some(q => /origem IS DISTINCT FROM 'faturamento'/.test(q)),
+      `campanha cortadores: Map por código (compra em out. = até 31/10, em set. = fora, sem compra = até 30/11) e cache: ${JSON.stringify([m.size, a, semCompra, consultas.length])}`);
   }
 
   {

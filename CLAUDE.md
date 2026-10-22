@@ -1426,6 +1426,21 @@ Supabase, sem PR — não é mudança de código.
   impostos (preço com classificatório, sem campanha; embalagem que passaria mais de 10% do valor é pulada); e o card **"Mais vendidos"** no início da aba Produtos, que abre a grade
   (mesmo visual da campanha aberta, `campanhaAberta = MAIS_VENDIDOS`) com seleção, "+ Orçamento" e card/encarte (até 24).
 
+- **Cortadores manuais 5% na 1ª compra** (10/2026, e-mail da Adm. de Vendas "Campanha Cortadores Manuais" com a planilha
+  `Campanha_Cortadores_Manuais...xlsx`; decisões do usuário: desconto **aplicado no orçamento** + **bloco na aba Clientes**; o
+  placar da comissão extra do representante ficou de fora). De 01/09 a 30/11/2026, Canal Varejo: cliente sem cortador manual
+  em 2026 ganha **5% sobre o preço fixo** dos cortadores manuais (família "01 - CORTADORES MANUAIS") **só no mês da 1ª compra**;
+  no ERP o vendedor lança no campo **Desconto Adicional**. Lista de 243 códigos da aba "Clientes - Desconto Extra 5%" fixa em
+  `routes/lib/campanhaCortadores.js` (`CODIGOS`; lista nova = trocar ali). O `/api/clientes/sync` manda `desconto_cortadores`
+  ({ate, primeira, valor12m}): sem compra desde 01/09 = até 30/11; com compra = até o fim do mês da 1ª (implantação no ERP,
+  carteira inclusive, ou pedido do app; implantado antes de 01/09 conta pelo faturamento - a planilha é por faturamento).
+  No app vira uma regra de campanha a mais no orçamento do cliente (`regraCortadoresDoCliente`/`regrasDoOrcamento`, `index.html`,
+  `soNoPrecoFixo`): com a Black Friday dos cortadores (15% no fixo, "não acumulativo") **vale a maior** (decisão do usuário).
+  Faixa verde no card do cliente (Pedido/Levantamento) e bloco "Cortadores 5% · 1ª compra" em Pra vender hoje (quem ainda não
+  comprou primeiro, por faturado em 12 meses). Em 22/10/2026: 228 sem compra, 5 com 1ª compra em outubro, 10 já vencidos (setembro).
+  A planilha também traz a comissão extra (média jul–dez/2025 83, gatilho 109/mês); o app conta 46 cortadores faturados em
+  outubro, igual à planilha - dá pra virar um placar no Dashboard se o usuário pedir.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

@@ -3565,6 +3565,22 @@
       display: none;
     }
 
+    /* desconto extra da campanha dos cortadores manuais (1ª compra do ano) */
+    .clienteCortadores {
+      margin-top: 10px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+
+    .clienteCortadores.hidden {
+      display: none;
+    }
+
     /* saldo em carteira com aviso de cancelamento (e-mail das assistentes
        comerciais): ainda dá pra salvar aumentando a quantidade */
     .clienteCancelamento {
@@ -11102,6 +11118,7 @@
           </div>
           <div class="clienteProgresso" id="precosClientProgress"></div>
           <button type="button" class="clienteContumaz hidden" id="precosClientContumaz"></button>
+          <div class="clienteCortadores hidden" id="precosClientCortadores"></div>
           <div class="clienteBloqueio hidden" id="precosClientBloqueio"></div>
           <button type="button" class="clienteCancelamento hidden" id="precosClientCancelamento"></button>
           <div class="clienteInadimplente hidden" id="precosClientInadimplente"></div>
@@ -11254,6 +11271,7 @@
           </div>
           <div class="clienteProgresso" id="levClientProgress"></div>
           <button type="button" class="clienteContumaz hidden" id="levClientContumaz"></button>
+          <div class="clienteCortadores hidden" id="levClientCortadores"></div>
           <div class="clienteBloqueio hidden" id="levClientBloqueio"></div>
           <button type="button" class="clienteCancelamento hidden" id="levClientCancelamento"></button>
           <div class="clienteInadimplente hidden" id="levClientInadimplente"></div>
@@ -11450,6 +11468,7 @@
           <div class="recompra hidden" id="recompraWrap"></div>
           <div class="recompra hidden" id="reativarWrap"></div>
           <div class="recompra hidden" id="classifAlertasWrap"></div>
+          <div class="recompra hidden" id="cortadoresWrap"></div>
         </div>
         <div class="clientesGrupo">
           <div class="clientesSecao">Pra cuidar</div>
@@ -14524,6 +14543,46 @@
         return { canal: state.canal || 'VAREJO', uf: state.uf, classiTipos: classiTiposDoOrcamento(), hoje: hojeBrasiliaISO() };
       }
 
+      // ---- Cortadores manuais: 5% sobre o preço fixo na 1ª compra (10/2026) ----
+      // Campanha da Cortag (01/09 a 30/11/2026, Canal Varejo) pro cliente que ainda
+      // não comprou cortador manual em 2026, pela lista da planilha da Cortag
+      // (routes/lib/campanhaCortadores.js): vale só no mês da 1ª compra. O
+      // /api/clientes/sync manda até quando vale pra cada cliente
+      // (desconto_cortadores, funciona sem internet) e aqui ela vira mais uma regra
+      // de campanha no orçamento do cliente, "soNoPrecoFixo": com a Black Friday dos
+      // cortadores ("não acumulativo") vale a maior (bestBonusForProduct, decisão
+      // do usuário). No ERP o vendedor lança no campo Desconto Adicional.
+      let descontoCortadoresPorId = null; // refeito quando a cópia de clientes muda (saveClientesLocais)
+      function descontoCortadoresDoCliente(cliente) {
+        if (!cliente || cliente.id == null) return null;
+        if (!descontoCortadoresPorId) descontoCortadoresPorId = new Map(loadClientesLocais().filter(x => x.desconto_cortadores).map(x => [String(x.id), x.desconto_cortadores]));
+        const d = descontoCortadoresPorId.get(String(cliente.id));
+        // data sem hora: compara o texto AAAA-MM-DD com o dia de Brasília
+        return d && /^\d{4}-\d{2}-\d{2}$/.test(d.ate || '') && hojeBrasiliaISO() <= d.ate ? d : null;
+      }
+      function familiaCortadoresManuais() {
+        for (const p of (DB.products || [])) {
+          const f = productFamilia(p);
+          if (/cortadores manuais/.test(textoCampanha(f))) return f;
+        }
+        return null;
+      }
+      function regraCortadoresDoCliente(cliente) {
+        const d = descontoCortadoresDoCliente(cliente);
+        const familia = d && familiaCortadoresManuais();
+        if (!familia) return null;
+        return {
+          id: 'cortadores-1a-compra', name: 'Cortadores manuais 5% · 1ª compra', active: true,
+          targetType: 'category', targetValue: familia, basis: 'self', selfMetric: 'qty', tiers: [{ min: 1, pct: 5 }],
+          canais: ['VAREJO'], soNoPrecoFixo: true, validoAte: d.ate, descontoAdicional: true,
+        };
+      }
+      // Regras de campanha do orçamento: as do Painel + a dos cortadores, se o cliente tem.
+      function regrasDoOrcamento() {
+        const extra = regraCortadoresDoCliente(state.levCliente);
+        return extra ? [...(state.promoRules || []), extra] : state.promoRules;
+      }
+
       // ---- Fita de campanha no card do item (Pedido e Levantamento) ----
       // Opção "D" escolhida pelo usuário a partir de mockups (10/2026): o card do
       // produto em campanha ganha borda e uma fita no topo com o nome e o maior
@@ -14531,7 +14590,7 @@
       // faixas e condições. A fita só diz que o item faz parte - o desconto em si
       // continua saindo do orçamento (cartTotals), como antes.
       function campanhasDoCard(p, ctx) {
-        return campanhasDoItem(state.promoRules, p, ctx || contextoCampanhas(), isPrecoFixoParaCanal(p));
+        return campanhasDoItem(regrasDoOrcamento(), p, ctx || contextoCampanhas(), isPrecoFixoParaCanal(p));
       }
       function ehCampanhaBlackFriday(r) {
         return /black\s*friday/i.test((r && r.name) || '') || /black\s*friday/i.test(campanhaEspecialDaRegra(r));
@@ -14588,6 +14647,7 @@
         if (Number(r.maxPctDoPedido) > 0) partes.push(`Junto com outros produtos: o item da campanha até ${r.maxPctDoPedido}% do pedido`);
         if (r.exigeItens && Number(r.exigeItens.pct) > 0) partes.push(`Mínimo de ${r.exigeItens.pct}% dos itens em lançamentos/família foco`);
         if (r.excluirOutraCampanha) partes.push('Não vale no item que já ganha outra campanha');
+        if (r.descontoAdicional) partes.push('Cliente sem cortador manual em 2026: só no mês da 1ª compra. No ERP, lançar no campo Desconto Adicional');
         const classis = listaDaRegra(r.classificatorios);
         if (classis.length) partes.push('Só ' + classis.join(', '));
         if (/^\d{4}-\d{2}-\d{2}$/.test(r.validoAte || '')) partes.push('Válido até ' + formatDateBr(r.validoAte));
@@ -14642,7 +14702,7 @@
           return { p, it, lp, lpSemImposto, cp, cpSemImposto, lineTotal, fixo };
         }).filter(Boolean);
 
-        const { bonuses, avisos } = avaliarCampanhas(state.promoRules, baseRows, contextoCampanhas());
+        const { bonuses, avisos } = avaliarCampanhas(regrasDoOrcamento(), baseRows, contextoCampanhas());
 
         const rows = baseRows.map(r => {
           // Preço Fixo (no canal atual) bloqueia bônus de campanha, igual aos outros descontos
@@ -14714,7 +14774,7 @@
         if (incompleto) { barra.classList.add('hidden'); txt.classList.add('hidden'); return; }
         const minimo = metaPedidoMinimo(totalSemImpostos);
         let campanha = null;
-        try { campanha = proximaFaixaCampanha(state.promoRules, baseRows || [], contextoCampanhas()); } catch (e) { campanha = null; }
+        try { campanha = proximaFaixaCampanha(regrasDoOrcamento(), baseRows || [], contextoCampanhas()); } catch (e) { campanha = null; }
         const partes = [];
         if (minimo) partes.push(`Faltam <b>${brl(minimo.falta)}</b> ${minimo.rotulo}`);
         if (campanha) partes.push(`${escapeHtml(textoFaltaCampanha(campanha))} = <b>${campanha.pct}%</b> em ${escapeHtml(campanha.regra)}`);
@@ -15604,6 +15664,7 @@
           if (cliente && cliente.classificatorio_tipo) carregarProgressoClienteBar(prefixo, cliente);
         }
         atualizarContumazClienteBar(prefixo, cliente);
+        atualizarCortadoresClienteBar(prefixo, cliente);
         atualizarBloqueioClienteBar(prefixo, cliente);
         atualizarCancelamentoClienteBar(prefixo, cliente);
         atualizarReativarClienteBar(prefixo, cliente);
@@ -15624,6 +15685,19 @@
           ? `⚠ Devedor contumaz na Receita${/^\d{4}-\d{2}-\d{2}/.test(conferido) ? ' · conferido em ' + formatDateBr(conferido) : ''} · ver ficha`
           : '';
         el.onclick = conferido ? () => abrirFichaCnpjCliente(cliente) : null;
+      }
+      // Faixa verde com o desconto extra dos cortadores manuais (campanha da 1ª
+      // compra, regraCortadoresDoCliente), pela cópia do /sync.
+      function atualizarCortadoresClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientCortadores');
+        if (!el) return;
+        const d = descontoCortadoresDoCliente(cliente);
+        el.classList.toggle('hidden', !d);
+        el.innerHTML = d
+          ? `✂ Cortadores manuais: 5% de desconto extra no preço fixo até ${escapeHtml(dataCurtaISO(d.ate))}`
+            + (d.primeira ? ` (mês da 1ª compra, ${escapeHtml(dataCurtaISO(d.primeira))})` : ' · 1ª compra do ano')
+            + '<br><small>Varejo · no ERP, lançar no campo Desconto Adicional</small>'
+          : '';
       }
       function atualizarBloqueioClienteBar(prefixo, cliente) {
         const bloqueioEl = document.getElementById(prefixo + 'ClientBloqueio');
@@ -15889,6 +15963,7 @@
         // porque autoFillClassificatorioDiscount também precisa LIMPAR um
         // valor que o cliente anterior tinha deixado preenchido sozinho.
         for (const item of state.cart) autoFillClassificatorioDiscount(item.cod);
+        if (state.cart.length) renderCartBar(); // desconto dos cortadores (regrasDoOrcamento) depende do cliente
         saveLevSurvey(); // mantém o rascunho local sempre com o cliente certo vinculado
         carregarSugestoesRecompra(cliente);
         carregarCompradosRecentes(cliente);
@@ -17001,7 +17076,7 @@
           // "Recompra da semana" ficava escondido nesse caminho
           // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
           if (tab === 'produtos') { if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio(); }
-          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderPerto(); carregarReativar(false); renderCancelamentos(); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
+          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderCortadores(); renderPerto(); carregarReativar(false); renderCancelamentos(); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -17123,7 +17198,7 @@
         const incompleto = baseRows.length < state.cart.length;
         const minimo = itens.length && !incompleto ? metaPedidoMinimo(totalSemImpostos) : null;
         let campanha = null;
-        try { campanha = itens.length && !incompleto ? proximaFaixaCampanha(state.promoRules, baseRows, contextoCampanhas()) : null; } catch (e) { campanha = null; }
+        try { campanha = itens.length && !incompleto ? proximaFaixaCampanha(regrasDoOrcamento(), baseRows, contextoCampanhas()) : null; } catch (e) { campanha = null; }
         return {
           ...base,
           itens,
@@ -19775,6 +19850,7 @@
       function saveClientesLocais(clientes) {
         fantasiaLocalPorId = null;
         outroVendedorPorId = null;
+        descontoCortadoresPorId = null;
         try { localStorage.setItem(CLIENTES_LOCAIS_LS_KEY, JSON.stringify({ clientes, updatedAt: Date.now() })); }
         catch (e) { console.warn('Não foi possível salvar a cópia local de clientes:', e); }
       }
@@ -19792,6 +19868,8 @@
             // bloqueio que chegou/saiu desde a última cópia aparece no card já aberto
             renderCancelamentos();
             renderVisitas();
+            renderCortadores();
+            if (state.levCliente) { atualizarCortadoresClienteBar('lev', state.levCliente); atualizarCortadoresClienteBar('precos', state.levCliente); }
             if (state.levCliente) { atualizarCancelamentoClienteBar('lev', state.levCliente); atualizarCancelamentoClienteBar('precos', state.levCliente); }
             if (state.levCliente) { atualizarBloqueioClienteBar('lev', state.levCliente); atualizarBloqueioClienteBar('precos', state.levCliente); atualizarBotaoWaze(state.levCliente); atualizarWhatsClienteBar('lev', state.levCliente); atualizarWhatsClienteBar('precos', state.levCliente); }
           }
@@ -23450,6 +23528,7 @@
         classificatorio: '<path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
         rota: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/>',
         visita: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/>',
+        cortador: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
         cancelamento: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
       };
       function cabecalhoBloco({ id, aberta, icone, titulo, resumo, numero, rotulo, acao }) {
@@ -23465,7 +23544,7 @@
       // Abrir um bloco fecha os outros (com Recompra e Para reativar abertos
       // juntos a aba virava uma rolagem sem fim). Cada um lembra o seu estado.
       function alternarBlocoCliente(chave) {
-        const chaves = [RECOMPRA_ABERTO_LS_KEY, CANC_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY];
+        const chaves = [RECOMPRA_ABERTO_LS_KEY, CANC_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY, CORTADORES_ABERTO_LS_KEY];
         let aberta = false;
         try { aberta = localStorage.getItem(chave) === '1'; } catch (e) { }
         for (const k of chaves) {
@@ -23476,6 +23555,7 @@
         renderInadimplencia();
         renderReativar();
         renderClassifAlertas();
+        renderCortadores();
         renderPerto();
         renderRota();
         renderVisitas();
@@ -25004,6 +25084,58 @@
         el.innerHTML = `💰 ${escapeHtml(brl(c.total))} em atraso · ${escapeHtml(textoAtrasoInad(c))}`
           + `${c.cobranca_terceirizada ? ' · cobrança terceirizada' : ''}<br><small style="font-weight:400;">${escapeHtml(inadPosicao())}</small>`;
       }
+      // ---- Cortadores 5% (aba Clientes, Pra vender hoje) ----
+      // Clientes da campanha dos cortadores manuais com o desconto valendo hoje
+      // (descontoCortadoresDoCliente, cópia do /sync: funciona sem internet).
+      // Primeiro quem ainda não comprou cortador (quem faturou mais em 12 meses
+      // primeiro), depois quem já comprou no mês (o desconto vale até o fim
+      // dele). Conta ativa de outra base fica de fora.
+      const CORTADORES_ABERTO_LS_KEY = 'cortagCortadoresAberto_v1';
+      const CORTADORES_POR_PAGINA = 15;
+      let cortadoresVerTodos = false;
+      function cortadoresAberto() {
+        try { return localStorage.getItem(CORTADORES_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      function renderCortadores() {
+        const el = document.getElementById('cortadoresWrap');
+        if (!el) return;
+        const lista = loadClientesLocais().map(c => ({ c, d: descontoCortadoresDoCliente(c) }))
+          .filter(x => x.d && !x.c.outro_vendedor)
+          .sort((a, b) => (Number(!!a.d.primeira) - Number(!!b.d.primeira)) || (Number(b.d.valor12m) || 0) - (Number(a.d.valor12m) || 0)
+            || String(a.c.nome).localeCompare(String(b.c.nome)));
+        el.classList.toggle('hidden', !!clienteTabSelected || !lista.length);
+        if (!lista.length) { el.innerHTML = ''; return; }
+        const semCompra = lista.filter(x => !x.d.primeira).length;
+        const ate = lista.reduce((m, x) => (x.d.ate > m ? x.d.ate : m), '');
+        const aberta = cortadoresAberto();
+        el.dataset.cor = 'azul';
+        let corpo = '';
+        if (aberta) {
+          const mostrar = cortadoresVerTodos ? lista : lista.slice(0, CORTADORES_POR_PAGINA);
+          const resto = lista.length - mostrar.length;
+          corpo = `<p class="recompraHint">Campanha da Cortag (Varejo): cliente sem cortador manual em 2026 ganha 5% sobre o preço fixo dos cortadores manuais no mês da 1ª compra, até 30/11. O orçamento já aplica; no ERP, lançar no campo Desconto Adicional.</p>`
+            + mostrar.map(({ c, d }) => {
+              const meta = fantasiaNaMeta(c, c.id);
+              const cidade = c.endereco && c.endereco.municipio ? nomeCidade(c.endereco.municipio) : '';
+              if (cidade) meta.push(escapeHtml(cidade));
+              if (Number(d.valor12m) > 0) meta.push(`faturou ${escapeHtml(brl(Number(d.valor12m)))} em 12 meses`);
+              meta.push(d.primeira ? `1ª compra em ${escapeHtml(dataCurtaISO(d.primeira))} · vale até ${escapeHtml(dataCurtaISO(d.ate))}` : `vale até ${escapeHtml(dataCurtaISO(d.ate))}`);
+              return `<div class="recompraItem">
+                <button type="button" class="recompraNome" data-cort-abrir="${escapeHtml(String(c.id))}"><span>${escapeHtml(c.nome)}</span>${d.primeira ? '<span class="recompraSelo">comprou no mês</span>' : ''}</button>
+                <div class="recompraMeta">${meta.join(' · ')}</div>
+              </div>`;
+            }).join('')
+            + (resto > 0 ? `<button type="button" class="recompraMais" id="cortadoresMais">Ver mais ${resto}</button>` : '');
+        }
+        el.innerHTML = cabecalhoBloco({
+          id: 'cortadoresToggle', aberta, icone: 'cortador', titulo: 'Cortadores 5% · 1ª compra',
+          resumo: escapeHtml(`${semCompra} sem cortador em 2026 · até ${dataCurtaISO(ate)}`),
+          numero: lista.length, rotulo: lista.length === 1 ? 'cliente' : 'clientes',
+        }) + corpo;
+        document.getElementById('cortadoresToggle').addEventListener('click', () => alternarBlocoCliente(CORTADORES_ABERTO_LS_KEY));
+        document.getElementById('cortadoresMais')?.addEventListener('click', () => { cortadoresVerTodos = true; renderCortadores(); });
+        el.querySelectorAll('[data-cort-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.cortAbrir })));
+      }
       // ---- Para reativar (aba Clientes, abaixo de "Perto de mim") ----
       // Clientes há 3 meses ou mais sem compra, pelo Relatório de Clientes Sem
       // Compra do ERP (todo dia 2, pela importação por e-mail) - GET
@@ -25771,6 +25903,7 @@
         renderCancelamentos();
         renderInadimplencia();
         renderClassifAlertas();
+        renderCortadores();
         atualizarPainelClientes();
       }
       async function loadClienteDetailView() {
@@ -26480,7 +26613,7 @@
         const semOferta = { de, por: de, regra: null };
         if (!(de > 0)) return semOferta;
         const ctx = contextoCampanhas();
-        const regras = (soRegra ? [soRegra] : (state.promoRules || [])).filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
+        const regras = (soRegra ? [soRegra] : (regrasDoOrcamento() || [])).filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
           && r.selfMetric !== 'skus' && !!r.soNoPrecoFixo === !!fixo && regraValeNoContexto(r, ctx)
           && scopeMatchesProduct(r.targetType, String(r.targetValue || ''), p)
           && !produtoNaListaDaRegra(p, listaDaRegra(r.excluirCodigos), listaDaRegra(r.excluirFamilias)));
@@ -27076,8 +27209,10 @@
         const salvo = {
           canal: state.canal, channelDiscount: state.channelDiscount, uf: state.uf, promoDiscount: state.promoDiscount,
           descontoPrazoDesligado: state.descontoPrazoDesligado, priceOverrides: state.priceOverrides, qtyDiscounts: state.qtyDiscounts,
+          levCliente: state.levCliente,
         };
         try {
+          state.levCliente = cliente || null; // desconto dos cortadores (regrasDoOrcamento) é o do comprador
           const politica = cliente && cliente.classificatorio_tipo ? classificatorioDaPolitica(cliente.classificatorio_tipo) : null;
           const descontoErp = cliente && cliente.classificatorio_desconto != null && cliente.classificatorio_desconto !== ''
             ? Number(cliente.classificatorio_desconto) : NaN;
