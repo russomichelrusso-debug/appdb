@@ -12892,25 +12892,51 @@
       // e o imposto do produto entra por cima - antes o valor digitado ia cru pro
       // orçamento (sem IPI/ST, mais barato que o devido) e, nos produtos da Lista de
       // Preços (sem lsp/lss/lnc), o lápis nem abria (achado do /review, 10/2026).
+      // IPI que passa a valer numa data (comunicado da Adm. de Vendas) e que a
+      // Lista de Preços importada ainda não traz: a partir de `desde` (dia de
+      // Brasília) o preço ganha o IPI novo por cima do que o catálogo tem. Quando
+      // a lista vier com o IPI certo (p.ipi >= aliquota), nada muda. Promocional
+      // P/P1/P2 segue o código base. Antes da data o orçamento leva o recado
+      // (avisoIpiProgramado) até `avisoAte`.
+      const IPI_PROGRAMADO = {
+        // Comunicado de 22/10/2026: pedidos implantados e faturados a partir de 01/11/2026.
+        '60950': { aliquota: 0.0325, desde: '2026-11-01', avisoAte: '2026-11-30', nome: 'Bloco de Espuma' },
+      };
+      function ipiProgramadoDoCodigo(cod) {
+        const c = String(cod || '');
+        if (IPI_PROGRAMADO[c]) return IPI_PROGRAMADO[c];
+        const promo = /^P[12]?(.+)$/.exec(c);
+        return (promo && IPI_PROGRAMADO[promo[1]]) || null;
+      }
+      // IPI do produto hoje: o do catálogo ou, já em vigor, o programado.
+      function ipiDoProduto(p) {
+        const atual = Number(p.ipi) || 0;
+        const prog = ipiProgramadoDoCodigo(p.c);
+        return prog && prog.aliquota > atual && hojeBrasiliaISO() >= prog.desde ? prog.aliquota : atual;
+      }
+      // Quanto o preço com imposto do catálogo sobe pelo IPI programado (1 = nada).
+      function fatorIpiProgramado(p) {
+        return (1 + ipiDoProduto(p)) / (1 + (Number(p.ipi) || 0));
+      }
       function fatorImposto(p, uf, canal) {
         canal = canal || state.canal || 'VAREJO';
         if (p.precos && p.precosSemImposto) {
           const com = (p.precos[canal] || p.precos.VAREJO || {})[uf];
           const sem = (p.precosSemImposto[canal] || p.precosSemImposto.VAREJO || {})[uf];
-          if (typeof com === 'number' && typeof sem === 'number' && sem > 0) return com / sem;
+          if (typeof com === 'number' && typeof sem === 'number' && sem > 0) return com / sem * fatorIpiProgramado(p);
         }
         if (p.precos) return 1; // sem o preço sem imposto: o base já é o preço cheio (ver listPriceSemImposto)
         const st = STATE_BY_UF[uf];
         const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
         const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
-        return (1 + (Number(p.ipi) || 0)) * (1 + stRate);
+        return (1 + ipiDoProduto(p)) * (1 + stRate);
       }
       function listPrice(p, uf, canal) {
         canal = canal || state.canal || 'VAREJO';
         if (Object.prototype.hasOwnProperty.call(state.priceOverrides, p.c)) return state.priceOverrides[p.c] * fatorImposto(p, uf, canal);
         if (p.precos) {
           const porCanal = p.precos[canal] || p.precos.VAREJO;
-          if (porCanal && typeof porCanal[uf] === 'number') return porCanal[uf];
+          if (porCanal && typeof porCanal[uf] === 'number') return porCanal[uf] * fatorIpiProgramado(p);
         }
         const st = STATE_BY_UF[uf];
         const liq = effectiveLiq(p, uf);
@@ -12920,7 +12946,7 @@
         // quebrar quando DB.stProfiles/p.st estiverem ausentes.
         const perfilSt = DB.stProfiles && DB.stProfiles[p.st];
         const stRate = perfilSt ? (perfilSt[TAXKEY_IDX[st.taxKey]] || 0) : 0;
-        return liq * (1 + p.ipi) * (1 + stRate);
+        return liq * (1 + ipiDoProduto(p)) * (1 + stRate);
       }
       // Mesmo preço de listPrice(), mas sem IPI nem ICMS-ST embutido - só pro
       // "Total S/ Impostos" pequeno do orçamento. Produto do catálogo novo usa o
@@ -17978,7 +18004,7 @@
 
         const st = STATE_BY_UF[state.uf];
         const today = new Date().toLocaleDateString('pt-BR');
-        const avisoSt = avisoStPr2026(rows);
+        const avisosFiscais = avisosDoOrcamento(rows);
 
         const tpl = document.getElementById('exportTemplate');
         tpl.innerHTML = `
@@ -18004,7 +18030,7 @@
         ${rows.map(({ p, it, lp, cp, lineTotal }, idx) => `
           <tr>
             <td class="num">${idx + 1}</td>
-            <td><div class="exn">${escapeHtml(p.n)}${marcaSt(avisoSt, p)}</div><div class="exc">Cód. ${escapeHtml(p.c)}</div></td>
+            <td><div class="exn">${escapeHtml(p.n)}${marcaDosAvisos(avisosFiscais, p)}</div><div class="exc">Cód. ${escapeHtml(p.c)}</div></td>
             <td class="num">${it.qty}</td>
             <td class="num">${brl(cp)}</td>
             <td class="num">${brl(lineTotal)}</td>
@@ -18018,10 +18044,10 @@
         <div class="v">${brl(total)}</div>
       </div>
     </div>
-    ${avisoSt ? `<div style="margin:14px 36px 0;padding:10px 12px;border:1.5px solid #e6b43c;background:#fff8e1;border-radius:6px;font-size:12px;line-height:1.45;color:#141414;">
-      <div style="font-weight:700;margin-bottom:4px;">${escapeHtml(avisoSt.titulo)}</div>
-      <div>${escapeHtml(avisoSt.frases.join(' '))}</div>
-    </div>` : ''}
+    ${avisosFiscais.map(a => `<div style="margin:14px 36px 0;padding:10px 12px;border:1.5px solid #e6b43c;background:#fff8e1;border-radius:6px;font-size:12px;line-height:1.45;color:#141414;">
+      <div style="font-weight:700;margin-bottom:4px;">${escapeHtml(a.titulo)}</div>
+      <div>${escapeHtml(a.frases.join(' '))}</div>
+    </div>`).join('')}
     <div class="ex-footer">
       <div>
         <div class="redbar" style="width:60px;"></div>
@@ -18327,9 +18353,9 @@
       function buildCartShareText() {
         const { rows, total } = cartTotals();
         const st = STATE_BY_UF[state.uf];
-        const avisoSt = avisoStPr2026(rows);
+        const avisosFiscais = avisosDoOrcamento(rows);
         const linhas = rows.map(({ p, it, cp, lineTotal }, idx) =>
-          `${itemNumLabel(idx)} ${p.n}${marcaSt(avisoSt, p)} (Cód. ${p.c})\n  ${it.qty} un. x ${brl(cp)} = ${brl(lineTotal)}`
+          `${itemNumLabel(idx)} ${p.n}${marcaDosAvisos(avisosFiscais, p)} (Cód. ${p.c})\n  ${it.qty} un. x ${brl(cp)} = ${brl(lineTotal)}`
         );
         const partes = [
           `*Orçamento Cortag*`,
@@ -18341,7 +18367,7 @@
           '',
           `*Total: ${brl(total)}*`,
           ...(state.paymentTerm ? [`Cond. pagamento: ${rotuloPrazoComDesconto()}`] : []),
-          ...(avisoSt ? ['', `*${avisoSt.titulo}*`, avisoSt.frases.join(' ')] : []),
+          ...avisosFiscais.flatMap(a => ['', `*${a.titulo}*`, a.frases.join(' ')]),
         ];
         return partes.join('\n');
       }
@@ -18467,7 +18493,7 @@
       // desconto, já que channelPct/promoPct/qtyPct escalam cp e cpSemImposto
       // pelo mesmo fator (ver clientPrice()), preservando a proporção.
       function separarImpostosDaLinha(row) {
-        const ipiUnit = row.cpSemImposto * (row.p.ipi || 0);
+        const ipiUnit = row.cpSemImposto * ipiDoProduto(row.p);
         const baseComIpi = row.cpSemImposto + ipiUnit;
         const stUnit = Math.max(0, row.cp - baseComIpi);
         return { ipiTotal: ipiUnit * row.it.qty, stTotal: stUnit * row.it.qty };
@@ -18586,11 +18612,36 @@
         if (marcados.size < rows.length) frases.push('Os demais itens não mudam.');
         return {
           marcados,
+          marca: '(*)',
           titulo: '(*) ICMS-ST no Paraná — Protocolos ICMS 111/2026 e 95/2026',
           frases,
         };
       }
-      const marcaSt = (aviso, p) => (aviso && aviso.marcados.has(p.c) ? ' (*)' : '');
+      // Recado do IPI_PROGRAMADO: antes da data, avisa que a nota faturada
+      // depois sai com o IPI (o orçamento ainda está sem ele); depois, até
+      // avisoAte, diz que os valores já o incluem.
+      function avisoIpiProgramado(rows) {
+        const hoje = hojeBrasiliaISO();
+        const itens = rows.map(r => ({ r, prog: ipiProgramadoDoCodigo(r.p.c) }))
+          .filter(x => x.prog && hoje <= x.prog.avisoAte && x.prog.aliquota > (Number(x.r.p.ipi) || 0));
+        if (itens.length === 0) return null;
+        const marcados = new Set(itens.map(x => x.r.p.c));
+        const frases = [];
+        for (const prog of new Set(itens.map(x => x.prog))) {
+          const cods = Object.keys(IPI_PROGRAMADO).filter(c => IPI_PROGRAMADO[c] === prog).join(', ');
+          const pct = (prog.aliquota * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 }) + '%';
+          const data = prog.desde.split('-').reverse().join('/');
+          frases.push(hoje < prog.desde
+            ? `A partir de ${data}, o ${prog.nome} (cód. ${cods}) passa a ter IPI de ${pct}, em pedidos implantados e faturados a partir dessa data. Os valores deste orçamento ainda estão sem esse IPI.`
+            : `Desde ${data}, o ${prog.nome} (cód. ${cods}) tem IPI de ${pct}, já incluído nos valores deste orçamento.`);
+        }
+        return { marcados, marca: '(**)', titulo: '(**) IPI', frases };
+      }
+      // Recados fiscais do orçamento (PDF, imagem e texto), cada um com a sua marca no item.
+      function avisosDoOrcamento(rows) {
+        return [avisoStPr2026(rows), avisoIpiProgramado(rows)].filter(Boolean);
+      }
+      const marcaDosAvisos = (avisos, p) => avisos.filter(a => a.marcados.has(p.c)).map(a => ' ' + a.marca).join('');
       // Destaque visual (fundo azul claro) pras colunas/linha de preço já COM
       // impostos - é o valor que o cliente de fato paga, então recebe ênfase
       // em vez de se misturar com o resto da tabela (pedido do usuário depois
@@ -18606,7 +18657,7 @@
       async function generateQuotePDF() {
         const { rows, total, totalSemImpostos } = cartTotals();
         if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
-        const avisoSt = avisoStPr2026(rows);
+        const avisosFiscais = avisosDoOrcamento(rows);
         try {
           await loadJsPdfScripts();
         } catch (e) {
@@ -18727,7 +18778,7 @@
           body: rows.map((r) => {
             const { ipiTotal, stTotal } = separarImpostosDaLinha(r);
             return [
-              r.p.c, r.p.n + marcaSt(avisoSt, r.p), String(r.it.qty), 'Un',
+              r.p.c, r.p.n + marcaDosAvisos(avisosFiscais, r.p), String(r.it.qty), 'Un',
               numBr(r.cpSemImposto), numBr(r.lineTotalSemImpostos),
               numBr(ipiTotal), numBr(stTotal),
               numBr(r.cp), numBr(r.lineTotal),
@@ -18772,12 +18823,12 @@
           bodyStyles: { halign: 'left' },
         });
 
-        if (avisoSt) {
+        for (const a of avisosFiscais) {
           doc.autoTable({
             startY: doc.lastAutoTable.finalY + 5,
             body: [
-              [{ content: avisoSt.titulo, styles: { fontStyle: 'bold', fontSize: 8.5 } }],
-              [{ content: avisoSt.frases.join(' ') }],
+              [{ content: a.titulo, styles: { fontStyle: 'bold', fontSize: 8.5 } }],
+              [{ content: a.frases.join(' ') }],
             ],
             theme: 'plain',
             styles: { fontSize: 8, cellPadding: { top: 1.2, bottom: 1.2, left: 3, right: 3 }, textColor: [20, 20, 20], fillColor: [255, 248, 225] },
