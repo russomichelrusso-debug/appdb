@@ -24,9 +24,7 @@ const { sqlFaturadoDeFato } = require('./faturadoDeFato');
 const CAMPANHA = {
   inicio: '2026-09-01',
   fim: '2026-11-30',
-  pct: 5,
   familia: 'CORTADORES MANUAIS', // "01 - CORTADORES MANUAIS" na Lista de Preços
-  canal: 'VAREJO',
 };
 
 const CODIGOS = new Set(`

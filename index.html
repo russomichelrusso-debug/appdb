@@ -14560,12 +14560,12 @@
         // data sem hora: compara o texto AAAA-MM-DD com o dia de Brasília
         return d && /^\d{4}-\d{2}-\d{2}$/.test(d.ate || '') && hojeBrasiliaISO() <= d.ate ? d : null;
       }
+      // guardada enquanto o catálogo for o mesmo: roda a cada card (campanhasDoCard)
+      let familiaCortadoresMemo = null;
       function familiaCortadoresManuais() {
-        for (const p of (DB.products || [])) {
-          const f = productFamilia(p);
-          if (/cortadores manuais/.test(textoCampanha(f))) return f;
-        }
-        return null;
+        if (familiaCortadoresMemo?.products !== DB.products) familiaCortadoresMemo = { products: DB.products,
+          f: (DB.products || []).map(productFamilia).find(f => /cortadores manuais/.test(textoCampanha(f))) || null };
+        return familiaCortadoresMemo.f;
       }
       function regraCortadoresDoCliente(cliente) {
         const d = descontoCortadoresDoCliente(cliente);
