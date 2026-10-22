@@ -2330,6 +2330,11 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
 
+  // Campanha dos cortadores no /sync (routes/lib/campanhaCortadores.js): um dia
+  // fora do período, então a lib não faz as outras consultas (testadas com um
+  // pool falso no run_tests.js; o SQL foi conferido no Supabase).
+  if (/::DATE::TEXT AS HOJE$/.test(s)) return { rows: [{ hoje: '2000-01-01' }] };
+
   throw new Error('Mock não sabe responder a esta query: ' + sql.slice(0, 80));
 }
 

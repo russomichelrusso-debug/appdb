@@ -4453,6 +4453,25 @@ async function main() {
       && cc.validoAteDoCliente(null, '2026-12-01') === null && cc.validoAteDoCliente(null, '2026-08-31') === null
       && cc.fimDoMes('2026-02-10') === '2026-02-28',
       'campanha cortadores: desconto vale até 30/11 sem compra e até o fim do mês da 1ª compra');
+    // monta o Map pelas respostas do banco (o SQL em si foi conferido no Supabase:
+    // o mock não fala ANY/regexp_replace); a 2ª chamada usa o cache
+    const consultas = [];
+    const poolFalso = { query: async (sql) => {
+      consultas.push(sql);
+      if (/AS hoje/.test(sql)) return { rows: [{ hoje: '2026-10-22' }] };
+      if (/min\(dia\)/.test(sql)) return { rows: [{ cod: '13556', primeira: '2026-10-08' }, { cod: '222171', primeira: '2026-09-24' }] };
+      return { rows: [{ cod: '13556', valor: '1234.567' }] };
+    } };
+    cc.esquecerCacheCortadores();
+    const m = await cc.clientesComDescontoCortadores(poolFalso);
+    const m2 = await cc.clientesComDescontoCortadores(poolFalso);
+    cc.esquecerCacheCortadores();
+    const a = m.get('13556'), semCompra = m.get('288056');
+    assert(m === m2 && consultas.length === 3 && m.size === 242 && !m.has('222171')
+      && a && a.ate === '2026-10-31' && a.primeira === '2026-10-08' && a.valor12m === 1234.57
+      && semCompra && semCompra.ate === '2026-11-30' && semCompra.primeira === null && semCompra.valor12m === 0
+      && consultas.some(q => /sqlFaturadoDeFato|status = 'faturado'/.test(q)) && consultas.some(q => /origem IS DISTINCT FROM 'faturamento'/.test(q)),
+      `campanha cortadores: Map por código (compra em out. = até 31/10, em set. = fora, sem compra = até 30/11) e cache: ${JSON.stringify([m.size, a, semCompra, consultas.length])}`);
   }
 
   {

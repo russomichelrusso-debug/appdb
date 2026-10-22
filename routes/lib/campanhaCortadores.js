@@ -69,7 +69,18 @@ function validoAteDoCliente(primeira, hoje) {
 // Map codigo_oficial -> { ate, primeira, valor12m } dos clientes da lista que
 // ainda têm o desconto hoje (dia de Brasília). valor12m (faturado de fato em
 // 12 meses) ordena a lista da aba Clientes: quem comprava mais primeiro.
-async function clientesComDescontoCortadores(pool) {
+// Guardado CACHE_MS na memória: todo aparelho chama o /sync ao abrir o app.
+const CACHE_MS = 10 * 60 * 1000;
+let cache = null; // { em, valor: Promise<Map> }
+function clientesComDescontoCortadores(pool) {
+  if (cache && Date.now() - cache.em < CACHE_MS) return cache.valor;
+  const valor = calcular(pool);
+  cache = { em: Date.now(), valor };
+  valor.catch(() => { if (cache && cache.valor === valor) cache = null; }); // falhou: tenta de novo no próximo
+  return valor;
+}
+function esquecerCacheCortadores() { cache = null; }
+async function calcular(pool) {
   const { rows: [h] } = await pool.query(`SELECT ${SQL_HOJE_BR}::text AS hoje`);
   const hoje = h && h.hoje;
   if (!hoje || hoje < CAMPANHA.inicio || hoje > CAMPANHA.fim) return new Map();
@@ -117,4 +128,4 @@ async function clientesComDescontoCortadores(pool) {
   return res;
 }
 
-module.exports = { CAMPANHA, CODIGOS, fimDoMes, validoAteDoCliente, clientesComDescontoCortadores };
+module.exports = { CAMPANHA, CODIGOS, fimDoMes, validoAteDoCliente, clientesComDescontoCortadores, esquecerCacheCortadores };

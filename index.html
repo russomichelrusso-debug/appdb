@@ -25903,6 +25903,7 @@
         renderCancelamentos();
         renderInadimplencia();
         renderClassifAlertas();
+        renderCortadores();
         atualizarPainelClientes();
       }
       async function loadClienteDetailView() {
@@ -26612,7 +26613,7 @@
         const semOferta = { de, por: de, regra: null };
         if (!(de > 0)) return semOferta;
         const ctx = contextoCampanhas();
-        const regras = (soRegra ? [soRegra] : (state.promoRules || [])).filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
+        const regras = (soRegra ? [soRegra] : (regrasDoOrcamento() || [])).filter(r => r && r.active && r.basis !== 'combo' && r.targetType !== 'all'
           && r.selfMetric !== 'skus' && !!r.soNoPrecoFixo === !!fixo && regraValeNoContexto(r, ctx)
           && scopeMatchesProduct(r.targetType, String(r.targetValue || ''), p)
           && !produtoNaListaDaRegra(p, listaDaRegra(r.excluirCodigos), listaDaRegra(r.excluirFamilias)));
@@ -27208,8 +27209,10 @@
         const salvo = {
           canal: state.canal, channelDiscount: state.channelDiscount, uf: state.uf, promoDiscount: state.promoDiscount,
           descontoPrazoDesligado: state.descontoPrazoDesligado, priceOverrides: state.priceOverrides, qtyDiscounts: state.qtyDiscounts,
+          levCliente: state.levCliente,
         };
         try {
+          state.levCliente = cliente || null; // desconto dos cortadores (regrasDoOrcamento) é o do comprador
           const politica = cliente && cliente.classificatorio_tipo ? classificatorioDaPolitica(cliente.classificatorio_tipo) : null;
           const descontoErp = cliente && cliente.classificatorio_desconto != null && cliente.classificatorio_desconto !== ''
             ? Number(cliente.classificatorio_desconto) : NaN;
