@@ -91,6 +91,11 @@ Automação do Claude Code (`.claude/`):
   escolhe o esforço de raciocínio de cada mensagem (juiz no Haiku, pelo próprio login do Claude) e mostra
   uma barra acima do prompt com o uso do contexto, o tempo de cache e Handoff/Compact. Não mexe no código
   do app; a 1ª sessão abre uma configuração rápida (`/effortless setup` refaz).
+- Plugin **ponytail** (`DietrichGebert/ponytail`, registrado do mesmo jeito, 10/2026, pedido do usuário): "modo dev sênior
+  preguiçoso" — hooks em Node (início de sessão, cada mensagem, subagente) que puxam pra solução mais curta que funciona, e as
+  skills `ponytail`, `-review`, `-audit`, `-debt`, `-gain`, `-help`. Só grava no aparelho (`~/.claude/.ponytail-active`,
+  `~/.config/ponytail/`; o webhook opcional vem vazio). O "mínimo de código" dele não passa por cima deste arquivo: fluxo de PR,
+  `/simplify` + `/code-review` antes de PR grande, CRLF do `index.html`, testes e as regras de "Pegadinhas" continuam valendo.
 - MCP **Playwright** (`.mcp.json` → `.claude/mcp-playwright.js`): navegador com tela de celular
   (Pixel 7) pra abrir o app e tirar print. Com `scripts/app-local.js` rodando, abrir
   `http://localhost:8080/__entrar`. Na nuvem usa o Chromium de `/opt/pw-browsers` (sem janela,

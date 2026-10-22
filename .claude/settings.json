@@ -41,11 +41,18 @@
         "source": "git",
         "url": "https://github.com/HeyCubit/effortless.git"
       }
+    },
+    "ponytail": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/DietrichGebert/ponytail.git"
+      }
     }
   },
   "enabledPlugins": {
     "agent-skills@addy-agent-skills": true,
     "taste-skill@taste-skill": true,
-    "effortless@effortless": true
+    "effortless@effortless": true,
+    "ponytail@ponytail": true
   }
 }
