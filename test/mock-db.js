@@ -112,6 +112,14 @@ function seed(partial) {
   if (partial.contasSalesforce) contasSalesforce.push(...partial.contasSalesforce);
 }
 
+// Tira de novo o que um seed pôs (mesmos objetos) - pro teste não vazar pros seguintes.
+function desfazerSeed(partial) {
+  const fora = (lista, tirar) => (tirar ? lista.filter(x => !tirar.includes(x)) : lista);
+  clientes = fora(clientes, partial.clientes);
+  pedidosOficiaisItens = fora(pedidosOficiaisItens, partial.pedidosOficiaisItens);
+  contasSalesforce = fora(contasSalesforce, partial.contasSalesforce);
+}
+
 // Reproduz sqlChaveEndereco (routes/lib/geocodificacao.js)
 function chaveEnderecoFicha(f) {
   const t = (v) => String(v == null ? '' : v).trim().toUpperCase();
@@ -785,6 +793,17 @@ async function query(sql, params = []) {
     const rep = (c) => /^representante/i.test(String(c.classificatorio || '').trim());
     return { rows: contasSalesforce.filter(c => (c.de_outro_vendedor || rep(c)) && c.cliente_id != null)
       .map(c => ({ cliente_id: c.cliente_id, base: rep(c) ? 'Representação' : (c.base || c.proprietario) })) };
+  }
+  if (s.includes('/* DASHBOARD:ENTRADA-ATE */')) {
+    const dias = pedidosOficiaisItens.filter(i => i.data_implantacao && String(i.nr_pedido).length <= 6).map(i => String(i.data_implantacao).slice(0, 10)).sort();
+    return { rows: [{ dia: dias.length ? dias[dias.length - 1] : null }] };
+  }
+  if (s.includes('/* CONTAS-SF:DASHBOARD */')) {
+    return { rows: contasSalesforce.map(c => ({
+      codigo_oficial: c.codigo_oficial, cliente_id: c.cliente_id ?? null, nome: c.nome, situacao: c.situacao || null,
+      classificatorio: c.classificatorio || null, ultima_compra: c.ultima_compra || null,
+      data_relatorio: c.data_relatorio || null, de_outro_vendedor: !!c.de_outro_vendedor,
+    })) };
   }
   if (s.includes('/* CONTAS-SF:INATIVOS */')) {
     return { rows: contasSalesforce.filter(c => c.cliente_id != null && c.situacao === 'Inativo').map(c => ({ cliente_id: c.cliente_id })) };
@@ -1472,9 +1491,10 @@ async function query(sql, params = []) {
     const rows = clientes.map(c => ({
       id: c.id,
       nome: c.nome,
+      codigo_oficial: c.codigo_oficial || null,
       classificatorio_tipo: c.classificatorio_tipo || null,
-      ultima_compra: comoDateDoPg(calcularFaturamentoAnoFechadoParaCliente(c.id).ultima_compra),
-      ultimo_pedido: comoDateDoPg(calcularFaturamentoAnoFechadoParaCliente(c.id).ultimo_pedido),
+      ultima_compra: comoDateDoPg(calcularFaturamentoAnoFechadoParaCliente(c.id, false).ultima_compra),
+      ultimo_pedido: comoDateDoPg(calcularFaturamentoAnoFechadoParaCliente(c.id, false).ultimo_pedido),
     }));
     return { rows };
   }
@@ -2496,6 +2516,7 @@ module.exports = {
   },
   __queryLog: queryLog,
   __reset: reset,
+  __desfazerSeed: desfazerSeed,
   __seed: seed,
   __getClientes: () => clientes,
   __getContasSalesforce: () => contasSalesforce,

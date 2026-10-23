@@ -1060,6 +1060,7 @@ module.exports.calcularRitmoTrimestral = calcularRitmoTrimestral;
 module.exports.FAIXAS = FAIXAS;
 module.exports.faixaDoTipo = faixaDoTipo;
 module.exports.SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE = SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE;
+module.exports.SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE = SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE;
 module.exports.interpretarDiferencaErp = interpretarDiferencaErp;
 module.exports.aplicarLeituraErp = aplicarLeituraErp;
 module.exports.diaDoBanco = diaDoBanco;

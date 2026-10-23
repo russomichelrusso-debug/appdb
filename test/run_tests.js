@@ -1118,13 +1118,19 @@ async function main() {
     d.setUTCDate(d.getUTCDate() - n);
     return d.toISOString().slice(0, 10);
   }
+  // pelo dia de Brasília, como o servidor conta os dias sem comprar
+  function diasAtrasBR(n) {
+    const d = new Date(`${new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  }
   mockDb.__seed({
     clientes: [{
       id: 9003, nome: 'CLIENTE SUMIDO 150 DIAS', documento: '99988877000344', codigo_oficial: 'COD9003',
       classificatorio_tipo: null, classificatorio_desconto: null, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null,
     }],
     pedidosOficiaisItens: [
-      { nr_pedido: 'PC4', codigo_sku: '60863', cliente_codigo_oficial: 'COD9003', quantidade: 1, valor: 1000, data_faturamento: diasAtrasISO(150), status: 'faturado' },
+      { nr_pedido: 'PC4', codigo_sku: '60863', cliente_codigo_oficial: 'COD9003', quantidade: 1, valor: 1000, data_faturamento: diasAtrasBR(150), status: 'faturado' },
     ],
   });
   res = await req('GET', '/api/dashboard/resumo');
@@ -1136,12 +1142,50 @@ async function main() {
     `dashboard/resumo traz a lista de clientes de 3-5 meses sem comprar, com nome e dias: ${JSON.stringify(listaDe3a5)}`
   );
 
+  let inicioLogDashboard = 0;
+  // 16-sf) Régua do painel do Salesforce: ativos = situação "Ativo" do
+  // relatório Todas Contas (inclusive de outra base e conta fora do app) ou
+  // pedido depois da foto; nas listas de meses sem compra, a última compra do
+  // Salesforce vale quando é mais nova e as ativas de outra base ficam fora.
+  {
+    const antes = res.body.clientesAtivosPorCanal;
+    const cli = (id, nome, cod) => ({ id, nome, documento: null, codigo_oficial: cod, classificatorio_tipo: 'Varejo Master', classificatorio_desconto: null, classificatorio_pic: false, classificatorio_vl_acordo: null, matriz_grupo: null });
+    const seedSf = {
+      clientes: [cli(9301, 'SF OUTRA BASE', 'SF1'), cli(9302, 'SF INATIVO QUE PEDIU', 'SF2'), cli(9303, 'SF SEIS MESES', 'SF3'), cli(9305, 'SF SEM CLIENTE_ID', 'SF5')],
+      pedidosOficiaisItens: [
+        { nr_pedido: '610001', codigo_sku: '1', cliente_codigo_oficial: 'SF1', quantidade: 1, valor: 10, data_implantacao: diasAtrasBR(100), data_faturamento: diasAtrasBR(100), status: 'faturado' },
+        { nr_pedido: '610002', codigo_sku: '1', cliente_codigo_oficial: 'SF2', quantidade: 1, valor: 10, data_implantacao: diasAtrasBR(1), data_faturamento: null, status: 'carteira' },
+        { nr_pedido: '610005', codigo_sku: '1', cliente_codigo_oficial: 'SF5', quantidade: 1, valor: 10, data_implantacao: diasAtrasBR(10), data_faturamento: diasAtrasBR(10), status: 'faturado' },
+        { nr_pedido: '610003', codigo_sku: '1', cliente_codigo_oficial: 'SF3', quantidade: 1, valor: 10, data_implantacao: diasAtrasBR(400), data_faturamento: diasAtrasBR(400), status: 'faturado' },
+      ],
+      contasSalesforce: [
+        { codigo_oficial: 'SF1', cliente_id: 9301, nome: 'SF OUTRA BASE', situacao: 'Ativo', de_outro_vendedor: true, proprietario: 'Rodrigo', classificatorio: 'Varejo Master (20)', ultima_compra: diasAtrasBR(100), data_relatorio: diasAtrasBR(5) },
+        { codigo_oficial: 'SF2', cliente_id: 9302, nome: 'SF INATIVO QUE PEDIU', situacao: 'Inativo', de_outro_vendedor: false, classificatorio: 'Varejo Master (20)', ultima_compra: diasAtrasBR(400), data_relatorio: diasAtrasBR(5) },
+        { codigo_oficial: 'SF3', cliente_id: 9303, nome: 'SF SEIS MESES', situacao: 'Inativo', de_outro_vendedor: false, classificatorio: 'Rede', ultima_compra: diasAtrasBR(200), data_relatorio: diasAtrasBR(5) },
+        // gravada antes de o cliente existir no app: liga pelo código, conta uma vez só
+        { codigo_oficial: 'SF5', cliente_id: null, nome: 'SF SEM CLIENTE_ID', situacao: 'Ativo', de_outro_vendedor: true, classificatorio: 'Varejo Master (20)', ultima_compra: diasAtrasBR(10), data_relatorio: diasAtrasBR(5) },
+        { codigo_oficial: 'SF4', cliente_id: null, nome: 'SO NO SALESFORCE', situacao: 'Ativo', de_outro_vendedor: true, classificatorio: 'Atacado', ultima_compra: diasAtrasBR(20), data_relatorio: diasAtrasBR(5) },
+      ],
+    };
+    mockDb.__seed(seedSf);
+    inicioLogDashboard = mockDb.__queryLog.length; // a mesma chamada serve ao 16a (limite de 40 leituras pesadas/min)
+    res = await req('GET', '/api/dashboard/resumo');
+    mockDb.__desfazerSeed(seedSf);
+    const at = res.body.clientesAtivosPorCanal || {};
+    const ids3a5 = (res.body.contasSemComprar?.clientesDe3a5Meses || []).map(c => c.id);
+    const seis = (res.body.contasSemComprar?.clientesDe6a8Meses || []).find(c => c.id === 9303);
+    assert(res.status === 200 && at.total === antes.total + 4 && at.deOutrasBases === (antes.deOutrasBases || 0) + 3
+        && /^\d{4}-\d{2}-\d{2}$/.test(res.body.entradaAte || '')
+        && at.porCanal.Atacado === (antes.porCanal.Atacado || 0) + 1
+        && !ids3a5.includes(9301) && seis && seis.diasSemComprar === 200,
+      `dashboard na régua do Salesforce (ativos pela situação, outra base fora das listas, última compra do SF): ${JSON.stringify({ antes, at, ids3a5, seis })}`);
+  }
+
   // 16a) "Hoje" é o dia de Brasília (o banco roda em UTC: das 21h à meia-noite
   // CURRENT_DATE já é amanhã) - faturamento semanal/trimestral, top clientes do
   // Dashboard e as janelas do classificatório (12 meses, ano, trimestre)
   {
-    const inicioLog = mockDb.__queryLog.length;
-    await req('GET', '/api/dashboard/resumo');
+    const inicioLog = inicioLogDashboard;
     await req('GET', '/api/clientes/9001/classificatorio/status');
     await req('GET', '/api/clientes/classificatorio/alertas');
     const sqls = mockDb.__queryLog.slice(inicioLog).map(q => q.sql);

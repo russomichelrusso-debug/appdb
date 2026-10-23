@@ -1365,6 +1365,14 @@ Supabase, sem PR — não é mudança de código.
   Famílias em barras deitadas com ★ nas de foco (o 2º gráfico "Produtos foco" saiu). As séries semanal/trimestral do
   servidor **não têm `generate_series`** (só períodos com faturamento): semana/trimestre atual e a comparação do trimestre
   saem pela data, nunca pela posição na lista.
+  **Cartões na régua do painel do Salesforce** (10/2026, prints do usuário app × Salesforce em 22/10: ativos 300 × 290, 3–5
+  meses 57 × 61, 6–8 meses 20 × 24, entrada R$ 198 mil × 229,7 mil): "Clientes Ativos por Canal" = contas com situação "Ativo"
+  no relatório Todas Contas (`contas_salesforce`, inclusive de outra base - "N de outras bases" no cartão) ou com pedido depois
+  da foto; conta fora do relatório = pedido em 6 meses (antes: 12 meses). Meses sem compra **por conta** (sem somar
+  `matriz_grupo`), em meses de calendário com buraco entre as faixas como no Salesforce ([hoje−5m, hoje−3m] e [hoje−8m,
+  hoje−6m]), pela última compra mais nova entre app/ERP e a do Salesforce (o "Última compra" de lá é a implantação); ativas de
+  outra base e a representação fora das listas. A entrada não é erro de conta: o relatório do ERP chega de madrugada sem os
+  pedidos da véspera e o Salesforce é ao vivo - o cartão mostra "pedidos do ERP até DD/MM" (`entradaAte`).
 
 - **Curva ABC (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, página
   "Curva ABC" do mesmo canvas): página larga também nesta aba (`body.abaAbc`); filtros numa barra com o total à direita
