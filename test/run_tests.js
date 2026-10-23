@@ -1373,11 +1373,11 @@ async function main() {
   res = await req('GET', '/api/clientes/9111/mensal');
   {
     const meses = (res.body && res.body.meses) || [];
-    const mesDe = (iso) => iso.slice(0, 7);
+    const mesDe = (iso) => iso.slice(0, 7) + '-01';
     const soma = meses.reduce((t, m) => t + m.valor, 0);
     const mesAtual = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).format(new Date());
-    assert(res.status === 200 && meses.length === 12 && meses[11].mes === mesAtual
-      && meses.find(m => m.mes === mesDe(diasAtrasISO(30))).valor >= 20 && soma === 30,
+    assert(res.status === 200 && meses.length === 12 && meses[11].periodo === mesAtual + '-01'
+      && meses.find(m => m.periodo === mesDe(diasAtrasISO(30))).valor >= 20 && soma === 30,
       `mensal: 12 meses até o atual, só faturado nos últimos 12 meses: ${JSON.stringify(res.body)}`);
   }
   res = await req('GET', '/api/clientes/999999/mensal');

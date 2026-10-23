@@ -24756,11 +24756,9 @@
         renderCartBar();
         openDrawer();
         const fora = (c.itens || []).length - itens.length;
-        const origemIt = c.itens[0] && c.itens[0].origem;
-        const origem = origemIt === 'frequente' ? 'que vieram nas últimas compras'
-          : origemIt === 'comprados' ? 'comprados nos últimos 12 meses, na quantidade da última compra'
-          : origemIt === 'gaveta' ? 'escolhidos no Dashboard'
-          : 'que costumam vir nessa compra';
+        // quem chama pode dizer de onde vieram os itens (link do Dashboard); senão, a Recompra
+        const origem = c.descricaoOrigem
+          || (c.itens[0] && c.itens[0].origem === 'frequente' ? 'que vieram nas últimas compras' : 'que costumam vir nessa compra');
         showToast(`Proposta de ${c.nome}: ${itens.length} produto(s) ${origem} — revise as quantidades antes de enviar`
           + (fora ? ` · ${fora} fora do catálogo atual ficaram de fora` : ''), 'longo');
       }
@@ -24780,7 +24778,7 @@
           if (!params.has('cliente')) return;
           escolhidos = String(params.get('itens') || '').split(',').slice(0, 100)
             .map(par => /^([^:,]{1,30}):(\d{1,5})$/.exec(par.trim()))
-            .filter(Boolean).map(m => ({ codigo_sku: m[1], quantidade: Math.max(1, Number(m[2])), origem: 'gaveta' }));
+            .filter(Boolean).map(m => ({ codigo_sku: m[1], quantidade: Math.max(1, Number(m[2])) }));
           params.delete('cliente'); params.delete('acao'); params.delete('itens');
           const resto = params.toString();
           history.replaceState(history.state, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
@@ -24800,7 +24798,7 @@
         try { await catalogoPromise; } catch (e) { /* segue: montarPropostaRecompra avisa se nada estiver no catálogo */ }
         if (escolhidos.length) {
           await montarPropostaRecompra({ cliente_id: cliente.id, nome: cliente.nome, documento: cliente.documento,
-            classificatorio_tipo: cliente.classificatorio_tipo, itens: escolhidos });
+            classificatorio_tipo: cliente.classificatorio_tipo, itens: escolhidos, descricaoOrigem: 'escolhidos no Dashboard' });
           return;
         }
         await carregarCompradosRecentes(cliente);
@@ -24815,7 +24813,8 @@
         }
         await montarPropostaRecompra({
           cliente_id: cliente.id, nome: cliente.nome, documento: cliente.documento, classificatorio_tipo: cliente.classificatorio_tipo,
-          itens: comprados.map(c => ({ codigo_sku: c.codigo_sku, quantidade: Number(c.qtd_ultima_compra) || 1, origem: 'comprados' })),
+          itens: comprados.map(c => ({ codigo_sku: c.codigo_sku, quantidade: Number(c.qtd_ultima_compra) || 1 })),
+          descricaoOrigem: 'comprados nos últimos 12 meses, na quantidade da última compra',
         });
       }
       function adiarRecompra(c) {
