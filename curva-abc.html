@@ -1639,6 +1639,11 @@
         if (infos.length) partes.push(`<section class="gavInfos">${infos.join('')}</section>`);
         corpo = partes.join('');
       }
+      // passo 4: proposta que cobre o que falta pra faixa (montarPropostaFaixa, no app)
+      const alvo = !faixaAoVivo(status) || status.regraFaixa !== 'ano_fiscal' || !Array.isArray(status.degraus) || status.degraus.length < 2 ? null
+        : status.faltaPraManter > 0 ? { valor: status.faltaPraManter, rotulo: 'pra não cair' }
+        : status.faltaPraProximaFaixa > 0 ? { valor: status.faltaPraProximaFaixa, rotulo: `pra ${NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa}` }
+        : null;
       el.innerHTML = `
         <div class="gavTopo">
           <div class="gavTit">
@@ -1653,8 +1658,11 @@
         </div>
         <div class="gavCorpo">${corpo}</div>
         <div class="gavRodape">
-          <button type="button" class="principal" data-gav="proposta">${rotuloProposta()}</button>
+          ${alvo
+            ? `<button type="button" class="principal" data-gav="faixa" data-alvo="${Math.ceil(alvo.valor)}" data-rotulo="${escapeHtml(alvo.rotulo)}">Proposta ${escapeHtml(alvo.rotulo)} · ${escapeHtml(formatCompact(alvo.valor, true))}</button>`
+            : `<button type="button" class="principal" data-gav="proposta">${rotuloProposta()}</button>`}
           <div class="linha">
+            ${alvo ? `<button type="button" data-gav="proposta">${rotuloProposta()}</button>` : ''}
             <button type="button" data-gav="historico">Histórico</button>
             ${whats ? `<a href="https://wa.me/${escapeHtml(whats)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
             <button type="button" data-gav="app">Abrir no app</button>
@@ -1686,6 +1694,10 @@
       const id = gaveta.id;
       if (acao === 'fechar') { fecharGaveta(); return; }
       if (acao === 'historico') { const nome = gaveta.nome; fecharGaveta(); abrirHistoricoCliente(id, nome); return; }
+      if (acao === 'faixa') {
+        location.href = `index.html?${new URLSearchParams({ cliente: id, acao: 'faixa', alvo: btn.dataset.alvo, rotulo: btn.dataset.rotulo })}`;
+        return;
+      }
       const params = new URLSearchParams({ cliente: id, acao: acao === 'app' ? 'ver' : 'proposta' });
       if (acao === 'proposta' && gaveta.sel.size) params.set('itens', [...gaveta.sel].map(([cod, qtd]) => `${cod}:${qtd}`).join(','));
       location.href = `index.html?${params}`;
