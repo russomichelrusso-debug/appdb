@@ -179,6 +179,21 @@ async function query(sql, params = []) {
   if (s.includes('/* CACHE-TABELA:VERSAO */')) {
     return { rows: [{ versao: String(versaoTabelas ?? ++versaoTabelasContador) }] };
   }
+  // GET /api/clientes/:id/mensal (routes/relatorios.js): faturado de fato do
+  // cliente por mês da nota, os 12 meses até o atual (dia de Brasília), mês vazio = 0
+  if (s.includes('/* CLIENTE-MENSAL */')) {
+    const [cod] = params;
+    const [ano, mes] = hojeBr().split('-').map(Number);
+    const meses = [];
+    for (let i = 11; i >= 0; i--) meses.push(new Date(Date.UTC(ano, mes - 1 - i, 1)).toISOString().slice(0, 10));
+    const porMes = new Map(meses.map(m => [m.slice(0, 7), 0]));
+    for (const it of pedidosOficiaisItens) {
+      if (!faturadoDeFato(it) || cod == null || it.cliente_codigo_oficial !== cod || !it.data_faturamento) continue;
+      const m = String(it.data_faturamento).slice(0, 7);
+      if (porMes.has(m)) porMes.set(m, porMes.get(m) + (Number(it.valor) || 0));
+    }
+    return { rows: meses.map(m => ({ periodo: m, valor: String(porMes.get(m.slice(0, 7))) })) };
+  }
   if (s.includes('/* PRODUTOS:CONTAGEM */')) {
     const noCadastro = new Set(produtos.map(p => String(p.codigo_sku)));
     return { rows: [{ total: produtos.length, catalogo: catalogoPrecos.length,

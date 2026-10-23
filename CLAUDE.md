@@ -1383,6 +1383,25 @@ Supabase, sem PR — não é mudança de código.
   apaga os parâmetros em `abrirPeloLinkDoDashboard` (`index.html`, fim do `init`). A lista de Entrada de Pedidos ganhou
   `cliente_id` (`SQL_ENTRADA_PEDIDOS_DO_MES`). Em tela de 900 px+ a lista do painel do "Pede atenção" vira colunas.
 
+- **Gaveta do cliente no Dashboard** (10/2026, passo 3 da sequência; opção "A" com as listas com "+" da "B" e "D" no celular,
+  canvas "Cortag · Gaveta do cliente no Dashboard"): o **nome** do cliente nas listas do Dashboard agora abre uma gaveta à direita
+  (520 px; tela cheia com seta de voltar abaixo de 700 px) em vez de ir pro app. Mostra selos (faixa, em risco), nome fantasia,
+  a régua da faixa (mesma conta do `renderReguaFaixa` do app: "Pra não cair"/"Pra Master" com o ritmo por mês), o faturado mês a
+  mês (`GET /api/clientes/:id/mensal`, nova: faturado de fato por CNPJ, este mês + 11, mês sem nota = 0), **Compra sempre** (os 8
+  de `comprados-recentes` com mais pedidos) e **Parou de comprar** (as 💡 sugestões, que agora trazem `codigo_sku` = a última
+  medida comprada ainda na Lista de Preços), cada um com **"+"** que marca o produto (na quantidade da última compra; o que parou,
+  1 embalagem), e última compra (`ultimoPedido` do status), sua última visita, atraso e saldo a cancelar. Visita, inadimplência,
+  saldo a cancelar, fantasia/cidade e WhatsApp vêm da cópia que o app guarda no aparelho (`cortagClientesLocais_v1`,
+  `cortagInadimplencia_v1`, `cortagVisitas_v1`/`cortagVisitasLocais_v1`; aparelho sem o app aberto antes = essas linhas somem).
+  Rodapé: **"Montar proposta"** (sem marcados = tudo o que comprou em 12 meses; com marcados = `&itens=cod:qtd,…`, que o
+  `abrirPeloLinkDoDashboard` valida e passa pro `montarPropostaRecompra`), Histórico (Curva ABC dele), WhatsApp (só com o do
+  comprador cadastrado) e Abrir no app. O "+" **não grava no orçamento** do aparelho: só o app mexe nele, perguntando antes de trocar.
+  Régua, `NOME_CURTO_FAIXA` e as travas (PIC, Rede, matriz com empresas fora do app = sem régua) são cópia do card do app
+  (`renderReguaFaixa`): mudou lá, muda em `htmlReguaGaveta`. Saldo a cancelar só com aviso de até 15 dias; inadimplência com a
+  "posição de DD/MM". Limites conhecidos: "Compra sempre" escolhe entre os 60 SKUs de compra mais recente (`comprados-recentes`),
+  então numa loja com mais de 60 SKUs no ano pode faltar um produto frequente comprado há meses; grupo de "Parou de comprar" cujas
+  medidas compradas saíram todas da Lista de Preços fica sem "+" (o código novo do grupo não é procurado).
+
 - **Curva ABC (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, página
   "Curva ABC" do mesmo canvas): página larga também nesta aba (`body.abaAbc`); filtros numa barra com o total à direita
   (`#abcResumo`); cartão escuro "N produtos fazem 80% do faturamento" com a fatia de cada classe no catálogo e no valor
@@ -1497,14 +1516,18 @@ Supabase, sem PR — não é mudança de código.
   cartão "próxima faixa de campanha" da tela do cliente não foi visto com campanha real.
 - **Dashboard → cliente → proposta — sequência combinada com o usuário (10/2026)**. Feitos: **1** (nome do cliente abre ele no
   app) e **2** (botões "Montar proposta"/"Histórico" na linha) — ver "Cliente clicável nas listas do Dashboard" acima. Próximos,
-  nesta ordem, se o uso pegar:
-  3. **Mini-dashboard do cliente numa gaveta lateral** no próprio Dashboard (no celular, tela cheia): faturado no ano × faixa
-     (régua do card, quanto falta e ritmo por mês), gráfico de 12 meses, top produtos e os que parou de comprar, última compra,
-     última visita, inadimplência, saldo a cancelar; botões Montar proposta, Mix pra completar a faixa, WhatsApp, Abrir no app.
-     Sugestão: fazer mockups antes (o usuário escolhe por mockup).
-  4. **"Proposta pra manter a faixa"**: monta o orçamento até cobrir o "Faltam R$ X" — 1º o que ele recompra no ritmo (Recompra),
-     depois o que parou de comprar (💡 sugestões, por grupo → escolher a medida), por fim os mais vendidos do canal que ele não
-     compra (Mix inicial). Junta peças que já existem; o novo é parar ao bater o valor (sem impostos, como o mínimo CIF).
+  nesta ordem, se o uso pegar (o nome do cliente, que no passo 1 abria o app, agora abre a gaveta do passo 3):
+  3. Feito em 10/2026: **gaveta do cliente** no Dashboard (ver "Gaveta do cliente no Dashboard" acima). Ficou de fora o botão
+     "Mix pra completar a faixa" (entra com o passo 4).
+  4. Feito em 10/2026: **"Proposta pra manter a faixa"** (`montarPropostaFaixa`, `index.html`): monta o orçamento até cobrir o
+     "Faltam R$ X" da régua (pra não cair; sem isso, pra próxima faixa), **sem impostos** (mesma conta do mix inicial: preço com o
+     classificatório, sem campanha), nesta ordem: itens que vencem na Recompra do cliente (cópia `cortagRecompra_v1`), o que ele
+     compra sempre (`comprados-recentes`, mais pedidos primeiro, quantidade da última compra), o que parou de comprar (sugestões,
+     `codigo_sku`, 1 embalagem) e os mais vendidos do canal que ele não compra (`rankingMixInicial`); para ao passar do valor (pode
+     passar um pouco), pula item sem previsão de chegada, pergunta antes de trocar o orçamento e diz no aviso quanto chegou e de
+     onde veio cada parte. Duas portas: botão **"Montar proposta pra não cair · R$ X"** embaixo da régua na ficha do cliente (aba
+     Clientes) e o botão principal da gaveta do Dashboard ("Proposta pra não cair · R$ X", `index.html?cliente=ID&acao=faixa&alvo=…`;
+     o "Montar proposta" vai pra linha de baixo). Só onde a régua aparece (sem PIC, Rede ou matriz com empresas fora do app).
 - Ideia em aberto, ainda não implementada: um painel de "oportunidades do dia" na tela inicial
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como

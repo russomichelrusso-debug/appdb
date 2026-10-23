@@ -1319,6 +1319,8 @@ async function main() {
       && !grupos.some(g => g.startsWith('Broca')),
     `sugestoes-recompra agrupa variações, junta faturado + app e ignora grupo comprado no último ano: ${JSON.stringify(res.body)}`
   );
+  // a medida comprada por último (promocional vira o base) - o "+" da gaveta do cliente no Dashboard
+  assert(esp && esp.codigo_sku === '61296', `sugestoes-recompra devolve o código da última medida comprada: ${JSON.stringify(esp)}`);
   res = await req('GET', '/api/clientes/999999/sugestoes-recompra');
   assert(res.status === 404, 'sugestoes-recompra de cliente inexistente responde 404');
 
@@ -1363,6 +1365,23 @@ async function main() {
   );
   res = await req('GET', '/api/clientes/999999/comprados-recentes');
   assert(res.status === 404, 'comprados-recentes de cliente inexistente responde 404');
+
+  // 18b2) GET /api/clientes/:id/mensal: faturado de fato do cliente por mês,
+  // este mês + os 11 anteriores (gaveta do cliente no Dashboard). Mesmo cliente
+  // de cima: R2 (há 30 dias, 10 + 10) e R1 (há 200 dias); R0 (400 dias) e a
+  // carteira ficam fora.
+  res = await req('GET', '/api/clientes/9111/mensal');
+  {
+    const meses = (res.body && res.body.meses) || [];
+    const mesDe = (iso) => iso.slice(0, 7) + '-01';
+    const soma = meses.reduce((t, m) => t + m.valor, 0);
+    const mesAtual = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit' }).format(new Date());
+    assert(res.status === 200 && meses.length === 12 && meses[11].periodo === mesAtual + '-01'
+      && meses.find(m => m.periodo === mesDe(diasAtrasISO(30))).valor >= 20 && soma === 30,
+      `mensal: 12 meses até o atual, só faturado nos últimos 12 meses: ${JSON.stringify(res.body)}`);
+  }
+  res = await req('GET', '/api/clientes/999999/mensal');
+  assert(res.status === 404, 'mensal de cliente inexistente responde 404');
 
   // 18b1) Dia do pedido do app no fuso de Brasília (routes/lib/comprasApp.js
   // sqlDiaDoPedido): pedido com hora real vai pro dia de Brasília; o de PDF/faturamento,

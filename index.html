@@ -1559,6 +1559,21 @@
       border-left: 0;
     }
 
+    .clsReguaProposta {
+      display: block;
+      width: 100%;
+      min-height: 44px;
+      margin-top: 10px;
+      border: 1px solid var(--red);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--red);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
     .clsReguaCartoes {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -20461,6 +20476,10 @@
         }
 
         content.innerHTML = partes.join('');
+        content.querySelector('[data-proposta-faixa]')?.addEventListener('click', (e) => {
+          const b = e.currentTarget;
+          if (clienteTabSelected) montarPropostaFaixa(clienteTabSelected, Number(b.dataset.propostaFaixa), b.dataset.rotulo);
+        });
         if (!status.ehRede) initClienteGrupoUI(status);
       }
 
@@ -20504,6 +20523,13 @@
         } else if (idxAtual === degraus.length - 1) {
           cartoes.push(`<div class="clsReguaCartao clsReguaCartao--ok"><small>✓ Faixa máxima</small><b>${nome(degraus[idxAtual].tipo)}</b></div>`);
         }
+        // proposta que cobre o que falta (montarPropostaFaixa): pra não cair, ou pra próxima faixa
+        const alvoProposta = status.faltaPraManter != null
+          ? { valor: status.faltaPraManter, rotulo: 'pra não cair' }
+          : status.faltaPraProximaFaixa != null ? { valor: status.faltaPraProximaFaixa, rotulo: `pra ${NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa}` } : null;
+        const botaoProposta = alvoProposta && alvoProposta.valor > 0
+          ? `<button type="button" class="clsReguaProposta" data-proposta-faixa="${Math.ceil(alvoProposta.valor)}" data-rotulo="${escapeHtml(alvoProposta.rotulo)}">Montar proposta ${escapeHtml(alvoProposta.rotulo)} · ${escapeHtml(brlCurto(alvoProposta.valor))}</button>`
+          : '';
         return `<div class="clsRegua">
           <div class="clsReguaTopo"><span>Faturado em ${escapeHtml(String(ano))}</span><b>${fat >= 1000000 ? `R$ ${valorMil(fat)}` : brlCurto(fat)}</b></div>
           <div class="clsReguaBarraCaixa">
@@ -20512,6 +20538,7 @@
           </div>
           <div class="clsReguaNomes">${nomes}</div>
           ${cartoes.length ? `<div class="clsReguaCartoes">${cartoes.join('')}</div>` : ''}
+          ${botaoProposta}
         </div>`;
       }
 
@@ -24756,10 +24783,9 @@
         renderCartBar();
         openDrawer();
         const fora = (c.itens || []).length - itens.length;
-        const origemIt = c.itens[0] && c.itens[0].origem;
-        const origem = origemIt === 'frequente' ? 'que vieram nas últimas compras'
-          : origemIt === 'comprados' ? 'comprados nos últimos 12 meses, na quantidade da última compra'
-          : 'que costumam vir nessa compra';
+        // quem chama pode dizer de onde vieram os itens (link do Dashboard); senão, a Recompra
+        const origem = c.descricaoOrigem
+          || (c.itens[0] && c.itens[0].origem === 'frequente' ? 'que vieram nas últimas compras' : 'que costumam vir nessa compra');
         showToast(`Proposta de ${c.nome}: ${itens.length} produto(s) ${origem} — revise as quantidades antes de enviar`
           + (fora ? ` · ${fora} fora do catálogo atual ficaram de fora` : ''), 'longo');
       }
@@ -24768,15 +24794,21 @@
       // ?cliente=ID&acao=ver (ficha dele na aba Clientes) ou &acao=proposta
       // (orçamento com o que ele comprou nos últimos 12 meses, na quantidade da
       // última compra - comprados-recentes, mesmo caminho do "Montar proposta"
-      // da Recompra). Os parâmetros saem do endereço pra recarregar não repetir.
+      // da Recompra; com &itens=cod:qtd,… vêm só os marcados no "+" da gaveta
+      // do cliente). Os parâmetros saem do endereço pra recarregar não repetir.
       async function abrirPeloLinkDoDashboard(catalogoPromise) {
-        let id, acao;
+        let id, acao, escolhidos = [], alvo = 0, rotuloAlvo = '';
         try {
           const params = new URLSearchParams(location.search);
           id = Number(params.get('cliente'));
           acao = params.get('acao');
           if (!params.has('cliente')) return;
-          params.delete('cliente'); params.delete('acao');
+          escolhidos = String(params.get('itens') || '').split(',').slice(0, 100)
+            .map(par => /^([^:,]{1,30}):(\d{1,5})$/.exec(par.trim()))
+            .filter(Boolean).map(m => ({ codigo_sku: m[1], quantidade: Math.max(1, Number(m[2])) }));
+          alvo = Number(params.get('alvo')) || 0;
+          rotuloAlvo = String(params.get('rotulo') || '').slice(0, 40);
+          params.delete('cliente'); params.delete('acao'); params.delete('itens'); params.delete('alvo'); params.delete('rotulo');
           const resto = params.toString();
           history.replaceState(history.state, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
         } catch (e) { return; }
@@ -24786,6 +24818,16 @@
           await activateMainTab('clientes');
           if (document.body.dataset.aba === 'clientes') abrirClienteDaRecompra({ cliente_id: id });
         };
+        if (acao === 'faixa' && alvo > 0) {
+          let cliente = loadClientesLocais().find(x => String(x.id) === String(id));
+          if (!cliente) {
+            try { cliente = await apiFetch(`/api/clientes/${id}`); }
+            catch (e) { showToast('Não foi possível abrir esse cliente.', 'erro'); return; }
+          }
+          try { await catalogoPromise; } catch (e) { }
+          await montarPropostaFaixa(cliente, alvo, rotuloAlvo);
+          return;
+        }
         if (acao !== 'proposta') { await abrirFicha(); return; }
         let cliente = loadClientesLocais().find(x => String(x.id) === String(id));
         if (!cliente) {
@@ -24793,6 +24835,11 @@
           catch (e) { showToast('Não foi possível abrir esse cliente.', 'erro'); return; }
         }
         try { await catalogoPromise; } catch (e) { /* segue: montarPropostaRecompra avisa se nada estiver no catálogo */ }
+        if (escolhidos.length) {
+          await montarPropostaRecompra({ cliente_id: cliente.id, nome: cliente.nome, documento: cliente.documento,
+            classificatorio_tipo: cliente.classificatorio_tipo, itens: escolhidos, descricaoOrigem: 'escolhidos no Dashboard' });
+          return;
+        }
         await carregarCompradosRecentes(cliente);
         const comprados = (COMPRADOS_CACHE.get(cliente.id) || [])
           .slice().sort((a, b) => String(b.ultima_compra).localeCompare(String(a.ultima_compra)));
@@ -24805,8 +24852,71 @@
         }
         await montarPropostaRecompra({
           cliente_id: cliente.id, nome: cliente.nome, documento: cliente.documento, classificatorio_tipo: cliente.classificatorio_tipo,
-          itens: comprados.map(c => ({ codigo_sku: c.codigo_sku, quantidade: Number(c.qtd_ultima_compra) || 1, origem: 'comprados' })),
+          itens: comprados.map(c => ({ codigo_sku: c.codigo_sku, quantidade: Number(c.qtd_ultima_compra) || 1 })),
+          descricaoOrigem: 'comprados nos últimos 12 meses, na quantidade da última compra',
         });
+      }
+      // ---- Proposta pra manter (ou subir) a faixa (10/2026, passo 4 da sequência do Dashboard) ----
+      // Monta o orçamento até cobrir o "Faltam R$ X" da régua da faixa, sem impostos
+      // (mesma conta do mix inicial: preço com o classificatório, sem campanha). Ordem:
+      // 1º o que vence na Recompra (ritmo dele), 2º o que ele compra sempre (comprados
+      // dos 12 meses, mais pedidos primeiro, quantidade da última compra), 3º o que
+      // parou de comprar (💡 sugestões, a última medida, 1 embalagem), 4º os mais
+      // vendidos do canal que ele não compra (Mix inicial). Para ao passar do valor;
+      // item sem previsão de chegada fica de fora. Pergunta antes de trocar o orçamento.
+      let propostaFaixaMontando = false; // toque duplo com sinal fraco somava duas propostas no mesmo orçamento
+      async function montarPropostaFaixa(cliente, alvo, rotulo) {
+        if (!cliente || !(alvo > 0) || propostaFaixaMontando) return;
+        propostaFaixaMontando = true;
+        try { await montarPropostaFaixaAgora(cliente, alvo, rotulo); } finally { propostaFaixaMontando = false; }
+      }
+      async function montarPropostaFaixaAgora(cliente, alvo, rotulo) {
+        if (state.cart.length > 0
+          && !await askConfirm(`Trocar os ${state.cart.length} produto(s) do orçamento atual pela proposta de ${cliente.nome}?`, 'Trocar')) return;
+        setPedidoEditando(null); // proposta é pedido novo
+        state.cart = [];
+        setLevCliente(cliente); // canal, estado e classificatório do cliente valem pro preço abaixo
+        await activateMainTab('precos');
+        showToast('Montando a proposta…');
+        await carregarCompradosRecentes(cliente);
+        let sugestoes = SUGESTOES_CACHE.get(cliente.id);
+        if (!sugestoes) {
+          try { sugestoes = await apiFetch(`/api/clientes/${cliente.id}/sugestoes-recompra`); } catch (e) { sugestoes = null; }
+          if (Array.isArray(sugestoes)) SUGESTOES_CACHE.set(cliente.id, sugestoes);
+        }
+        const mix = await carregarMixInicial(true);
+        if (!recompraDados) { try { recompraDados = JSON.parse(localStorage.getItem(RECOMPRA_LS_KEY)) || null; } catch (e) { } }
+        const daRecompra = ((recompraDados && recompraDados.clientes) || []).find(c => String(c.cliente_id) === String(cliente.id));
+        const comprados = (COMPRADOS_CACHE.get(cliente.id) || []).slice().sort((a, b) => (b.num_pedidos || 0) - (a.num_pedidos || 0));
+        const candidatos = [
+          ...((daRecompra && daRecompra.itens) || []).map(it => ({ cod: it.codigo_sku, qtd: it.quantidade, de: 'recompra' })),
+          ...comprados.map(c => ({ cod: c.codigo_sku, qtd: c.qtd_ultima_compra, de: 'sempre' })),
+          ...(Array.isArray(sugestoes) ? sugestoes : []).filter(s => s.codigo_sku).map(s => ({ cod: s.codigo_sku, qtd: 0, de: 'parou' })),
+          ...(mix ? rankingMixInicial(mix).itens : []).map(({ p }) => ({ cod: p.c, qtd: 0, de: 'mix' })),
+        ];
+        let soma = 0;
+        // embalagem que passaria mais de 20% do valor é pulada (o 1º item entra sempre)
+        const teto = alvo * 1.2;
+        const porOrigem = { recompra: 0, sempre: 0, parou: 0, mix: 0 };
+        for (const c of candidatos) {
+          if (soma >= alvo) break;
+          const p = productByCod(String(c.cod));
+          if (!p || state.cart.some(i => i.cod === p.c) || itemSemPrevisaoDeChegada(p.c)) continue;
+          const passo = packStep(p);
+          const qtd = Math.max(1, Math.ceil((Number(c.qtd) || passo) / passo)) * passo;
+          const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), 0);
+          if (!(unit > 0) || (soma > 0 && soma + unit * qtd > teto)) continue;
+          addToCart(p.c, qtd, true);
+          soma += unit * qtd;
+          porOrigem[c.de]++;
+        }
+        renderResults();
+        renderCartBar();
+        if (!state.cart.length) { showToast('Nenhum produto pra montar a proposta (catálogo ainda carregando ou sem internet?).', 'erro'); return; }
+        openDrawer();
+        const partes = [[porOrigem.recompra, 'da recompra'], [porOrigem.sempre, 'que ele compra sempre'],
+          [porOrigem.parou, 'que parou de comprar'], [porOrigem.mix, 'dos mais vendidos']].filter(([n]) => n).map(([n, t]) => `${n} ${t}`);
+        showToast(`Proposta ${rotulo || 'pra faixa'}: ≈ ${brl(soma)} sem impostos de ${brl(alvo)}${soma < alvo ? ' (faltou produto pra chegar no valor)' : ''} · ${partes.join(', ')} — revise antes de enviar`, 'longo');
       }
       function adiarRecompra(c) {
         if (!c) return;

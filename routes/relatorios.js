@@ -481,23 +481,26 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
       g.pedidos.add(String(l.pedido));
       porSku.set(sku, g);
     }
+    const cat = await catalogoOuNada(pool);
     const grupos = new Map();
     for (const linha of [...porSku.values()].map(g => ({ codigo_sku: g.codigo_sku, ultima_compra: g.ultima_compra, num_pedidos: g.pedidos.size }))) {
       const sku = linha.codigo_sku;
       const nome = nomePorCodigo.get(sku);
       if (!nome || !linha.ultima_compra) continue; // produto fora do catálogo: sem nome pra agrupar
       const { chave, rotulo } = grupoDoProduto(nome);
-      const g = grupos.get(chave) || { chave, grupo: rotulo, ultima_compra: null, num_pedidos: 0, variacoes: new Set() };
+      const g = grupos.get(chave) || { chave, grupo: rotulo, ultima_compra: null, num_pedidos: 0, variacoes: new Set(), ultimo: null };
       // prefere o rótulo com acento quando o catálogo grafa o mesmo nome dos dois jeitos
       if (rotulo !== g.grupo && /[^\x00-\x7F]/.test(rotulo) && !/[^\x00-\x7F]/.test(g.grupo)) g.grupo = rotulo;
       const data = new Date(linha.ultima_compra);
       if (!g.ultima_compra || data > g.ultima_compra) g.ultima_compra = data;
       g.num_pedidos += Number(linha.num_pedidos) || 0;
       g.variacoes.add(sku);
+      // a medida comprada por último que ainda está na Lista de Preços - o "+"
+      // da gaveta do cliente (Dashboard) põe ela na proposta
+      if (!(cat && estaDescontinuado(sku, cat.codigos)) && (!g.ultimo || data > g.ultimo.data)) g.ultimo = { sku, data };
       grupos.set(chave, g);
     }
 
-    const cat = await catalogoOuNada(pool);
     const limite = Date.now() - SUGESTOES_DIAS_SEM_COMPRAR * 86400000;
     const sugestoes = [...grupos.values()]
       // grupo sem nenhum produto na Lista de Preços saiu de linha: não tem o que
@@ -512,11 +515,41 @@ router.get('/clientes/:id/sugestoes-recompra', async (req, res) => {
         meses_sem_comprar: Math.floor((Date.now() - g.ultima_compra.getTime()) / (30.44 * 86400000)),
         num_pedidos: g.num_pedidos,
         variacoes: g.variacoes.size,
+        codigo_sku: g.ultimo ? g.ultimo.sku : null,
       }));
     res.json(sugestoes);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar sugestões de recompra.' });
+  }
+});
+
+// Faturado do cliente mês a mês, este mês + os 11 anteriores - gráfico da gaveta
+// do cliente no Dashboard (curva-abc.html). Por CNPJ (sem somar a matriz),
+// faturado de fato pela data da nota (mesma régua da faixa). Mês sem nota = 0;
+// meses pelo dia de Brasília, como a série mensal do Dashboard.
+router.get('/clientes/:id/mensal', async (req, res) => {
+  try {
+    const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]);
+    if (cliente.rows.length === 0) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const r = await pool.query(
+      `/* cliente-mensal */
+       SELECT to_char(m.periodo, 'YYYY-MM-DD') AS periodo, COALESCE(f.valor, 0) AS valor
+       FROM generate_series(date_trunc('month', ${SQL_HOJE_BR}) - INTERVAL '11 months',
+                            date_trunc('month', ${SQL_HOJE_BR}), INTERVAL '1 month') AS m(periodo)
+       LEFT JOIN (
+         SELECT date_trunc('month', data_faturamento) AS periodo, SUM(valor) AS valor
+         FROM pedidos_oficiais_itens
+         WHERE ${sqlFaturadoDeFato()} AND cliente_codigo_oficial = $1
+           AND data_faturamento >= date_trunc('month', ${SQL_HOJE_BR}) - INTERVAL '11 months'
+         GROUP BY 1
+       ) f ON f.periodo = m.periodo
+       ORDER BY m.periodo`,
+      [cliente.rows[0].codigo_oficial]);
+    res.json({ meses: r.rows.map(x => ({ periodo: x.periodo, valor: Math.round((Number(x.valor) || 0) * 100) / 100 })) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar o faturamento mensal do cliente.' });
   }
 });
 

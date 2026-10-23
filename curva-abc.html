@@ -337,6 +337,76 @@
     .cliAcoes button.principal { border-color: var(--red); color: var(--red); }
     .cliAcoes button:hover { background: var(--fill); }
     .dashTop .cliAcoes { margin: 6px 0 2px 30px; }
+
+    /* ---------- Gaveta do cliente (10/2026, opção "A" com as listas com "+" da "B", canvas
+       "Cortag · Gaveta do cliente no Dashboard"; "D" no celular = tela cheia) ---------- */
+    html.gavetaAberta { overflow: hidden; }
+    .gavFundo { position: fixed; inset: 0; background: rgba(29, 29, 31, .38); z-index: 60; }
+    .gaveta { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100%); background: var(--white); z-index: 61;
+      box-shadow: -12px 0 32px rgba(0, 0, 0, .12); display: flex; flex-direction: column; }
+    .gavTopo { padding: 18px 20px 14px; border-bottom: 1px solid var(--hairline); display: flex; gap: 12px; align-items: flex-start; }
+    .gavTopo .gavTit { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+    .gavTopo h2 { margin: 0; font-size: 20px; font-weight: 800; letter-spacing: -.01em; }
+    .gavTopo .gavSub { font-size: 12.5px; color: var(--gray); }
+    .gavSelos { display: flex; gap: 6px; flex-wrap: wrap; }
+    .gavSelo { font-size: 11.5px; font-weight: 700; padding: 3px 8px; border-radius: 999px; background: var(--fill); }
+    .gavSelo[data-cor="danger"] { background: var(--danger-bg); color: var(--danger); }
+    .gavSelo[data-cor="success"] { background: var(--success-bg); color: var(--success); }
+    .gavFechar { width: 44px; height: 44px; border: none; background: var(--fill); color: var(--ink); border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0; }
+    .gavFechar .seta { display: none; }
+    .gavCorpo { flex: 1; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+    .gavSecTit { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .gavSecTit small { font-weight: 500; color: var(--gray); }
+    .gavRegua .topo { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+    .gavRegua .topo span { font-size: 11.5px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: .05em; }
+    .gavRegua .topo b { font-size: 24px; font-weight: 800; }
+    .gavBarraCaixa { position: relative; margin: 10px 0 4px; }
+    .gavBarra { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--fill); }
+    .gavBarra i { display: block; height: 100%; border-right: 2px solid var(--white); box-sizing: border-box; }
+    .gavBarra i.abaixo { background: var(--hairline); }
+    .gavBarra i.atual { background: var(--accent-bg); box-shadow: inset 0 0 0 1px rgba(204, 9, 53, .25); }
+    .gavBarra i.acima { background: var(--fill); }
+    .gavMarca { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: var(--ink); }
+    .gavNomes { display: flex; font-size: 11px; color: var(--gray); }
+    .gavNomes span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .gavCartoes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+    .gavCartao { background: var(--fill); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 1px; font-size: 11.5px; color: var(--gray); }
+    .gavCartao small { font-size: 11.5px; font-weight: 700; color: var(--ink); }
+    .gavCartao b { font-size: 18px; font-weight: 800; color: var(--ink); }
+    .gavCartao[data-cor="danger"] { background: var(--danger-bg); }
+    .gavCartao[data-cor="danger"] small, .gavCartao[data-cor="danger"] b { color: var(--danger); }
+    .gavCartao[data-cor="warning"] { background: var(--warning-bg); }
+    .gavCartao[data-cor="warning"] small, .gavCartao[data-cor="warning"] b { color: var(--warning); }
+    .gavCartao[data-cor="success"] { background: var(--success-bg); }
+    .gavCartao[data-cor="success"] small, .gavCartao[data-cor="success"] b { color: var(--success); }
+    .gaveta .barras { height: 84px; }
+    .gavInfos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .gavInfo { background: var(--fill); border-radius: 12px; padding: 9px 11px; font-size: 12.5px; line-height: 1.35; }
+    .gavInfo b { display: block; }
+    .gavInfo[data-cor="danger"] { background: var(--danger-bg); color: var(--danger); }
+    .gavInfo[data-cor="warning"] { background: var(--warning-bg); color: var(--warning); }
+    .gavProd { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--hairline); }
+    .gavProd:last-child { border-bottom: none; }
+    .gavProd .txt { flex: 1; min-width: 0; }
+    .gavProd .txt b { display: block; font-size: 13px; font-weight: 600; }
+    .gavProd .txt span { display: block; font-size: 11.5px; color: var(--gray); }
+    .gavProd[data-parou] .txt span { color: var(--warning); }
+    .gavMais { min-width: 44px; height: 44px; padding: 0 10px; border: none; border-radius: 999px; background: var(--accent-bg); color: var(--red); font: inherit; font-size: 20px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+    .gavMais[aria-pressed="true"] { background: var(--red); color: #fff; font-size: 13px; }
+    .gavVazio { font-size: 12.5px; color: var(--gray); }
+    .gavRodape { padding: 12px 20px 18px; border-top: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 8px; }
+    .gavRodape .principal { height: 48px; border: none; border-radius: 12px; background: var(--red); color: #fff; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+    .gavRodape .linha { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; }
+    .gavRodape .linha a, .gavRodape .linha button { height: 44px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--white); color: var(--ink); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
+    /* Celular (opção "D"): tela cheia, seta de voltar no lugar do ✕ */
+    @media (max-width: 699px) {
+      .gaveta { width: 100%; box-shadow: none; }
+      .gavTopo { flex-direction: row-reverse; padding: 12px 16px; }
+      .gavFechar .xis { display: none; }
+      .gavFechar .seta { display: block; }
+      .gavCorpo { padding: 14px 16px; }
+      .gavRodape { padding: 10px 16px 16px; }
+    }
     .rankItem { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--hairline); }
     .rankItem:last-child { border-bottom: none; }
     .rankItem .pos { width: 20px; height: 20px; border-radius: 6px; background: var(--fill); color: var(--gray); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -601,7 +671,7 @@
       position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(10px);
       background: rgba(29, 29, 31, .92); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
       color: #fff; padding: 11px 20px; border-radius: 24px; font-size: 13.5px; font-weight: 600;
-      opacity: 0; transition: opacity .2s ease, transform .2s ease; z-index: 60; pointer-events: none; white-space: nowrap;
+      opacity: 0; transition: opacity .2s ease, transform .2s ease; z-index: 70; pointer-events: none; white-space: nowrap;
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   </style>
@@ -611,6 +681,8 @@
   <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
 
   <div class="toast" id="toast"></div>
+  <div class="gavFundo hidden" id="gavetaFundo"></div>
+  <aside class="gaveta hidden" id="gavetaCliente" role="dialog" aria-modal="true" aria-labelledby="gavNome"></aside>
 
   <div id="loadingScreen" class="loadingScreen">
     <div class="brand">Cortag</div>
@@ -1014,7 +1086,12 @@
       }
     }
     document.addEventListener('DOMContentLoaded', boot);
-    document.addEventListener('DOMContentLoaded', () => document.getElementById('tabDashboardPrincipal').addEventListener('click', acaoClienteDoDashboard));
+    document.addEventListener('DOMContentLoaded', () => {
+      document.getElementById('tabDashboardPrincipal').addEventListener('click', acaoClienteDoDashboard);
+      document.getElementById('gavetaCliente').addEventListener('click', cliqueNaGaveta);
+      document.getElementById('gavetaFundo').addEventListener('click', fecharGaveta);
+      document.addEventListener('keydown', e => { if (e.key === 'Escape' && gaveta) fecharGaveta(); });
+    });
 
     // =================================================================
     // ---------------------------- Dashboard ---------------------------
@@ -1336,7 +1413,7 @@
     // como o "← App" - o orçamento do app está no aparelho e não se perde.
     function nomeClienteHtml(c) {
       if (!c.id) return `<span class="nome">${escapeHtml(c.nome)}</span>`;
-      return `<button type="button" class="nome cliLink" data-cli-acao="ver" data-id="${Number(c.id)}" title="Abrir ${escapeHtml(c.nome)} no app">${escapeHtml(c.nome)}</button>`;
+      return `<button type="button" class="nome cliLink" data-cli-acao="gaveta" data-id="${Number(c.id)}" data-nome="${escapeHtml(c.nome)}" title="Ver o resumo de ${escapeHtml(c.nome)}">${escapeHtml(c.nome)}</button>`;
     }
     function acoesClienteHtml(c) {
       if (!c.id) return '';
@@ -1353,7 +1430,277 @@
       if (!Number.isInteger(id) || id <= 0) return;
       const acao = btn.dataset.cliAcao;
       if (acao === 'historico') { abrirHistoricoCliente(id, btn.dataset.nome || ''); return; }
+      if (acao === 'gaveta') { abrirGaveta(id, btn.dataset.nome || '', btn); return; }
       location.href = `index.html?${new URLSearchParams({ cliente: id, acao })}`;
+    }
+
+    // ---- Gaveta do cliente (nome nas listas do Dashboard) ----
+    // Resumo do cliente sem sair do Dashboard: faixa (régua do card do app),
+    // faturado mês a mês, o que ele compra sempre e o que parou de comprar (com
+    // "+" que marca o produto pra proposta), última compra/visita, atraso e saldo
+    // a cancelar. Servidor: status do classificatório, /mensal, comprados-recentes
+    // e sugestões; cadastro, visita, inadimplência, saldo a cancelar e WhatsApp
+    // vêm das cópias que o app guarda no aparelho (chaves abaixo; o formato é o
+    // do index.html - mudou lá, confira aqui). Cliente fora da cópia: o cadastro
+    // vem de GET /api/clientes/:id.
+    // "Montar proposta" leva os marcados (ou, sem nenhum, tudo o que comprou em
+    // 12 meses) pro app: index.html?cliente=ID&acao=proposta[&itens=cod:qtd,…],
+    // que pergunta antes de trocar o orçamento (abrirPeloLinkDoDashboard).
+    const CLIENTES_LOCAIS_LS_KEY = 'cortagClientesLocais_v1'; // { clientes: [...] } do /api/clientes/sync (saveClientesLocais)
+    const INAD_LS_KEY = 'cortagInadimplencia_v1';             // { clientes: [...] } do /api/inadimplencia (carregarInadimplencia)
+    const VISITAS_LS_KEY = 'cortagVisitas_v1';                // { clientes: [...] } do /api/visitas (carregarVisitas)
+    const VISITAS_LOCAIS_LS_KEY = 'cortagVisitasLocais_v1';   // id -> 'AAAA-MM-DD' salvo e ainda não devolvido pelo servidor
+    const WHATS_COMPRADOR_LS_KEY = 'cortagWhatsComprador_v1'; // id -> { numero, nome, em } salvo e ainda não confirmado (whatsPendentes)
+    const CANC_VALIDADE_DIAS = 15; // aviso de cancelamento do saldo vale 15 dias (avisosCancelamentoDoCliente)
+    const INAD_VELHO_DIAS = 15;    // relatório de inadimplência mais velho que isso "pode já ter sido pago" (inadPosicao)
+    // cópia de NOME_CURTO_FAIXA e da régua (renderReguaFaixa) do index.html: mudou lá, muda aqui
+    const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master' };
+    const DIA_BR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+    let gaveta = null; // { id, nome, cliente, locais, dados, sel: Map(cod -> qtd), origem }
+    let gavetaReq = 0;
+    function lerLocal(chave) { try { return JSON.parse(localStorage.getItem(chave)); } catch (e) { return null; } }
+    function hojeBrasiliaISO() { return DIA_BR.format(new Date()); }
+    function diasEntreISO(a, b) { return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000); }
+    // DD/MM, com o ano quando não é o deste ano
+    function dataCurta(iso) {
+      const t = rotuloSemana(iso);
+      const ano = String(iso).slice(0, 4);
+      return ano === hojeBrasiliaISO().slice(0, 4) ? t : `${t}/${ano.slice(2)}`;
+    }
+    function haDias(iso) {
+      const n = diasEntreISO(String(iso).slice(0, 10), hojeBrasiliaISO());
+      return n <= 0 ? 'hoje' : n === 1 ? 'ontem' : `há ${n} dias`;
+    }
+    // lido uma vez por abertura (a cópia de clientes tem a carteira inteira)
+    function dadosLocaisDoCliente(id) {
+      const mesmo = v => v != null && String(v) === String(id);
+      const loc = ((lerLocal(CLIENTES_LOCAIS_LS_KEY) || {}).clientes || []).find(c => mesmo(c.id)) || null;
+      const cod = loc && loc.codigo_oficial;
+      const inadDados = lerLocal(INAD_LS_KEY) || {};
+      const inad = (inadDados.clientes || [])
+        .find(c => mesmo(c.cliente_id) || (cod && String(c.codigo_oficial) === String(cod))) || null;
+      const inadPosicao = (inadDados.relatorio && inadDados.relatorio.periodo_fim) || null;
+      const vis = ((lerLocal(VISITAS_LS_KEY) || {}).clientes || []).find(c => mesmo(c.cliente_id));
+      const visLocal = (lerLocal(VISITAS_LOCAIS_LS_KEY) || {})[id];
+      const visita = [vis && vis.ultima_visita, visLocal].filter(Boolean).map(d => String(d).slice(0, 10)).sort().pop() || null;
+      // a cópia pode ser de dias atrás: só os avisos ainda no prazo, como o app
+      const limiteCanc = new Date(Date.now() - CANC_VALIDADE_DIAS * 86400000).toISOString().slice(0, 10);
+      const cancelamentos = ((loc && loc.cancelamentos) || []).filter(a => String(a.data_aviso || '').slice(0, 10) >= limiteCanc);
+      // WhatsApp: o mais novo entre o salvo sem internet (ainda na fila) e o do servidor (whatsCompradorDoCliente)
+      const pend = (lerLocal(WHATS_COMPRADOR_LS_KEY) || {})[id];
+      const doServ = loc && loc.whatsapp_comprador_em ? { numero: loc.whatsapp_comprador || '', em: Date.parse(loc.whatsapp_comprador_em) || 0 } : null;
+      const whats = [pend, doServ].filter(Boolean).sort((a, b) => (b.em || 0) - (a.em || 0))[0];
+      return { loc, inad, inadPosicao, visita, cancelamentos, whatsapp: whats && whats.numero ? String(whats.numero).replace(/\D/g, '') : '' };
+    }
+    function abrirGaveta(id, nome, origem) {
+      const req = ++gavetaReq;
+      const locais = dadosLocaisDoCliente(id);
+      gaveta = { id, nome, cliente: locais.loc, locais, dados: null, sel: new Map(), origem };
+      document.getElementById('gavetaFundo').classList.remove('hidden');
+      document.getElementById('gavetaCliente').classList.remove('hidden');
+      document.documentElement.classList.add('gavetaAberta');
+      renderGaveta();
+      document.querySelector('#gavetaCliente .gavFechar')?.focus();
+      const pegar = url => apiFetch(url).catch(() => null); // uma parte que falha só some da gaveta
+      Promise.all([
+        gaveta.cliente ? null : pegar(`/api/clientes/${id}`),
+        pegar(`/api/clientes/${id}/classificatorio/status`),
+        pegar(`/api/clientes/${id}/mensal`),
+        pegar(`/api/clientes/${id}/comprados-recentes`),
+        pegar(`/api/clientes/${id}/sugestoes-recompra`),
+      ]).then(([cliente, status, mensal, comprados, sugestoes]) => {
+        if (req !== gavetaReq || !gaveta) return; // fechou ou abriu outro cliente enquanto esperava
+        if (cliente) gaveta.cliente = cliente;
+        if (gaveta.cliente && gaveta.cliente.nome) gaveta.nome = gaveta.cliente.nome;
+        gaveta.dados = { status, mensal, comprados: Array.isArray(comprados) ? comprados : null,
+          sugestoes: Array.isArray(sugestoes) ? sugestoes : null };
+        renderGaveta();
+      });
+    }
+    function fecharGaveta() {
+      if (!gaveta) return;
+      gavetaReq++;
+      const origem = gaveta.origem;
+      gaveta = null;
+      document.getElementById('gavetaFundo').classList.add('hidden');
+      document.getElementById('gavetaCliente').classList.add('hidden');
+      document.documentElement.classList.remove('gavetaAberta');
+      if (origem && document.body.contains(origem)) origem.focus();
+    }
+    // Mesmas travas do card do app (index.html): matriz com empresas fora do app
+    // fica sem veredito de faixa ao vivo, e PIC (faltaPraMeta) tem a meta própria.
+    function faixaAoVivo(status) {
+      return !!status && status.classificado !== false && !status.ehRede
+        && !(status.erp && status.erp.fat12mOutrasEmpresas > 0) && status.faltaPraMeta == null;
+    }
+    // Régua da faixa: mesma conta do card do app (renderReguaFaixa, index.html).
+    function htmlReguaGaveta(status) {
+      if (!status || status.classificado === false) return '';
+      const degraus = status.degraus;
+      const ano = Number(status.anoCorrente) || Number(hojeBrasiliaISO().slice(0, 4));
+      const fat = Number(status.faturamentoFaixa ?? status.faturamentoAnoCorrente) || 0;
+      const topo = `<div class="topo"><span>Faturado em ${ano}</span><b>${escapeHtml(formatCompact(fat, true))}</b></div>`;
+      // sem régua ao vivo (Rede, PIC, matriz com empresas fora do app, servidor antigo) o app esconde: aqui também
+      if (!faixaAoVivo(status) || status.regraFaixa !== 'ano_fiscal' || !Array.isArray(degraus) || degraus.length < 2) return '';
+      const nome = t => escapeHtml(NOME_CURTO_FAIXA[t] || t || '');
+      const limite = degraus[degraus.length - 1].min / 0.72 || 1;
+      const idxAtual = Math.max(0, degraus.findIndex(d => d.atual));
+      const segs = degraus.map((d, i) => ({ d, i, larg: Math.max(0, (i + 1 < degraus.length ? degraus[i + 1].min : limite) - d.min) / limite * 100 }));
+      const dias = Math.max(1, diasEntreISO(hojeBrasiliaISO(), `${ano}-12-31`) + 1);
+      const ritmo = falta => (dias > 31 ? `≈ ${formatCompact(falta / (dias / 30.44), true)}/mês` : `em ${dias} dia${dias > 1 ? 's' : ''}`);
+      const cartoes = [];
+      if (status.faltaPraManter != null) {
+        cartoes.push(`<div class="gavCartao" data-cor="${status.emRiscoDeQueda ? 'danger' : 'warning'}"><small>Pra não cair até 31/12</small><b>${escapeHtml(formatCompact(status.faltaPraManter, true))}</b><span>${escapeHtml(ritmo(status.faltaPraManter))}</span></div>`);
+      } else if (degraus[idxAtual].min > 0) {
+        cartoes.push(`<div class="gavCartao" data-cor="success"><small>${nome(degraus[idxAtual].tipo)}</small><b>garantido</b><span>no ano</span></div>`);
+      }
+      if (status.faltaPraProximaFaixa != null) {
+        cartoes.push(`<div class="gavCartao"><small>Pra ${nome(status.proximaFaixa)} no ano</small><b>${escapeHtml(formatCompact(status.faltaPraProximaFaixa, true))}</b><span>${escapeHtml(ritmo(status.faltaPraProximaFaixa))}</span></div>`);
+      } else if (status.jaQualificaProximaFaixa) {
+        cartoes.push(`<div class="gavCartao" data-cor="success"><small>Bateu ${nome(status.proximaFaixa)}</small><b>no ano</b><span>dá pra pedir a subida</span></div>`);
+      } else if (idxAtual === degraus.length - 1) {
+        cartoes.push(`<div class="gavCartao" data-cor="success"><small>Faixa máxima</small><b>${nome(degraus[idxAtual].tipo)}</b></div>`);
+      }
+      return `<section class="gavRegua">${topo}
+        <div class="gavBarraCaixa">
+          <div class="gavBarra">${segs.map(({ i, larg }) => `<i class="${i < idxAtual ? 'abaixo' : i === idxAtual ? 'atual' : 'acima'}" style="flex:0 0 ${larg}%"></i>`).join('')}</div>
+          <div class="gavMarca" style="left:${Math.min(100, fat / limite * 100)}%" title="${escapeHtml(brl(fat))}"></div>
+        </div>
+        <div class="gavNomes">${segs.map(({ d, larg }) => `<span style="flex:0 0 ${larg}%">${nome(d.tipo)}</span>`).join('')}</div>
+        ${cartoes.length ? `<div class="gavCartoes">${cartoes.join('')}</div>` : ''}
+      </section>`;
+    }
+    function rotuloProposta() {
+      const n = gaveta.sel.size;
+      return n ? `Montar proposta com ${n} ite${n === 1 ? 'm' : 'ns'}` : 'Montar proposta';
+    }
+    function htmlProdutoGaveta(cod, nome, detalhe, qtd, parou) {
+      const q = Math.max(1, Math.round(Number(qtd) || 1));
+      const botao = cod
+        ? `<button type="button" class="gavMais" data-gav-sel="${escapeHtml(cod)}" data-qtd="${q}" data-nome="${escapeHtml(nome)}" aria-pressed="false"
+            aria-label="Pôr na proposta: ${escapeHtml(nome)}">+</button>`
+        : '';
+      return `<div class="gavProd"${parou ? ' data-parou' : ''}><div class="txt"><b>${escapeHtml(nome)}</b><span>${escapeHtml(detalhe)}</span></div>${botao}</div>`;
+    }
+    function renderGaveta() {
+      const el = document.getElementById('gavetaCliente');
+      if (!gaveta) return;
+      const d = gaveta.dados;
+      const cliente = gaveta.cliente;
+      const status = d && d.status;
+      const { loc, inad, inadPosicao, visita, cancelamentos, whatsapp: whats } = gaveta.locais;
+      const razao = (cliente && cliente.nome) || gaveta.nome;
+      const titulo = (loc && loc.nome_fantasia) || razao;
+      const end = loc && loc.endereco;
+      const sub = [titulo !== razao ? razao : '', end && end.municipio ? `${end.municipio}/${end.uf || ''}` : '',
+        cliente && cliente.codigo_oficial ? `cód. ${cliente.codigo_oficial}` : ''].filter(Boolean).join(' · ');
+      const selos = [];
+      if (cliente && cliente.classificatorio_tipo) {
+        const pct = cliente.classificatorio_desconto != null ? ` · ${Number(cliente.classificatorio_desconto)}%` : '';
+        selos.push(`<span class="gavSelo">${escapeHtml((NOME_CURTO_FAIXA[cliente.classificatorio_tipo] || cliente.classificatorio_tipo) + pct)}</span>`);
+      }
+      if (faixaAoVivo(status) && status.emRiscoDeQueda) selos.push('<span class="gavSelo" data-cor="danger">Em risco de queda</span>');
+      else if (faixaAoVivo(status) && status.jaQualificaProximaFaixa) selos.push('<span class="gavSelo" data-cor="success">Bateu a próxima faixa</span>');
+
+      let corpo;
+      if (!d) {
+        corpo = '<div class="chartEmpty">Carregando…</div>';
+      } else {
+        const partes = [htmlReguaGaveta(status)];
+        if (d.mensal && Array.isArray(d.mensal.meses)) {
+          partes.push(`<section><div class="gavSecTit">Faturado mês a mês <small>· deste CNPJ, últimos 12 meses</small></div><div id="gavMensal"></div></section>`);
+        }
+        // Compra sempre: os que vieram em mais pedidos nos 12 meses
+        if (d.comprados) {
+          const sempre = d.comprados.slice().sort((a, b) => b.num_pedidos - a.num_pedidos || String(b.ultima_compra).localeCompare(String(a.ultima_compra))).slice(0, 8);
+          partes.push(`<section><div class="gavSecTit">Compra sempre <small>· últimos 12 meses</small></div>${sempre.length
+            ? sempre.map(c => htmlProdutoGaveta(String(c.codigo_sku), c.nome,
+              `${c.num_pedidos} compra${c.num_pedidos === 1 ? '' : 's'} · última ${dataCurta(c.ultima_compra)} · ${Number(c.qtd_ultima_compra) || 0} un.`,
+              c.qtd_ultima_compra, false)).join('')
+            : '<div class="gavVazio">Nenhuma compra nos últimos 12 meses.</div>'}</section>`);
+        }
+        if (d.sugestoes && d.sugestoes.length) {
+          partes.push(`<section><div class="gavSecTit">Parou de comprar <small>· mais de 1 ano</small></div>${d.sugestoes.slice(0, 5).map(s =>
+            htmlProdutoGaveta(s.codigo_sku ? String(s.codigo_sku) : '', s.grupo,
+              `última compra ${rotuloMes(s.ultima_compra)} · ${s.meses_sem_comprar} meses`, 1, true)).join('')}</section>`);
+        }
+        const infos = [];
+        const ultima = status && (status.ultimoPedido || status.ultimaCompra);
+        if (ultima) infos.push(`<div class="gavInfo"><b>Última compra</b>${escapeHtml(dataCurta(ultima))} · ${escapeHtml(haDias(ultima))}</div>`);
+        if (visita) infos.push(`<div class="gavInfo"${diasEntreISO(visita, hojeBrasiliaISO()) > 60 ? ' data-cor="warning"' : ''}><b>Sua última visita</b>${escapeHtml(dataCurta(visita))} · ${escapeHtml(haDias(visita))}</div>`);
+        if (inad && Number(inad.total) > 0) {
+          // o relatório não chega em dia fixo: sempre a posição, e "pode já ter sido pago" se for velho (inadPosicao do app)
+          const velho = !!inadPosicao && diasEntreISO(String(inadPosicao).slice(0, 10), hojeBrasiliaISO()) > INAD_VELHO_DIAS;
+          infos.push(`<div class="gavInfo"${velho ? '' : ' data-cor="danger"'}><b>Em atraso</b>${escapeHtml(brl(inad.total))}${inad.mais_antigo ? ` · venceu ${escapeHtml(dataCurta(inad.mais_antigo))}` : ''}`
+            + `${inadPosicao ? `<br><small>posição de ${escapeHtml(dataCurta(inadPosicao))}${velho ? ' — pode já ter sido pago' : ''}</small>` : ''}</div>`);
+        }
+        const pedidosCanc = [...new Set(cancelamentos.map(a => String(a.nr_pedido)))];
+        if (pedidosCanc.length) infos.push(`<div class="gavInfo" data-cor="warning"><b>Saldo a cancelar</b>${pedidosCanc.length === 1 ? `pedido ${escapeHtml(pedidosCanc[0])}` : `${pedidosCanc.length} pedidos`}</div>`);
+        if (infos.length) partes.push(`<section class="gavInfos">${infos.join('')}</section>`);
+        corpo = partes.join('');
+      }
+      // passo 4: proposta que cobre o que falta pra faixa (montarPropostaFaixa, no app)
+      const alvo = !faixaAoVivo(status) || status.regraFaixa !== 'ano_fiscal' || !Array.isArray(status.degraus) || status.degraus.length < 2 ? null
+        : status.faltaPraManter > 0 ? { valor: status.faltaPraManter, rotulo: 'pra não cair' }
+        : status.faltaPraProximaFaixa > 0 ? { valor: status.faltaPraProximaFaixa, rotulo: `pra ${NOME_CURTO_FAIXA[status.proximaFaixa] || status.proximaFaixa}` }
+        : null;
+      el.innerHTML = `
+        <div class="gavTopo">
+          <div class="gavTit">
+            ${selos.length ? `<div class="gavSelos">${selos.join('')}</div>` : ''}
+            <h2 id="gavNome">${escapeHtml(titulo)}</h2>
+            ${sub ? `<div class="gavSub">${escapeHtml(sub)}</div>` : ''}
+          </div>
+          <button type="button" class="gavFechar" data-gav="fechar" aria-label="Fechar">
+            <svg class="xis" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            <svg class="seta" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+        </div>
+        <div class="gavCorpo">${corpo}</div>
+        <div class="gavRodape">
+          ${alvo
+            ? `<button type="button" class="principal" data-gav="faixa" data-alvo="${Math.ceil(alvo.valor)}" data-rotulo="${escapeHtml(alvo.rotulo)}">Proposta ${escapeHtml(alvo.rotulo)} · ${escapeHtml(formatCompact(alvo.valor, true))}</button>`
+            : `<button type="button" class="principal" data-gav="proposta">${rotuloProposta()}</button>`}
+          <div class="linha">
+            ${alvo ? `<button type="button" data-gav="proposta">${rotuloProposta()}</button>` : ''}
+            <button type="button" data-gav="historico">Histórico</button>
+            ${whats ? `<a href="https://wa.me/${escapeHtml(whats)}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+            <button type="button" data-gav="app">Abrir no app</button>
+          </div>
+        </div>`;
+      if (d && d.mensal && Array.isArray(d.mensal.meses)) {
+        renderBarras('gavMensal', d.mensal.meses, { rotulo: rotuloMes, valorKey: 'valor', atual: p => p === d.mensal.meses[d.mensal.meses.length - 1],
+          pontas: true, semValor: true, msgVazio: 'Nenhuma nota faturada nos últimos 12 meses.', ariaLabel: 'Faturado do cliente nos últimos 12 meses' });
+      }
+    }
+    function cliqueNaGaveta(e) {
+      if (!gaveta) return;
+      const sel = e.target.closest('[data-gav-sel]');
+      if (sel) {
+        // só o botão e o rótulo do "Montar proposta" mudam (a gaveta não é redesenhada)
+        const cod = sel.dataset.gavSel;
+        const qtd = Number(sel.dataset.qtd);
+        const marcar = !gaveta.sel.has(cod);
+        if (marcar) gaveta.sel.set(cod, qtd); else gaveta.sel.delete(cod);
+        sel.setAttribute('aria-pressed', String(marcar));
+        sel.setAttribute('aria-label', `${marcar ? 'Tirar da proposta' : 'Pôr na proposta'}: ${sel.dataset.nome}`);
+        sel.textContent = marcar ? `✓ ${qtd}` : '+';
+        document.querySelector('#gavetaCliente [data-gav="proposta"]').textContent = rotuloProposta();
+        return;
+      }
+      const btn = e.target.closest('[data-gav]');
+      if (!btn) return;
+      const acao = btn.dataset.gav;
+      const id = gaveta.id;
+      if (acao === 'fechar') { fecharGaveta(); return; }
+      if (acao === 'historico') { const nome = gaveta.nome; fecharGaveta(); abrirHistoricoCliente(id, nome); return; }
+      if (acao === 'faixa') {
+        location.href = `index.html?${new URLSearchParams({ cliente: id, acao: 'faixa', alvo: btn.dataset.alvo, rotulo: btn.dataset.rotulo })}`;
+        return;
+      }
+      const params = new URLSearchParams({ cliente: id, acao: acao === 'app' ? 'ver' : 'proposta' });
+      if (acao === 'proposta' && gaveta.sel.size) params.set('itens', [...gaveta.sel].map(([cod, qtd]) => `${cod}:${qtd}`).join(','));
+      location.href = `index.html?${params}`;
     }
     function renderListaAlerta(hostId, lista, detalheFn) {
       const host = document.getElementById(hostId);
