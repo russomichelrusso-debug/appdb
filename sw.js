@@ -84,8 +84,8 @@ const LIBS = new Map([
   ['https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js', 'sha384-vuyrTV5nkscLp1knFvt+FIHfKKzmROBq5reruhMRslauj54mW+l2B8b6szMN6lCL'],
   ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js', 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB'],
   ['https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js', 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT'],
-  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.min.mjs', 'sha384-DVT/98LrvV8RwTKMrO+XhNmriXzZXkaBiUEzFou91SiquMt7FvC3TMHs4tMlDQhD'],
-  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.1.200/pdf.worker.min.mjs', 'sha384-Tfvhzz17zRZraaeJSy+9zZprh8OYQHd3NC7yMUa5APLz8buWdx7MloIddcBGa3oW'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.min.mjs', 'sha384-QCvhu/UPp22U/TNLVbQNONL82ES2yY717GAiqP9VVu37Y7+m9VPKvadGx9XlFvcp'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.worker.min.mjs', 'sha384-NfW/OTMWezITv4oaALvfH7MFLwzPxEvpySmDpoALa1mtTY8MC200l0ZNFD+SOlrM'],
   // QR Code do pareamento da tela do cliente (tela-cliente.html)
   ['https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'],
   // Mapa da carteira (aba Clientes, laptop)
