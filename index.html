@@ -24756,9 +24756,57 @@
         renderCartBar();
         openDrawer();
         const fora = (c.itens || []).length - itens.length;
-        const origem = c.itens[0] && c.itens[0].origem === 'frequente' ? 'que vieram nas últimas compras' : 'que costumam vir nessa compra';
+        const origemIt = c.itens[0] && c.itens[0].origem;
+        const origem = origemIt === 'frequente' ? 'que vieram nas últimas compras'
+          : origemIt === 'comprados' ? 'comprados nos últimos 12 meses, na quantidade da última compra'
+          : 'que costumam vir nessa compra';
         showToast(`Proposta de ${c.nome}: ${itens.length} produto(s) ${origem} — revise as quantidades antes de enviar`
           + (fora ? ` · ${fora} fora do catálogo atual ficaram de fora` : ''), 'longo');
+      }
+      // ---- Link do Dashboard (curva-abc.html, 10/2026) ----
+      // Tocar no nome de um cliente nas listas do Dashboard abre o app com
+      // ?cliente=ID&acao=ver (ficha dele na aba Clientes) ou &acao=proposta
+      // (orçamento com o que ele comprou nos últimos 12 meses, na quantidade da
+      // última compra - comprados-recentes, mesmo caminho do "Montar proposta"
+      // da Recompra). Os parâmetros saem do endereço pra recarregar não repetir.
+      async function abrirPeloLinkDoDashboard(catalogoPromise) {
+        let id, acao;
+        try {
+          const params = new URLSearchParams(location.search);
+          id = Number(params.get('cliente'));
+          acao = params.get('acao');
+          if (!params.has('cliente')) return;
+          params.delete('cliente'); params.delete('acao');
+          const resto = params.toString();
+          history.replaceState(history.state, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
+        } catch (e) { return; }
+        if (!Number.isInteger(id) || id <= 0) return;
+        // levantamento não salvo: activateMainTab pergunta e o vendedor pode ficar onde está
+        const abrirFicha = async () => {
+          await activateMainTab('clientes');
+          if (document.body.dataset.aba === 'clientes') abrirClienteDaRecompra({ cliente_id: id });
+        };
+        if (acao !== 'proposta') { await abrirFicha(); return; }
+        let cliente = loadClientesLocais().find(x => String(x.id) === String(id));
+        if (!cliente) {
+          try { cliente = await apiFetch(`/api/clientes/${id}`); }
+          catch (e) { showToast('Não foi possível abrir esse cliente.', 'erro'); return; }
+        }
+        try { await catalogoPromise; } catch (e) { /* segue: montarPropostaRecompra avisa se nada estiver no catálogo */ }
+        await carregarCompradosRecentes(cliente);
+        const comprados = (COMPRADOS_CACHE.get(cliente.id) || [])
+          .slice().sort((a, b) => String(b.ultima_compra).localeCompare(String(a.ultima_compra)));
+        // sem o que propor: abre a ficha em vez de selecionar o cliente por cima do
+        // orçamento/levantamento de outro (o ⇄ pergunta antes; aqui não daria)
+        if (!comprados.length) {
+          await abrirFicha();
+          showToast(`${cliente.nome} não comprou nos últimos 12 meses (ou não deu pra buscar agora) — selecione no Pedido e monte pelo "Montar mix inicial" ou pela busca.`, 'longo');
+          return;
+        }
+        await montarPropostaRecompra({
+          cliente_id: cliente.id, nome: cliente.nome, documento: cliente.documento, classificatorio_tipo: cliente.classificatorio_tipo,
+          itens: comprados.map(c => ({ codigo_sku: c.codigo_sku, quantidade: Number(c.qtd_ultima_compra) || 1, origem: 'comprados' })),
+        });
       }
       function adiarRecompra(c) {
         if (!c) return;
@@ -30619,6 +30667,7 @@
           carregarStatusRelatorioOficial();
           initCarteiraAntigaLimpar();
           initApagarTudoFaturamento();
+          abrirPeloLinkDoDashboard(catalogoPromise); // sem await: ?cliente= vindo do Dashboard
 
           renderResults();
           renderCartBar();

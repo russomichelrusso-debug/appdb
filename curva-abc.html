@@ -328,6 +328,15 @@
     .listaAlertaItem:last-child { border-bottom: none; }
     .listaAlertaItem .nome { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .listaAlertaItem .valor { flex-shrink: 0; font-size: 11.5px; color: var(--gray); text-align: right; }
+    /* Nome do cliente que abre ele no app + "Montar proposta"/"Histórico" (10/2026). */
+    .listaAlertaItem:has(.cliAcoes) { flex-wrap: wrap; row-gap: 4px; }
+    .cliLink { flex: 1 1 0; min-width: 0; border: none; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
+    .cliLink:hover, .cliLink:focus-visible { color: var(--red); text-decoration: underline; }
+    .cliAcoes { flex-basis: 100%; display: flex; gap: 6px; flex-wrap: wrap; }
+    .cliAcoes button { border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; padding: 5px 10px; min-height: 32px; border-radius: 8px; cursor: pointer; }
+    .cliAcoes button.principal { border-color: var(--red); color: var(--red); }
+    .cliAcoes button:hover { background: var(--fill); }
+    .dashTop .cliAcoes { margin: 6px 0 2px 30px; }
     .rankItem { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--hairline); }
     .rankItem:last-child { border-bottom: none; }
     .rankItem .pos { width: 20px; height: 20px; border-radius: 6px; background: var(--fill); color: var(--gray); font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -958,8 +967,9 @@
           ? `<div class="lev-empty">${escapeHtml(cfg.vazio || 'Nenhum cliente nessa situação agora.')}</div>`
           : cfg.lista.map(c => `
         <div class="listaAlertaItem">
-          <span class="nome">${escapeHtml(c.nome)}</span>
+          ${nomeClienteHtml(c)}
           <span class="valor">${escapeHtml(cfg.detalheFn(c))}</span>
+          ${acoesClienteHtml(c)}
         </div>`).join('')}</div>`;
       panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
@@ -971,12 +981,17 @@
       const params = new URLSearchParams(location.search);
       const clienteId = Number(params.get('cliente'));
       if (!Number.isInteger(clienteId) || clienteId <= 0) return false;
+      abrirHistoricoCliente(clienteId, params.get('nome') || '');
+      return true;
+    }
+    // Curva ABC do cliente (link do app e botão "Histórico" das listas do Dashboard).
+    function abrirHistoricoCliente(clienteId, nome) {
       document.querySelectorAll('#verSeg button').forEach(b => b.classList.toggle('active', b.dataset.modo === 'porCliente'));
       state.modo = 'porCliente';
       curvaAbcCarregada = true; // evita a carga automática de ativarTabPrincipal() com o cliente ainda não selecionado
       ativarTabPrincipal('curvaAbc');
-      selecionarCliente(clienteId, params.get('nome') || '');
-      return true;
+      selecionarCliente(clienteId, nome);
+      window.scrollTo(0, 0);
     }
 
     async function boot() {
@@ -999,6 +1014,7 @@
       }
     }
     document.addEventListener('DOMContentLoaded', boot);
+    document.addEventListener('DOMContentLoaded', () => document.getElementById('tabDashboardPrincipal').addEventListener('click', acaoClienteDoDashboard));
 
     // =================================================================
     // ---------------------------- Dashboard ---------------------------
@@ -1312,13 +1328,41 @@
         <div class="barras${opts.semValor ? ' semValor' : ''}" role="img" aria-label="${escapeHtml(opts.ariaLabel || 'Gráfico de vendas')}">${linhaMeta}${linhaMedia}${colunas}</div>
         <div class="barRotulos${opts.pontas ? ' pontas' : ''}">${rotulos}</div>`;
     }
+    // Cliente nas listas do Dashboard (10/2026, pedido do usuário: "ao clicar no
+    // nome abrir o cliente, local pra criar uma proposta"): o nome abre a ficha
+    // dele no app (index.html?cliente=ID&acao=ver, aba Clientes); "Montar
+    // proposta" abre o orçamento com o que ele comprou nos últimos 12 meses
+    // (&acao=proposta); "Histórico" fica aqui, na Curva ABC dele. Mesma aba,
+    // como o "← App" - o orçamento do app está no aparelho e não se perde.
+    function nomeClienteHtml(c) {
+      if (!c.id) return `<span class="nome">${escapeHtml(c.nome)}</span>`;
+      return `<button type="button" class="nome cliLink" data-cli-acao="ver" data-id="${Number(c.id)}" title="Abrir ${escapeHtml(c.nome)} no app">${escapeHtml(c.nome)}</button>`;
+    }
+    function acoesClienteHtml(c) {
+      if (!c.id) return '';
+      const dados = `data-id="${Number(c.id)}" data-nome="${escapeHtml(c.nome)}"`;
+      return `<span class="cliAcoes">
+        <button type="button" class="principal" data-cli-acao="proposta" ${dados}>Montar proposta</button>
+        <button type="button" data-cli-acao="historico" ${dados}>Histórico</button>
+      </span>`;
+    }
+    function acaoClienteDoDashboard(e) {
+      const btn = e.target.closest('[data-cli-acao]');
+      if (!btn) return;
+      const id = Number(btn.dataset.id);
+      if (!Number.isInteger(id) || id <= 0) return;
+      const acao = btn.dataset.cliAcao;
+      if (acao === 'historico') { abrirHistoricoCliente(id, btn.dataset.nome || ''); return; }
+      location.href = `index.html?${new URLSearchParams({ cliente: id, acao })}`;
+    }
     function renderListaAlerta(hostId, lista, detalheFn) {
       const host = document.getElementById(hostId);
       if (!lista || lista.length === 0) { host.innerHTML = '<div class="lev-empty">Nenhum cliente nessa situação agora.</div>'; return; }
       host.innerHTML = lista.slice(0, 5).map(c => `
         <div class="listaAlertaItem">
-          <span class="nome">${escapeHtml(c.nome)}</span>
+          ${nomeClienteHtml(c)}
           <span class="valor">${escapeHtml(detalheFn(c))}</span>
+          ${acoesClienteHtml(c)}
         </div>`).join('');
     }
 
@@ -1329,9 +1373,10 @@
       host.innerHTML = lista.map((c, i) => `
         <div class="rankItem">
           <span class="pos">${i + 1}</span>
-          <span class="nome">${escapeHtml(c.nome)}</span>
+          ${nomeClienteHtml(c)}
           <span class="valor">${brl(c.faturamento)}</span>
           <span class="rankTrilho"><span class="rankBarra" style="display:block;width:${((Number(c.faturamento) || 0) / maior * 100).toFixed(1)}%;"></span></span>
+          ${acoesClienteHtml(c)}
         </div>`).join('');
     }
 
@@ -1438,6 +1483,7 @@
           // data_implantacao é DATE - lê o "AAAA-MM-DD" direto da string (new
           // Date() no fuso do Brasil jogaria pro dia anterior).
           lista: (resumo.entradaPedidosMes || []).map(p => ({
+            id: p.cliente_id || null,
             nome: p.cliente_nome || `Cliente ${p.cliente_codigo_oficial}`,
             dia: String(p.data_implantacao || '').slice(0, 10).split('-').reverse().slice(0, 2).join('/'),
             valor: Number(p.valor) || 0,

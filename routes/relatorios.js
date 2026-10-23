@@ -845,7 +845,7 @@ const SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE = `
 // abre ao tocar no cartão. Cliente ainda não vinculado ao código oficial
 // (sem linha em clientes) vem com nome null - a tela mostra o código.
 const SQL_ENTRADA_PEDIDOS_DO_MES = `
-  SELECT poi.nr_pedido, poi.cliente_codigo_oficial, MAX(c.nome) AS cliente_nome,
+  SELECT poi.nr_pedido, poi.cliente_codigo_oficial, MAX(c.id) AS cliente_id, MAX(c.nome) AS cliente_nome,
          MIN(poi.data_implantacao) AS data_implantacao, SUM(poi.valor) AS valor
   FROM pedidos_oficiais_itens poi
   LEFT JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
