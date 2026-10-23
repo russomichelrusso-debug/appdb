@@ -7,7 +7,7 @@
     "start": "node server.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": "26.x"
   },
   "dependencies": {
     "@e965/xlsx": "^0.20.3",
