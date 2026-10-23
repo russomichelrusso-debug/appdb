@@ -1374,6 +1374,15 @@ Supabase, sem PR — não é mudança de código.
   outra base e a representação fora das listas. A entrada não é erro de conta: o relatório do ERP chega de madrugada sem os
   pedidos da véspera e o Salesforce é ao vivo - o cartão mostra "pedidos do ERP até DD/MM" (`entradaAte`).
 
+- **Cliente clicável nas listas do Dashboard** (10/2026, passos 1 e 2 da sequência "Dashboard → cliente → proposta" em
+  "Caminho a seguir"): em Pede atenção (painel que abre), Em risco/Perto de subir/Sem comprar, Top 5 e Entrada de Pedidos do
+  mês, o **nome** abre o cliente no app (`index.html?cliente=ID&acao=ver`, ficha na aba Clientes) e cada linha ganha
+  **"Montar proposta"** (`&acao=proposta`: orçamento com o que ele comprou nos últimos 12 meses — `comprados-recentes`, quantidade
+  da última compra, a mais recente primeiro — pelo mesmo `montarPropostaRecompra` da Recompra, que pergunta antes de trocar o
+  orçamento; sem compra em 12 meses abre a ficha, sem selecionar o cliente por cima do orçamento de outro) e **"Histórico"** (Curva ABC dele na própria página, `abrirHistoricoCliente`). Mesma aba, como o "← App". O app lê e
+  apaga os parâmetros em `abrirPeloLinkDoDashboard` (`index.html`, fim do `init`). A lista de Entrada de Pedidos ganhou
+  `cliente_id` (`SQL_ENTRADA_PEDIDOS_DO_MES`). Em tela de 900 px+ a lista do painel do "Pede atenção" vira colunas.
+
 - **Curva ABC (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, página
   "Curva ABC" do mesmo canvas): página larga também nesta aba (`body.abaAbc`); filtros numa barra com o total à direita
   (`#abcResumo`); cartão escuro "N produtos fazem 80% do faturamento" com a fatia de cada classe no catálogo e no valor
@@ -1486,6 +1495,16 @@ Supabase, sem PR — não é mudança de código.
   falsa (leituras simuladas) — conferir num aparelho de verdade, principalmente no iPhone (sem BarcodeDetector, usa o
   ZXing). Na v2 (várias instâncias), as salas de `routes/segundaTela.js` têm de sair da memória (banco ou Redis). O
   cartão "próxima faixa de campanha" da tela do cliente não foi visto com campanha real.
+- **Dashboard → cliente → proposta — sequência combinada com o usuário (10/2026)**. Feitos: **1** (nome do cliente abre ele no
+  app) e **2** (botões "Montar proposta"/"Histórico" na linha) — ver "Cliente clicável nas listas do Dashboard" acima. Próximos,
+  nesta ordem, se o uso pegar:
+  3. **Mini-dashboard do cliente numa gaveta lateral** no próprio Dashboard (no celular, tela cheia): faturado no ano × faixa
+     (régua do card, quanto falta e ritmo por mês), gráfico de 12 meses, top produtos e os que parou de comprar, última compra,
+     última visita, inadimplência, saldo a cancelar; botões Montar proposta, Mix pra completar a faixa, WhatsApp, Abrir no app.
+     Sugestão: fazer mockups antes (o usuário escolhe por mockup).
+  4. **"Proposta pra manter a faixa"**: monta o orçamento até cobrir o "Faltam R$ X" — 1º o que ele recompra no ritmo (Recompra),
+     depois o que parou de comprar (💡 sugestões, por grupo → escolher a medida), por fim os mais vendidos do canal que ele não
+     compra (Mix inicial). Junta peças que já existem; o novo é parar ao bater o valor (sem impostos, como o mínimo CIF).
 - Ideia em aberto, ainda não implementada: um painel de "oportunidades do dia" na tela inicial
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como
