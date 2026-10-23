@@ -1839,7 +1839,7 @@
         },
         de3a5: { titulo: 'Contas - 3 a 5 Meses Sem Compra', lista: contas.clientesDe3a5Meses || [], detalheFn: c => `${c.diasSemComprar} dias sem comprar` },
         de6a8: { titulo: 'Contas - 6 a 8 Meses Sem Compra', lista: contas.clientesDe6a8Meses || [], detalheFn: c => `${c.diasSemComprar} dias sem comprar` },
-        riscoQueda: { titulo: 'Em risco de queda', lista: alertas.riscoDeQueda || [], detalheFn: c => `Faltam ${formatCompact(c.faltaPraManter, true)}` },
+        riscoQueda: { titulo: 'Em risco de queda', lista: alertas.riscoDeQueda || [], detalheFn: c => c.faltaPraManter != null ? `Faltam ${formatCompact(c.faltaPraManter, true)}` : `Faltam ${formatCompact(c.faltaPraMeta || 0, true)} pra meta` },
         pertoSubir: { titulo: 'Perto de subir', lista: alertas.pertoDeSubir || [], detalheFn: c => `Faltam ${formatCompact(c.faltaPraProximaFaixa, true)}` },
       };
       document.getElementById('kpiExpandPanel').classList.add('hidden'); // reabre sob demanda no próximo clique
@@ -2069,7 +2069,7 @@
         dashMensal = { ...dashMensal, resumo, meta: metaMensal };
         renderMensal();
         renderSemanaTrimestre(resumo);
-        renderListaAlerta('listaRiscoQueda', alertas.riscoDeQueda, c => `Faltam ${brl(c.faltaPraManter)}`);
+        renderListaAlerta('listaRiscoQueda', alertas.riscoDeQueda, c => c.faltaPraManter != null ? `Faltam ${brl(c.faltaPraManter)}` : `Faltam ${brl(c.faltaPraMeta || 0)} pra meta`);
         renderListaAlerta('listaPertoSubir', alertas.pertoDeSubir, c => `Faltam ${brl(c.faltaPraProximaFaixa)}`);
         renderListaAlerta('listaSemComprar', alertas.semComprarRecente, c => `${c.diasSemComprar} dias`);
         renderRankTopClientes(resumo.topClientes);
