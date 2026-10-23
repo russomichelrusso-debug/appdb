@@ -23669,7 +23669,7 @@
         if (aberta) {
           const secoes = [];
           if (risco.length) secoes.push(`<h3 class="recompraSecao" style="color:var(--danger);">Em risco de cair de faixa (${risco.length})</h3>` +
-            risco.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}${seloFonteErp(c)}`)).join(''));
+            risco.map(c => renderClassificatorioAlertaItem(c, (c.faltaPraManter != null ? `faltam ${brl(c.faltaPraManter)} pra manter ${escapeHtml(NOME_CURTO_FAIXA[c.tipo] || c.tipo)}` : `faltam ${brl(c.faltaPraMeta || 0)} pra meta do PIC`) + seloFonteErp(c))).join(''));
           if (subir.length) secoes.push(`<h3 class="recompraSecao" style="color:var(--success);">Perto de subir de faixa (${subir.length})</h3>` +
             subir.map(c => renderClassificatorioAlertaItem(c, `faltam ${brl(c.faltaPraProximaFaixa)} pra ${escapeHtml(NOME_CURTO_FAIXA[c.proximaFaixa] || c.proximaFaixa)}${seloFonteErp(c)}`)).join(''));
           if (sem.length) secoes.push(`<h3 class="recompraSecao" style="color:var(--warning);">Sem comprar há mais de 60 dias (${sem.length})</h3>` +

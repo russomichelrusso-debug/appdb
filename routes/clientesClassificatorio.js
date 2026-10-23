@@ -839,6 +839,11 @@ router.get('/classificatorio/alertas', async (req, res) => {
       }
     }
 
+    // Quem falta menos primeiro: venda pequena salva a faixa (pedido do usuário).
+    // PIC em risco não tem "pra manter", só a meta do acordo.
+    const falta = v => (v == null ? Infinity : Number(v));
+    riscoDeQueda.sort((a, b) => falta(a.faltaPraManter ?? a.faltaPraMeta) - falta(b.faltaPraManter ?? b.faltaPraMeta));
+    pertoDeSubir.sort((a, b) => falta(a.faltaPraProximaFaixa) - falta(b.faltaPraProximaFaixa));
     res.json({ pertoDeSubir, riscoDeQueda, semComprarRecente });
   } catch (e) {
     console.error(e);
