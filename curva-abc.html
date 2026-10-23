@@ -246,6 +246,12 @@
     .kpiExpandPanel { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; margin: -4px 0 14px; }
     .kpiExpandPanel h3 { margin: 0 0 4px; font-size: 14px; }
     .kpiExpandList { display: flex; flex-direction: column; gap: 2px; max-height: 340px; overflow-y: auto; margin-top: 8px; }
+    /* Tela larga: a lista vira colunas, senão o valor fica a ~1.500 px do nome (print do usuário, 10/2026). */
+    @media (min-width: 900px) {
+      .kpiExpandList { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); column-gap: 32px; row-gap: 0; max-height: 420px; }
+      .kpiExpandList .listaAlertaItem:last-child { border-bottom: 1px solid var(--hairline); }
+      .kpiExpandList .lev-empty { grid-column: 1 / -1; }
+    }
 
     /* ---------- chart card ---------- */
     .chartCard { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 18px 18px 12px; margin-bottom: 14px; }
