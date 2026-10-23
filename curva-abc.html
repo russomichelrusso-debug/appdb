@@ -1450,6 +1450,9 @@
     const INAD_LS_KEY = 'cortagInadimplencia_v1';             // { clientes: [...] } do /api/inadimplencia (carregarInadimplencia)
     const VISITAS_LS_KEY = 'cortagVisitas_v1';                // { clientes: [...] } do /api/visitas (carregarVisitas)
     const VISITAS_LOCAIS_LS_KEY = 'cortagVisitasLocais_v1';   // id -> 'AAAA-MM-DD' salvo e ainda não devolvido pelo servidor
+    const WHATS_COMPRADOR_LS_KEY = 'cortagWhatsComprador_v1'; // id -> { numero, nome, em } salvo e ainda não confirmado (whatsPendentes)
+    const CANC_VALIDADE_DIAS = 15; // aviso de cancelamento do saldo vale 15 dias (avisosCancelamentoDoCliente)
+    const INAD_VELHO_DIAS = 15;    // relatório de inadimplência mais velho que isso "pode já ter sido pago" (inadPosicao)
     // cópia de NOME_CURTO_FAIXA e da régua (renderReguaFaixa) do index.html: mudou lá, muda aqui
     const NOME_CURTO_FAIXA = { 'Varejo Exclusive': 'Exclusive', 'Varejo Premium': 'Premium', 'Varejo Master': 'Master' };
     const DIA_BR = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1458,6 +1461,12 @@
     function lerLocal(chave) { try { return JSON.parse(localStorage.getItem(chave)); } catch (e) { return null; } }
     function hojeBrasiliaISO() { return DIA_BR.format(new Date()); }
     function diasEntreISO(a, b) { return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000); }
+    // DD/MM, com o ano quando não é o deste ano
+    function dataCurta(iso) {
+      const t = rotuloSemana(iso);
+      const ano = String(iso).slice(0, 4);
+      return ano === hojeBrasiliaISO().slice(0, 4) ? t : `${t}/${ano.slice(2)}`;
+    }
     function haDias(iso) {
       const n = diasEntreISO(String(iso).slice(0, 10), hojeBrasiliaISO());
       return n <= 0 ? 'hoje' : n === 1 ? 'ontem' : `há ${n} dias`;
@@ -1467,12 +1476,21 @@
       const mesmo = v => v != null && String(v) === String(id);
       const loc = ((lerLocal(CLIENTES_LOCAIS_LS_KEY) || {}).clientes || []).find(c => mesmo(c.id)) || null;
       const cod = loc && loc.codigo_oficial;
-      const inad = ((lerLocal(INAD_LS_KEY) || {}).clientes || [])
+      const inadDados = lerLocal(INAD_LS_KEY) || {};
+      const inad = (inadDados.clientes || [])
         .find(c => mesmo(c.cliente_id) || (cod && String(c.codigo_oficial) === String(cod))) || null;
+      const inadPosicao = (inadDados.relatorio && inadDados.relatorio.periodo_fim) || null;
       const vis = ((lerLocal(VISITAS_LS_KEY) || {}).clientes || []).find(c => mesmo(c.cliente_id));
       const visLocal = (lerLocal(VISITAS_LOCAIS_LS_KEY) || {})[id];
       const visita = [vis && vis.ultima_visita, visLocal].filter(Boolean).map(d => String(d).slice(0, 10)).sort().pop() || null;
-      return { loc, inad, visita };
+      // a cópia pode ser de dias atrás: só os avisos ainda no prazo, como o app
+      const limiteCanc = new Date(Date.now() - CANC_VALIDADE_DIAS * 86400000).toISOString().slice(0, 10);
+      const cancelamentos = ((loc && loc.cancelamentos) || []).filter(a => String(a.data_aviso || '').slice(0, 10) >= limiteCanc);
+      // WhatsApp: o mais novo entre o salvo sem internet (ainda na fila) e o do servidor (whatsCompradorDoCliente)
+      const pend = (lerLocal(WHATS_COMPRADOR_LS_KEY) || {})[id];
+      const doServ = loc && loc.whatsapp_comprador_em ? { numero: loc.whatsapp_comprador || '', em: Date.parse(loc.whatsapp_comprador_em) || 0 } : null;
+      const whats = [pend, doServ].filter(Boolean).sort((a, b) => (b.em || 0) - (a.em || 0))[0];
+      return { loc, inad, inadPosicao, visita, cancelamentos, whatsapp: whats && whats.numero ? String(whats.numero).replace(/\D/g, '') : '' };
     }
     function abrirGaveta(id, nome, origem) {
       const req = ++gavetaReq;
@@ -1522,9 +1540,8 @@
       const ano = Number(status.anoCorrente) || Number(hojeBrasiliaISO().slice(0, 4));
       const fat = Number(status.faturamentoFaixa ?? status.faturamentoAnoCorrente) || 0;
       const topo = `<div class="topo"><span>Faturado em ${ano}</span><b>${escapeHtml(formatCompact(fat, true))}</b></div>`;
-      if (!faixaAoVivo(status) || status.regraFaixa !== 'ano_fiscal' || !Array.isArray(degraus) || degraus.length < 2) {
-        return `<section class="gavRegua">${topo}</section>`;
-      }
+      // sem régua ao vivo (Rede, PIC, matriz com empresas fora do app, servidor antigo) o app esconde: aqui também
+      if (!faixaAoVivo(status) || status.regraFaixa !== 'ano_fiscal' || !Array.isArray(degraus) || degraus.length < 2) return '';
       const nome = t => escapeHtml(NOME_CURTO_FAIXA[t] || t || '');
       const limite = degraus[degraus.length - 1].min / 0.72 || 1;
       const idxAtual = Math.max(0, degraus.findIndex(d => d.atual));
@@ -1571,7 +1588,7 @@
       const d = gaveta.dados;
       const cliente = gaveta.cliente;
       const status = d && d.status;
-      const { loc, inad, visita } = gaveta.locais;
+      const { loc, inad, inadPosicao, visita, cancelamentos, whatsapp: whats } = gaveta.locais;
       const razao = (cliente && cliente.nome) || gaveta.nome;
       const titulo = (loc && loc.nome_fantasia) || razao;
       const end = loc && loc.endereco;
@@ -1598,7 +1615,7 @@
           const sempre = d.comprados.slice().sort((a, b) => b.num_pedidos - a.num_pedidos || String(b.ultima_compra).localeCompare(String(a.ultima_compra))).slice(0, 8);
           partes.push(`<section><div class="gavSecTit">Compra sempre <small>· últimos 12 meses</small></div>${sempre.length
             ? sempre.map(c => htmlProdutoGaveta(String(c.codigo_sku), c.nome,
-              `${c.num_pedidos} compra${c.num_pedidos === 1 ? '' : 's'} · última ${rotuloSemana(c.ultima_compra)} · ${Number(c.qtd_ultima_compra) || 0} un.`,
+              `${c.num_pedidos} compra${c.num_pedidos === 1 ? '' : 's'} · última ${dataCurta(c.ultima_compra)} · ${Number(c.qtd_ultima_compra) || 0} un.`,
               c.qtd_ultima_compra, false)).join('')
             : '<div class="gavVazio">Nenhuma compra nos últimos 12 meses.</div>'}</section>`);
         }
@@ -1609,15 +1626,19 @@
         }
         const infos = [];
         const ultima = status && (status.ultimoPedido || status.ultimaCompra);
-        if (ultima) infos.push(`<div class="gavInfo"><b>Última compra</b>${escapeHtml(rotuloSemana(ultima))} · ${escapeHtml(haDias(ultima))}</div>`);
-        if (visita) infos.push(`<div class="gavInfo"${diasEntreISO(visita, hojeBrasiliaISO()) > 60 ? ' data-cor="warning"' : ''}><b>Sua última visita</b>${escapeHtml(rotuloSemana(visita))} · ${escapeHtml(haDias(visita))}</div>`);
-        if (inad && Number(inad.total) > 0) infos.push(`<div class="gavInfo" data-cor="danger"><b>Em atraso</b>${escapeHtml(brl(inad.total))}${inad.mais_antigo ? ` · venceu ${escapeHtml(rotuloSemana(inad.mais_antigo))}` : ''}</div>`);
-        const pedidosCanc = [...new Set(((loc && loc.cancelamentos) || []).map(a => String(a.nr_pedido)))];
+        if (ultima) infos.push(`<div class="gavInfo"><b>Última compra</b>${escapeHtml(dataCurta(ultima))} · ${escapeHtml(haDias(ultima))}</div>`);
+        if (visita) infos.push(`<div class="gavInfo"${diasEntreISO(visita, hojeBrasiliaISO()) > 60 ? ' data-cor="warning"' : ''}><b>Sua última visita</b>${escapeHtml(dataCurta(visita))} · ${escapeHtml(haDias(visita))}</div>`);
+        if (inad && Number(inad.total) > 0) {
+          // o relatório não chega em dia fixo: sempre a posição, e "pode já ter sido pago" se for velho (inadPosicao do app)
+          const velho = !!inadPosicao && diasEntreISO(String(inadPosicao).slice(0, 10), hojeBrasiliaISO()) > INAD_VELHO_DIAS;
+          infos.push(`<div class="gavInfo"${velho ? '' : ' data-cor="danger"'}><b>Em atraso</b>${escapeHtml(brl(inad.total))}${inad.mais_antigo ? ` · venceu ${escapeHtml(dataCurta(inad.mais_antigo))}` : ''}`
+            + `${inadPosicao ? `<br><small>posição de ${escapeHtml(dataCurta(inadPosicao))}${velho ? ' — pode já ter sido pago' : ''}</small>` : ''}</div>`);
+        }
+        const pedidosCanc = [...new Set(cancelamentos.map(a => String(a.nr_pedido)))];
         if (pedidosCanc.length) infos.push(`<div class="gavInfo" data-cor="warning"><b>Saldo a cancelar</b>${pedidosCanc.length === 1 ? `pedido ${escapeHtml(pedidosCanc[0])}` : `${pedidosCanc.length} pedidos`}</div>`);
         if (infos.length) partes.push(`<section class="gavInfos">${infos.join('')}</section>`);
         corpo = partes.join('');
       }
-      const whats = loc && loc.whatsapp_comprador ? String(loc.whatsapp_comprador).replace(/\D/g, '') : '';
       el.innerHTML = `
         <div class="gavTopo">
           <div class="gavTit">

@@ -1396,6 +1396,11 @@ Supabase, sem PR — não é mudança de código.
   Rodapé: **"Montar proposta"** (sem marcados = tudo o que comprou em 12 meses; com marcados = `&itens=cod:qtd,…`, que o
   `abrirPeloLinkDoDashboard` valida e passa pro `montarPropostaRecompra`), Histórico (Curva ABC dele), WhatsApp (só com o do
   comprador cadastrado) e Abrir no app. O "+" **não grava no orçamento** do aparelho: só o app mexe nele, perguntando antes de trocar.
+  Régua, `NOME_CURTO_FAIXA` e as travas (PIC, Rede, matriz com empresas fora do app = sem régua) são cópia do card do app
+  (`renderReguaFaixa`): mudou lá, muda em `htmlReguaGaveta`. Saldo a cancelar só com aviso de até 15 dias; inadimplência com a
+  "posição de DD/MM". Limites conhecidos: "Compra sempre" escolhe entre os 60 SKUs de compra mais recente (`comprados-recentes`),
+  então numa loja com mais de 60 SKUs no ano pode faltar um produto frequente comprado há meses; grupo de "Parou de comprar" cujas
+  medidas compradas saíram todas da Lista de Preços fica sem "+" (o código novo do grupo não é procurado).
 
 - **Curva ABC (`curva-abc.html`) pra laptop e tablet** (10/2026, opção "A" escolhida pelo usuário a partir de mockups, página
   "Curva ABC" do mesmo canvas): página larga também nesta aba (`body.abaAbc`); filtros numa barra com o total à direita
