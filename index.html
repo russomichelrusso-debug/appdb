@@ -24759,6 +24759,7 @@
         const origemIt = c.itens[0] && c.itens[0].origem;
         const origem = origemIt === 'frequente' ? 'que vieram nas últimas compras'
           : origemIt === 'comprados' ? 'comprados nos últimos 12 meses, na quantidade da última compra'
+          : origemIt === 'gaveta' ? 'escolhidos no Dashboard'
           : 'que costumam vir nessa compra';
         showToast(`Proposta de ${c.nome}: ${itens.length} produto(s) ${origem} — revise as quantidades antes de enviar`
           + (fora ? ` · ${fora} fora do catálogo atual ficaram de fora` : ''), 'longo');
@@ -24768,15 +24769,19 @@
       // ?cliente=ID&acao=ver (ficha dele na aba Clientes) ou &acao=proposta
       // (orçamento com o que ele comprou nos últimos 12 meses, na quantidade da
       // última compra - comprados-recentes, mesmo caminho do "Montar proposta"
-      // da Recompra). Os parâmetros saem do endereço pra recarregar não repetir.
+      // da Recompra; com &itens=cod:qtd,… vêm só os marcados no "+" da gaveta
+      // do cliente). Os parâmetros saem do endereço pra recarregar não repetir.
       async function abrirPeloLinkDoDashboard(catalogoPromise) {
-        let id, acao;
+        let id, acao, escolhidos = [];
         try {
           const params = new URLSearchParams(location.search);
           id = Number(params.get('cliente'));
           acao = params.get('acao');
           if (!params.has('cliente')) return;
-          params.delete('cliente'); params.delete('acao');
+          escolhidos = String(params.get('itens') || '').split(',').slice(0, 100)
+            .map(par => /^([^:,]{1,30}):(\d{1,5})$/.exec(par.trim()))
+            .filter(Boolean).map(m => ({ codigo_sku: m[1], quantidade: Math.max(1, Number(m[2])), origem: 'gaveta' }));
+          params.delete('cliente'); params.delete('acao'); params.delete('itens');
           const resto = params.toString();
           history.replaceState(history.state, '', location.pathname + (resto ? '?' + resto : '') + location.hash);
         } catch (e) { return; }
@@ -24793,6 +24798,11 @@
           catch (e) { showToast('Não foi possível abrir esse cliente.', 'erro'); return; }
         }
         try { await catalogoPromise; } catch (e) { /* segue: montarPropostaRecompra avisa se nada estiver no catálogo */ }
+        if (escolhidos.length) {
+          await montarPropostaRecompra({ cliente_id: cliente.id, nome: cliente.nome, documento: cliente.documento,
+            classificatorio_tipo: cliente.classificatorio_tipo, itens: escolhidos });
+          return;
+        }
         await carregarCompradosRecentes(cliente);
         const comprados = (COMPRADOS_CACHE.get(cliente.id) || [])
           .slice().sort((a, b) => String(b.ultima_compra).localeCompare(String(a.ultima_compra)));

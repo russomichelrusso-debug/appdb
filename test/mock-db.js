@@ -179,6 +179,19 @@ async function query(sql, params = []) {
   if (s.includes('/* CACHE-TABELA:VERSAO */')) {
     return { rows: [{ versao: String(versaoTabelas ?? ++versaoTabelasContador) }] };
   }
+  // GET /api/clientes/:id/mensal (routes/relatorios.js): faturado de fato do
+  // cliente por mês da nota, a partir de $2
+  if (s.includes('/* CLIENTE-MENSAL */')) {
+    const [cod, inicio] = params;
+    const porMes = new Map();
+    for (const it of pedidosOficiaisItens) {
+      if (!faturadoDeFato(it) || it.cliente_codigo_oficial !== cod || !it.data_faturamento) continue;
+      const d = String(it.data_faturamento).slice(0, 10);
+      if (d < inicio) continue;
+      porMes.set(d.slice(0, 7), (porMes.get(d.slice(0, 7)) || 0) + (Number(it.valor) || 0));
+    }
+    return { rows: [...porMes].map(([mes, valor]) => ({ mes, valor: String(valor) })) };
+  }
   if (s.includes('/* PRODUTOS:CONTAGEM */')) {
     const noCadastro = new Set(produtos.map(p => String(p.codigo_sku)));
     return { rows: [{ total: produtos.length, catalogo: catalogoPrecos.length,
