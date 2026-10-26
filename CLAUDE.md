@@ -603,8 +603,9 @@ Supabase, sem PR — não é mudança de código.
   18/09 cancelado por "Abaixo R$300,00".
 
 - **Aviso de cancelamento do saldo pelo e-mail** (10/2026): o "Cancelamento saldo em carteira DD.MM.AAAA"
-  vem das assistentes comerciais (thamiris.sabino@, paloma.mantovani@ e, uma vez, atendimento01@cortag.com —
-  lista em `REMETENTE_DO_TIPO.cancelamento`, `routes/lib/emailCortag.js`, e em `CONFIG.mensagens` do script),
+  vem das assistentes comerciais (thamiris.sabino@, paloma.mantovani@, atendimento01@, bianca.pereira@cortag.com — desde
+  26/10/2026 vale **qualquer endereço @cortag.com** (`'@cortag.com'` em `REMETENTE_DO_TIPO.cancelamento`, `routes/lib/emailCortag.js`,
+  e em `CONFIG.mensagens` do script): o aviso da bianca, assistente nova fora da lista, não entrou no app),
   com uma **tabela HTML** no corpo (Cod. Cliente, Nr. Pedido, Item, Descrição, O.C., Motivo, Qt./Vl. Pendente;
   o texto puro do Gmail junta as células, por isso o script manda o HTML, enxuto antes do corte de 300 mil
   letras). Correção do usuário: **é o aviso final antes do corte, uma chance de vender mais** — o vendedor

@@ -71,9 +71,8 @@ const CONFIG = {
     { remetente: 'noreply@cortag.com.br', assunto: /Pedido de Venda [àa] Vista/i, busca: 'subject:"Pedido de Venda"' },
     // aviso final antes de cortar o saldo em carteira (tabela no corpo); só o
     // e-mail original - "RES:"/"Re:"/"Fwd:" ficam de fora
-    { remetente: 'thamiris.sabino@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
-    { remetente: 'paloma.mantovani@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
-    { remetente: 'atendimento01@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
+    // qualquer assistente @cortag.com (mudam: thamiris, paloma, atendimento01, bianca...)
+    { remetente: '@cortag.com', assunto: /^\s*Cancelamento saldo em carteira\b/i, busca: 'subject:"Cancelamento saldo em carteira"' },
   ],
   maxProcessadosGuardados: 400,
   // e-mail com erro do servidor (5xx) nesta quantidade de rodadas seguidas:
@@ -110,7 +109,7 @@ function verificarEmails() {
   const periodo = `newer_than:${CONFIG.diasParaTras}d`;
   const consultas = [`from:(${remetentes.join(' OR ')}) has:attachment filename:xlsx ${periodo}`]
     .concat(CONFIG.porAssunto.map(r => `from:${r.remetente} has:attachment ${r.busca} ${periodo}`))
-    .concat(CONFIG.mensagens.map(m => `from:${m.remetente} ${m.busca} ${periodo}`));
+    .concat(CONFIG.mensagens.map(m => `from:${buscaDe_(m.remetente)} ${m.busca} ${periodo}`));
   const limite = new Date(Date.now() - CONFIG.diasParaTras * 86400000);
 
   // junta os e-mails novos e importa do MAIS ANTIGO pro mais novo - senão uma
@@ -128,11 +127,11 @@ function verificarEmails() {
         ? todosAnexos.map((a, i) => ({ anexo: a, nome: nomePeloAssunto_(peloAssunto, msg, i, todosAnexos.length) }))
         : todosAnexos.filter(a => CONFIG.regras.some(r => de === r.remetente && r.anexo.test(a.getName())))
           .map(a => ({ anexo: a, nome: a.getName() }));
-      const ehMensagem = CONFIG.mensagens.some(m => de === m.remetente && m.assunto.test(msg.getSubject()));
+      const ehMensagem = CONFIG.mensagens.some(m => casaRemetente_(de, m.remetente) && m.assunto.test(msg.getSubject()));
       if (anexos.length === 0 && !ehMensagem) {
         // "De:" que cita um remetente da Cortag mas não é exatamente ele: fica de
         // fora, mas deixa rastro no log (pode ser a Cortag mudando o formato)
-        if (remetentesTodos.some(r => msg.getFrom().toLowerCase().indexOf(r) !== -1 && de !== r)) {
+        if (remetentesTodos.some(r => !r.startsWith('@') && msg.getFrom().toLowerCase().indexOf(r) !== -1 && de !== r)) {
           Logger.log('Ignorado - o endereço não é exatamente o da Cortag: "%s" de %s', msg.getSubject(), msg.getFrom());
         }
         processados.push(id); jaFeito.add(id); return;
@@ -316,6 +315,17 @@ function enderecoDe_(from) {
   return (m ? m[1] : s).trim().toLowerCase();
 }
 
+// remetente "@dominio" = qualquer endereço exatamente desse domínio (a
+// autenticação do Gmail continua sendo do domínio do endereço)
+function casaRemetente_(endereco, remetente) {
+  if (remetente.charAt(0) !== '@') return endereco === remetente;
+  const partes = endereco.split('@');
+  return partes.length === 2 && partes[0] !== '' && '@' + partes[1] === remetente;
+}
+function buscaDe_(remetente) {
+  return remetente.charAt(0) === '@' ? remetente.slice(1) : remetente;
+}
+
 // autenticadoPeloGmail_ com memória entre as rodadas: o cabeçalho só vem com
 // o e-mail inteiro (getRawContent, ~9 MB numa Lista de Preços), e um e-mail
 // que espera na fila (servidor com erro, tempo esgotado) era relido a cada 15
@@ -415,12 +425,13 @@ function conferirAutenticacao() {
   const remetentes = Array.from(new Set(CONFIG.regras.map(r => r.remetente)
     .concat(CONFIG.mensagens.map(m => m.remetente), CONFIG.porAssunto.map(r => r.remetente))));
   remetentes.forEach(remetente => {
-    const threads = GmailApp.search(`from:${remetente} newer_than:30d`, 0, 10);
+    const threads = GmailApp.search(`from:${buscaDe_(remetente)} newer_than:30d`, 0, 10);
     let ok = 0;
     let total = 0;
     let outroEndereco = 0;
     threads.forEach(t => t.getMessages().forEach(msg => {
-      if (enderecoDe_(msg.getFrom()) !== remetente) {
+      const endereco = enderecoDe_(msg.getFrom());
+      if (!casaRemetente_(endereco, remetente)) {
         // a busca do Gmail achou, mas o endereço não é exatamente este: não
         // seria importado (antes era pulado sem aviso)
         outroEndereco++;
@@ -428,7 +439,7 @@ function conferirAutenticacao() {
         return;
       }
       const cab = cabecalhos_(msg);
-      const passou = autenticadoPeloGmail_(cab, remetente);
+      const passou = autenticadoPeloGmail_(cab, endereco);
       total++;
       if (passou) ok++;
       const linha = cab.split(/\r?\n/).find(l => /^Authentication-Results:/i.test(l)) || '(sem Authentication-Results)';
