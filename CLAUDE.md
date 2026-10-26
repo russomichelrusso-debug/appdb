@@ -1528,6 +1528,30 @@ Supabase, sem PR — não é mudança de código.
      onde veio cada parte. Duas portas: botão **"Montar proposta pra não cair · R$ X"** embaixo da régua na ficha do cliente (aba
      Clientes) e o botão principal da gaveta do Dashboard ("Proposta pra não cair · R$ X", `index.html?cliente=ID&acao=faixa&alvo=…`;
      o "Montar proposta" vai pra linha de baixo). Só onde a régua aparece (sem PIC, Rede ou matriz com empresas fora do app).
+- **Ficha técnica pelo site oficial + apresentação da proposta — agendado pra 27/10/2026 a partir das 18h** (10/2026, pedido do
+  usuário: "apresentação de proposta de compra pro cliente com as imagens e a ficha técnica; melhorar a ficha com scraping do site
+  oficial"). Em 2 PRs, nesta ordem:
+  1. **Raspagem do cortag.com → ficha técnica.** Levantado em 26/10/2026: WordPress, `robots.txt` só bloqueia `/wp-admin/` e aponta
+     `https://cortag.com/sitemap_index.xml`; `/wp-json` responde 401 (só pelo HTML). 16 `produto-sitemapN.xml` com 2.942 páginas
+     (todos os idiomas), **399 em `/pt-br/produto/`**. Cada página tem "Descrição" + "Especificações Técnicas": texto de venda,
+     benefícios em tópicos, "Indicado para…", tabela por medida (Cortador Hi-Tech 85/100/125 com corte reto/diagonal) e o bloco
+     **SKU / EAN / Embalagem** — uma página pode ter vários SKUs (63672, 63673, 63367); fotos em `wp-content/uploads` até 1024 px,
+     inclusive foto ambientada. Regras: **casar só pelo SKU (ou EAN) impresso na página, nunca pelo nome** (o "catálogo técnico"
+     antigo mostrava foto/dado de um produto em outro por mapeamento errado — ver comentário do `SITE_LINK_MAP`, `index.html`);
+     página sem SKU do catálogo fica de fora e sai num relatório pra conferir antes de gravar. Script em `scripts/` (não no Render:
+     layout do site muda e o erro chegaria ao vendedor sem ninguém ver), 1 página a cada 1–2 s, gera o arquivo pro import de fichas
+     que já existe no Painel (`/api/fichas-tecnicas/importar`). **Não sobrescreve**: conteúdo do site em campos novos do `specs`
+     (benefícios, "indicado para", link da página); campo que já existe só é preenchido se estiver vazio; texto da página vale pra
+     todos os SKUs dela e a coluna da tabela só pro SKU dela. Foto do site só como sugestão pra produto sem foto, nunca troca a de
+     vendedor (`produto_fotos`). Na ficha do produto: "Benefícios" e "Indicado para"; `searchProductsPelaFicha` passa a ler esses
+     campos. Primeiro mostrar ao usuário quantas das 1.812 fichas casam/ganham texto e o que ficou de fora. Antes de pôr foto/texto
+     do site num PDF pro cliente, vale um "pode?" informal ao marketing da Cortag.
+  2. **"Apresentação da proposta"** (botão à parte no compartilhar do orçamento; o PDF de hoje continua como orçamento rápido):
+     PDF pelo jsPDF que já existe (`LIBS` do `sw.js`, sem internet): **capa** (logo, "Proposta para LOJA X", vendedor e contato,
+     data/validade), **uma página (ou meia) por produto** (foto grande de `produto_fotos`, nome, 3–5 benefícios, tabela técnica,
+     quantidade, preço e de/por de campanha por `ofertaDoProduto`/`cartTotals`) e **resumo** com a tabela do orçamento **mantendo
+     IPI/ST detalhados** (ver "O que já tentamos"), total, prazo, pedido mínimo/CIF. Opção "sem preço" = catálogo personalizado.
+     Antes de construir: mockups pro usuário escolher o layout.
 - **Voz e lista de itens — a fazer depois, nesta ordem de ideia** (10/2026, a partir de um script Python + Playwright + Gemini
   que o usuário trouxe; analisado e **não adotado**: abre site e copia a página, e no PWA os dados já estão no aparelho). O que
   já existe: 🎤 na busca do Pedido e do Levantamento (`startVoiceRecognition`/`VOICE_COMMANDS`, `index.html`, Web Speech API
