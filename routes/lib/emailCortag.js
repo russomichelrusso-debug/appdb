@@ -142,8 +142,10 @@ const NOREPLY = 'noreply@cortag.com.br';
 const REMETENTE_DO_TIPO = {
   relatorio: NOREPLY, classificatorio: NOREPLY, previsao: NOREPLY, bloqueado: NOREPLY, avista: NOREPLY, semcompra: NOREPLY, inadimplencia: NOREPLY,
   precos: 'vendas@cortag.com',
-  // assistentes comerciais (e o atendimento, que mandou o de 16/10/2025)
-  cancelamento: ['thamiris.sabino@cortag.com', 'paloma.mantovani@cortag.com', 'atendimento01@cortag.com'],
+  // qualquer endereço @cortag.com: as assistentes comerciais mudam (thamiris,
+  // paloma, atendimento01; bianca.pereira em 26/10/2026 ficou de fora da lista
+  // e o aviso não entrou). O script só manda com o domínio autenticado pelo Gmail.
+  cancelamento: '@cortag.com',
 };
 
 // "Vendas <vendas@cortag.com>" -> "vendas@cortag.com" (o nome de exibição é
@@ -154,9 +156,16 @@ function enderecoDoRemetente(from) {
   return (m ? m[1] : s).trim().toLowerCase();
 }
 
+// "@dominio" vale qualquer endereço exatamente desse domínio
+function casaRemetente(endereco, valido) {
+  if (!valido.startsWith('@')) return endereco === valido;
+  const partes = endereco.split('@');
+  return partes.length === 2 && partes[0] !== '' && `@${partes[1]}` === valido;
+}
+
 function remetenteValido(tipo, from) {
-  const validos = [].concat(REMETENTE_DO_TIPO[tipo] || []);
-  return validos.includes(enderecoDoRemetente(from));
+  const endereco = enderecoDoRemetente(from);
+  return [].concat(REMETENTE_DO_TIPO[tipo] || []).some(v => casaRemetente(endereco, v));
 }
 
 module.exports = {

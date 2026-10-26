@@ -3487,7 +3487,14 @@ async function main() {
     const deThamiris = { remetente: 'Thamiris Sabino <thamiris.sabino@cortag.com>', html: htmlCanc, mensagemId: 'canc-1' };
     res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, remetente: 'noreply@cortag.com.br' });
     assert(res.status === 422 && mockDb.__getAvisosCancelamento().length === 0,
-      `e-mail Cortag: cancelamento de saldo só vale das assistentes comerciais: ${JSON.stringify(res.body)}`);
+      `e-mail Cortag: cancelamento de saldo só vale de @cortag.com: ${JSON.stringify(res.body)}`);
+    for (const outro of ['Bianca <bianca.pereira@cortag.com.br>', 'x@falsocortag.com', 'a@b@cortag.com', '@cortag.com']) {
+      res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, remetente: outro });
+      assert(res.status === 422 && mockDb.__getAvisosCancelamento().length === 0,
+        `e-mail Cortag: cancelamento de fora do domínio cortag.com é recusado (${outro}): ${JSON.stringify(res.body)}`);
+    }
+    assert(EmailCortag.remetenteValido('cancelamento', 'Bianca Pereira <bianca.pereira@cortag.com>'),
+      'e-mail Cortag: cancelamento de assistente nova @cortag.com (bianca.pereira, 26/10/2026) vale');
     res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, html: '' });
     assert(res.status === 422 && /script do Gmail/.test(res.body.erro), `e-mail Cortag: cancelamento sem HTML (script antigo) é recusado: ${JSON.stringify(res.body)}`);
     const avisosCancAntes = mockDb.__getNovidades().filter(n => n.tipo === 'cancelamento-saldo').length;
