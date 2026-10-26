@@ -1528,6 +1528,26 @@ Supabase, sem PR — não é mudança de código.
      onde veio cada parte. Duas portas: botão **"Montar proposta pra não cair · R$ X"** embaixo da régua na ficha do cliente (aba
      Clientes) e o botão principal da gaveta do Dashboard ("Proposta pra não cair · R$ X", `index.html?cliente=ID&acao=faixa&alvo=…`;
      o "Montar proposta" vai pra linha de baixo). Só onde a régua aparece (sem PIC, Rede ou matriz com empresas fora do app).
+- **Voz e lista de itens — a fazer depois, nesta ordem de ideia** (10/2026, a partir de um script Python + Playwright + Gemini
+  que o usuário trouxe; analisado e **não adotado**: abre site e copia a página, e no PWA os dados já estão no aparelho). O que
+  já existe: 🎤 na busca do Pedido e do Levantamento (`startVoiceRecognition`/`VOICE_COMMANDS`, `index.html`, Web Speech API
+  pt-BR) e a rota `POST /api/assistente/interpretar` (`routes/assistente.js`: Gemini no servidor, só classifica a pergunta e
+  devolve o termo, nunca o dado) — **o app não chama essa rota em lugar nenhum**, e o modelo padrão `gemini-2.0-flash` deve ser
+  trocado (`GEMINI_MODEL`). Regra pros três itens: **a IA só entende o texto; produto, preço e desconto saem do motor do app**
+  (`searchProducts`, `clientPrice`…), e nada entra no orçamento/levantamento **sem a tela de conferência** (termo ambíguo =
+  vendedor escolhe; caixa = múltiplo da embalagem).
+  1. **Levantamento por voz em escuta contínua**: falar item atrás de item ("colher quarenta e dois, seis") sem tocar a cada um,
+     no molde do `#modoLeitor` (evento com id, desfazer a última). Cuidado: no Android o reconhecimento para sozinho depois de um
+     silêncio e reiniciar é instável; no depósito o barulho troca medidas ("2 mm" × "12 mm"); no iPhone instalado na Tela de
+     Início o `webkitSpeechRecognition` é instável — testar em aparelho de verdade.
+  2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
+     (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
+  3. **Lista colada do WhatsApp**: o cliente manda a lista em texto, o vendedor cola — mesma intenção `itens` e mesma conferência,
+     sem depender do microfone (funciona no iPhone). Provavelmente o caso mais comum.
+  Implicações: o Gemini precisa de sinal (sem internet, só a busca local; a lista poderia esperar na fila offline); o Render free
+  dorme e a 1ª chamada do dia leva 30–50 s (mostrar "acordando o servidor…"); o plano grátis do Gemini pode usar os dados pra
+  treino — mandar só o texto dos produtos ou usar conta paga (LGPD); rota em `routes/` = teste no `run_tests.js` com a chamada
+  ao Gemini simulada. Antes de construir: perguntar aos vendedores se usam o 🎤 de hoje. Fazer mockups da tela de conferência.
 - Ideia em aberto, ainda não implementada: um painel de "oportunidades do dia" na tela inicial
   (ex.: clientes sumidos há N dias, objetivo trimestral em risco, produtos parados na Lista de
   preços) — surgiu de "o que podemos implementar pra ajudar nas vendas" e faz sentido como
