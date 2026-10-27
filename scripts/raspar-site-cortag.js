@@ -12,6 +12,7 @@
 // apagar a pasta pra pegar o site atualizado). Saídas:
 //   paginas.json       tudo o que foi lido, uma entrada por página
 //   site-por-sku.json  {sku: {...}} - só SKU impresso na página, nunca pelo nome
+//   fichas-site.json   o arquivo pra importar no Painel (Importar › Conteúdo do site Cortag)
 //   relatorio.md       (com --catalogo) quantos códigos do catálogo casam e o que
 //                      ficou de fora. catalogo.json = [{c: codigo, e: ean13}, ...]
 'use strict';
@@ -248,6 +249,37 @@ function porSku(paginas) {
   return mapa;
 }
 
+// Arquivo pro Painel (Importar › "Conteúdo do site Cortag", rota POST
+// /api/fichas-tecnicas/site): uma entrada por página, com a tabela de cada SKU.
+// Sai da tabela o que não é ficha (DUN, EAN, SKU, embalagem, células vazias "—");
+// "Indicação" da coluna vira o "indicado" daquele SKU.
+const FORA_DA_TABELA = /^(dun|dun-?14|ean|ean-?13|sku|c[oó]digo|embalagem|qtd\.? ?embalagem)$/i;
+const ROTULO_INDICACAO = /^indica[cç][aã]o$/i;
+function arquivoParaImportar(paginas, hoje) {
+  const saida = [];
+  for (const p of paginas) {
+    const skus = {};
+    for (const v of p.variacoes) {
+      const sku = String(v.sku || '').trim().toUpperCase();
+      if (!/^[A-Z0-9]{3,10}$/.test(sku)) continue;
+      const tabela = {};
+      let indicado = '';
+      for (const [rot, val] of Object.entries(v.specs)) {
+        if (!val || /^[—–-]+$/.test(val.trim())) continue;
+        if (ROTULO_INDICACAO.test(rot)) indicado = val;
+        else if (!FORA_DA_TABELA.test(rot)) tabela[rot] = val;
+      }
+      skus[sku] = { tabela, indicado, foto: v.foto || '' };
+    }
+    if (!Object.keys(skus).length) continue;
+    saida.push({
+      url: p.url, titulo: p.titulo, categoria: p.categoria, texto: p.texto, beneficios: p.beneficios,
+      indicado: p.indicado, acompanha: p.acompanha, foto: p.foto, skus,
+    });
+  }
+  return { origem: 'cortag.com', lidoEm: hoje, paginas: saida };
+}
+
 function relatorio(paginas, mapa, catalogo) {
   const codigos = new Map(catalogo.map(r => [String(r.c).toUpperCase(), r]));
   const porEan = new Map(catalogo.filter(r => r.e).map(r => [so(r.e), r]));
@@ -330,6 +362,9 @@ async function main() {
   fs.writeFileSync(path.join(saida, 'paginas.json'), JSON.stringify(paginas, null, 1));
   fs.writeFileSync(path.join(saida, 'site-por-sku.json'), JSON.stringify(mapa, null, 1));
   console.log(`${Object.keys(mapa).length} SKUs lidos de ${paginas.length} páginas`);
+  const hoje = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  fs.writeFileSync(path.join(saida, 'fichas-site.json'), JSON.stringify(arquivoParaImportar(paginas, hoje)));
+  console.log('fichas-site.json pronto pra importar no Painel');
 
   if (catalogo) {
     const cat = JSON.parse(fs.readFileSync(catalogo, 'utf8'));
@@ -341,4 +376,4 @@ async function main() {
 
 if (require.main === module) main().catch(e => { console.error(e.message); process.exit(1); });
 
-module.exports = { lerPagina, porSku, relatorio };
+module.exports = { lerPagina, porSku, relatorio, arquivoParaImportar };

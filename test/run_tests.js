@@ -3877,6 +3877,47 @@ async function main() {
       rf = await req('GET', '/api/produto-fotos/FT1');
       assert(rf.status === 404, 'fotos: produto sem foto responde 404');
 
+      // Conteúdo do site oficial (routes/lib/fichasSite.js, /api/fichas-tecnicas/site) e
+      // "usar a foto do site": o endereço da foto vem da página gravada, nunca do app
+      const pagina = (url, skus, extra) => ({ url, titulo: 'Ventosa', texto: 'Linha 1\nLinha 2', beneficios: ['Leve', '', 'Firme'],
+        indicado: 'Indicada para porcelanato.', foto: 'https://cortag.com/wp-content/uploads/2026/08/VENTOSA.jpeg', skus, ...extra });
+      rf = await req('POST', '/api/fichas-tecnicas/site', { lidoEm: '2026-10-27', paginas: [
+        pagina('https://cortag.com/pt-br/produto/ventosa/', { ft1: { tabela: { Capacidade: '120 kg', '': 'x' }, foto: 'https://cortag.com/wp-content/uploads/2026/08/V-1024x1024.jpeg' }, FT4: { tabela: {} } }),
+        pagina('https://evil.example/pt-br/produto/x/', { FT2: {} }),
+        pagina('https://cortag.com/pt-br/produto/sem-sku/', {}),
+        pagina('https://cortag.com/pt-br/produto/foto-de-fora/', { FT2: { foto: 'https://evil.example/x.jpeg' } }, { foto: 'javascript:alert(1)' }),
+      ] });
+      const site = mockDb.__getFichasSite();
+      assert(rf.status === 200 && rf.body.paginas === 2 && rf.body.recusadas === 2 && site[0].skus.FT1.tabela.Capacidade === '120 kg'
+        && !('' in site[0].skus.FT1.tabela) && JSON.stringify(site[0].beneficios) === '["Leve","Firme"]' && site[0].texto === 'Linha 1\nLinha 2'
+        && site[1].foto === '' && site[1].skus.FT2.foto === '',
+        `site: importa só página do cortag.com com SKU, foto só de wp-content/uploads: ${JSON.stringify(rf.body)} ${JSON.stringify(site)}`);
+      rf = await req('GET', '/api/fichas-tecnicas/site');
+      assert(rf.status === 200 && rf.body.paginas.length === 2 && rf.body.paginas[0].lido_em === '2026-10-27', `site: leitura das páginas: ${JSON.stringify(rf.body).slice(0, 300)}`);
+      const fetchAntesSite = global.fetch;
+      const pedidosFoto = [];
+      global.fetch = async (url) => { pedidosFoto.push(String(url)); return { ok: true, status: 200, arrayBuffer: async () => Buffer.from(jpeg(4000, 9), 'base64') }; };
+      try {
+        rf = await req('POST', '/api/produto-fotos/FT1/do-site');
+        assert(rf.status === 200 && mockDb.__getProdutoFotos().FT1 && pedidosFoto[0] === 'https://cortag.com/wp-content/uploads/2026/08/V-1024x1024.jpeg',
+          `site: "usar a foto do site" baixa a foto da coluna do SKU e grava: ${rf.status} ${JSON.stringify(rf.body)} ${pedidosFoto}`);
+        rf = await req('POST', '/api/produto-fotos/FT1/do-site');
+        assert(rf.status === 409, 'site: produto que já tem foto não é trocado (409)');
+        rf = await req('POST', '/api/produto-fotos/FT4/do-site');
+        assert(rf.status === 200 && pedidosFoto[2] === 'https://cortag.com/wp-content/uploads/2026/08/VENTOSA.jpeg', 'site: sem foto na coluna, usa a foto da página');
+        rf = await req('POST', '/api/produto-fotos/FT2/do-site');
+        assert(rf.status === 404 && pedidosFoto.length === 3, 'site: foto de fora do cortag.com nunca é baixada (404)');
+        global.fetch = async () => ({ ok: true, status: 200, arrayBuffer: async () => Buffer.from('<html>não é foto</html>'.repeat(100)) });
+        delete mockDb.__getProdutoFotos().FT1;
+        rf = await req('POST', '/api/produto-fotos/FT1/do-site');
+        assert(rf.status === 422 && !mockDb.__getProdutoFotos().FT1, 'site: o que não é JPEG não é gravado (422)');
+      } finally {
+        global.fetch = fetchAntesSite;
+      }
+      rf = await req('POST', '/api/fichas-tecnicas/site', { paginas: 'x' });
+      assert(rf.status === 422, 'site: arquivo fora do formato responde 422');
+      delete mockDb.__getProdutoFotos().FT4;
+
       // Miniaturas pro catálogo sem internet: geradas na 1ª vez, guardadas, zeradas ao trocar a foto
       const jpegJs = require('jpeg-js');
       const jpegReal = (w, h, semente) => {
@@ -4294,6 +4335,11 @@ async function main() {
           'busca pela ficha: acha pela descrição, com plural/singular e palavras do nome junto');
         assert(ficha('serra copo') === '' && ficha('marmore 51') === '' && ficha('marmore', [{ c: '60882' }]) === '62857',
           'busca pela ficha: nada quando tudo está no nome, medida só no nome, e sem repetir o que a busca normal achou');
+        // texto do site oficial (scripts/raspar-site-cortag.js) entra como mais um pedaço da ficha, até sem ficha
+        const site = { '62438': 'Indicada para furar granito e concreto.', '60876': 'Mistura argamassa e rejunte.' };
+        const comSite = (q) => ctxB.searchProductsPelaFicha(q, fichas, [], site).map(p => p.c).sort().join(',');
+        assert(comSite('granito') === '62438,62857' && comSite('batedor rejunte') === '60876' && ficha('granito') === '62857',
+          'busca pela ficha: o texto do site também conta, inclusive em produto sem ficha (e só quando é passado)');
       }
     }
 

@@ -1529,24 +1529,29 @@ Supabase, sem PR — não é mudança de código.
      onde veio cada parte. Duas portas: botão **"Montar proposta pra não cair · R$ X"** embaixo da régua na ficha do cliente (aba
      Clientes) e o botão principal da gaveta do Dashboard ("Proposta pra não cair · R$ X", `index.html?cliente=ID&acao=faixa&alvo=…`;
      o "Montar proposta" vai pra linha de baixo). Só onde a régua aparece (sem PIC, Rede ou matriz com empresas fora do app).
-- **Ficha técnica pelo site oficial + apresentação da proposta — agendado pra 27/10/2026 a partir das 18h** (10/2026, pedido do
+- **Ficha técnica pelo site oficial + apresentação da proposta** (10/2026, pedido do
   usuário: "apresentação de proposta de compra pro cliente com as imagens e a ficha técnica; melhorar a ficha com scraping do site
   oficial"). Em 2 PRs, nesta ordem:
-  1. **Raspagem do cortag.com → ficha técnica.** Levantado em 26/10/2026: WordPress, `robots.txt` só bloqueia `/wp-admin/` e aponta
-     `https://cortag.com/sitemap_index.xml`; `/wp-json` responde 401 (só pelo HTML). 16 `produto-sitemapN.xml` com 2.942 páginas
-     (todos os idiomas), **399 em `/pt-br/produto/`**. Cada página tem "Descrição" + "Especificações Técnicas": texto de venda,
-     benefícios em tópicos, "Indicado para…", tabela por medida (Cortador Hi-Tech 85/100/125 com corte reto/diagonal) e o bloco
-     **SKU / EAN / Embalagem** — uma página pode ter vários SKUs (63672, 63673, 63367); fotos em `wp-content/uploads` até 1024 px,
-     inclusive foto ambientada. Regras: **casar só pelo SKU (ou EAN) impresso na página, nunca pelo nome** (o "catálogo técnico"
-     antigo mostrava foto/dado de um produto em outro por mapeamento errado — ver comentário do `SITE_LINK_MAP`, `index.html`);
-     página sem SKU do catálogo fica de fora e sai num relatório pra conferir antes de gravar. Script em `scripts/` (não no Render:
-     layout do site muda e o erro chegaria ao vendedor sem ninguém ver), 1 página a cada 1–2 s, gera o arquivo pro import de fichas
-     que já existe no Painel (`/api/fichas-tecnicas/importar`). **Não sobrescreve**: conteúdo do site em campos novos do `specs`
-     (benefícios, "indicado para", link da página); campo que já existe só é preenchido se estiver vazio; texto da página vale pra
-     todos os SKUs dela e a coluna da tabela só pro SKU dela. Foto do site só como sugestão pra produto sem foto, nunca troca a de
-     vendedor (`produto_fotos`). Na ficha do produto: "Benefícios" e "Indicado para"; `searchProductsPelaFicha` passa a ler esses
-     campos. Primeiro mostrar ao usuário quantas das 1.812 fichas casam/ganham texto e o que ficou de fora. Antes de pôr foto/texto
-     do site num PDF pro cliente, vale um "pode?" informal ao marketing da Cortag.
+  1. Feito em 10/2026 (PR #318): **raspagem do cortag.com → ficha técnica**. `scripts/raspar-site-cortag.js` (rodar à mão, fora
+     do Render: `NODE_USE_ENV_PROXY=1 node scripts/raspar-site-cortag.js --saida <pasta> [--catalogo catalogo.json]`) lê os
+     sitemaps (o `produto-sitemap16.xml` responde 404 e é pulado), as 398 páginas `/pt-br/produto/` (1 a cada 1,2 s, HTML em
+     cache na pasta) e gera `relatorio.md` (casamento com o catálogo) e `fichas-site.json`. **Casa só pelo SKU impresso na
+     página** (o "catálogo técnico" antigo trocava foto/dado entre produtos por mapeamento; ver comentário do `SITE_LINK_MAP`).
+     Em 27/10/2026: 1.599 dos 1.793 códigos casaram, 1.563 com tabela da medida, 567 com "Indicado para"/"Indicação", 119 com
+     benefícios em tópicos; 194 do catálogo sem página (abrasivos, furação diamantada, carrinhos, rebites, KAEF); **24 EAN do
+     site diferentes do catálogo, vários com erro de digitação do site** (12/14 dígitos, DUN no lugar) - o EAN do site não é usado.
+     Decisões do usuário: **o texto do site fica à parte** (não substitui a descrição da ficha) e **a foto do site é só sugestão**.
+     Painel › Importar reconhece o `fichas-site.json` ("Conteúdo do site Cortag", só admin) → `POST /api/fichas-tecnicas/site`
+     troca a foto inteira da tabela `fichas_site` (uma linha por página, `skus` = tabela/indicação/foto de cada SKU; limpeza em
+     `routes/lib/fichasSite.js`: só página `cortag.com/pt-br/produto/` e foto `cortag.com/wp-content/uploads`); não mexe em
+     `fichas_tecnicas`. `GET /api/fichas-tecnicas/site` (cache `lerComCache`) e cópia no aparelho `cortagFichasSite_v1` (~700 KB):
+     a ficha técnica do produto (`htmlSiteDoProduto`, `siteDoProduto` - promocional cai no base) ganhou "Pra que serve",
+     "Benefícios", "Acompanha", "Medidas" (só o que a ficha não mostra), "Sobre o produto" e o link "Site Cortag"; a busca pela
+     ficha lê esse texto (`SITE_BUSCA`, 4º parâmetro de `searchProductsPelaFicha`). Produto **sem foto** mostra a do site com
+     "Usar esta foto" (`usarFotoDoSite` → `POST /api/produto-fotos/:sku/do-site`: o servidor pega o endereço na `fichas_site`,
+     nunca do app, baixa só JPEG até 600 KB e não troca foto que já existe - 409). Pra atualizar: rodar o script de novo (apagar a
+     pasta `html/` pra baixar o site atual) e importar o `fichas-site.json`. Ainda vale o "pode?" ao marketing antes de pôr foto
+     ou texto do site no PDF da apresentação.
   2. **"Apresentação da proposta"** (botão à parte no compartilhar do orçamento; o PDF de hoje continua como orçamento rápido):
      PDF pelo jsPDF que já existe (`LIBS` do `sw.js`, sem internet): **capa** (logo, "Proposta para LOJA X", vendedor e contato,
      data/validade), **uma página (ou meia) por produto** (foto grande de `produto_fotos`, nome, 3–5 benefícios, tabela técnica,

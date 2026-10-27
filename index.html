@@ -6557,6 +6557,86 @@
       color: var(--gray);
     }
 
+    /* Conteúdo do site oficial dentro da ficha técnica (siteDoProduto) */
+    .fichaTecSite {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 0.75px solid var(--hairline);
+    }
+
+    .fichaTecSite h4 {
+      margin: 12px 0 4px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      text-transform: uppercase;
+      color: var(--gray);
+    }
+
+    .fichaTecSite h4:first-child {
+      margin-top: 0;
+    }
+
+    .fichaTecSite p {
+      margin: 0 0 6px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--ink);
+    }
+
+    .fichaTecSite ul {
+      margin: 0;
+      padding-left: 18px;
+      font-size: 13px;
+      line-height: 1.45;
+      color: var(--ink);
+    }
+
+    .fichaTecSite li + li {
+      margin-top: 3px;
+    }
+
+    /* Produto sem foto: a foto do site como sugestão ("Usar esta foto") */
+    .ofertaFotoSite {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      height: 100%;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+
+    .ofertaFotoSite img {
+      flex: 1;
+      min-height: 0;
+      max-width: 100%;
+      object-fit: contain;
+    }
+
+    .ofertaFotoSiteRotulo {
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .ofertaFotoSiteAcoes {
+      display: flex;
+      gap: 8px;
+    }
+
+    .ofertaFotoSiteAcoes .recompraBtn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 40px;
+    }
+
+    .ofertaFotoSiteAcoes svg {
+      width: 16px;
+      height: 16px;
+    }
+
     .ofertaAcoes .recompraBtn--principal {
       background: var(--red);
       border-color: var(--red);
@@ -13346,7 +13426,19 @@
         }
         return r;
       }
-      function searchProductsPelaFicha(qRaw, fichas, jaAchados) {
+      // Texto do site oficial (benefícios, "Indicado para", texto de venda) entra na
+      // busca como mais um pedaço da ficha (textoSite: { sku: texto }, opcional).
+      const radicaisDoTextoSite = new Map();
+      function radicaisTextoSite(t) {
+        let r = radicaisDoTextoSite.get(t);
+        if (!r) {
+          if (radicaisDoTextoSite.size > 5000) radicaisDoTextoSite.clear();
+          r = normalizarBusca(t).split(' ').filter(Boolean).map(radicalBusca);
+          radicaisDoTextoSite.set(t, r);
+        }
+        return r;
+      }
+      function searchProductsPelaFicha(qRaw, fichas, jaAchados, textoSite) {
         const q = normalizarBusca(String(qRaw || ''));
         if (!q || !fichas) return [];
         const todas = q.split(' ').filter(w => !PALAVRAS_LIGACAO.has(w));
@@ -13357,12 +13449,14 @@
         const bate = (w, toks) => toks.some(t => t === w || t.startsWith(w));
         const achados = [];
         for (const p of DB.products) {
-          const f = fichas[p.c];
-          if (!f || typeof f !== 'object' || fora.has(p.c)) continue;
+          const f = fichas[p.c] && typeof fichas[p.c] === 'object' ? fichas[p.c] : null;
+          const doSite = textoSite && textoSite[p.c];
+          if ((!f && !doSite) || fora.has(p.c)) continue;
           if (!p._tok) prepararProdutoParaBusca(p);
           if (!numeros.every(w => p._tok.includes(w))) continue;
           if (!p._rad) p._rad = p._tok.map(radicalBusca);
-          const daFicha = radicaisFicha(f);
+          let daFicha = f ? radicaisFicha(f) : [];
+          if (doSite) daFicha = daFicha.concat(radicaisTextoSite(doSite));
           let soNaFicha = 0, ok = true;
           for (const w of palavras) {
             if (bate(w, p._rad)) continue;
@@ -13391,6 +13485,49 @@
           renderResults(); // reaplica pra mostrar os balões (i) que já podem se aplicar
           if (document.getElementById('prodTabSearch')?.value.trim()) searchProdutoTabList(document.getElementById('prodTabSearch').value);
         } catch (e) { /* sem ficha tecnica disponivel ainda, ou sem rede - sem problema */ }
+      }
+      // Conteúdo do site oficial (cortag.com, tabela fichas_site, importado pelo Painel a
+      // partir do scripts/raspar-site-cortag.js): texto de venda, benefícios, "Indicado
+      // para" e a tabela da medida, por SKU impresso na página do site - nunca pelo nome.
+      // Fica à parte da ficha (decisão do usuário: não substitui a descrição de hoje).
+      // Cópia no aparelho (~700 KB em 10/2026): vale sem internet. Dado de catálogo.
+      const FICHAS_SITE_LS_KEY = 'cortagFichasSite_v1';
+      let SITE_POR_SKU = {};
+      let SITE_BUSCA = {}; // sku -> texto pra busca pela ficha
+      function montarSitePorSku(paginas) {
+        const porSku = {}, busca = {};
+        for (const p of Array.isArray(paginas) ? paginas : []) {
+          const comum = [p.texto, p.indicado, ...(p.beneficios || [])].join(' ');
+          for (const [sku, v] of Object.entries(p.skus || {})) {
+            porSku[sku] = { ...v, sku, pagina: p };
+            busca[sku] = v.indicado ? comum + ' ' + v.indicado : comum;
+          }
+        }
+        SITE_POR_SKU = porSku;
+        SITE_BUSCA = busca;
+      }
+      try { montarSitePorSku(JSON.parse(localStorage.getItem(FICHAS_SITE_LS_KEY))); } catch (e) { }
+      async function loadFichasSite() {
+        try {
+          const r = await apiFetch('/api/fichas-tecnicas/site');
+          if (!r || !Array.isArray(r.paginas)) return;
+          montarSitePorSku(r.paginas);
+          try { localStorage.setItem(FICHAS_SITE_LS_KEY, JSON.stringify(r.paginas)); } catch (e) { /* sem espaço: fica só na memória */ }
+          if (prodTabSelected) renderProdutoOferta(prodTabSelected);
+        } catch (e) { /* sem conteúdo importado ainda, ou sem rede */ }
+      }
+      // Promocional (P/P1/P2 + base) usa o do código base, como a foto.
+      function siteDoProduto(cod) {
+        const c = String(cod || '').toUpperCase();
+        if (SITE_POR_SKU[c]) return SITE_POR_SKU[c];
+        const promo = /^P[12]?(.+)$/.exec(c);
+        return promo ? SITE_POR_SKU[promo[1]] || null : null;
+      }
+      function fotoDoSiteDoProduto(cod) {
+        const site = siteDoProduto(cod);
+        // só com o código da página no catálogo (é nele que a foto é gravada)
+        if (!site || !productByCod(site.sku)) return '';
+        return urlHttpsOuVazio(site.foto) || urlHttpsOuVazio(site.pagina && site.pagina.foto);
       }
       // Resultados da busca pela ficha agrupados por família (ordem da Lista de
       // Preços: "01 - …", "02 - …"), pra responder "qual disco, qual broca".
@@ -13551,7 +13688,7 @@
         }
         hint.style.display = 'none';
         const items = searchProducts(q);
-        const pelaFicha = searchProductsPelaFicha(q, FICHAS_MAP, items);
+        const pelaFicha = searchProductsPelaFicha(q, FICHAS_MAP, items, SITE_BUSCA);
         ultimosResultados = items;
         if (items.length === 0 && pelaFicha.length) {
           addAllBar.classList.add('hidden');
@@ -21535,6 +21672,7 @@
         videos: { rotulo: 'Vídeos de produto', importar: (f) => importarVideosProduto(f) },
         linkSite: { rotulo: 'Link do site oficial', importar: (f) => importarLinksSite(f) },
         fichas: { rotulo: 'Fichas técnicas', importar: (f) => importarFichasTecnicasDeArquivo(f) },
+        fichasSite: { rotulo: 'Conteúdo do site Cortag', importar: (f) => importarFichasSiteDeArquivo(f) },
         codigos: { rotulo: 'Códigos EAN-13/DUN-14', importar: (f) => importarCodigosDeArquivo(f) },
         clientes: { rotulo: 'Clientes (nome + CNPJ)', importar: (f) => importarClientesJson(f) },
         pdf: { rotulo: 'Cotação em PDF', importar: (f) => importarCotacaoPdf(f) },
@@ -21551,6 +21689,7 @@
             return dados.some(c => c && typeof c === 'object' && c.nome && c.cnpj) ? 'clientes' : null;
           }
           if (!dados || typeof dados !== 'object') return null;
+          if (dados.origem === 'cortag.com' && Array.isArray(dados.paginas)) return 'fichasSite';
           const amostra = Object.values(dados).slice(0, 30).filter(v => v && typeof v === 'object');
           if (amostra.some(v => 'ean' in v || 'dun14' in v)) return 'codigos';
           if (amostra.some(v => 'specs' in v || 'desc' in v || 'nome' in v)) return 'fichas';
@@ -26205,7 +26344,7 @@
         if (!t) { wrap.innerHTML = ''; return; }
         const todos = searchProducts(term); // mesma busca do Pedido: palavras em qualquer ordem, medida exata, erro de digitação
         const encontrados = todos.slice(0, 30);
-        const pelaFicha = searchProductsPelaFicha(term, FICHAS_MAP, todos);
+        const pelaFicha = searchProductsPelaFicha(term, FICHAS_MAP, todos, SITE_BUSCA);
         const ctxCamp = contextoCampanhas();
         // selo de campanha (só texto: o item inteiro já é um botão) com o maior desconto, como a fita do Pedido
         const seloCampanha = (p) => {
@@ -26835,25 +26974,48 @@
       // Aberta, o "Enviar card" já vem com a legenda da ficha na foto (opção "E").
       let fichaTecnicaAberta = false;
       const ICONE_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>';
+      // O que o site oficial diz do produto (siteDoProduto): pra que serve, benefícios,
+      // o que acompanha, as medidas que a ficha ainda não mostra e o texto de venda.
+      function htmlSiteDoProduto(site, specs) {
+        if (!site) return '';
+        const pg = site.pagina || {};
+        const jaTem = new Set(specs.map(x => normalizarBusca(x.rotulo)));
+        const tabela = Object.entries(site.tabela || {}).filter(([k]) => !jaTem.has(normalizarBusca(k)));
+        const indicado = site.indicado || pg.indicado;
+        const partes = [];
+        if (indicado) partes.push(`<h4>Pra que serve</h4><p>${escapeHtml(indicado)}</p>`);
+        if (pg.beneficios && pg.beneficios.length) partes.push(`<h4>Benefícios</h4><ul>${pg.beneficios.map(b => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`);
+        if (pg.acompanha) partes.push(`<h4>Acompanha</h4><p>${escapeHtml(pg.acompanha)}</p>`);
+        if (tabela.length) {
+          partes.push(`<h4>Medidas</h4><div class="fichaTecLinhas">${tabela.map(([k, val]) => `<div class="fichaSpecRow"><span>${escapeHtml(k)}</span><b>${escapeHtml(val)}</b></div>`).join('')}</div>`);
+        }
+        if (pg.texto) partes.push(`<h4>Sobre o produto</h4>${String(pg.texto).split('\n').map(l => `<p>${escapeHtml(l)}</p>`).join('')}`);
+        if (!partes.length) return '';
+        return `<div class="fichaTecSite">${partes.join('')}<div class="fichaTecNota">Do site da Cortag${pg.lido_em ? ` · lido em ${formatDateBr(pg.lido_em)}` : ''}</div></div>`;
+      }
       function htmlFichaTecnicaDoProduto(p) {
         const ficha = FICHAS_MAP[p.c];
         const specs = specsDaFicha(p.c);
+        const site = siteDoProduto(p.c);
         const v = VIDEOS_MAP[p.c] || {};
-        const links = [[urlHttpsOuVazio(v.youtube), 'Vídeo'], [urlHttpsOuVazio(v.instagram), 'Reels'], [urlHttpsOuVazio(SITE_LINK_MAP[p.c]), 'Site Cortag']]
+        const linkSite = urlHttpsOuVazio(SITE_LINK_MAP[p.c]) || urlHttpsOuVazio(site && site.pagina && site.pagina.url);
+        const links = [[urlHttpsOuVazio(v.youtube), 'Vídeo'], [urlHttpsOuVazio(v.instagram), 'Reels'], [linkSite, 'Site Cortag']]
           .filter(l => l[0]);
         const desc = ficha && ficha.desc ? String(ficha.desc).trim() : '';
-        if (!desc && !specs.length && !links.length) return '';
+        const doSite = htmlSiteDoProduto(site, specs);
+        if (!desc && !specs.length && !links.length && !doSite) return '';
         const linhas = specs.concat(p.e ? [{ rotulo: 'EAN', valor: String(p.e) }] : [])
           .map(x => `<div class="fichaSpecRow"><span>${x.rotulo}</span><b>${escapeHtml(x.valor)}</b></div>`).join('');
         return `<div class="fichaTec${fichaTecnicaAberta ? ' aberta' : ''}">
           <button type="button" class="fichaTecBtn" id="fichaTecBtn" aria-expanded="${fichaTecnicaAberta}" aria-controls="fichaTecCorpo">
             ${ICONE_INFO}<span class="fichaTecTitulo">Ficha técnica</span>
-            <span class="fichaTecResumo">${escapeHtml(specs.slice(0, 2).map(x => x.valor).join(' · '))}</span>
+            <span class="fichaTecResumo">${escapeHtml(specs.length ? specs.slice(0, 2).map(x => x.valor).join(' · ') : doSite ? 'Pra que serve, benefícios' : '')}</span>
             <svg class="fichaTecSeta" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
           </button>
           <div class="fichaTecCorpo" id="fichaTecCorpo">
             ${desc ? `<p class="fichaTecDesc">${escapeHtml(desc)}</p>` : ''}
             ${linhas ? `<div class="fichaTecLinhas">${linhas}</div>` : ''}
+            ${doSite}
             ${links.length ? `<div class="fichaTecLinks">${links.map(([url, rotulo]) => `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${rotulo}</a>`).join('')}</div>` : ''}
             ${specs.length ? '<div class="fichaTecNota">Com a ficha aberta, o card enviado leva a legenda na foto.</div>' : ''}
           </div>
@@ -26866,9 +27028,19 @@
         if (!p) { el.innerHTML = ''; return; }
         const of = ofertaDoProduto(p);
         const temFoto = !!codigoDaFoto(cod);
+        // sem foto: a do site da Cortag como sugestão (decisão do usuário: só sugere, o vendedor confirma)
+        const fotoSite = temFoto ? '' : fotoDoSiteDoProduto(cod);
         el.innerHTML = `
           <div class="ofertaFoto" id="ofertaFotoBox">
             ${temFoto ? '<div class="lev-empty">Carregando foto…</div>'
+              : fotoSite ? `<div class="ofertaFotoSite">
+                  <img src="${escapeHtml(fotoSite)}" alt="" referrerpolicy="no-referrer" id="ofertaFotoSiteImg">
+                  <div class="ofertaFotoSiteRotulo">Foto do site da Cortag · sugestão</div>
+                  <div class="ofertaFotoSiteAcoes">
+                    <button type="button" class="recompraBtn recompraBtn--principal" id="ofertaUsarFotoSite">Usar esta foto</button>
+                    <button type="button" class="recompraBtn" id="ofertaAddFoto">${ICONE_CAMERA}Outra</button>
+                  </div>
+                </div>`
               : `<button type="button" class="ofertaSemFoto" id="ofertaAddFoto">${ICONE_CAMERA}<span>Adicionar foto</span></button>`}
           </div>
           <div class="ofertaPreco">
@@ -26885,6 +27057,9 @@
           </div>
           ${htmlFichaTecnicaDoProduto(p)}`;
         document.getElementById('ofertaAddFoto')?.addEventListener('click', () => abrirFotoProduto(cod));
+        // sem internet a sugestão não carrega: fica só o rótulo e os botões
+        document.getElementById('ofertaFotoSiteImg')?.addEventListener('error', (e) => e.currentTarget.remove());
+        document.getElementById('ofertaUsarFotoSite')?.addEventListener('click', (e) => usarFotoDoSite(cod, e.currentTarget));
         document.getElementById('fichaTecBtn')?.addEventListener('click', (e) => {
           fichaTecnicaAberta = !fichaTecnicaAberta;
           e.currentTarget.parentElement.classList.toggle('aberta', fichaTecnicaAberta);
@@ -27006,6 +27181,23 @@
         } catch (e) {
           btn.disabled = false;
           showToast(e && e.message ? e.message : 'Não foi possível salvar a foto.', 'erro');
+        }
+      }
+      // A foto vai pro código que está na página do site (no promocional, o base - que a
+      // foto do promocional já usa); o servidor baixa do cortag.com, o app não manda imagem.
+      async function usarFotoDoSite(cod, btn) {
+        const site = siteDoProduto(cod);
+        if (!site) return;
+        btn.disabled = true;
+        try {
+          const r = await apiFetch(`/api/produto-fotos/${encodeURIComponent(site.sku)}/do-site`, { method: 'POST' });
+          FOTOS_PRODUTO[site.sku] = r.versao;
+          gravarFotosLocais();
+          showToast('Foto do site salva');
+          if (prodTabSelected === cod) renderProdutoOferta(cod);
+        } catch (e) {
+          btn.disabled = false;
+          showToast(e && e.message ? e.message : 'Não foi possível usar a foto do site.', 'erro');
         }
       }
       async function removerFotoProduto() {
@@ -29727,6 +29919,15 @@
         return `${qtdNovas} ficha(s) importada(s) — total agora: ${result.total}.`;
       }
 
+      // fichas-site.json do scripts/raspar-site-cortag.js: troca o conteúdo do site inteiro
+      async function importarFichasSiteDeArquivo(file) {
+        const dados = JSON.parse(await file.text());
+        const r = await apiFetch('/api/fichas-tecnicas/site', { method: 'POST', body: JSON.stringify(dados) });
+        await loadFichasSite();
+        return `${r.paginas} página(s) do site, ${r.skus} produto(s)`
+          + (r.recusadas ? ` — ${r.recusadas} página(s) fora do formato ficaram de fora.` : '.');
+      }
+
       async function importarCodigosDeArquivo(file) {
         const novosCodigos = JSON.parse(await file.text());
         if (typeof novosCodigos !== 'object' || Array.isArray(novosCodigos)) throw new Error('Formato inválido — esperado um objeto {codigo: {ean, dun14}}.');
@@ -30654,6 +30855,7 @@
           // disso o aparelho tem 0 produtos e parecia "desatualizado" (e o admin
           // disparava um sync vazio, que o servidor recusa).
           catalogoPromise.then(() => verificarESincronizarTudo(true)).catch(() => { }); // silencioso - já mostra o erro nos próprios campos de status
+          loadFichasSite();
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
           loadProdutosVideos(); // idem
           loadProdutosLinkSite(); // idem
