@@ -1551,7 +1551,8 @@ Supabase, sem PR — não é mudança de código.
      "Usar esta foto" (`usarFotoDoSite` → `POST /api/produto-fotos/:sku/do-site`: o servidor pega o endereço na `fichas_site`,
      nunca do app, baixa só JPEG até 600 KB e não troca foto que já existe - 409). Pra atualizar: rodar o script de novo (apagar a
      pasta `html/` pra baixar o site atual) e importar o `fichas-site.json`. Ainda vale o "pode?" ao marketing antes de pôr foto
-     ou texto do site no PDF da apresentação.
+     ou texto do site no PDF da apresentação. **Importado em produção em 27/10/2026** (pelo Painel, conferido no banco): 396
+     páginas, 1.622 SKUs, 1.599 códigos do catálogo com conteúdo do site, 357 páginas com foto pra sugerir.
   2. Feito em 10/2026 (PR #318, **página inteira por produto**, escolhida pelo usuário nos mockups "Cortag · Apresentação da
      proposta"): **"Apresentação"** e **"Catálogo"** (a mesma sem preço) no "Como você quer enviar?" do orçamento
      (`generateProposalPDF`, `index.html`; o PDF de hoje, `generateQuotePDF`, continua igual). jsPDF desenhado direto (sem
