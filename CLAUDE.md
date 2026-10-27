@@ -1552,12 +1552,20 @@ Supabase, sem PR — não é mudança de código.
      nunca do app, baixa só JPEG até 600 KB e não troca foto que já existe - 409). Pra atualizar: rodar o script de novo (apagar a
      pasta `html/` pra baixar o site atual) e importar o `fichas-site.json`. Ainda vale o "pode?" ao marketing antes de pôr foto
      ou texto do site no PDF da apresentação.
-  2. **"Apresentação da proposta"** (botão à parte no compartilhar do orçamento; o PDF de hoje continua como orçamento rápido):
-     PDF pelo jsPDF que já existe (`LIBS` do `sw.js`, sem internet): **capa** (logo, "Proposta para LOJA X", vendedor e contato,
-     data/validade), **uma página (ou meia) por produto** (foto grande de `produto_fotos`, nome, 3–5 benefícios, tabela técnica,
-     quantidade, preço e de/por de campanha por `ofertaDoProduto`/`cartTotals`) e **resumo** com a tabela do orçamento **mantendo
-     IPI/ST detalhados** (ver "O que já tentamos"), total, prazo, pedido mínimo/CIF. Opção "sem preço" = catálogo personalizado.
-     Antes de construir: mockups pro usuário escolher o layout.
+  2. Feito em 10/2026 (PR #318, **página inteira por produto**, escolhida pelo usuário nos mockups "Cortag · Apresentação da
+     proposta"): **"Apresentação"** e **"Catálogo"** (a mesma sem preço) no "Como você quer enviar?" do orçamento
+     (`generateProposalPDF`, `index.html`; o PDF de hoje, `generateQuotePDF`, continua igual). jsPDF desenhado direto (sem
+     html2canvas), funciona sem internet. **Capa** vermelha: logo branco, "Proposta para <fantasia ou razão social>", cidade, data,
+     válida até (`APRES_VALIDADE_DIAS` = 10; o catálogo não tem), nº de itens, as linhas de produto e o vendedor (nome do usuário
+     logado + telefone do card, `vendedorDoCard`). **Uma página por produto**: foto do app (`blobDaFoto` - **não** `fetch` da URL
+     `blob:`, o CSP `connect-src` barra), selo "Campanha -N%" (sem o nome da regra), nome, código/EAN, texto do site
+     (`textoCurtoDoSite`, ~600 letras, corta com "…"; sem site, a descrição da ficha), "Pra que serve", até 6 benefícios, ficha
+     técnica (`specsDaFicha` + medidas do site + acompanha, só as linhas que cabem acima da caixa) e embaixo a caixa "Nesta
+     proposta" (quantidade, de/por quando a campanha baixa o preço, total do item) ou "Peça seu orçamento" no catálogo. **Resumo**:
+     tabela do orçamento com **IPI/ST separados** e destaque no com-imposto (como o PDF de hoje), subtotal/IPI/ST/economia com
+     campanhas, total em vermelho, cartões de pagamento, frete (`metaPedidoMinimo`) e validade, avisos fiscais (`avisosDoOrcamento`)
+     e o contato; no catálogo, só código/produto/embalagem. Arquivo `Proposta-<cliente>-DDMMAA.pdf` / `Selecao-…`. Produto sem
+     foto sai sem o quadro da foto (texto na largura toda).
 - **Voz e lista de itens — a fazer depois, nesta ordem de ideia** (10/2026, a partir de um script Python + Playwright + Gemini
   que o usuário trouxe; analisado e **não adotado**: abre site e copia a página, e no PWA os dados já estão no aparelho). O que
   já existe: 🎤 na busca do Pedido e do Levantamento (`startVoiceRecognition`/`VOICE_COMMANDS`, `index.html`, Web Speech API

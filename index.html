@@ -11938,6 +11938,24 @@
           <span>CSV</span>
           <small>Pra importar em sistema</small>
         </button>
+        <button type="button" data-share="apresentacao">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <rect x="3" y="4" width="18" height="14" rx="2" />
+            <path d="M8 21h8M12 18v3M7 9h6M7 13h10" />
+          </svg>
+          <span>Apresentação</span>
+          <small>Capa, fotos e ficha</small>
+        </button>
+        <button type="button" data-share="selecao">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M4 19.5A2.5 2.5 0 016.5 17H20V3H6.5A2.5 2.5 0 004 5.5z" />
+            <path d="M4 19.5A2.5 2.5 0 006.5 22H20v-5" />
+          </svg>
+          <span>Catálogo</span>
+          <small>Apresentação sem preço</small>
+        </button>
       </div>
       <button type="button" id="shareSheetCancel">Cancelar</button>
     </div>
@@ -19071,6 +19089,409 @@
         shareOrDownloadBlob(blob, fileName, 'Orçamento Cortag (PDF)', 'PDF baixado — verifique a pasta Downloads do celular');
       }
 
+      // ---------------- Apresentação da proposta (PDF) ----------------
+      // Pedido do usuário (10/2026, mockups "Cortag · Apresentação da proposta",
+      // escolhida a página inteira por produto): capa com o cliente e o vendedor,
+      // uma página por produto (foto do app, o que o site da Cortag diz - pra que
+      // serve, benefícios, texto - e a ficha técnica, com quantidade e preço da
+      // proposta) e o resumo com a tabela do orçamento, IPI/ST separados como no
+      // PDF de hoje (ver "O que já tentamos" no CLAUDE.md), condições e contato.
+      // semPreco = catálogo personalizado: sem preço, quantidade nem resumo de valores.
+      // O PDF "rápido" (generateQuotePDF) continua igual.
+      const APRES_VERMELHO = [204, 9, 53];
+      const APRES_VALIDADE_DIAS = 10;
+      async function fotoDoProdutoParaPdf(cod) {
+        try {
+          // o blob direto do cache das fotos (fetch de URL blob: é barrado pelo CSP, connect-src)
+          const c = codigoDaFoto(cod);
+          const blob = c ? await blobDaFoto(c, false) : null;
+          if (!blob) return null;
+          const bmp = await createImageBitmap(blob);
+          const dims = { w: bmp.width, h: bmp.height };
+          if (bmp.close) bmp.close();
+          return { dataUrl: await blobParaDataUrl(blob), ...dims };
+        } catch (e) { return null; }
+      }
+      // os primeiros parágrafos do texto do site até ~600 letras
+      function textoCurtoDoSite(texto) {
+        const saida = [];
+        let n = 0;
+        for (const par of String(texto || '').split('\n')) {
+          if (saida.length && n + par.length > 600) break;
+          saida.push(par);
+          n += par.length;
+        }
+        return saida.join('\n');
+      }
+      function nomeDoClienteNaProposta(cliente) {
+        if (!cliente) return '';
+        return fantasiaDoCliente(cliente) || cliente.nome;
+      }
+      function dataBr(d) {
+        return d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+      }
+      async function generateProposalPDF(opcoes = {}) {
+        const semPreco = !!opcoes.semPreco;
+        const { rows, baseRows, total, totalSemImpostos } = cartTotals();
+        if (rows.length === 0) { showToast('Adicione itens ao orçamento primeiro'); return; }
+        try {
+          await loadJsPdfScripts();
+        } catch (e) {
+          showToast('Não foi possível carregar o gerador de PDF — verifique sua internet.');
+          return;
+        }
+        showToast('Montando a apresentação…');
+        const avisosFiscais = semPreco ? [] : avisosDoOrcamento(rows);
+        const fotos = await Promise.all(rows.map(r => fotoDoProdutoParaPdf(r.p.c)));
+        let logoBranco = null;
+        try { logoBranco = await logoBrancoUrl(); } catch (e) { }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+        const W = 210, H = 297, M = 16, CW = W - 2 * M;
+        const cliente = state.levCliente;
+        const nomeCliente = nomeDoClienteNaProposta(cliente);
+        const vendedor = vendedorDoCard();
+        const nomeVendedor = vendedor.nome || state.seller || '';
+        const hoje = new Date();
+        const validade = new Date(hoje.getTime() + APRES_VALIDADE_DIAS * 86400000);
+        const totalPaginas = 1 + rows.length + 1;
+        const cinza = (t) => doc.setTextColor(t, t, t);
+        const rotulo = (txt, x, y, cor) => {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+          if (cor) doc.setTextColor(...cor); else cinza(107);
+          doc.text(txt.toUpperCase(), x, y, { charSpace: 0.4 });
+        };
+        const rodape = (pagina) => {
+          doc.setDrawColor(228, 228, 231); doc.setLineWidth(0.3);
+          doc.line(M, H - 14, W - M, H - 14);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); cinza(107);
+          doc.text(`${nomeCliente ? 'Proposta para ' + nomeCliente : 'Proposta Cortag'} · ${dataBr(hoje)}`, M, H - 9);
+          doc.text(`${pagina} / ${totalPaginas}`, W - M, H - 9, { align: 'right' });
+        };
+        const cabecalho = (txt) => {
+          rotulo(txt, M, 14);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(...APRES_VERMELHO);
+          doc.text('CORTAG', W - M, 14, { align: 'right' });
+        };
+
+        // ---- Capa ----
+        doc.setFillColor(...APRES_VERMELHO);
+        doc.rect(0, 0, W, 148, 'F');
+        if (logoBranco) {
+          try { doc.addImage(logoBranco, 'PNG', M, 16, 36, 36 * (await getLogoDimensions().then(d => d.height / d.width))); }
+          catch (e) { logoBranco = null; }
+        }
+        doc.setTextColor(255, 255, 255);
+        if (!logoBranco) { doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.text('CORTAG', M, 26); }
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
+        doc.text(semPreco ? 'SELEÇÃO DE PRODUTOS' : 'PROPOSTA COMERCIAL', M, 92, { charSpace: 0.6 });
+        doc.setFontSize(26);
+        const titulo = doc.splitTextToSize(nomeCliente ? `${semPreco ? 'Seleção' : 'Proposta'} para ${nomeCliente}` : (semPreco ? 'Seleção de produtos Cortag' : 'Proposta Cortag'), CW);
+        doc.text(titulo.slice(0, 3), M, 104);
+        if (cliente) {
+          const info = FICHA_CNPJ_INFO.get(cliente.id) || {};
+          const linha = [nomeCliente !== cliente.nome ? cliente.nome : '', [info.municipio, info.uf].filter(Boolean).join(' - ')].filter(Boolean).join(' · ');
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+          if (linha) doc.text(doc.splitTextToSize(linha, CW)[0], M, 138);
+        }
+        let y = 166;
+        const colunas = [['Data', dataBr(hoje)], ...(semPreco ? [] : [['Válida até', dataBr(validade)]]), ['Produtos', `${rows.length} ${rows.length === 1 ? 'item' : 'itens'}`]];
+        colunas.forEach(([r, v], i) => {
+          const x = M + i * (CW / 3);
+          rotulo(r, x, y);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(13); cinza(29);
+          doc.text(v, x, y + 7);
+        });
+        y += 16;
+        doc.setDrawColor(228, 228, 231); doc.line(M, y, W - M, y);
+        y += 9;
+        rotulo('Nesta proposta', M, y);
+        y += 7;
+        const porFamilia = new Map();
+        for (const r of rows) {
+          const f = productFamilia(r.p).replace(/^\d+\s*-\s*/, '') || 'Outros';
+          if (!porFamilia.has(f)) porFamilia.set(f, []);
+          porFamilia.get(f).push(r.p.n);
+        }
+        for (const [f, nomes] of [...porFamilia.entries()].slice(0, 7)) {
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(10); cinza(29);
+          const nomeF = f.charAt(0) + f.slice(1).toLowerCase();
+          doc.text(nomeF, M, y);
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(9); cinza(107);
+          const lista = doc.splitTextToSize(`${nomes.length} ${nomes.length === 1 ? 'produto' : 'produtos'}: ${nomes.join(', ')}`, CW - 62);
+          doc.text(lista[0] + (lista.length > 1 ? '…' : ''), M + 62, y);
+          y += 7;
+        }
+        if (porFamilia.size > 7) { doc.setFontSize(9); cinza(107); doc.text(`e mais ${porFamilia.size - 7} linha(s) de produto`, M, y); }
+        doc.setDrawColor(...APRES_VERMELHO); doc.setLineWidth(0.8);
+        doc.line(M, H - 44, W - M, H - 44);
+        rotulo('Seu representante', M, H - 36);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(13); cinza(29);
+        doc.text(nomeVendedor || 'Representante Cortag', M, H - 29);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(10); cinza(58);
+        if (vendedor.tel) doc.text(vendedor.tel, M, H - 23);
+        doc.setFontSize(9); cinza(107);
+        doc.text('cortag.com', W - M, H - 23, { align: 'right' });
+
+        // ---- Uma página por produto ----
+        const basePorCod = new Map((baseRows || []).map(b => [b.p.c, b]));
+        rows.forEach((r, i) => {
+          doc.addPage();
+          const p = r.p;
+          const site = siteDoProduto(p.c);
+          const pg = (site && site.pagina) || {};
+          cabecalho(productFamilia(p).replace(/^\d+\s*-\s*/, '') || 'Produto');
+          const foto = fotos[i];
+          const topo = 22;
+          let xTexto = M, wTexto = CW, fimFoto = topo;
+          if (foto) {
+            const lado = 80;
+            doc.setFillColor(245, 245, 247);
+            doc.roundedRect(M, topo, lado, lado, 3, 3, 'F');
+            const esc = Math.min((lado - 8) / foto.w, (lado - 8) / foto.h);
+            const fw = foto.w * esc, fh = foto.h * esc;
+            try { doc.addImage(foto.dataUrl, 'JPEG', M + (lado - fw) / 2, topo + (lado - fh) / 2, fw, fh); } catch (e) { }
+            if (!semPreco && r.campaignPct > 0) {
+              const selo = `Campanha -${r.campaignPct}%`;
+              doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+              const sw = doc.getTextWidth(selo) + 6;
+              doc.setFillColor(...APRES_VERMELHO);
+              doc.roundedRect(M + 4, topo + 4, sw, 7, 1.5, 1.5, 'F');
+              doc.setTextColor(255, 255, 255);
+              doc.text(selo, M + 7, topo + 8.9);
+            }
+            xTexto = M + lado + 8; wTexto = CW - lado - 8; fimFoto = topo + lado;
+          }
+          let yt = topo + 6;
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(17); cinza(29);
+          const nome = doc.splitTextToSize(p.n, wTexto).slice(0, 4);
+          doc.text(nome, xTexto, yt);
+          yt += nome.length * 6.8;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); cinza(107);
+          doc.text(`Cód. ${p.c}${p.e ? '  ·  EAN ' + p.e : ''}`, xTexto, yt);
+          yt += 7;
+          const sobre = textoCurtoDoSite(pg.texto) || String((FICHAS_MAP[p.c] && FICHAS_MAP[p.c].desc) || '').trim();
+          if (sobre) {
+            doc.setFontSize(9.5); cinza(58);
+            const todas = doc.splitTextToSize(sobre, wTexto);
+            const linhas = todas.slice(0, foto ? 9 : 7);
+            if (todas.length > linhas.length) linhas[linhas.length - 1] = linhas[linhas.length - 1].replace(/\s*\S*$/, '') + '…';
+            doc.text(linhas, xTexto, yt, { lineHeightFactor: 1.35 });
+            yt += linhas.length * 4.5 + 3;
+          }
+          let yb = Math.max(yt, fimFoto) + 8;
+          const indicado = (site && site.indicado) || pg.indicado;
+          if (indicado) {
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+            const linhas = doc.splitTextToSize(indicado, CW - 10).slice(0, 4);
+            const alt = linhas.length * 4.5 + 11;
+            doc.setFillColor(247, 247, 248);
+            doc.roundedRect(M, yb, CW, alt, 2.5, 2.5, 'F');
+            rotulo('Pra que serve', M + 5, yb + 6);
+            cinza(29); doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+            doc.text(linhas, M + 5, yb + 11.5, { lineHeightFactor: 1.35 });
+            yb += alt + 7;
+          }
+          const beneficios = (pg.beneficios || []).slice(0, 6);
+          if (beneficios.length) {
+            rotulo('Por que vende', M, yb);
+            yb += 5.5;
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); cinza(29);
+            for (const b of beneficios) {
+              const linhas = doc.splitTextToSize(b, CW - 6).slice(0, 2);
+              doc.setFillColor(...APRES_VERMELHO);
+              doc.circle(M + 1.3, yb - 1.2, 0.9, 'F');
+              doc.text(linhas, M + 5, yb, { lineHeightFactor: 1.3 });
+              yb += linhas.length * 4.4 + 1.6;
+            }
+            yb += 4;
+          }
+          const ficha = specsDaFicha(p.c).map(x => [x.rotulo, x.valor]);
+          const jaTem = new Set(ficha.map(([k]) => normalizarBusca(k)));
+          for (const [k, v] of Object.entries((site && site.tabela) || {})) if (!jaTem.has(normalizarBusca(k))) ficha.push([k, v]);
+          if (pg.acompanha) ficha.push(['Acompanha', pg.acompanha]);
+          const caixaPreco = 30;
+          const limite = H - 18 - caixaPreco - 6;
+          if (ficha.length && yb < limite - 14) {
+            rotulo('Ficha técnica', M, yb);
+            const cabem = Math.max(1, Math.floor((limite - yb - 4) / 6.2));
+            doc.autoTable({
+              startY: yb + 2.5,
+              body: ficha.slice(0, cabem),
+              theme: 'plain',
+              styles: { fontSize: 8.8, cellPadding: { top: 1.3, bottom: 1.3, left: 2.5, right: 2.5 }, textColor: [29, 29, 31], overflow: 'linebreak' },
+              alternateRowStyles: { fillColor: [247, 247, 248] },
+              columnStyles: { 0: { cellWidth: 60, textColor: [107, 107, 112] }, 1: { cellWidth: CW - 60, fontStyle: 'bold' } },
+              margin: { left: M, right: M, bottom: H - limite },
+              tableWidth: CW,
+            });
+          }
+          // caixa de baixo: quantidade e preço da proposta, ou o contato no catálogo sem preço
+          const yc = H - 18 - caixaPreco;
+          doc.setPage(doc.getNumberOfPages());
+          if (semPreco) {
+            doc.setFillColor(247, 247, 248);
+            doc.roundedRect(M, yc, CW, caixaPreco, 3, 3, 'F');
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(12); cinza(29);
+            doc.text('Peça seu orçamento', W / 2, yc + 13, { align: 'center' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); cinza(58);
+            doc.text([nomeVendedor, vendedor.tel].filter(Boolean).join('  ·  ') || 'Fale com seu representante Cortag', W / 2, yc + 20, { align: 'center' });
+          } else {
+            const base = basePorCod.get(p.c);
+            const de = r.campaignPct > 0 && base && base.cp > r.cp + 0.005 ? base.cp : null;
+            doc.setDrawColor(...(de ? APRES_VERMELHO : [228, 228, 231])); doc.setLineWidth(de ? 0.7 : 0.3);
+            doc.roundedRect(M, yc, CW, caixaPreco, 3, 3, 'S');
+            rotulo('Nesta proposta', M + 6, yc + 7);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(15); cinza(29);
+            doc.text(`${r.it.qty} ${r.it.qty === 1 ? 'unidade' : 'unidades'}`, M + 6, yc + 16);
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); cinza(107);
+            doc.text(`Preço unitário com IPI e ST · ${state.uf || ''}${state.paymentTerm ? ' · ' + rotuloPrazoComDesconto() : ''}`, M + 6, yc + 23);
+            const xr = W - M - 6;
+            if (de) {
+              doc.setFontSize(9.5); cinza(107);
+              const txtDe = 'de ' + brl(de);
+              doc.text(txtDe, xr, yc + 9, { align: 'right' });
+              const tw = doc.getTextWidth(txtDe);
+              doc.setDrawColor(107, 107, 112); doc.setLineWidth(0.3);
+              doc.line(xr - tw, yc + 7.8, xr, yc + 7.8);
+            }
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(20); doc.setTextColor(...(de ? APRES_VERMELHO : [29, 29, 31]));
+            doc.text(brl(r.cp), xr, yc + 18, { align: 'right' });
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); cinza(107);
+            doc.text(`Total do item: ${brl(r.lineTotal)}`, xr, yc + 24.5, { align: 'right' });
+          }
+          rodape(i + 2);
+        });
+
+        // ---- Resumo e condições ----
+        doc.addPage();
+        cabecalho(semPreco ? 'Resumo da seleção' : 'Resumo da proposta');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(20); cinza(29);
+        doc.text(semPreco ? 'Produtos desta seleção' : 'Resumo e condições', M, 28);
+        const margemTab = { top: M, right: M, bottom: 22, left: M };
+        if (semPreco) {
+          doc.autoTable({
+            startY: 34,
+            head: [['Código', 'Produto', 'Embalagem']],
+            body: rows.map(r => [r.p.c, r.p.n, r.p.emb ? `${r.p.emb} un.` : '']),
+            theme: 'grid',
+            styles: { fontSize: 8.5, cellPadding: 2, textColor: [20, 20, 20], lineColor: [210, 210, 214] },
+            headStyles: { fillColor: [29, 29, 31], textColor: [255, 255, 255], fontStyle: 'bold' },
+            columnStyles: { 0: { cellWidth: 22 }, 2: { cellWidth: 26, halign: 'center' } },
+            margin: margemTab, tableWidth: CW,
+          });
+        } else {
+          doc.autoTable({
+            startY: 34,
+            head: [['Cód.', 'Produto', 'Qtd.', 'Unit. s/ imp.', 'IPI', 'ST', 'Unit. c/ imp.', 'Total c/ imp.']],
+            body: rows.map(r => {
+              const { ipiTotal, stTotal } = separarImpostosDaLinha(r);
+              return [r.p.c, r.p.n + marcaDosAvisos(avisosFiscais, r.p), String(r.it.qty), numBr(r.cpSemImposto), numBr(ipiTotal), numBr(stTotal), numBr(r.cp), numBr(r.lineTotal)];
+            }),
+            theme: 'grid',
+            styles: { fontSize: 7.3, cellPadding: 1.6, textColor: [20, 20, 20], lineColor: [210, 210, 214], overflow: 'linebreak' },
+            headStyles: { fillColor: [29, 29, 31], textColor: [255, 255, 255], fontStyle: 'bold' },
+            columnStyles: {
+              0: { cellWidth: 13 }, 1: { cellWidth: 60 }, 2: { cellWidth: 11, halign: 'center' },
+              3: { cellWidth: 18, halign: 'right' }, 4: { cellWidth: 15, halign: 'right' }, 5: { cellWidth: 15, halign: 'right' },
+              6: { cellWidth: 21, halign: 'right', fontStyle: 'bold', fillColor: DESTAQUE_COM_IMPOSTO },
+              7: { cellWidth: 25, halign: 'right', fontStyle: 'bold', fillColor: DESTAQUE_COM_IMPOSTO },
+            },
+            margin: margemTab, tableWidth: CW,
+          });
+          const totalIpi = rows.reduce((s, r) => s + separarImpostosDaLinha(r).ipiTotal, 0);
+          const totalSt = rows.reduce((s, r) => s + separarImpostosDaLinha(r).stTotal, 0);
+          const economia = rows.reduce((s, r) => {
+            const b = basePorCod.get(r.p.c);
+            return s + (b && b.cp > r.cp ? (b.cp - r.cp) * r.it.qty : 0);
+          }, 0);
+          let yr = doc.lastAutoTable.finalY + 8;
+          if (yr > H - 90) { doc.addPage(); yr = 24; }
+          const linhasTotal = [['Subtotal sem impostos', brl(totalSemImpostos)], ['IPI', brl(totalIpi)], ['ICMS-ST', brl(totalSt)]];
+          if (economia > 0.005) linhasTotal.push(['Economia com campanhas', '- ' + brl(economia)]);
+          doc.setFontSize(10);
+          linhasTotal.forEach(([k, v], i) => {
+            doc.setFont('helvetica', 'normal'); cinza(107); doc.text(k, M, yr + i * 6.5);
+            if (k.startsWith('Economia')) doc.setTextColor(31, 122, 58); else cinza(29);
+            doc.text(v, M + 95, yr + i * 6.5, { align: 'right' });
+          });
+          doc.setFillColor(...APRES_VERMELHO);
+          doc.roundedRect(W - M - 70, yr - 6, 70, 26, 3, 3, 'F');
+          doc.setTextColor(255, 255, 255);
+          doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+          doc.text('TOTAL COM IMPOSTOS', W - M - 64, yr + 1, { charSpace: 0.4 });
+          doc.setFontSize(18);
+          doc.text(brl(total), W - M - 64, yr + 12);
+          yr += Math.max(linhasTotal.length * 6.5, 22) + 8;
+          const meta = metaPedidoMinimo(totalSemImpostos);
+          const cards = [
+            ['Pagamento', state.paymentTerm ? rotuloPrazoComDesconto() : 'A combinar'],
+            ['Frete', meta ? `Faltam ${brl(meta.falta)} ${meta.rotulo}` : 'CIF · pedido mínimo atingido'],
+            ['Validade', `até ${dataBr(validade)}`],
+          ];
+          const cw3 = (CW - 8) / 3;
+          cards.forEach(([k, v], i) => {
+            const x = M + i * (cw3 + 4);
+            doc.setFillColor(247, 247, 248);
+            doc.roundedRect(x, yr, cw3, 20, 2.5, 2.5, 'F');
+            rotulo(k, x + 4, yr + 6.5);
+            doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); cinza(29);
+            doc.text(doc.splitTextToSize(v, cw3 - 8).slice(0, 2), x + 4, yr + 12.5);
+          });
+          yr += 27;
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); cinza(107);
+          doc.text(`Preços para o estado ${state.uf || ''}. Campanhas sujeitas à vigência e ao estoque.`, M, yr);
+          for (const a of avisosFiscais) {
+            doc.autoTable({
+              startY: doc.lastAutoTable && doc.lastAutoTable.finalY > yr ? doc.lastAutoTable.finalY + 4 : yr + 4,
+              body: [[{ content: a.titulo, styles: { fontStyle: 'bold', fontSize: 8.5 } }], [{ content: a.frases.join(' ') }]],
+              theme: 'plain',
+              styles: { fontSize: 8, cellPadding: { top: 1.2, bottom: 1.2, left: 3, right: 3 }, textColor: [20, 20, 20], fillColor: [255, 248, 225] },
+              tableLineColor: [230, 180, 60], tableLineWidth: 0.4,
+              margin: margemTab, tableWidth: CW,
+            });
+            yr = doc.lastAutoTable.finalY;
+          }
+        }
+        // contato no fim da última página
+        doc.setPage(doc.getNumberOfPages());
+        const yv = H - 18 - 22;
+        doc.setDrawColor(228, 228, 231); doc.setLineWidth(0.3);
+        doc.roundedRect(M, yv, CW, 18, 3, 3, 'S');
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(12); cinza(29);
+        doc.text(nomeVendedor || 'Seu representante Cortag', M + 6, yv + 8);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); cinza(58);
+        doc.text(vendedor.tel || 'cortag.com', M + 6, yv + 14);
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...APRES_VERMELHO);
+        doc.text(semPreco ? 'Peça seu orçamento' : 'Responda esta proposta no WhatsApp', W - M - 6, yv + 11, { align: 'right' });
+        // o resumo pode ter quebrado em mais de uma página: numera pelo total real
+        const ultima = doc.getNumberOfPages();
+        for (let pgNum = 1 + rows.length + 1; pgNum <= ultima; pgNum++) {
+          doc.setPage(pgNum);
+          doc.setFillColor(255, 255, 255); doc.rect(0, H - 15, W, 15, 'F');
+          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); cinza(107);
+          doc.setDrawColor(228, 228, 231); doc.line(M, H - 14, W - M, H - 14);
+          doc.text(`${nomeCliente ? 'Proposta para ' + nomeCliente : 'Proposta Cortag'} · ${dataBr(hoje)}`, M, H - 9);
+          doc.text(`${pgNum} / ${ultima}`, W - M, H - 9, { align: 'right' });
+        }
+        if (ultima !== totalPaginas) {
+          for (let pgNum = 2; pgNum <= 1 + rows.length; pgNum++) {
+            doc.setPage(pgNum);
+            doc.setFillColor(255, 255, 255); doc.rect(W - M - 20, H - 13, 20, 6, 'F');
+            doc.setFont('helvetica', 'normal'); doc.setFontSize(8); cinza(107);
+            doc.text(`${pgNum} / ${ultima}`, W - M, H - 9, { align: 'right' });
+          }
+        }
+
+        const blob = doc.output('blob');
+        const d = hoje;
+        const pad = n => String(n).padStart(2, '0');
+        const parteNome = sanitizeFileNamePart(nomeCliente).slice(0, 40).replace(/-+$/, '');
+        const fileName = `${semPreco ? 'Selecao' : 'Proposta'}-${parteNome ? parteNome + '-' : ''}${pad(d.getDate())}${pad(d.getMonth() + 1)}${String(d.getFullYear()).slice(-2)}.pdf`;
+        shareOrDownloadBlob(blob, fileName, semPreco ? 'Seleção de produtos Cortag (PDF)' : 'Proposta Cortag (PDF)', 'PDF baixado — verifique a pasta Downloads do celular');
+      }
+
       // ---------------- Modal: nome do arquivo do export CSV ----------------
       // Com cliente selecionado, vem com o nome já escolhido pra ele (ou a 1ª
       // palavra), sugestões tiradas do nome dele e "Usar sempre esse nome pra
@@ -19169,6 +19590,8 @@
             if (type === 'text') shareCartAsText();
             else if (type === 'image') generateQuoteImage();
             else if (type === 'pdf') generateQuotePDF();
+            else if (type === 'apresentacao') generateProposalPDF();
+            else if (type === 'selecao') generateProposalPDF({ semPreco: true });
             else if (type === 'csv') openCsvNamePrompt();
           });
         });
