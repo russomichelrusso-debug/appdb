@@ -42,6 +42,7 @@ let reativacaoAlvos = []; // placar "Recuperados" (reativacao_alvos)
 let titulosInadimplentes = []; // routes/inadimplencia.js
 let produtoFotos = {}; // codigo_sku -> { imagem, tamanho, versao } (routes/produtoFotos.js)
 let produtoFotosRelogio = 1760000000000;
+let fichasSite = []; // linhas de fichas_site (routes/fichasTecnicas.js /site)
 let catalogoPrecos = []; // {codigo_sku, nome, emb, ipi, familia, precos_sem_imposto} (routes/catalogoPrecos.js)
 let fichasTecnicas = {}; // codigo_sku -> { nome, descricao, foto, specs } (routes/fichasTecnicas.js)
 // Versão das tabelas (routes/lib/cacheTabela.js, pg_stat_user_tables): por
@@ -82,6 +83,7 @@ function reset() {
   reativacaoAlvos = [];
   titulosInadimplentes = [];
   produtoFotos = {};
+  fichasSite = [];
   novidades = [];
   importacoesEmail = [];
   pedidosBloqueados = [];
@@ -741,6 +743,26 @@ async function query(sql, params = []) {
   if (s.includes('/* FOTOS:MINIATURA_GRAVAR */')) {
     const f = produtoFotos[params[0]];
     if (f && String(f.versao) === String(params[2])) f.miniatura = params[1];
+    return { rows: [] };
+  }
+  if (s.includes('/* FOTOS:PAGINA_SITE */')) {
+    const p = fichasSite.find(x => x.skus && x.skus[params[0]]);
+    return { rows: p ? [{ foto: p.foto, skus: p.skus }] : [] };
+  }
+  if (s.includes('/* FOTOS:GRAVAR_SE_NAO_TEM */')) {
+    const [sku, imagem, tamanho] = params;
+    if (produtoFotos[sku]) return { rows: [] };
+    produtoFotosRelogio += 1000;
+    produtoFotos[sku] = { imagem, tamanho, versao: produtoFotosRelogio };
+    return { rows: [{ versao: String(produtoFotosRelogio) }] };
+  }
+  // fichas_site - routes/fichasTecnicas.js (/site)
+  if (s.includes('/* FICHAS_SITE:LISTA */')) return { rows: fichasSite.map(x => ({ ...x })) };
+  if (s.includes('/* FICHAS_SITE:APAGAR */')) { fichasSite = []; return { rows: [] }; }
+  if (s.includes('/* FICHAS_SITE:GRAVAR */')) {
+    const [urls, titulos, categorias, textos, beneficios, indicados, acompanhas, fotos, skus, lidos] = params;
+    fichasSite = urls.map((url, i) => ({ url, titulo: titulos[i], categoria: categorias[i], texto: textos[i], beneficios: JSON.parse(beneficios[i]),
+      indicado: indicados[i], acompanha: acompanhas[i], foto: fotos[i], skus: JSON.parse(skus[i]), lido_em: lidos[i] }));
     return { rows: [] };
   }
   if (s.includes('/* FOTOS:APAGAR */')) { delete produtoFotos[params[0]]; return { rows: [] }; }
@@ -2544,6 +2566,7 @@ module.exports = {
   __getOcorrencias: () => ocorrencias,
   __getNovidades: () => novidades,
   __getProdutoFotos: () => produtoFotos,
+  __getFichasSite: () => fichasSite,
   __getImportacoesEmail: () => importacoesEmail,
   __getPedidosBloqueados: () => pedidosBloqueados,
   __getAvisosCancelamento: () => avisosCancelamento,

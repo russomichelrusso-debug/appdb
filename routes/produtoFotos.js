@@ -16,6 +16,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { gerarMiniaturaSemTravar } = require('./lib/miniaturaFoto');
+const { fotoDoSkuNaPagina, URL_FOTO } = require('./lib/fichasSite');
 
 const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 const FOTO_MIN_BYTES = 1024;
@@ -229,6 +230,50 @@ router.put('/:sku', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao salvar a foto do produto.' });
+  }
+});
+
+// "Usar a foto do site" (produto sem foto, 10/2026): a foto vem da página do
+// cortag.com onde o SKU está impresso (tabela fichas_site), nunca de um endereço
+// mandado pelo app - o servidor só baixa de cortag.com/wp-content/uploads. É só
+// sugestão: produto que já tem foto não é trocado (409).
+const PRAZO_FOTO_SITE_MS = 15000;
+router.post('/:sku/do-site', async (req, res) => {
+  const sku = String(req.params.sku || '');
+  if (!CODIGO_SKU_REGEX.test(sku)) return res.status(422).json({ erro: 'Código de produto inválido.' });
+  try {
+    const p = await pool.query(`/* FOTOS:PRODUTOS */ SELECT codigo_sku, nome FROM produtos WHERE codigo_sku = ANY($1::text[])`, [[sku]]);
+    if (!p.rows.length) return res.status(404).json({ erro: 'Produto não encontrado no catálogo.' });
+    const pg = await pool.query(`/* FOTOS:PAGINA_SITE */ SELECT foto, skus FROM fichas_site WHERE skus ? $1 LIMIT 1`, [sku.toUpperCase()]);
+    const url = pg.rows.length ? fotoDoSkuNaPagina(pg.rows[0], sku.toUpperCase()) : '';
+    if (!url || !URL_FOTO.test(url)) return res.status(404).json({ erro: 'Este produto não tem foto no site da Cortag.' });
+    let imagem;
+    try {
+      const r = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(PRAZO_FOTO_SITE_MS) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (Number(r.headers && r.headers.get && r.headers.get('content-length')) > FOTO_MAX_BYTES) {
+        return res.status(422).json({ erro: 'A foto do site é grande demais: tire uma foto ou escolha da galeria.' });
+      }
+      imagem = Buffer.from(await r.arrayBuffer());
+    } catch (e) {
+      console.error(`Foto do site (${sku}): ${e.message}`);
+      return res.status(502).json({ erro: 'Não consegui baixar a foto do site da Cortag. Tente de novo mais tarde.' });
+    }
+    if (!ehJpeg(imagem)) return res.status(422).json({ erro: 'A foto do site não é JPEG: tire uma foto ou escolha da galeria.' });
+    if (imagem.length > FOTO_MAX_BYTES) return res.status(422).json({ erro: 'A foto do site é grande demais: tire uma foto ou escolha da galeria.' });
+    if (imagem.length < FOTO_MIN_BYTES) return res.status(422).json({ erro: 'A foto do site veio vazia: tire uma foto ou escolha da galeria.' });
+    const r = await pool.query(
+      `/* FOTOS:GRAVAR_SE_NAO_TEM */ INSERT INTO produto_fotos (codigo_sku, imagem, tamanho, atualizado_em, atualizado_por)
+       VALUES ($1, $2, $3, now(), $4)
+       ON CONFLICT (codigo_sku) DO NOTHING
+       RETURNING (EXTRACT(EPOCH FROM atualizado_em) * 1000)::bigint AS versao`,
+      [sku, imagem, imagem.length, req.usuario ? req.usuario.id : null]
+    );
+    if (!r.rows.length) return res.status(409).json({ erro: 'Este produto já tem foto.' });
+    res.json({ codigo_sku: sku, versao: Number(r.rows[0].versao) });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao salvar a foto do site.' });
   }
 });
 

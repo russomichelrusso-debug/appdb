@@ -218,6 +218,26 @@ CREATE TABLE IF NOT EXISTS fichas_tecnicas (
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Conteúdo das páginas de produto do site oficial (cortag.com/pt-br/produto/),
+-- lido pelo scripts/raspar-site-cortag.js e importado pelo Painel: uma linha
+-- por página, com o texto de venda, os benefícios, o "Indicado para" e, por
+-- SKU impresso na página, a tabela da medida e a foto. Fica à parte da
+-- fichas_tecnicas de propósito (decisão do usuário: o texto do site não
+-- substitui a descrição de hoje). Cada importação troca a foto inteira.
+CREATE TABLE IF NOT EXISTS fichas_site (
+  url TEXT PRIMARY KEY,
+  titulo TEXT NOT NULL DEFAULT '',
+  categoria TEXT NOT NULL DEFAULT '',
+  texto TEXT NOT NULL DEFAULT '',
+  beneficios JSONB NOT NULL DEFAULT '[]',
+  indicado TEXT NOT NULL DEFAULT '',
+  acompanha TEXT NOT NULL DEFAULT '',
+  foto TEXT NOT NULL DEFAULT '',
+  skus JSONB NOT NULL DEFAULT '{}',
+  lido_em DATE,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Códigos oficiais (EAN-13 da unidade e DUN-14 da caixa fechada) por SKU -
 -- corrige/completa o EAN que já vem no catálogo de preços, e adiciona o
 -- código da caixa fechada, usado no Levantamento pra somar a quantidade da
@@ -803,6 +823,7 @@ ALTER TABLE sessoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE previsao_estoque ENABLE ROW LEVEL SECURITY;
 ALTER TABLE configuracoes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fichas_tecnicas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE fichas_site ENABLE ROW LEVEL SECURITY;
 ALTER TABLE codigos_produto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pedidos_oficiais_itens ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pedidos_pendentes_pagamento ENABLE ROW LEVEL SECURITY;
