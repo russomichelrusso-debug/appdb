@@ -202,6 +202,7 @@ async function listarUrls() {
   const urls = new Set();
   for (const sm of sitemaps) {
     const xml = await baixar(sm);
+    if (xml == null) { console.warn(`404: ${sm}`); continue; }
     for (const m of xml.matchAll(/<loc>([^<]+)<\/loc>/g)) if (m[1].startsWith(PREFIXO)) urls.add(m[1]);
     await esperar(PAUSA_MS);
   }
