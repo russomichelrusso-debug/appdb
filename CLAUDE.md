@@ -1542,7 +1542,9 @@ Supabase, sem PR — não é mudança de código.
     abreviação do catálogo (palavra digitada que começa com a do nome, 4+ letras: "desempenadeira" acha "DESEMP.", vale pra toda
     busca); sem nenhum resultado, tenta sem cada número (o 4" do "REBOLO COPO CONICO 4 M14 G120 100MM", o "100PC" da cunha) e vai
     pra "Pra escolher", nunca pronto. Na ordem da busca, faltar palavra de 3+ letras pesa mais que faltar unidade ("mm"). Conferido
-    no catálogo real: o próprio nome em 1º continua 1.792 de 1.793. A busca "Buscar outro produto" da linha "Pra escolher" ficava
+    no catálogo real: o próprio nome em 1º continua 1.792 de 1.793. Também com resultado, se o melhor achado tem palavra faltando,
+    tenta sem cada número e põe na frente quem tem todas (foto real: "NIVELADOR 1,5MM ECO 50PCS" só oferecia o SUPRA "C/ 50 UN"
+    - o "50" é o pacote e o ECO do catálogo vem em C/500). A busca "Buscar outro produto" da linha "Pra escolher" ficava
     espremida na linha dos botões; agora vai em cima deles, na largura toda.
   - **KAEF sempre por último** (10/2026, pedido do usuário: "menor peso, prioridade só quando buscados"; 44 produtos com "KAEF" no
     nome): `kaefPorUltimo` (`<motor-busca>`, `p._kaef` no `prepararProdutoParaBusca`) põe os KAEF no fim da busca (Pedido, aba

@@ -14308,9 +14308,9 @@
         let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
         if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
         else achados = item.termo ? buscarComPontos(item.termo) : [];
-        if (!achados.length) {
-          // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
-          // "CUNHA SLIM 100PC"): tenta sem cada número e o vendedor escolhe (nunca vai pronto)
+        // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
+        // "CUNHA SLIM 100PC"; "NIVELADOR 1,5MM ECO 50PCS": o ECO vem em C/500): tenta sem cada número
+        const semCadaNumero = () => {
           const pal = normalizarBusca(item.termo || '').split(' ');
           const vistos = new Set(), sem = [];
           pal.forEach((w, i) => {
@@ -14319,9 +14319,12 @@
               if (!vistos.has(x.p.c)) { vistos.add(x.p.c); sem.push(x); }
             }
           });
-          if (!sem.length) return { estado: 'nao', produto: null, opcoes: [], medida };
-          sem.sort((x, y) => (!!x.p._kaef - !!y.p._kaef) || (y.topo - x.topo) || x.nivel - y.nivel || x.pen - y.pen);
-          const ops = sem.map(x => x.p);
+          return sem.sort((x, y) => (!!x.p._kaef - !!y.p._kaef) || (y.topo - x.topo) || x.nivel - y.nivel || x.pen - y.pen);
+        };
+        if (!achados.length) {
+          // sem nenhum achado: o vendedor escolhe entre os achados sem um número (nunca vai pronto)
+          const ops = semCadaNumero().map(x => x.p);
+          if (!ops.length) return { estado: 'nao', produto: null, opcoes: [], medida };
           return { estado: 'escolher', produto: null, opcoes: ops.slice(0, 6), maisOpcoes: Math.max(0, ops.length - 6), medida };
         }
         const a = achados[0];
@@ -14329,6 +14332,12 @@
         const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
         const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen && !!x.p._kaef === !!a.p._kaef;
         let opcoes = (exato ? achados.filter(empatado) : achados.slice(0, 4)).map(x => x.p);
+        if (!exato) {
+          // achado com palavra faltando (o "eco"): os que, sem um número, têm todas as palavras vêm
+          // na frente - o número costuma ser o tamanho do pacote ("50PCS") e o catálogo escreve outro
+          const melhores = semCadaNumero().filter(x => x.topo || x.nivel < a.nivel).map(x => x.p);
+          if (melhores.length) opcoes = [...melhores, ...opcoes.filter(p => !melhores.includes(p))];
+        }
         if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
         const queCompra = opcoes.filter(p => comprados.has(p.c));
         if (queCompra.length === 1 && exato) return pronto(queCompra[0]);
