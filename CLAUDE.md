@@ -1528,6 +1528,27 @@ Supabase, sem PR — não é mudança de código.
     vírgula ("1.234,56") não muda. Junto, `normalizarBusca` separa a letra do número depois dela ("7x80" = "7 x 80", "M14" = "M 14",
     dos dois lados): o termo da lista virava "7x80" e o "RODEL Ø7 X 80 mm" não era achado nem pelo nome. Conferido no catálogo: os
     1.719 produtos continuam em 1º buscando o próprio nome.
+  - **Cliente sugerido pela lista** (10/2026, pergunta do usuário: "o app não consegue ver o WhatsApp de origem?" - não: o compartilhar
+    do Android só manda o conteúdo, sem o número). O app procura pistas no que chegou (`clienteDaListaCliente`, `<motor-lista>`): **CNPJ**
+    no texto/PDF (`cnpjsDaListaCliente`, sem o da Cortag) ou lido na foto pelo Gemini (`cnpj` na resposta de `/itens-da-imagem`, guardado
+    junto da foto que espera internet) que bate com um cliente só; senão o **nome de quem mandou** no texto copiado de várias mensagens
+    ("[10:30, 28/10/2026] Marcos Silva: …", `remetenteDaListaWhatsapp`; o prefixo sai das linhas) contra o nome do WhatsApp do comprador
+    cadastrado (todas as palavras do cadastro no nome do contato; o mais específico vence, empate = nada). **Só o CNPJ escolhe sozinho** (sem cliente no
+    orçamento e sem outro cliente guardado com a foto); pelo nome, ou com outro cliente aberto, a conferência mostra "A lista parece ser de X · Usar" (`#lcUsarSugeridoBtn`, que
+    troca pelo `deixarClienteAnterior`); quando bate, o "Pra" mostra "✓ pelo CNPJ da lista"/"pelo WhatsApp de quem mandou".
+  - **Foto com código do cliente e "CORTAG"** (10/2026, foto real: 7 de 19 linhas em "Não achei", "17205 CORTAG DISCO FLAP AZUL G60
+    4.1/2", "8883 CORTAG DESEMPENADEIRA ESTRIADA"): a marca "cortag" sai da busca da lista (`ENFEITES_LISTA`; quase nenhum nome do
+    catálogo tem); número de 4 dígitos no começo da linha com quantidade conhecida é o código do cliente e sai; a busca aceita a
+    abreviação do catálogo (palavra digitada que começa com a do nome, 4+ letras: "desempenadeira" acha "DESEMP.", vale pra toda
+    busca); sem nenhum resultado, tenta sem cada número (o 4" do "REBOLO COPO CONICO 4 M14 G120 100MM", o "100PC" da cunha) e vai
+    pra "Pra escolher", nunca pronto. Na ordem da busca, faltar palavra de 3+ letras pesa mais que faltar unidade ("mm"). Conferido
+    no catálogo real: o próprio nome em 1º continua 1.792 de 1.793. A busca "Buscar outro produto" da linha "Pra escolher" ficava
+    espremida na linha dos botões; agora vai em cima deles, na largura toda.
+  - **KAEF sempre por último** (10/2026, pedido do usuário: "menor peso, prioridade só quando buscados"; 44 produtos com "KAEF" no
+    nome): `kaefPorUltimo` (`<motor-busca>`, `p._kaef` no `prepararProdutoParaBusca`) põe os KAEF no fim da busca (Pedido, aba
+    Produtos, lista do cliente, "Pela ficha técnica") e da grade de cada família do Catálogo. Na frente só com "kaef" digitado
+    (`buscaPedeKaef`, "kae" já vale) ou o código/nome exato dele. Na lista do cliente KAEF não empata com outra marca (não vira
+    "Pra escolher" por causa dele).
 
 ## O que já tentamos e não deu certo
 

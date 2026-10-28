@@ -4606,6 +4606,40 @@
       display: none;
     }
 
+    .lcParaPor {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .lcSugerido {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 48px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border: 1px solid var(--blue);
+      border-radius: var(--r-md);
+      background: var(--info-bg);
+      color: var(--ink);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .lcSugerido span {
+      flex: 1;
+    }
+
+    .lcSugerido em {
+      font-style: normal;
+      font-weight: 700;
+      color: var(--blue);
+    }
+
     .lcPara small {
       font-size: 12px;
       color: var(--gray);
@@ -13814,6 +13848,16 @@
       function prepararProdutoParaBusca(p) {
         p._n = normalizarBusca(p.n);
         p._tok = p._n ? p._n.split(' ') : [];
+        p._kaef = p._tok.includes('kaef');
+      }
+      // KAEF (outra marca, 10/2026, pedido do usuário): sempre por último nas listas, na frente só quando a
+      // busca pede ("kaef" digitado) ou acha o código/nome exato dele (topo nível 0/1)
+      const buscaPedeKaef = (palavras) => palavras.some(w => w.length >= 3 && 'kaef'.startsWith(w));
+      function kaefPorUltimo(lista, pedeKaef, produtoDe, exato) {
+        if (pedeKaef) return lista;
+        const fim = [], comeco = [];
+        for (const x of lista) (produtoDe(x)._kaef && !(exato && exato(x)) ? fim : comeco).push(x);
+        return fim.length ? comeco.concat(fim) : lista;
       }
       // Palavras de ligação: o vendedor digita "disco de corte", o catálogo
       // diz "DISCO CORTE" - não contam se o produto não tiver.
@@ -13869,6 +13913,8 @@
           if (tok === w) return 0;
           if (tok.startsWith(w)) best = Math.min(best, 1);
           else if (w.length >= 3 && tok.includes(w)) best = Math.min(best, 2);
+          // o catálogo abrevia: "DESEMPENADEIRA" digitada acha o "DESEMP." do nome
+          else if (tok.length >= 4 && w.startsWith(tok) && !ehNumeroBusca(tok)) best = Math.min(best, 2);
         }
         if (best < Infinity || w.length < 3) return best;
         const md = wordMaxDist(w);
@@ -13926,14 +13972,16 @@
           }
           if (achadasFortes < minFortes || achadas + numeros.length === 0) continue;
           const frase = words.length > 1 && (' ' + p._n + ' ').includes(' ' + words.join(' ')) ? 0 : 1;
-          resto.push([textos.length - achadas, pen, frase, p]);
+          // falta palavra que diz o produto ("segmentado") pesa mais que falta de unidade ("mm")
+          resto.push([textos.length - achadas, fortes.length - achadasFortes, pen, frase, p]);
         }
 
         // empate: ordem natural do nome (16 mm, 19 mm, 25 mm... 152 mm - não 152 antes de 16)
         const natural = (x, y) => COLLATOR_BUSCA.compare(x._n, y._n); // _n: sem acento e sem espaço duplo
         topo.sort((a, b) => a[0] - b[0] || natural(a[1], b[1]));
-        resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || natural(a[3], b[3]));
-        return [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[3], topo: false, nivel: r[0], pen: r[1] }))];
+        resto.sort((a, b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2] || a[3] - b[3] || natural(a[4], b[4]));
+        const todosAchados = [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[4], topo: false, nivel: r[0], pen: r[2] }))];
+        return kaefPorUltimo(todosAchados, buscaPedeKaef(todas), x => x.p, x => x.topo && x.nivel <= 1);
       }
       // Busca pela ficha técnica (10/2026, pedido do usuário: "pesquisar mármore ou
       // pedras naturais e ver qual disco ou broca corta"): pra que o produto serve
@@ -13996,7 +14044,7 @@
           }
           if (ok && soNaFicha) achados.push(p);
         }
-        return achados.slice(0, 60);
+        return kaefPorUltimo(achados, buscaPedeKaef(todas), p => p).slice(0, 60);
       }
       // </motor-busca>
 
@@ -14016,7 +14064,8 @@
         'ml', 'v', 'w', 'hp', 'graus', 'grau', 'polegada', 'polegadas']);
       const PALAVRAS_QTD_LISTA = new Set(['qtd', 'qtde', 'qt', 'quant', 'quantidade']);
       // pedido escrito em volta do produto: não ajuda a busca
-      const ENFEITES_LISTA = new Set(['quero', 'preciso', 'manda', 'mandar', 'enviar', 'envia', 'favor', 'pf', 'pfv', 'pfvr', 'por', 'mais', 'tem', 'ai']);
+      const ENFEITES_LISTA = new Set(['quero', 'preciso', 'manda', 'mandar', 'enviar', 'envia', 'favor', 'pf', 'pfv', 'pfvr', 'por', 'mais', 'tem', 'ai',
+        'cortag']); // a marca: quase nenhum nome do catálogo tem (e a lista do cliente escreve "17205 CORTAG DISCO FLAP...")
       // linha que não é produto: saudação, "segue o pedido:", assinatura
       const SAUDACAO_LISTA = /^((bom dia|boa tarde|boa noite|ola|oi|segue|grato|grata|att|abs|valeu|tudo bem|pedido|orcamento|lista|total|subtotal|frete|cnpj|cpf|telefone|fone|endereco|vendedor|cliente|validade|prazo|condicao|pagamento|observac)\b|obrigad|atencios|abraco)/;
       const ehInteiroLista = (t) => /^\d+$/.test(t);
@@ -14106,7 +14155,8 @@
       // Mensagem inteira -> linhas com produto. Tira marcador de lista ("-", "•") e a numeração
       // "1.", "2)" quando as linhas vêm numeradas em sequência (senão o "1." seria quantidade).
       function linhasDaListaCliente(texto, modoPdf) {
-        const brutas = String(texto || '').split(/\r?\n/).map(l => l.replace(/^\s*[-*•·>–—]+\s*/, '').trim()).filter(Boolean);
+        const brutas = String(texto || '').split(/\r?\n/)
+          .map(l => l.replace(PREFIXO_WHATSAPP_LISTA, '').replace(/^\s*[-*•·>–—]+\s*/, '').trim()).filter(Boolean);
         const numeradas = brutas.map(l => (l.match(/^(\d{1,3})\s*[).\-–]\s+\S/) || [])[1]).filter(Boolean).map(Number);
         const emSequencia = numeradas.length >= 2 && numeradas.every((n, i) => n === i + 1);
         const linhas = [];
@@ -14166,11 +14216,26 @@
         let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
         if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
         else achados = item.termo ? buscarComPontos(item.termo) : [];
-        if (!achados.length) return { estado: 'nao', produto: null, opcoes: [], medida };
+        if (!achados.length) {
+          // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
+          // "CUNHA SLIM 100PC"): tenta sem cada número e o vendedor escolhe (nunca vai pronto)
+          const pal = normalizarBusca(item.termo || '').split(' ');
+          const vistos = new Set(), sem = [];
+          pal.forEach((w, i) => {
+            if (!ehNumeroBusca(w)) return;
+            for (const x of buscarComPontos(pal.filter((_, k) => k !== i).join(' ')).slice(0, 6)) {
+              if (!vistos.has(x.p.c)) { vistos.add(x.p.c); sem.push(x); }
+            }
+          });
+          if (!sem.length) return { estado: 'nao', produto: null, opcoes: [], medida };
+          sem.sort((x, y) => (!!x.p._kaef - !!y.p._kaef) || (y.topo - x.topo) || x.nivel - y.nivel || x.pen - y.pen);
+          const ops = sem.map(x => x.p);
+          return { estado: 'escolher', produto: null, opcoes: ops.slice(0, 6), maisOpcoes: Math.max(0, ops.length - 6), medida };
+        }
         const a = achados[0];
         if (a.topo && a.nivel <= 1) return pronto(a.p);
         const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
-        const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen;
+        const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen && !!x.p._kaef === !!a.p._kaef;
         let opcoes = (exato ? achados.filter(empatado) : achados.slice(0, 4)).map(x => x.p);
         if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
         const queCompra = opcoes.filter(p => comprados.has(p.c));
@@ -14214,8 +14279,51 @@
       function linhaComQuantidadeLista(texto, qtd, unidade) {
         const item = interpretarLinhaLista(texto, true);
         if (!item || qtd == null) return item;
-        const termo = termoDasPalavrasLista(palavrasDaLinhaLista(item.texto).filter(t => !/^\d{5,}$/.test(t)));
+        // o número de 4+ dígitos no começo é o código DO CLIENTE ("3860 CORTAG APLICADOR..." da foto real de 10/2026)
+        const pal = palavrasDaLinhaLista(item.texto);
+        const termo = termoDasPalavrasLista(pal.filter((t, i) => !/^\d{5,}$/.test(t)
+          && !(i === 0 && /^\d{4}$/.test(t) && !MEDIDAS_LISTA.has(pal[1]))));
         return { ...item, termo, qtd, unidade, talvez: false };
+      }
+      // Mensagens copiadas/compartilhadas do WhatsApp vêm com data e quem mandou na frente:
+      // "[10:30, 28/10/2026] Marcos Mat. São José: colher 12" (copiar) ou
+      // "28/10/2026 10:30 - Marcos Mat. São José: colher 12" (exportar conversa).
+      const PREFIXO_WHATSAPP_LISTA = /^\s*(\[[^\]]{3,40}\]|\d{1,2}\/\d{1,2}(\/\d{2,4})?,?\s+\d{1,2}:\d{2}\s*-)\s*[^:\n]{1,60}:\s+/;
+      // Quem mandou: o nome do contato no celular do vendedor (o WhatsApp não manda o número)
+      function remetenteDaListaWhatsapp(texto) {
+        for (const l of String(texto || '').split(/\r?\n/)) {
+          const m = l.match(/^\s*(?:\[[^\]]{3,40}\]|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?,?\s+\d{1,2}:\d{2}\s*-)\s*([^:\n]{1,60}):\s+/);
+          if (m && !/^(voce|você|you)$/i.test(m[1].trim())) return m[1].trim();
+        }
+        return '';
+      }
+      // CNPJs escritos na lista/PDF (com ou sem pontuação), menos os de fora (o da Cortag)
+      function cnpjsDaListaCliente(texto, fora) {
+        const achados = String(texto || '').match(/\b\d{2}\.?\d{3}\.?\d{3}\s*\/?\s*\d{4}\s*-?\s*\d{2}\b/g) || [];
+        const nao = new Set(fora || []);
+        return [...new Set(achados.map(c => c.replace(/\D/g, '')).filter(c => c.length === 14 && !nao.has(c)))];
+      }
+      // De quem é a lista: pelo CNPJ (cliente com esse documento) ou pelo nome de quem mandou no
+      // WhatsApp (todas as palavras do "WhatsApp do comprador" cadastrado estão no nome do contato).
+      // Só com um cliente só; senão null. { cliente, motivo: 'cnpj' | 'whatsapp' }
+      function clienteDaListaCliente(pistas, clientes) {
+        const lista = clientes || [];
+        for (const cnpj of (pistas && pistas.cnpjs) || []) {
+          const iguais = lista.filter(c => String(c.documento || '').replace(/\D/g, '') === cnpj);
+          if (iguais.length === 1) return { cliente: iguais[0], motivo: 'cnpj' };
+        }
+        const palavras = (t) => normalize(t).split(/[^a-z0-9]+/).filter(w => w.length >= 3);
+        const doContato = new Set(palavras((pistas && pistas.remetente) || ''));
+        if (!doContato.size) return null;
+        // o nome mais completo que bate vence ("Marcos Silva" na frente de "Marcos"); empate = nada
+        let melhor = [], tamanho = 0;
+        for (const c of lista) {
+          const p = palavras(c.whatsapp_comprador_nome || '');
+          if (!p.length || !p.every(w => doContato.has(w)) || p.length < tamanho) continue;
+          if (p.length > tamanho) { melhor = []; tamanho = p.length; }
+          melhor.push(c);
+        }
+        return melhor.length === 1 ? { cliente: melhor[0], motivo: 'whatsapp' } : null;
       }
       // Na tela de escolha: tira o começo que todas as opções têm ("DESEMPENADEIRA INOX CABO
       // REMOVÍVEL LISA - COM CABO" / "... - SEM CABO" -> "COM CABO" / "SEM CABO"), pra caber no botão.
@@ -29293,6 +29401,7 @@
           m.get(f).produtos.push(p);
         }
         // pela numeração da planilha ("01 - ..."), sem número no fim
+        for (const f of m.values()) f.produtos = kaefPorUltimo(f.produtos, false, p => (p._tok || prepararProdutoParaBusca(p), p));
         const ordem = (x) => { const n = /^\s*(\d+)/.exec(x.chave); return n ? Number(n[1]) : Infinity; };
         return [...m.values()].sort((a, b) => (ordem(a) - ordem(b)) || a.nome.localeCompare(b.nome, 'pt-BR'));
       }
@@ -31577,14 +31686,22 @@
         document.getElementById('listaClienteModal').classList.add('hidden');
       }
       function lcComprados() {
-        const c = (lc && lc.clienteDaLista) || state.levCliente; // lista guardada: o que compra o cliente dela
+        return compradosDoCliente((lc && lc.clienteDaLista) || state.levCliente); // lista guardada: o que compra o cliente dela
+      }
+      function compradosDoCliente(c) {
         if (!c || !c.id) return new Set();
         const lista = COMPRADOS_CACHE.get(c.id) || lerCompradosLS()[c.id] || [];
         return new Set(lista.map(x => x.codigo_sku));
       }
       // itens do <motor-lista> -> linhas da conferência
       function conferirItensDaLista(itens, origem, extra) {
-        const comprados = lcComprados();
+        // de quem é a lista (CNPJ no documento ou nome de quem mandou no WhatsApp). Só o CNPJ, sem cliente
+        // aberto e sem outro cliente guardado com a lista, escolhe sozinho; o resto só sugere (lcUsarSugeridoBtn)
+        const sugerido = extra && extra.pistas ? clienteDaListaCliente(extra.pistas, loadClientesLocais()) : null;
+        const guardado = lc && lc.clienteDaLista;
+        const escolherSozinho = sugerido && sugerido.motivo === 'cnpj' && !state.levCliente
+          && (!guardado || String(guardado.id) === String(sugerido.cliente.id));
+        const comprados = escolherSozinho ? compradosDoCliente(sugerido.cliente) : lcComprados();
         const ctx = { comprados, porCodigo: findByExactCode }; // a mesma do leitor: EAN, DUN, zeros à esquerda
         let ignoradas = 0;
         const linhas = [];
@@ -31604,7 +31721,8 @@
           renderListaCliente();
           return;
         }
-        lc = { ...(lc || {}), fase: 'conferir', origem, linhas, ignoradas, comprados, prontosAbertos: false, ...(extra || {}) };
+        if (escolherSozinho) setLevCliente(sugerido.cliente);
+        lc = { ...(lc || {}), fase: 'conferir', origem, linhas, ignoradas, comprados, sugerido, prontosAbertos: false, ...(extra || {}) };
         renderListaCliente();
       }
       function lcEscolher(l, p) {
@@ -31616,7 +31734,7 @@
       function lerTextoDaLista(texto, origem) {
         const itens = linhasDaListaCliente(texto, origem === 'pdf');
         if (!itens.length) { showToast(origem === 'pdf' ? 'Não achei linhas de produto nesse PDF.' : 'Não achei produto nesse texto — uma linha por produto.', 'erro'); return; }
-        conferirItensDaLista(itens, origem);
+        conferirItensDaLista(itens, origem, { pistas: { cnpjs: cnpjsDaListaCliente(texto, [CORTAG_CNPJ_DIGITS]), remetente: remetenteDaListaWhatsapp(texto) } });
       }
       // Foto -> JPEG de até 1600 px e 900 KB (a mesma redução da foto do produto, fundo branco no
       // print com transparência): sobe rápido no 4G e cabe no aparelho se ficar guardada
@@ -31672,7 +31790,8 @@
       }
       async function pedirLeituraDaImagem(imagens, signal) {
         const r = await apiFetch('/api/assistente/itens-da-imagem', { method: 'POST', body: JSON.stringify({ imagens }), signal });
-        return (r && Array.isArray(r.itens) ? r.itens : []).map(linhaDaImagemLista).filter(Boolean);
+        const cnpj = r && /^\d{14}$/.test(r.cnpj || '') && r.cnpj !== CORTAG_CNPJ_DIGITS ? r.cnpj : null;
+        return { itens: (r && Array.isArray(r.itens) ? r.itens : []).map(linhaDaImagemLista).filter(Boolean), cnpjs: cnpj ? [cnpj] : [] };
       }
       async function lerImagensDaLista(imagens, origem) {
         if (!lc) return;
@@ -31681,8 +31800,8 @@
         const abortar = new AbortController();
         lc = { ...lc, fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
         renderListaCliente();
-        let itens;
-        try { itens = await pedirLeituraDaImagem(imagens, abortar.signal); }
+        let lido;
+        try { lido = await pedirLeituraDaImagem(imagens, abortar.signal); }
         catch (e) {
           if (lcVelha(g) || abortar.signal.aborted) return;
           if (!e.status) { await guardarListaCliente(imagens, origem); return; } // sem conexão: guarda
@@ -31692,8 +31811,8 @@
         }
         if (lcVelha(g) || abortar.signal.aborted) return;
         lc.abortar = null;
-        if (!itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
-        conferirItensDaLista(itens, origem);
+        if (!lido.itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
+        conferirItensDaLista(lido.itens, origem, { pistas: { cnpjs: lido.cnpjs } });
       }
 
       // ---- lista guardada pra ler quando a internet voltar (IndexedDB: fotos não cabem no localStorage)
@@ -31742,7 +31861,7 @@
             const tent = reg.tentativas || 0;
             if (!agora && (tent >= LC_ESPERAS_MIN.length || (reg.proximaEm && Date.now() < reg.proximaEm))) continue;
             let itens;
-            try { itens = await pedirLeituraDaImagem(reg.imagens); }
+            try { const lido = await pedirLeituraDaImagem(reg.imagens); itens = lido.itens; reg.cnpjs = lido.cnpjs; }
             catch (e) {
               if (!e.status) break; // caiu a conexão: tenta de novo quando voltar
               reg.erro = e.message;
@@ -31800,7 +31919,7 @@
         lcGeracao++;
         lc = { fase: 'conferir', clienteDaLista: reg.cliente || null };
         document.getElementById('listaClienteModal').classList.remove('hidden');
-        conferirItensDaLista(reg.itens, 'foto', { guardadaId: reg.id, rotulo });
+        conferirItensDaLista(reg.itens, 'foto', { guardadaId: reg.id, rotulo, pistas: { cnpjs: reg.cnpjs || [] } });
       }
 
       // ---- tela
@@ -31825,7 +31944,8 @@
           <div class="lcOpcoes">${opcoes}</div>
           ${l.maisOpcoes ? `<div class="lcNota">+${l.maisOpcoes} parecido${l.maisOpcoes > 1 ? 's' : ''} · use a busca se não for nenhum desses</div>` : ''}
           ${l.cod && l.ajuste ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
-          <div class="lcAcoes">${htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
+          ${l.buscando ? htmlBuscaLista(i, l) : ''}
+          <div class="lcAcoes">${l.buscando ? '<span></span>' : htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
         </div>`;
       }
       function htmlLinhaNaoAchei(i, l) {
@@ -31863,7 +31983,12 @@
         const para = document.getElementById('lcParaBtn');
         const clientePara = lc.fase === 'conferir' ? state.levCliente : null;
         para.classList.toggle('hidden', lc.fase !== 'conferir');
-        para.innerHTML = clientePara ? `<small>Pra</small><b>${escapeHtml(clientePara.nome)}</b><em>trocar</em>` : '<small>Pra</small><b>Sem cliente</b><em>escolher</em>';
+        const sug = lc.fase === 'conferir' ? lc.sugerido : null;
+        const porQue = sug ? (sug.motivo === 'cnpj' ? 'pelo CNPJ da lista' : 'pelo WhatsApp de quem mandou') : '';
+        const confere = sug && clientePara && String(sug.cliente.id) === String(clientePara.id);
+        para.innerHTML = clientePara
+          ? `<small>Pra</small><b>${escapeHtml(clientePara.nome)}${confere ? `<span class="lcParaPor">✓ ${escapeHtml(porQue)}</span>` : ''}</b><em>trocar</em>`
+          : '<small>Pra</small><b>Sem cliente</b><em>escolher</em>';
         if (lc.fase === 'entrada') {
           titulo.textContent = 'Colar lista do cliente';
           sub.textContent = state.levCliente ? state.levCliente.nome : '';
@@ -31927,7 +32052,9 @@
         });
         const secao = (cls, nome, idx, fazer) => idx.length ? `<div class="lcSecao ${cls}"><h4>${nome} · ${idx.length}</h4>${idx.map(i => fazer(i, ls[i])).join('')}</div>` : '';
         const resumoProntas = prontas.map(i => { const p = productByCod(ls[i].cod); return `${p ? p.n : ls[i].cod} ×${ls[i].qtd}`; }).join(' · ');
-        corpo.innerHTML = secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
+        const outroSugerido = sug && !confere
+          ? `<button type="button" class="lcSugerido" id="lcUsarSugeridoBtn"><span>A lista parece ser de <b>${escapeHtml(sug.cliente.nome)}</b> (${escapeHtml(porQue)})</span><em>Usar</em></button>` : '';
+        corpo.innerHTML = outroSugerido + secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
           + secao('nao', 'Não achei', nao, htmlLinhaNaoAchei)
           + secao('ajustada', 'Quantidade ajustada', ajustadas, htmlLinhaPronta)
           + (prontas.length ? `<div class="lcSecao pronta">
@@ -32026,6 +32153,18 @@
           if (t.id === 'lcGuardarBtn') { guardarListaCliente(lc.imagens, lc.origemImagem || 'foto'); return; }
           if (t.id === 'lcVoltarBtn') { lc.fase = 'entrada'; renderListaCliente(); return; }
           if (t.id === 'lcPorBtn') { porListaNoOrcamento(); return; }
+          if (t.id === 'lcUsarSugeridoBtn' && lc.sugerido) {
+            const g = lcGeracao, novo = lc.sugerido.cliente, anterior = state.levCliente;
+            // o mesmo cuidado do ⇄ do card: pergunta antes de largar o orçamento/levantamento do anterior
+            if (anterior && String(anterior.id) !== String(novo.id) && !await deixarClienteAnterior(anterior, novo)) return;
+            if (lcVelha(g)) return;
+            setLevCliente(novo);
+            lc.clienteDaLista = null;
+            lc.comprados = lcComprados();
+            for (const l of lc.linhas || []) l.jaCompra = !!l.cod && lc.comprados.has(l.cod);
+            renderListaCliente();
+            return;
+          }
           if (t.id === 'lcLerGuardadasBtn') { await lerListasGuardadas(true); if (lc && lc.fase === 'guardadas') { lc.regs = await listasGuardadas(); renderListaCliente(); } return; }
           if (t.dataset.lcAbrirGuardada) { const reg = (lc.regs || []).find(r => r.id === t.dataset.lcAbrirGuardada); if (reg) abrirListaGuardada(reg); return; }
           if (t.dataset.lcApagarGuardada) {
