@@ -1508,7 +1508,8 @@ Supabase, sem PR — não é mudança de código.
     (`GEMINI_MODEL` troca). **Sem internet a foto fica guardada** (decisão do usuário; IndexedDB `cortag-listas`, a foto sai do aparelho
     depois de lida) e é lida sozinha quando o sinal volta (`lerListasGuardadas`: `online`, voltar pro app, 3 s depois de abrir); faixa
     no Pedido "📋 N listas esperando internet · Ver" / "lida · Conferir". Logout apaga (`apagarListasDoAparelho`). **LGPD**: a foto pode
-    ter nome/CNPJ/telefone do cliente e o plano grátis do Gemini pode usar o que recebe pra treino - conta paga recomendada.
+    ter nome/CNPJ/telefone do cliente e o plano grátis do Gemini pode usar o que recebe pra treino - decisão do usuário (10/2026):
+    **fica no plano grátis**, ciente disso.
   - Também corrigido: o "Montar mix inicial" do Pedido só ganhava o clique com reconhecimento de voz no navegador (`initVoiceSearch`).
   - Fica pra depois: o app no **Compartilhar do WhatsApp** (Web Share Target no `manifest.json` + `sw.js`, só Android instalado).
 
