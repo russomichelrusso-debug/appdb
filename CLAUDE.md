@@ -1544,6 +1544,11 @@ Supabase, sem PR — não é mudança de código.
     pra "Pra escolher", nunca pronto. Na ordem da busca, faltar palavra de 3+ letras pesa mais que faltar unidade ("mm"). Conferido
     no catálogo real: o próprio nome em 1º continua 1.792 de 1.793. A busca "Buscar outro produto" da linha "Pra escolher" ficava
     espremida na linha dos botões; agora vai em cima deles, na largura toda.
+  - **KAEF sempre por último** (10/2026, pedido do usuário: "menor peso, prioridade só quando buscados"; 44 produtos com "KAEF" no
+    nome): `kaefPorUltimo` (`<motor-busca>`, `p._kaef` no `prepararProdutoParaBusca`) põe os KAEF no fim da busca (Pedido, aba
+    Produtos, lista do cliente, "Pela ficha técnica") e da grade de cada família do Catálogo. Na frente só com "kaef" digitado
+    (`buscaPedeKaef`, "kae" já vale) ou o código/nome exato dele. Na lista do cliente KAEF não empata com outra marca (não vira
+    "Pra escolher" por causa dele).
 
 ## O que já tentamos e não deu certo
 

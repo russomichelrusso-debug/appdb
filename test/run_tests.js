@@ -4363,6 +4363,7 @@ async function main() {
         { c: '60650', n: 'DESEMP. PLÁSTICA 12 x 23 cm ESTRIADA', emb: 12 },
         { c: '61750', n: 'REBOLO TIPO COPO CONICO 100 mm G 120 ROSCA M14', emb: 1 },
         { c: '61569', n: 'APLICADOR DE SILICONE PROFISSIONAL 9" - REFORÇADO', emb: 6 },
+        { c: '60709', n: 'COLHER P/ PEDREIRO KAEF CABO PLÁSTICO RETA 08"', emb: 6 },
       ];
       const ctxL = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
       vmL.createContext(ctxL);
@@ -4477,6 +4478,11 @@ async function main() {
         assert((des.produto && des.produto.c === '60650') || (des.opcoes || []).some(p => p.c === '60650'), `lista do cliente: "DESEMPENADEIRA" acha o "DESEMP." do catálogo: ${des.estado}`);
         const reb = daFoto('20661 CORTAG REBOLO COPO CONICO 4 M14 G120 100MM');
         assert(reb.estado === 'escolher' && reb.opcoes[0].c === '61750', `lista do cliente: número que o catálogo não tem vira escolha, não "não achei": ${reb.estado}`);
+        // KAEF (outra marca) sempre por último, na frente só quando buscado (pedido do usuário, 10/2026)
+        const kaefFim = ctxL.buscarComPontos('colher pedreiro 08').map(x => x.p.c);
+        const kaefBuscado = ctxL.buscarComPontos('colher kaef').map(x => x.p.c);
+        assert(kaefFim[kaefFim.length - 1] === '60709' && kaefBuscado[0] === '60709' && ctxL.buscarComPontos('60709')[0].p.c === '60709',
+          `busca: KAEF por último, primeiro quando buscado: ${kaefFim.join(',')} / ${kaefBuscado.join(',')}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

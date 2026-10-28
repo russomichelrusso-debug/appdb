@@ -13848,6 +13848,16 @@
       function prepararProdutoParaBusca(p) {
         p._n = normalizarBusca(p.n);
         p._tok = p._n ? p._n.split(' ') : [];
+        p._kaef = p._tok.includes('kaef');
+      }
+      // KAEF (outra marca, 10/2026, pedido do usuário): sempre por último nas listas, na frente só quando a
+      // busca pede ("kaef" digitado) ou acha o código/nome exato dele (topo nível 0/1)
+      const buscaPedeKaef = (palavras) => palavras.some(w => w.length >= 3 && 'kaef'.startsWith(w));
+      function kaefPorUltimo(lista, pedeKaef, produtoDe, exato) {
+        if (pedeKaef) return lista;
+        const fim = [], comeco = [];
+        for (const x of lista) (produtoDe(x)._kaef && !(exato && exato(x)) ? fim : comeco).push(x);
+        return fim.length ? comeco.concat(fim) : lista;
       }
       // Palavras de ligação: o vendedor digita "disco de corte", o catálogo
       // diz "DISCO CORTE" - não contam se o produto não tiver.
@@ -13970,7 +13980,8 @@
         const natural = (x, y) => COLLATOR_BUSCA.compare(x._n, y._n); // _n: sem acento e sem espaço duplo
         topo.sort((a, b) => a[0] - b[0] || natural(a[1], b[1]));
         resto.sort((a, b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2] || a[3] - b[3] || natural(a[4], b[4]));
-        return [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[4], topo: false, nivel: r[0], pen: r[2] }))];
+        const todosAchados = [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[4], topo: false, nivel: r[0], pen: r[2] }))];
+        return kaefPorUltimo(todosAchados, buscaPedeKaef(todas), x => x.p, x => x.topo && x.nivel <= 1);
       }
       // Busca pela ficha técnica (10/2026, pedido do usuário: "pesquisar mármore ou
       // pedras naturais e ver qual disco ou broca corta"): pra que o produto serve
@@ -14033,7 +14044,7 @@
           }
           if (ok && soNaFicha) achados.push(p);
         }
-        return achados.slice(0, 60);
+        return kaefPorUltimo(achados, buscaPedeKaef(todas), p => p).slice(0, 60);
       }
       // </motor-busca>
 
@@ -14217,14 +14228,14 @@
             }
           });
           if (!sem.length) return { estado: 'nao', produto: null, opcoes: [], medida };
-          sem.sort((x, y) => (y.topo - x.topo) || x.nivel - y.nivel || x.pen - y.pen);
+          sem.sort((x, y) => (!!x.p._kaef - !!y.p._kaef) || (y.topo - x.topo) || x.nivel - y.nivel || x.pen - y.pen);
           const ops = sem.map(x => x.p);
           return { estado: 'escolher', produto: null, opcoes: ops.slice(0, 6), maisOpcoes: Math.max(0, ops.length - 6), medida };
         }
         const a = achados[0];
         if (a.topo && a.nivel <= 1) return pronto(a.p);
         const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
-        const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen;
+        const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen && !!x.p._kaef === !!a.p._kaef;
         let opcoes = (exato ? achados.filter(empatado) : achados.slice(0, 4)).map(x => x.p);
         if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
         const queCompra = opcoes.filter(p => comprados.has(p.c));
@@ -29390,6 +29401,7 @@
           m.get(f).produtos.push(p);
         }
         // pela numeração da planilha ("01 - ..."), sem número no fim
+        for (const f of m.values()) f.produtos = kaefPorUltimo(f.produtos, false, p => (p._tok || prepararProdutoParaBusca(p), p));
         const ordem = (x) => { const n = /^\s*(\d+)/.exec(x.chave); return n ? Number(n[1]) : Infinity; };
         return [...m.values()].sort((a, b) => (ordem(a) - ordem(b)) || a.nome.localeCompare(b.nome, 'pt-BR'));
       }
