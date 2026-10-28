@@ -1536,6 +1536,14 @@ Supabase, sem PR — não é mudança de código.
     cadastrado (todas as palavras do cadastro no nome do contato; o mais específico vence, empate = nada). **Só o CNPJ escolhe sozinho** (sem cliente no
     orçamento e sem outro cliente guardado com a foto); pelo nome, ou com outro cliente aberto, a conferência mostra "A lista parece ser de X · Usar" (`#lcUsarSugeridoBtn`, que
     troca pelo `deixarClienteAnterior`); quando bate, o "Pra" mostra "✓ pelo CNPJ da lista"/"pelo WhatsApp de quem mandou".
+  - **Foto com código do cliente e "CORTAG"** (10/2026, foto real: 7 de 19 linhas em "Não achei", "17205 CORTAG DISCO FLAP AZUL G60
+    4.1/2", "8883 CORTAG DESEMPENADEIRA ESTRIADA"): a marca "cortag" sai da busca da lista (`ENFEITES_LISTA`; quase nenhum nome do
+    catálogo tem); número de 4 dígitos no começo da linha com quantidade conhecida é o código do cliente e sai; a busca aceita a
+    abreviação do catálogo (palavra digitada que começa com a do nome, 4+ letras: "desempenadeira" acha "DESEMP.", vale pra toda
+    busca); sem nenhum resultado, tenta sem cada número (o 4" do "REBOLO COPO CONICO 4 M14 G120 100MM", o "100PC" da cunha) e vai
+    pra "Pra escolher", nunca pronto. Na ordem da busca, faltar palavra de 3+ letras pesa mais que faltar unidade ("mm"). Conferido
+    no catálogo real: o próprio nome em 1º continua 1.792 de 1.793. A busca "Buscar outro produto" da linha "Pra escolher" ficava
+    espremida na linha dos botões; agora vai em cima deles, na largura toda.
 
 ## O que já tentamos e não deu certo
 

@@ -4360,6 +4360,9 @@ async function main() {
         { c: '60876', n: 'BATEDOR ARGAMASSA', emb: 6 },
         { c: '61010', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
         { c: '60200', n: 'RODEL Ø7 X 80 mm', emb: 1 },
+        { c: '60650', n: 'DESEMP. PLÁSTICA 12 x 23 cm ESTRIADA', emb: 12 },
+        { c: '61750', n: 'REBOLO TIPO COPO CONICO 100 mm G 120 ROSCA M14', emb: 1 },
+        { c: '61569', n: 'APLICADOR DE SILICONE PROFISSIONAL 9" - REFORÇADO', emb: 6 },
       ];
       const ctxL = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
       vmL.createContext(ctxL);
@@ -4465,6 +4468,15 @@ async function main() {
         assert(soMarcos && soMarcos.cliente.id === 3 && soMarcos.motivo === 'whatsapp',
           'lista do cliente: "Marcos" bate só com o comprador "Marcos" (e por nome o app só sugere, não escolhe sozinho)');
         assert(ctxL.clienteDaListaCliente({ cnpjs: [], remetente: '' }, clientesL) === null, 'lista do cliente: sem pista, sem sugestão');
+        // foto real de 10/2026 (19 linhas, 7 em "Não achei"): código do cliente no começo, a marca no meio,
+        // o catálogo abreviando ("DESEMP.") e um número que o catálogo não escreve (o 4" do rebolo)
+        const daFoto = (texto) => ctxL.produtoDaLinhaLista(ctxL.linhaDaImagemLista({ texto, quantidade: 12 }), { porCodigo: () => null });
+        const apl = daFoto('3860 CORTAG APLICADOR DE SILICONE PROF.');
+        assert(apl.estado === 'pronto' && apl.produto.c === '61569', `lista do cliente: código do cliente e "CORTAG" saem da busca: ${apl.estado}`);
+        const des = daFoto('8883 CORTAG DESEMPENADEIRA ESTRIADA');
+        assert((des.produto && des.produto.c === '60650') || (des.opcoes || []).some(p => p.c === '60650'), `lista do cliente: "DESEMPENADEIRA" acha o "DESEMP." do catálogo: ${des.estado}`);
+        const reb = daFoto('20661 CORTAG REBOLO COPO CONICO 4 M14 G120 100MM');
+        assert(reb.estado === 'escolher' && reb.opcoes[0].c === '61750', `lista do cliente: número que o catálogo não tem vira escolha, não "não achei": ${reb.estado}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

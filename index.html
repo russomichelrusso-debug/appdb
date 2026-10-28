@@ -13903,6 +13903,8 @@
           if (tok === w) return 0;
           if (tok.startsWith(w)) best = Math.min(best, 1);
           else if (w.length >= 3 && tok.includes(w)) best = Math.min(best, 2);
+          // o catálogo abrevia: "DESEMPENADEIRA" digitada acha o "DESEMP." do nome
+          else if (tok.length >= 4 && w.startsWith(tok) && !ehNumeroBusca(tok)) best = Math.min(best, 2);
         }
         if (best < Infinity || w.length < 3) return best;
         const md = wordMaxDist(w);
@@ -13960,14 +13962,15 @@
           }
           if (achadasFortes < minFortes || achadas + numeros.length === 0) continue;
           const frase = words.length > 1 && (' ' + p._n + ' ').includes(' ' + words.join(' ')) ? 0 : 1;
-          resto.push([textos.length - achadas, pen, frase, p]);
+          // falta palavra que diz o produto ("segmentado") pesa mais que falta de unidade ("mm")
+          resto.push([textos.length - achadas, fortes.length - achadasFortes, pen, frase, p]);
         }
 
         // empate: ordem natural do nome (16 mm, 19 mm, 25 mm... 152 mm - não 152 antes de 16)
         const natural = (x, y) => COLLATOR_BUSCA.compare(x._n, y._n); // _n: sem acento e sem espaço duplo
         topo.sort((a, b) => a[0] - b[0] || natural(a[1], b[1]));
-        resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || natural(a[3], b[3]));
-        return [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[3], topo: false, nivel: r[0], pen: r[1] }))];
+        resto.sort((a, b) => a[1] - b[1] || a[0] - b[0] || a[2] - b[2] || a[3] - b[3] || natural(a[4], b[4]));
+        return [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[4], topo: false, nivel: r[0], pen: r[2] }))];
       }
       // Busca pela ficha técnica (10/2026, pedido do usuário: "pesquisar mármore ou
       // pedras naturais e ver qual disco ou broca corta"): pra que o produto serve
@@ -14050,7 +14053,8 @@
         'ml', 'v', 'w', 'hp', 'graus', 'grau', 'polegada', 'polegadas']);
       const PALAVRAS_QTD_LISTA = new Set(['qtd', 'qtde', 'qt', 'quant', 'quantidade']);
       // pedido escrito em volta do produto: não ajuda a busca
-      const ENFEITES_LISTA = new Set(['quero', 'preciso', 'manda', 'mandar', 'enviar', 'envia', 'favor', 'pf', 'pfv', 'pfvr', 'por', 'mais', 'tem', 'ai']);
+      const ENFEITES_LISTA = new Set(['quero', 'preciso', 'manda', 'mandar', 'enviar', 'envia', 'favor', 'pf', 'pfv', 'pfvr', 'por', 'mais', 'tem', 'ai',
+        'cortag']); // a marca: quase nenhum nome do catálogo tem (e a lista do cliente escreve "17205 CORTAG DISCO FLAP...")
       // linha que não é produto: saudação, "segue o pedido:", assinatura
       const SAUDACAO_LISTA = /^((bom dia|boa tarde|boa noite|ola|oi|segue|grato|grata|att|abs|valeu|tudo bem|pedido|orcamento|lista|total|subtotal|frete|cnpj|cpf|telefone|fone|endereco|vendedor|cliente|validade|prazo|condicao|pagamento|observac)\b|obrigad|atencios|abraco)/;
       const ehInteiroLista = (t) => /^\d+$/.test(t);
@@ -14201,7 +14205,22 @@
         let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
         if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
         else achados = item.termo ? buscarComPontos(item.termo) : [];
-        if (!achados.length) return { estado: 'nao', produto: null, opcoes: [], medida };
+        if (!achados.length) {
+          // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
+          // "CUNHA SLIM 100PC"): tenta sem cada número e o vendedor escolhe (nunca vai pronto)
+          const pal = normalizarBusca(item.termo || '').split(' ');
+          const vistos = new Set(), sem = [];
+          pal.forEach((w, i) => {
+            if (!ehNumeroBusca(w)) return;
+            for (const x of buscarComPontos(pal.filter((_, k) => k !== i).join(' ')).slice(0, 6)) {
+              if (!vistos.has(x.p.c)) { vistos.add(x.p.c); sem.push(x); }
+            }
+          });
+          if (!sem.length) return { estado: 'nao', produto: null, opcoes: [], medida };
+          sem.sort((x, y) => (y.topo - x.topo) || x.nivel - y.nivel || x.pen - y.pen);
+          const ops = sem.map(x => x.p);
+          return { estado: 'escolher', produto: null, opcoes: ops.slice(0, 6), maisOpcoes: Math.max(0, ops.length - 6), medida };
+        }
         const a = achados[0];
         if (a.topo && a.nivel <= 1) return pronto(a.p);
         const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
@@ -14249,7 +14268,10 @@
       function linhaComQuantidadeLista(texto, qtd, unidade) {
         const item = interpretarLinhaLista(texto, true);
         if (!item || qtd == null) return item;
-        const termo = termoDasPalavrasLista(palavrasDaLinhaLista(item.texto).filter(t => !/^\d{5,}$/.test(t)));
+        // o número de 4+ dígitos no começo é o código DO CLIENTE ("3860 CORTAG APLICADOR..." da foto real de 10/2026)
+        const pal = palavrasDaLinhaLista(item.texto);
+        const termo = termoDasPalavrasLista(pal.filter((t, i) => !/^\d{5,}$/.test(t)
+          && !(i === 0 && /^\d{4}$/.test(t) && !MEDIDAS_LISTA.has(pal[1]))));
         return { ...item, termo, qtd, unidade, talvez: false };
       }
       // Mensagens copiadas/compartilhadas do WhatsApp vêm com data e quem mandou na frente:
@@ -31910,7 +31932,8 @@
           <div class="lcOpcoes">${opcoes}</div>
           ${l.maisOpcoes ? `<div class="lcNota">+${l.maisOpcoes} parecido${l.maisOpcoes > 1 ? 's' : ''} · use a busca se não for nenhum desses</div>` : ''}
           ${l.cod && l.ajuste ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
-          <div class="lcAcoes">${htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
+          ${l.buscando ? htmlBuscaLista(i, l) : ''}
+          <div class="lcAcoes">${l.buscando ? '<span></span>' : htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
         </div>`;
       }
       function htmlLinhaNaoAchei(i, l) {
