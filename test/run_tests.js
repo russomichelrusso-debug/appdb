@@ -4381,6 +4381,8 @@ async function main() {
         assert(res[1].estado === 'escolher' && res[1].opcoes.length === 2
           && ctxL.rotulosDistintosLista(res[1].opcoes).join('/') === 'COM CABO/SEM CABO',
           `lista do cliente: dois empatados = escolher, rótulo só com o que muda: ${ctxL.rotulosDistintosLista(res[1].opcoes || []).join('/')}`);
+        const niv = ctxL.rotulosDistintosLista([{ n: 'ESPAÇADOR NIVELADOR 1,5 mm' }, { n: 'ESPAÇADOR NIVELADOR 1,5 mm SUPRA - PCT C/ 50 UN.' }]);
+        assert(niv.join('/') === '1,5 mm/1,5 mm SUPRA - PCT C/ 50 UN.', `lista do cliente: rótulo não corta a medida no meio: ${niv.join('/')}`);
         const comCx = ctxL.quantidadeDaLinhaLista(linhas[1], prods[2]);
         assert(comCx.qtd === 24 && /2 cx × 12 = 24/.test(comCx.ajuste), `lista do cliente: caixa vira unidades pela embalagem: ${JSON.stringify(comCx)}`);
         assert(res[2].estado === 'pronto' && qtd(2).qtd === 10 && /500 un → 10 pct de 50/.test(qtd(2).ajuste),
@@ -4400,6 +4402,12 @@ async function main() {
         const pdf = ctxL.linhasDaListaCliente('001 BATEDOR ARGAMASSA 12 UN 15,30 183,60\nTotal R$ 1.234,56', true);
         assert(pdf.length >= 1 && pdf[0].qtd === 12 && pdf[0].unidade === 'un' && pdf[0].termo === 'batedor argamassa',
           `lista do cliente: PDF sem os valores em reais: ${JSON.stringify(pdf.map(l => [l.termo, l.qtd]))}`);
+        // código do produto na linha nunca vira quantidade (achado do revisor-cortag: "colher 60162" ia com 60162 un.)
+        const cods = ctxL.linhasDaListaCliente('Colher pedreiro 60162\nbatedor P60876\n60876 batedor argamassa 4');
+        assert(cods.map(l => l.qtd).join(',') === ',,4' && cods[1].codigos.join() === 'P60876' && cods[2].termo === 'batedor argamassa',
+          `lista do cliente: código não é quantidade nem palavra da busca: ${JSON.stringify(cods.map(l => [l.termo, l.qtd]))}`);
+        const alta = ctxL.quantidadeDaLinhaLista({ qtd: 6000, unidade: null }, prods[6]);
+        assert(/confira/.test(alta.ajuste || ''), 'lista do cliente: quantidade acima de 5.000 vai pra "Quantidade ajustada"');
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

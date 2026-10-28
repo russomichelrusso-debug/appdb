@@ -33,7 +33,8 @@ async function chamarGemini(partes, apiKey, modelo, tentativasRestantes = 2, pra
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{ parts: typeof partes === 'string' ? [{ text: partes }] : partes }],
-        generationConfig: { temperature: 0.1, responseMimeType: 'application/json' },
+        // só ler/classificar: sem "raciocínio" do 2.5 (deixava a resposta lenta); modelo antigo não aceita o campo
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json', ...(/2\.5/.test(modelo) ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
       }),
       signal: AbortSignal.timeout(prazoMs),
     }

@@ -13759,10 +13759,11 @@
           .replace(/[^a-z0-9./]+/g, ' ')
           .replace(/(\d)([a-z])/g, '$1 $2')
           .replace(/(^|\s)[./]+|[./]+(?=\s|$)/g, ' ')
-          // "08" = "8" e "8,0" = "8" (o catálogo tem COLHER ... 08" e BROCA 8,0 mm; "0,5" fica)
+          // "08" = "8", "8,0" = "8" e "1,50" = "1,5" (o catálogo tem COLHER ... 08" e BROCA 8,0 mm;
+          // "0,5" fica, e "1.000" de milhar também - só 1 ou 2 casas depois do ponto)
           .replace(/(^|[^\d.])0+(?=\d)/g, '$1')
-          .replace(/(\d)\.0+(?=[^\d]|$)/g, '$1')
-          .replace(/(\.\d*?[1-9])0+(?=[^\d]|$)/g, '$1')
+          .replace(/(\d)\.00?(?=[^\d]|$)/g, '$1')
+          .replace(/(\.[1-9])0(?=[^\d]|$)/g, '$1')
           .replace(/\s+/g, ' ')
           .trim();
       }
@@ -14000,25 +14001,31 @@
         if (!tok.some(t => /[a-z]{2}/.test(t)) && !codigos.length) return null; // só número/símbolo
         let qtd = null, unidade = null, talvez = false;
         const tirar = new Set();
+        // código/EAN (5+ dígitos, com o "P" do promocional antes) nunca é quantidade nem palavra da busca
+        tok.forEach((t, i) => { if (/^\d{5,}$/.test(t)) { tirar.add(i); if (tok[i - 1] === 'p') tirar.add(i - 1); } });
         const ehMedida = (i) => MEDIDAS_LISTA.has(tok[i + 1]);
         // 1) número com unidade ("2 cx", "500 pc"), "x 12", "qtd 12" ou "12 x colher"
+        const codigo = new Set(tirar);
+        let daQtd = [];
         for (let i = 0; i < tok.length; i++) {
-          if (!ehInteiroLista(tok[i]) || ehMedida(i)) continue;
+          if (!ehInteiroLista(tok[i]) || ehMedida(i) || codigo.has(i)) continue;
           const un = UNIDADES_LISTA[tok[i + 1]];
-          if (un) { qtd = +tok[i]; unidade = un; tirar.clear(); tirar.add(i).add(i + 1); continue; }
-          if (tok[i - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[i - 1])) { qtd = +tok[i]; unidade = null; tirar.clear(); tirar.add(i - 1).add(i); continue; }
-          if (i === 0 && tok[1] === 'x') { qtd = +tok[0]; tirar.clear(); tirar.add(0).add(1); }
+          if (un) { qtd = +tok[i]; unidade = un; daQtd = [i, i + 1]; continue; }
+          if (tok[i - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[i - 1])) { qtd = +tok[i]; unidade = null; daQtd = [i - 1, i]; continue; }
+          if (i === 0 && tok[1] === 'x') { qtd = +tok[0]; daQtd = [0, 1]; }
         }
+        daQtd.forEach(i => tirar.add(i));
         // 2) número no fim ("colher 8 pol 12", "cortador 75 cm - 1")
-        const ult = tok.length - 1;
+        let ult = tok.length - 1;
+        while (ult > 0 && codigo.has(ult)) ult--;
         if (qtd == null && ult > 0 && ehInteiroLista(tok[ult])) {
-          const outros = tok.slice(0, ult).some(ehNumeroLista);
+          const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && !codigo.has(i));
           const separado = /[-:=]\s*\d+\s*$/.test(linha);
           qtd = +tok[ult]; tirar.add(ult);
           talvez = !outros && !separado;
         }
         // 3) número no começo seguido do produto ("12 colher de pedreiro")
-        if (qtd == null && tok.length > 1 && ehInteiroLista(tok[0]) && !ehMedida(0)) { qtd = +tok[0]; tirar.add(0); }
+        if (qtd == null && tok.length > 1 && ehInteiroLista(tok[0]) && !ehMedida(0) && !codigo.has(0)) { qtd = +tok[0]; tirar.add(0); }
         // número no começo que sobrou depois de achar a quantidade é o nº do item ("001 BATEDOR ... 12 UN")
         if (qtd != null && ehInteiroLista(tok[0]) && !tirar.has(0) && !ehMedida(0)) tirar.add(0);
         // "pol" sai da busca: o catálogo escreve 8" (as aspas somem na busca), não POL
@@ -14095,6 +14102,7 @@
         }
         const final = Math.ceil(qtd / step) * step;
         if (final !== qtd) ajustes.push(`pediu ${qtd} → ${final} (embalagem de ${step})`);
+        if (final > 5000) ajustes.push('quantidade alta · confira');
         return { qtd: final, ajuste: ajustes.length ? ajustes.join(' · ') : null };
       }
       // Linha que a IA leu da foto ({ texto, quantidade, unidade }): com a quantidade dela, o texto
@@ -14112,6 +14120,8 @@
         const palavras = produtos.map(p => String(p.n).split(/\s+/));
         let n = 0;
         while (palavras.every(ws => ws.length > n + 1 && ws[n] === palavras[0][n])) n++;
+        // não corta a medida no meio: "1,5 mm" fica junto (sem isso o botão dizia só "mm")
+        while (n > 0 && palavras.some(ws => /^(mm|cm|m|mts?|pol|kg|g|l|ml|"|\(|-)/i.test(ws[n] || ''))) n--;
         return palavras.map((ws, i) => {
           const r = ws.slice(n).join(' ').replace(/^[-–—·]\s*/, '').trim();
           return r.length >= 2 ? r : produtos[i].n;
@@ -31442,19 +31452,24 @@
       // lidos aqui mesmo (sem internet); só a foto vai pro servidor (Gemini, /api/assistente).
       let lc = null; // { fase, origem, linhas, ignoradas, prontosAbertos, guardadaId, rotulo, abortar }
       const LC_MAX_IMAGENS = 3;
-      function lcAberto() { return !document.getElementById('listaClienteModal').classList.contains('hidden'); }
+      // abrir/fechar a janela muda a geração: foto/PDF ainda lendo de uma janela fechada desiste
+      // (não manda pro servidor, não guarda e não troca a tela da lista nova)
+      let lcGeracao = 0;
+      const lcVelha = (g) => g !== lcGeracao || !lc;
       function abrirListaCliente() {
+        lcGeracao++;
         lc = { fase: 'entrada', texto: '' };
         document.getElementById('listaClienteModal').classList.remove('hidden');
         renderListaCliente();
       }
       function fecharListaCliente() {
         if (lc && lc.abortar) lc.abortar.abort();
+        lcGeracao++;
         lc = null;
         document.getElementById('listaClienteModal').classList.add('hidden');
       }
       function lcComprados() {
-        const c = state.levCliente;
+        const c = (lc && lc.clienteDaLista) || state.levCliente; // lista guardada: o que compra o cliente dela
         if (!c || !c.id) return new Set();
         const lista = COMPRADOS_CACHE.get(c.id) || lerCompradosLS()[c.id] || [];
         return new Set(lista.map(x => x.codigo_sku));
@@ -31509,26 +31524,31 @@
       }
       async function lcFotosEscolhidas(arquivos) {
         const lista = [...arquivos].slice(0, LC_MAX_IMAGENS);
-        if (!lista.length) return;
-        lc = { ...(lc || {}), fase: 'lendo', msg: 'Preparando a foto…' };
+        if (!lista.length || !lc) return;
+        const g = lcGeracao;
+        lc = { ...lc, fase: 'lendo', msg: 'Preparando a foto…' };
         renderListaCliente();
         try {
           const imagens = [];
           for (const f of lista) imagens.push({ tipo: 'image/jpeg', dados: await reduzirImagemLista(f) });
+          if (lcVelha(g)) return;
           await lerImagensDaLista(imagens, 'foto');
         } catch (e) {
+          if (lcVelha(g)) return;
           showToast('Não deu pra abrir essa imagem.', 'erro');
           if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
         }
       }
       // PDF com texto: lido aqui. PDF escaneado (só imagem): as 3 primeiras páginas viram foto.
       async function lcPdfEscolhido(arquivo) {
-        if (!arquivo) return;
-        lc = { ...(lc || {}), fase: 'lendo', msg: 'Abrindo o PDF…' };
+        if (!arquivo || !lc) return;
+        const g = lcGeracao;
+        lc = { ...lc, fase: 'lendo', msg: 'Abrindo o PDF…' };
         renderListaCliente();
         try {
           const dados = await arquivo.arrayBuffer();
           const { texto } = await extrairTextoPdf(dados.slice(0));
+          if (lcVelha(g)) return;
           if ((texto.match(/[A-Za-zÀ-ÿ]{3,}/g) || []).length >= 5) { lerTextoDaLista(texto, 'pdf'); if (lc && lc.fase === 'lendo') { lc.fase = 'entrada'; renderListaCliente(); } return; }
           const pdfjsLib = await loadPdfJs();
           const doc = await pdfjsLib.getDocument({ data: dados }).promise;
@@ -31542,8 +31562,10 @@
             await pagina.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
             imagens.push({ tipo: 'image/jpeg', dados: canvas.toDataURL('image/jpeg', 0.82).split(',')[1] });
           }
+          if (lcVelha(g)) return;
           await lerImagensDaLista(imagens, 'pdf');
         } catch (e) {
+          if (lcVelha(g)) return;
           showToast(navigator.onLine ? 'Não deu pra abrir esse PDF.' : 'Não deu pra abrir o PDF sem internet — o leitor de PDF ainda não foi baixado neste aparelho.', 'erro');
           if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
         }
@@ -31553,20 +31575,22 @@
         return (r && Array.isArray(r.itens) ? r.itens : []).map(linhaDaImagemLista).filter(Boolean);
       }
       async function lerImagensDaLista(imagens, origem) {
+        if (!lc) return;
         if (!navigator.onLine) { await guardarListaCliente(imagens, origem); return; }
+        const g = lcGeracao;
         const abortar = new AbortController();
         lc = { ...(lc || {}), fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
         renderListaCliente();
         let itens;
         try { itens = await pedirLeituraDaImagem(imagens, abortar.signal); }
         catch (e) {
-          if (!lc || abortar.signal.aborted) return;
+          if (lcVelha(g) || abortar.signal.aborted) return;
           if (!e.status) { await guardarListaCliente(imagens, origem); return; } // sem conexão: guarda
           lc = { ...lc, fase: 'erroLeitura', erro: e.message, abortar: null };
           renderListaCliente();
           return;
         }
-        if (!lc || abortar.signal.aborted) return;
+        if (lcVelha(g) || abortar.signal.aborted) return;
         lc.abortar = null;
         if (!itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
         conferirItensDaLista(itens, 'foto');
@@ -31591,6 +31615,8 @@
         try { return ((await lcBancoOp('readonly', s => s.getAll())) || []).sort((a, b) => a.criadaEm - b.criadaEm); } catch (e) { return []; }
       }
       async function guardarListaCliente(imagens, origem) {
+        if (!lc) return; // janela fechada (cancelou): não guarda
+        const g = lcGeracao;
         const c = state.levCliente;
         const reg = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), criadaEm: Date.now(), origem, imagens,
           cliente: c ? { id: c.id, nome: c.nome } : null, itens: null };
@@ -31600,39 +31626,57 @@
           if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
           return;
         }
-        lc = { ...(lc || {}), fase: 'guardada', abortar: null };
-        renderListaCliente();
         atualizarFaixaListas();
+        if (lcVelha(g)) return;
+        lc = { ...lc, fase: 'guardada', abortar: null };
+        renderListaCliente();
       }
       async function apagarListaGuardada(id) {
         try { await lcBancoOp('readwrite', s => s.delete(id)); } catch (e) { }
         atualizarFaixaListas();
       }
+      let listasApagadas = false; // logout: leitura em andamento não grava de volta
       async function apagarListasDoAparelho() { // logout: foto de documento de cliente não fica no aparelho
+        listasApagadas = true;
         try { await lcBancoOp('readwrite', s => s.clear()); } catch (e) { }
       }
+      // Servidor recusou ou falhou (502 do Gemini, 429 do limite, 503 sem chave): espera 2, 10 e
+      // 60 min entre as tentativas e, depois da 3ª, só no "Ler agora" (senão cada volta pro app
+      // reenviava as fotos no 4G e gastava o limite de fotos do vendedor).
+      const LC_ESPERAS_MIN = [2, 10, 60];
       let lendoGuardadas = false;
-      async function lerListasGuardadas() {
-        if (lendoGuardadas || !navigator.onLine || !getStoredToken()) return;
+      async function lerListasGuardadas(agora) {
+        if (lendoGuardadas || listasApagadas || !navigator.onLine || !getStoredToken()) return;
         lendoGuardadas = true;
         let lidas = 0;
-        try {
+        const ler = async () => {
           for (const reg of await listasGuardadas()) {
             if (reg.itens) continue;
+            const tent = reg.tentativas || 0;
+            if (!agora && (tent > LC_ESPERAS_MIN.length || (reg.proximaEm && Date.now() < reg.proximaEm))) continue;
             let itens;
             try { itens = await pedirLeituraDaImagem(reg.imagens); }
             catch (e) {
-              if (!e.status) break; // caiu a conexão: tenta de novo depois
+              if (!e.status) break; // caiu a conexão: tenta de novo quando voltar
               reg.erro = e.message;
+              reg.tentativas = tent + 1;
+              reg.proximaEm = Date.now() + (LC_ESPERAS_MIN[tent] || 60) * 60000;
               if (e.recusado) reg.itens = []; // imagem que o servidor recusa não adianta reenviar
-              try { await lcBancoOp('readwrite', s => s.put(reg)); } catch (e2) { }
+              if (!listasApagadas) { try { await lcBancoOp('readwrite', s => s.put(reg)); } catch (e2) { } }
               continue;
             }
+            if (listasApagadas) return;
             reg.itens = itens; reg.lidaEm = Date.now(); reg.erro = null;
             reg.imagens = []; // lida: a foto não precisa mais ficar no aparelho
             try { await lcBancoOp('readwrite', s => s.put(reg)); lidas++; } catch (e) { }
           }
+        };
+        try {
+          // uma aba por vez (o app instalado e uma aba do navegador dividem o aparelho)
+          if (navigator.locks) await navigator.locks.request('cortag-listas', { ifAvailable: true }, (lock) => lock ? ler() : null);
+          else await ler();
         } finally { lendoGuardadas = false; }
+        if (listasApagadas) return;
         if (lidas) showToast(`Lista do cliente lida${lidas > 1 ? ` (${lidas})` : ''} · toque em "Conferir" no Pedido`, 'longo');
         atualizarFaixaListas();
       }
@@ -31652,14 +31696,21 @@
       async function abrirListasGuardadas() {
         const regs = await listasGuardadas();
         if (regs.length === 1 && regs[0].itens && regs[0].itens.length) { abrirListaGuardada(regs[0]); return; }
+        lcGeracao++;
         lc = { fase: 'guardadas', regs };
         document.getElementById('listaClienteModal').classList.remove('hidden');
         renderListaCliente();
       }
-      function abrirListaGuardada(reg) {
+      async function abrirListaGuardada(reg) {
+        const atual = state.levCliente;
+        if (reg.cliente && (!atual || atual.id !== reg.cliente.id)) {
+          const msg = `Essa lista é de ${reg.cliente.nome}, e o orçamento aberto ${atual ? 'é de ' + atual.nome : 'está sem cliente'}. Conferir pra pôr no orçamento aberto?`;
+          if (!await askConfirm(msg, 'Conferir assim')) return;
+        }
         const quando = new Date(reg.criadaEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
         const rotulo = `${reg.origem === 'pdf' ? 'PDF' : 'Foto'} de ${quando}${reg.cliente ? ' · ' + reg.cliente.nome : ''}`;
-        lc = { fase: 'conferir' };
+        lcGeracao++;
+        lc = { fase: 'conferir', clienteDaLista: reg.cliente || null };
         document.getElementById('listaClienteModal').classList.remove('hidden');
         conferirItensDaLista(reg.itens, 'foto', { guardadaId: reg.id, rotulo });
       }
@@ -31836,7 +31887,7 @@
           if (t.id === 'lcGuardarBtn') { guardarListaCliente(lc.imagens, lc.origemImagem || 'foto'); return; }
           if (t.id === 'lcVoltarBtn') { lc.fase = 'entrada'; renderListaCliente(); return; }
           if (t.id === 'lcPorBtn') { porListaNoOrcamento(); return; }
-          if (t.id === 'lcLerGuardadasBtn') { await lerListasGuardadas(); if (lc && lc.fase === 'guardadas') { lc.regs = await listasGuardadas(); renderListaCliente(); } return; }
+          if (t.id === 'lcLerGuardadasBtn') { await lerListasGuardadas(true); if (lc && lc.fase === 'guardadas') { lc.regs = await listasGuardadas(); renderListaCliente(); } return; }
           if (t.dataset.lcAbrirGuardada) { const reg = (lc.regs || []).find(r => r.id === t.dataset.lcAbrirGuardada); if (reg) abrirListaGuardada(reg); return; }
           if (t.dataset.lcApagarGuardada) {
             if (!await askConfirm('Descartar essa lista guardada?', 'Descartar', { perigo: true })) return;
@@ -31872,10 +31923,10 @@
           const res = document.getElementById('lcBuscaRes' + i);
           if (res) res.innerHTML = htmlResultadosBuscaLista(i, l.busca.trim().length >= 2 ? searchProducts(l.busca).slice(0, 5) : []);
         });
-        window.addEventListener('online', lerListasGuardadas);
+        window.addEventListener('online', () => lerListasGuardadas());
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lerListasGuardadas(); });
         atualizarFaixaListas();
-        setTimeout(lerListasGuardadas, 3000);
+        setTimeout(() => lerListasGuardadas(), 3000);
       }
 
       function initVoiceSearch() {
