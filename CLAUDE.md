@@ -1483,6 +1483,35 @@ Supabase, sem PR — não é mudança de código.
   A planilha também traz a comissão extra (média jul–dez/2025 83, gatilho 109/mês); o app conta 46 cortadores faturados em
   outubro, igual à planilha - dá pra virar um placar no Dashboard se o usuário pedir.
 
+- **Lista do cliente: texto, foto ou PDF → conferência → orçamento** (10/2026, item 3 de "Voz e lista de itens" com foto e PDF
+  junto, pedido do usuário: "há clientes que mandam PDF, foto de orçamento também"; opção "C" dos mockups "Cortag · Lista colada do
+  WhatsApp"). Botão **"📋 Colar lista do cliente"** abaixo do mix inicial no Pedido (e na gaveta vazia): Colar texto / Foto ou print
+  / PDF. **Texto e PDF com texto são lidos no aparelho, sem internet e sem IA** (`<motor-lista>` no `index.html`, testado):
+  `linhasDaListaCliente` tira saudação/"obrigado"/cabeçalho, marcador e numeração "1. 2. 3." em sequência; `interpretarLinhaLista`
+  acha a quantidade (número com unidade "2 cx"/"500 pç", "x 12", "qtd 12", número no fim, número no começo) e deixa a medida no
+  produto ("75 cm", 8" vira "8 pol" e o "pol" sai da busca); no PDF os valores em reais saem e o nº do item ("001") também.
+  `produtoDaLinhaLista` usa a busca do app (`buscarComPontos`, a mesma `searchProducts` com a chave de ordem): código/EAN na linha
+  acha direto; um só no topo (ou o único dos empatados que o cliente já compra, `comprados-recentes`) = pronto; empatados ou palavra
+  faltando = escolher (até 6, rótulo sem o começo comum, `rotulosDistintosLista`); nada = não achei. `quantidadeDaLinhaLista`: caixa
+  × embalagem, "500 pç" de produto "C/ 50 UN" = 10 pacotes, sobe pro múltiplo da embalagem; "disco 110" sem outro número = 110 é a
+  medida se o catálogo tiver (1 embalagem, avisado). Junto: `normalizarBusca` passou a tratar "08" = "8" e "8,0" = "8" (o catálogo
+  tem COLHER ... 08" e BROCA 8,0 mm) - vale pra toda busca do app.
+  - **Conferência em grupos** (`renderListaCliente`): Pra escolher (botões com as opções + "Buscar outro produto") · Não achei (busca
+    no catálogo) · Quantidade ajustada (com o porquê) · Prontos (recolhido), −/+ na embalagem, "Deixar de fora"/"Tirar". Decisão do
+    usuário: **linha em dúvida que não foi escolhida fica de fora**; "Pôr N itens no orçamento" soma (`addToCart`, não troca o
+    orçamento) e o aviso diz o que ficou de fora. Total sem impostos com o classificatório, sem campanha (mesma conta do mix inicial).
+    No PDF, linha sem produto e sem unidade é cabeçalho/total e é ignorada ("N sem produto ignoradas").
+  - **Foto (e PDF escaneado, até 3 páginas)**: o celular reduz pra JPEG de 1600 px e manda pra `POST /api/assistente/itens-da-imagem`
+    (`routes/assistente.js`; até 3 imagens, 20 por 10 min por usuário, confere o login antes de ler o corpo - `ROTAS_PAYLOAD_GRANDE`):
+    o **Gemini só lê** e a rota devolve só `{texto, quantidade, unidade}` limpos (`itensDaRespostaGemini`); o produto sai da mesma
+    conferência (`linhaDaImagemLista`: com a quantidade da IA, o texto inteiro é o produto). Modelo padrão passou a `gemini-2.5-flash`
+    (`GEMINI_MODEL` troca). **Sem internet a foto fica guardada** (decisão do usuário; IndexedDB `cortag-listas`, a foto sai do aparelho
+    depois de lida) e é lida sozinha quando o sinal volta (`lerListasGuardadas`: `online`, voltar pro app, 3 s depois de abrir); faixa
+    no Pedido "📋 N listas esperando internet · Ver" / "lida · Conferir". Logout apaga (`apagarListasDoAparelho`). **LGPD**: a foto pode
+    ter nome/CNPJ/telefone do cliente e o plano grátis do Gemini pode usar o que recebe pra treino - conta paga recomendada.
+  - Também corrigido: o "Montar mix inicial" do Pedido só ganhava o clique com reconhecimento de voz no navegador (`initVoiceSearch`).
+  - Fica pra depois: o app no **Compartilhar do WhatsApp** (Web Share Target no `manifest.json` + `sw.js`, só Android instalado).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -1571,8 +1600,8 @@ Supabase, sem PR — não é mudança de código.
   que o usuário trouxe; analisado e **não adotado**: abre site e copia a página, e no PWA os dados já estão no aparelho). O que
   já existe: 🎤 na busca do Pedido e do Levantamento (`startVoiceRecognition`/`VOICE_COMMANDS`, `index.html`, Web Speech API
   pt-BR) e a rota `POST /api/assistente/interpretar` (`routes/assistente.js`: Gemini no servidor, só classifica a pergunta e
-  devolve o termo, nunca o dado) — **o app não chama essa rota em lugar nenhum**, e o modelo padrão `gemini-2.0-flash` deve ser
-  trocado (`GEMINI_MODEL`). Regra pros três itens: **a IA só entende o texto; produto, preço e desconto saem do motor do app**
+  devolve o termo, nunca o dado) — **o app não chama essa rota em lugar nenhum** (a foto da lista do cliente usa
+  `/itens-da-imagem`, na mesma rota; modelo padrão `gemini-2.5-flash` desde 10/2026, `GEMINI_MODEL` troca). Regra pros três itens: **a IA só entende o texto; produto, preço e desconto saem do motor do app**
   (`searchProducts`, `clientPrice`…), e nada entra no orçamento/levantamento **sem a tela de conferência** (termo ambíguo =
   vendedor escolhe; caixa = múltiplo da embalagem).
   1. **Levantamento por voz em escuta contínua**: falar item atrás de item ("colher quarenta e dois, seis") sem tocar a cada um,
@@ -1581,8 +1610,8 @@ Supabase, sem PR — não é mudança de código.
      Início o `webkitSpeechRecognition` é instável — testar em aparelho de verdade.
   2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
      (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
-  3. **Lista colada do WhatsApp**: o cliente manda a lista em texto, o vendedor cola — mesma intenção `itens` e mesma conferência,
-     sem depender do microfone (funciona no iPhone). Provavelmente o caso mais comum.
+  3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;
+     a lista falada (item 2) pode reaproveitar `linhasDaListaCliente` + a mesma conferência.
   Implicações: o Gemini precisa de sinal (sem internet, só a busca local; a lista poderia esperar na fila offline); o Render free
   dorme e a 1ª chamada do dia leva 30–50 s (mostrar "acordando o servidor…"); o plano grátis do Gemini pode usar os dados pra
   treino — mandar só o texto dos produtos ou usar conta paga (LGPD); rota em `routes/` = teste no `run_tests.js` com a chamada

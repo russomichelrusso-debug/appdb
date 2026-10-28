@@ -76,7 +76,8 @@ app.use((req, res, next) => {
 // mais nada pra ler do corpo já consumido pelo primeiro).
 const jsonPadrao = express.json({ limit: '1mb' });
 const jsonGrande = express.json({ limit: '25mb' });
-const ROTAS_PAYLOAD_GRANDE = ['/api/catalogo-precos', '/api/fichas-tecnicas'];
+// e a foto da lista/orçamento que o cliente mandou (routes/assistente.js, até 3 imagens em base64)
+const ROTAS_PAYLOAD_GRANDE = ['/api/catalogo-precos', '/api/fichas-tecnicas', '/api/assistente/itens-da-imagem'];
 // Importação por e-mail (routes/importacaoEmail.js): arquivo grande, mas sem
 // login - só aceita quem manda a chave certa, conferida ANTES de ler o corpo.
 const ROTA_IMPORTACAO_EMAIL = '/api/importacao-email/arquivo';
