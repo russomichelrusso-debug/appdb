@@ -13842,12 +13842,14 @@
       // nome, e das outras palavras pelo menos metade (cobre "faltou uma
       // palavra" e erro de digitação). Entre eles: menos palavras faltando,
       // palavras mais certas, a frase seguida no nome, ordem natural do nome.
-      // buscarComPontos: a mesma busca com a chave de ordem de cada achado (k), pra quem precisa
-      // saber se o 1º empatou com os seguintes (lista colada do cliente, <motor-lista>):
-      // [0, posição no topo, 0] ou [1, palavras faltando, penalidade].
+      // buscarComPontos: a mesma busca dizendo como cada um foi achado, pra quem precisa saber se o
+      // 1º empatou com os seguintes (lista do cliente, <motor-lista>): { p, topo, nivel, pen } -
+      // topo: nivel 0 código/EAN exato, 1 nome igual, 2 código começando, 3 nome começando;
+      // senão nivel = palavras faltando e pen = quão certas as outras estão.
       function searchProducts(qRaw) {
         return buscarComPontos(qRaw).slice(0, 50).map(x => x.p);
       }
+      const COLLATOR_BUSCA = new Intl.Collator('pt', { numeric: true });
       function buscarComPontos(qRaw) {
         const termo = String(qRaw || '').trim();
         const termoUpper = termo.toUpperCase();
@@ -13885,10 +13887,10 @@
         }
 
         // empate: ordem natural do nome (16 mm, 19 mm, 25 mm... 152 mm - não 152 antes de 16)
-        const natural = (x, y) => x._n.localeCompare(y._n, 'pt', { numeric: true }); // _n: sem acento e sem espaço duplo
+        const natural = (x, y) => COLLATOR_BUSCA.compare(x._n, y._n); // _n: sem acento e sem espaço duplo
         topo.sort((a, b) => a[0] - b[0] || natural(a[1], b[1]));
         resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || natural(a[3], b[3]));
-        return [...topo.map(r => ({ p: r[1], k: [0, r[0], 0] })), ...resto.map(r => ({ p: r[3], k: [1, r[0], r[1]] }))];
+        return [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[3], topo: false, nivel: r[0], pen: r[1] }))];
       }
       // Busca pela ficha técnica (10/2026, pedido do usuário: "pesquisar mármore ou
       // pedras naturais e ver qual disco ou broca corta"): pra que o produto serve
@@ -13989,6 +13991,10 @@
           .replace(/(^|\s)[./]+|[./]+(?=\s|$)/g, ' ')
           .trim().split(/\s+/).filter(Boolean);
       }
+      // O que vai pra busca: sem os enfeites, e "pol" sai (o catálogo escreve 8", não POL)
+      function termoDasPalavrasLista(tok) {
+        return tok.filter(t => !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
+      }
       // Uma linha -> { texto, termo, qtd (null = sem quantidade), unidade ('un'|'cx'|'pct'|null),
       // talvez (o único número é o do fim, sem unidade: pode ser medida ou quantidade), codigos }.
       function interpretarLinhaLista(linhaBruta, modoPdf) {
@@ -14028,8 +14034,7 @@
         if (qtd == null && tok.length > 1 && ehInteiroLista(tok[0]) && !ehMedida(0) && !codigo.has(0)) { qtd = +tok[0]; tirar.add(0); }
         // número no começo que sobrou depois de achar a quantidade é o nº do item ("001 BATEDOR ... 12 UN")
         if (qtd != null && ehInteiroLista(tok[0]) && !tirar.has(0) && !ehMedida(0)) tirar.add(0);
-        // "pol" sai da busca: o catálogo escreve 8" (as aspas somem na busca), não POL
-        const termo = tok.filter((t, i) => !tirar.has(i) && !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
+        const termo = termoDasPalavrasLista(tok.filter((t, i) => !tirar.has(i)));
         if (qtd != null && !(qtd > 0 && qtd <= 99999)) { qtd = null; unidade = null; talvez = false; }
         return { texto: linhaBruta.trim(), termo, qtd, unidade, talvez, codigos };
       }
@@ -14055,27 +14060,25 @@
       function produtoDaLinhaLista(item, ctx) {
         const comprados = (ctx && ctx.comprados) || new Set();
         const porCodigo = (ctx && ctx.porCodigo) || (() => null);
+        let medida = false;
+        const pronto = (p) => ({ estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c), medida });
         for (const c of item.codigos || []) {
           const p = porCodigo(c);
-          if (p) return { estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c) };
+          if (p) return pronto(p);
         }
-        let termo = item.termo;
-        let achados = termo ? buscarComPontos(termo) : [];
-        let medida = false;
         // "disco 110": o 110 é a medida do disco (o catálogo tem) ou a quantidade?
-        if (item.talvez && item.qtd != null) {
-          const comNumero = buscarComPontos(termo + ' ' + item.qtd);
-          if (comNumero.length) { achados = comNumero; termo += ' ' + item.qtd; medida = true; }
-        }
+        let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
+        if (achados.length) medida = true;
+        else achados = item.termo ? buscarComPontos(item.termo) : [];
         if (!achados.length) return { estado: 'nao', produto: null, opcoes: [], medida };
-        const k = achados[0].k;
-        const mesmaChave = (x) => x.k[0] === k[0] && x.k[1] === k[1] && x.k[2] === k[2];
-        if (k[0] === 0 && k[1] <= 1) return { estado: 'pronto', produto: achados[0].p, opcoes: [], jaCompra: comprados.has(achados[0].p.c), medida };
-        const exato = k[0] === 0 || k[1] === 0; // nome começando com a busca, ou nenhuma palavra faltando
-        let opcoes = (exato || k[0] === 0 ? achados.filter(mesmaChave) : achados.slice(0, 4)).map(x => x.p);
-        if (opcoes.length === 1 && exato) return { estado: 'pronto', produto: opcoes[0], opcoes: [], jaCompra: comprados.has(opcoes[0].c), medida };
+        const a = achados[0];
+        if (a.topo && a.nivel <= 1) return pronto(a.p);
+        const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
+        const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen;
+        let opcoes = (exato ? achados.filter(empatado) : achados.slice(0, 4)).map(x => x.p);
+        if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
         const queCompra = opcoes.filter(p => comprados.has(p.c));
-        if (queCompra.length === 1 && exato) return { estado: 'pronto', produto: queCompra[0], opcoes: [], jaCompra: true, medida };
+        if (queCompra.length === 1 && exato) return pronto(queCompra[0]);
         opcoes = [...queCompra, ...opcoes.filter(p => !comprados.has(p.c))];
         return { estado: 'escolher', produto: null, opcoes: opcoes.slice(0, 6), maisOpcoes: Math.max(0, opcoes.length - 6), medida };
       }
@@ -14110,7 +14113,7 @@
       function linhaDaImagemLista(it) {
         const item = interpretarLinhaLista(it.texto, true);
         if (!item || !(it.quantidade > 0)) return item;
-        const termo = palavrasDaLinhaLista(item.texto).filter(t => !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
+        const termo = termoDasPalavrasLista(palavrasDaLinhaLista(item.texto).filter(t => !/^\d{5,}$/.test(t)));
         return { ...item, termo, qtd: it.quantidade, unidade: it.unidade || null, talvez: false };
       }
       // Na tela de escolha: tira o começo que todas as opções têm ("DESEMPENADEIRA INOX CABO
@@ -24199,26 +24202,25 @@
         try { localStorage.setItem(chave, JSON.stringify(lista)); } catch (e) { }
       }
       // Rascunho com as fotos (File/Blob) no IndexedDB - não cabe no localStorage
-      function ocBanco() {
-        return new Promise((ok, falha) => {
-          const r = indexedDB.open('cortag-ocorrencias', 1);
-          r.onupgradeneeded = () => r.result.createObjectStore('rascunhos', { keyPath: 'chave' });
+      // Uma operação num banco IndexedDB de uma "tabela" só (rascunho de ocorrência, lista do cliente)
+      async function idbOp(nome, tabela, chave, modo, fazer) {
+        const db = await new Promise((ok, falha) => {
+          const r = indexedDB.open(nome, 1);
+          r.onupgradeneeded = () => r.result.createObjectStore(tabela, { keyPath: chave });
           r.onsuccess = () => ok(r.result);
           r.onerror = () => falha(r.error);
         });
-      }
-      async function ocBancoOp(modo, fazer) {
-        const db = await ocBanco();
         try {
           return await new Promise((ok, falha) => {
-            const tx = db.transaction('rascunhos', modo);
-            const r = fazer(tx.objectStore('rascunhos'));
+            const tx = db.transaction(tabela, modo);
+            const r = fazer(tx.objectStore(tabela));
             tx.oncomplete = () => ok(r && r.result);
             tx.onerror = () => falha(tx.error);
             tx.onabort = () => falha(tx.error);
           });
         } finally { db.close(); }
       }
+      const ocBancoOp = (modo, fazer) => idbOp('cortag-ocorrencias', 'rascunhos', 'chave', modo, fazer);
       async function lerRascunhoOcorrencia(chave) {
         try { return await ocBancoOp('readonly', s => s.get(chave)) || null; } catch (e) { return null; }
       }
@@ -28189,11 +28191,11 @@
           }
         } catch (e) { /* sem internet: salvar avisa; sem variações, só o produto */ }
       }
-      async function reduzirFoto(file) {
+      async function reduzirFoto(file, passos = [[FOTO_LADO_MAX, 0.82], [800, 0.72], [640, 0.65]], bytesMax = FOTO_BYTES_MAX) {
         const url = URL.createObjectURL(file);
         try {
           const img = await new Promise((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = url; });
-          for (const [lado, qualidade] of [[FOTO_LADO_MAX, 0.82], [800, 0.72], [640, 0.65]]) {
+          for (const [lado, qualidade] of passos) {
             const escala = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
@@ -28203,7 +28205,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', qualidade));
-            if (blob && blob.size <= FOTO_BYTES_MAX) return blob;
+            if (blob && blob.size <= bytesMax) return blob;
           }
         } finally { URL.revokeObjectURL(url); }
         throw new Error('A foto ficou grande demais — tente outra.');
@@ -31474,12 +31476,10 @@
         const lista = COMPRADOS_CACHE.get(c.id) || lerCompradosLS()[c.id] || [];
         return new Set(lista.map(x => x.codigo_sku));
       }
-      function lcPorCodigo(c) {
-        return productByCod(c) || productByCod(String(c).toUpperCase()) || (DB.eanIndex && DB.eanIndex[c]) || null;
-      }
       // itens do <motor-lista> -> linhas da conferência
       function conferirItensDaLista(itens, origem, extra) {
-        const ctx = { comprados: lcComprados(), porCodigo: lcPorCodigo };
+        const comprados = lcComprados();
+        const ctx = { comprados, porCodigo: findByExactCode }; // a mesma do leitor: EAN, DUN, zeros à esquerda
         let ignoradas = 0;
         const linhas = [];
         for (const item of itens) {
@@ -31498,7 +31498,7 @@
           renderListaCliente();
           return;
         }
-        lc = { ...(lc || {}), fase: 'conferir', origem, linhas, ignoradas, prontosAbertos: false, ...(extra || {}) };
+        lc = { ...(lc || {}), fase: 'conferir', origem, linhas, ignoradas, comprados, prontosAbertos: false, ...(extra || {}) };
         renderListaCliente();
       }
       function lcEscolher(l, p) {
@@ -31510,18 +31510,10 @@
         if (!itens.length) { showToast(origem === 'pdf' ? 'Não achei linhas de produto nesse PDF.' : 'Não achei produto nesse texto — uma linha por produto.', 'erro'); return; }
         conferirItensDaLista(itens, origem);
       }
-      // Foto -> JPEG de até 1600 px (~300 KB): sobe rápido no 4G e cabe no aparelho se ficar guardada
-      async function reduzirImagemLista(blob) {
-        const url = URL.createObjectURL(blob);
-        try {
-          const img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => falha(new Error('imagem')); i.src = url; });
-          const escala = Math.min(1, 1600 / Math.max(img.naturalWidth, img.naturalHeight));
-          const canvas = document.createElement('canvas');
-          canvas.width = Math.round(img.naturalWidth * escala); canvas.height = Math.round(img.naturalHeight * escala);
-          canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-          return canvas.toDataURL('image/jpeg', 0.82).split(',')[1];
-        } finally { URL.revokeObjectURL(url); }
-      }
+      // Foto -> JPEG de até 1600 px e 900 KB (a mesma redução da foto do produto, fundo branco no
+      // print com transparência): sobe rápido no 4G e cabe no aparelho se ficar guardada
+      const jpegBase64 = async (blob) => (await blobParaDataUrl(blob)).split(',')[1];
+      const reduzirImagemLista = async (arquivo) => jpegBase64(await reduzirFoto(arquivo, [[1600, 0.82], [1200, 0.72], [900, 0.65]], 900 * 1024));
       async function lcFotosEscolhidas(arquivos) {
         const lista = [...arquivos].slice(0, LC_MAX_IMAGENS);
         if (!lista.length || !lc) return;
@@ -31560,7 +31552,7 @@
             const canvas = document.createElement('canvas');
             canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
             await pagina.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-            imagens.push({ tipo: 'image/jpeg', dados: canvas.toDataURL('image/jpeg', 0.82).split(',')[1] });
+            imagens.push({ tipo: 'image/jpeg', dados: await jpegBase64(await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.82))) });
           }
           if (lcVelha(g)) return;
           await lerImagensDaLista(imagens, 'pdf');
@@ -31579,7 +31571,7 @@
         if (!navigator.onLine) { await guardarListaCliente(imagens, origem); return; }
         const g = lcGeracao;
         const abortar = new AbortController();
-        lc = { ...(lc || {}), fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
+        lc = { ...lc, fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
         renderListaCliente();
         let itens;
         try { itens = await pedirLeituraDaImagem(imagens, abortar.signal); }
@@ -31597,20 +31589,7 @@
       }
 
       // ---- lista guardada pra ler quando a internet voltar (IndexedDB: fotos não cabem no localStorage)
-      function lcBancoOp(modo, fazer) {
-        return new Promise((ok, falha) => {
-          const r = indexedDB.open('cortag-listas', 1);
-          r.onupgradeneeded = () => r.result.createObjectStore('listas', { keyPath: 'id' });
-          r.onerror = () => falha(r.error);
-          r.onsuccess = () => {
-            const db = r.result;
-            const tx = db.transaction('listas', modo);
-            const req = fazer(tx.objectStore('listas'));
-            tx.oncomplete = () => { db.close(); ok(req && req.result); };
-            tx.onerror = tx.onabort = () => { db.close(); falha(tx.error); };
-          };
-        });
-      }
+      const lcBancoOp = (modo, fazer) => idbOp('cortag-listas', 'listas', 'id', modo, fazer);
       async function listasGuardadas() {
         try { return ((await lcBancoOp('readonly', s => s.getAll())) || []).sort((a, b) => a.criadaEm - b.criadaEm); } catch (e) { return []; }
       }
@@ -31707,8 +31686,7 @@
           const msg = `Essa lista é de ${reg.cliente.nome}, e o orçamento aberto ${atual ? 'é de ' + atual.nome : 'está sem cliente'}. Conferir pra pôr no orçamento aberto?`;
           if (!await askConfirm(msg, 'Conferir assim')) return;
         }
-        const quando = new Date(reg.criadaEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-        const rotulo = `${reg.origem === 'pdf' ? 'PDF' : 'Foto'} de ${quando}${reg.cliente ? ' · ' + reg.cliente.nome : ''}`;
+        const rotulo = `${reg.origem === 'pdf' ? 'PDF' : 'Foto'} de ${quandoCurto(reg.criadaEm)}${reg.cliente ? ' · ' + reg.cliente.nome : ''}`;
         lcGeracao++;
         lc = { fase: 'conferir', clienteDaLista: reg.cliente || null };
         document.getElementById('listaClienteModal').classList.remove('hidden');
@@ -31725,17 +31703,16 @@
       }
       function htmlBuscaLista(i, l) {
         if (!l.buscando) return `<button type="button" class="lcLink" data-lc-buscar="${i}">Buscar outro produto</button>`;
-        const achados = l.busca.trim().length >= 2 ? searchProducts(l.busca).slice(0, 5) : [];
         return `<div class="lcBusca"><input type="search" data-lc-busca="${i}" value="${escapeHtml(l.busca)}" placeholder="Buscar no catálogo" aria-label="Buscar outro produto pra “${escapeHtml(l.item.texto)}”"></div>
-          <div class="lcBuscaRes" id="lcBuscaRes${i}">${htmlResultadosBuscaLista(i, achados)}</div>`;
+          <div class="lcBuscaRes" id="lcBuscaRes${i}">${htmlResultadosBuscaLista(i, l.achados || [])}</div>`;
       }
+      const lcAchados = (busca) => busca.trim().length >= 2 ? searchProducts(busca).slice(0, 5) : [];
       function htmlResultadosBuscaLista(i, achados) {
         return achados.map(p => `<button type="button" class="lcOpcao" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}">${escapeHtml(p.n)}<small>${escapeHtml(p.c)}</small></button>`).join('');
       }
       function htmlLinhaEscolher(i, l) {
         const rotulos = rotulosDistintosLista(l.opcoes);
-        const compra = lcComprados();
-        const opcoes = l.opcoes.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${compra.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
+        const opcoes = l.opcoes.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${lc.comprados.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
         return `<div class="lcLinha${l.fora ? ' fora' : ''}">
           <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”</span>${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
           <div class="lcOpcoes">${opcoes}</div>
@@ -31808,10 +31785,9 @@
         if (lc.fase === 'guardadas') {
           titulo.textContent = 'Listas guardadas';
           corpo.innerHTML = lc.regs.length ? lc.regs.map(r => {
-            const quando = new Date(r.criadaEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
             const situacao = r.itens ? (r.itens.length ? `lida · ${r.itens.length} linha${r.itens.length > 1 ? 's' : ''}` : 'sem produto lido') : 'esperando internet';
             return `<div class="lcGuardada">
-              <div><b>${r.origem === 'pdf' ? 'PDF' : 'Foto'} de ${escapeHtml(quando)}</b><small>${escapeHtml((r.cliente ? r.cliente.nome + ' · ' : '') + situacao)}${r.erro ? ' · ' + escapeHtml(r.erro) : ''}</small></div>
+              <div><b>${r.origem === 'pdf' ? 'PDF' : 'Foto'} de ${escapeHtml(quandoCurto(r.criadaEm))}</b><small>${escapeHtml((r.cliente ? r.cliente.nome + ' · ' : '') + situacao)}${r.erro ? ' · ' + escapeHtml(r.erro) : ''}</small></div>
               <span>${r.itens && r.itens.length ? `<button type="button" class="restoreBtn compacto" data-lc-abrir-guardada="${escapeHtml(r.id)}">Conferir</button>` : ''}<button type="button" class="restoreBtn compacto" data-lc-apagar-guardada="${escapeHtml(r.id)}">Descartar</button></span>
             </div>`;
           }).join('') : '<p class="lcDica">Nenhuma lista guardada.</p>';
@@ -31909,6 +31885,7 @@
           } else if (t.dataset.lcBuscar !== undefined) {
             l.buscando = true;
             l.busca = l.item.termo || '';
+            l.achados = lcAchados(l.busca);
           }
           renderListaCliente();
           if (t.dataset.lcBuscar !== undefined) { const inp = corpo.querySelector(`[data-lc-busca="${t.dataset.lcBuscar}"]`); if (inp) inp.focus(); }
@@ -31920,8 +31897,9 @@
           const i = Number(inp.dataset.lcBusca), l = lc.linhas[i];
           if (!l) return;
           l.busca = inp.value;
+          l.achados = lcAchados(l.busca);
           const res = document.getElementById('lcBuscaRes' + i);
-          if (res) res.innerHTML = htmlResultadosBuscaLista(i, l.busca.trim().length >= 2 ? searchProducts(l.busca).slice(0, 5) : []);
+          if (res) res.innerHTML = htmlResultadosBuscaLista(i, l.achados);
         });
         window.addEventListener('online', () => lerListasGuardadas());
         document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lerListasGuardadas(); });
