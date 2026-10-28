@@ -14021,16 +14021,19 @@
           if (i === 0 && tok[1] === 'x') { qtd = +tok[0]; daQtd = [0, 1]; }
         }
         daQtd.forEach(i => tirar.add(i));
+        // número no começo seguido do produto ("5 colher pedreiro 8": 5 é a quantidade, o 8 é a medida);
+        // no PDF o número do começo é o nº do item ("001 BATEDOR ...")
+        const qtdNoComeco = !modoPdf && tok.length > 1 && ehInteiroLista(tok[0]) && !/^0/.test(tok[0]) && !ehMedida(0) && !codigo.has(0) && /[a-z]/.test(tok[1]);
+        const separado = /[-:=]\s*\d+\s*$/.test(linha);
         // 2) número no fim ("colher 8 pol 12", "cortador 75 cm - 1")
         let ult = tok.length - 1;
         while (ult > 0 && codigo.has(ult)) ult--;
-        if (qtd == null && ult > 0 && ehInteiroLista(tok[ult])) {
+        if (qtd == null && ult > 0 && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
           const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && !codigo.has(i));
-          const separado = /[-:=]\s*\d+\s*$/.test(linha);
           qtd = +tok[ult]; tirar.add(ult);
           talvez = !outros && !separado;
         }
-        // 3) número no começo seguido do produto ("12 colher de pedreiro")
+        // 3) número no começo ("12 colher de pedreiro")
         if (qtd == null && tok.length > 1 && ehInteiroLista(tok[0]) && !ehMedida(0) && !codigo.has(0)) { qtd = +tok[0]; tirar.add(0); }
         // número no começo que sobrou depois de achar a quantidade é o nº do item ("001 BATEDOR ... 12 UN")
         if (qtd != null && ehInteiroLista(tok[0]) && !tirar.has(0) && !ehMedida(0)) tirar.add(0);
@@ -14067,8 +14070,9 @@
           if (p) return pronto(p);
         }
         // "disco 110": o 110 é a medida do disco (o catálogo tem) ou a quantidade?
+        // (só se o catálogo tem o produto com esse número sem faltar palavra; senão é quantidade)
         let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
-        if (achados.length) medida = true;
+        if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
         else achados = item.termo ? buscarComPontos(item.termo) : [];
         if (!achados.length) return { estado: 'nao', produto: null, opcoes: [], medida };
         const a = achados[0];
@@ -26114,7 +26118,7 @@
           if (!p || state.cart.some(i => i.cod === p.c) || itemSemPrevisaoDeChegada(p.c)) continue;
           const passo = packStep(p);
           const qtd = Math.max(1, Math.ceil((Number(c.qtd) || passo) / passo)) * passo;
-          const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), 0);
+          const unit = precoUnitarioSemImpostos(p);
           if (!(unit > 0) || (soma > 0 && soma + unit * qtd > teto)) continue;
           addToCart(p.c, qtd, true);
           soma += unit * qtd;
@@ -28898,6 +28902,11 @@
           : r.semConferir ? `, sem conferir o que ${r.semConferir.nome} já compra (sem a lista dele no aparelho)` : '';
         return `comprados pelo maior número de lojas em 12 meses (${quem})${filtro}`;
       }
+      // Preço unitário sem impostos com o classificatório do orçamento, sem campanha (mix inicial,
+      // proposta pra manter a faixa, total da lista do cliente). Preço Fixo no canal não ganha desconto.
+      function precoUnitarioSemImpostos(p) {
+        return clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), 0);
+      }
       async function montarMixInicial() {
         const dados = await carregarMixInicial(true);
         if (!dados) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
@@ -28919,7 +28928,7 @@
           if (soma >= alvo) break;
           if (state.cart.some(i => i.cod === p.c)) continue;
           const qtd = packStep(p);
-          const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, false, 0);
+          const unit = precoUnitarioSemImpostos(p);
           if (!(unit > 0) || soma + unit * qtd > teto) continue;
           addToCart(p.c, qtd, true);
           soma += unit * qtd;
@@ -31502,7 +31511,9 @@
         renderListaCliente();
       }
       function lcEscolher(l, p) {
-        const q = quantidadeDaLinhaLista(l.item, p, l.medida);
+        if (!p._tok) prepararProdutoParaBusca(p);
+        const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
+        const q = quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
       function lerTextoDaLista(texto, origem) {
@@ -31585,7 +31596,7 @@
         if (lcVelha(g) || abortar.signal.aborted) return;
         lc.abortar = null;
         if (!itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
-        conferirItensDaLista(itens, 'foto');
+        conferirItensDaLista(itens, origem);
       }
 
       // ---- lista guardada pra ler quando a internet voltar (IndexedDB: fotos não cabem no localStorage)
@@ -31632,7 +31643,7 @@
           for (const reg of await listasGuardadas()) {
             if (reg.itens) continue;
             const tent = reg.tentativas || 0;
-            if (!agora && (tent > LC_ESPERAS_MIN.length || (reg.proximaEm && Date.now() < reg.proximaEm))) continue;
+            if (!agora && (tent >= LC_ESPERAS_MIN.length || (reg.proximaEm && Date.now() < reg.proximaEm))) continue;
             let itens;
             try { itens = await pedirLeituraDaImagem(reg.imagens); }
             catch (e) {
@@ -31645,9 +31656,9 @@
               continue;
             }
             if (listasApagadas) return;
-            reg.itens = itens; reg.lidaEm = Date.now(); reg.erro = null;
+            reg.itens = itens; reg.lidaEm = Date.now(); reg.erro = itens.length ? null : 'nenhum produto lido na imagem';
             reg.imagens = []; // lida: a foto não precisa mais ficar no aparelho
-            try { await lcBancoOp('readwrite', s => s.put(reg)); lidas++; } catch (e) { }
+            try { await lcBancoOp('readwrite', s => s.put(reg)); if (itens.length) lidas++; } catch (e) { }
           }
         };
         try {
@@ -31663,9 +31674,11 @@
         const el = document.getElementById('listaGuardadaFaixa');
         if (!el) return;
         const regs = await listasGuardadas();
-        const lidas = regs.filter(r => r.itens), esperando = regs.filter(r => !r.itens);
+        const lidas = regs.filter(r => r.itens && r.itens.length), esperando = regs.filter(r => !r.itens);
+        const semProduto = regs.length - lidas.length - esperando.length;
         if (!regs.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
         const partes = [];
+        if (semProduto) partes.push(`${semProduto} sem produto lido`);
         if (lidas.length) partes.push(`${lidas.length} lista${lidas.length > 1 ? 's' : ''} do cliente lida${lidas.length > 1 ? 's' : ''}`);
         if (esperando.length) partes.push(lidas.length ? `${esperando.length} esperando internet` : `${esperando.length} lista${esperando.length > 1 ? 's' : ''} do cliente esperando internet`);
         el.innerHTML = `<span>📋 ${escapeHtml(partes.join(' · '))}</span><b>${lidas.length ? 'Conferir' : 'Ver'}</b>`;
@@ -31694,9 +31707,6 @@
       }
 
       // ---- tela
-      function lcPrecoSemImposto(p) {
-        return clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, false, 0);
-      }
       function lcIncluidas() { return lc && lc.linhas ? lc.linhas.filter(l => l.cod && !l.fora) : []; }
       function htmlStepperLista(i, l) {
         return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
@@ -31815,7 +31825,7 @@
               ${lc.prontosAbertos ? prontas.map(i => htmlLinhaPronta(i, ls[i])).join('') : ''}
             </div>` : '');
         const incl = lcIncluidas();
-        const total = incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? lcPrecoSemImposto(p) * l.qtd : 0); }, 0);
+        const total = incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
         const semEscolha = ls.filter(l => !l.cod && !l.fora).length;
         rodape.innerHTML = `<div class="lcTotal"><span>${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} · sem impostos</span><b>${brl(total)}</b></div>
           <button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no orçamento</button>

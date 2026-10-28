@@ -4408,6 +4408,13 @@ async function main() {
           `lista do cliente: código não é quantidade nem palavra da busca: ${JSON.stringify(cods.map(l => [l.termo, l.qtd]))}`);
         const alta = ctxL.quantidadeDaLinhaLista({ qtd: 6000, unidade: null }, prods[6]);
         assert(/confira/.test(alta.ajuste || ''), 'lista do cliente: quantidade acima de 5.000 vai pra "Quantidade ajustada"');
+        // quantidade no começo e medida no fim ("5 colher ... 8"): achado do /code-review
+        const comeco = ctxL.linhasDaListaCliente('5 colher pedreiro aço oval 8');
+        assert(comeco[0].qtd === 5 && comeco[0].termo === 'colher pedreiro aco oval 8', `lista do cliente: "5 colher ... 8" = 5 unidades da colher 8: ${JSON.stringify(comeco[0])}`);
+        // número que acha o produto só com palavra faltando é quantidade, não medida
+        const fraco = ctxL.linhasDaListaCliente('batedor argamassa forte 6');
+        const rFraco = ctxL.produtoDaLinhaLista(fraco[0], { porCodigo });
+        assert(!rFraco.medida, 'lista do cliente: o "6" só vira medida com o produto achado sem faltar palavra');
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);
