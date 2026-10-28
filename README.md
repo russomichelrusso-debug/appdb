@@ -77,8 +77,8 @@ Variáveis de ambiente:
 | `GOOGLE_CLIENT_ID` | Não | Client ID do Google usado no login (há um valor fixo no código como padrão). |
 | `ADMIN_EMAIL` | Não | Se definida, só esse e-mail pode virar o **primeiro** usuário (admin) num banco sem usuários. Sem ela, quem logar primeiro vira admin. |
 | `ALLOWED_ORIGINS` | Não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://usuario.github.io`). Sem ela, a API aceita qualquer origem. |
-| `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini usada pelo assistente com IA. |
-| `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.0-flash`. |
+| `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini: assistente de voz e leitura da foto da lista/orçamento do cliente (`/api/assistente/itens-da-imagem`). |
+| `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.5-flash`. |
 | `IMPORTACAO_EMAIL_CHAVE` | Não (para a importação por e-mail) | Chave secreta (≥ 32 caracteres, `openssl rand -hex 32`) que o script do Gmail manda no cabeçalho `X-Chave-Importacao`. Sem ela, `POST /api/importacao-email/arquivo` fica fechado. Ver `docs/IMPORTACAO-EMAIL.md`. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Não (para avisos no celular) | Chave Web Push dos avisos de importação (gerar com `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` = `mailto:` ou URL https). Sem elas, as novidades aparecem só no app. Trocar a chave invalida as inscrições: cada vendedor ativa de novo. |
 

@@ -4343,6 +4343,84 @@ async function main() {
       }
     }
 
+    // Lista do cliente (index.html, trecho <motor-lista>): texto colado do WhatsApp / PDF / o que a
+    // IA leu da foto -> produto + quantidade pra conferir (10/2026, opção "C" dos mockups).
+    {
+      const fsL = require('fs');
+      const vmL = require('vm');
+      const htmlL = fsL.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+      const trecho = (a, b) => { const i = htmlL.indexOf(a), f = htmlL.indexOf(b); return i >= 0 && f > i ? htmlL.slice(i, f) : ''; };
+      const prods = [
+        { c: '60162', n: 'COLHER P/ PEDREIRO AÇO CABO DI Ø10mm OVAL 08"', emb: 6 },
+        { c: '60163', n: 'COLHER P/ PEDREIRO AÇO CABO DI Ø10mm RETA 08"', emb: 6 },
+        { c: '60170', n: 'DESEMPENADEIRA INOX CABO REMOVÍVEL LISA - COM CABO', emb: 12 },
+        { c: '60171', n: 'DESEMPENADEIRA INOX CABO REMOVÍVEL LISA - SEM CABO', emb: 12 },
+        { c: '62857', n: 'ESPAÇADOR NIVELADOR 1,5 mm SUPRA - PCT C/ 50 UN.', emb: 1 },
+        { c: '62438', n: 'BROCA DE AÇO RAPIDO 8,0 mm', emb: 10 },
+        { c: '60876', n: 'BATEDOR ARGAMASSA', emb: 6 },
+        { c: '61010', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
+      ];
+      const ctxL = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
+      vmL.createContext(ctxL);
+      vmL.runInContext(trecho('// <motor-busca>', '// </motor-busca>') + trecho('// <motor-lista>', '// </motor-lista>'), ctxL);
+      if (!ctxL.linhasDaListaCliente) {
+        assert(false, 'lista do cliente: trecho <motor-lista> não encontrado no index.html');
+      } else {
+        const msg = 'Bom dia Sergio, segue o pedido:\n- colher pedreiro 8 aço oval 12\n- desempenadeira lisa 2 cx\n- espaçador nivelador supra 1,5mm 500 pç\n'
+          + '- broca aço rapido 8mm 6\n- disco diamantado turbo 110\n- rejunte cinza 20kg 3\n60876 - 4\nObrigado!';
+        const linhas = ctxL.linhasDaListaCliente(msg);
+        const resumo = linhas.map(l => [l.termo, l.qtd, l.unidade || ''].join('|'));
+        assert(linhas.length === 7 && resumo[0] === 'colher pedreiro 8 aco oval|12|' && resumo[1] === 'desempenadeira lisa|2|cx'
+          && resumo[2] === 'espacador nivelador supra 1.5 mm|500|un' && resumo[5] === 'rejunte cinza 20 kg|3|',
+          `lista do cliente: saudação fora, quantidade no fim/com unidade, medida fica no produto: ${JSON.stringify(resumo)}`);
+        const porCodigo = (c) => prods.find(p => p.c === c) || null;
+        const res = linhas.map(l => ctxL.produtoDaLinhaLista(l, { porCodigo }));
+        const qtd = (i) => ctxL.quantidadeDaLinhaLista(linhas[i], res[i].produto, res[i].medida);
+        assert(res[0].estado === 'pronto' && res[0].produto.c === '60162' && qtd(0).qtd === 12 && !qtd(0).ajuste,
+          'lista do cliente: "8" acha o 08" do catálogo, um só no topo = pronto');
+        assert(res[1].estado === 'escolher' && res[1].opcoes.length === 2
+          && ctxL.rotulosDistintosLista(res[1].opcoes).join('/') === 'COM CABO/SEM CABO',
+          `lista do cliente: dois empatados = escolher, rótulo só com o que muda: ${ctxL.rotulosDistintosLista(res[1].opcoes || []).join('/')}`);
+        const niv = ctxL.rotulosDistintosLista([{ n: 'ESPAÇADOR NIVELADOR 1,5 mm' }, { n: 'ESPAÇADOR NIVELADOR 1,5 mm SUPRA - PCT C/ 50 UN.' }]);
+        assert(niv.join('/') === '1,5 mm/1,5 mm SUPRA - PCT C/ 50 UN.', `lista do cliente: rótulo não corta a medida no meio: ${niv.join('/')}`);
+        const comCx = ctxL.quantidadeDaLinhaLista(linhas[1], prods[2]);
+        assert(comCx.qtd === 24 && /2 cx × 12 = 24/.test(comCx.ajuste), `lista do cliente: caixa vira unidades pela embalagem: ${JSON.stringify(comCx)}`);
+        assert(res[2].estado === 'pronto' && qtd(2).qtd === 10 && /500 un → 10 pct de 50/.test(qtd(2).ajuste),
+          `lista do cliente: 500 peças de produto em pacote C/ 50 = 10 pacotes: ${JSON.stringify(qtd(2))}`);
+        assert(res[3].produto && res[3].produto.c === '62438' && qtd(3).qtd === 10 && /pediu 6 → 10/.test(qtd(3).ajuste),
+          'lista do cliente: "8mm" acha "8,0 mm" e a quantidade sobe pro múltiplo da embalagem');
+        assert(res[4].estado === 'pronto' && res[4].medida && qtd(4).qtd === 10 && /medida/.test(qtd(4).ajuste),
+          'lista do cliente: "disco 110" sem quantidade = 110 é a medida (o catálogo tem), 1 embalagem e avisa');
+        assert(res[5].estado === 'nao', 'lista do cliente: produto fora do catálogo = não achei');
+        assert(res[6].estado === 'pronto' && res[6].produto.c === '60876' && qtd(6).qtd === 6, 'lista do cliente: código do produto na linha acha direto');
+        // comprado pelo cliente desempata
+        const desemp = ctxL.produtoDaLinhaLista(linhas[1], { porCodigo, comprados: new Set(['60171']) });
+        assert(desemp.estado === 'pronto' && desemp.produto.c === '60171' && desemp.jaCompra, 'lista do cliente: entre empatados, o único que ele já compra fica pronto');
+        // numeração 1. 2. 3. não é quantidade; PDF tira os valores em reais
+        const num = ctxL.linhasDaListaCliente('1. batedor argamassa - 6\n2. broca aço rapido 8mm 20\n3. colher pedreiro aço oval 8 12');
+        assert(num.map(l => l.qtd).join(',') === '6,20,12', `lista do cliente: lista numerada 1., 2., 3. não vira quantidade: ${num.map(l => l.qtd)}`);
+        const pdf = ctxL.linhasDaListaCliente('001 BATEDOR ARGAMASSA 12 UN 15,30 183,60\nTotal R$ 1.234,56', true);
+        assert(pdf.length >= 1 && pdf[0].qtd === 12 && pdf[0].unidade === 'un' && pdf[0].termo === 'batedor argamassa',
+          `lista do cliente: PDF sem os valores em reais: ${JSON.stringify(pdf.map(l => [l.termo, l.qtd]))}`);
+        // código do produto na linha nunca vira quantidade (achado do revisor-cortag: "colher 60162" ia com 60162 un.)
+        const cods = ctxL.linhasDaListaCliente('Colher pedreiro 60162\nbatedor P60876\n60876 batedor argamassa 4');
+        assert(cods.map(l => l.qtd).join(',') === ',,4' && cods[1].codigos.join() === 'P60876' && cods[2].termo === 'batedor argamassa',
+          `lista do cliente: código não é quantidade nem palavra da busca: ${JSON.stringify(cods.map(l => [l.termo, l.qtd]))}`);
+        const alta = ctxL.quantidadeDaLinhaLista({ qtd: 6000, unidade: null }, prods[6]);
+        assert(/confira/.test(alta.ajuste || ''), 'lista do cliente: quantidade acima de 5.000 vai pra "Quantidade ajustada"');
+        // quantidade no começo e medida no fim ("5 colher ... 8"): achado do /code-review
+        const comeco = ctxL.linhasDaListaCliente('5 colher pedreiro aço oval 8');
+        assert(comeco[0].qtd === 5 && comeco[0].termo === 'colher pedreiro aco oval 8', `lista do cliente: "5 colher ... 8" = 5 unidades da colher 8: ${JSON.stringify(comeco[0])}`);
+        // número que acha o produto só com palavra faltando é quantidade, não medida
+        const fraco = ctxL.linhasDaListaCliente('batedor argamassa forte 6');
+        const rFraco = ctxL.produtoDaLinhaLista(fraco[0], { porCodigo });
+        assert(!rFraco.medida, 'lista do cliente: o "6" só vira medida com o produto achado sem faltar palavra');
+        // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
+        const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
+        assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);
+      }
+    }
+
     // Motor de campanhas do Painel (index.html, trecho <motor-campanhas>): campos
     // opcionais do Trade News de 10/2026 (classificatório, estado, validade, teto do
     // alvo no pedido, itens diferentes com exclusões, exigência de lançamentos) e
@@ -5164,6 +5242,45 @@ async function main() {
     assert(bloqueadoEm === LIMITE_CARTEIRA + 1 && /espera um minuto/.test(msg || '') && adiar.status !== 429 && outro.status !== 429,
       `limite de rotas pesadas: ${LIMITE_CARTEIRA} por minuto por usuário, depois 429 (gravação e outro usuário passam): ${JSON.stringify({ bloqueadoEm, msg, adiar: adiar.status, outro: outro.status })}`);
     authToken = tokenAntes;
+  }
+
+  {
+    // Foto da lista do cliente (routes/assistente.js /itens-da-imagem): o Gemini só lê; a rota
+    // devolve só texto/quantidade/unidade limpos, recusa imagem inválida e sem chave avisa.
+    const fetchAntes = global.fetch;
+    const chaveAntes = process.env.GEMINI_API_KEY;
+    let enviado = null;
+    global.fetch = async (url, opts) => {
+      if (!String(url).includes('generativelanguage.googleapis.com')) return fetchAntes(url, opts);
+      enviado = JSON.parse(opts.body);
+      const resposta = { itens: [{ texto: 'Colher de pedreiro 8 aço', quantidade: '12', unidade: 'un' }, { texto: 'R$', quantidade: 3 },
+        { texto: 'Disco turbo 110', quantidade: -1, unidade: 'caixa' }, { texto: '<b>x</b> broca 8mm', quantidade: 6, unidade: 'pct', extra: 'nao passa' }] };
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(resposta) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+      delete process.env.GEMINI_API_KEY;
+      const img = { tipo: 'image/jpeg', dados: Buffer.from('jpeg falso').toString('base64') };
+      let r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
+      assert(r.status === 503, `foto da lista: sem GEMINI_API_KEY responde 503 (${r.status})`);
+      process.env.GEMINI_API_KEY = 'chave-falsa';
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [{ tipo: 'text/html', dados: 'PGI+' }] });
+      const r2 = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img, img, img, img] });
+      assert(r.status === 422 && r2.status === 422, `foto da lista: tipo errado e mais de 3 imagens = 422 (${r.status}, ${r2.status})`);
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
+      const itens = r.body && r.body.itens;
+      assert(r.status === 200 && Array.isArray(itens) && itens.length === 3
+        && itens[0].texto === 'Colher de pedreiro 8 aço' && itens[0].quantidade === 12 && itens[0].unidade === 'un'
+        && itens[1].quantidade === null && itens[1].unidade === null && itens[2].unidade === 'pct' && !('extra' in itens[2])
+        && enviado && enviado.contents[0].parts[1].inline_data.mime_type === 'image/jpeg',
+        `foto da lista: só texto/quantidade/unidade válidos voltam, a imagem vai pro Gemini: ${JSON.stringify(r.body)}`);
+      const semLogin = authToken; authToken = '';
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
+      authToken = semLogin;
+      assert(r.status === 401, `foto da lista: sem login = 401 antes de ler o corpo (${r.status})`);
+    } finally {
+      global.fetch = fetchAntes;
+      if (chaveAntes === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = chaveAntes;
+    }
   }
 
   console.log();

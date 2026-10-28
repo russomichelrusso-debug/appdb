@@ -4517,6 +4517,445 @@
       cursor: pointer;
     }
 
+    /* Lista do cliente (texto, foto ou PDF) - opção "C" dos mockups "Cortag · Lista colada do WhatsApp" */
+    #colarListaBtn.buscando {
+      display: none;
+    }
+
+    .listaGuardadaFaixa {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 44px;
+      margin: 10px 0 0;
+      padding: 0 14px;
+      border: none;
+      border-radius: var(--r-md);
+      background: var(--warning-bg);
+      color: var(--warning);
+      font-size: 13px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .listaGuardadaFaixa span {
+      flex: 1;
+    }
+
+    .listaGuardadaFaixa.lida {
+      background: var(--success-bg);
+      color: var(--success);
+    }
+
+    .listaGuardadaFaixa.hidden {
+      display: none;
+    }
+
+    #listaClienteModal {
+      padding: 12px;
+    }
+
+    #listaClienteModal .lcCard {
+      max-width: 520px;
+      height: calc(100vh - 24px);
+      height: calc(100dvh - 24px);
+      display: flex;
+      flex-direction: column;
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .lcTopo {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 12px 8px 10px 18px;
+      border-bottom: 1px solid var(--hairline);
+    }
+
+    .lcTopo h3 {
+      margin: 6px 0 0;
+    }
+
+    .lcSub {
+      margin: 2px 0 0;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .lcFechar {
+      width: 44px;
+      height: 44px;
+      flex-shrink: 0;
+      border: none;
+      background: none;
+      color: var(--gray);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .lcCorpo {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 14px;
+      background: var(--fill);
+    }
+
+    .lcRodape {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 10px 14px 14px;
+      border-top: 1px solid var(--hairline);
+      background: var(--white);
+    }
+
+    .lcRodape > button {
+      flex: 1;
+      min-height: 48px;
+    }
+
+    .lcTotal {
+      display: flex;
+      justify-content: space-between;
+      width: 100%;
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .lcTotal b {
+      color: var(--ink);
+    }
+
+    .lcFicaFora {
+      width: 100%;
+      text-align: center;
+      font-size: 12px;
+      color: var(--warning);
+    }
+
+    .lcDica {
+      margin: 0 0 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--gray);
+    }
+
+    .lcNota {
+      margin: 6px 0 0;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .lcFontes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .lcFonte {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-height: 64px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .lcFonte span {
+      font-size: 20px;
+    }
+
+    .lcRotulo {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--gray);
+    }
+
+    #lcTexto {
+      width: 100%;
+      box-sizing: border-box;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      padding: 12px;
+      font: inherit;
+      font-size: 15px;
+      line-height: 1.5;
+      color: var(--ink);
+      background: var(--white);
+      resize: vertical;
+    }
+
+    .lcLendo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      padding: 40px 12px;
+      text-align: center;
+    }
+
+    .lcLendo p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .lcGira {
+      width: 32px;
+      height: 32px;
+      border: 3px solid var(--hairline);
+      border-top-color: var(--red);
+      border-radius: 50%;
+      animation: lcGira 0.9s linear infinite;
+    }
+
+    @keyframes lcGira {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .lcSecao {
+      margin-bottom: 14px;
+    }
+
+    .lcSecao h4 {
+      margin: 0 0 8px 2px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .3px;
+      text-transform: uppercase;
+    }
+
+    .lcSecao.escolher h4 {
+      color: var(--warning);
+    }
+
+    .lcSecao.nao h4 {
+      color: var(--danger);
+    }
+
+    .lcSecao.ajustada h4 {
+      color: var(--blue);
+    }
+
+    .lcLinha {
+      margin-bottom: 8px;
+      padding: 10px 12px;
+      border-radius: var(--r-md);
+      background: var(--white);
+    }
+
+    .lcLinha.fora {
+      opacity: .55;
+    }
+
+    .lcTopoLinha {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .lcOriginal {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .lcNome {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .lcNome em,
+    .lcOpcao em {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: var(--success-bg);
+      color: var(--success);
+      font-size: 11px;
+      font-style: normal;
+      font-weight: 700;
+    }
+
+    .lcLinha.simples .lcOriginal {
+      margin-top: 2px;
+      font-size: 12px;
+    }
+
+    .lcAjuste {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--blue);
+    }
+
+    .lcOpcoes,
+    .lcBuscaRes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .lcOpcao {
+      min-height: 40px;
+      padding: 6px 12px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-md);
+      background: var(--white);
+      color: var(--ink);
+      font-size: 13px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .lcOpcao small {
+      display: block;
+      font-size: 11px;
+      color: var(--gray);
+    }
+
+    .lcOpcao.sel {
+      border: 2px solid var(--red);
+      background: var(--accent-bg);
+      color: var(--red-deep);
+      font-weight: 600;
+    }
+
+    .lcBusca input {
+      width: 100%;
+      box-sizing: border-box;
+      height: 44px;
+      margin-top: 8px;
+      padding: 0 12px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      font: inherit;
+      font-size: 15px;
+      color: var(--ink);
+      background: var(--white);
+    }
+
+    .lcAcoes {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .lcLink {
+      min-height: 36px;
+      padding: 0;
+      border: none;
+      background: none;
+      color: var(--red);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .lcLink.cinza {
+      color: var(--gray);
+      font-weight: 500;
+    }
+
+    .lcQtd {
+      display: inline-flex;
+      align-items: center;
+      flex-shrink: 0;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+    }
+
+    .lcQtd button {
+      width: 40px;
+      height: 40px;
+      border: none;
+      background: none;
+      color: var(--ink);
+      font-size: 18px;
+      cursor: pointer;
+    }
+
+    .lcQtd b {
+      min-width: 32px;
+      text-align: center;
+      font-size: 14px;
+    }
+
+    .lcProntosCab {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      min-height: 52px;
+      margin-bottom: 8px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: var(--r-md);
+      background: var(--white);
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .lcProntosCab b {
+      display: block;
+      color: var(--success);
+      font-size: 14px;
+    }
+
+    .lcProntosCab small {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .lcGuardada {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      padding: 10px 12px;
+      border-radius: var(--r-md);
+      background: var(--white);
+    }
+
+    .lcGuardada small {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .lcGuardada > span {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
     #ocorrenciaModal {
       padding: 12px;
     }
@@ -11324,6 +11763,8 @@
         </div>
         <div class="hint" id="searchHint">Digite ao menos 2 caracteres para buscar.</div>
         <button type="button" class="mixInicialBtn" id="mixInicialBtn">✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>
+        <button type="button" class="mixInicialBtn" id="colarListaBtn">📋 Colar lista do cliente <span>texto, foto ou PDF que ele mandou no WhatsApp</span></button>
+        <button type="button" class="listaGuardadaFaixa hidden" id="listaGuardadaFaixa"></button>
       </div>
 
       <div class="priceListSection hidden" id="priceListSection">
@@ -11993,6 +12434,23 @@
           <button type="button" id="pedidoCsvAbrirBtn">📂 Abrir arquivo CSV</button>
         </div>
       </div>
+    </div>
+
+    <!-- Lista do cliente (texto, foto ou PDF) -> conferência -> orçamento (initListaCliente) -->
+    <div class="minimodal hidden" id="listaClienteModal">
+      <div class="minimodal-card lcCard" role="dialog" aria-modal="true" aria-labelledby="lcTitulo">
+        <div class="lcTopo">
+          <div>
+            <h3 id="lcTitulo">Colar lista do cliente</h3>
+            <p class="lcSub" id="lcSub"></p>
+          </div>
+          <button type="button" class="lcFechar" id="lcFecharBtn" aria-label="Fechar">✕</button>
+        </div>
+        <div class="lcCorpo" id="lcCorpo"></div>
+        <div class="lcRodape" id="lcRodape"></div>
+      </div>
+      <input type="file" id="lcFotoInput" accept="image/*" multiple style="display:none" aria-hidden="true" tabindex="-1">
+      <input type="file" id="lcPdfInput" accept="application/pdf,.pdf" style="display:none" aria-hidden="true" tabindex="-1">
     </div>
 
     <!-- Ocorrência no Pós-Vendas: assistente em 4 passos + revisão (initOcorrencia) -->
@@ -13301,6 +13759,11 @@
           .replace(/[^a-z0-9./]+/g, ' ')
           .replace(/(\d)([a-z])/g, '$1 $2')
           .replace(/(^|\s)[./]+|[./]+(?=\s|$)/g, ' ')
+          // "08" = "8", "8,0" = "8" e "1,50" = "1,5" (o catálogo tem COLHER ... 08" e BROCA 8,0 mm;
+          // "0,5" fica, e "1.000" de milhar também - só 1 ou 2 casas depois do ponto)
+          .replace(/(^|[^\d.])0+(?=\d)/g, '$1')
+          .replace(/(\d)\.00?(?=[^\d]|$)/g, '$1')
+          .replace(/(\.[1-9])0(?=[^\d]|$)/g, '$1')
           .replace(/\s+/g, ' ')
           .trim();
       }
@@ -13379,7 +13842,15 @@
       // nome, e das outras palavras pelo menos metade (cobre "faltou uma
       // palavra" e erro de digitação). Entre eles: menos palavras faltando,
       // palavras mais certas, a frase seguida no nome, ordem natural do nome.
+      // buscarComPontos: a mesma busca dizendo como cada um foi achado, pra quem precisa saber se o
+      // 1º empatou com os seguintes (lista do cliente, <motor-lista>): { p, topo, nivel, pen } -
+      // topo: nivel 0 código/EAN exato, 1 nome igual, 2 código começando, 3 nome começando;
+      // senão nivel = palavras faltando e pen = quão certas as outras estão.
       function searchProducts(qRaw) {
+        return buscarComPontos(qRaw).slice(0, 50).map(x => x.p);
+      }
+      const COLLATOR_BUSCA = new Intl.Collator('pt', { numeric: true });
+      function buscarComPontos(qRaw) {
         const termo = String(qRaw || '').trim();
         const termoUpper = termo.toUpperCase();
         const q = normalizarBusca(termo);
@@ -13416,10 +13887,10 @@
         }
 
         // empate: ordem natural do nome (16 mm, 19 mm, 25 mm... 152 mm - não 152 antes de 16)
-        const natural = (x, y) => x._n.localeCompare(y._n, 'pt', { numeric: true }); // _n: sem acento e sem espaço duplo
+        const natural = (x, y) => COLLATOR_BUSCA.compare(x._n, y._n); // _n: sem acento e sem espaço duplo
         topo.sort((a, b) => a[0] - b[0] || natural(a[1], b[1]));
         resto.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || natural(a[3], b[3]));
-        return [...topo.map(r => r[1]), ...resto.map(r => r[3])].slice(0, 50);
+        return [...topo.map(r => ({ p: r[1], topo: true, nivel: r[0], pen: 0 })), ...resto.map(r => ({ p: r[3], topo: false, nivel: r[0], pen: r[1] }))];
       }
       // Busca pela ficha técnica (10/2026, pedido do usuário: "pesquisar mármore ou
       // pedras naturais e ver qual disco ou broca corta"): pra que o produto serve
@@ -13485,6 +13956,185 @@
         return achados.slice(0, 60);
       }
       // </motor-busca>
+
+      // <motor-lista> - lista de produtos que o cliente mandou (texto colado do WhatsApp, PDF ou o que
+      // a IA leu da foto) -> uma linha por produto com a quantidade, pra conferir antes de ir pro
+      // orçamento (10/2026, opção "C" dos mockups "Cortag · Lista colada do WhatsApp"). A IA só lê a
+      // foto; texto e PDF são lidos aqui, no aparelho, sem internet. Produto sai sempre da busca do
+      // catálogo (buscarComPontos, <motor-busca>), nunca de quem leu. Sem DOM: rodado isolado pelo
+      // test/run_tests.js junto com o <motor-busca>.
+      const UNIDADES_LISTA = {
+        un: 'un', und: 'un', unid: 'un', unids: 'un', unidade: 'un', unidades: 'un', pc: 'un', pcs: 'un', peca: 'un', pecas: 'un',
+        jg: 'un', jogo: 'un', jogos: 'un', kit: 'un', kits: 'un', cj: 'un', conj: 'un',
+        cx: 'cx', cxs: 'cx', caixa: 'cx', caixas: 'cx', pct: 'pct', pcts: 'pct', pacote: 'pct', pacotes: 'pct',
+      };
+      // número seguido disto é medida do produto ("75 cm", "8 pol"), não quantidade
+      const MEDIDAS_LISTA = new Set(['mm', 'cm', 'm', 'mt', 'mts', 'metro', 'metros', 'pol', 'kg', 'g', 'gr', 'l', 'lt', 'litro', 'litros',
+        'ml', 'v', 'w', 'hp', 'graus', 'grau', 'polegada', 'polegadas']);
+      const PALAVRAS_QTD_LISTA = new Set(['qtd', 'qtde', 'qt', 'quant', 'quantidade']);
+      // pedido escrito em volta do produto: não ajuda a busca
+      const ENFEITES_LISTA = new Set(['quero', 'preciso', 'manda', 'mandar', 'enviar', 'envia', 'favor', 'pf', 'pfv', 'pfvr', 'por', 'mais', 'tem', 'ai']);
+      // linha que não é produto: saudação, "segue o pedido:", assinatura
+      const SAUDACAO_LISTA = /^((bom dia|boa tarde|boa noite|ola|oi|segue|grato|grata|att|abs|valeu|tudo bem|pedido|orcamento|lista|total|subtotal|frete|cnpj|cpf|telefone|fone|endereco|vendedor|cliente|validade|prazo|condicao|pagamento|observac)\b|obrigad|atencios|abraco)/;
+      const ehInteiroLista = (t) => /^\d+$/.test(t);
+      const ehNumeroLista = (t) => /^\d+([./]\d+)?$/.test(t);
+      // Texto da linha em palavras: sem acento, minúsculo, 8" = "8 pol", vírgula decimal = ponto,
+      // "12un" = "12 un", "x12" = "x 12"; medida "12x24" fica junta (vira "12×24").
+      function palavrasDaLinhaLista(linha) {
+        return normalize(linha)
+          .replace(/(\d)\s*("|''|”|″)/g, '$1 pol ')
+          .replace(/(\d),(\d)/g, '$1.$2')
+          .replace(/(\d)\s*x\s*(\d)/g, '$1×$2')
+          .replace(/(\d)([a-z])/g, '$1 $2')
+          .replace(/([a-z])(\d)/g, '$1 $2')
+          .replace(/[^a-z0-9.×/]+/g, ' ')
+          .replace(/(^|\s)[./]+|[./]+(?=\s|$)/g, ' ')
+          .trim().split(/\s+/).filter(Boolean);
+      }
+      // O que vai pra busca: sem os enfeites, e "pol" sai (o catálogo escreve 8", não POL)
+      function termoDasPalavrasLista(tok) {
+        return tok.filter(t => !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
+      }
+      // Uma linha -> { texto, termo, qtd (null = sem quantidade), unidade ('un'|'cx'|'pct'|null),
+      // talvez (o único número é o do fim, sem unidade: pode ser medida ou quantidade), codigos }.
+      function interpretarLinhaLista(linhaBruta, modoPdf) {
+        let linha = String(linhaBruta || '').replace(/\s+/g, ' ').trim();
+        if (!linha) return null;
+        if (modoPdf) linha = linha.replace(/R\$\s*/gi, ' ').replace(/(^|\s)\d{1,3}(\.\d{3})*,\d{2}(?=\s|$)/g, ' ').trim(); // valores em reais
+        // código do produto ou EAN escrito na linha ("60882", "P60863", "7898...")
+        const codigos = (linha.match(/\b[Pp]?\d{5,6}\b|\b\d{8,14}\b/g) || []).map(c => c.toUpperCase());
+        const tok = palavrasDaLinhaLista(linha);
+        if (!tok.some(t => /[a-z]{2}/.test(t)) && !codigos.length) return null; // só número/símbolo
+        let qtd = null, unidade = null, talvez = false;
+        const tirar = new Set();
+        // código/EAN (5+ dígitos, com o "P" do promocional antes) nunca é quantidade nem palavra da busca
+        tok.forEach((t, i) => { if (/^\d{5,}$/.test(t)) { tirar.add(i); if (tok[i - 1] === 'p') tirar.add(i - 1); } });
+        const ehMedida = (i) => MEDIDAS_LISTA.has(tok[i + 1]);
+        // 1) número com unidade ("2 cx", "500 pc"), "x 12", "qtd 12" ou "12 x colher"
+        const codigo = new Set(tirar);
+        let daQtd = [];
+        for (let i = 0; i < tok.length; i++) {
+          if (!ehInteiroLista(tok[i]) || ehMedida(i) || codigo.has(i)) continue;
+          const un = UNIDADES_LISTA[tok[i + 1]];
+          if (un) { qtd = +tok[i]; unidade = un; daQtd = [i, i + 1]; continue; }
+          if (tok[i - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[i - 1])) { qtd = +tok[i]; unidade = null; daQtd = [i - 1, i]; continue; }
+          if (i === 0 && tok[1] === 'x') { qtd = +tok[0]; daQtd = [0, 1]; }
+        }
+        daQtd.forEach(i => tirar.add(i));
+        // número no começo seguido do produto ("5 colher pedreiro 8": 5 é a quantidade, o 8 é a medida);
+        // no PDF o número do começo é o nº do item ("001 BATEDOR ...")
+        const qtdNoComeco = !modoPdf && tok.length > 1 && ehInteiroLista(tok[0]) && !/^0/.test(tok[0]) && !ehMedida(0) && !codigo.has(0) && /[a-z]/.test(tok[1]);
+        const separado = /[-:=]\s*\d+\s*$/.test(linha);
+        // 2) número no fim ("colher 8 pol 12", "cortador 75 cm - 1")
+        let ult = tok.length - 1;
+        while (ult > 0 && codigo.has(ult)) ult--;
+        if (qtd == null && ult > 0 && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
+          const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && !codigo.has(i));
+          qtd = +tok[ult]; tirar.add(ult);
+          talvez = !outros && !separado;
+        }
+        // 3) número no começo ("12 colher de pedreiro")
+        if (qtd == null && tok.length > 1 && ehInteiroLista(tok[0]) && !ehMedida(0) && !codigo.has(0)) { qtd = +tok[0]; tirar.add(0); }
+        // número no começo que sobrou depois de achar a quantidade é o nº do item ("001 BATEDOR ... 12 UN")
+        if (qtd != null && ehInteiroLista(tok[0]) && !tirar.has(0) && !ehMedida(0)) tirar.add(0);
+        const termo = termoDasPalavrasLista(tok.filter((t, i) => !tirar.has(i)));
+        if (qtd != null && !(qtd > 0 && qtd <= 99999)) { qtd = null; unidade = null; talvez = false; }
+        return { texto: linhaBruta.trim(), termo, qtd, unidade, talvez, codigos };
+      }
+      // Mensagem inteira -> linhas com produto. Tira marcador de lista ("-", "•") e a numeração
+      // "1.", "2)" quando as linhas vêm numeradas em sequência (senão o "1." seria quantidade).
+      function linhasDaListaCliente(texto, modoPdf) {
+        const brutas = String(texto || '').split(/\r?\n/).map(l => l.replace(/^\s*[-*•·>–—]+\s*/, '').trim()).filter(Boolean);
+        const numeradas = brutas.map(l => (l.match(/^(\d{1,3})\s*[).\-–]\s+\S/) || [])[1]).filter(Boolean).map(Number);
+        const emSequencia = numeradas.length >= 2 && numeradas.every((n, i) => n === i + 1);
+        const linhas = [];
+        for (let l of brutas) {
+          if (emSequencia) l = l.replace(/^\d{1,3}\s*[).\-–]\s+/, '');
+          const n = normalize(l).trim();
+          if (SAUDACAO_LISTA.test(n) || /:\s*$/.test(l)) continue;
+          const item = interpretarLinhaLista(l, modoPdf);
+          if (item) linhas.push(item);
+        }
+        return linhas;
+      }
+      // Produto da linha: { estado: 'pronto'|'escolher'|'nao', produto, opcoes, jaCompra }.
+      // Pronto = um só no topo da busca (ou só um deles o cliente já compra); vários empatados ou
+      // achado com palavra faltando = o vendedor escolhe; nada = não achei.
+      function produtoDaLinhaLista(item, ctx) {
+        const comprados = (ctx && ctx.comprados) || new Set();
+        const porCodigo = (ctx && ctx.porCodigo) || (() => null);
+        let medida = false;
+        const pronto = (p) => ({ estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c), medida });
+        for (const c of item.codigos || []) {
+          const p = porCodigo(c);
+          if (p) return pronto(p);
+        }
+        // "disco 110": o 110 é a medida do disco (o catálogo tem) ou a quantidade?
+        // (só se o catálogo tem o produto com esse número sem faltar palavra; senão é quantidade)
+        let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
+        if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
+        else achados = item.termo ? buscarComPontos(item.termo) : [];
+        if (!achados.length) return { estado: 'nao', produto: null, opcoes: [], medida };
+        const a = achados[0];
+        if (a.topo && a.nivel <= 1) return pronto(a.p);
+        const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
+        const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen;
+        let opcoes = (exato ? achados.filter(empatado) : achados.slice(0, 4)).map(x => x.p);
+        if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
+        const queCompra = opcoes.filter(p => comprados.has(p.c));
+        if (queCompra.length === 1 && exato) return pronto(queCompra[0]);
+        opcoes = [...queCompra, ...opcoes.filter(p => !comprados.has(p.c))];
+        return { estado: 'escolher', produto: null, opcoes: opcoes.slice(0, 6), maisOpcoes: Math.max(0, opcoes.length - 6), medida };
+      }
+      // Quantidade que vai pro orçamento: caixa vira unidades, "500 pç" de produto vendido em
+      // pacote "C/ 50 UN" vira 10 pacotes, e tudo sobe pro múltiplo da embalagem. ajuste = o que
+      // mudou, pra mostrar em "Quantidade ajustada".
+      function quantidadeDaLinhaLista(item, p, medida) {
+        const step = p && p.emb > 0 ? p.emb : 1;
+        const ajustes = [];
+        let qtd = medida ? null : item.qtd;
+        if (medida) ajustes.push(`“${item.qtd}” é a medida do produto`);
+        if (qtd == null) { ajustes.push('sem quantidade na mensagem · 1 embalagem'); return { qtd: step, ajuste: ajustes.join(' · ') }; }
+        if (item.unidade === 'cx') {
+          if (step > 1) { ajustes.push(`${qtd} cx × ${step} = ${qtd * step} un`); qtd *= step; }
+          else ajustes.push(`pediu ${qtd} cx, o catálogo não diz quantas vêm na caixa · confira`);
+        } else if (item.unidade === 'un') {
+          const m = normalize(p.n).match(/c\/\s*(\d+)\s*(un|und|unid|pc|pcs|pecas?)\b/);
+          const porPacote = m ? +m[1] : 0;
+          if (porPacote > 1 && qtd >= porPacote) {
+            const pacotes = Math.ceil(qtd / porPacote);
+            ajustes.push(`${qtd} un → ${pacotes} pct de ${porPacote}`);
+            qtd = pacotes;
+          }
+        }
+        const final = Math.ceil(qtd / step) * step;
+        if (final !== qtd) ajustes.push(`pediu ${qtd} → ${final} (embalagem de ${step})`);
+        if (final > 5000) ajustes.push('quantidade alta · confira');
+        return { qtd: final, ajuste: ajustes.length ? ajustes.join(' · ') : null };
+      }
+      // Linha que a IA leu da foto ({ texto, quantidade, unidade }): com a quantidade dela, o texto
+      // inteiro é o produto (o "110" de "disco 110" não vira quantidade); sem, lê como texto colado.
+      function linhaDaImagemLista(it) {
+        const item = interpretarLinhaLista(it.texto, true);
+        if (!item || !(it.quantidade > 0)) return item;
+        const termo = termoDasPalavrasLista(palavrasDaLinhaLista(item.texto).filter(t => !/^\d{5,}$/.test(t)));
+        return { ...item, termo, qtd: it.quantidade, unidade: it.unidade || null, talvez: false };
+      }
+      // Na tela de escolha: tira o começo que todas as opções têm ("DESEMPENADEIRA INOX CABO
+      // REMOVÍVEL LISA - COM CABO" / "... - SEM CABO" -> "COM CABO" / "SEM CABO"), pra caber no botão.
+      function rotulosDistintosLista(produtos) {
+        if (produtos.length < 2) return produtos.map(p => p.n);
+        const palavras = produtos.map(p => String(p.n).split(/\s+/));
+        let n = 0;
+        while (palavras.every(ws => ws.length > n + 1 && ws[n] === palavras[0][n])) n++;
+        // não corta a medida no meio: "1,5 mm" fica junto (sem isso o botão dizia só "mm")
+        while (n > 0 && palavras.some(ws => /^(mm|cm|m|mts?|pol|kg|g|l|ml|"|\(|-)/i.test(ws[n] || ''))) n--;
+        return palavras.map((ws, i) => {
+          const r = ws.slice(n).join(' ').replace(/^[-–—·]\s*/, '').trim();
+          return r.length >= 2 ? r : produtos[i].n;
+        });
+      }
+      // </motor-lista>
 
       // ---------------- Fichas técnicas (balão de informação) ----------------
       // Carregado em segundo plano, sem bloquear a abertura do app - a maioria
@@ -13693,6 +14343,7 @@
         const focoQtd = ativo && ativo.dataset ? ativo.dataset.tabelaQtd : null;
         list.classList.remove('emTabela');
         document.getElementById('mixInicialBtn').classList.toggle('buscando', q.trim().length >= 2);
+        document.getElementById('colarListaBtn').classList.toggle('buscando', q.trim().length >= 2);
         // ✕ da busca também quando o app limpa o campo sozinho (código que entrou na lista de preços)
         const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
         if (limpar) limpar.classList.toggle('hidden', !q);
@@ -15072,8 +15723,10 @@
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
           body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>
-            <button type="button" class="mixInicialBtn" data-mix-inicial>✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>`;
+            <button type="button" class="mixInicialBtn" data-mix-inicial>✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>
+            <button type="button" class="mixInicialBtn" data-colar-lista>📋 Colar lista do cliente <span>texto, foto ou PDF que ele mandou no WhatsApp</span></button>`;
           body.querySelector('[data-mix-inicial]').addEventListener('click', montarMixInicial);
+          body.querySelector('[data-colar-lista]').addEventListener('click', abrirListaCliente);
         } else {
           body.innerHTML = rows.map(({ p, it, cp, lineTotal, campaignPct, campaignName }, idx) => `
       <div class="cartitem">
@@ -23553,26 +24206,25 @@
         try { localStorage.setItem(chave, JSON.stringify(lista)); } catch (e) { }
       }
       // Rascunho com as fotos (File/Blob) no IndexedDB - não cabe no localStorage
-      function ocBanco() {
-        return new Promise((ok, falha) => {
-          const r = indexedDB.open('cortag-ocorrencias', 1);
-          r.onupgradeneeded = () => r.result.createObjectStore('rascunhos', { keyPath: 'chave' });
+      // Uma operação num banco IndexedDB de uma "tabela" só (rascunho de ocorrência, lista do cliente)
+      async function idbOp(nome, tabela, chave, modo, fazer) {
+        const db = await new Promise((ok, falha) => {
+          const r = indexedDB.open(nome, 1);
+          r.onupgradeneeded = () => r.result.createObjectStore(tabela, { keyPath: chave });
           r.onsuccess = () => ok(r.result);
           r.onerror = () => falha(r.error);
         });
-      }
-      async function ocBancoOp(modo, fazer) {
-        const db = await ocBanco();
         try {
           return await new Promise((ok, falha) => {
-            const tx = db.transaction('rascunhos', modo);
-            const r = fazer(tx.objectStore('rascunhos'));
+            const tx = db.transaction(tabela, modo);
+            const r = fazer(tx.objectStore(tabela));
             tx.oncomplete = () => ok(r && r.result);
             tx.onerror = () => falha(tx.error);
             tx.onabort = () => falha(tx.error);
           });
         } finally { db.close(); }
       }
+      const ocBancoOp = (modo, fazer) => idbOp('cortag-ocorrencias', 'rascunhos', 'chave', modo, fazer);
       async function lerRascunhoOcorrencia(chave) {
         try { return await ocBancoOp('readonly', s => s.get(chave)) || null; } catch (e) { return null; }
       }
@@ -25466,7 +26118,7 @@
           if (!p || state.cart.some(i => i.cod === p.c) || itemSemPrevisaoDeChegada(p.c)) continue;
           const passo = packStep(p);
           const qtd = Math.max(1, Math.ceil((Number(c.qtd) || passo) / passo)) * passo;
-          const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), 0);
+          const unit = precoUnitarioSemImpostos(p);
           if (!(unit > 0) || (soma > 0 && soma + unit * qtd > teto)) continue;
           addToCart(p.c, qtd, true);
           soma += unit * qtd;
@@ -27543,11 +28195,11 @@
           }
         } catch (e) { /* sem internet: salvar avisa; sem variações, só o produto */ }
       }
-      async function reduzirFoto(file) {
+      async function reduzirFoto(file, passos = [[FOTO_LADO_MAX, 0.82], [800, 0.72], [640, 0.65]], bytesMax = FOTO_BYTES_MAX) {
         const url = URL.createObjectURL(file);
         try {
           const img = await new Promise((ok, erro) => { const i = new Image(); i.onload = () => ok(i); i.onerror = erro; i.src = url; });
-          for (const [lado, qualidade] of [[FOTO_LADO_MAX, 0.82], [800, 0.72], [640, 0.65]]) {
+          for (const [lado, qualidade] of passos) {
             const escala = Math.min(1, lado / Math.max(img.naturalWidth, img.naturalHeight));
             const canvas = document.createElement('canvas');
             canvas.width = Math.max(1, Math.round(img.naturalWidth * escala));
@@ -27557,7 +28209,7 @@
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
             const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', qualidade));
-            if (blob && blob.size <= FOTO_BYTES_MAX) return blob;
+            if (blob && blob.size <= bytesMax) return blob;
           }
         } finally { URL.revokeObjectURL(url); }
         throw new Error('A foto ficou grande demais — tente outra.');
@@ -28250,6 +28902,11 @@
           : r.semConferir ? `, sem conferir o que ${r.semConferir.nome} já compra (sem a lista dele no aparelho)` : '';
         return `comprados pelo maior número de lojas em 12 meses (${quem})${filtro}`;
       }
+      // Preço unitário sem impostos com o classificatório do orçamento, sem campanha (mix inicial,
+      // proposta pra manter a faixa, total da lista do cliente). Preço Fixo no canal não ganha desconto.
+      function precoUnitarioSemImpostos(p) {
+        return clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), 0);
+      }
       async function montarMixInicial() {
         const dados = await carregarMixInicial(true);
         if (!dados) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
@@ -28271,7 +28928,7 @@
           if (soma >= alvo) break;
           if (state.cart.some(i => i.cod === p.c)) continue;
           const qtd = packStep(p);
-          const unit = clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, false, 0);
+          const unit = precoUnitarioSemImpostos(p);
           if (!(unit > 0) || soma + unit * qtd > teto) continue;
           addToCart(p.c, qtd, true);
           soma += unit * qtd;
@@ -30795,13 +31452,479 @@
         catch (e) { showToast('Não foi possível iniciar o microfone'); }
       }
 
+      // =================================================================
+      // ---------------- Lista do cliente (texto, foto ou PDF) ----------
+      // =================================================================
+      // O cliente manda no WhatsApp a lista do que quer (texto, foto do orçamento, PDF): o vendedor
+      // cola/escolhe aqui, o app acha cada produto (<motor-lista>) e ele confere em grupos (opção "C"
+      // dos mockups "Cortag · Lista colada do WhatsApp", 10/2026) antes de ir pro orçamento.
+      // Decisões do usuário: linha que ficou em dúvida e não foi escolhida fica de fora; foto sem
+      // internet fica guardada no aparelho e é lida quando o sinal voltar. Texto e PDF com texto são
+      // lidos aqui mesmo (sem internet); só a foto vai pro servidor (Gemini, /api/assistente).
+      let lc = null; // { fase, origem, linhas, ignoradas, prontosAbertos, guardadaId, rotulo, abortar }
+      const LC_MAX_IMAGENS = 3;
+      // abrir/fechar a janela muda a geração: foto/PDF ainda lendo de uma janela fechada desiste
+      // (não manda pro servidor, não guarda e não troca a tela da lista nova)
+      let lcGeracao = 0;
+      const lcVelha = (g) => g !== lcGeracao || !lc;
+      function abrirListaCliente() {
+        lcGeracao++;
+        lc = { fase: 'entrada', texto: '' };
+        document.getElementById('listaClienteModal').classList.remove('hidden');
+        renderListaCliente();
+      }
+      function fecharListaCliente() {
+        if (lc && lc.abortar) lc.abortar.abort();
+        lcGeracao++;
+        lc = null;
+        document.getElementById('listaClienteModal').classList.add('hidden');
+      }
+      function lcComprados() {
+        const c = (lc && lc.clienteDaLista) || state.levCliente; // lista guardada: o que compra o cliente dela
+        if (!c || !c.id) return new Set();
+        const lista = COMPRADOS_CACHE.get(c.id) || lerCompradosLS()[c.id] || [];
+        return new Set(lista.map(x => x.codigo_sku));
+      }
+      // itens do <motor-lista> -> linhas da conferência
+      function conferirItensDaLista(itens, origem, extra) {
+        const comprados = lcComprados();
+        const ctx = { comprados, porCodigo: findByExactCode }; // a mesma do leitor: EAN, DUN, zeros à esquerda
+        let ignoradas = 0;
+        const linhas = [];
+        for (const item of itens) {
+          const r = produtoDaLinhaLista(item, ctx);
+          // PDF tem cabeçalho, endereço, total...: linha que não acha produto nenhum não é item
+          // (só fica a que tem quantidade com unidade, "3 UN": é item que o catálogo não tem)
+          if (r.estado === 'nao' && origem === 'pdf' && !item.unidade) { ignoradas++; continue; }
+          const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
+            cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '' };
+          if (r.produto) lcEscolher(l, r.produto);
+          linhas.push(l);
+        }
+        if (!linhas.length) {
+          showToast(`Não achei produto do catálogo ${origem === 'pdf' ? 'nesse PDF' : 'nessa lista'}.`, 'erro');
+          lc = { ...(lc || {}), fase: 'entrada', abortar: null };
+          renderListaCliente();
+          return;
+        }
+        lc = { ...(lc || {}), fase: 'conferir', origem, linhas, ignoradas, comprados, prontosAbertos: false, ...(extra || {}) };
+        renderListaCliente();
+      }
+      function lcEscolher(l, p) {
+        if (!p._tok) prepararProdutoParaBusca(p);
+        const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
+        const q = quantidadeDaLinhaLista(l.item, p, medida);
+        l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
+      }
+      function lerTextoDaLista(texto, origem) {
+        const itens = linhasDaListaCliente(texto, origem === 'pdf');
+        if (!itens.length) { showToast(origem === 'pdf' ? 'Não achei linhas de produto nesse PDF.' : 'Não achei produto nesse texto — uma linha por produto.', 'erro'); return; }
+        conferirItensDaLista(itens, origem);
+      }
+      // Foto -> JPEG de até 1600 px e 900 KB (a mesma redução da foto do produto, fundo branco no
+      // print com transparência): sobe rápido no 4G e cabe no aparelho se ficar guardada
+      const jpegBase64 = async (blob) => (await blobParaDataUrl(blob)).split(',')[1];
+      const reduzirImagemLista = async (arquivo) => jpegBase64(await reduzirFoto(arquivo, [[1600, 0.82], [1200, 0.72], [900, 0.65]], 900 * 1024));
+      async function lcFotosEscolhidas(arquivos) {
+        const lista = [...arquivos].slice(0, LC_MAX_IMAGENS);
+        if (!lista.length || !lc) return;
+        const g = lcGeracao;
+        lc = { ...lc, fase: 'lendo', msg: 'Preparando a foto…' };
+        renderListaCliente();
+        try {
+          const imagens = [];
+          for (const f of lista) imagens.push({ tipo: 'image/jpeg', dados: await reduzirImagemLista(f) });
+          if (lcVelha(g)) return;
+          await lerImagensDaLista(imagens, 'foto');
+        } catch (e) {
+          if (lcVelha(g)) return;
+          showToast('Não deu pra abrir essa imagem.', 'erro');
+          if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
+        }
+      }
+      // PDF com texto: lido aqui. PDF escaneado (só imagem): as 3 primeiras páginas viram foto.
+      async function lcPdfEscolhido(arquivo) {
+        if (!arquivo || !lc) return;
+        const g = lcGeracao;
+        lc = { ...lc, fase: 'lendo', msg: 'Abrindo o PDF…' };
+        renderListaCliente();
+        try {
+          const dados = await arquivo.arrayBuffer();
+          const { texto } = await extrairTextoPdf(dados.slice(0));
+          if (lcVelha(g)) return;
+          if ((texto.match(/[A-Za-zÀ-ÿ]{3,}/g) || []).length >= 5) { lerTextoDaLista(texto, 'pdf'); if (lc && lc.fase === 'lendo') { lc.fase = 'entrada'; renderListaCliente(); } return; }
+          const pdfjsLib = await loadPdfJs();
+          const doc = await pdfjsLib.getDocument({ data: dados }).promise;
+          const imagens = [];
+          for (let i = 1; i <= Math.min(doc.numPages, LC_MAX_IMAGENS); i++) {
+            const pagina = await doc.getPage(i);
+            const base = pagina.getViewport({ scale: 1 });
+            const viewport = pagina.getViewport({ scale: Math.min(3, 1600 / Math.max(base.width, base.height)) });
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height);
+            await pagina.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
+            imagens.push({ tipo: 'image/jpeg', dados: await jpegBase64(await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.82))) });
+          }
+          if (lcVelha(g)) return;
+          await lerImagensDaLista(imagens, 'pdf');
+        } catch (e) {
+          if (lcVelha(g)) return;
+          showToast(navigator.onLine ? 'Não deu pra abrir esse PDF.' : 'Não deu pra abrir o PDF sem internet — o leitor de PDF ainda não foi baixado neste aparelho.', 'erro');
+          if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
+        }
+      }
+      async function pedirLeituraDaImagem(imagens, signal) {
+        const r = await apiFetch('/api/assistente/itens-da-imagem', { method: 'POST', body: JSON.stringify({ imagens }), signal });
+        return (r && Array.isArray(r.itens) ? r.itens : []).map(linhaDaImagemLista).filter(Boolean);
+      }
+      async function lerImagensDaLista(imagens, origem) {
+        if (!lc) return;
+        if (!navigator.onLine) { await guardarListaCliente(imagens, origem); return; }
+        const g = lcGeracao;
+        const abortar = new AbortController();
+        lc = { ...lc, fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
+        renderListaCliente();
+        let itens;
+        try { itens = await pedirLeituraDaImagem(imagens, abortar.signal); }
+        catch (e) {
+          if (lcVelha(g) || abortar.signal.aborted) return;
+          if (!e.status) { await guardarListaCliente(imagens, origem); return; } // sem conexão: guarda
+          lc = { ...lc, fase: 'erroLeitura', erro: e.message, abortar: null };
+          renderListaCliente();
+          return;
+        }
+        if (lcVelha(g) || abortar.signal.aborted) return;
+        lc.abortar = null;
+        if (!itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
+        conferirItensDaLista(itens, origem);
+      }
+
+      // ---- lista guardada pra ler quando a internet voltar (IndexedDB: fotos não cabem no localStorage)
+      const lcBancoOp = (modo, fazer) => idbOp('cortag-listas', 'listas', 'id', modo, fazer);
+      async function listasGuardadas() {
+        try { return ((await lcBancoOp('readonly', s => s.getAll())) || []).sort((a, b) => a.criadaEm - b.criadaEm); } catch (e) { return []; }
+      }
+      async function guardarListaCliente(imagens, origem) {
+        if (!lc) return; // janela fechada (cancelou): não guarda
+        const g = lcGeracao;
+        const c = state.levCliente;
+        const reg = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), criadaEm: Date.now(), origem, imagens,
+          cliente: c ? { id: c.id, nome: c.nome } : null, itens: null };
+        try { await lcBancoOp('readwrite', s => s.put(reg)); }
+        catch (e) {
+          showToast('Sem internet e sem espaço no aparelho pra guardar a foto — ela NÃO ficou salva. Tente de novo com sinal.', 'erro');
+          if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
+          return;
+        }
+        atualizarFaixaListas();
+        if (lcVelha(g)) return;
+        lc = { ...lc, fase: 'guardada', abortar: null };
+        renderListaCliente();
+      }
+      async function apagarListaGuardada(id) {
+        try { await lcBancoOp('readwrite', s => s.delete(id)); } catch (e) { }
+        atualizarFaixaListas();
+      }
+      let listasApagadas = false; // logout: leitura em andamento não grava de volta
+      async function apagarListasDoAparelho() { // logout: foto de documento de cliente não fica no aparelho
+        listasApagadas = true;
+        try { await lcBancoOp('readwrite', s => s.clear()); } catch (e) { }
+      }
+      // Servidor recusou ou falhou (502 do Gemini, 429 do limite, 503 sem chave): espera 2, 10 e
+      // 60 min entre as tentativas e, depois da 3ª, só no "Ler agora" (senão cada volta pro app
+      // reenviava as fotos no 4G e gastava o limite de fotos do vendedor).
+      const LC_ESPERAS_MIN = [2, 10, 60];
+      let lendoGuardadas = false;
+      async function lerListasGuardadas(agora) {
+        if (lendoGuardadas || listasApagadas || !navigator.onLine || !getStoredToken()) return;
+        lendoGuardadas = true;
+        let lidas = 0;
+        const ler = async () => {
+          for (const reg of await listasGuardadas()) {
+            if (reg.itens) continue;
+            const tent = reg.tentativas || 0;
+            if (!agora && (tent >= LC_ESPERAS_MIN.length || (reg.proximaEm && Date.now() < reg.proximaEm))) continue;
+            let itens;
+            try { itens = await pedirLeituraDaImagem(reg.imagens); }
+            catch (e) {
+              if (!e.status) break; // caiu a conexão: tenta de novo quando voltar
+              reg.erro = e.message;
+              reg.tentativas = tent + 1;
+              reg.proximaEm = Date.now() + (LC_ESPERAS_MIN[tent] || 60) * 60000;
+              if (e.recusado) reg.itens = []; // imagem que o servidor recusa não adianta reenviar
+              if (!listasApagadas) { try { await lcBancoOp('readwrite', s => s.put(reg)); } catch (e2) { } }
+              continue;
+            }
+            if (listasApagadas) return;
+            reg.itens = itens; reg.lidaEm = Date.now(); reg.erro = itens.length ? null : 'nenhum produto lido na imagem';
+            reg.imagens = []; // lida: a foto não precisa mais ficar no aparelho
+            try { await lcBancoOp('readwrite', s => s.put(reg)); if (itens.length) lidas++; } catch (e) { }
+          }
+        };
+        try {
+          // uma aba por vez (o app instalado e uma aba do navegador dividem o aparelho)
+          if (navigator.locks) await navigator.locks.request('cortag-listas', { ifAvailable: true }, (lock) => lock ? ler() : null);
+          else await ler();
+        } finally { lendoGuardadas = false; }
+        if (listasApagadas) return;
+        if (lidas) showToast(`Lista do cliente lida${lidas > 1 ? ` (${lidas})` : ''} · toque em "Conferir" no Pedido`, 'longo');
+        atualizarFaixaListas();
+      }
+      async function atualizarFaixaListas() {
+        const el = document.getElementById('listaGuardadaFaixa');
+        if (!el) return;
+        const regs = await listasGuardadas();
+        const lidas = regs.filter(r => r.itens && r.itens.length), esperando = regs.filter(r => !r.itens);
+        const semProduto = regs.length - lidas.length - esperando.length;
+        if (!regs.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+        const partes = [];
+        if (semProduto) partes.push(`${semProduto} sem produto lido`);
+        if (lidas.length) partes.push(`${lidas.length} lista${lidas.length > 1 ? 's' : ''} do cliente lida${lidas.length > 1 ? 's' : ''}`);
+        if (esperando.length) partes.push(lidas.length ? `${esperando.length} esperando internet` : `${esperando.length} lista${esperando.length > 1 ? 's' : ''} do cliente esperando internet`);
+        el.innerHTML = `<span>📋 ${escapeHtml(partes.join(' · '))}</span><b>${lidas.length ? 'Conferir' : 'Ver'}</b>`;
+        el.classList.toggle('lida', lidas.length > 0);
+        el.classList.remove('hidden');
+      }
+      async function abrirListasGuardadas() {
+        const regs = await listasGuardadas();
+        if (regs.length === 1 && regs[0].itens && regs[0].itens.length) { abrirListaGuardada(regs[0]); return; }
+        lcGeracao++;
+        lc = { fase: 'guardadas', regs };
+        document.getElementById('listaClienteModal').classList.remove('hidden');
+        renderListaCliente();
+      }
+      async function abrirListaGuardada(reg) {
+        const atual = state.levCliente;
+        if (reg.cliente && (!atual || atual.id !== reg.cliente.id)) {
+          const msg = `Essa lista é de ${reg.cliente.nome}, e o orçamento aberto ${atual ? 'é de ' + atual.nome : 'está sem cliente'}. Conferir pra pôr no orçamento aberto?`;
+          if (!await askConfirm(msg, 'Conferir assim')) return;
+        }
+        const rotulo = `${reg.origem === 'pdf' ? 'PDF' : 'Foto'} de ${quandoCurto(reg.criadaEm)}${reg.cliente ? ' · ' + reg.cliente.nome : ''}`;
+        lcGeracao++;
+        lc = { fase: 'conferir', clienteDaLista: reg.cliente || null };
+        document.getElementById('listaClienteModal').classList.remove('hidden');
+        conferirItensDaLista(reg.itens, 'foto', { guardadaId: reg.id, rotulo });
+      }
+
+      // ---- tela
+      function lcIncluidas() { return lc && lc.linhas ? lc.linhas.filter(l => l.cod && !l.fora) : []; }
+      function htmlStepperLista(i, l) {
+        return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
+      }
+      function htmlBuscaLista(i, l) {
+        if (!l.buscando) return `<button type="button" class="lcLink" data-lc-buscar="${i}">Buscar outro produto</button>`;
+        return `<div class="lcBusca"><input type="search" data-lc-busca="${i}" value="${escapeHtml(l.busca)}" placeholder="Buscar no catálogo" aria-label="Buscar outro produto pra “${escapeHtml(l.item.texto)}”"></div>
+          <div class="lcBuscaRes" id="lcBuscaRes${i}">${htmlResultadosBuscaLista(i, l.achados || [])}</div>`;
+      }
+      const lcAchados = (busca) => busca.trim().length >= 2 ? searchProducts(busca).slice(0, 5) : [];
+      function htmlResultadosBuscaLista(i, achados) {
+        return achados.map(p => `<button type="button" class="lcOpcao" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}">${escapeHtml(p.n)}<small>${escapeHtml(p.c)}</small></button>`).join('');
+      }
+      function htmlLinhaEscolher(i, l) {
+        const rotulos = rotulosDistintosLista(l.opcoes);
+        const opcoes = l.opcoes.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${lc.comprados.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
+        return `<div class="lcLinha${l.fora ? ' fora' : ''}">
+          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”</span>${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
+          <div class="lcOpcoes">${opcoes}</div>
+          ${l.maisOpcoes ? `<div class="lcNota">+${l.maisOpcoes} parecido${l.maisOpcoes > 1 ? 's' : ''} · use a busca se não for nenhum desses</div>` : ''}
+          ${l.cod && l.ajuste ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
+          <div class="lcAcoes">${htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
+        </div>`;
+      }
+      function htmlLinhaNaoAchei(i, l) {
+        const p = l.cod ? productByCod(l.cod) : null;
+        return `<div class="lcLinha${l.fora ? ' fora' : ''}">
+          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”</span>${p && !l.fora ? htmlStepperLista(i, l) : ''}</div>
+          ${p ? `<div class="lcNome">✓ ${escapeHtml(p.n)}</div>` : ''}
+          ${l.fora ? '<div class="lcNota">fica de fora</div>' : htmlBuscaLista(i, l)}
+          <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
+        </div>`;
+      }
+      function htmlLinhaPronta(i, l) {
+        const p = productByCod(l.cod);
+        return `<div class="lcLinha simples${l.fora ? ' fora' : ''}">
+          <div class="lcTopoLinha"><span class="lcNome">${escapeHtml(p ? p.n : l.cod)}${l.jaCompra ? '<em>já compra</em>' : ''}</span>${l.fora ? '' : htmlStepperLista(i, l)}</div>
+          <div class="lcOriginal">“${escapeHtml(l.item.texto)}”</div>
+          ${l.ajuste && !l.fora ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
+          <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Tirar'}</button></div>
+        </div>`;
+      }
+      function renderListaCliente() {
+        if (!lc) return;
+        const corpo = document.getElementById('lcCorpo'), rodape = document.getElementById('lcRodape');
+        const titulo = document.getElementById('lcTitulo'), sub = document.getElementById('lcSub');
+        const rolagem = corpo.scrollTop;
+        sub.textContent = '';
+        if (lc.fase === 'entrada') {
+          titulo.textContent = 'Colar lista do cliente';
+          sub.textContent = state.levCliente ? state.levCliente.nome : '';
+          corpo.innerHTML = `<p class="lcDica">Texto, foto do orçamento ou PDF, do jeito que o cliente mandou. O app acha cada produto e você confere antes de entrar no orçamento.</p>
+            <div class="lcFontes">
+              <button type="button" class="lcFonte" id="lcColarBtn"><span aria-hidden="true">📋</span>Colar texto</button>
+              <button type="button" class="lcFonte" id="lcFotoBtn"><span aria-hidden="true">📷</span>Foto ou print</button>
+              <button type="button" class="lcFonte" id="lcPdfBtn"><span aria-hidden="true">📄</span>PDF</button>
+            </div>
+            <label class="lcRotulo" for="lcTexto">Mensagem do cliente</label>
+            <textarea id="lcTexto" rows="9" placeholder="Ex.:\n- colher de pedreiro 8 · 12\n- desempenadeira lisa 2 cx\n- disco diamantado 110 · 10">${escapeHtml(lc.texto || '')}</textarea>
+            <p class="lcNota">Uma linha por produto. Saudação e "obrigado" ficam de fora sozinhos. Texto e PDF são lidos sem internet; a foto precisa de sinal (sem ele, fica guardada).</p>`;
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button><button type="button" class="btnPrimary" id="lcLerBtn">Ler lista</button>`;
+          document.getElementById('lcTexto').addEventListener('input', (e) => { if (lc) lc.texto = e.target.value; });
+          return;
+        }
+        if (lc.fase === 'lendo') {
+          titulo.textContent = 'Lendo a lista';
+          corpo.innerHTML = `<div class="lcLendo"><span class="lcGira" aria-hidden="true"></span><b>${escapeHtml(lc.msg || 'Lendo…')}</b>${lc.sub ? `<p>${escapeHtml(lc.sub)}</p>` : ''}</div>`;
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
+          return;
+        }
+        if (lc.fase === 'erroLeitura') {
+          titulo.textContent = 'Não deu pra ler';
+          corpo.innerHTML = `<div class="ap-msg error">${escapeHtml(lc.erro || 'Erro ao ler a lista.')}</div>`;
+          rodape.innerHTML = lc.imagens
+            ? `<button type="button" class="restoreBtn" id="lcGuardarBtn">Guardar e ler depois</button><button type="button" class="btnPrimary" id="lcTentarBtn">Tentar de novo</button>`
+            : `<button type="button" class="restoreBtn" id="lcVoltarBtn">Voltar</button>`;
+          return;
+        }
+        if (lc.fase === 'guardada') {
+          titulo.textContent = 'Sem sinal agora';
+          corpo.innerHTML = `<p class="lcDica">A lista ficou guardada neste aparelho. Quando a internet voltar, o app lê e avisa aqui no Pedido pra você conferir.</p>
+            <p class="lcNota">Enquanto isso, dá pra buscar os produtos um por um.</p>`;
+          rodape.innerHTML = `<button type="button" class="btnPrimary" data-lc-fechar>Ok</button>`;
+          return;
+        }
+        if (lc.fase === 'guardadas') {
+          titulo.textContent = 'Listas guardadas';
+          corpo.innerHTML = lc.regs.length ? lc.regs.map(r => {
+            const situacao = r.itens ? (r.itens.length ? `lida · ${r.itens.length} linha${r.itens.length > 1 ? 's' : ''}` : 'sem produto lido') : 'esperando internet';
+            return `<div class="lcGuardada">
+              <div><b>${r.origem === 'pdf' ? 'PDF' : 'Foto'} de ${escapeHtml(quandoCurto(r.criadaEm))}</b><small>${escapeHtml((r.cliente ? r.cliente.nome + ' · ' : '') + situacao)}${r.erro ? ' · ' + escapeHtml(r.erro) : ''}</small></div>
+              <span>${r.itens && r.itens.length ? `<button type="button" class="restoreBtn compacto" data-lc-abrir-guardada="${escapeHtml(r.id)}">Conferir</button>` : ''}<button type="button" class="restoreBtn compacto" data-lc-apagar-guardada="${escapeHtml(r.id)}">Descartar</button></span>
+            </div>`;
+          }).join('') : '<p class="lcDica">Nenhuma lista guardada.</p>';
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>${navigator.onLine && lc.regs.some(r => !r.itens) ? '<button type="button" class="btnPrimary" id="lcLerGuardadasBtn">Ler agora</button>' : ''}`;
+          return;
+        }
+        // conferir
+        titulo.textContent = 'Conferir lista';
+        const ls = lc.linhas;
+        sub.textContent = lc.rotulo || `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`;
+        const escolher = [], nao = [], ajustadas = [], prontas = [];
+        ls.forEach((l, i) => {
+          if (l.estado === 'escolher') escolher.push(i);
+          else if (l.estado === 'nao') nao.push(i);
+          else if (l.ajuste) ajustadas.push(i);
+          else prontas.push(i);
+        });
+        const secao = (cls, nome, idx, fazer) => idx.length ? `<div class="lcSecao ${cls}"><h4>${nome} · ${idx.length}</h4>${idx.map(i => fazer(i, ls[i])).join('')}</div>` : '';
+        const resumoProntas = prontas.map(i => { const p = productByCod(ls[i].cod); return `${p ? p.n : ls[i].cod} ×${ls[i].qtd}`; }).join(' · ');
+        corpo.innerHTML = secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
+          + secao('nao', 'Não achei', nao, htmlLinhaNaoAchei)
+          + secao('ajustada', 'Quantidade ajustada', ajustadas, htmlLinhaPronta)
+          + (prontas.length ? `<div class="lcSecao pronta">
+              <button type="button" class="lcProntosCab" data-lc-prontos aria-expanded="${lc.prontosAbertos}"><span><b>✓ Prontos · ${prontas.length}</b><small>${escapeHtml(resumoProntas)}</small></span><span aria-hidden="true">${lc.prontosAbertos ? '▴' : '▾'}</span></button>
+              ${lc.prontosAbertos ? prontas.map(i => htmlLinhaPronta(i, ls[i])).join('') : ''}
+            </div>` : '');
+        const incl = lcIncluidas();
+        const total = incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
+        const semEscolha = ls.filter(l => !l.cod && !l.fora).length;
+        rodape.innerHTML = `<div class="lcTotal"><span>${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} · sem impostos</span><b>${brl(total)}</b></div>
+          <button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no orçamento</button>
+          ${semEscolha ? `<div class="lcFicaFora">${semEscolha} sem escolha fica${semEscolha > 1 ? 'm' : ''} de fora</div>` : ''}`;
+        corpo.scrollTop = rolagem;
+      }
+      async function porListaNoOrcamento() {
+        const incl = lcIncluidas();
+        if (!incl.length) return;
+        for (const l of incl) addToCart(l.cod, l.qtd, true);
+        const fora = lc.linhas.filter(l => !l.cod || l.fora).map(l => l.item.texto);
+        if (lc.guardadaId) await apagarListaGuardada(lc.guardadaId);
+        fecharListaCliente();
+        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} da lista no orçamento${fora.length ? ` · ficou de fora: ${fora.slice(0, 3).join(', ')}${fora.length > 3 ? '…' : ''}` : ''}`, 'longo');
+        renderResults();
+        openDrawer();
+      }
+      function initListaCliente() {
+        const modal = document.getElementById('listaClienteModal');
+        const corpo = document.getElementById('lcCorpo');
+        const fotoInput = document.getElementById('lcFotoInput'), pdfInput = document.getElementById('lcPdfInput');
+        document.getElementById('colarListaBtn').addEventListener('click', abrirListaCliente);
+        document.getElementById('listaGuardadaFaixa').addEventListener('click', abrirListasGuardadas);
+        document.getElementById('lcFecharBtn').addEventListener('click', fecharListaCliente);
+        fotoInput.addEventListener('change', () => { const f = fotoInput.files; if (f && f.length) lcFotosEscolhidas(f); fotoInput.value = ''; });
+        pdfInput.addEventListener('change', () => { const f = pdfInput.files && pdfInput.files[0]; if (f) lcPdfEscolhido(f); pdfInput.value = ''; });
+        modal.addEventListener('click', async (e) => {
+          if (!lc) return;
+          const t = e.target.closest('button, [data-lc-fechar]');
+          if (!t) return;
+          if (t.matches('[data-lc-fechar]')) { fecharListaCliente(); return; }
+          if (t.id === 'lcColarBtn') {
+            try {
+              const txt = await navigator.clipboard.readText();
+              if (txt && txt.trim()) { lc.texto = txt; renderListaCliente(); return; }
+            } catch (err) { }
+            document.getElementById('lcTexto').focus();
+            showToast('Segure no campo e toque em "Colar".');
+            return;
+          }
+          if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
+          if (t.id === 'lcPdfBtn') { pdfInput.click(); return; }
+          if (t.id === 'lcLerBtn') { lerTextoDaLista(document.getElementById('lcTexto').value, 'texto'); return; }
+          if (t.id === 'lcTentarBtn') { lerImagensDaLista(lc.imagens, lc.origemImagem || 'foto'); return; }
+          if (t.id === 'lcGuardarBtn') { guardarListaCliente(lc.imagens, lc.origemImagem || 'foto'); return; }
+          if (t.id === 'lcVoltarBtn') { lc.fase = 'entrada'; renderListaCliente(); return; }
+          if (t.id === 'lcPorBtn') { porListaNoOrcamento(); return; }
+          if (t.id === 'lcLerGuardadasBtn') { await lerListasGuardadas(true); if (lc && lc.fase === 'guardadas') { lc.regs = await listasGuardadas(); renderListaCliente(); } return; }
+          if (t.dataset.lcAbrirGuardada) { const reg = (lc.regs || []).find(r => r.id === t.dataset.lcAbrirGuardada); if (reg) abrirListaGuardada(reg); return; }
+          if (t.dataset.lcApagarGuardada) {
+            if (!await askConfirm('Descartar essa lista guardada?', 'Descartar', { perigo: true })) return;
+            await apagarListaGuardada(t.dataset.lcApagarGuardada);
+            if (lc && lc.fase === 'guardadas') { lc.regs = await listasGuardadas(); renderListaCliente(); }
+            return;
+          }
+          if (t.matches('[data-lc-prontos]')) { lc.prontosAbertos = !lc.prontosAbertos; renderListaCliente(); return; }
+          const l = lc.linhas && lc.linhas[Number(t.dataset.lcOp ?? t.dataset.lcQtd ?? t.dataset.lcFora ?? t.dataset.lcBuscar)];
+          if (!l) return;
+          if (t.dataset.lcOp !== undefined) {
+            const p = productByCod(t.dataset.cod);
+            if (p) lcEscolher(l, p);
+          } else if (t.dataset.lcQtd !== undefined) {
+            const p = productByCod(l.cod), step = packStep(p);
+            l.qtd = Math.max(step, l.qtd + Number(t.dataset.dir) * step);
+          } else if (t.dataset.lcFora !== undefined) {
+            l.fora = !l.fora;
+          } else if (t.dataset.lcBuscar !== undefined) {
+            l.buscando = true;
+            l.busca = l.item.termo || '';
+            l.achados = lcAchados(l.busca);
+          }
+          renderListaCliente();
+          if (t.dataset.lcBuscar !== undefined) { const inp = corpo.querySelector(`[data-lc-busca="${t.dataset.lcBuscar}"]`); if (inp) inp.focus(); }
+        });
+        // busca dentro da linha: só a lista de resultados redesenha (o campo não perde o foco)
+        corpo.addEventListener('input', (e) => {
+          const inp = e.target.closest('[data-lc-busca]');
+          if (!inp || !lc || !lc.linhas) return;
+          const i = Number(inp.dataset.lcBusca), l = lc.linhas[i];
+          if (!l) return;
+          l.busca = inp.value;
+          l.achados = lcAchados(l.busca);
+          const res = document.getElementById('lcBuscaRes' + i);
+          if (res) res.innerHTML = htmlResultadosBuscaLista(i, l.achados);
+        });
+        window.addEventListener('online', () => lerListasGuardadas());
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') lerListasGuardadas(); });
+        atualizarFaixaListas();
+        setTimeout(() => lerListasGuardadas(), 3000);
+      }
+
       function initVoiceSearch() {
+        // fora do "if" abaixo: sem reconhecimento de voz (Firefox, alguns iPhones) o botão não fazia nada
+        document.getElementById('mixInicialBtn').addEventListener('click', montarMixInicial);
         if (!SpeechRecognitionCtor) {
           document.querySelectorAll('.micBtn').forEach(b => b.classList.add('unsupported'));
           return;
         }
         document.getElementById('micBtnSearch').addEventListener('click', () => startVoiceRecognition('searchInput'));
-        document.getElementById('mixInicialBtn').addEventListener('click', montarMixInicial);
         document.getElementById('micBtnLev').addEventListener('click', () => startVoiceRecognition('levInput'));
       }
 
@@ -31158,6 +32281,7 @@
         desconectarLeitorTablet(); // nem somando leituras num levantamento depois do logout
         if (leitorCelular) { const id = leitorCelular.id; sairDoModoLeitor(); apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { }); }
         await apagarOcorrenciasDoAparelho(); // rascunhos com fotos de cliente não ficam no aparelho
+        await apagarListasDoAparelho(); // nem a foto da lista/orçamento que o cliente mandou
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
@@ -31322,6 +32446,7 @@
           initPriceEdit();
           initFichaTecnicaModal();
           initVoiceSearch();
+          initListaCliente();
           initBarcodeScanner();
 
           const searchInput = document.getElementById('searchInput');
