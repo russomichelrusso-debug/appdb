@@ -4415,6 +4415,22 @@ async function main() {
         const fraco = ctxL.linhasDaListaCliente('batedor argamassa forte 6');
         const rFraco = ctxL.produtoDaLinhaLista(fraco[0], { porCodigo });
         assert(!rFraco.medida, 'lista do cliente: o "6" só vira medida com o produto achado sem faltar palavra');
+        // PDF real de pedido de cliente (CONSTRUBASSO, 10/2026): "Qtde Código Ref. Produto Marca" -
+        // a quantidade é "12,00" (parecia valor em reais e sumia) e "3893" é o código DO CLIENTE
+        // (virava "3.894 colheres"); o código Cortag vem no fim da descrição
+        const construbasso = 'ORÇAMENTO nº 333127\nQtde Código Ref. Produto Marca\n'
+          + '12,00 3893 3893 COLHER PEDR 08 OVAL CABO PLASTICO 62536 CORTAG\n6,00 5453 23504 COLHER PEDR10 OVAL CABO EMB 60256 CORTAG\n'
+          + '10,00 1354 1354 DISCO CORTE MADEIRA TUNGSTENIO 110MM 4 61346 CORTAG\nImpresso por ROBSON em 03/08/2026 10:47:03 Página: 1 / 1';
+        const cb = ctxL.linhasDaListaCliente(construbasso, true);
+        const cbRes = cb.slice(0, 3).map(l => [l.qtd, l.codigos[0], l.termo].join('|')); // o da descrição vem primeiro
+        assert(cbRes[0] === '12|62536|colher pedr 08 oval cabo plastico' && cbRes[1] === '6|60256|colher pedr 10 oval cabo emb'
+          && cbRes[2] === '10|61346|disco corte madeira tungstenio 110 mm 4',
+          `lista do cliente: tabela do PDF pela coluna Qtde, sem o código do cliente nem a marca: ${JSON.stringify(cbRes)}`);
+        const comCodCol = ctxL.linhasDaListaCliente('Qtde Código Produto\n4,00 60876 BATEDOR', true);
+        assert(comCodCol[0] && comCodCol[0].qtd === 4 && comCodCol[0].codigos.includes('60876'), 'lista do cliente: código Cortag na coluna antes da descrição vale');
+        // sem cabeçalho, "12,00" no começo da linha do PDF continua sendo a quantidade
+        const semCab = ctxL.linhasDaListaCliente('12,00 3893 3893 COLHER PEDR 08 OVAL 62536 CORTAG 15,30 183,60', true);
+        assert(semCab[0].qtd === 12 && !/3893/.test(semCab[0].termo), `lista do cliente: "12,00" no começo do PDF é quantidade: ${JSON.stringify(semCab[0])}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);
@@ -5242,6 +5258,20 @@ async function main() {
     assert(bloqueadoEm === LIMITE_CARTEIRA + 1 && /espera um minuto/.test(msg || '') && adiar.status !== 429 && outro.status !== 429,
       `limite de rotas pesadas: ${LIMITE_CARTEIRA} por minuto por usuário, depois 429 (gravação e outro usuário passam): ${JSON.stringify({ bloqueadoEm, msg, adiar: adiar.status, outro: outro.status })}`);
     authToken = tokenAntes;
+  }
+
+  {
+    // Compartilhar do WhatsApp (manifest "share_target" + sw.js): o endereço e o nome do campo dos
+    // arquivos têm de bater nos dois lados, senão o Android abre o app sem nada
+    const fsS = require('fs');
+    const man = JSON.parse(fsS.readFileSync(path.join(__dirname, '..', 'manifest.json'), 'utf8'));
+    const swTxt = fsS.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+    const st = man.share_target || {};
+    const campo = ((st.params || {}).files || [])[0] || {};
+    assert(st.action === './compartilhar' && st.method === 'POST' && st.enctype === 'multipart/form-data'
+      && swTxt.includes("endsWith('/compartilhar')") && swTxt.includes(`form.getAll('${campo.name}')`)
+      && /cortag-sw-v(\d+)/.exec(swTxt) && Number(/cortag-sw-v(\d+)/.exec(swTxt)[1]) >= 6,
+      `compartilhar do WhatsApp: manifest e sw.js combinam (endereço, campo "${campo.name}", CACHE_VERSION subido)`);
   }
 
   {

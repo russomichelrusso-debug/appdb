@@ -22,7 +22,8 @@
 // o manifest é servido do cache primeiro, então só a troca de versão faz o aparelho pegar o novo.
 // Pula o "v3" de propósito: era o número do SW antigo removido em 30/08 (acima),
 // e um cache com nome parecido de um aparelho esquecido não pode ser reaproveitado.
-const CACHE_VERSION = 'cortag-sw-v5';
+// v6 (10/2026): manifest.json com "share_target" (o app aparece no Compartilhar do WhatsApp no Android).
+const CACHE_VERSION = 'cortag-sw-v6';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.
@@ -161,8 +162,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Compartilhar do WhatsApp (Web Share Target, "share_target" do manifest.json): o Android manda um
+// POST multipart pro ./compartilhar com o texto e as fotos/PDF. Guardamos no IndexedDB
+// 'cortag-compartilhado' (o index.html lê e apaga, abrirCompartilhado) e abrimos o app - o
+// GitHub Pages não aceita POST, então só funciona com o SW ativo (o app instalado sempre tem).
+const LIMITE_COMPARTILHADO = 3; // fotos/PDF por vez, o mesmo da leitura da foto
+function guardarCompartilhado(reg) {
+  return new Promise((ok, falha) => {
+    const r = indexedDB.open('cortag-compartilhado', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('itens', { keyPath: 'id' });
+    r.onerror = () => falha(r.error);
+    r.onsuccess = () => {
+      const db = r.result;
+      const tx = db.transaction('itens', 'readwrite');
+      tx.objectStore('itens').put(reg);
+      tx.oncomplete = () => { db.close(); ok(); };
+      tx.onerror = tx.onabort = () => { db.close(); falha(tx.error); };
+    };
+  });
+}
+async function receberCompartilhado(req) {
+  try {
+    const form = await req.formData();
+    const arquivos = form.getAll('arquivos')
+      .filter((f) => f && typeof f === 'object' && f.size > 0 && f.size <= 25 * 1024 * 1024)
+      .slice(0, LIMITE_COMPARTILHADO)
+      .map((f) => ({ nome: f.name || '', tipo: f.type || '', blob: f }));
+    const texto = ['title', 'text', 'url'].map((k) => form.get(k)).filter((v) => typeof v === 'string' && v.trim()).join('\n');
+    await guardarCompartilhado({ id: 'ultimo', em: Date.now(), texto, arquivos });
+  } catch (e) {
+    // abre o app mesmo assim e ele avisa (sem isto, um compartilhamento anterior não lido abria no lugar)
+    await guardarCompartilhado({ id: 'ultimo', em: Date.now(), erro: true }).catch(() => {});
+  }
+  return Response.redirect(new URL('./index.html?compartilhado=1', self.registration.scope).href, 303);
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
+  if (req.method === 'POST' && new URL(req.url).pathname.endsWith('/compartilhar')) {
+    event.respondWith(receberCompartilhado(req));
+    return;
+  }
   if (req.method !== 'GET') return;
 
   const url = new URL(req.url);

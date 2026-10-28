@@ -1511,7 +1511,18 @@ Supabase, sem PR — não é mudança de código.
     ter nome/CNPJ/telefone do cliente e o plano grátis do Gemini pode usar o que recebe pra treino - decisão do usuário (10/2026):
     **fica no plano grátis**, ciente disso.
   - Também corrigido: o "Montar mix inicial" do Pedido só ganhava o clique com reconhecimento de voz no navegador (`initVoiceSearch`).
-  - Fica pra depois: o app no **Compartilhar do WhatsApp** (Web Share Target no `manifest.json` + `sw.js`, só Android instalado).
+  - **Compartilhar do WhatsApp** (10/2026, opção "B" dos mockups, segunda fila do canvas): no Android com o app instalado, segurar
+    a mensagem/foto/PDF › Compartilhar › **Cortag**. `share_target` no `manifest.json` (POST multipart pra `./compartilhar`, campo
+    `arquivos`, até 3) → o `sw.js` guarda no IndexedDB `cortag-compartilhado` (`receberCompartilhado`) e abre `index.html?compartilhado=1`
+    → `abrirCompartilhado` lê, apaga (compartilhamento de mais de 30 min é descartado) e cai **direto na conferência** pro cliente do
+    orçamento aberto; o topo da conferência mostra "Pra CLIENTE · trocar" (`#lcParaBtn`, o mesmo ⇄ do card, `selectLevClient`). Só
+    funciona com o SW ativo (o GitHub Pages não aceita POST); iPhone não tem (o Safari não suporta), a janela de colar mostra a dica
+    de copiar/salvar (`dicaCompartilharLista`). Mudou o manifest → `CACHE_VERSION` v6 (o teste confere que manifest e SW combinam).
+  - **Tabela de PDF de pedido do cliente** (10/2026, PDF real da CONSTRUBASSO: "Qtde Código Ref. Produto Marca"): o cabeçalho diz a
+    coluna da quantidade e onde começa a descrição (`colunasDoCabecalhoLista`/`linhaDaTabelaLista`); as colunas numéricas antes da
+    descrição são o **código do cliente** (não é quantidade nem código Cortag) e a marca do fim sai. Antes o "12,00" sumia como valor
+    em reais e o "3893" do cliente virava "3.894 colheres" (orçamento de R$ 2,4 milhões). Sem cabeçalho, "12,00" no começo da linha
+    do PDF é a quantidade.
 
 ## O que já tentamos e não deu certo
 
