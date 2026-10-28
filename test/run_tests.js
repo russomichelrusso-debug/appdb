@@ -4359,6 +4359,7 @@ async function main() {
         { c: '62438', n: 'BROCA DE AÇO RAPIDO 8,0 mm', emb: 10 },
         { c: '60876', n: 'BATEDOR ARGAMASSA', emb: 6 },
         { c: '61010', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
+        { c: '60200', n: 'RODEL Ø7 X 80 mm', emb: 1 },
       ];
       const ctxL = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
       vmL.createContext(ctxL);
@@ -4439,6 +4440,11 @@ async function main() {
           `lista do cliente: ponto de milhar (código e quantidade): ${JSON.stringify(milhar.map(l => [l.codigos.join(), l.qtd, l.termo]))}`);
         const fotoMilhar = ctxL.linhaDaImagemLista({ texto: '60.876 BATEDOR ARGAMASSA', quantidade: 6 });
         assert(fotoMilhar.codigos.includes('60876') && fotoMilhar.termo === 'batedor argamassa', 'lista do cliente: linha da foto com código de ponto de milhar');
+        // pelo nome, com código que não é do catálogo e "7x80" junto (foto real de 10/2026)
+        const rodel = ctxL.linhaDaImagemLista({ texto: '99.999 RODEL Ø7 X 80 mm', quantidade: 2 });
+        const rRodel = ctxL.produtoDaLinhaLista(rodel, { porCodigo });
+        assert(rRodel.estado === 'pronto' && rRodel.produto.c === '60200' && ctxL.searchProducts('rodel 7x80').some(p => p.c === '60200'),
+          `lista do cliente: "RODEL Ø7 X 80 mm" acha pelo nome e "7x80" = "7 x 80": ${JSON.stringify([rodel.termo, rRodel.estado])}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

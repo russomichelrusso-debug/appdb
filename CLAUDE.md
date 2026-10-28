@@ -1525,7 +1525,9 @@ Supabase, sem PR — não é mudança de código.
     do PDF é a quantidade.
   - **Ponto de milhar** (10/2026, foto real de tabela de preço da Cortag: "60.200 RODEL Ø7 X 80 mm", 50 de 51 linhas em "Não achei"):
     `semPontoDeMilharLista` tira o ponto antes de achar código e quantidade ("60.200" = código 60200, "1.000 un" = mil); valor com
-    vírgula ("1.234,56") não muda.
+    vírgula ("1.234,56") não muda. Junto, `normalizarBusca` separa a letra do número depois dela ("7x80" = "7 x 80", "M14" = "M 14",
+    dos dois lados): o termo da lista virava "7x80" e o "RODEL Ø7 X 80 mm" não era achado nem pelo nome. Conferido no catálogo: os
+    1.719 produtos continuam em 1º buscando o próprio nome.
 
 ## O que já tentamos e não deu certo
 

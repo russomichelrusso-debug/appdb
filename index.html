@@ -13798,6 +13798,9 @@
           .replace(/(\d),(\d)/g, '$1.$2')
           .replace(/[^a-z0-9./]+/g, ' ')
           .replace(/(\d)([a-z])/g, '$1 $2')
+          // e a letra se separa do número depois dela: "7x80" = "7 x 80" (sem isso "x80" virava palavra e
+          // "RODEL Ø7 X 80 mm" não achava o "RODEL 7x80" da lista do cliente), "M14" = "M 14" dos dois lados
+          .replace(/([a-z])(\d)/g, '$1 $2')
           .replace(/(^|\s)[./]+|[./]+(?=\s|$)/g, ' ')
           // "08" = "8", "8,0" = "8" e "1,50" = "1,5" (o catálogo tem COLHER ... 08" e BROCA 8,0 mm;
           // "0,5" fica, e "1.000" de milhar também - só 1 ou 2 casas depois do ponto)
