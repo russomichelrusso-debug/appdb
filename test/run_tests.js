@@ -4431,6 +4431,14 @@ async function main() {
         // sem cabeçalho, "12,00" no começo da linha do PDF continua sendo a quantidade
         const semCab = ctxL.linhasDaListaCliente('12,00 3893 3893 COLHER PEDR 08 OVAL 62536 CORTAG 15,30 183,60', true);
         assert(semCab[0].qtd === 12 && !/3893/.test(semCab[0].termo), `lista do cliente: "12,00" no começo do PDF é quantidade: ${JSON.stringify(semCab[0])}`);
+        // código com ponto de milhar (foto da tabela de preço, 10/2026: "60.200 RODEL Ø7 X 80 mm") acha pelo código,
+        // e "1.000 un" é mil; valor "1.234,56" no PDF continua saindo como reais
+        const milhar = ctxL.linhasDaListaCliente('60.876 BATEDOR ARGAMASSA\nbatedor argamassa 1.000 un');
+        assert(milhar[0].codigos.includes('60876') && milhar[0].qtd == null && milhar[0].termo === 'batedor argamassa'
+          && milhar[1].qtd === 1000 && milhar[1].unidade === 'un',
+          `lista do cliente: ponto de milhar (código e quantidade): ${JSON.stringify(milhar.map(l => [l.codigos.join(), l.qtd, l.termo]))}`);
+        const fotoMilhar = ctxL.linhaDaImagemLista({ texto: '60.876 BATEDOR ARGAMASSA', quantidade: 6 });
+        assert(fotoMilhar.codigos.includes('60876') && fotoMilhar.termo === 'batedor argamassa', 'lista do cliente: linha da foto com código de ponto de milhar');
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

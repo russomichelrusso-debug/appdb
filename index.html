@@ -14020,8 +14020,14 @@
       const ehNumeroLista = (t) => /^\d+([./]\d+)?$/.test(t);
       // Texto da linha em palavras: sem acento, minúsculo, 8" = "8 pol", vírgula decimal = ponto,
       // "12un" = "12 un", "x12" = "x 12"; medida "12x24" fica junta (vira "12×24").
+      // Ponto de milhar sai: "60.200" é o código 60200 (tabela de preço da Cortag escreve assim, foto real
+      // de 10/2026: 50 de 51 linhas ficavam em "Não achei") e "1.000" é mil. Decimal com ponto de 3 casas
+      // não aparece em lista de pedido; com vírgula depois ("1.234,56", valor) fica.
+      function semPontoDeMilharLista(s) {
+        return String(s).replace(/(^|[^\d.,])(\d{1,3})\.(\d{3})(?![\d.,])/g, '$1$2$3');
+      }
       function palavrasDaLinhaLista(linha) {
-        return normalize(linha)
+        return normalize(semPontoDeMilharLista(linha))
           .replace(/(\d)\s*("|''|”|″)/g, '$1 pol ')
           .replace(/(\d),(\d)/g, '$1.$2')
           .replace(/(\d)\s*x\s*(\d)/g, '$1×$2')
@@ -14048,7 +14054,7 @@
           linha = linha.replace(/R\$\s*/gi, ' ').replace(/(^|\s)\d{1,3}(\.\d{3})*,\d{2}(?=\s|$)/g, ' ').trim(); // valores em reais
         }
         // código do produto ou EAN escrito na linha ("60882", "P60863", "7898...")
-        const codigos = (linha.match(/\b[Pp]?\d{5,6}\b|\b\d{8,14}\b/g) || []).map(c => c.toUpperCase());
+        const codigos = (semPontoDeMilharLista(linha).match(/\b[Pp]?\d{5,6}\b|\b\d{8,14}\b/g) || []).map(c => c.toUpperCase());
         const tok = palavrasDaLinhaLista(linha);
         if (!tok.some(t => /[a-z]{2}/.test(t)) && !codigos.length) return null; // só número/símbolo
         let qtd = null, unidade = null, talvez = false;
