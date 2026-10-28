@@ -4445,6 +4445,26 @@ async function main() {
         const rRodel = ctxL.produtoDaLinhaLista(rodel, { porCodigo });
         assert(rRodel.estado === 'pronto' && rRodel.produto.c === '60200' && ctxL.searchProducts('rodel 7x80').some(p => p.c === '60200'),
           `lista do cliente: "RODEL Ø7 X 80 mm" acha pelo nome e "7x80" = "7 x 80": ${JSON.stringify([rodel.termo, rRodel.estado])}`);
+        // de quem é a lista: CNPJ do documento (sem o da Cortag) ou nome de quem mandou no WhatsApp
+        const clientesL = [
+          { id: 1, nome: 'CONSTRUBASSO MATERIAIS', documento: '09.345.595/0001-91', whatsapp_comprador_nome: 'Robson' },
+          { id: 2, nome: 'MAT. SAO JOSE', documento: '11.222.333/0001-44', whatsapp_comprador_nome: 'Marcos Silva' },
+          { id: 3, nome: 'DEPEL', documento: '', whatsapp_comprador_nome: 'Marcos' },
+        ];
+        const cnpjs = ctxL.cnpjsDaListaCliente('CORTAG 00.808.396/0005-21\nCNPJ: 09.345.595/0001-91 IE 90429998', ['00808396000521']);
+        assert(cnpjs.join() === '09345595000191' && ctxL.clienteDaListaCliente({ cnpjs }, clientesL).cliente.id === 1,
+          `lista do cliente: CNPJ da lista acha o cliente e o da Cortag fica de fora: ${cnpjs}`);
+        const copiado = '[10:30, 28/10/2026] Marcos Silva Mat SJ: bom dia\n[10:31, 28/10/2026] Marcos Silva Mat SJ: batedor argamassa 12';
+        const remet = ctxL.remetenteDaListaWhatsapp(copiado);
+        const doWhats = ctxL.clienteDaListaCliente({ cnpjs: [], remetente: remet }, clientesL);
+        const linhasCop = ctxL.linhasDaListaCliente(copiado);
+        assert(remet === 'Marcos Silva Mat SJ' && doWhats && doWhats.cliente.id === 2 && doWhats.motivo === 'whatsapp'
+          && linhasCop.length === 1 && linhasCop[0].termo === 'batedor argamassa' && linhasCop[0].qtd === 12,
+          `lista do cliente: nome de quem mandou no WhatsApp acha o comprador (todas as palavras) e o prefixo sai das linhas: ${JSON.stringify([remet, doWhats && doWhats.cliente.id, linhasCop.map(l => [l.termo, l.qtd])])}`);
+        const soMarcos = ctxL.clienteDaListaCliente({ cnpjs: [], remetente: 'Marcos' }, clientesL);
+        assert(soMarcos && soMarcos.cliente.id === 3 && soMarcos.motivo === 'whatsapp',
+          'lista do cliente: "Marcos" bate só com o comprador "Marcos" (e por nome o app só sugere, não escolhe sozinho)');
+        assert(ctxL.clienteDaListaCliente({ cnpjs: [], remetente: '' }, clientesL) === null, 'lista do cliente: sem pista, sem sugestão');
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);
@@ -5297,7 +5317,7 @@ async function main() {
     global.fetch = async (url, opts) => {
       if (!String(url).includes('generativelanguage.googleapis.com')) return fetchAntes(url, opts);
       enviado = JSON.parse(opts.body);
-      const resposta = { itens: [{ texto: 'Colher de pedreiro 8 aço', quantidade: '12', unidade: 'un' }, { texto: 'R$', quantidade: 3 },
+      const resposta = { cnpj: '09.345.595/0001-91', itens: [{ texto: 'Colher de pedreiro 8 aço', quantidade: '12', unidade: 'un' }, { texto: 'R$', quantidade: 3 },
         { texto: 'Disco turbo 110', quantidade: -1, unidade: 'caixa' }, { texto: '<b>x</b> broca 8mm', quantidade: 6, unidade: 'pct', extra: 'nao passa' }] };
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(resposta) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
@@ -5315,7 +5335,7 @@ async function main() {
       assert(r.status === 200 && Array.isArray(itens) && itens.length === 3
         && itens[0].texto === 'Colher de pedreiro 8 aço' && itens[0].quantidade === 12 && itens[0].unidade === 'un'
         && itens[1].quantidade === null && itens[1].unidade === null && itens[2].unidade === 'pct' && !('extra' in itens[2])
-        && enviado && enviado.contents[0].parts[1].inline_data.mime_type === 'image/jpeg',
+        && enviado && enviado.contents[0].parts[1].inline_data.mime_type === 'image/jpeg' && r.body.cnpj === '09345595000191',
         `foto da lista: só texto/quantidade/unidade válidos voltam, a imagem vai pro Gemini: ${JSON.stringify(r.body)}`);
       const semLogin = authToken; authToken = '';
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });

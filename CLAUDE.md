@@ -1528,6 +1528,14 @@ Supabase, sem PR — não é mudança de código.
     vírgula ("1.234,56") não muda. Junto, `normalizarBusca` separa a letra do número depois dela ("7x80" = "7 x 80", "M14" = "M 14",
     dos dois lados): o termo da lista virava "7x80" e o "RODEL Ø7 X 80 mm" não era achado nem pelo nome. Conferido no catálogo: os
     1.719 produtos continuam em 1º buscando o próprio nome.
+  - **Cliente sugerido pela lista** (10/2026, pergunta do usuário: "o app não consegue ver o WhatsApp de origem?" - não: o compartilhar
+    do Android só manda o conteúdo, sem o número). O app procura pistas no que chegou (`clienteDaListaCliente`, `<motor-lista>`): **CNPJ**
+    no texto/PDF (`cnpjsDaListaCliente`, sem o da Cortag) ou lido na foto pelo Gemini (`cnpj` na resposta de `/itens-da-imagem`, guardado
+    junto da foto que espera internet) que bate com um cliente só; senão o **nome de quem mandou** no texto copiado de várias mensagens
+    ("[10:30, 28/10/2026] Marcos Silva: …", `remetenteDaListaWhatsapp`; o prefixo sai das linhas) contra o nome do WhatsApp do comprador
+    cadastrado (todas as palavras do cadastro no nome do contato; o mais específico vence, empate = nada). **Só o CNPJ escolhe sozinho** (sem cliente no
+    orçamento e sem outro cliente guardado com a foto); pelo nome, ou com outro cliente aberto, a conferência mostra "A lista parece ser de X · Usar" (`#lcUsarSugeridoBtn`, que
+    troca pelo `deixarClienteAnterior`); quando bate, o "Pra" mostra "✓ pelo CNPJ da lista"/"pelo WhatsApp de quem mandou".
 
 ## O que já tentamos e não deu certo
 

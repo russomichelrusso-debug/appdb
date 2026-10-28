@@ -168,10 +168,12 @@ Liste cada linha de PRODUTO, na ordem em que aparece. Para cada uma:
 - "quantidade": o número pedido, ou null se não estiver escrito
 - "unidade": "cx" se a quantidade for em caixas, "pct" se for em pacotes, "un" se for em unidades/peças, ou null
 
-Ignore cabeçalho, dados de cliente, CNPJ, telefone, endereço, preços, totais, prazo, frete, assinatura e observações. Não invente linhas que não estão na imagem.
+Ignore cabeçalho, dados de cliente, telefone, endereço, preços, totais, prazo, frete, assinatura e observações nas linhas de produto. Não invente linhas que não estão na imagem.
+
+Se aparecer o CNPJ da loja que fez o pedido/orçamento (não o do fornecedor), devolva em "cnpj" (só números); senão null.
 
 Responda SOMENTE com um JSON válido neste formato:
-{"itens": [{"texto": "colher de pedreiro 8 cabo madeira", "quantidade": 12, "unidade": "un"}]}`;
+{"itens": [{"texto": "colher de pedreiro 8 cabo madeira", "quantidade": 12, "unidade": "un"}], "cnpj": null}`;
   const partes = [{ text: prompt }, ...imagens.map(im => ({ inline_data: { mime_type: im.tipo, data: im.dados } }))];
   try {
     const resp = await chamarGemini(partes, apiKey, modelo, 1, 45000);
@@ -184,7 +186,9 @@ Responda SOMENTE com um JSON válido neste formato:
     let resultado = null;
     try { resultado = JSON.parse(textoResposta || ''); } catch (e) { }
     if (!resultado) return res.status(502).json({ erro: 'Não deu pra ler a foto agora — tenta de novo.' });
-    res.json({ itens: itensDaRespostaGemini(resultado) });
+    // CNPJ da loja (o app sugere o cliente por ele); só 14 dígitos passam
+    const cnpj = String((resultado && resultado.cnpj) || '').replace(/\D/g, '');
+    res.json({ itens: itensDaRespostaGemini(resultado), cnpj: cnpj.length === 14 ? cnpj : null });
   } catch (e) {
     console.error('Erro ao ler a imagem:', e.message);
     res.status(502).json({ erro: e.name === 'TimeoutError' ? 'A leitura da foto demorou demais — tenta de novo.' : 'Erro ao ler a foto.' });
