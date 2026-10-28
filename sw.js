@@ -23,7 +23,8 @@
 // Pula o "v3" de propósito: era o número do SW antigo removido em 30/08 (acima),
 // e um cache com nome parecido de um aparelho esquecido não pode ser reaproveitado.
 // v6 (10/2026): manifest.json com "share_target" (o app aparece no Compartilhar do WhatsApp no Android).
-const CACHE_VERSION = 'cortag-sw-v6';
+// v7 (10/2026): tela de abertura nova com logo-abertura.png (precisa estar no cache pra abrir sem internet).
+const CACHE_VERSION = 'cortag-sw-v7';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.
@@ -35,6 +36,7 @@ const STATIC_ASSETS = [
   './icon-192.png',
   './icon-512.png',
   './icon-512-maskable.png',
+  './logo-abertura.png',
 ];
 
 // O app e as páginas separadas, guardados já na instalação: o SW é registrado
