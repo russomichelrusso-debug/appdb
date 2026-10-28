@@ -4356,6 +4356,7 @@ async function main() {
         { c: '60170', n: 'DESEMPENADEIRA INOX CABO REMOVÍVEL LISA - COM CABO', emb: 12 },
         { c: '60171', n: 'DESEMPENADEIRA INOX CABO REMOVÍVEL LISA - SEM CABO', emb: 12 },
         { c: '62857', n: 'ESPAÇADOR NIVELADOR 1,5 mm SUPRA - PCT C/ 50 UN.', emb: 1 },
+        { c: '62407', n: 'ESPAÇADOR NIVELADOR 1,5 mm ECO (VERMELHO) - C/500 PÇS', emb: 1 },
         { c: '62438', n: 'BROCA DE AÇO RAPIDO 8,0 mm', emb: 10 },
         { c: '60876', n: 'BATEDOR ARGAMASSA', emb: 6 },
         { c: '61010', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
@@ -4413,6 +4414,10 @@ async function main() {
           `lista do cliente: código não é quantidade nem palavra da busca: ${JSON.stringify(cods.map(l => [l.termo, l.qtd]))}`);
         const alta = ctxL.quantidadeDaLinhaLista({ qtd: 6000, unidade: null }, prods[6]);
         assert(/confira/.test(alta.ajuste || ''), 'lista do cliente: quantidade acima de 5.000 vai pra "Quantidade ajustada"');
+        // "50PCS" é o pacote: o ECO do catálogo vem em C/500 e não pode sumir por causa do 50 (foto real de 10/2026)
+        const eco = ctxL.produtoDaLinhaLista(ctxL.linhaDaImagemLista({ texto: '20390 CORTAG ESPACADOR NIVELADOR 1,5MM ECO 50PCS', quantidade: 36, unidade: 'un' }), { porCodigo });
+        assert(eco.estado === 'escolher' && eco.opcoes[0].c === '62407' && eco.opcoes.some(p => p.c === '62857'),
+          `lista do cliente: palavra faltando ("eco") = tenta sem cada número e põe na frente quem tem todas: ${JSON.stringify((eco.opcoes || []).map(p => p.c))}`);
         // quantidade no começo e medida no fim ("5 colher ... 8"): achado do /code-review
         const comeco = ctxL.linhasDaListaCliente('5 colher pedreiro aço oval 8');
         assert(comeco[0].qtd === 5 && comeco[0].termo === 'colher pedreiro aco oval 8', `lista do cliente: "5 colher ... 8" = 5 unidades da colher 8: ${JSON.stringify(comeco[0])}`);
