@@ -14191,10 +14191,26 @@
         let linha = String(linhaBruta || '').replace(/\s+/g, ' ').trim();
         if (!linha) return null;
         // PDF: "12,00" no começo da linha é a quantidade (coluna Qtde); os outros com centavos são reais
-        let qtdDoPdf = null;
+        let qtdDoPdf = null, unidadeDoPdf = null;
         if (modoPdf) {
           const m = linha.match(/^(\d{1,5}),(\d{2,3})\s+(?=\S*[A-Za-zÀ-ÿ\d])/);
           if (m && /^0+$/.test(m[2])) { qtdDoPdf = Number(m[1]); linha = linha.slice(m[0].length); }
+          // "UN 6,00" / "6,00 CX": a quantidade em reais-sem-centavos colada na unidade (orçamento de outra
+          // loja, PDF real de 10/2026: "1477 APLICADOR ... - CORTAG UN 6,00 33,19 29,90 179,40" - o 6,00 sumia
+          // como valor e o 1477, código do cliente, virava a quantidade). Com número inteiro antes da unidade
+          // ("12 UN 15,00") quem vale é ele.
+          if (qtdDoPdf == null) {
+            const formas = [...linha.matchAll(/(^|\s)([A-Za-zÀ-ÿ]{2,9})\.?\s+(\d{1,5}),0{2,3}(?=\s|$)/g),
+              ...linha.matchAll(/(^|\s)()()(\d{1,5}),0{2,3}\s+([A-Za-zÀ-ÿ]{2,9})\.?(?=\s|$)/g)].sort((a, b) => a.index - b.index);
+            for (const mu of formas) {
+              const un = UNIDADES_LISTA[normalize(mu[2] || mu[5])];
+              if (!un) continue;
+              if (mu[2] && /\d\s*$/.test(linha.slice(0, mu.index + mu[1].length))) break;
+              qtdDoPdf = Number(mu[3] || mu[4]); unidadeDoPdf = un;
+              linha = (linha.slice(0, mu.index) + ' ' + linha.slice(mu.index + mu[0].length)).trim();
+              break;
+            }
+          }
           linha = linha.replace(/R\$\s*/gi, ' ').replace(/(^|\s)\d{1,3}(\.\d{3})*,\d{2}(?=\s|$)/g, ' ').trim(); // valores em reais
         }
         // código do produto ou EAN escrito na linha ("60882", "P60863", "7898...")
@@ -14240,7 +14256,7 @@
           // (o código do cliente que vem logo depois, "12,00 3893 3893 COLHER", também sai)
           const primeiraPalavra = tok.findIndex(t => /[a-z]/.test(t));
           const t2 = termoDasPalavrasLista(tok.filter((t, i) => !codigo.has(i) && !(i < primeiraPalavra && ehInteiroLista(t))));
-          return { texto: linhaBruta.trim(), termo: t2, qtd: qtdDoPdf, unidade: null, talvez: false, codigos };
+          return { texto: linhaBruta.trim(), termo: t2, qtd: qtdDoPdf, unidade: unidadeDoPdf, talvez: false, codigos };
         }
         return { texto: linhaBruta.trim(), termo, qtd, unidade, talvez, codigos };
       }
@@ -14248,7 +14264,7 @@
       // "1.", "2)" quando as linhas vêm numeradas em sequência (senão o "1." seria quantidade).
       function linhasDaListaCliente(texto, modoPdf) {
         const brutas = String(texto || '').split(/\r?\n/)
-          .map(l => l.replace(PREFIXO_WHATSAPP_LISTA, '').replace(/^\s*[-*•·>–—]+\s*/, '').trim()).filter(Boolean);
+          .map(l => l.replace(PREFIXO_WHATSAPP_LISTA, '').replace(/^\s*(\[\s*\]|[-*•·>–—☐□]+)\s*/, '').trim()).filter(Boolean);
         const numeradas = brutas.map(l => (l.match(/^(\d{1,3})\s*[).\-–]\s+\S/) || [])[1]).filter(Boolean).map(Number);
         const emSequencia = numeradas.length >= 2 && numeradas.every((n, i) => n === i + 1);
         const linhas = [];

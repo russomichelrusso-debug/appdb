@@ -4408,6 +4408,13 @@ async function main() {
         const pdf = ctxL.linhasDaListaCliente('001 BATEDOR ARGAMASSA 12 UN 15,30 183,60\nTotal R$ 1.234,56', true);
         assert(pdf.length >= 1 && pdf[0].qtd === 12 && pdf[0].unidade === 'un' && pdf[0].termo === 'batedor argamassa',
           `lista do cliente: PDF sem os valores em reais: ${JSON.stringify(pdf.map(l => [l.termo, l.qtd]))}`);
+        // PDF de orçamento com "UN 6,00" (10/2026, VAZ & DAL SANTOS): o 6,00 sumia como valor em reais e o
+        // código do cliente (1477, 7356) virava a quantidade; "[]" da caixinha de marcar sai
+        const vaz = ctxL.linhasDaListaCliente('[] 1477 APLICADOR DE SILICONE 9" USO LEVE - CORTAG UN 6,00 33,19 29,90 179,40\n'
+          + '[] 18793 BROCA SDS VIDEA 10X150X210MM - CORTAG UN 6,00 18,32 16,50 99,00\n[] 7356 BROCA SDS VIDEA 10X100X160MM - CORTAG 2,00 CX 16,54 14,90 89,40\n'
+          + '001 BATEDOR ARGAMASSA 12 UN 15,00 180,00', true);
+        assert(vaz.map(l => l.qtd + l.unidade).join(',') === '6un,6un,2cx,12un' && !/1477|7356/.test(vaz.map(l => l.termo).join()),
+          `lista do cliente: "UN 6,00" do PDF é a quantidade: ${JSON.stringify(vaz.map(l => [l.termo, l.qtd, l.unidade]))}`);
         // código do produto na linha nunca vira quantidade (achado do revisor-cortag: "colher 60162" ia com 60162 un.)
         const cods = ctxL.linhasDaListaCliente('Colher pedreiro 60162\nbatedor P60876\n60876 batedor argamassa 4');
         assert(cods.map(l => l.qtd).join(',') === ',,4' && cods[1].codigos.join() === 'P60876' && cods[2].termo === 'batedor argamassa',
