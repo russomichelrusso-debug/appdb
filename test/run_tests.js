@@ -4335,6 +4335,10 @@ async function main() {
         assert(fala('6 8 6 3') === '' && fala('alicate meia cana') === '' && fala('chave meia polegada') === '' && fala('meia dúzia') === '',
           'código falado: só 5 números, e "meia cana"/"meia polegada"/"meia dúzia" não são código');
         assert(fala('código meia um sete cinco três quantidade dez') === '61753', 'código falado: palavras em volta não atrapalham');
+        const dig = (x) => ctxB.numerosFaladosParaDigitos(x);
+        assert(dig('colher oito oval três') === 'colher 8 oval 3' && dig('disco cento e dez dois') === 'disco 110 2' && dig('nivelador um e meio vinte e quatro') === 'nivelador 1,5 24'
+          && dig('disco cem, dois') === 'disco 100 2' && dig('meia dúzia') === '6' && dig('alicate meia cana dois') === 'alicate meia cana 2',
+          'voz: números falados viram dígitos ("cem" não junta, a vírgula da pausa separa, "meia cana" fica)');
         // busca pela ficha técnica: "mármore"/"pedras naturais" acham o que a ficha diz que corta
         const fichas = {
           '60882': { nome: 'Serra Copo', desc: 'Furos precisos em porcelanato e mármore.', specs: { diametro: '50 mm' } },
@@ -4412,6 +4416,8 @@ async function main() {
         const fEst = falaLev('estoque batedor argamassa sete');
         assert(fEst && fEst.campo === 'qty' && ctxL.quantidadeDaFalaLev(fEst.item, pBat, 'qty').qtd === 7 && ctxL.quantidadeDaFalaLev(fEst.item, pBat, 'ped').qtd === 12,
           'voz: no estoque soma o contado (7), no pedido sobe pra embalagem (12)');
+        const fCem = falaLev('disco turbo cem, dois');
+        assert(fCem && fCem.item.termo === 'disco turbo 100' && fCem.item.qtd === 2, `voz: "cem, dois" = medida 100 e quantidade 2: ${JSON.stringify(fCem && fCem.item)}`);
         const fColher = falaLev('colher oito');
         const rColher = fColher && ctxL.produtoDaLinhaLista(fColher.item, { porCodigo });
         assert(fColher && !(rColher.estado === 'pronto' && fColher.item.qtd != null && !rColher.medida),

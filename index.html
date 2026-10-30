@@ -14473,6 +14473,9 @@
       // Números falados viram dígitos pra quantidade e medida: "colher oito oval três" = "colher 8 oval 3",
       // "vinte e quatro"/"vinte quatro" = 24, "um e meio" = 1,5, "meia dúzia" = 6, "duas dúzias" = 24
       function numerosFaladosParaDigitos(texto) {
+        // a vírgula que o reconhecimento põe na pausa separa a medida da quantidade ("disco cem, dois")
+        const partes = String(texto || '').split(/(?<!\d),|,(?!\d)|[.;]\s/);
+        if (partes.length > 1) return partes.map(numerosFaladosParaDigitos).filter(Boolean).join(' ');
         const w = palavrasDaFala(String(texto || '')
           .replace(/\bmeia\s+d[uú]zia\b/gi, '6').replace(/\b(uma|1)\s+d[uú]zia\b/gi, '12')
           .replace(/\b(duas|2)\s+d[uú]zias\b/gi, '24').replace(/\bd[uú]zia\b/gi, '12'));
@@ -14488,7 +14491,7 @@
             n += Number(y.v); ultimo = y; return true;
           };
           for (;;) {
-            if (!(ultimo.dezena || ultimo.centena)) break;
+            if (!(ultimo.dezena || ultimo.centena) || w[i] === 'cem') break; // "cem" é 100 redondo ("cento e dois" junta)
             if (w[i + 1] === 'e' && ehNumero(i + 2) && junta(i + 2)) { i += 2; continue; }
             if (ehNumero(i + 1) && junta(i + 1)) { i += 1; continue; }
             break;
@@ -14882,11 +14885,8 @@
       // com 5 números e existindo no catálogo (porCodigo); a quantidade é o que sobra.
       function itemDaFalaLevantamento(fala, porCodigo) {
         let campo = null;
-        const resto = palavrasDaFala(fala).filter(t => {
-          if (t === 'pedido' || t === 'pedir') { campo = 'ped'; return false; }
-          if (t === 'estoque') { campo = 'qty'; return false; }
-          return true;
-        }).join(' ');
+        // sem as palavras do campo, mas com a vírgula da pausa (separa medida de quantidade)
+        const resto = normalize(fala || '').replace(/\b(pedido|pedir|estoque)\b/g, (m) => { campo = m === 'estoque' ? 'qty' : 'ped'; return ' '; });
         const cod = porCodigo ? leiturasDeCodigoDaFala(resto).find(l => porCodigo(l.codigo)) : null;
         const linha = (cod ? [numerosFaladosParaDigitos(cod.antes), cod.codigo, numerosFaladosParaDigitos(cod.depois)].join(' ')
           : numerosFaladosParaDigitos(resto)).replace(/\bcom (?=\d)/g, 'qtd ').replace(/\s+/g, ' ').trim();
@@ -32272,8 +32272,13 @@
       function abrirVozLev() {
         if (!SpeechRecognitionCtor) { showToast('Este navegador não reconhece voz — use o leitor de código', 'erro'); return; }
         if (!window.isSecureContext) { showToast('A voz só funciona com o app hospedado em HTTPS', 'erro'); return; }
+        // "Pra conferir" é do levantamento do cliente em que foi falado: o de outro cliente (a contagem dele já
+        // saiu da tela ao trocar) não pode cair neste
+        const doCliente = state.levCliente ? state.levCliente.id : null;
+        const pend = lerPendentesVoz().filter(x => String(x.cliente ?? '') === String(doCliente ?? ''));
+        gravarPendentesVoz(pend);
         voz = { ativo: true, segurando: false, rec: null, campo: 'qty', comprados: compradosDoCliente(state.levCliente), desfazer: [], ultima: null,
-          parcial: '', msg: '', semRede: false, ultimoFinal: null, nPend: lerPendentesVoz().length };
+          parcial: '', msg: '', semRede: false, ultimoFinal: null, nPend: pend.length };
         document.getElementById('vozLev').classList.remove('hidden');
         vozIniciarRec();
         renderVozLev();
@@ -32322,11 +32327,18 @@
           voz.rec = null;
           voz.parcial = '';
           // o Android para sozinho depois de um silêncio: com a escuta contínua ligada, liga de novo
-          if (voz.ativo && !document.hidden) setTimeout(() => { if (voz && voz.ativo) vozIniciarRec(); }, 250);
+          // (e segurando o botão: o dedo ainda está lá, a fala continua)
+          if ((voz.ativo || voz.segurando) && !document.hidden) setTimeout(() => { if (voz && (voz.ativo || voz.segurando)) vozIniciarRec(); }, 250);
           renderVozLev();
         };
         voz.rec = rec;
-        try { rec.start(); } catch (e) { voz.rec = null; }
+        try { rec.start(); voz.falhasStart = 0; } catch (e) {
+          // o navegador ainda segura o microfone da escuta anterior: tenta de novo, e desiste na 3ª
+          voz.rec = null;
+          voz.falhasStart = (voz.falhasStart || 0) + 1;
+          if (voz.falhasStart >= 3) { voz.ativo = false; voz.segurando = false; voz.msg = 'Não foi possível ligar o microfone — toque em Ligar escuta contínua'; renderVozLev(); }
+          else setTimeout(() => { if (voz && (voz.ativo || voz.segurando)) vozIniciarRec(); }, 700);
+        }
       }
       function vozPararRec() {
         if (voz && voz.rec) { try { voz.rec.stop(); } catch (e) { } }
@@ -32334,27 +32346,31 @@
       // só muda o estado: quem chama (onresult) desenha a tela uma vez no fim
       function processarFalaLev(alts) {
         if (!voz || !alts.length) return;
-        const chave = normalize(alts[0]).replace(/[^a-z0-9]+/g, ' ').trim();
+        const chave = palavrasDaFala(alts[0]).join(' ');
         if (!chave) return;
-        // o Chrome do Android às vezes entrega a mesma frase duas vezes
-        if (voz.ultimoFinal && voz.ultimoFinal.chave === chave && Date.now() - voz.ultimoFinal.em < 2000) return;
+        // o Chrome do Android às vezes entrega a mesma frase duas vezes, quase juntas (a mesma fala dita de
+        // novo de propósito leva mais que isso)
+        if (voz.ultimoFinal && voz.ultimoFinal.chave === chave && Date.now() - voz.ultimoFinal.em < 700) return;
         voz.ultimoFinal = { chave, em: Date.now() };
         if (/^(desfazer|apagar|cancelar|volta|voltar)( (a )?ultim[ao])?$/.test(chave)) { desfazerFalaLev(); return; }
         if (/^(pausar|parar)( (a )?escuta)?$/.test(chave)) { voz.ativo = false; vozPararRec(); return; }
         if (chave === 'estoque' || chave === 'pedido') { voz.campo = chave === 'pedido' ? 'ped' : 'qty'; return; }
         const ctx = { comprados: voz.comprados, porCodigo: findByExactCode };
-        const vistas = new Set();
+        // A 1ª leitura decide; as outras só entram sozinhas pelo código do catálogo (o "três" × "seis" do
+        // código falado) - um nome mal ouvido numa leitura de baixo não passa sem conferir. Sem nenhuma que
+        // entre, vai pra conferir a mais útil (vários parecidos vale mais que "não achei").
+        const vistas = new Set(), nivel = { pronto: 2, escolher: 1, nao: 0 };
         let melhor = null;
-        for (const a of alts) {
-          const k = normalize(a).replace(/[^a-z0-9]+/g, ' ').trim();
+        for (const [i, a] of alts.entries()) {
+          const k = palavrasDaFala(a).join(' ');
           if (vistas.has(k)) continue; // leituras que só mudam acento/pontuação dariam a mesma busca
           vistas.add(k);
           const f = itemDaFalaLevantamento(a, findByExactCode);
           if (!f) continue;
           const r = produtoDaLinhaLista(f.item, ctx);
-          const ok = r.estado === 'pronto' && f.item.qtd != null && !r.medida;
-          if (!melhor || ok) melhor = { f, r, ok };
-          if (ok) break;
+          const ok = r.estado === 'pronto' && f.item.qtd != null && !r.medida && (i === 0 || f.item.codigos.some(c => findByExactCode(c)));
+          if (ok) { melhor = { f, r, ok }; break; }
+          if (!melhor || nivel[r.estado] > nivel[melhor.r.estado]) melhor = { f, r, ok };
         }
         voz.msg = '';
         if (!melhor) { voz.msg = `Não entendi “${alts[0]}” — fale o produto e a quantidade`; playScanBeep(false); return; }
@@ -32373,7 +32389,7 @@
             : melhor.r.estado === 'nao' ? 'não achei no catálogo'
               : melhor.r.medida ? 'o número pode ser a medida' : melhor.f.item.qtd == null ? 'faltou a quantidade' : 'quantidade fora do normal';
           const pend = lerPendentesVoz();
-          pend.push({ ...melhor.f.item, campo, id: novoIdEnvio() });
+          pend.push({ ...melhor.f.item, campo, cliente: state.levCliente ? state.levCliente.id : null });
           gravarPendentesVoz(pend);
           voz.ultima = { ok: false, titulo: `Pra conferir · ${motivo}`, nome: `“${melhor.f.item.texto}”` };
           playScanBeep(false);
