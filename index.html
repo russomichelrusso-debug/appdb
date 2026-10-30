@@ -10241,41 +10241,15 @@
        segurar pra falar, numa tela cheia escura como a do modo leitor */
     .levVozBtn {
       display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      min-height: 44px;
-      margin: 0 16px 10px;
-      padding: 0 14px;
-      border: 1px solid var(--hairline);
-      border-radius: var(--r-sm);
-      background: var(--white);
-      color: var(--ink);
-      font: inherit;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
     }
 
     .levVozBtn.hidden {
       display: none;
     }
 
-    .levVozBtn svg {
-      width: 20px;
-      height: 20px;
-      flex-shrink: 0;
-    }
-
-    .vozLev {
-      position: fixed;
-      inset: 0;
-      z-index: 55;
-      background: #1C1C1E;
-      color: #FFFFFF;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+    .modoLeitor.vozLev {
+      padding-left: 16px;
+      padding-right: 16px;
       overflow-y: auto;
     }
 
@@ -12305,7 +12279,7 @@
       </div>
       <div class="hint lev-hint">Cada leitura de código soma 1 unidade. Por nome, toque no produto certo na lista. O
         estoque também pode ser digitado direto.</div>
-      <button type="button" class="levVozBtn hidden" id="levVozBtn"
+      <button type="button" class="levLeitorBtn levVozBtn hidden" id="levVozBtn"
         aria-label="Contar por voz: fale o código ou o nome e a quantidade de cada produto">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
           stroke-linejoin="round" aria-hidden="true">
@@ -12623,7 +12597,7 @@
       <p class="leitorNota" id="leitorNota"></p>
     </div>
 
-    <div class="vozLev hidden" id="vozLev" role="dialog" aria-label="Levantamento por voz">
+    <div class="modoLeitor vozLev hidden" id="vozLev" role="dialog" aria-label="Levantamento por voz">
       <div class="leitorTopo">
         <span class="leitorStatus" id="vozStatus" role="status"></span>
         <button type="button" class="leitorFechar" id="vozFecharBtn" aria-label="Concluir a contagem por voz">
@@ -14921,9 +14895,10 @@
       }
       // Quanto soma no levantamento: no estoque é o que foi contado (caixa = embalagem inteira, sem arredondar);
       // no pedido, como na lista do cliente (múltiplo da embalagem)
-      function quantidadeDaFalaLev(item, p, campo) {
-        if (campo === 'ped') return quantidadeDaLinhaLista(item, p, false);
+      function quantidadeDaFalaLev(item, p, campo, medida) {
+        if (campo === 'ped') return quantidadeDaLinhaLista(item, p, !!medida);
         const emb = p && p.emb > 0 ? p.emb : 1;
+        if (medida) return { qtd: 1, ajuste: `“${item.qtd}” é a medida do produto · confira a quantidade` };
         if (item.qtd == null) return { qtd: 1, ajuste: 'sem quantidade na fala · 1' };
         if (item.unidade === 'cx' && emb > 1) return { qtd: item.qtd * emb, ajuste: `${item.qtd} cx × ${emb} = ${item.qtd * emb}` };
         return { qtd: item.qtd, ajuste: null };
@@ -18704,7 +18679,7 @@
           if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || !MQ_TELA_LARGA.matches) return;
           const alvo = e.target;
           if (alvo && (alvo.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))) return;
-          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden), .shareSheet:not(.hidden), .scannerModal:not(.hidden), .modoLeitor:not(.hidden), .vozLev:not(.hidden)')) return;
+          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden), .shareSheet:not(.hidden), .scannerModal:not(.hidden), .modoLeitor:not(.hidden)')) return;
           const busca = { precos: 'searchInput', levantamento: 'levInput', produtos: 'prodTabSearch', clientes: 'clienteTabSearch' }[document.body.dataset.aba];
           const campo = busca && document.getElementById(busca);
           if (!campo || campo.offsetParent === null) return;
@@ -19196,6 +19171,19 @@
         }
         return it;
       }
+      // soma no levantamento (leitor do celular, voz, falas conferidas), no máximo 99999
+      function somarNoLevantamento(cod, campo, qtd) {
+        const it = itemDoLevantamento(cod, true);
+        it[campo] = Math.min(99999, (Number(it[campo]) || 0) + qtd);
+        return it;
+      }
+      function marcarCampoLeitor(idGrupo, campo) {
+        document.querySelectorAll(`#${idGrupo} button`).forEach(b => {
+          const ativo = b.dataset.campo === campo;
+          b.classList.toggle('active', ativo);
+          b.setAttribute('aria-checked', String(ativo));
+        });
+      }
       function aplicarEventoLeitor(ev) {
         const campo = ev.campo === 'ped' ? 'ped' : 'qty';
         const rotulo = campo === 'ped' ? 'no pedido' : 'no estoque';
@@ -19206,17 +19194,16 @@
             showToast(`Código ${ev.cod} lido no celular não está no catálogo deste aparelho`, 'erro');
             return;
           }
-          const it = itemDoLevantamento(p.c, true);
           if (ev.tipo === 'leitura') {
             const qtd = Math.max(1, Math.min(9999, Math.round(Number(ev.qtd) || 1)));
-            it[campo] = (Number(it[campo]) || 0) + qtd;
+            const it = somarNoLevantamento(p.c, campo, qtd);
             leiturasAplicadas.set(ev.id, { cod: p.c, campo, qtd });
             leitorTablet.recebidas += 1;
             playScanBeep(true);
             showToast(`📱 ${p.n} — ${it[campo]} un. ${rotulo}`);
           } else {
             const valor = Math.max(0, Math.min(99999, Math.round(Number(ev.valor) || 0)));
-            it[campo] = valor;
+            itemDoLevantamento(p.c, true)[campo] = valor;
             showToast(`📱 ${p.n} — ${valor} un. ${rotulo} (digitado no celular)`);
           }
           return;
@@ -19529,11 +19516,7 @@
         }
         status.dataset.tipo = tipo;
         status.textContent = texto;
-        document.querySelectorAll('#leitorCampo button').forEach(b => {
-          const ativo = b.dataset.campo === leitorCampo;
-          b.classList.toggle('active', ativo);
-          b.setAttribute('aria-checked', String(ativo));
-        });
+        marcarCampoLeitor('leitorCampo', leitorCampo);
         const card = document.getElementById('leitorUltima');
         if (leitorUltima) {
           const ev = leitorUltima.ev;
@@ -32279,13 +32262,18 @@
       // guardado no aparelho (VOZ_PEND_LS_KEY), e passa pela mesma conferência da lista do cliente com destino
       // no levantamento. O reconhecimento é o do navegador: precisa de internet (no Chrome do Android vai pro Google).
       const VOZ_PEND_LS_KEY = 'cortagVozPendentes_v1';
-      let voz = null; // { ativo, segurando, rec, campo, desfazer, recentes, ultima, parcial, msg, semRede, ultimoFinal }
+      const ROTULO_CAMPO = { qty: 'estoque', ped: 'pedido' };
+      let voz = null; // { ativo, segurando, rec, campo, comprados, desfazer, ultima, parcial, msg, semRede, ultimoFinal, nPend }
       const lerPendentesVoz = () => { try { const l = JSON.parse(localStorage.getItem(VOZ_PEND_LS_KEY)); return Array.isArray(l) ? l : []; } catch (e) { return []; } };
-      const gravarPendentesVoz = (l) => { try { if (l.length) localStorage.setItem(VOZ_PEND_LS_KEY, JSON.stringify(l.slice(-60))); else localStorage.removeItem(VOZ_PEND_LS_KEY); } catch (e) { } };
+      function gravarPendentesVoz(l) {
+        try { if (l.length) localStorage.setItem(VOZ_PEND_LS_KEY, JSON.stringify(l.slice(-60))); else localStorage.removeItem(VOZ_PEND_LS_KEY); } catch (e) { }
+        if (voz) voz.nPend = Math.min(l.length, 60);
+      }
       function abrirVozLev() {
         if (!SpeechRecognitionCtor) { showToast('Este navegador não reconhece voz — use o leitor de código', 'erro'); return; }
         if (!window.isSecureContext) { showToast('A voz só funciona com o app hospedado em HTTPS', 'erro'); return; }
-        voz = { ativo: true, segurando: false, rec: null, campo: 'qty', desfazer: [], recentes: [], ultima: null, parcial: '', msg: '', semRede: false, ultimoFinal: null };
+        voz = { ativo: true, segurando: false, rec: null, campo: 'qty', comprados: compradosDoCliente(state.levCliente), desfazer: [], ultima: null,
+          parcial: '', msg: '', semRede: false, ultimoFinal: null, nPend: lerPendentesVoz().length };
         document.getElementById('vozLev').classList.remove('hidden');
         vozIniciarRec();
         renderVozLev();
@@ -32297,7 +32285,7 @@
         if (v.rec) { try { v.rec.abort(); } catch (e) { } }
         document.getElementById('vozLev').classList.add('hidden');
         renderLevList();
-        if (!semConferir && lerPendentesVoz().length) abrirConferenciaVoz();
+        if (!semConferir && v.nPend) abrirConferenciaVoz();
         else if (v.desfazer.length) showToast(`${v.desfazer.length} fala${v.desfazer.length > 1 ? 's' : ''} no levantamento`);
       }
       function vozIniciarRec() {
@@ -32310,15 +32298,17 @@
         rec.maxAlternatives = 5; // "três" × "seis": vale a 1ª leitura que acha o produto
         rec.onresult = (e) => {
           if (!voz || voz.rec !== rec) return;
-          let parcial = '';
+          let parcial = '', teveFinal = false;
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
-            if (r.isFinal) processarFalaLev(Array.from(r).map(a => a.transcript).filter(Boolean));
+            if (r.isFinal) { teveFinal = true; processarFalaLev(Array.from(r).map(a => a.transcript).filter(Boolean)); }
             else parcial += r[0].transcript;
           }
+          if (!voz) return;
           voz.parcial = parcial.trim();
           voz.semRede = false;
-          renderVozLev();
+          // resultado parcial chega várias vezes por segundo: só o texto ouvido muda
+          if (teveFinal) renderVozLev(); else renderOuvidoVoz();
         };
         rec.onerror = (e) => {
           if (!voz || voz.rec !== rec) return;
@@ -32341,6 +32331,7 @@
       function vozPararRec() {
         if (voz && voz.rec) { try { voz.rec.stop(); } catch (e) { } }
       }
+      // só muda o estado: quem chama (onresult) desenha a tela uma vez no fim
       function processarFalaLev(alts) {
         if (!voz || !alts.length) return;
         const chave = normalize(alts[0]).replace(/[^a-z0-9]+/g, ' ').trim();
@@ -32349,11 +32340,15 @@
         if (voz.ultimoFinal && voz.ultimoFinal.chave === chave && Date.now() - voz.ultimoFinal.em < 2000) return;
         voz.ultimoFinal = { chave, em: Date.now() };
         if (/^(desfazer|apagar|cancelar|volta|voltar)( (a )?ultim[ao])?$/.test(chave)) { desfazerFalaLev(); return; }
-        if (/^(pausar|parar)( (a )?escuta)?$/.test(chave)) { voz.ativo = false; vozPararRec(); renderVozLev(); return; }
-        if (chave === 'estoque' || chave === 'pedido') { voz.campo = chave === 'pedido' ? 'ped' : 'qty'; renderVozLev(); return; }
-        const ctx = { comprados: compradosDoCliente(state.levCliente), porCodigo: findByExactCode };
+        if (/^(pausar|parar)( (a )?escuta)?$/.test(chave)) { voz.ativo = false; vozPararRec(); return; }
+        if (chave === 'estoque' || chave === 'pedido') { voz.campo = chave === 'pedido' ? 'ped' : 'qty'; return; }
+        const ctx = { comprados: voz.comprados, porCodigo: findByExactCode };
+        const vistas = new Set();
         let melhor = null;
         for (const a of alts) {
+          const k = normalize(a).replace(/[^a-z0-9]+/g, ' ').trim();
+          if (vistas.has(k)) continue; // leituras que só mudam acento/pontuação dariam a mesma busca
+          vistas.add(k);
           const f = itemDaFalaLevantamento(a, findByExactCode);
           if (!f) continue;
           const r = produtoDaLinhaLista(f.item, ctx);
@@ -32361,19 +32356,16 @@
           if (!melhor || ok) melhor = { f, r, ok };
           if (ok) break;
         }
+        voz.msg = '';
         if (!melhor) { voz.msg = `Não entendi “${alts[0]}” — fale o produto e a quantidade`; playScanBeep(false); return; }
         const campo = melhor.f.campo || voz.campo;
         const q = melhor.ok ? quantidadeDaFalaLev(melhor.f.item, melhor.r.produto, campo) : null;
         if (q && q.qtd > 0 && q.qtd <= 9999) {
           const p = melhor.r.produto;
           const criado = !itemDoLevantamento(p.c, false);
-          const it = itemDoLevantamento(p.c, true);
-          it[campo] = (Number(it[campo]) || 0) + q.qtd;
+          somarNoLevantamento(p.c, campo, q.qtd);
           voz.desfazer.push({ cod: p.c, campo, qtd: q.qtd, criado });
-          voz.ultima = { ok: true, titulo: `${p.c} · ${campo === 'ped' ? 'pedido' : 'estoque'} +${q.qtd}${q.ajuste ? ' (' + q.ajuste + ')' : ''}`, nome: p.n };
-          voz.recentes.unshift({ nome: p.n, txt: `${campo === 'ped' ? 'ped.' : 'est.'} ${it[campo]}` });
-          voz.recentes = voz.recentes.slice(0, 5);
-          voz.msg = '';
+          voz.ultima = { ok: true, titulo: `${p.c} · ${ROTULO_CAMPO[campo]} +${q.qtd}${q.ajuste ? ' (' + q.ajuste + ')' : ''}`, nome: p.n };
           saveLevSurvey();
           playScanBeep(true);
         } else {
@@ -32381,10 +32373,9 @@
             : melhor.r.estado === 'nao' ? 'não achei no catálogo'
               : melhor.r.medida ? 'o número pode ser a medida' : melhor.f.item.qtd == null ? 'faltou a quantidade' : 'quantidade fora do normal';
           const pend = lerPendentesVoz();
-          pend.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), texto: alts[0], campo, item: melhor.f.item });
+          pend.push({ ...melhor.f.item, campo, id: novoIdEnvio() });
           gravarPendentesVoz(pend);
-          voz.ultima = { ok: false, titulo: `Pra conferir · ${motivo}`, nome: `“${alts[0]}”` };
-          voz.msg = '';
+          voz.ultima = { ok: false, titulo: `Pra conferir · ${motivo}`, nome: `“${melhor.f.item.texto}”` };
           playScanBeep(false);
         }
       }
@@ -32398,41 +32389,42 @@
           if (a.criado && !(Number(it.qty) > 0) && !(Number(it.ped) > 0)) state.survey = state.survey.filter(x => x !== it);
         }
         saveLevSurvey();
-        voz.recentes.shift();
         const p = productByCod(a.cod);
         voz.ultima = null;
-        voz.msg = `Desfeito: ${p ? p.n : a.cod} ${a.campo === 'ped' ? 'pedido' : 'estoque'} −${a.qtd}`;
+        voz.msg = `Desfeito: ${p ? p.n : a.cod} ${ROTULO_CAMPO[a.campo]} −${a.qtd}`;
         renderVozLev();
+      }
+      function renderOuvidoVoz() {
+        const ouvido = document.getElementById('vozOuvido');
+        const texto = voz.parcial ? `“${voz.parcial}…”` : voz.msg;
+        ouvido.textContent = texto || (voz.rec ? 'Fale o código ou o nome e a quantidade' : voz.ativo ? 'Ligando o microfone…' : 'Segure o botão pra falar, ou ligue a escuta contínua');
+        ouvido.classList.toggle('dica', !voz.parcial);
       }
       function renderVozLev() {
         if (!voz) return;
         const ouvindo = !!voz.rec;
         const status = document.getElementById('vozStatus');
-        status.textContent = voz.semRede ? 'Sem internet' : ouvindo ? (voz.segurando && !voz.ativo ? 'Ouvindo · solte pra parar' : 'Ouvindo') : 'Pausado';
+        status.textContent = voz.semRede ? 'Sem internet' : ouvindo ? (voz.segurando ? 'Ouvindo · solte pra parar' : 'Ouvindo') : 'Pausado';
         status.dataset.tipo = ouvindo ? 'ouvindo' : 'aviso';
         const cli = state.levCliente;
         const n = (state.survey || []).length;
         document.getElementById('vozCliente').textContent = `${cli ? cli.nome + ' · ' : ''}${n} ite${n === 1 ? 'm' : 'ns'} no levantamento`;
-        document.querySelectorAll('#vozCampo button').forEach(b => {
-          const sel = b.dataset.campo === voz.campo;
-          b.classList.toggle('active', sel);
-          b.setAttribute('aria-checked', sel ? 'true' : 'false');
-        });
-        const ouvido = document.getElementById('vozOuvido');
-        const texto = voz.parcial ? `“${voz.parcial}…”` : voz.msg;
-        ouvido.textContent = texto || (ouvindo ? 'Fale o código ou o nome e a quantidade' : voz.ativo ? 'Ligando o microfone…' : 'Segure o botão pra falar, ou ligue a escuta contínua');
-        ouvido.classList.toggle('dica', !voz.parcial);
+        marcarCampoLeitor('vozCampo', voz.campo);
+        renderOuvidoVoz();
         const ult = document.getElementById('vozUltima');
         ult.classList.toggle('hidden', !voz.ultima);
         if (voz.ultima) {
           ult.classList.toggle('conferir', !voz.ultima.ok);
           ult.innerHTML = `<div><b>${voz.ultima.ok ? '✓ ' : ''}${escapeHtml(voz.ultima.titulo)}</b><small>${escapeHtml(voz.ultima.nome)}</small></div>${voz.ultima.ok ? '<button type="button" id="vozDesfazerBtn">Desfazer</button>' : ''}`;
         }
-        const pend = lerPendentesVoz().length;
         const pendBtn = document.getElementById('vozPendBtn');
-        pendBtn.classList.toggle('hidden', !pend);
-        pendBtn.innerHTML = `<span>Pra conferir · ${pend} fala${pend === 1 ? '' : 's'}</span><span aria-hidden="true">Ver ›</span>`;
-        document.getElementById('vozRecentes').innerHTML = voz.recentes.map(r => `<div><span>${escapeHtml(r.nome)}</span><b>${escapeHtml(r.txt)}</b></div>`).join('');
+        pendBtn.classList.toggle('hidden', !voz.nPend);
+        pendBtn.innerHTML = `<span>Pra conferir · ${voz.nPend} fala${voz.nPend === 1 ? '' : 's'}</span><span aria-hidden="true">Ver ›</span>`;
+        // as últimas contadas, com o total de agora no levantamento
+        document.getElementById('vozRecentes').innerHTML = voz.desfazer.slice(-5).reverse().map(a => {
+          const p = productByCod(a.cod), it = itemDoLevantamento(a.cod, false);
+          return `<div><span>${escapeHtml(p ? p.n : a.cod)}</span><b>${a.campo === 'ped' ? 'ped.' : 'est.'} ${it ? Number(it[a.campo]) || 0 : 0}</b></div>`;
+        }).join('');
         const falar = document.getElementById('vozFalarBtn');
         falar.disabled = voz.ativo || voz.semRede;
         falar.classList.toggle('ouvindo', ouvindo);
@@ -32443,8 +32435,7 @@
         const pend = lerPendentesVoz();
         if (!pend.length) return;
         abrirListaCliente();
-        conferirItensDaLista(pend.map(x => ({ ...x.item, texto: x.texto, campo: x.campo })), 'voz',
-          { destino: 'lev', rotulo: `${pend.length} fala${pend.length === 1 ? '' : 's'} da contagem por voz` });
+        conferirItensDaLista(pend, 'voz', { destino: 'lev', rotulo: `${pend.length} fala${pend.length === 1 ? '' : 's'} da contagem por voz` });
       }
       function initVozLevantamento() {
         const btn = document.getElementById('levVozBtn');
@@ -32576,9 +32567,7 @@
         if (!p._tok) prepararProdutoParaBusca(p);
         const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
         // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem
-        const q = !l.campo ? quantidadeDaLinhaLista(l.item, p, medida)
-          : medida ? { qtd: l.campo === 'qty' ? 1 : packStep(p), ajuste: `“${l.item.qtd}” é a medida do produto · confira a quantidade` }
-            : quantidadeDaFalaLev(l.item, p, l.campo);
+        const q = l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
       function lerTextoDaLista(texto, origem) {
@@ -32774,7 +32763,7 @@
 
       // ---- tela
       function lcIncluidas() { return lc && lc.linhas ? lc.linhas.filter(l => l.cod && !l.fora) : []; }
-      const campoDaLinhaLista = (l) => l.campo ? (l.campo === 'ped' ? ' · pedido' : ' · estoque') : '';
+      const campoDaLinhaLista = (l) => l.campo ? ' · ' + ROTULO_CAMPO[l.campo] : '';
       function htmlStepperLista(i, l) {
         return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
       }
@@ -32924,11 +32913,7 @@
       // falas conferidas do levantamento por voz: somam no levantamento e saem de "Pra conferir" (a que não
       // foi escolhida fica de fora, como na lista do cliente)
       function porFalasNoLevantamento(incl) {
-        for (const l of incl) {
-          const it = itemDoLevantamento(l.cod, true);
-          const campo = l.campo === 'ped' ? 'ped' : 'qty';
-          it[campo] = (Number(it[campo]) || 0) + l.qtd;
-        }
+        for (const l of incl) somarNoLevantamento(l.cod, l.campo, l.qtd);
         const fora = lc.linhas.filter(l => !l.cod || l.fora).length;
         gravarPendentesVoz([]);
         saveLevSurvey();
