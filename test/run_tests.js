@@ -4335,6 +4335,10 @@ async function main() {
         assert(fala('6 8 6 3') === '' && fala('alicate meia cana') === '' && fala('chave meia polegada') === '' && fala('meia dúzia') === '',
           'código falado: só 5 números, e "meia cana"/"meia polegada"/"meia dúzia" não são código');
         assert(fala('código meia um sete cinco três quantidade dez') === '61753', 'código falado: palavras em volta não atrapalham');
+        const dig = (x) => ctxB.numerosFaladosParaDigitos(x);
+        assert(dig('colher oito oval três') === 'colher 8 oval 3' && dig('disco cento e dez dois') === 'disco 110 2' && dig('nivelador um e meio vinte e quatro') === 'nivelador 1,5 24'
+          && dig('disco cem, dois') === 'disco 100 2' && dig('meia dúzia') === '6' && dig('alicate meia cana dois') === 'alicate meia cana 2',
+          'voz: números falados viram dígitos ("cem" não junta, a vírgula da pausa separa, "meia cana" fica)');
         // busca pela ficha técnica: "mármore"/"pedras naturais" acham o que a ficha diz que corta
         const fichas = {
           '60882': { nome: 'Serra Copo', desc: 'Furos precisos em porcelanato e mármore.', specs: { diametro: '50 mm' } },
@@ -4394,6 +4398,30 @@ async function main() {
           && resumo[2] === 'espacador nivelador supra 1.5 mm|500|un' && resumo[5] === 'rejunte cinza 20 kg|3|',
           `lista do cliente: saudação fora, quantidade no fim/com unidade, medida fica no produto: ${JSON.stringify(resumo)}`);
         const porCodigo = (c) => prods.find(p => p.c === c) || null;
+        // levantamento por voz: uma fala = um item (código falado com "meia", número por extenso, "pedido" na fala)
+        const falaLev = (t) => ctxL.itemDaFalaLevantamento(t, porCodigo);
+        const fCod = falaLev('meia zero oito sete meia, com seis');
+        const rCod = fCod && ctxL.produtoDaLinhaLista(fCod.item, { porCodigo });
+        assert(fCod && fCod.item.qtd === 6 && fCod.campo === null && rCod.estado === 'pronto' && rCod.produto.c === '60876' && !rCod.medida,
+          `voz: código falado com "meia" e a quantidade depois: ${JSON.stringify(fCod)}`);
+        const fDisco = falaLev('disco turbo cento e dez dois');
+        const rDisco = fDisco && ctxL.produtoDaLinhaLista(fDisco.item, { porCodigo });
+        assert(fDisco && fDisco.item.qtd === 2 && rDisco.estado === 'pronto' && rDisco.produto.c === '61010',
+          `voz: "cento e dez" é a medida e "dois" a quantidade: ${JSON.stringify(fDisco && fDisco.item)}`);
+        const fCx = falaLev('pedido batedor argamassa uma caixa');
+        const pBat = porCodigo('60876');
+        assert(fCx && fCx.campo === 'ped' && fCx.item.qtd === 1 && fCx.item.unidade === 'cx'
+          && ctxL.quantidadeDaFalaLev(fCx.item, pBat, 'ped').qtd === 6 && ctxL.quantidadeDaFalaLev(fCx.item, pBat, 'qty').qtd === 6,
+          `voz: "pedido" na fala escolhe o campo e "uma caixa" = a embalagem: ${JSON.stringify(fCx)}`);
+        const fEst = falaLev('estoque batedor argamassa sete');
+        assert(fEst && fEst.campo === 'qty' && ctxL.quantidadeDaFalaLev(fEst.item, pBat, 'qty').qtd === 7 && ctxL.quantidadeDaFalaLev(fEst.item, pBat, 'ped').qtd === 12,
+          'voz: no estoque soma o contado (7), no pedido sobe pra embalagem (12)');
+        const fCem = falaLev('disco turbo cem, dois');
+        assert(fCem && fCem.item.termo === 'disco turbo 100' && fCem.item.qtd === 2, `voz: "cem, dois" = medida 100 e quantidade 2: ${JSON.stringify(fCem && fCem.item)}`);
+        const fColher = falaLev('colher oito');
+        const rColher = fColher && ctxL.produtoDaLinhaLista(fColher.item, { porCodigo });
+        assert(fColher && !(rColher.estado === 'pronto' && fColher.item.qtd != null && !rColher.medida),
+          'voz: "colher oito" (oval × reta, o 8 pode ser a medida) não entra sozinho, vai pra conferir');
         const res = linhas.map(l => ctxL.produtoDaLinhaLista(l, { porCodigo }));
         const qtd = (i) => ctxL.quantidadeDaLinhaLista(linhas[i], res[i].produto, res[i].medida);
         assert(res[0].estado === 'pronto' && res[0].produto.c === '60162' && qtd(0).qtd === 12 && !qtd(0).ajuste,

@@ -1647,10 +1647,21 @@ Supabase, sem PR — não é mudança de código.
   `/itens-da-imagem`, na mesma rota; modelo padrão `gemini-2.5-flash` desde 10/2026, `GEMINI_MODEL` troca). Regra pros três itens: **a IA só entende o texto; produto, preço e desconto saem do motor do app**
   (`searchProducts`, `clientPrice`…), e nada entra no orçamento/levantamento **sem a tela de conferência** (termo ambíguo =
   vendedor escolhe; caixa = múltiplo da embalagem).
-  1. **Levantamento por voz em escuta contínua**: falar item atrás de item ("colher quarenta e dois, seis") sem tocar a cada um,
-     no molde do `#modoLeitor` (evento com id, desfazer a última). Cuidado: no Android o reconhecimento para sozinho depois de um
-     silêncio e reiniciar é instável; no depósito o barulho troca medidas ("2 mm" × "12 mm"); no iPhone instalado na Tela de
-     Início o `webkitSpeechRecognition` é instável — testar em aparelho de verdade.
+  1. Feito em 10/2026 (opção "A" com o botão da "B", canvas "Cortag · Levantamento por voz contínuo"): botão **"Contar por voz"**
+     no Levantamento abre a tela cheia `#vozLev` (`abrirVozLev`, `index.html`): **escuta contínua** que religa sozinha quando o
+     celular para no silêncio (`rec.onend`) + **"Segure pra falar"** (ouve só com o dedo no botão, pra loja barulhenta; com a
+     escuta ligada o botão fica desligado), "+ no estoque | + no pedido", **Desfazer** a última e as últimas 5 contadas. Cada
+     fala final = um item (`itemDaFalaLevantamento` no `<motor-lista>`, testado): código falado (5 números, "meia" = 6) ou nome,
+     número por extenso vira dígito (`numerosFaladosParaDigitos`: "cento e dez", "um e meio" = 1,5, "meia dúzia"), "pedido"/
+     "estoque" na fala escolhe o campo, "com N" = quantidade; até 5 leituras do reconhecimento, vale a 1ª que acha o produto.
+     **Entra sozinho só com um produto e a quantidade dita** (`produtoDaLinhaLista` pronto, sem "o número pode ser a medida");
+     estoque soma o contado (caixa = embalagem, sem arredondar), pedido sobe pro múltiplo da embalagem (`quantidadeDaFalaLev`).
+     O resto vai pra **"Pra conferir"** (`cortagVozPendentes_v1`, sobrevive a fechar o app) e passa pela **mesma conferência
+     da lista do cliente** com `lc.destino = 'lev'` ("Conferir falas", `porFalasNoLevantamento`; a que não foi escolhida fica de
+     fora). Comandos falados: "desfazer", "pausar", "estoque"/"pedido". Precisa de internet (o Chrome do Android reconhece no
+     Google; sem sinal avisa e para). Testado só com reconhecimento simulado: **conferir num Android e num iPhone de verdade**
+     (o Android dá um bipe a cada religada; no depósito o barulho troca medidas; no iPhone instalado o `webkitSpeechRecognition`
+     é instável). Gravar e converter depois (opção "D" do canvas) ficou de fora.
   2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
      (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
   3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;
