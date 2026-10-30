@@ -14191,10 +14191,26 @@
         let linha = String(linhaBruta || '').replace(/\s+/g, ' ').trim();
         if (!linha) return null;
         // PDF: "12,00" no começo da linha é a quantidade (coluna Qtde); os outros com centavos são reais
-        let qtdDoPdf = null;
+        let qtdDoPdf = null, unidadeDoPdf = null;
         if (modoPdf) {
           const m = linha.match(/^(\d{1,5}),(\d{2,3})\s+(?=\S*[A-Za-zÀ-ÿ\d])/);
           if (m && /^0+$/.test(m[2])) { qtdDoPdf = Number(m[1]); linha = linha.slice(m[0].length); }
+          // "UN 6,00" / "6,00 CX": a quantidade em reais-sem-centavos colada na unidade (orçamento de outra
+          // loja, PDF real de 10/2026: "1477 APLICADOR ... - CORTAG UN 6,00 33,19 29,90 179,40" - o 6,00 sumia
+          // como valor e o 1477, código do cliente, virava a quantidade). Com número inteiro antes da unidade
+          // ("12 UN 15,00") quem vale é ele.
+          if (qtdDoPdf == null) {
+            const formas = [...linha.matchAll(/(^|\s)([A-Za-zÀ-ÿ]{2,9})\.?\s+(\d{1,5}),0{2,3}(?=\s|$)/g),
+              ...linha.matchAll(/(^|\s)()()(\d{1,5}),0{2,3}\s+([A-Za-zÀ-ÿ]{2,9})\.?(?=\s|$)/g)].sort((a, b) => a.index - b.index);
+            for (const mu of formas) {
+              const un = UNIDADES_LISTA[normalize(mu[2] || mu[5])];
+              if (!un) continue;
+              if (mu[2] && /\d\s*$/.test(linha.slice(0, mu.index + mu[1].length))) break;
+              qtdDoPdf = Number(mu[3] || mu[4]); unidadeDoPdf = un;
+              linha = (linha.slice(0, mu.index) + ' ' + linha.slice(mu.index + mu[0].length)).trim();
+              break;
+            }
+          }
           linha = linha.replace(/R\$\s*/gi, ' ').replace(/(^|\s)\d{1,3}(\.\d{3})*,\d{2}(?=\s|$)/g, ' ').trim(); // valores em reais
         }
         // código do produto ou EAN escrito na linha ("60882", "P60863", "7898...")
@@ -14215,6 +14231,13 @@
           if (un) { qtd = +tok[i]; unidade = un; daQtd = [i, i + 1]; continue; }
           if (tok[i - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[i - 1])) { qtd = +tok[i]; unidade = null; daQtd = [i - 1, i]; continue; }
           if (i === 0 && tok[1] === 'x') { qtd = +tok[0]; daQtd = [0, 1]; }
+        }
+        // "nivelador 1,5 eco 50pcs 3": com outro número no fim, o "50pcs" do meio é o pacote (fica no produto)
+        // e o do fim é a quantidade. Só nivelador/cunha: em "disco turbo 3 un 110" o 110 é a medida
+        const fim = tok.length - 1;
+        if (unidade === 'un' && daQtd.length === 2 && daQtd[1] < fim && NIVELAMENTO_LISTA.test(tok.join(' ')) && ehInteiroLista(tok[fim]) && !codigo.has(fim) && /^[1-9]/.test(tok[fim])) {
+          qtd = +tok[fim]; unidade = null; daQtd = [fim];
+          if (tok[fim - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[fim - 1])) daQtd.push(fim - 1);
         }
         daQtd.forEach(i => tirar.add(i));
         // número no começo seguido do produto ("5 colher pedreiro 8": 5 é a quantidade, o 8 é a medida);
@@ -14240,7 +14263,7 @@
           // (o código do cliente que vem logo depois, "12,00 3893 3893 COLHER", também sai)
           const primeiraPalavra = tok.findIndex(t => /[a-z]/.test(t));
           const t2 = termoDasPalavrasLista(tok.filter((t, i) => !codigo.has(i) && !(i < primeiraPalavra && ehInteiroLista(t))));
-          return { texto: linhaBruta.trim(), termo: t2, qtd: qtdDoPdf, unidade: null, talvez: false, codigos };
+          return { texto: linhaBruta.trim(), termo: t2, qtd: qtdDoPdf, unidade: unidadeDoPdf, talvez: false, codigos };
         }
         return { texto: linhaBruta.trim(), termo, qtd, unidade, talvez, codigos };
       }
@@ -14248,7 +14271,7 @@
       // "1.", "2)" quando as linhas vêm numeradas em sequência (senão o "1." seria quantidade).
       function linhasDaListaCliente(texto, modoPdf) {
         const brutas = String(texto || '').split(/\r?\n/)
-          .map(l => l.replace(PREFIXO_WHATSAPP_LISTA, '').replace(/^\s*[-*•·>–—]+\s*/, '').trim()).filter(Boolean);
+          .map(l => l.replace(PREFIXO_WHATSAPP_LISTA, '').replace(/^\s*(\[\s*\]|[-*•·>–—☐□]+)\s*/, '').trim()).filter(Boolean);
         const numeradas = brutas.map(l => (l.match(/^(\d{1,3})\s*[).\-–]\s+\S/) || [])[1]).filter(Boolean).map(Number);
         const emSequencia = numeradas.length >= 2 && numeradas.every((n, i) => n === i + 1);
         const linhas = [];
@@ -14294,6 +14317,30 @@
       // Produto da linha: { estado: 'pronto'|'escolher'|'nao', produto, opcoes, jaCompra }.
       // Pronto = um só no topo da busca (ou só um deles o cliente já compra); vários empatados ou
       // achado com palavra faltando = o vendedor escolhe; nada = não achei.
+      // Quantas peças vêm no produto: "C/ 50 UN", "C/500 PÇS", "GRANEL 1000 PCS", "100 pçs". Nivelador e
+      // cunha da família "(PACOTE)" sem número no nome vêm em pacote de 50 (10/2026, usuário: "quando fala
+      // 50 unidades geralmente é o pacote, não a caixa com 500"); o granel/balde traz o número. 0 = não se sabe.
+      // Só nivelador/cunha (o caso pedido): "BROCA C/ 3 PONTAS" e "GRAMPO ... CX C/ 1000" não são pacote de peças
+      // a dividir (achados do revisor-cortag)
+      const NIVELAMENTO_LISTA = /\b(nivelador|niveladores|espacador|espacadores|cunha|cunhas)\b/;
+      const ehNivelamentoLista = (p) => /sistema de nivelamento/.test(normalize((p && p.familia) || ''))
+        || /^(balde - )?(espacador nivelador|cunha nivelamento|cunha tradicional)|^mini cunha/.test(normalize((p && p.n) || ''));
+      function pacoteDoProdutoLista(p) {
+        const n = normalize((p && p.n) || '');
+        const m = n.match(/c\/\s*(\d+)\s*(un|und|unid|unidades?|pc|pcs|pecas?)\b/) || (ehNivelamentoLista(p) && n.match(/\b(\d{2,4})\s*(pc|pcs|pecas?)\b/));
+        if (m) return +m[1];
+        const fam = normalize((p && p.familia) || '');
+        if (fam ? /nivelamento \(pacote\)/.test(fam) : /^(espacador nivelador|cunha nivelamento)\b/.test(n)) return 50;
+        return 0;
+      }
+      // "50PCS"/"50 un" escrito no produto, com a quantidade já em outra coluna (foto, tabela): é o
+      // tamanho do pacote, não palavra da busca ("pcs" só aparece no nome do granel "C/500 PÇS")
+      function pacoteNoTermoLista(termo) {
+        const pal = String(termo || '').split(' ');
+        const unidades = NIVELAMENTO_LISTA.test(pal.join(' ')) ? /^(pc|pcs|peca|pecas|un|und|unid|unidades?)$/ : /^(pc|pcs|peca|pecas)$/;
+        const i = pal.findIndex((w, k) => /^\d+$/.test(w) && +w > 1 && unidades.test(pal[k + 1] || ''));
+        return i < 0 ? { termo, pacote: 0 } : { termo: pal.filter((_, k) => k !== i && k !== i + 1).join(' '), pacote: +pal[i] };
+      }
       function produtoDaLinhaLista(item, ctx) {
         const comprados = (ctx && ctx.comprados) || new Set();
         const porCodigo = (ctx && ctx.porCodigo) || (() => null);
@@ -14303,19 +14350,40 @@
           const p = porCodigo(c);
           if (p) return pronto(p);
         }
+        const { termo, pacote } = pacoteNoTermoLista(item.termo);
+        // Pacote: com "50PCS" no produto fica o de 50 (ou, sem ele, nada maior); com "50 un" de quantidade,
+        // o granel/balde (300+ peças) maior que o pedido sai, menos o que o cliente já compra (o "50PCS" escrito vale mais).
+        const pedidoUn = !pacote && item.unidade === 'un' && item.qtd > 0 ? item.qtd : 0;
+        const cabe = (p) => {
+          const pp = pacoteDoProdutoLista(p);
+          if (!pacote && !ehNivelamentoLista(p)) return true;
+          if (!pp) return true;
+          if (pacote) return pp <= pacote;
+          return !(pedidoUn && pp >= 300 && pedidoUn < pp);
+        };
+        const peloPacote = (lista) => {
+          if (!pacote && !pedidoUn) return lista;
+          let ok = lista.filter(x => cabe(x.p) || (!pacote && comprados.has(x.p.c)));
+          if (pacote) {
+            const igual = ok.filter(x => pacoteDoProdutoLista(x.p) === pacote);
+            if (igual.length) ok = igual;
+          }
+          return ok.length ? ok : lista;
+        };
+        const buscar = (q) => peloPacote(buscarComPontos(q));
         // "disco 110": o 110 é a medida do disco (o catálogo tem) ou a quantidade?
         // (só se o catálogo tem o produto com esse número sem faltar palavra; senão é quantidade)
-        let achados = item.talvez && item.qtd != null && item.termo ? buscarComPontos(item.termo + ' ' + item.qtd) : [];
+        let achados = item.talvez && item.qtd != null && termo ? buscar(termo + ' ' + item.qtd) : [];
         if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
-        else achados = item.termo ? buscarComPontos(item.termo) : [];
+        else achados = termo ? buscar(termo) : [];
         // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
         // "CUNHA SLIM 100PC"; "NIVELADOR 1,5MM ECO 50PCS": o ECO vem em C/500): tenta sem cada número
         const semCadaNumero = () => {
-          const pal = normalizarBusca(item.termo || '').split(' ');
+          const pal = normalizarBusca(termo || '').split(' ');
           const vistos = new Set(), sem = [];
           pal.forEach((w, i) => {
             if (!ehNumeroBusca(w)) return;
-            for (const x of buscarComPontos(pal.filter((_, k) => k !== i).join(' ')).slice(0, 6)) {
+            for (const x of buscar(pal.filter((_, k) => k !== i).join(' ')).slice(0, 6)) {
               if (!vistos.has(x.p.c)) { vistos.add(x.p.c); sem.push(x); }
             }
           });
@@ -14340,7 +14408,10 @@
         }
         if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
         const queCompra = opcoes.filter(p => comprados.has(p.c));
-        if (queCompra.length === 1 && exato) return pronto(queCompra[0]);
+        // histórico do cliente (10/2026, pedido do usuário: "buscar sempre o histórico pra fazer o cruzamento"):
+        // o único das opções que ele já compra vai pronto, também quando faltou palavra (o "eco", o "videa"),
+        // desde que caiba no pacote pedido
+        if (queCompra.length === 1 && (exato || cabe(queCompra[0]))) return pronto(queCompra[0]);
         opcoes = [...queCompra, ...opcoes.filter(p => !comprados.has(p.c))];
         return { estado: 'escolher', produto: null, opcoes: opcoes.slice(0, 6), maisOpcoes: Math.max(0, opcoes.length - 6), medida };
       }
@@ -14357,12 +14428,16 @@
           if (step > 1) { ajustes.push(`${qtd} cx × ${step} = ${qtd * step} un`); qtd *= step; }
           else ajustes.push(`pediu ${qtd} cx, o catálogo não diz quantas vêm na caixa · confira`);
         } else if (item.unidade === 'un') {
-          const m = normalize(p.n).match(/c\/\s*(\d+)\s*(un|und|unid|pc|pcs|pecas?)\b/);
-          const porPacote = m ? +m[1] : 0;
-          if (porPacote > 1 && qtd >= porPacote) {
+          const porPacote = pacoteDoProdutoLista(p);
+          // "50PCS" no produto: a quantidade já é de pacotes; "36 un" de pacote de 50 = 36 pacotes
+          if (porPacote > 1 && qtd >= porPacote && !pacoteNoTermoLista(item.termo).pacote) {
             const pacotes = Math.ceil(qtd / porPacote);
-            ajustes.push(`${qtd} un → ${pacotes} pct de ${porPacote}`);
+            ajustes.push(`${qtd} un → ${pacotes} ${porPacote >= 300 ? 'un' : 'pct'} de ${porPacote}`);
             qtd = pacotes;
+          } else if (porPacote >= 300 && qtd >= 25 && qtd < porPacote && ehNivelamentoLista(p)) {
+            // "50 un" de balde/granel de 500: são peças, não 50 baldes
+            ajustes.push(`pediu ${qtd} un e o produto vem com ${porPacote} · confira`);
+            qtd = 1;
           }
         }
         const final = Math.ceil(qtd / step) * step;
@@ -31795,13 +31870,23 @@
         return new Set(lista.map(x => x.codigo_sku));
       }
       // itens do <motor-lista> -> linhas da conferência
-      function conferirItensDaLista(itens, origem, extra) {
+      async function conferirItensDaLista(itens, origem, extra) {
         // de quem é a lista (CNPJ no documento ou nome de quem mandou no WhatsApp). Só o CNPJ, sem cliente
         // aberto e sem outro cliente guardado com a lista, escolhe sozinho; o resto só sugere (lcUsarSugeridoBtn)
         const sugerido = extra && extra.pistas ? clienteDaListaCliente(extra.pistas, loadClientesLocais()) : null;
         const guardado = lc && lc.clienteDaLista;
         const escolherSozinho = sugerido && sugerido.motivo === 'cnpj' && !state.levCliente
           && (!guardado || String(guardado.id) === String(sugerido.cliente.id));
+        // o histórico do cliente decide entre opções parecidas (pacote × granel, o "eco" faltando): sem ele
+        // no aparelho, busca antes de conferir (até 6 s; sem internet segue sem)
+        const doCliente = escolherSozinho ? sugerido.cliente : (guardado || state.levCliente);
+        if (doCliente && doCliente.id && !COMPRADOS_CACHE.has(doCliente.id) && !lerCompradosLS()[doCliente.id] && navigator.onLine && lc) {
+          const g = lcGeracao;
+          lc = { ...lc, fase: 'lendo', msg: 'Buscando o histórico do cliente…', sub: '' };
+          renderListaCliente();
+          await Promise.race([carregarCompradosRecentes(doCliente), new Promise(ok => setTimeout(ok, 6000))]);
+          if (lcVelha(g)) return;
+        }
         const comprados = escolherSozinho ? compradosDoCliente(sugerido.cliente) : lcComprados();
         const ctx = { comprados, porCodigo: findByExactCode }; // a mesma do leitor: EAN, DUN, zeros à esquerda
         let ignoradas = 0;
@@ -31835,7 +31920,7 @@
       function lerTextoDaLista(texto, origem) {
         const itens = linhasDaListaCliente(texto, origem === 'pdf');
         if (!itens.length) { showToast(origem === 'pdf' ? 'Não achei linhas de produto nesse PDF.' : 'Não achei produto nesse texto — uma linha por produto.', 'erro'); return; }
-        conferirItensDaLista(itens, origem, { pistas: { cnpjs: cnpjsDaListaCliente(texto, [CORTAG_CNPJ_DIGITS]), remetente: remetenteDaListaWhatsapp(texto) } });
+        return conferirItensDaLista(itens, origem, { pistas: { cnpjs: cnpjsDaListaCliente(texto, [CORTAG_CNPJ_DIGITS]), remetente: remetenteDaListaWhatsapp(texto) } });
       }
       // Foto -> JPEG de até 1600 px e 900 KB (a mesma redução da foto do produto, fundo branco no
       // print com transparência): sobe rápido no 4G e cabe no aparelho se ficar guardada
@@ -31868,7 +31953,7 @@
           const dados = await arquivo.arrayBuffer();
           const { texto } = await extrairTextoPdf(dados.slice(0));
           if (lcVelha(g)) return;
-          if ((texto.match(/[A-Za-zÀ-ÿ]{3,}/g) || []).length >= 5) { lerTextoDaLista(texto, 'pdf'); if (lc && lc.fase === 'lendo') { lc.fase = 'entrada'; renderListaCliente(); } return; }
+          if ((texto.match(/[A-Za-zÀ-ÿ]{3,}/g) || []).length >= 5) { await lerTextoDaLista(texto, 'pdf'); if (lcVelha(g)) return; if (lc && lc.fase === 'lendo') { lc.fase = 'entrada'; renderListaCliente(); } return; }
           const pdfjsLib = await loadPdfJs();
           const doc = await pdfjsLib.getDocument({ data: dados }).promise;
           const imagens = [];

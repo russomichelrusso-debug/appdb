@@ -4356,8 +4356,11 @@ async function main() {
         { c: '60170', n: 'DESEMPENADEIRA INOX CABO REMOVÍVEL LISA - COM CABO', emb: 12 },
         { c: '60171', n: 'DESEMPENADEIRA INOX CABO REMOVÍVEL LISA - SEM CABO', emb: 12 },
         { c: '62857', n: 'ESPAÇADOR NIVELADOR 1,5 mm SUPRA - PCT C/ 50 UN.', emb: 1 },
-        { c: '62407', n: 'ESPAÇADOR NIVELADOR 1,5 mm ECO (VERMELHO) - C/500 PÇS', emb: 1 },
+        { c: '62407', n: 'ESPAÇADOR NIVELADOR 1,5 mm ECO (VERMELHO) - C/500 PÇS', emb: 1, familia: '06 - SISTEMA DE NIVELAMENTO (A GRANEL)' },
+        { c: '61336', n: 'ESPAÇADOR NIVELADOR 1,5 mm ECO (VERMELHO) - CX 12 UN', emb: 12, familia: '05 - SISTEMA DE NIVELAMENTO (PACOTE)' },
         { c: '62438', n: 'BROCA DE AÇO RAPIDO 8,0 mm', emb: 10 },
+        { c: '60390', n: 'BROCA C/ 3 PONTAS PARA MADEIRA 8,0 mm', emb: 10 },
+        { c: '60531', n: 'GRAMPO 6 mm CX C/ 1000 P/ GRAMPEADOR MANUAL', emb: 10 },
         { c: '60876', n: 'BATEDOR ARGAMASSA', emb: 6 },
         { c: '61010', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
         { c: '60200', n: 'RODEL Ø7 X 80 mm', emb: 1 },
@@ -4408,6 +4411,13 @@ async function main() {
         const pdf = ctxL.linhasDaListaCliente('001 BATEDOR ARGAMASSA 12 UN 15,30 183,60\nTotal R$ 1.234,56', true);
         assert(pdf.length >= 1 && pdf[0].qtd === 12 && pdf[0].unidade === 'un' && pdf[0].termo === 'batedor argamassa',
           `lista do cliente: PDF sem os valores em reais: ${JSON.stringify(pdf.map(l => [l.termo, l.qtd]))}`);
+        // PDF de orçamento com "UN 6,00" (10/2026, VAZ & DAL SANTOS): o 6,00 sumia como valor em reais e o
+        // código do cliente (1477, 7356) virava a quantidade; "[]" da caixinha de marcar sai
+        const vaz = ctxL.linhasDaListaCliente('[] 1477 APLICADOR DE SILICONE 9" USO LEVE - CORTAG UN 6,00 33,19 29,90 179,40\n'
+          + '[] 18793 BROCA SDS VIDEA 10X150X210MM - CORTAG UN 6,00 18,32 16,50 99,00\n[] 7356 BROCA SDS VIDEA 10X100X160MM - CORTAG 2,00 CX 16,54 14,90 89,40\n'
+          + '001 BATEDOR ARGAMASSA 12 UN 15,00 180,00', true);
+        assert(vaz.map(l => l.qtd + l.unidade).join(',') === '6un,6un,2cx,12un' && !/1477|7356/.test(vaz.map(l => l.termo).join()),
+          `lista do cliente: "UN 6,00" do PDF é a quantidade: ${JSON.stringify(vaz.map(l => [l.termo, l.qtd, l.unidade]))}`);
         // código do produto na linha nunca vira quantidade (achado do revisor-cortag: "colher 60162" ia com 60162 un.)
         const cods = ctxL.linhasDaListaCliente('Colher pedreiro 60162\nbatedor P60876\n60876 batedor argamassa 4');
         assert(cods.map(l => l.qtd).join(',') === ',,4' && cods[1].codigos.join() === 'P60876' && cods[2].termo === 'batedor argamassa',
@@ -4416,8 +4426,36 @@ async function main() {
         assert(/confira/.test(alta.ajuste || ''), 'lista do cliente: quantidade acima de 5.000 vai pra "Quantidade ajustada"');
         // "50PCS" é o pacote: o ECO do catálogo vem em C/500 e não pode sumir por causa do 50 (foto real de 10/2026)
         const eco = ctxL.produtoDaLinhaLista(ctxL.linhaDaImagemLista({ texto: '20390 CORTAG ESPACADOR NIVELADOR 1,5MM ECO 50PCS', quantidade: 36, unidade: 'un' }), { porCodigo });
-        assert(eco.estado === 'escolher' && eco.opcoes[0].c === '62407' && eco.opcoes.some(p => p.c === '62857'),
-          `lista do cliente: palavra faltando ("eco") = tenta sem cada número e põe na frente quem tem todas: ${JSON.stringify((eco.opcoes || []).map(p => p.c))}`);
+        assert(eco.estado === 'pronto' && eco.produto.c === '61336',
+          `lista do cliente: "50PCS" é o pacote de 50 (o ECO em pacote, não o granel C/500): ${JSON.stringify(eco)}`);
+        // usuário (10/2026): "quando fala 50 unidades geralmente é o pacote, não a caixa com 500"
+        const eco50 = ctxL.linhasDaListaCliente('espaçador nivelador 1,5 eco 50 un')[0];
+        const r50 = ctxL.produtoDaLinhaLista(eco50, { porCodigo });
+        const q50 = ctxL.quantidadeDaLinhaLista(eco50, r50.produto);
+        assert(r50.estado === 'pronto' && r50.produto.c === '61336' && q50.qtd === 12 && /50 un → 1 pct de 50/.test(q50.ajuste),
+          `lista do cliente: "50 un" de nivelador = 1 pacote de 50 (sobe pra embalagem), não 50 do granel: ${JSON.stringify([r50.produto && r50.produto.c, q50])}`);
+        const ecoFim = ctxL.linhasDaListaCliente('nivelador 1,5 eco 50pcs 3')[0];
+        const rFim = ctxL.produtoDaLinhaLista(ecoFim, { porCodigo });
+        assert(ecoFim.qtd === 3 && rFim.estado === 'pronto' && rFim.produto.c === '61336',
+          `lista do cliente: "50pcs" no meio com quantidade no fim = pacote de 50, 3 pacotes: ${JSON.stringify([ecoFim, rFim.estado])}`);
+        // fora do nivelador nada muda (achados do revisor-cortag): "C/ 3 PONTAS" não é pacote, "50 un" do grampo
+        // CX C/ 1000 são 50 caixas e o 110 do fim de "disco ... 3 un 110" é a medida
+        const fora = ctxL.linhasDaListaCliente('broca 3 pontas madeira 8mm 30 un\ngrampo 6mm 50 un\ndisco diamantado turbo 3 un 110');
+        const qFora = fora.map(l => { const r = ctxL.produtoDaLinhaLista(l, { porCodigo }); const p = r.produto || r.opcoes[0]; return [p && p.c, ctxL.quantidadeDaLinhaLista(l, p).qtd]; });
+        assert(JSON.stringify(qFora) === '[["60390",30],["60531",50],["61010",10]]',
+          `lista do cliente: regra de pacote só vale pra nivelador/cunha: ${JSON.stringify(qFora)}`);
+        const granel = ctxL.quantidadeDaLinhaLista(eco50, prods.find(p => p.c === '62407'));
+        assert(granel.qtd === 1 && /vem com 500/.test(granel.ajuste), `lista do cliente: "50 un" do granel de 500 = 1 e confira, não 50 baldes: ${JSON.stringify(granel)}`);
+        // histórico do cliente: o que ele já compra vai pronto (mesmo com palavra faltando); o "50PCS" escrito
+        // não troca pelo granel que ele compra
+        const compraGranel = ctxL.produtoDaLinhaLista(ctxL.linhaDaImagemLista({ texto: 'NIVELADOR 1,5MM ECO 50PCS', quantidade: 36, unidade: 'un' }), { porCodigo, comprados: new Set(['62407']) });
+        assert(compraGranel.estado === 'pronto' && compraGranel.produto.c === '61336',
+          `lista do cliente: "50PCS" escrito vale mais que o granel que ele compra: ${JSON.stringify(compraGranel)}`);
+        const historico = ctxL.produtoDaLinhaLista(ctxL.linhasDaListaCliente('espaçador nivelador 1,5 eco vermelho grande 36')[0], { porCodigo, comprados: new Set(['61336']) });
+        const semHist = ctxL.produtoDaLinhaLista(ctxL.linhasDaListaCliente('espaçador nivelador 1,5 eco vermelho grande 36')[0], { porCodigo });
+        assert(semHist.estado === 'escolher', `lista do cliente: sem histórico, palavra faltando continua pra escolher: ${semHist.estado}`);
+        assert(historico.estado === 'pronto' && historico.produto.c === '61336',
+          `lista do cliente: faltou palavra mas só uma opção ele já compra = pronto: ${JSON.stringify(historico)}`);
         // quantidade no começo e medida no fim ("5 colher ... 8"): achado do /code-review
         const comeco = ctxL.linhasDaListaCliente('5 colher pedreiro aço oval 8');
         assert(comeco[0].qtd === 5 && comeco[0].termo === 'colher pedreiro aco oval 8', `lista do cliente: "5 colher ... 8" = 5 unidades da colher 8: ${JSON.stringify(comeco[0])}`);
