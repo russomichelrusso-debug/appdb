@@ -14889,7 +14889,9 @@
         const resto = normalize(fala || '').replace(/\b(pedido|pedir|estoque)\b/g, (m) => { campo = m === 'estoque' ? 'qty' : 'ped'; return ' '; });
         const cod = porCodigo ? leiturasDeCodigoDaFala(resto).find(l => porCodigo(l.codigo)) : null;
         const linha = (cod ? [numerosFaladosParaDigitos(cod.antes), cod.codigo, numerosFaladosParaDigitos(cod.depois)].join(' ')
-          : numerosFaladosParaDigitos(resto)).replace(/\bcom (?=\d)/g, 'qtd ').replace(/\s+/g, ' ').trim();
+          : numerosFaladosParaDigitos(resto)).replace(/\bcom (?=\d)/g, 'qtd ')
+          // "dezoito por trinta" é a medida 18x30 (vídeo do usuário, 10/2026: o 30 virava a quantidade)
+          .replace(/(\d) (?:por|vezes) (?=\d)/g, '$1x').replace(/\s+/g, ' ').trim();
         const item = interpretarLinhaLista(linha);
         return item ? { item: { ...item, texto: String(fala || '').trim() }, campo } : null;
       }
@@ -32285,6 +32287,7 @@
       }
       function fecharVozLev(semConferir) {
         if (!voz) return;
+        soltarFalaVoz(); // a última fala ainda esperando a frase terminar
         const v = voz;
         voz = null;
         if (v.rec) { try { v.rec.abort(); } catch (e) { } }
@@ -32306,7 +32309,7 @@
           let parcial = '', teveFinal = false;
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const r = e.results[i];
-            if (r.isFinal) { teveFinal = true; processarFalaLev(Array.from(r).map(a => a.transcript).filter(Boolean)); }
+            if (r.isFinal) { teveFinal = true; receberFinalVoz(Array.from(r).map(a => a.transcript).filter(Boolean)); }
             else parcial += r[0].transcript;
           }
           if (!voz) return;
@@ -32343,7 +32346,34 @@
       function vozPararRec() {
         if (voz && voz.rec) { try { voz.rec.stop(); } catch (e) { } }
       }
-      // só muda o estado: quem chama (onresult) desenha a tela uma vez no fim
+      // O Chrome do Android, na escuta contínua, entrega cada pedaço da frase como final, cada um com o anterior
+      // no começo ("desempenadeira", "desempenadeira 18", "desempenadeira 18 x", "desempenadeira 18 por 30" -
+      // vídeo do usuário, 10/2026: 4 falas na conferência pra 1 item). A fala espera um pouco: chegando outra
+      // que começa com ela, fica só a nova.
+      const ESPERA_FALA_VOZ_MS = 1300;
+      function receberFinalVoz(alts) {
+        if (!voz || !alts.length) return;
+        const chave = palavrasDaFala(alts[0]).join(' ');
+        if (!chave) return;
+        const ant = voz.falaEsperando;
+        if (ant) {
+          clearTimeout(ant.timer);
+          voz.falaEsperando = null;
+          if (!(chave === ant.chave || chave.startsWith(ant.chave + ' '))) processarFalaLev(ant.alts);
+        }
+        const timer = setTimeout(() => {
+          if (voz && voz.falaEsperando && voz.falaEsperando.timer === timer) { soltarFalaVoz(); renderVozLev(); }
+        }, ESPERA_FALA_VOZ_MS);
+        voz.falaEsperando = { alts, chave, timer };
+      }
+      function soltarFalaVoz() {
+        const f = voz && voz.falaEsperando;
+        if (!f) return;
+        clearTimeout(f.timer);
+        voz.falaEsperando = null;
+        processarFalaLev(f.alts);
+      }
+      // só muda o estado: quem chama (onresult/soltarFalaVoz) desenha a tela uma vez no fim
       function processarFalaLev(alts) {
         if (!voz || !alts.length) return;
         const chave = palavrasDaFala(alts[0]).join(' ');
@@ -32351,6 +32381,13 @@
         // o Chrome do Android às vezes entrega a mesma frase duas vezes, quase juntas (a mesma fala dita de
         // novo de propósito leva mais que isso)
         if (voz.ultimoFinal && voz.ultimoFinal.chave === chave && Date.now() - voz.ultimoFinal.em < 700) return;
+        // o pedaço da frase que chegou depois da espera e já foi pra conferir: a fala mais completa fica no lugar
+        const conf = voz.ultimaConferir;
+        voz.ultimaConferir = null;
+        if (conf && chave.startsWith(conf.chave + ' ') && Date.now() - conf.em < 8000) {
+          const pend = lerPendentesVoz();
+          if (pend.length && pend[pend.length - 1].texto === conf.texto) { pend.pop(); gravarPendentesVoz(pend); }
+        }
         voz.ultimoFinal = { chave, em: Date.now() };
         if (/^(desfazer|apagar|cancelar|volta|voltar)( (a )?ultim[ao])?$/.test(chave)) { desfazerFalaLev(); return; }
         if (/^(pausar|parar)( (a )?escuta)?$/.test(chave)) { voz.ativo = false; vozPararRec(); return; }
@@ -32391,6 +32428,7 @@
           const pend = lerPendentesVoz();
           pend.push({ ...melhor.f.item, campo, cliente: state.levCliente ? state.levCliente.id : null });
           gravarPendentesVoz(pend);
+          voz.ultimaConferir = { chave, texto: melhor.f.item.texto, em: Date.now() };
           voz.ultima = { ok: false, titulo: `Pra conferir · ${motivo}`, nome: `“${melhor.f.item.texto}”` };
           playScanBeep(false);
         }
