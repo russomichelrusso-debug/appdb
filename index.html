@@ -14138,6 +14138,74 @@
         }
         return kaefPorUltimo(achados, buscaPedeKaef(todas), p => p).slice(0, 60);
       }
+      // Código falado (🎤, 10/2026, pedido do usuário): o vendedor fala o código em pedaços e usa "meia" pro 6
+      // (pra não confundir com o "três"): "meia um sete cinco três" = 61753, "sessenta oito meia três" = 60863.
+      // Regra do usuário: **o código tem sempre 5 números** (todo o catálogo) - só vale a leitura que fecha
+      // exatamente 5, e é isso que decide "sessenta oito" = 608 (60863) ou 68. Devolve as leituras possíveis
+      // na ordem de preferência; quem chama fica com a 1ª que existe no catálogo. "meia" só é número colado em
+      // outro número e fora de "meia cana"/"meia polegada" (há produtos com MEIA CANA no nome).
+      const UNIDADES_FALADAS = { zero: '0', um: '1', uma: '1', dois: '2', duas: '2', tres: '3', quatro: '4', cinco: '5',
+        seis: '6', meia: '6', sete: '7', oito: '8', nove: '9' };
+      const DEZ_A_DEZENOVE_FALADOS = { dez: '10', onze: '11', doze: '12', treze: '13', catorze: '14', quatorze: '14',
+        quinze: '15', dezesseis: '16', dezasseis: '16', dezessete: '17', dezoito: '18', dezenove: '19' };
+      const DEZENAS_FALADAS = { vinte: 2, trinta: 3, quarenta: 4, cinquenta: 5, sessenta: 6, setenta: 7, oitenta: 8, noventa: 9 };
+      const CENTENAS_FALADAS = { cem: 1, cento: 1, duzentos: 2, trezentos: 3, quatrocentos: 4, quinhentos: 5,
+        seiscentos: 6, setecentos: 7, oitocentos: 8, novecentos: 9 };
+      const MEIA_NAO_E_NUMERO = new Set(['cana', 'polegada', 'polegadas', 'pol', 'lua', 'duzia', 'volta']);
+      // valor da palavra: { v, zeros } (zeros = os que podem sumir quando o próximo número completa: "sessenta oito")
+      function valorFalado(w) {
+        if (/^\d+$/.test(w)) return { v: w, zeros: 0, digitos: true };
+        if (UNIDADES_FALADAS[w]) return { v: UNIDADES_FALADAS[w], zeros: 0, unidade: true };
+        if (DEZ_A_DEZENOVE_FALADOS[w]) return { v: DEZ_A_DEZENOVE_FALADOS[w], zeros: 0 };
+        if (DEZENAS_FALADAS[w]) return { v: DEZENAS_FALADAS[w] + '0', zeros: 1, dezena: true };
+        if (CENTENAS_FALADAS[w]) return { v: CENTENAS_FALADAS[w] + '00', zeros: 2, centena: true };
+        return null;
+      }
+      function codigosDaFala(texto) {
+        const w = normalize(texto || '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
+        const ehNumero = (i) => {
+          if (i < 0 || i >= w.length || !valorFalado(w[i])) return false;
+          if (w[i] !== 'meia') return true;
+          if (MEIA_NAO_E_NUMERO.has(w[i + 1])) return false;
+          const vizinho = (j) => j >= 0 && j < w.length && w[j] !== 'meia' && !!valorFalado(w[j]);
+          let a = i - 1; while (a >= 0 && w[a] === 'meia') a--;
+          let b = i + 1; while (b < w.length && w[b] === 'meia') b++;
+          return vizinho(a) || vizinho(b);
+        };
+        // grupos: "sessenta e oito" e "seiscentos e sessenta e três" somam; cada grupo tem as escritas possíveis
+        const corridas = [];
+        let atual = [];
+        for (let i = 0; i < w.length; i++) {
+          if (!ehNumero(i)) { if (atual.length) corridas.push(atual); atual = []; continue; }
+          let x = valorFalado(w[i]);
+          let n = Number(x.v), zeros = x.zeros, ultimo = x;
+          while ((ultimo.dezena || ultimo.centena) && w[i + 1] === 'e' && ehNumero(i + 2)) {
+            const y = valorFalado(w[i + 2]);
+            if (y.digitos || y.centena || Number(y.v) >= Math.pow(10, ultimo.zeros)) break;
+            n += Number(y.v); zeros = y.zeros; ultimo = y; i += 2;
+          }
+          const v = String(n);
+          const escritas = [v];
+          // sem "e", o número seguinte pode completar a dezena/centena: "sessenta oito" = 68 (ou 608)
+          if (zeros && ehNumero(i + 1)) for (let z = 1; z <= zeros; z++) escritas.push(v.slice(0, -z));
+          // "sessenta oito" que o reconhecimento já escreveu "68" pode ser 608
+          if (x.digitos && /^[2-9][1-9]$/.test(v)) escritas.push(v[0] + '0' + v[1]);
+          atual.push(escritas);
+        }
+        if (atual.length) corridas.push(atual);
+        const achados = [];
+        for (const grupos of corridas) {
+          for (let ini = 0; ini < grupos.length; ini++) {
+            const andar = (k, acc) => {
+              if (acc.length === 5) { if (!achados.includes(acc)) achados.push(acc); return; }
+              if (acc.length > 5 || k >= grupos.length) return;
+              for (const e of grupos[k]) andar(k + 1, acc + e);
+            };
+            andar(ini, '');
+          }
+        }
+        return achados;
+      }
       // </motor-busca>
 
       // <motor-lista> - lista de produtos que o cliente mandou (texto colado do WhatsApp, PDF ou o que
@@ -31749,7 +31817,16 @@
         { patterns: ['ir para precos', 'abrir precos', 'aba precos'], action: () => document.getElementById('tabBtnPrecos').click() },
       ];
 
-      function handleVoiceResult(transcript, targetInputId) {
+      // Código que o vendedor falou ("meia um sete cinco três" = 61753; codigosDaFala, <motor-busca>), só se
+      // existir no catálogo. Número inteiro que já é código/EAN/DUN vale como antes.
+      function codigoFalado(texto) {
+        const clean = texto.trim().replace(/[.,!?;:]+$/, '').trim();
+        const soDigitos = clean.replace(/[\s.\-]/g, '');
+        if (/^\d+$/.test(soDigitos) && findByExactCode(soDigitos)) return soDigitos;
+        return codigosDaFala(clean).find(c => findByExactCode(c)) || null;
+      }
+
+      function handleVoiceResult(transcript, targetInputId, alternativas) {
         // o reconhecimento às vezes devolve pontuação no fim ("disco diamantado.")
         const clean = transcript.trim().replace(/[.,!?;:]+$/, '').trim();
         const normalized = normalize(clean);
@@ -31763,6 +31840,17 @@
         // na aba Preços, voz também entra na lista de preços (mesmo mecanismo
         // do código escaneado/digitado) - não bateu com comando conhecido, então
         // trata o que foi dito como um código/nome de produto.
+        // código falado: vale a 1ª das leituras do reconhecimento que vira um código do catálogo
+        const codigo = [transcript].concat(alternativas || []).map(codigoFalado).find(Boolean);
+        if (codigo && targetInputId === 'searchInput') { processPrecoCodigo(codigo); return; }
+        if (codigo) {
+          const inputCod = document.getElementById(targetInputId);
+          if (!inputCod) return;
+          inputCod.value = codigo;
+          inputCod.dispatchEvent(new Event('input', { bubbles: true }));
+          showToast(`Código ${codigo}`);
+          return;
+        }
         if (targetInputId === 'searchInput') {
           // Código falado ("60 663", "60-663") vira só dígitos e entra direto na
           // lista, igual ao escaneado. Nome de produto costuma bater em vários
@@ -31811,13 +31899,14 @@
         }
         recognition.lang = 'pt-BR';
         recognition.interimResults = false;
-        recognition.maxAlternatives = 1;
+        // várias leituras: "três" e "seis" se confundem, e a que vira código do catálogo ganha
+        recognition.maxAlternatives = 5;
 
         recognition.onstart = () => { setMicListening(true); showToast('Ouvindo…'); };
         recognition.onend = () => setMicListening(false);
         recognition.onresult = (event) => {
-          const transcript = event.results?.[0]?.[0]?.transcript;
-          if (transcript) handleVoiceResult(transcript, targetInputId);
+          const leituras = Array.from(event.results?.[0] || []).map(a => a.transcript).filter(Boolean);
+          if (leituras.length) handleVoiceResult(leituras[0], targetInputId, leituras.slice(1));
         };
         recognition.onerror = (event) => {
           const messages = {

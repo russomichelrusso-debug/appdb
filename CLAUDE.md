@@ -1639,7 +1639,10 @@ Supabase, sem PR — não é mudança de código.
 - **Voz e lista de itens — a fazer depois, nesta ordem de ideia** (10/2026, a partir de um script Python + Playwright + Gemini
   que o usuário trouxe; analisado e **não adotado**: abre site e copia a página, e no PWA os dados já estão no aparelho). O que
   já existe: 🎤 na busca do Pedido e do Levantamento (`startVoiceRecognition`/`VOICE_COMMANDS`, `index.html`, Web Speech API
-  pt-BR) e a rota `POST /api/assistente/interpretar` (`routes/assistente.js`: Gemini no servidor, só classifica a pergunta e
+  pt-BR; **código falado** desde 10/2026: "meia" = 6 no meio do código e "sessenta oito meia três" = 60863 -
+  `codigosDaFala` no `<motor-busca>`, regra do usuário: o código tem **sempre 5 números**, só vale a leitura que fecha 5 e
+  existe no catálogo; pede 5 leituras ao reconhecimento e fica com a 1ª que vira código; "meia cana"/"meia polegada" não
+  viram número) e a rota `POST /api/assistente/interpretar` (`routes/assistente.js`: Gemini no servidor, só classifica a pergunta e
   devolve o termo, nunca o dado) — **o app não chama essa rota em lugar nenhum** (a foto da lista do cliente usa
   `/itens-da-imagem`, na mesma rota; modelo padrão `gemini-2.5-flash` desde 10/2026, `GEMINI_MODEL` troca). Regra pros três itens: **a IA só entende o texto; produto, preço e desconto saem do motor do app**
   (`searchProducts`, `clientPrice`…), e nada entra no orçamento/levantamento **sem a tela de conferência** (termo ambíguo =

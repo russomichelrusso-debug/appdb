@@ -4324,6 +4324,17 @@ async function main() {
         assert(cods('sera copo 50') === '60882,61420', 'busca: aceita erro de digitação');
         assert(cods('broca 4.5') === '62438' && cods('broca 4,5mm') === '62438', 'busca: vírgula e ponto decimal iguais');
         assert(cods('argamasa') === '60876' && cods('60882') === '60882', 'busca: erro de digitação numa palavra só e código exato');
+        // código falado (🎤): "meia" = 6 e o código tem sempre 5 números (regra do usuário, 10/2026)
+        const fala = (t) => ctxB.codigosDaFala(t).join(',');
+        assert(fala('meia um sete cinco três') === '61753' && fala('meia 1753') === '61753' && fala('meia um 753') === '61753',
+          'código falado: "meia" no meio do código vira 6');
+        assert(fala('sessenta oito meia três') === '60863' && fala('60 8 meia 3') === '60863' && fala('68 meia 3') === '60863',
+          'código falado: "sessenta oito" = 608 quando é o que fecha 5 números');
+        assert(fala('seiscentos e oito sessenta e três') === '60863' && fala('sessenta e oito meia três um') === '68631',
+          'código falado: "e" junta dezena/centena com a unidade');
+        assert(fala('6 8 6 3') === '' && fala('alicate meia cana') === '' && fala('chave meia polegada') === '' && fala('meia dúzia') === '',
+          'código falado: só 5 números, e "meia cana"/"meia polegada"/"meia dúzia" não são código');
+        assert(fala('código meia um sete cinco três quantidade dez') === '61753', 'código falado: palavras em volta não atrapalham');
         // busca pela ficha técnica: "mármore"/"pedras naturais" acham o que a ficha diz que corta
         const fichas = {
           '60882': { nome: 'Serra Copo', desc: 'Furos precisos em porcelanato e mármore.', specs: { diametro: '50 mm' } },
