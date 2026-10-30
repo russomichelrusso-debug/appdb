@@ -1677,6 +1677,10 @@ Supabase, sem PR — não é mudança de código.
      Google; sem sinal avisa e para). Testado só com reconhecimento simulado: **conferir num Android e num iPhone de verdade**
      (o Android dá um bipe a cada religada; no depósito o barulho troca medidas; no iPhone instalado o `webkitSpeechRecognition`
      é instável). Gravar e converter depois (opção "D" do canvas) ficou de fora.
+     **1º teste num Android (vídeo do usuário, 30/10/2026)**: o Chrome entregava cada pedaço da frase como fala final
+     ("desempenadeira", "… 18", "… 18 x", "… 18 por 30": 4 falas pra conferir pra 1 item). Agora a fala espera 1,3 s
+     (`receberFinalVoz`) e a que começa com a anterior fica no lugar dela (também a que já tinha ido pra conferir, até
+     8 s depois). "18 por 30"/"vezes" entre números = medida 18x30 (o 30 virava a quantidade).
   2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
      (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
   3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;

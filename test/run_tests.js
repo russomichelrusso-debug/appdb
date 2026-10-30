@@ -4418,6 +4418,11 @@ async function main() {
           'voz: no estoque soma o contado (7), no pedido sobe pra embalagem (12)');
         const fCem = falaLev('disco turbo cem, dois');
         assert(fCem && fCem.item.termo === 'disco turbo 100' && fCem.item.qtd === 2, `voz: "cem, dois" = medida 100 e quantidade 2: ${JSON.stringify(fCem && fCem.item)}`);
+        // "18 por 30" é a medida (vídeo do usuário, 10/2026: o 30 virava a quantidade)
+        const fPor = falaLev('desempenadeira dezoito por trinta');
+        const fPor2 = falaLev('desempenadeira 18 por 30 estoque 4');
+        assert(fPor && fPor.item.qtd == null && /18x30/.test(fPor.item.termo) && fPor2 && fPor2.item.qtd === 4 && /18x30/.test(fPor2.item.termo),
+          `voz: "18 por 30" é a medida, não a quantidade: ${JSON.stringify([fPor && fPor.item, fPor2 && fPor2.item])}`);
         const fColher = falaLev('colher oito');
         const rColher = fColher && ctxL.produtoDaLinhaLista(fColher.item, { porCodigo });
         assert(fColher && !(rColher.estado === 'pronto' && fColher.item.qtd != null && !rColher.medida),
