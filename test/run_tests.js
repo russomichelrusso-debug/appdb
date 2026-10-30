@@ -4335,6 +4335,9 @@ async function main() {
         assert(fala('6 8 6 3') === '' && fala('alicate meia cana') === '' && fala('chave meia polegada') === '' && fala('meia dúzia') === '',
           'código falado: só 5 números, e "meia cana"/"meia polegada"/"meia dúzia" não são código');
         assert(fala('código meia um sete cinco três quantidade dez') === '61753', 'código falado: palavras em volta não atrapalham');
+        // o Chrome gruda a quantidade no código (vídeo do usuário, 10/2026: "609237 unidades" = 60923 + 7)
+        assert(fala('609237 unidades').split(',').includes('60923') && fala('60 9237').split(',').includes('60923'),
+          'código falado: o que passa dos 5 números grudados é a quantidade');
         const dig = (x) => ctxB.numerosFaladosParaDigitos(x);
         assert(dig('colher oito oval três') === 'colher 8 oval 3' && dig('disco cento e dez dois') === 'disco 110 2' && dig('nivelador um e meio vinte e quatro') === 'nivelador 1,5 24'
           && dig('disco cem, dois') === 'disco 100 2' && dig('meia dúzia') === '6' && dig('alicate meia cana dois') === 'alicate meia cana 2',
@@ -4404,6 +4407,10 @@ async function main() {
         const rCod = fCod && ctxL.produtoDaLinhaLista(fCod.item, { porCodigo });
         assert(fCod && fCod.item.qtd === 6 && fCod.campo === null && rCod.estado === 'pronto' && rCod.produto.c === '60876' && !rCod.medida,
           `voz: código falado com "meia" e a quantidade depois: ${JSON.stringify(fCod)}`);
+        const fGrud = falaLev('608767 unidades');
+        const rGrud = fGrud && ctxL.produtoDaLinhaLista(fGrud.item, { porCodigo });
+        assert(fGrud && fGrud.item.qtd === 7 && rGrud.estado === 'pronto' && rGrud.produto.c === '60876',
+          `voz: código e quantidade grudados ("608767 unidades" = 60876 + 7): ${JSON.stringify(fGrud && fGrud.item)}`);
         const fDisco = falaLev('disco turbo cento e dez dois');
         const rDisco = fDisco && ctxL.produtoDaLinhaLista(fDisco.item, { porCodigo });
         assert(fDisco && fDisco.item.qtd === 2 && rDisco.estado === 'pronto' && rDisco.produto.c === '61010',

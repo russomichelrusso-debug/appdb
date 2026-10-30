@@ -14448,7 +14448,7 @@
           if (zeros && ehNumero(i + 1)) for (let z = 1; z <= zeros; z++) escritas.push(v.slice(0, -z));
           // "sessenta oito" que o reconhecimento já escreveu "68" pode ser 608
           if (x.digitos && /^[2-9][1-9]$/.test(v)) escritas.push(v[0] + '0' + v[1]);
-          atual.push({ escritas, ini, fim: i });
+          atual.push({ escritas, ini, fim: i, cru: x.digitos && ultimo === x ? v : null });
         }
         if (atual.length) corridas.push(atual);
         const achados = [];
@@ -14462,7 +14462,18 @@
                 return;
               }
               if (acc.length > 5 || k >= grupos.length) return;
-              for (const e of grupos[k].escritas) andar(k + 1, acc + e);
+              for (const e of grupos[k].escritas) {
+                // o Chrome escreve o código e a quantidade grudados: "60923, 7 unidades" vira "609237 unidades"
+                // (vídeo do usuário, 10/2026). O que passa dos 5 números é a quantidade.
+                if (e === grupos[k].cru && acc.length + e.length > 5) {
+                  const n = 5 - acc.length, cod = acc + e.slice(0, n);
+                  if (!achados.some(a => a.codigo === cod)) {
+                    achados.push({ codigo: cod, antes: w.slice(0, grupos[ini].ini).join(' '), depois: [e.slice(n), ...w.slice(grupos[k].fim + 1)].join(' ') });
+                  }
+                  continue;
+                }
+                andar(k + 1, acc + e);
+              }
             };
             andar(ini, '');
           }
