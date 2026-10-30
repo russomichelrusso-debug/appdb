@@ -4359,6 +4359,8 @@ async function main() {
         { c: '62407', n: 'ESPAÇADOR NIVELADOR 1,5 mm ECO (VERMELHO) - C/500 PÇS', emb: 1, familia: '06 - SISTEMA DE NIVELAMENTO (A GRANEL)' },
         { c: '61336', n: 'ESPAÇADOR NIVELADOR 1,5 mm ECO (VERMELHO) - CX 12 UN', emb: 12, familia: '05 - SISTEMA DE NIVELAMENTO (PACOTE)' },
         { c: '62438', n: 'BROCA DE AÇO RAPIDO 8,0 mm', emb: 10 },
+        { c: '60390', n: 'BROCA C/ 3 PONTAS PARA MADEIRA 8,0 mm', emb: 10 },
+        { c: '60531', n: 'GRAMPO 6 mm CX C/ 1000 P/ GRAMPEADOR MANUAL', emb: 10 },
         { c: '60876', n: 'BATEDOR ARGAMASSA', emb: 6 },
         { c: '61010', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
         { c: '60200', n: 'RODEL Ø7 X 80 mm', emb: 1 },
@@ -4436,6 +4438,12 @@ async function main() {
         const rFim = ctxL.produtoDaLinhaLista(ecoFim, { porCodigo });
         assert(ecoFim.qtd === 3 && rFim.estado === 'pronto' && rFim.produto.c === '61336',
           `lista do cliente: "50pcs" no meio com quantidade no fim = pacote de 50, 3 pacotes: ${JSON.stringify([ecoFim, rFim.estado])}`);
+        // fora do nivelador nada muda (achados do revisor-cortag): "C/ 3 PONTAS" não é pacote, "50 un" do grampo
+        // CX C/ 1000 são 50 caixas e o 110 do fim de "disco ... 3 un 110" é a medida
+        const fora = ctxL.linhasDaListaCliente('broca 3 pontas madeira 8mm 30 un\ngrampo 6mm 50 un\ndisco diamantado turbo 3 un 110');
+        const qFora = fora.map(l => { const r = ctxL.produtoDaLinhaLista(l, { porCodigo }); const p = r.produto || r.opcoes[0]; return [p && p.c, ctxL.quantidadeDaLinhaLista(l, p).qtd]; });
+        assert(JSON.stringify(qFora) === '[["60390",30],["60531",50],["61010",10]]',
+          `lista do cliente: regra de pacote só vale pra nivelador/cunha: ${JSON.stringify(qFora)}`);
         const granel = ctxL.quantidadeDaLinhaLista(eco50, prods.find(p => p.c === '62407'));
         assert(granel.qtd === 1 && /vem com 500/.test(granel.ajuste), `lista do cliente: "50 un" do granel de 500 = 1 e confira, não 50 baldes: ${JSON.stringify(granel)}`);
         // histórico do cliente: o que ele já compra vai pronto (mesmo com palavra faltando); o "50PCS" escrito

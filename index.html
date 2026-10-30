@@ -14233,9 +14233,9 @@
           if (i === 0 && tok[1] === 'x') { qtd = +tok[0]; daQtd = [0, 1]; }
         }
         // "nivelador 1,5 eco 50pcs 3": com outro número no fim, o "50pcs" do meio é o pacote (fica no produto)
-        // e o do fim é a quantidade
+        // e o do fim é a quantidade. Só nivelador/cunha: em "disco turbo 3 un 110" o 110 é a medida
         const fim = tok.length - 1;
-        if (unidade === 'un' && daQtd.length === 2 && daQtd[1] < fim && ehInteiroLista(tok[fim]) && !codigo.has(fim) && /^[1-9]/.test(tok[fim])) {
+        if (unidade === 'un' && daQtd.length === 2 && daQtd[1] < fim && NIVELAMENTO_LISTA.test(tok.join(' ')) && ehInteiroLista(tok[fim]) && !codigo.has(fim) && /^[1-9]/.test(tok[fim])) {
           qtd = +tok[fim]; unidade = null; daQtd = [fim];
           if (tok[fim - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[fim - 1])) daQtd.push(fim - 1);
         }
@@ -14320,9 +14320,14 @@
       // Quantas peças vêm no produto: "C/ 50 UN", "C/500 PÇS", "GRANEL 1000 PCS", "100 pçs". Nivelador e
       // cunha da família "(PACOTE)" sem número no nome vêm em pacote de 50 (10/2026, usuário: "quando fala
       // 50 unidades geralmente é o pacote, não a caixa com 500"); o granel/balde traz o número. 0 = não se sabe.
+      // Só nivelador/cunha (o caso pedido): "BROCA C/ 3 PONTAS" e "GRAMPO ... CX C/ 1000" não são pacote de peças
+      // a dividir (achados do revisor-cortag)
+      const NIVELAMENTO_LISTA = /\b(nivelador|niveladores|espacador|espacadores|cunha|cunhas)\b/;
+      const ehNivelamentoLista = (p) => /sistema de nivelamento/.test(normalize((p && p.familia) || ''))
+        || /^(balde - )?(espacador nivelador|cunha nivelamento|cunha tradicional)|^mini cunha/.test(normalize((p && p.n) || ''));
       function pacoteDoProdutoLista(p) {
         const n = normalize((p && p.n) || '');
-        const m = n.match(/c\/\s*(\d+)/) || n.match(/\b(\d{2,4})\s*(pc|pcs|pecas?)\b/);
+        const m = n.match(/c\/\s*(\d+)\s*(un|und|unid|unidades?|pc|pcs|pecas?)\b/) || (ehNivelamentoLista(p) && n.match(/\b(\d{2,4})\s*(pc|pcs|pecas?)\b/));
         if (m) return +m[1];
         const fam = normalize((p && p.familia) || '');
         if (fam ? /nivelamento \(pacote\)/.test(fam) : /^(espacador nivelador|cunha nivelamento)\b/.test(n)) return 50;
@@ -14332,7 +14337,8 @@
       // tamanho do pacote, não palavra da busca ("pcs" só aparece no nome do granel "C/500 PÇS")
       function pacoteNoTermoLista(termo) {
         const pal = String(termo || '').split(' ');
-        const i = pal.findIndex((w, k) => /^\d+$/.test(w) && +w > 1 && /^(pc|pcs|peca|pecas|un|und|unid|unidades?)$/.test(pal[k + 1] || ''));
+        const unidades = NIVELAMENTO_LISTA.test(pal.join(' ')) ? /^(pc|pcs|peca|pecas|un|und|unid|unidades?)$/ : /^(pc|pcs|peca|pecas)$/;
+        const i = pal.findIndex((w, k) => /^\d+$/.test(w) && +w > 1 && unidades.test(pal[k + 1] || ''));
         return i < 0 ? { termo, pacote: 0 } : { termo: pal.filter((_, k) => k !== i && k !== i + 1).join(' '), pacote: +pal[i] };
       }
       function produtoDaLinhaLista(item, ctx) {
@@ -14350,6 +14356,7 @@
         const pedidoUn = !pacote && item.unidade === 'un' && item.qtd > 0 ? item.qtd : 0;
         const cabe = (p) => {
           const pp = pacoteDoProdutoLista(p);
+          if (!pacote && !ehNivelamentoLista(p)) return true;
           if (!pp) return true;
           if (pacote) return pp <= pacote;
           return !(pedidoUn && pp >= 300 && pedidoUn < pp);
@@ -14427,7 +14434,7 @@
             const pacotes = Math.ceil(qtd / porPacote);
             ajustes.push(`${qtd} un → ${pacotes} ${porPacote >= 300 ? 'un' : 'pct'} de ${porPacote}`);
             qtd = pacotes;
-          } else if (porPacote >= 300 && qtd >= 25 && qtd < porPacote) {
+          } else if (porPacote >= 300 && qtd >= 25 && qtd < porPacote && ehNivelamentoLista(p)) {
             // "50 un" de balde/granel de 500: são peças, não 50 baldes
             ajustes.push(`pediu ${qtd} un e o produto vem com ${porPacote} · confira`);
             qtd = 1;
