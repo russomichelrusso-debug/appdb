@@ -1636,6 +1636,21 @@ Supabase, sem PR — não é mudança de código.
      campanhas, total em vermelho, cartões de pagamento, frete (`metaPedidoMinimo`) e validade, avisos fiscais (`avisosDoOrcamento`)
      e o contato; no catálogo, só código/produto/embalagem. Arquivo `Proposta-<cliente>-DDMMAA.pdf` / `Selecao-…`. Produto sem
      foto sai sem o quadro da foto (texto na largura toda).
+- **Code Mode (Cloudflare) — ideia registrada, não fazer agora** (10/2026, pesquisa a pedido do usuário; ele decidiu **não
+  implementar** e guardar como caminho futuro). Code Mode = o modelo escreve código contra uma API tipada (gerada das ferramentas MCP)
+  que roda numa sandbox isolada (Dynamic Workers, sem internet, chaves fora do código); vale com muitas ferramentas/passos encadeados
+  (com poucas ferramentas pode gastar mais tokens). Exige Workers Paid (US$ 5/mês, 1.000 Dynamic Workers/mês incluídos) = 4ª
+  plataforma além de Render/Supabase/GitHub Pages. Possibilidades, em ordem:
+  1. **Servidor MCP do app pra usar no Claude** (a mais aproveitável, piloto): só leitura, só admin, sobre ~10 rotas que já existem
+     (Curva ABC, classificatório, recompra, para reativar, inadimplência, visitas, mensal do cliente, mix inicial…) - perguntas
+     cruzadas ("clientes de Maringá que compravam rebolo, pararam há 90+ dias e estão perto de cair de faixa"). A IA só orquestra; o
+     número sai das rotas (regras de `sqlFaturadoDeFato`, compra em dobro etc. continuam valendo). Token próprio fora da sandbox e
+     passar pelo `limiteRotasPesadas` (laço no código gera dezenas de chamadas e gasta o egress do Supabase). Casa com a v2 de gerentes.
+  2. **"Pergunte ao app"** no próprio app (reaproveitaria `/api/assistente/interpretar`, sem uso): precisa de internet, o Render free
+     dorme (30–50 s na 1ª), LGPD do Gemini grátis - só depois do piloto 1 mostrar perguntas repetidas (que costumam virar botão).
+  3. Mesmo padrão sem Cloudflare (`isolated-vm` no Render; o `vm` do Node não isola): não recomendado, código de terceiro no
+     processo de produção.
+  Não serve pra voz/lista do cliente/lista falada (uma chamada só, "leia e devolva itens").
 - **Voz e lista de itens — a fazer depois, nesta ordem de ideia** (10/2026, a partir de um script Python + Playwright + Gemini
   que o usuário trouxe; analisado e **não adotado**: abre site e copia a página, e no PWA os dados já estão no aparelho). O que
   já existe: 🎤 na busca do Pedido e do Levantamento (`startVoiceRecognition`/`VOICE_COMMANDS`, `index.html`, Web Speech API
