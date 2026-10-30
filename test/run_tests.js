@@ -4394,6 +4394,28 @@ async function main() {
           && resumo[2] === 'espacador nivelador supra 1.5 mm|500|un' && resumo[5] === 'rejunte cinza 20 kg|3|',
           `lista do cliente: saudação fora, quantidade no fim/com unidade, medida fica no produto: ${JSON.stringify(resumo)}`);
         const porCodigo = (c) => prods.find(p => p.c === c) || null;
+        // levantamento por voz: uma fala = um item (código falado com "meia", número por extenso, "pedido" na fala)
+        const falaLev = (t) => ctxL.itemDaFalaLevantamento(t, porCodigo);
+        const fCod = falaLev('meia zero oito sete meia, com seis');
+        const rCod = fCod && ctxL.produtoDaLinhaLista(fCod.item, { porCodigo });
+        assert(fCod && fCod.item.qtd === 6 && fCod.campo === null && rCod.estado === 'pronto' && rCod.produto.c === '60876' && !rCod.medida,
+          `voz: código falado com "meia" e a quantidade depois: ${JSON.stringify(fCod)}`);
+        const fDisco = falaLev('disco turbo cento e dez dois');
+        const rDisco = fDisco && ctxL.produtoDaLinhaLista(fDisco.item, { porCodigo });
+        assert(fDisco && fDisco.item.qtd === 2 && rDisco.estado === 'pronto' && rDisco.produto.c === '61010',
+          `voz: "cento e dez" é a medida e "dois" a quantidade: ${JSON.stringify(fDisco && fDisco.item)}`);
+        const fCx = falaLev('pedido batedor argamassa uma caixa');
+        const pBat = porCodigo('60876');
+        assert(fCx && fCx.campo === 'ped' && fCx.item.qtd === 1 && fCx.item.unidade === 'cx'
+          && ctxL.quantidadeDaFalaLev(fCx.item, pBat, 'ped').qtd === 6 && ctxL.quantidadeDaFalaLev(fCx.item, pBat, 'qty').qtd === 6,
+          `voz: "pedido" na fala escolhe o campo e "uma caixa" = a embalagem: ${JSON.stringify(fCx)}`);
+        const fEst = falaLev('estoque batedor argamassa sete');
+        assert(fEst && fEst.campo === 'qty' && ctxL.quantidadeDaFalaLev(fEst.item, pBat, 'qty').qtd === 7 && ctxL.quantidadeDaFalaLev(fEst.item, pBat, 'ped').qtd === 12,
+          'voz: no estoque soma o contado (7), no pedido sobe pra embalagem (12)');
+        const fColher = falaLev('colher oito');
+        const rColher = fColher && ctxL.produtoDaLinhaLista(fColher.item, { porCodigo });
+        assert(fColher && !(rColher.estado === 'pronto' && fColher.item.qtd != null && !rColher.medida),
+          'voz: "colher oito" (oval × reta, o 8 pode ser a medida) não entra sozinho, vai pra conferir');
         const res = linhas.map(l => ctxL.produtoDaLinhaLista(l, { porCodigo }));
         const qtd = (i) => ctxL.quantidadeDaLinhaLista(linhas[i], res[i].produto, res[i].medida);
         assert(res[0].estado === 'pronto' && res[0].produto.c === '60162' && qtd(0).qtd === 12 && !qtd(0).ajuste,

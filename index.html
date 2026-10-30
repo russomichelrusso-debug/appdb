@@ -10237,6 +10237,245 @@
       }
     }
 
+    /* Levantamento por voz (10/2026, opção "A" com o botão da "B" dos mockups): escuta contínua +
+       segurar pra falar, numa tela cheia escura como a do modo leitor */
+    .levVozBtn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      margin: 0 16px 10px;
+      padding: 0 14px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      background: var(--white);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .levVozBtn.hidden {
+      display: none;
+    }
+
+    .levVozBtn svg {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+    }
+
+    .vozLev {
+      position: fixed;
+      inset: 0;
+      z-index: 55;
+      background: #1C1C1E;
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding: calc(12px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom));
+      overflow-y: auto;
+    }
+
+    .vozLev.hidden {
+      display: none;
+    }
+
+    .vozLev .leitorStatus[data-tipo="ouvindo"]::before {
+      background: #FF453A;
+    }
+
+    .vozCliente {
+      font-size: 13px;
+      color: #C7C7CC;
+    }
+
+    .vozOuvido {
+      min-height: 48px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      background: #2C2C2E;
+      color: #E5E5EA;
+      font-size: 16px;
+      font-style: italic;
+      line-height: 1.35;
+    }
+
+    .vozOuvido.dica {
+      font-style: normal;
+      font-size: 13px;
+      color: #AEAEB2;
+    }
+
+    .vozUltima {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: #E7F3EC;
+      color: #1D1D1F;
+    }
+
+    .vozUltima.hidden {
+      display: none;
+    }
+
+    .vozUltima.conferir {
+      background: #FFF4E5;
+    }
+
+    .vozUltima > div {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .vozUltima b {
+      display: block;
+      font-size: 13px;
+      color: #166B2E;
+    }
+
+    .vozUltima.conferir b {
+      color: #8A4F00;
+    }
+
+    .vozUltima small {
+      display: block;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vozUltima button {
+      min-height: 44px;
+      padding: 0 12px;
+      border: 1px solid #A8D5B8;
+      border-radius: 12px;
+      background: #FFFFFF;
+      color: #166B2E;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    .vozPendBtn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 48px;
+      padding: 0 14px;
+      border: 1px solid #F2C38A;
+      border-radius: 14px;
+      background: #FFF4E5;
+      color: #8A4F00;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .vozPendBtn.hidden {
+      display: none;
+    }
+
+    .vozRecentes {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .vozRecentes div {
+      display: flex;
+      gap: 10px;
+      align-items: baseline;
+      font-size: 13px;
+      color: #C7C7CC;
+    }
+
+    .vozRecentes span {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .vozRecentes b {
+      color: #FFFFFF;
+      flex-shrink: 0;
+    }
+
+    .vozBase {
+      margin-top: auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding-top: 8px;
+    }
+
+    .vozFalar {
+      width: 152px;
+      height: 152px;
+      border: none;
+      border-radius: 50%;
+      background: var(--red);
+      color: #FFFFFF;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      box-shadow: 0 0 0 10px rgba(204, 9, 53, .18);
+    }
+
+    .vozFalar svg {
+      width: 40px;
+      height: 40px;
+    }
+
+    .vozFalar.ouvindo {
+      box-shadow: 0 0 0 14px rgba(255, 69, 58, .35), 0 0 0 28px rgba(255, 69, 58, .12);
+    }
+
+    .vozFalar:disabled {
+      opacity: .45;
+    }
+
+    .vozContinua {
+      min-height: 44px;
+      padding: 0 18px;
+      border: 1px solid #48484A;
+      border-radius: 12px;
+      background: transparent;
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .vozLev .leitorNota {
+      text-align: center;
+      font-size: 12px;
+      color: #AEAEB2;
+      margin: 0;
+    }
+
     .leitorQrCard {
       text-align: center;
     }
@@ -12066,6 +12305,16 @@
       </div>
       <div class="hint lev-hint">Cada leitura de código soma 1 unidade. Por nome, toque no produto certo na lista. O
         estoque também pode ser digitado direto.</div>
+      <button type="button" class="levVozBtn hidden" id="levVozBtn"
+        aria-label="Contar por voz: fale o código ou o nome e a quantidade de cada produto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" />
+          <path d="M19 10v2a7 7 0 01-14 0v-2" />
+          <line x1="12" y1="19" x2="12" y2="23" />
+        </svg>
+        Contar por voz
+      </button>
       <button type="button" class="levLeitorBtn" id="levLeitorBtn"
         aria-label="Usar o celular como leitor: o levantamento fica nesta tela e cada código lido no celular soma aqui">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -12372,6 +12621,32 @@
         <button type="button" id="leitorDigitarBtn" disabled>Digitar quantidade</button>
       </div>
       <p class="leitorNota" id="leitorNota"></p>
+    </div>
+
+    <div class="vozLev hidden" id="vozLev" role="dialog" aria-label="Levantamento por voz">
+      <div class="leitorTopo">
+        <span class="leitorStatus" id="vozStatus" role="status"></span>
+        <button type="button" class="leitorFechar" id="vozFecharBtn" aria-label="Concluir a contagem por voz">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="vozCliente" id="vozCliente"></div>
+      <div class="leitorCampo" id="vozCampo" role="radiogroup" aria-label="Cada fala soma em">
+        <button type="button" role="radio" data-campo="qty" aria-checked="true" class="active">+ no estoque</button>
+        <button type="button" role="radio" data-campo="ped" aria-checked="false">+ no pedido</button>
+      </div>
+      <div class="vozOuvido dica" id="vozOuvido" aria-live="polite"></div>
+      <section class="vozUltima hidden" id="vozUltima" aria-label="Última fala"></section>
+      <button type="button" class="vozPendBtn hidden" id="vozPendBtn"></button>
+      <div class="vozRecentes" id="vozRecentes"></div>
+      <div class="vozBase">
+        <button type="button" class="vozFalar" id="vozFalarBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" /><path d="M19 10v2a7 7 0 01-14 0v-2" /><line x1="12" y1="19" x2="12" y2="23" /></svg>
+          <span id="vozFalarTxt">Segure pra falar</span>
+        </button>
+        <button type="button" class="vozContinua" id="vozContinuaBtn"></button>
+        <p class="leitorNota">Fale o código ou o nome e a quantidade: “meia um sete cinco três, seis”. “Pedido” ou “estoque” na fala troca onde soma; “desfazer” volta a última.</p>
+      </div>
     </div>
 
     <div class="minimodal hidden" id="novidadesModal">
@@ -14161,9 +14436,11 @@
         if (CENTENAS_FALADAS[w]) return { v: CENTENAS_FALADAS[w] + '00', zeros: 2, centena: true };
         return null;
       }
-      function codigosDaFala(texto) {
-        const w = normalize(texto || '').replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
-        const ehNumero = (i) => {
+      const palavrasDaFala = (texto) => normalize(texto || '').replace(/(\d),(\d)/g, '$1#$2').replace(/[^a-z0-9#]+/g, ' ')
+        .trim().split(' ').filter(Boolean).map(t => t.replace('#', ','));
+      // "meia" só é número colado em outro número (não "meia cana", "meia polegada")
+      function numeroFaladoEm(w) {
+        return (i) => {
           if (i < 0 || i >= w.length || !valorFalado(w[i])) return false;
           if (w[i] !== 'meia') return true;
           if (MEIA_NAO_E_NUMERO.has(w[i + 1])) return false;
@@ -14172,11 +14449,18 @@
           let b = i + 1; while (b < w.length && w[b] === 'meia') b++;
           return vizinho(a) || vizinho(b);
         };
+      }
+      // Leituras de código na fala: [{ codigo, antes, depois }] (antes/depois = as outras palavras, pra
+      // achar a quantidade: "meia um sete cinco três seis" = 61753 + "seis")
+      function leiturasDeCodigoDaFala(texto) {
+        const w = palavrasDaFala(texto);
+        const ehNumero = numeroFaladoEm(w);
         // grupos: "sessenta e oito" e "seiscentos e sessenta e três" somam; cada grupo tem as escritas possíveis
         const corridas = [];
         let atual = [];
         for (let i = 0; i < w.length; i++) {
           if (!ehNumero(i)) { if (atual.length) corridas.push(atual); atual = []; continue; }
+          const ini = i;
           let x = valorFalado(w[i]);
           let n = Number(x.v), zeros = x.zeros, ultimo = x;
           while ((ultimo.dezena || ultimo.centena) && w[i + 1] === 'e' && ehNumero(i + 2)) {
@@ -14184,27 +14468,62 @@
             if (y.digitos || y.centena || Number(y.v) >= Math.pow(10, ultimo.zeros)) break;
             n += Number(y.v); zeros = y.zeros; ultimo = y; i += 2;
           }
-          const v = String(n);
+          const v = x.digitos ? x.v : String(n);
           const escritas = [v];
           // sem "e", o número seguinte pode completar a dezena/centena: "sessenta oito" = 68 (ou 608)
           if (zeros && ehNumero(i + 1)) for (let z = 1; z <= zeros; z++) escritas.push(v.slice(0, -z));
           // "sessenta oito" que o reconhecimento já escreveu "68" pode ser 608
           if (x.digitos && /^[2-9][1-9]$/.test(v)) escritas.push(v[0] + '0' + v[1]);
-          atual.push(escritas);
+          atual.push({ escritas, ini, fim: i });
         }
         if (atual.length) corridas.push(atual);
         const achados = [];
         for (const grupos of corridas) {
           for (let ini = 0; ini < grupos.length; ini++) {
             const andar = (k, acc) => {
-              if (acc.length === 5) { if (!achados.includes(acc)) achados.push(acc); return; }
+              if (acc.length === 5) {
+                if (!achados.some(a => a.codigo === acc)) {
+                  achados.push({ codigo: acc, antes: w.slice(0, grupos[ini].ini).join(' '), depois: w.slice(grupos[k - 1].fim + 1).join(' ') });
+                }
+                return;
+              }
               if (acc.length > 5 || k >= grupos.length) return;
-              for (const e of grupos[k]) andar(k + 1, acc + e);
+              for (const e of grupos[k].escritas) andar(k + 1, acc + e);
             };
             andar(ini, '');
           }
         }
         return achados;
+      }
+      function codigosDaFala(texto) { return leiturasDeCodigoDaFala(texto).map(a => a.codigo); }
+      // Números falados viram dígitos pra quantidade e medida: "colher oito oval três" = "colher 8 oval 3",
+      // "vinte e quatro"/"vinte quatro" = 24, "um e meio" = 1,5, "meia dúzia" = 6, "duas dúzias" = 24
+      function numerosFaladosParaDigitos(texto) {
+        const w = palavrasDaFala(String(texto || '')
+          .replace(/\bmeia\s+d[uú]zia\b/gi, '6').replace(/\b(uma|1)\s+d[uú]zia\b/gi, '12')
+          .replace(/\b(duas|2)\s+d[uú]zias\b/gi, '24').replace(/\bd[uú]zia\b/gi, '12'));
+        const ehNumero = numeroFaladoEm(w);
+        const out = [];
+        for (let i = 0; i < w.length; i++) {
+          if (!ehNumero(i)) { out.push(w[i]); continue; }
+          const x = valorFalado(w[i]);
+          let n = Number(x.v), ultimo = x;
+          const junta = (j) => {
+            const y = valorFalado(w[j]);
+            if (y.digitos || y.centena || Number(y.v) >= Math.pow(10, ultimo.zeros)) return false;
+            n += Number(y.v); ultimo = y; return true;
+          };
+          for (;;) {
+            if (!(ultimo.dezena || ultimo.centena)) break;
+            if (w[i + 1] === 'e' && ehNumero(i + 2) && junta(i + 2)) { i += 2; continue; }
+            if (ehNumero(i + 1) && junta(i + 1)) { i += 1; continue; }
+            break;
+          }
+          let v = x.digitos && ultimo === x ? x.v : String(n);
+          if (w[i + 1] === 'e' && (w[i + 2] === 'meio' || w[i + 2] === 'meia')) { v += ',5'; i += 2; }
+          out.push(v);
+        }
+        return out.join(' ');
       }
       // </motor-busca>
 
@@ -14582,6 +14901,32 @@
           const r = ws.slice(n).join(' ').replace(/^[-–—·]\s*/, '').trim();
           return r.length >= 2 ? r : produtos[i].n;
         });
+      }
+      // Levantamento por voz (10/2026): uma fala = um item ("meia um sete cinco três, seis", "colher oito oval
+      // três", "pedido disco cento e dez dois"). Devolve { item (o de interpretarLinhaLista), campo }: campo
+      // 'ped'/'qty' quando a fala diz "pedido"/"estoque", null = o escolhido na tela. O código falado só vale
+      // com 5 números e existindo no catálogo (porCodigo); a quantidade é o que sobra.
+      function itemDaFalaLevantamento(fala, porCodigo) {
+        let campo = null;
+        const resto = palavrasDaFala(fala).filter(t => {
+          if (t === 'pedido' || t === 'pedir') { campo = 'ped'; return false; }
+          if (t === 'estoque') { campo = 'qty'; return false; }
+          return true;
+        }).join(' ');
+        const cod = porCodigo ? leiturasDeCodigoDaFala(resto).find(l => porCodigo(l.codigo)) : null;
+        const linha = (cod ? [numerosFaladosParaDigitos(cod.antes), cod.codigo, numerosFaladosParaDigitos(cod.depois)].join(' ')
+          : numerosFaladosParaDigitos(resto)).replace(/\bcom (?=\d)/g, 'qtd ').replace(/\s+/g, ' ').trim();
+        const item = interpretarLinhaLista(linha);
+        return item ? { item: { ...item, texto: String(fala || '').trim() }, campo } : null;
+      }
+      // Quanto soma no levantamento: no estoque é o que foi contado (caixa = embalagem inteira, sem arredondar);
+      // no pedido, como na lista do cliente (múltiplo da embalagem)
+      function quantidadeDaFalaLev(item, p, campo) {
+        if (campo === 'ped') return quantidadeDaLinhaLista(item, p, false);
+        const emb = p && p.emb > 0 ? p.emb : 1;
+        if (item.qtd == null) return { qtd: 1, ajuste: 'sem quantidade na fala · 1' };
+        if (item.unidade === 'cx' && emb > 1) return { qtd: item.qtd * emb, ajuste: `${item.qtd} cx × ${emb} = ${item.qtd * emb}` };
+        return { qtd: item.qtd, ajuste: null };
       }
       // </motor-lista>
 
@@ -18359,7 +18704,7 @@
           if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || !MQ_TELA_LARGA.matches) return;
           const alvo = e.target;
           if (alvo && (alvo.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(alvo.tagName))) return;
-          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden), .shareSheet:not(.hidden), .scannerModal:not(.hidden), .modoLeitor:not(.hidden)')) return;
+          if (document.querySelector('.minimodal:not(.hidden), .adminPanel:not(.hidden), .vitrine:not(.hidden), .shareSheet:not(.hidden), .scannerModal:not(.hidden), .modoLeitor:not(.hidden), .vozLev:not(.hidden)')) return;
           const busca = { precos: 'searchInput', levantamento: 'levInput', produtos: 'prodTabSearch', clientes: 'clienteTabSearch' }[document.body.dataset.aba];
           const campo = busca && document.getElementById(busca);
           if (!campo || campo.offsetParent === null) return;
@@ -31924,6 +32269,233 @@
       }
 
       // =================================================================
+      // ---------------- Levantamento por voz contínuo ------------------
+      // =================================================================
+      // Opção "A" com o botão da "B" (mockups "Cortag · Levantamento por voz contínuo", 10/2026): escuta
+      // contínua que religa sozinha quando o celular para no silêncio, e "segure pra falar" pra quando a loja
+      // está barulhenta (ouve só com o dedo no botão). Cada fala vira um item pelo <motor-lista>
+      // (itemDaFalaLevantamento): um produto só e quantidade dita = soma na hora (com Desfazer); o resto
+      // (vários parecidos, não achei, sem quantidade, número que pode ser a medida) espera em "Pra conferir",
+      // guardado no aparelho (VOZ_PEND_LS_KEY), e passa pela mesma conferência da lista do cliente com destino
+      // no levantamento. O reconhecimento é o do navegador: precisa de internet (no Chrome do Android vai pro Google).
+      const VOZ_PEND_LS_KEY = 'cortagVozPendentes_v1';
+      let voz = null; // { ativo, segurando, rec, campo, desfazer, recentes, ultima, parcial, msg, semRede, ultimoFinal }
+      const lerPendentesVoz = () => { try { const l = JSON.parse(localStorage.getItem(VOZ_PEND_LS_KEY)); return Array.isArray(l) ? l : []; } catch (e) { return []; } };
+      const gravarPendentesVoz = (l) => { try { if (l.length) localStorage.setItem(VOZ_PEND_LS_KEY, JSON.stringify(l.slice(-60))); else localStorage.removeItem(VOZ_PEND_LS_KEY); } catch (e) { } };
+      function abrirVozLev() {
+        if (!SpeechRecognitionCtor) { showToast('Este navegador não reconhece voz — use o leitor de código', 'erro'); return; }
+        if (!window.isSecureContext) { showToast('A voz só funciona com o app hospedado em HTTPS', 'erro'); return; }
+        voz = { ativo: true, segurando: false, rec: null, campo: 'qty', desfazer: [], recentes: [], ultima: null, parcial: '', msg: '', semRede: false, ultimoFinal: null };
+        document.getElementById('vozLev').classList.remove('hidden');
+        vozIniciarRec();
+        renderVozLev();
+      }
+      function fecharVozLev(semConferir) {
+        if (!voz) return;
+        const v = voz;
+        voz = null;
+        if (v.rec) { try { v.rec.abort(); } catch (e) { } }
+        document.getElementById('vozLev').classList.add('hidden');
+        renderLevList();
+        if (!semConferir && lerPendentesVoz().length) abrirConferenciaVoz();
+        else if (v.desfazer.length) showToast(`${v.desfazer.length} fala${v.desfazer.length > 1 ? 's' : ''} no levantamento`);
+      }
+      function vozIniciarRec() {
+        if (!voz || voz.rec || document.hidden) return;
+        let rec;
+        try { rec = new SpeechRecognitionCtor(); } catch (e) { voz.msg = 'Não foi possível ligar o microfone'; renderVozLev(); return; }
+        rec.lang = 'pt-BR';
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.maxAlternatives = 5; // "três" × "seis": vale a 1ª leitura que acha o produto
+        rec.onresult = (e) => {
+          if (!voz || voz.rec !== rec) return;
+          let parcial = '';
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) processarFalaLev(Array.from(r).map(a => a.transcript).filter(Boolean));
+            else parcial += r[0].transcript;
+          }
+          voz.parcial = parcial.trim();
+          voz.semRede = false;
+          renderVozLev();
+        };
+        rec.onerror = (e) => {
+          if (!voz || voz.rec !== rec) return;
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { voz.ativo = false; voz.msg = 'Permissão de microfone negada — libere nas configurações do navegador'; }
+          else if (e.error === 'network') { voz.ativo = false; voz.semRede = true; voz.msg = 'Sem internet: a voz precisa de sinal. Use o leitor de código ou digite.'; }
+          else if (e.error === 'audio-capture') { voz.ativo = false; voz.msg = 'Nenhum microfone encontrado'; }
+          renderVozLev();
+        };
+        rec.onend = () => {
+          if (!voz || voz.rec !== rec) return;
+          voz.rec = null;
+          voz.parcial = '';
+          // o Android para sozinho depois de um silêncio: com a escuta contínua ligada, liga de novo
+          if (voz.ativo && !document.hidden) setTimeout(() => { if (voz && voz.ativo) vozIniciarRec(); }, 250);
+          renderVozLev();
+        };
+        voz.rec = rec;
+        try { rec.start(); } catch (e) { voz.rec = null; }
+      }
+      function vozPararRec() {
+        if (voz && voz.rec) { try { voz.rec.stop(); } catch (e) { } }
+      }
+      function processarFalaLev(alts) {
+        if (!voz || !alts.length) return;
+        const chave = normalize(alts[0]).replace(/[^a-z0-9]+/g, ' ').trim();
+        if (!chave) return;
+        // o Chrome do Android às vezes entrega a mesma frase duas vezes
+        if (voz.ultimoFinal && voz.ultimoFinal.chave === chave && Date.now() - voz.ultimoFinal.em < 2000) return;
+        voz.ultimoFinal = { chave, em: Date.now() };
+        if (/^(desfazer|apagar|cancelar|volta|voltar)( (a )?ultim[ao])?$/.test(chave)) { desfazerFalaLev(); return; }
+        if (/^(pausar|parar)( (a )?escuta)?$/.test(chave)) { voz.ativo = false; vozPararRec(); renderVozLev(); return; }
+        if (chave === 'estoque' || chave === 'pedido') { voz.campo = chave === 'pedido' ? 'ped' : 'qty'; renderVozLev(); return; }
+        const ctx = { comprados: compradosDoCliente(state.levCliente), porCodigo: findByExactCode };
+        let melhor = null;
+        for (const a of alts) {
+          const f = itemDaFalaLevantamento(a, findByExactCode);
+          if (!f) continue;
+          const r = produtoDaLinhaLista(f.item, ctx);
+          const ok = r.estado === 'pronto' && f.item.qtd != null && !r.medida;
+          if (!melhor || ok) melhor = { f, r, ok };
+          if (ok) break;
+        }
+        if (!melhor) { voz.msg = `Não entendi “${alts[0]}” — fale o produto e a quantidade`; playScanBeep(false); return; }
+        const campo = melhor.f.campo || voz.campo;
+        const q = melhor.ok ? quantidadeDaFalaLev(melhor.f.item, melhor.r.produto, campo) : null;
+        if (q && q.qtd > 0 && q.qtd <= 9999) {
+          const p = melhor.r.produto;
+          const criado = !itemDoLevantamento(p.c, false);
+          const it = itemDoLevantamento(p.c, true);
+          it[campo] = (Number(it[campo]) || 0) + q.qtd;
+          voz.desfazer.push({ cod: p.c, campo, qtd: q.qtd, criado });
+          voz.ultima = { ok: true, titulo: `${p.c} · ${campo === 'ped' ? 'pedido' : 'estoque'} +${q.qtd}${q.ajuste ? ' (' + q.ajuste + ')' : ''}`, nome: p.n };
+          voz.recentes.unshift({ nome: p.n, txt: `${campo === 'ped' ? 'ped.' : 'est.'} ${it[campo]}` });
+          voz.recentes = voz.recentes.slice(0, 5);
+          voz.msg = '';
+          saveLevSurvey();
+          playScanBeep(true);
+        } else {
+          const motivo = melhor.r.estado === 'escolher' ? 'mais de um produto parecido'
+            : melhor.r.estado === 'nao' ? 'não achei no catálogo'
+              : melhor.r.medida ? 'o número pode ser a medida' : melhor.f.item.qtd == null ? 'faltou a quantidade' : 'quantidade fora do normal';
+          const pend = lerPendentesVoz();
+          pend.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), texto: alts[0], campo, item: melhor.f.item });
+          gravarPendentesVoz(pend);
+          voz.ultima = { ok: false, titulo: `Pra conferir · ${motivo}`, nome: `“${alts[0]}”` };
+          voz.msg = '';
+          playScanBeep(false);
+        }
+      }
+      function desfazerFalaLev() {
+        if (!voz) return;
+        const a = voz.desfazer.pop();
+        if (!a) { voz.msg = 'Nada pra desfazer'; renderVozLev(); return; }
+        const it = itemDoLevantamento(a.cod, false);
+        if (it) {
+          it[a.campo] = Math.max(0, (Number(it[a.campo]) || 0) - a.qtd);
+          if (a.criado && !(Number(it.qty) > 0) && !(Number(it.ped) > 0)) state.survey = state.survey.filter(x => x !== it);
+        }
+        saveLevSurvey();
+        voz.recentes.shift();
+        const p = productByCod(a.cod);
+        voz.ultima = null;
+        voz.msg = `Desfeito: ${p ? p.n : a.cod} ${a.campo === 'ped' ? 'pedido' : 'estoque'} −${a.qtd}`;
+        renderVozLev();
+      }
+      function renderVozLev() {
+        if (!voz) return;
+        const ouvindo = !!voz.rec;
+        const status = document.getElementById('vozStatus');
+        status.textContent = voz.semRede ? 'Sem internet' : ouvindo ? (voz.segurando && !voz.ativo ? 'Ouvindo · solte pra parar' : 'Ouvindo') : 'Pausado';
+        status.dataset.tipo = ouvindo ? 'ouvindo' : 'aviso';
+        const cli = state.levCliente;
+        const n = (state.survey || []).length;
+        document.getElementById('vozCliente').textContent = `${cli ? cli.nome + ' · ' : ''}${n} ite${n === 1 ? 'm' : 'ns'} no levantamento`;
+        document.querySelectorAll('#vozCampo button').forEach(b => {
+          const sel = b.dataset.campo === voz.campo;
+          b.classList.toggle('active', sel);
+          b.setAttribute('aria-checked', sel ? 'true' : 'false');
+        });
+        const ouvido = document.getElementById('vozOuvido');
+        const texto = voz.parcial ? `“${voz.parcial}…”` : voz.msg;
+        ouvido.textContent = texto || (ouvindo ? 'Fale o código ou o nome e a quantidade' : voz.ativo ? 'Ligando o microfone…' : 'Segure o botão pra falar, ou ligue a escuta contínua');
+        ouvido.classList.toggle('dica', !voz.parcial);
+        const ult = document.getElementById('vozUltima');
+        ult.classList.toggle('hidden', !voz.ultima);
+        if (voz.ultima) {
+          ult.classList.toggle('conferir', !voz.ultima.ok);
+          ult.innerHTML = `<div><b>${voz.ultima.ok ? '✓ ' : ''}${escapeHtml(voz.ultima.titulo)}</b><small>${escapeHtml(voz.ultima.nome)}</small></div>${voz.ultima.ok ? '<button type="button" id="vozDesfazerBtn">Desfazer</button>' : ''}`;
+        }
+        const pend = lerPendentesVoz().length;
+        const pendBtn = document.getElementById('vozPendBtn');
+        pendBtn.classList.toggle('hidden', !pend);
+        pendBtn.innerHTML = `<span>Pra conferir · ${pend} fala${pend === 1 ? '' : 's'}</span><span aria-hidden="true">Ver ›</span>`;
+        document.getElementById('vozRecentes').innerHTML = voz.recentes.map(r => `<div><span>${escapeHtml(r.nome)}</span><b>${escapeHtml(r.txt)}</b></div>`).join('');
+        const falar = document.getElementById('vozFalarBtn');
+        falar.disabled = voz.ativo || voz.semRede;
+        falar.classList.toggle('ouvindo', ouvindo);
+        document.getElementById('vozFalarTxt').textContent = voz.ativo ? 'Escuta ligada' : voz.segurando ? 'Ouvindo · solte' : 'Segure pra falar';
+        document.getElementById('vozContinuaBtn').textContent = voz.ativo ? 'Pausar escuta contínua' : 'Ligar escuta contínua';
+      }
+      function abrirConferenciaVoz() {
+        const pend = lerPendentesVoz();
+        if (!pend.length) return;
+        abrirListaCliente();
+        conferirItensDaLista(pend.map(x => ({ ...x.item, texto: x.texto, campo: x.campo })), 'voz',
+          { destino: 'lev', rotulo: `${pend.length} fala${pend.length === 1 ? '' : 's'} da contagem por voz` });
+      }
+      function initVozLevantamento() {
+        const btn = document.getElementById('levVozBtn');
+        btn.classList.remove('hidden');
+        btn.addEventListener('click', abrirVozLev);
+        document.getElementById('vozFecharBtn').addEventListener('click', () => fecharVozLev(false));
+        document.getElementById('vozPendBtn').addEventListener('click', () => fecharVozLev(false));
+        document.getElementById('vozCampo').addEventListener('click', (e) => {
+          const b = e.target.closest('button[data-campo]');
+          if (!b || !voz) return;
+          voz.campo = b.dataset.campo;
+          renderVozLev();
+        });
+        document.getElementById('vozUltima').addEventListener('click', (e) => { if (e.target.closest('#vozDesfazerBtn')) desfazerFalaLev(); });
+        document.getElementById('vozContinuaBtn').addEventListener('click', () => {
+          if (!voz) return;
+          voz.ativo = !voz.ativo;
+          voz.semRede = false;
+          voz.msg = '';
+          if (voz.ativo) vozIniciarRec(); else vozPararRec();
+          renderVozLev();
+        });
+        // segurar pra falar: ouve só com o dedo no botão (loja barulhenta)
+        const falar = document.getElementById('vozFalarBtn');
+        falar.addEventListener('pointerdown', (e) => {
+          if (!voz || voz.ativo || voz.semRede) return;
+          e.preventDefault();
+          try { falar.setPointerCapture(e.pointerId); } catch (err) { }
+          voz.segurando = true;
+          voz.msg = '';
+          vozIniciarRec();
+          renderVozLev();
+        });
+        const soltar = () => {
+          if (!voz || !voz.segurando) return;
+          voz.segurando = false;
+          if (!voz.ativo) vozPararRec(); // o que já foi dito ainda chega (stop, não abort)
+          renderVozLev();
+        };
+        ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => falar.addEventListener(ev, soltar));
+        falar.addEventListener('contextmenu', (e) => e.preventDefault());
+        // app em segundo plano: o microfone para; ao voltar, a escuta contínua liga de novo
+        document.addEventListener('visibilitychange', () => {
+          if (!voz) return;
+          if (document.hidden) { if (voz.rec) { try { voz.rec.abort(); } catch (e) { } voz.rec = null; } voz.segurando = false; }
+          else if (voz.ativo) vozIniciarRec();
+          renderVozLev();
+        });
+      }
+
+      // =================================================================
       // ---------------- Lista do cliente (texto, foto ou PDF) ----------
       // =================================================================
       // O cliente manda no WhatsApp a lista do que quer (texto, foto do orçamento, PDF): o vendedor
@@ -31986,7 +32558,7 @@
           // (só fica a que tem quantidade com unidade, "3 UN": é item que o catálogo não tem)
           if (r.estado === 'nao' && origem === 'pdf' && !item.unidade) { ignoradas++; continue; }
           const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
-            cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '' };
+            cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: item.campo || null };
           if (r.produto) lcEscolher(l, r.produto);
           linhas.push(l);
         }
@@ -32003,7 +32575,10 @@
       function lcEscolher(l, p) {
         if (!p._tok) prepararProdutoParaBusca(p);
         const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
-        const q = quantidadeDaLinhaLista(l.item, p, medida);
+        // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem
+        const q = !l.campo ? quantidadeDaLinhaLista(l.item, p, medida)
+          : medida ? { qtd: l.campo === 'qty' ? 1 : packStep(p), ajuste: `“${l.item.qtd}” é a medida do produto · confira a quantidade` }
+            : quantidadeDaFalaLev(l.item, p, l.campo);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
       function lerTextoDaLista(texto, origem) {
@@ -32199,6 +32774,7 @@
 
       // ---- tela
       function lcIncluidas() { return lc && lc.linhas ? lc.linhas.filter(l => l.cod && !l.fora) : []; }
+      const campoDaLinhaLista = (l) => l.campo ? (l.campo === 'ped' ? ' · pedido' : ' · estoque') : '';
       function htmlStepperLista(i, l) {
         return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
       }
@@ -32215,7 +32791,7 @@
         const rotulos = rotulosDistintosLista(l.opcoes);
         const opcoes = l.opcoes.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${lc.comprados.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
         return `<div class="lcLinha${l.fora ? ' fora' : ''}">
-          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”</span>${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
+          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
           <div class="lcOpcoes">${opcoes}</div>
           ${l.maisOpcoes ? `<div class="lcNota">+${l.maisOpcoes} parecido${l.maisOpcoes > 1 ? 's' : ''} · use a busca se não for nenhum desses</div>` : ''}
           ${l.cod && l.ajuste ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
@@ -32226,7 +32802,7 @@
       function htmlLinhaNaoAchei(i, l) {
         const p = l.cod ? productByCod(l.cod) : null;
         return `<div class="lcLinha${l.fora ? ' fora' : ''}">
-          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”</span>${p && !l.fora ? htmlStepperLista(i, l) : ''}</div>
+          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${p && !l.fora ? htmlStepperLista(i, l) : ''}</div>
           ${p ? `<div class="lcNome">✓ ${escapeHtml(p.n)}</div>` : ''}
           ${l.fora ? '<div class="lcNota">fica de fora</div>' : htmlBuscaLista(i, l)}
           <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
@@ -32236,7 +32812,7 @@
         const p = productByCod(l.cod);
         return `<div class="lcLinha simples${l.fora ? ' fora' : ''}">
           <div class="lcTopoLinha"><span class="lcNome">${escapeHtml(p ? p.n : l.cod)}${l.jaCompra ? '<em>já compra</em>' : ''}</span>${l.fora ? '' : htmlStepperLista(i, l)}</div>
-          <div class="lcOriginal">“${escapeHtml(l.item.texto)}”</div>
+          <div class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</div>
           ${l.ajuste && !l.fora ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
           <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Tirar'}</button></div>
         </div>`;
@@ -32315,7 +32891,8 @@
           return;
         }
         // conferir
-        titulo.textContent = 'Conferir lista';
+        const praLev = lc.destino === 'lev'; // falas do levantamento por voz
+        titulo.textContent = praLev ? 'Conferir falas' : 'Conferir lista';
         const ls = lc.linhas;
         sub.textContent = lc.rotulo || `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`;
         const escolher = [], nao = [], ajustadas = [], prontas = [];
@@ -32339,14 +32916,30 @@
         const incl = lcIncluidas();
         const total = incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
         const semEscolha = ls.filter(l => !l.cod && !l.fora).length;
-        rodape.innerHTML = `<div class="lcTotal"><span>${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} · sem impostos</span><b>${brl(total)}</b></div>
-          <button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no orçamento</button>
+        rodape.innerHTML = `${praLev ? '' : `<div class="lcTotal"><span>${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} · sem impostos</span><b>${brl(total)}</b></div>`}
+          <button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no ${praLev ? 'levantamento' : 'orçamento'}</button>
           ${semEscolha ? `<div class="lcFicaFora">${semEscolha} sem escolha fica${semEscolha > 1 ? 'm' : ''} de fora</div>` : ''}`;
         corpo.scrollTop = rolagem;
+      }
+      // falas conferidas do levantamento por voz: somam no levantamento e saem de "Pra conferir" (a que não
+      // foi escolhida fica de fora, como na lista do cliente)
+      function porFalasNoLevantamento(incl) {
+        for (const l of incl) {
+          const it = itemDoLevantamento(l.cod, true);
+          const campo = l.campo === 'ped' ? 'ped' : 'qty';
+          it[campo] = (Number(it[campo]) || 0) + l.qtd;
+        }
+        const fora = lc.linhas.filter(l => !l.cod || l.fora).length;
+        gravarPendentesVoz([]);
+        saveLevSurvey();
+        fecharListaCliente();
+        renderLevList();
+        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento${fora ? ` · ${fora} ficou de fora` : ''}`);
       }
       async function porListaNoOrcamento() {
         const incl = lcIncluidas();
         if (!incl.length) return;
+        if (lc.destino === 'lev') { porFalasNoLevantamento(incl); return; }
         for (const l of incl) addToCart(l.cod, l.qtd, true);
         const fora = lc.linhas.filter(l => !l.cod || l.fora).map(l => l.item.texto);
         if (lc.guardadaId) await apagarListaGuardada(lc.guardadaId);
@@ -32455,7 +33048,7 @@
             const p = productByCod(t.dataset.cod);
             if (p) lcEscolher(l, p);
           } else if (t.dataset.lcQtd !== undefined) {
-            const p = productByCod(l.cod), step = packStep(p);
+            const p = productByCod(l.cod), step = l.campo === 'qty' ? 1 : packStep(p);
             l.qtd = Math.max(step, l.qtd + Number(t.dataset.dir) * step);
           } else if (t.dataset.lcFora !== undefined) {
             l.fora = !l.fora;
@@ -32493,6 +33086,7 @@
         }
         document.getElementById('micBtnSearch').addEventListener('click', () => startVoiceRecognition('searchInput'));
         document.getElementById('micBtnLev').addEventListener('click', () => startVoiceRecognition('levInput'));
+        initVozLevantamento();
       }
 
       // =================================================================
@@ -32846,6 +33440,8 @@
         }
         await desconectarSegundaTela(); // o tablet não fica mostrando o orçamento de quem saiu
         desconectarLeitorTablet(); // nem somando leituras num levantamento depois do logout
+        fecharVozLev(true);
+        gravarPendentesVoz([]);
         if (leitorCelular) { const id = leitorCelular.id; sairDoModoLeitor(); apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { }); }
         await apagarOcorrenciasDoAparelho(); // rascunhos com fotos de cliente não ficam no aparelho
         await apagarListasDoAparelho(); // nem a foto da lista/orçamento que o cliente mandou
