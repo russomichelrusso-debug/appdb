@@ -1552,6 +1552,12 @@ Supabase, sem PR — não é mudança de código.
     (`buscaPedeKaef`, "kae" já vale) ou o código/nome exato dele. Na lista do cliente KAEF não empata com outra marca (não vira
     "Pra escolher" por causa dele).
 
+- **Tela acesa com o app aberto** (10/2026, pedido do usuário: no levantamento a tela apagava pelo tempo do celular): Wake Lock
+  do navegador (`pedirTelaAcesa`/`initTelaAcesa`, `index.html`), ligado por padrão, pedido de novo ao voltar pro app e no 1º
+  toque; o celular solta sozinho ao trocar de app/bloquear e pode recusar com economia de bateria. ⚙ › "Deixar a tela apagar
+  sozinha" desliga (`cortagTelaAcesa_v1` = '0'). Navegador sem o recurso (iPhone antes do iOS 16.4) só vê o aviso. A
+  `tela-cliente.html` já fazia o mesmo.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
@@ -1692,6 +1698,10 @@ Supabase, sem PR — não é mudança de código.
      **3º vídeo (30/10/2026)**: a mesma fala chegava escrita de dois jeitos, "61 421" e "61421", e cada código ia duas vezes
      pra conferir. A comparação de fala repetida/continuação (`mesmaFalaOuContinua`) olha também sem o espaço entre números, e
      a mesma fala em até 2 s (era 0,7 s) conta uma vez só.
+     Pergunta seguinte do usuário: "se entendeu e pôs no levantamento, por que vai pra conferir?" - o pedaço sem quantidade
+     ("61 421") chegava antes ou depois da fala inteira ("61421 3"), que entrava, e o pedaço ficava em "Pra conferir". Agora,
+     até 8 s (`FALA_PEDACO_MS`), o pedaço sem quantidade do mesmo código (ou que é o começo da fala que entrou) sai da lista
+     quando o item entra, e não entra nela se chegar depois. Produto diferente sem quantidade continua indo pra conferir.
   2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
      (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
   3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;
