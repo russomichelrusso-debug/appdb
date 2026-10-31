@@ -32380,6 +32380,7 @@
       // vídeo do usuário, 10/2026: 4 falas na conferência pra 1 item). A fala espera um pouco: chegando outra
       // que começa com ela, fica só a nova.
       const ESPERA_FALA_VOZ_MS = 1300;
+      const FALA_PEDACO_MS = 8000; // pedaço da mesma fala chega até uns segundos antes/depois da fala inteira
       // a mesma fala chega escrita de dois jeitos: "61 421" e depois "61421" (vídeo do usuário, 10/2026: cada
       // código ia duas vezes pra conferir). Compara também sem o espaço entre números.
       const semEspacoEntreNumeros = (c) => c.replace(/(\d) (?=\d)/g, '$1');
@@ -32454,6 +32455,14 @@
           const criado = !itemDoLevantamento(p.c, false);
           somarNoLevantamento(p.c, campo, q.qtd);
           voz.desfazer.push({ cod: p.c, campo, qtd: q.qtd, criado });
+          // o pedaço sem quantidade da mesma fala ("61 421" antes do "61421 3", vídeo do usuário, 10/2026) que
+          // já foi pra conferir sai de lá: o item entrou inteiro
+          const agora = Date.now();
+          voz.ultimaEntrada = { chave, cod: p.c, em: agora };
+          const pendAntes = lerPendentesVoz();
+          const pendDepois = pendAntes.filter(x => !(x.em && agora - x.em < FALA_PEDACO_MS && x.qtd == null
+            && ((x.codigos || []).includes(p.c) || (x.chave && mesmaFalaOuContinua(chave, x.chave)))));
+          if (pendDepois.length !== pendAntes.length) gravarPendentesVoz(pendDepois);
           voz.ultima = { ok: true, titulo: `${p.c} · ${ROTULO_CAMPO[campo]} +${q.qtd}${q.ajuste ? ' (' + q.ajuste + ')' : ''}`, nome: p.n };
           saveLevSurvey();
           playScanBeep(true);
@@ -32467,6 +32476,12 @@
             playScanBeep(false);
             return;
           }
+          // e o pedaço sem quantidade que chega depois do item que já entrou também não vai pra conferir
+          const ent = voz.ultimaEntrada;
+          if (ent && Date.now() - ent.em < FALA_PEDACO_MS && melhor.f.item.qtd == null
+            && ((melhor.f.item.codigos || []).includes(ent.cod) || mesmaFalaOuContinua(ent.chave, chave))) return;
+          item.em = Date.now();
+          item.chave = chave;
           const motivo = melhor.r.estado === 'escolher' ? 'mais de um produto parecido'
             : melhor.r.estado === 'nao' ? 'não achei no catálogo'
               : melhor.r.medida ? 'o número pode ser a medida' : melhor.f.item.qtd == null ? 'faltou a quantidade' : 'quantidade fora do normal';
