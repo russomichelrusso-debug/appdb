@@ -1552,6 +1552,12 @@ Supabase, sem PR — não é mudança de código.
     (`buscaPedeKaef`, "kae" já vale) ou o código/nome exato dele. Na lista do cliente KAEF não empata com outra marca (não vira
     "Pra escolher" por causa dele).
 
+- **Tela acesa com o app aberto** (10/2026, pedido do usuário: no levantamento a tela apagava pelo tempo do celular): Wake Lock
+  do navegador (`pedirTelaAcesa`/`initTelaAcesa`, `index.html`), ligado por padrão, pedido de novo ao voltar pro app e no 1º
+  toque; o celular solta sozinho ao trocar de app/bloquear e pode recusar com economia de bateria. ⚙ › "Deixar a tela apagar
+  sozinha" desliga (`cortagTelaAcesa_v1` = '0'). Navegador sem o recurso (iPhone antes do iOS 16.4) só vê o aviso. A
+  `tela-cliente.html` já fazia o mesmo.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

@@ -13172,6 +13172,8 @@
             <p class="ap-hint" style="margin:6px 0 0;">Conecta a SUA conta Google — os CSVs de Orçamento e
               Levantamento vão direto pro seu Google Drive.</p>
             <button class="restoreBtn" id="themeToggleBtn" style="margin-top:8px;">Alternar tema</button>
+            <button class="restoreBtn" id="telaAcesaBtn" style="margin-top:8px;">Manter a tela acesa</button>
+            <p class="ap-hint" id="telaAcesaHint" style="margin:6px 0 0;"></p>
             <button class="restoreBtn btnDanger" id="logoutBtn" style="margin-top:8px;">Sair (logout)</button>
           </div>
         </details>
@@ -23447,6 +23449,50 @@
           const novo = atual === 'dark' ? 'light' : 'dark';
           applyTheme(novo);
           try { localStorage.setItem(THEME_LS_KEY, novo); } catch (e) { }
+        });
+      }
+      // Tela acesa com o app aberto (pedido do usuário, 10/2026: no levantamento a tela apagava pela
+      // configuração do celular). Wake Lock do navegador: vale só com o app na frente (o celular solta sozinho
+      // ao trocar de app ou bloquear, e o app pede de novo ao voltar). Ligado por padrão; ⚙ › desliga.
+      const TELA_ACESA_LS_KEY = 'cortagTelaAcesa_v1';
+      let telaAcesaLock = null;
+      const telaAcesaLigada = () => { try { return localStorage.getItem(TELA_ACESA_LS_KEY) !== '0'; } catch (e) { return true; } };
+      async function pedirTelaAcesa() {
+        if (!('wakeLock' in navigator) || telaAcesaLock || !telaAcesaLigada() || document.visibilityState !== 'visible') return;
+        try {
+          telaAcesaLock = await navigator.wakeLock.request('screen');
+          telaAcesaLock.addEventListener('release', () => { telaAcesaLock = null; });
+        } catch (e) { /* bateria fraca/economia de energia: o celular recusa, segue normal */ }
+      }
+      function soltarTelaAcesa() {
+        if (telaAcesaLock) { telaAcesaLock.release().catch(() => { }); telaAcesaLock = null; }
+      }
+      function renderTelaAcesa() {
+        const btn = document.getElementById('telaAcesaBtn'), hint = document.getElementById('telaAcesaHint');
+        if (!btn) return;
+        if (!('wakeLock' in navigator)) {
+          btn.classList.add('hidden');
+          hint.textContent = 'Este navegador não deixa o app manter a tela acesa (no iPhone, precisa do iOS 16.4 ou mais novo).';
+          return;
+        }
+        const ligada = telaAcesaLigada();
+        btn.textContent = ligada ? 'Deixar a tela apagar sozinha' : 'Manter a tela acesa com o app aberto';
+        hint.textContent = ligada ? 'A tela fica acesa enquanto o app está aberto (gasta mais bateria).'
+          : 'A tela apaga no tempo configurado no celular.';
+      }
+      function initTelaAcesa() {
+        renderTelaAcesa();
+        pedirTelaAcesa();
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') pedirTelaAcesa(); });
+        // alguns navegadores só aceitam o pedido depois de um toque na página
+        document.addEventListener('pointerdown', () => { if (!telaAcesaLock) pedirTelaAcesa(); }, { passive: true });
+        const btn = document.getElementById('telaAcesaBtn');
+        if (btn) btn.addEventListener('click', () => {
+          const ligar = !telaAcesaLigada();
+          try { localStorage.setItem(TELA_ACESA_LS_KEY, ligar ? '1' : '0'); } catch (e) { }
+          if (ligar) pedirTelaAcesa(); else soltarTelaAcesa();
+          renderTelaAcesa();
+          showToast(ligar ? 'A tela vai ficar acesa com o app aberto' : 'A tela volta a apagar sozinha');
         });
       }
       function initGoogleDriveButton() {
@@ -33805,6 +33851,7 @@
             if (wrap.innerHTML) wrap.innerHTML = ''; else renderDetalheFila();
           });
           initTheme();
+          initTelaAcesa();
           initIntegrityCheck();
           initDuplicatePedidosCheck();
           initManageClients();
