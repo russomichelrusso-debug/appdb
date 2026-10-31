@@ -32380,6 +32380,13 @@
       // vídeo do usuário, 10/2026: 4 falas na conferência pra 1 item). A fala espera um pouco: chegando outra
       // que começa com ela, fica só a nova.
       const ESPERA_FALA_VOZ_MS = 1300;
+      // a mesma fala chega escrita de dois jeitos: "61 421" e depois "61421" (vídeo do usuário, 10/2026: cada
+      // código ia duas vezes pra conferir). Compara também sem o espaço entre números.
+      const semEspacoEntreNumeros = (c) => c.replace(/(\d) (?=\d)/g, '$1');
+      function mesmaFalaOuContinua(nova, ant) {
+        const igualOuComeca = (a, b) => a === b || a.startsWith(b + ' ');
+        return igualOuComeca(nova, ant) || igualOuComeca(semEspacoEntreNumeros(nova), semEspacoEntreNumeros(ant));
+      }
       function receberFinalVoz(alts) {
         if (!voz || !alts.length) return;
         const chave = palavrasDaFala(alts[0]).join(' ');
@@ -32388,7 +32395,7 @@
         if (ant) {
           clearTimeout(ant.timer);
           voz.falaEsperando = null;
-          if (!(chave === ant.chave || chave.startsWith(ant.chave + ' '))) processarFalaLev(ant.alts);
+          if (!mesmaFalaOuContinua(chave, ant.chave)) processarFalaLev(ant.alts);
         }
         const timer = setTimeout(() => {
           if (voz && voz.falaEsperando && voz.falaEsperando.timer === timer) { soltarFalaVoz(); renderVozLev(); }
@@ -32409,11 +32416,11 @@
         if (!chave) return;
         // o Chrome do Android às vezes entrega a mesma frase duas vezes, quase juntas (a mesma fala dita de
         // novo de propósito leva mais que isso)
-        if (voz.ultimoFinal && voz.ultimoFinal.chave === chave && Date.now() - voz.ultimoFinal.em < 700) return;
+        if (voz.ultimoFinal && semEspacoEntreNumeros(voz.ultimoFinal.chave) === semEspacoEntreNumeros(chave) && Date.now() - voz.ultimoFinal.em < 2000) return;
         // o pedaço da frase que chegou depois da espera e já foi pra conferir: a fala mais completa fica no lugar
         const conf = voz.ultimaConferir;
         voz.ultimaConferir = null;
-        if (conf && chave.startsWith(conf.chave + ' ') && Date.now() - conf.em < 8000) {
+        if (conf && mesmaFalaOuContinua(chave, conf.chave) && Date.now() - conf.em < 8000) {
           const pend = lerPendentesVoz();
           if (pend.length && pend[pend.length - 1].texto === conf.texto) { pend.pop(); gravarPendentesVoz(pend); }
         }
