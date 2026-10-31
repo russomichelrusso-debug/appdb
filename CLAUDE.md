@@ -1681,6 +1681,14 @@ Supabase, sem PR — não é mudança de código.
      ("desempenadeira", "… 18", "… 18 x", "… 18 por 30": 4 falas pra conferir pra 1 item). Agora a fala espera 1,3 s
      (`receberFinalVoz`) e a que começa com a anterior fica no lugar dela (também a que já tinha ido pra conferir, até
      8 s depois). "18 por 30"/"vezes" entre números = medida 18x30 (o 30 virava a quantidade).
+     **2º vídeo (30/10/2026)**: o Chrome gruda a quantidade no código ("60923, 7 unidades" vira "609237 unidades"; 6 de 22
+     falas foram pra "Não achei"/"Pra escolher" assim). Número escrito com mais dígitos do que falta pro código: os 5 primeiros
+     são o código e o resto é a quantidade (`leiturasDeCodigoDaFala`; só vale se o código existe no catálogo).
+     **"Pra conferir" enchia de lixo** (relato do usuário, 30/10/2026; opções "B + A" dos mockups "Cortag · Pra conferir da
+     voz"): fala que não acha produto nenhum (conversa, barulho) **não entra mais na lista** - fica na tela da voz como "Não virou
+     produto · ignorada" até a próxima fala, com "Guardar pra conferir". Na conferência das falas: "Descartar todas as N falas"
+     no topo, "Descartar" em cada uma, rodapé "Pôr N no levantamento e descartar M" (sem nada escolhido, "Descartar N falas" -
+     antes o botão ficava desligado e a lista não saía mais) e "Deixar pra depois" (fecha e guarda).
   2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
      (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
   3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;

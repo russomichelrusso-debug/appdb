@@ -5040,6 +5040,16 @@
       font-weight: 500;
     }
 
+    .lcDescartarTodas {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 4px;
+    }
+
+    .lcDescartarTodas .lcLink {
+      min-height: 44px;
+    }
+
     .lcQtd {
       display: inline-flex;
       align-items: center;
@@ -10301,6 +10311,14 @@
       background: #FFF4E5;
     }
 
+    .vozUltima.ignorada {
+      background: #F2F2F7;
+    }
+
+    .vozUltima.ignorada b {
+      color: #6E6E73;
+    }
+
     .vozUltima > div {
       flex: 1;
       min-width: 0;
@@ -14448,7 +14466,7 @@
           if (zeros && ehNumero(i + 1)) for (let z = 1; z <= zeros; z++) escritas.push(v.slice(0, -z));
           // "sessenta oito" que o reconhecimento já escreveu "68" pode ser 608
           if (x.digitos && /^[2-9][1-9]$/.test(v)) escritas.push(v[0] + '0' + v[1]);
-          atual.push({ escritas, ini, fim: i });
+          atual.push({ escritas, ini, fim: i, cru: x.digitos && ultimo === x ? v : null });
         }
         if (atual.length) corridas.push(atual);
         const achados = [];
@@ -14462,7 +14480,18 @@
                 return;
               }
               if (acc.length > 5 || k >= grupos.length) return;
-              for (const e of grupos[k].escritas) andar(k + 1, acc + e);
+              for (const e of grupos[k].escritas) {
+                // o Chrome escreve o código e a quantidade grudados: "60923, 7 unidades" vira "609237 unidades"
+                // (vídeo do usuário, 10/2026). O que passa dos 5 números é a quantidade.
+                if (e === grupos[k].cru && acc.length + e.length > 5) {
+                  const n = 5 - acc.length, cod = acc + e.slice(0, n);
+                  if (!achados.some(a => a.codigo === cod)) {
+                    achados.push({ codigo: cod, antes: w.slice(0, grupos[ini].ini).join(' '), depois: [e.slice(n), ...w.slice(grupos[k].fim + 1)].join(' ') });
+                  }
+                  continue;
+                }
+                andar(k + 1, acc + e);
+              }
             };
             andar(ini, '');
           }
@@ -32422,11 +32451,20 @@
           saveLevSurvey();
           playScanBeep(true);
         } else {
+          const item = { ...melhor.f.item, campo, cliente: state.levCliente ? state.levCliente.id : null };
+          // fala que não acha produto nenhum é quase sempre conversa, barulho ou leitura errada: não entra em
+          // "Pra conferir" (enchia a lista de lixo, vídeo do usuário, 10/2026). Fica só na tela até a próxima
+          // fala, com "Guardar pra conferir" (opção "B" dos mockups "Cortag · Pra conferir da voz")
+          if (melhor.r.estado === 'nao') {
+            voz.ultima = { ok: false, ignorada: item, titulo: 'Não virou produto · ignorada', nome: `“${item.texto}”` };
+            playScanBeep(false);
+            return;
+          }
           const motivo = melhor.r.estado === 'escolher' ? 'mais de um produto parecido'
             : melhor.r.estado === 'nao' ? 'não achei no catálogo'
               : melhor.r.medida ? 'o número pode ser a medida' : melhor.f.item.qtd == null ? 'faltou a quantidade' : 'quantidade fora do normal';
           const pend = lerPendentesVoz();
-          pend.push({ ...melhor.f.item, campo, cliente: state.levCliente ? state.levCliente.id : null });
+          pend.push(item);
           gravarPendentesVoz(pend);
           voz.ultimaConferir = { chave, texto: melhor.f.item.texto, em: Date.now() };
           voz.ultima = { ok: false, titulo: `Pra conferir · ${motivo}`, nome: `“${melhor.f.item.texto}”` };
@@ -32468,8 +32506,11 @@
         const ult = document.getElementById('vozUltima');
         ult.classList.toggle('hidden', !voz.ultima);
         if (voz.ultima) {
-          ult.classList.toggle('conferir', !voz.ultima.ok);
-          ult.innerHTML = `<div><b>${voz.ultima.ok ? '✓ ' : ''}${escapeHtml(voz.ultima.titulo)}</b><small>${escapeHtml(voz.ultima.nome)}</small></div>${voz.ultima.ok ? '<button type="button" id="vozDesfazerBtn">Desfazer</button>' : ''}`;
+          ult.classList.toggle('conferir', !voz.ultima.ok && !voz.ultima.ignorada);
+          ult.classList.toggle('ignorada', !!voz.ultima.ignorada);
+          const botao = voz.ultima.ok ? '<button type="button" id="vozDesfazerBtn">Desfazer</button>'
+            : voz.ultima.ignorada ? '<button type="button" id="vozGuardarBtn">Guardar pra conferir</button>' : '';
+          ult.innerHTML = `<div><b>${voz.ultima.ok ? '✓ ' : ''}${escapeHtml(voz.ultima.titulo)}</b><small>${escapeHtml(voz.ultima.nome)}</small></div>${botao}`;
         }
         const pendBtn = document.getElementById('vozPendBtn');
         pendBtn.classList.toggle('hidden', !voz.nPend);
@@ -32503,7 +32544,16 @@
           voz.campo = b.dataset.campo;
           renderVozLev();
         });
-        document.getElementById('vozUltima').addEventListener('click', (e) => { if (e.target.closest('#vozDesfazerBtn')) desfazerFalaLev(); });
+        document.getElementById('vozUltima').addEventListener('click', (e) => {
+          if (e.target.closest('#vozDesfazerBtn')) desfazerFalaLev();
+          else if (e.target.closest('#vozGuardarBtn') && voz && voz.ultima && voz.ultima.ignorada) {
+            const pend = lerPendentesVoz();
+            pend.push(voz.ultima.ignorada);
+            gravarPendentesVoz(pend);
+            voz.ultima = { ok: false, titulo: 'Pra conferir · não achei no catálogo', nome: voz.ultima.nome };
+            renderVozLev();
+          }
+        });
         document.getElementById('vozContinuaBtn').addEventListener('click', () => {
           if (!voz) return;
           voz.ativo = !voz.ativo;
@@ -32818,6 +32868,8 @@
       // ---- tela
       function lcIncluidas() { return lc && lc.linhas ? lc.linhas.filter(l => l.cod && !l.fora) : []; }
       const campoDaLinhaLista = (l) => l.campo ? ' · ' + ROTULO_CAMPO[l.campo] : '';
+      // fala da voz que fica de fora é descartada ao pôr no levantamento: o botão diz isso
+      const rotuloForaLista = (l, padrao) => l.fora ? 'Voltar pra lista' : lc && lc.destino === 'lev' ? 'Descartar' : padrao;
       function htmlStepperLista(i, l) {
         return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
       }
@@ -32839,7 +32891,7 @@
           ${l.maisOpcoes ? `<div class="lcNota">+${l.maisOpcoes} parecido${l.maisOpcoes > 1 ? 's' : ''} · use a busca se não for nenhum desses</div>` : ''}
           ${l.cod && l.ajuste ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
           ${l.buscando ? htmlBuscaLista(i, l) : ''}
-          <div class="lcAcoes">${l.buscando ? '<span></span>' : htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
+          <div class="lcAcoes">${l.buscando ? '<span></span>' : htmlBuscaLista(i, l)}<button type="button" class="lcLink cinza" data-lc-fora="${i}">${rotuloForaLista(l, 'Deixar de fora')}</button></div>
         </div>`;
       }
       function htmlLinhaNaoAchei(i, l) {
@@ -32848,7 +32900,7 @@
           <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${p && !l.fora ? htmlStepperLista(i, l) : ''}</div>
           ${p ? `<div class="lcNome">✓ ${escapeHtml(p.n)}</div>` : ''}
           ${l.fora ? '<div class="lcNota">fica de fora</div>' : htmlBuscaLista(i, l)}
-          <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Deixar de fora'}</button></div>
+          <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${rotuloForaLista(l, 'Deixar de fora')}</button></div>
         </div>`;
       }
       function htmlLinhaPronta(i, l) {
@@ -32857,7 +32909,7 @@
           <div class="lcTopoLinha"><span class="lcNome">${escapeHtml(p ? p.n : l.cod)}${l.jaCompra ? '<em>já compra</em>' : ''}</span>${l.fora ? '' : htmlStepperLista(i, l)}</div>
           <div class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</div>
           ${l.ajuste && !l.fora ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
-          <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${l.fora ? 'Voltar pra lista' : 'Tirar'}</button></div>
+          <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${rotuloForaLista(l, 'Tirar')}</button></div>
         </div>`;
       }
       // O atalho do Compartilhar só existe no Android com o app instalado (o Safari não tem)
@@ -32949,7 +33001,8 @@
         const resumoProntas = prontas.map(i => { const p = productByCod(ls[i].cod); return `${p ? p.n : ls[i].cod} ×${ls[i].qtd}`; }).join(' · ');
         const outroSugerido = sug && !confere
           ? `<button type="button" class="lcSugerido" id="lcUsarSugeridoBtn"><span>A lista parece ser de <b>${escapeHtml(sug.cliente.nome)}</b> (${escapeHtml(porQue)})</span><em>Usar</em></button>` : '';
-        corpo.innerHTML = outroSugerido + secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
+        const descartarTodas = praLev ? `<div class="lcDescartarTodas"><button type="button" class="lcLink" id="lcDescartarTodasBtn">${ls.length === 1 ? 'Descartar a fala' : `Descartar todas as ${ls.length} falas`}</button></div>` : '';
+        corpo.innerHTML = descartarTodas + outroSugerido + secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
           + secao('nao', 'Não achei', nao, htmlLinhaNaoAchei)
           + secao('ajustada', 'Quantidade ajustada', ajustadas, htmlLinhaPronta)
           + (prontas.length ? `<div class="lcSecao pronta">
@@ -32959,8 +33012,19 @@
         const incl = lcIncluidas();
         const total = incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
         const semEscolha = ls.filter(l => !l.cod && !l.fora).length;
-        rodape.innerHTML = `${praLev ? '' : `<div class="lcTotal"><span>${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} · sem impostos</span><b>${brl(total)}</b></div>`}
-          <button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no ${praLev ? 'levantamento' : 'orçamento'}</button>
+        if (praLev) {
+          // "Pra conferir" da voz: o que não for pro levantamento é descartado junto, e sem nada escolhido o
+          // botão descarta tudo (antes ficava desligado e a lista não saía mais, relato do usuário, 10/2026)
+          const fora = ls.length - incl.length;
+          const rotulo = !incl.length ? `Descartar ${ls.length} fala${ls.length === 1 ? '' : 's'}`
+            : `Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento${fora ? ` e descartar ${fora}` : ''}`;
+          rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn">${rotulo}</button>
+            <button type="button" class="restoreBtn" data-lc-fechar>Deixar pra depois</button>`;
+          corpo.scrollTop = rolagem;
+          return;
+        }
+        rodape.innerHTML = `<div class="lcTotal"><span>${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} · sem impostos</span><b>${brl(total)}</b></div>
+          <button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no orçamento</button>
           ${semEscolha ? `<div class="lcFicaFora">${semEscolha} sem escolha fica${semEscolha > 1 ? 'm' : ''} de fora</div>` : ''}`;
         corpo.scrollTop = rolagem;
       }
@@ -32968,17 +33032,18 @@
       // foi escolhida fica de fora, como na lista do cliente)
       function porFalasNoLevantamento(incl) {
         for (const l of incl) somarNoLevantamento(l.cod, l.campo, l.qtd);
-        const fora = lc.linhas.filter(l => !l.cod || l.fora).length;
+        const fora = lc.linhas.length - incl.length;
         gravarPendentesVoz([]);
         saveLevSurvey();
         fecharListaCliente();
         renderLevList();
-        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento${fora ? ` · ${fora} ficou de fora` : ''}`);
+        const descartadas = `${fora} fala${fora === 1 ? '' : 's'} descartada${fora === 1 ? '' : 's'}`;
+        showToast(incl.length ? `${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento${fora ? ` · ${descartadas}` : ''}` : descartadas);
       }
       async function porListaNoOrcamento() {
         const incl = lcIncluidas();
-        if (!incl.length) return;
         if (lc.destino === 'lev') { porFalasNoLevantamento(incl); return; }
+        if (!incl.length) return;
         for (const l of incl) addToCart(l.cod, l.qtd, true);
         const fora = lc.linhas.filter(l => !l.cod || l.fora).map(l => l.item.texto);
         if (lc.guardadaId) await apagarListaGuardada(lc.guardadaId);
@@ -33060,6 +33125,7 @@
           if (t.id === 'lcGuardarBtn') { guardarListaCliente(lc.imagens, lc.origemImagem || 'foto'); return; }
           if (t.id === 'lcVoltarBtn') { lc.fase = 'entrada'; renderListaCliente(); return; }
           if (t.id === 'lcPorBtn') { porListaNoOrcamento(); return; }
+          if (t.id === 'lcDescartarTodasBtn') { porFalasNoLevantamento([]); return; }
           if (t.id === 'lcUsarSugeridoBtn' && lc.sugerido) {
             const g = lcGeracao, novo = lc.sugerido.cliente, anterior = state.levCliente;
             // o mesmo cuidado do ⇄ do card: pergunta antes de largar o orçamento/levantamento do anterior
