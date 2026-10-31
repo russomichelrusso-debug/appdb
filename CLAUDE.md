@@ -1689,6 +1689,9 @@ Supabase, sem PR — não é mudança de código.
      produto · ignorada" até a próxima fala, com "Guardar pra conferir". Na conferência das falas: "Descartar todas as N falas"
      no topo, "Descartar" em cada uma, rodapé "Pôr N no levantamento e descartar M" (sem nada escolhido, "Descartar N falas" -
      antes o botão ficava desligado e a lista não saía mais) e "Deixar pra depois" (fecha e guarda).
+     **3º vídeo (30/10/2026)**: a mesma fala chegava escrita de dois jeitos, "61 421" e "61421", e cada código ia duas vezes
+     pra conferir. A comparação de fala repetida/continuação (`mesmaFalaOuContinua`) olha também sem o espaço entre números, e
+     a mesma fala em até 2 s (era 0,7 s) conta uma vez só.
   2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
      (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
   3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;
