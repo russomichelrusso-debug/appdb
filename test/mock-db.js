@@ -772,6 +772,9 @@ async function query(sql, params = []) {
     return { rows: produtoVetores.filter(v => v.modelo === modelo && (!desde || v.atualizado_em > params[1])).sort((a, b) => a.id - b.id)
       .map(v => ({ id: String(v.id), codigo_sku: v.codigo_sku, origem: v.origem, foto_versao: v.foto_versao == null ? null : String(v.foto_versao), v: v.vetor.toString('base64') })) };
   }
+  if (s.includes('/* VETORES:IDS */')) {
+    return { rows: produtoVetores.filter(v => v.modelo === params[0]).map(v => ({ id: String(v.id) })) };
+  }
   if (s.includes('/* VETORES:CATALOGO */')) {
     const [modelo, cods, bufs, versoes, por] = params;
     let n = 0;

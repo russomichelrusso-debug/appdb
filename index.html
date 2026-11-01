@@ -28864,10 +28864,11 @@
       let miniaturasStatus = null; // { guardadas, total, esperandoWifi }
       // download grande (miniaturas, reconhecedor de fotos): sozinho só fora da rede móvel (Android diz o tipo;
       // iPhone não diz, baixa) e sem "economia de dados" - ou depois que o vendedor tocou em "baixar agora"
-      function esperandoWifiPraBaixar() {
+      // semPedido: não vale o "baixar agora" das miniaturas (o reconhecedor, ~39 MB, nunca baixa sozinho no 4G)
+      function esperandoWifiPraBaixar(semPedido) {
         const con = navigator.connection;
         let pediu = false;
-        try { pediu = localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
+        try { pediu = !semPedido && localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
         return !pediu && !!con && (con.saveData || con.type === 'cellular');
       }
       function atualizarStatusMiniaturas() {
@@ -30507,7 +30508,7 @@
           atualizarProdutosInicio();
         });
         document.getElementById('prodCatalogo').addEventListener('click', (e) => {
-          if (e.target.closest('[data-baixar-miniaturas]')) { baixarMiniaturas(true).then(() => prepararReconhecedor(true)); }
+          if (e.target.closest('[data-baixar-miniaturas]')) baixarMiniaturas(true);
         });
         document.getElementById('vitrineSeparadosModal').addEventListener('click', (e) => {
           const b = e.target.closest('button[data-vit-sep]');
@@ -33011,11 +33012,13 @@
       const CANDIDATOS_GEMINI = 30;
       const SUGESTOES_SEM_INTERNET = 5;
       const RECONHECER_PRAZO_MS = 20000; // 1ª foto do dia carrega o modelo (~2-5 s no celular)
-      let indiceFotos = null; // { modelo, versao, ultimo, itens: [{ id, c, o, f, v: Float32Array }] }
+      let indiceFotos = null; // { modelo, versao, ultimo, vetores: [{ id, c, o, f, v: base64 }] } (como veio do servidor)
       let indiceFotosPromise = null; // leitura do IndexedDB em andamento (status e preparo ao mesmo tempo)
       let reconhecedorPromise = null; // sessão do onnxruntime, carregada na 1ª foto
       let reconhecedorGuardado = false; // os 4 arquivos já no cache (não muda mais na sessão)
       let preparandoReconhecedor = false;
+      let reconhecedorNaoGuardou = false;
+      let inferindo = false; // o onnxruntime roda uma foto por vez (a que passou do prazo ainda pode estar rodando)
       const fetchConferido = (url) => fetch(url, { mode: 'cors', credentials: 'omit', integrity: INTEGRIDADE_CDN[url] });
       async function reconhecedorNoAparelho() {
         if (reconhecedorGuardado || typeof caches === 'undefined') return reconhecedorGuardado;
@@ -33075,14 +33078,18 @@
       }
       // ---- índice (do servidor; cópia no aparelho pra funcionar sem internet)
       const indiceFotosOp = (modo, fazer) => idbOp('cortag-vetores', 'dados', 'id', modo, fazer);
-      const itemDoIndice = (x) => ({ id: x.id, c: x.c, o: x.o, f: x.f, v: vetorNormalizado(vetorDeBase64(x.v)) });
+      // os vetores decodificados só na 1ª foto (status e preparo, que todo aparelho roda, só contam)
+      function itensDoIndice(idx) {
+        if (!idx._itens) idx._itens = idx.vetores.map(x => ({ c: x.c, v: vetorNormalizado(vetorDeBase64(x.v)) }));
+        return idx._itens;
+      }
       function lerIndiceFotos() {
         if (indiceFotos) return Promise.resolve(indiceFotos);
         if (!indiceFotosPromise) {
           indiceFotosPromise = (async () => {
             try {
               const reg = await indiceFotosOp('readonly', s => s.get('indice'));
-              if (reg && reg.modelo === MODELO_VETOR && !indiceFotos) indiceFotos = { ...reg, itens: (reg.vetores || []).map(itemDoIndice) };
+              if (reg && reg.modelo === MODELO_VETOR && Array.isArray(reg.vetores) && !indiceFotos) indiceFotos = reg;
             } catch (e) { }
             indiceFotosPromise = null;
             return indiceFotos;
@@ -33100,8 +33107,9 @@
         let vetores = null;
         if (atual && atual.ultimo && atual.vetores) {
           const mudou = await apiFetch(`/api/produto-vetores?desde=${atual.ultimo}`);
-          if (mudou && mudou.modelo === MODELO_VETOR) {
-            const porId = new Map(atual.vetores.map(x => [x.id, x]));
+          if (mudou && mudou.modelo === MODELO_VETOR && Array.isArray(mudou.ids)) {
+            const existem = new Set(mudou.ids); // o que o servidor apagou sai daqui também
+            const porId = new Map(atual.vetores.filter(x => existem.has(x.id)).map(x => [x.id, x]));
             for (const x of mudou.vetores || []) porId.set(x.id, x);
             if (porId.size === st.total) vetores = [...porId.values()];
           }
@@ -33113,7 +33121,7 @@
         }
         const reg = { id: 'indice', modelo: MODELO_VETOR, versao: st.versao, ultimo: st.ultimo, vetores };
         try { await indiceFotosOp('readwrite', s => s.put(reg)); } catch (e) { }
-        indiceFotos = { ...reg, itens: vetores.map(itemDoIndice) };
+        indiceFotos = reg;
         return indiceFotos;
       }
       // Em segundo plano (depois das miniaturas, e ao abrir o "Pela etiqueta"): índice novo e, com ele não vazio,
@@ -33125,15 +33133,18 @@
         try {
           let idx;
           try { idx = await atualizarIndiceFotos(); } catch (e) { idx = await lerIndiceFotos(); }
-          if (!idx || !idx.itens.length || await reconhecedorNoAparelho()) return;
-          if (!(navigator.serviceWorker && navigator.serviceWorker.controller)) return;
-          if (!agora && esperandoWifiPraBaixar()) return;
+          if (!idx || !idx.vetores.length || await reconhecedorNoAparelho()) return;
+          if (!(navigator.serviceWorker && navigator.serviceWorker.controller) || reconhecedorNaoGuardou) return;
+          if (!agora && esperandoWifiPraBaixar(true)) return;
           for (const u of RECONHECEDOR_ARQUIVOS) {
             const r = await fetchConferido(u);
             if (!r.ok) return;
             const leitor = r.body.getReader(); // lê até o fim sem juntar na memória: quem guarda é o sw.js
             while (!(await leitor.read()).done);
           }
+          // o sw.js ainda é o da versão anterior (sem estes arquivos na LIBS): não guardou; não baixa de novo
+          // nesta sessão (o novo assume logo, skipWaiting)
+          reconhecedorNaoGuardou = !(await reconhecedorNoAparelho());
         } catch (e) { } finally {
           preparandoReconhecedor = false;
           atualizarStatusReconhecedor();
@@ -33143,11 +33154,15 @@
       async function parecidosDaFoto(b64) {
         try {
           const idx = await lerIndiceFotos();
-          if (!idx || !idx.itens.length || !(await reconhecedorNoAparelho())) return null;
+          if (!idx || !idx.vetores.length || !(await reconhecedorNoAparelho())) return null;
+          if (inferindo) return null; // a foto anterior ainda roda: esta vai só pela leitura da etiqueta
           const foto = new Blob([Uint8Array.from(atob(b64), ch => ch.charCodeAt(0))], { type: 'image/jpeg' });
-          const vetor = await Promise.race([vetorDaFoto(foto),
-            new Promise((ok, falha) => setTimeout(() => falha(new Error('demorou')), RECONHECER_PRAZO_MS))]);
-          const cands = candidatosPorVetor(vetorNormalizado(vetor), idx.itens, CANDIDATOS_GEMINI + 10).filter(x => productByCod(x.c)).slice(0, CANDIDATOS_GEMINI);
+          inferindo = true;
+          const rodando = vetorDaFoto(foto).finally(() => { inferindo = false; });
+          let prazo;
+          const vetor = await Promise.race([rodando, new Promise((ok, falha) => { prazo = setTimeout(() => falha(new Error('demorou')), RECONHECER_PRAZO_MS); })])
+            .finally(() => clearTimeout(prazo));
+          const cands = candidatosPorVetor(vetorNormalizado(vetor), itensDoIndice(idx), CANDIDATOS_GEMINI + 10).filter(x => productByCod(x.c)).slice(0, CANDIDATOS_GEMINI);
           return { vetor, cands }; // vetor em int8 (o que vai pro servidor se a foto for confirmada)
         } catch (e) { return null; }
       }
@@ -33157,14 +33172,14 @@
         if (!lc || lc.modo !== 'etiqueta' || !lc.vetorFoto || !lc.linhas || lc.linhas.length !== 1 || incl.length !== 1) return;
         const c = incl[0].cod, q = lc.vetorFoto;
         lc.vetorFoto = null;
-        if (indiceFotos) indiceFotos.itens.push({ c, o: 'loja', f: null, v: vetorNormalizado(q) });
+        if (indiceFotos && indiceFotos._itens) indiceFotos._itens.push({ c, v: vetorNormalizado(q) }); // já vale na próxima foto
         apiFetch('/api/produto-vetores/loja', { method: 'POST', body: JSON.stringify({ modelo: MODELO_VETOR, c, v: base64DeVetor(q) }) },
           { tipo: 'vetor-foto', descricao: 'Foto de etiqueta (reconhecimento por foto)' }).catch(() => { });
       }
       async function atualizarStatusReconhecedor() {
         const el = document.getElementById('apReconhec'), sub = document.getElementById('apReconhecSub');
         if (!el) return;
-        const itens = (await lerIndiceFotos() || { itens: [] }).itens;
+        const itens = (await lerIndiceFotos() || { vetores: [] }).vetores;
         const fotos = itens.length;
         const noAparelho = await reconhecedorNoAparelho();
         const daLoja = itens.filter(x => x.o === 'loja').length;
@@ -33186,7 +33201,7 @@
           aviso(await reconhecedorNoAparelho() ? 'Carregando o reconhecedor…' : `Baixando o reconhecedor (~${RECONHECEDOR_MB} MB, uma vez)…`);
           await carregarReconhecedor();
           const idx = await atualizarIndiceFotos();
-          const feito = new Map((idx ? idx.itens : []).filter(x => x.o === 'catalogo').map(x => [x.c, String(x.f)]));
+          const feito = new Map((idx ? idx.vetores : []).filter(x => x.o === 'catalogo').map(x => [x.c, String(x.f)]));
           const pendentes = Object.keys(FOTOS_PRODUTO).filter(c => feito.get(c) !== String(FOTOS_PRODUTO[c]));
           if (!pendentes.length) { aviso(`✓ Índice em dia: ${feito.size.toLocaleString('pt-BR')} fotos`, 'success'); return; }
           let lote = [], feitos = 0, semFoto = 0;
@@ -33195,17 +33210,20 @@
             await apiFetch('/api/produto-vetores/catalogo', { method: 'POST', body: JSON.stringify({ modelo: MODELO_VETOR, vetores: lote }) });
             lote = [];
           };
+          let ilegiveis = 0;
           for (const c of pendentes) {
             const blob = await blobDaFoto(c, true);
             if (!blob) { semFoto++; continue; }
-            lote.push({ c, f: Number(FOTOS_PRODUTO[c]), v: base64DeVetor(await vetorDaFoto(blob)) });
+            let v;
+            try { v = await vetorDaFoto(blob); } catch (e) { ilegiveis++; continue; } // foto que o navegador não abre: segue
+            lote.push({ c, f: Number(FOTOS_PRODUTO[c]), v: base64DeVetor(v) });
             feitos++;
             if (lote.length >= 200) await enviar(); // o máximo por pedido do servidor
             if (feitos % 10 === 0) aviso(`Calculando… ${feitos.toLocaleString('pt-BR')} de ${pendentes.length.toLocaleString('pt-BR')}`);
           }
           await enviar();
           await atualizarIndiceFotos();
-          aviso(`✓ ${feitos.toLocaleString('pt-BR')} foto${feitos === 1 ? '' : 's'} no índice${semFoto ? ` · ${semFoto} sem foto baixada (sem internet?)` : ''}`, 'success');
+          aviso(`✓ ${feitos.toLocaleString('pt-BR')} foto${feitos === 1 ? '' : 's'} no índice${semFoto ? ` · ${semFoto} sem foto baixada (sem internet?)` : ''}${ilegiveis ? ` · ${ilegiveis} que não deu pra abrir` : ''}`, 'success');
         } catch (e) {
           aviso(e.message || 'Erro ao gerar o índice.', 'error');
         } finally {
@@ -33622,7 +33640,7 @@
               renderLevList();
               showToast(`${conferidos.length} ite${conferidos.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
             }
-            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null };
+            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, rotulo: null, sugerido: null, pistas: null };
             renderListaCliente();
             etiquetaInput.click();
             return;

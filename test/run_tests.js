@@ -5579,6 +5579,15 @@ async function main() {
     // aparelho lê a versão e o índice do modelo atual. Vetor = 384 bytes em base64.
     const { MODELO_VETOR, VETOR_DIM } = require('../routes/lib/vetoresFoto');
     const vet = (b) => Buffer.alloc(VETOR_DIM, b).toString('base64');
+    // sessão de admin própria: o GET do índice conta no limite da carteira (40/min), que a suíte já gastou
+    const tokenAntesVetores = authToken;
+    {
+      const u = await mockDb.pool.query('INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, true) RETURNING id',
+        ['Admin Vetores', 'admin.vetores@example.com', 'sub-admin-vetores']);
+      const tok = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tok), u.rows[0].id, '90']);
+      authToken = tok;
+    }
     mockDb.__getProdutoFotos().VT1 = { imagem: Buffer.from('x'), tamanho: 1, versao: 111 };
     mockDb.__getProdutoFotos().VT2 = { imagem: Buffer.from('x'), tamanho: 1, versao: 222 };
     mockDb.__seed({ catalogoPrecos: [{ codigo_sku: 'VT1', nome: 'DISCO VT1', emb: 10 }] });
@@ -5610,7 +5619,7 @@ async function main() {
     const rd = await req('GET', `/api/produto-vetores?desde=${rv.body.ultimo}`);
     const rdRuim = await req('GET', '/api/produto-vetores?desde=abc');
     assert(rd.status === 200 && rd.body.vetores.length === 1 && rd.body.vetores[0].o === 'loja' && Buffer.from(rd.body.vetores[0].v, 'base64')[0] === 99
-      && rd.body.vetores[0].id > 0 && rdRuim.status === 422,
+      && rd.body.vetores[0].id > 0 && rdRuim.status === 422 && Array.isArray(rd.body.ids) && rd.body.ids.length === mockDb.__getProdutoVetores().length,
       `vetores: ?desde= devolve só o que mudou (${rd.body.vetores && rd.body.vetores.length}), desde inválido = 422`);
     delete mockDb.__getProdutoFotos().VT2;
     await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 333, v: vet(6) }] });
@@ -5647,6 +5656,7 @@ async function main() {
     } finally {
       global.fetch = fetchAntes;
       if (chaveAntes === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = chaveAntes;
+      authToken = tokenAntesVetores;
     }
   }
 

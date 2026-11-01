@@ -51,9 +51,14 @@ router.get('/', async (req, res) => {
         `/* VETORES:LISTA */ SELECT ${COLUNAS_LISTA} FROM produto_vetores WHERE modelo = '${MODELO_VETOR}' ORDER BY id`)
       : (await pool.query(`/* VETORES:DESDE */ SELECT ${COLUNAS_LISTA} FROM produto_vetores
           WHERE modelo = $1 AND atualizado_em > to_timestamp($2 / 1000.0) ORDER BY id`, [MODELO_VETOR, desde])).rows;
+    // com ?desde=, os ids que existem hoje (~10 KB): o aparelho tira os que o servidor apagou (foto
+    // retirada, foto de loja além das 8) sem baixar o índice inteiro de novo
+    const ids = desde == null ? undefined
+      : (await pool.query(`/* VETORES:IDS */ SELECT id FROM produto_vetores WHERE modelo = $1`, [MODELO_VETOR])).rows.map(r => Number(r.id));
     res.json({
       modelo: MODELO_VETOR,
       vetores: rows.map(r => ({ id: Number(r.id), c: r.codigo_sku, o: r.origem, f: r.foto_versao == null ? null : Number(r.foto_versao), v: r.v })),
+      ...(ids ? { ids } : {}),
     });
   } catch (e) {
     console.error(e);

@@ -136,7 +136,12 @@ const etiquetaLimiter = rateLimit({
   keyGenerator: (req) => String(req.usuario?.id || req.ip),
   message: { erro: 'Muitas etiquetas lidas em pouco tempo — espera uns minutos ou use o código de barras.' },
 });
-const limiteDaImagem = (req, res, next) => (req.body && req.body.modo === 'etiqueta' ? etiquetaLimiter : imagemLimiter)(req, res, next);
+// O modo vem do app: o teto de 60 vale pra todo pedido do usuário (lista e etiqueta juntas), e a lista
+// do cliente ainda tem o dela, de 20 (mandar modo 'etiqueta' não passa do teto)
+const limiteDaImagem = (req, res, next) => etiquetaLimiter(req, res, (erro) => {
+  if (erro || (req.body && req.body.modo === 'etiqueta')) return next(erro);
+  imagemLimiter(req, res, next);
+});
 const MAX_IMAGENS = 3;
 const MAX_BASE64_POR_IMAGEM = 4 * 1024 * 1024; // ~3 MB de imagem; o app manda ~300 KB
 const MAX_ITENS_DA_IMAGEM = 80;
