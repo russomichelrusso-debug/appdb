@@ -4453,6 +4453,11 @@ async function main() {
         vmE.createContext(ctxR);
         vmE.runInContext(trechoE('// <motor-busca>', '// </motor-busca>') + trechoE('// <motor-lista>', '// </motor-lista>'), ctxR);
         const naoInteiro = ['rodel 7', 'cortador 750'].map(t => ctxR.produtoDaLinhaLista(ctxR.linhaDaImagemLista({ texto: t, quantidade: 1, unidade: null }), { porCodigo: () => null, etiqueta: true }));
+        // sem a leitura da etiqueta: os mais parecidos pela foto vêm prontos pra escolher (o que o cliente compra na frente)
+        const pelaFoto = ctxE.produtoDaLinhaLista({ texto: 'pela foto', termo: '', qtd: 1, codigos: [], opcoes: ['60863', '61314', 'NAOTEM'] },
+          { porCodigo: porCodigoE, comprados: new Set(['61314']) });
+        assert(pelaFoto.estado === 'escolher' && pelaFoto.opcoes.map(p => p.c).join(',') === '61314,60863',
+          `etiqueta: opções vindas da foto vão pra escolher, sem código desconhecido (${pelaFoto.estado} ${pelaFoto.opcoes.map(p => p.c)})`);
         assert(naoInteiro.every(r => r.estado !== 'pronto'), `etiqueta: número/sigla do nome que não foi lido não decide sozinho (${naoInteiro.map(r => r.estado + ':' + (r.produto ? r.produto.c : '')).join(', ')})`);
       }
     }
@@ -5594,11 +5599,19 @@ async function main() {
     assert(r.status === 422, `vetores: foto da loja de produto fora do catálogo = 422 (${r.status})`);
     r = await req('GET', '/api/produto-vetores');
     const lista = r.body && r.body.vetores;
-    assert(r.status === 200 && lista.length === 10 && lista.filter(x => x.o === 'catalogo').length === 2
+    assert(r.status === 200 && lista.length === 10 && lista.filter(x => x.o === 'catalogo').length === 2 && lista.every(x => x.id > 0)
       && lista.find(x => x.c === 'VT2').f === 222 && Buffer.from(lista[0].v, 'base64').length === VETOR_DIM,
       `vetores: o índice traz catálogo + loja do modelo atual: ${lista && lista.length}`);
     const rv = await req('GET', '/api/produto-vetores/versao');
-    assert(rv.body.total === 10 && rv.body.versao !== '0-0', `vetores: a versão muda com o índice (${rv.body.versao})`);
+    assert(rv.body.total === 10 && rv.body.versao !== '0-0' && rv.body.ultimo > 0, `vetores: a versão muda com o índice (${rv.body.versao})`);
+    // só o que mudou: a foto de etiqueta nova não faz o aparelho baixar o índice inteiro de novo
+    await new Promise(ok => setTimeout(ok, 5));
+    await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, c: 'VT1', v: vet(99) });
+    const rd = await req('GET', `/api/produto-vetores?desde=${rv.body.ultimo}`);
+    const rdRuim = await req('GET', '/api/produto-vetores?desde=abc');
+    assert(rd.status === 200 && rd.body.vetores.length === 1 && rd.body.vetores[0].o === 'loja' && Buffer.from(rd.body.vetores[0].v, 'base64')[0] === 99
+      && rd.body.vetores[0].id > 0 && rdRuim.status === 422,
+      `vetores: ?desde= devolve só o que mudou (${rd.body.vetores && rd.body.vetores.length}), desde inválido = 422`);
     delete mockDb.__getProdutoFotos().VT2;
     await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 333, v: vet(6) }] });
     assert(!mockDb.__getProdutoVetores().some(v => v.codigo_sku === 'VT2'), 'vetores: foto que saiu do produto tira o vetor do índice');

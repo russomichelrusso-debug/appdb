@@ -144,7 +144,7 @@ const TIPOS_IMAGEM = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 // Resposta do Gemini -> [{ texto, quantidade, unidade }] limpo (nada além disso passa). Com
 // candidatos (etiqueta), "codigo" só passa se for um deles: código inventado não entra.
-function itensDaRespostaGemini(resultado, codigosPermitidos) {
+function itensDaRespostaGemini(resultado, codigosPermitidos = new Set()) {
   const lista = Array.isArray(resultado) ? resultado : (resultado && Array.isArray(resultado.itens) ? resultado.itens : []);
   const itens = [];
   for (const it of lista) {
@@ -154,7 +154,7 @@ function itensDaRespostaGemini(resultado, codigosPermitidos) {
     const q = Number(String(it.quantidade ?? '').replace(',', '.'));
     const quantidade = q > 0 && q <= 99999 ? Math.round(q * 1000) / 1000 : null;
     const unidade = ['un', 'cx', 'pct'].includes(it.unidade) ? it.unidade : null;
-    const codigo = codigosPermitidos && codigosPermitidos.has(String(it.codigo ?? '')) ? String(it.codigo) : null;
+    const codigo = codigosPermitidos.has(String(it.codigo ?? '')) ? String(it.codigo) : null;
     itens.push(codigo ? { texto, quantidade, unidade, codigo } : { texto, quantidade, unidade });
     if (itens.length >= MAX_ITENS_DA_IMAGEM) break;
   }
@@ -174,7 +174,7 @@ Responda SOMENTE com um JSON válido neste formato:
 {"itens": [{"texto": "disco de corte diamantado turbo 110 mm", "quantidade": null, "unidade": null}], "cnpj": null}`;
 
 const MAX_CANDIDATOS = 40;
-const CODIGO_CANDIDATO = /^[A-Za-z0-9._-]{1,30}$/;
+const { CODIGO_SKU_REGEX: CODIGO_CANDIDATO } = require('./lib/vetoresFoto');
 // [{ c, n }] -> limpo; ausente = []; formato errado = null
 function candidatosDaEtiqueta(lista) {
   if (lista == null) return [];
@@ -241,8 +241,7 @@ Responda SOMENTE com um JSON válido neste formato:
     if (!resultado) return res.status(502).json({ erro: 'Não deu pra ler a foto agora — tenta de novo.' });
     // CNPJ da loja (o app sugere o cliente por ele); só 14 dígitos passam
     const cnpj = String((resultado && resultado.cnpj) || '').replace(/\D/g, '');
-    const permitidos = candidatos.length ? new Set(candidatos.map(x => x.c)) : null;
-    res.json({ itens: itensDaRespostaGemini(resultado, permitidos), cnpj: !etiqueta && cnpj.length === 14 ? cnpj : null });
+    res.json({ itens: itensDaRespostaGemini(resultado, new Set(candidatos.map(x => x.c))), cnpj: !etiqueta && cnpj.length === 14 ? cnpj : null });
   } catch (e) {
     console.error('Erro ao ler a imagem:', e.message);
     res.status(502).json({ erro: e.name === 'TimeoutError' ? 'A leitura da foto demorou demais — tenta de novo.' : 'Erro ao ler a foto.' });

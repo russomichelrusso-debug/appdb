@@ -3,7 +3,9 @@
 // compara com este índice pra mandar ao Gemini só os ~30 produtos mais parecidos
 // (ele escolhe dentro da lista) e, sem internet, sugerir os 5 primeiros.
 // - GET /versao: barato, pro aparelho saber se precisa baixar de novo
-// - GET /: o índice inteiro do modelo atual (~1 MB pra ~1.800 fotos)
+// - GET /: o índice inteiro do modelo atual (~1 MB pra ~1.800 fotos); ?desde=<ms> só o que mudou
+//   depois disso (cada foto de etiqueta confirmada mudaria a versão e faria todo aparelho baixar
+//   o índice inteiro de novo: egress do Supabase)
 // - POST /catalogo (admin): vetores das fotos do catálogo, gerados no Painel
 // - POST /loja: foto de etiqueta que o vendedor confirmou (até 8 por código)
 const express = require('express');
@@ -31,22 +33,27 @@ router.get('/versao', async (req, res) => {
       `/* VETORES:VERSAO */ SELECT count(*)::int AS n, (EXTRACT(EPOCH FROM max(atualizado_em)) * 1000)::bigint AS ultimo
        FROM produto_vetores WHERE modelo = $1`, [MODELO_VETOR]);
     const { n, ultimo } = r.rows[0] || {};
-    res.json({ modelo: MODELO_VETOR, versao: `${n || 0}-${ultimo || 0}`, total: n || 0 });
+    res.json({ modelo: MODELO_VETOR, versao: `${n || 0}-${ultimo || 0}`, total: n || 0, ultimo: Number(ultimo) || 0 });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao ler a versão do índice de fotos.' });
   }
 });
 
+const COLUNAS_LISTA = `id, codigo_sku, origem, foto_versao, encode(vetor, 'base64') AS v`;
 router.get('/', async (req, res) => {
+  const desde = req.query.desde == null ? null : Number(req.query.desde);
+  if (desde != null && !(Number.isSafeInteger(desde) && desde >= 0)) return res.status(422).json({ erro: 'Parâmetro desde inválido.' });
   try {
     // modelo vem da constante (não do usuário): pode ir no texto da consulta, que é a chave do cache
-    const rows = await lerComCache(`vetores:${MODELO_VETOR}`, 'produto_vetores',
-      `/* VETORES:LISTA */ SELECT codigo_sku, origem, foto_versao, encode(vetor, 'base64') AS v
-       FROM produto_vetores WHERE modelo = '${MODELO_VETOR}' ORDER BY id`);
+    const rows = desde == null
+      ? await lerComCache(`vetores:${MODELO_VETOR}`, 'produto_vetores',
+        `/* VETORES:LISTA */ SELECT ${COLUNAS_LISTA} FROM produto_vetores WHERE modelo = '${MODELO_VETOR}' ORDER BY id`)
+      : (await pool.query(`/* VETORES:DESDE */ SELECT ${COLUNAS_LISTA} FROM produto_vetores
+          WHERE modelo = $1 AND atualizado_em > to_timestamp($2 / 1000.0) ORDER BY id`, [MODELO_VETOR, desde])).rows;
     res.json({
       modelo: MODELO_VETOR,
-      vetores: rows.map(r => ({ c: r.codigo_sku, o: r.origem, f: r.foto_versao == null ? null : Number(r.foto_versao), v: r.v })),
+      vetores: rows.map(r => ({ id: Number(r.id), c: r.codigo_sku, o: r.origem, f: r.foto_versao == null ? null : Number(r.foto_versao), v: r.v })),
     });
   } catch (e) {
     console.error(e);
@@ -98,17 +105,18 @@ router.post('/loja', lojaLimiter, async (req, res) => {
   const sku = String(c || '');
   if (!buf || !CODIGO_SKU_REGEX.test(sku)) return res.status(422).json({ erro: 'Foto de etiqueta inválida.' });
   try {
-    const existe = await pool.query(
-      `/* VETORES:SKU_EXISTE */ SELECT 1 FROM catalogo_precos WHERE codigo_sku = $1 UNION ALL SELECT 1 FROM produtos WHERE codigo_sku = $1 LIMIT 1`, [sku]);
-    if (!existe.rows.length) return res.status(422).json({ erro: 'Produto não está no catálogo.' });
-    await pool.query(
-      `/* VETORES:LOJA */ INSERT INTO produto_vetores (codigo_sku, origem, modelo, vetor, criado_por) VALUES ($1, 'loja', $2, $3, $4)`,
+    // só grava código que está no catálogo (uma ida ao banco: Render em Oregon, Supabase em São Paulo)
+    const ins = await pool.query(
+      `/* VETORES:LOJA */ INSERT INTO produto_vetores (codigo_sku, origem, modelo, vetor, criado_por)
+       SELECT $1, 'loja', $2, $3, $4
+       WHERE EXISTS (SELECT 1 FROM catalogo_precos WHERE codigo_sku = $1) OR EXISTS (SELECT 1 FROM produtos WHERE codigo_sku = $1)`,
       [sku, MODELO_VETOR, buf, req.usuario ? req.usuario.id : null]);
+    if (!ins.rowCount) return res.status(422).json({ erro: 'Produto não está no catálogo.' });
     // só as mais recentes de cada código (o índice que todo aparelho baixa não cresce sem fim)
     await pool.query(
       `/* VETORES:LOJA_LIMITE */ DELETE FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = $1 AND modelo = $2
-       AND id NOT IN (SELECT id FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = $1 AND modelo = $2 ORDER BY id DESC LIMIT ${LOJA_POR_CODIGO})`,
-      [sku, MODELO_VETOR]);
+       AND id NOT IN (SELECT id FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = $1 AND modelo = $2 ORDER BY id DESC LIMIT $3)`,
+      [sku, MODELO_VETOR, LOJA_POR_CODIGO]);
     esquecerTabela('produto_vetores');
     res.json({ ok: true });
   } catch (e) {

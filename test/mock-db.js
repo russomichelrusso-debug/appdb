@@ -766,10 +766,11 @@ async function query(sql, params = []) {
     const ultimo = doModelo.reduce((m, v) => Math.max(m, v.atualizado_em), 0);
     return { rows: [{ n: doModelo.length, ultimo: doModelo.length ? String(ultimo) : null }] };
   }
-  if (s.includes('/* VETORES:LISTA */')) {
-    const modelo = (/modelo = '([^']+)'/.exec(sql) || [])[1]; // s está em maiúsculas
-    return { rows: produtoVetores.filter(v => v.modelo === modelo).sort((a, b) => a.id - b.id)
-      .map(v => ({ codigo_sku: v.codigo_sku, origem: v.origem, foto_versao: v.foto_versao == null ? null : String(v.foto_versao), v: v.vetor.toString('base64') })) };
+  if (s.includes('/* VETORES:LISTA */') || s.includes('/* VETORES:DESDE */')) {
+    const desde = s.includes('/* VETORES:DESDE */');
+    const modelo = desde ? params[0] : (/modelo = '([^']+)'/.exec(sql) || [])[1]; // s está em maiúsculas
+    return { rows: produtoVetores.filter(v => v.modelo === modelo && (!desde || v.atualizado_em > params[1])).sort((a, b) => a.id - b.id)
+      .map(v => ({ id: String(v.id), codigo_sku: v.codigo_sku, origem: v.origem, foto_versao: v.foto_versao == null ? null : String(v.foto_versao), v: v.vetor.toString('base64') })) };
   }
   if (s.includes('/* VETORES:CATALOGO */')) {
     const [modelo, cods, bufs, versoes, por] = params;
@@ -788,17 +789,14 @@ async function query(sql, params = []) {
     produtoVetores = produtoVetores.filter(v => v.origem !== 'catalogo' || produtoFotos[v.codigo_sku]);
     return { rows: [] };
   }
-  if (s.includes('/* VETORES:SKU_EXISTE */')) {
-    const existe = catalogoPrecos.some(p => p.codigo_sku === params[0]) || produtos.some(p => p.codigo_sku === params[0]);
-    return { rows: existe ? [{ '?column?': 1 }] : [] };
-  }
   if (s.includes('/* VETORES:LOJA */')) {
     const [c, modelo, vetor, por] = params;
+    if (!catalogoPrecos.some(p => p.codigo_sku === c) && !produtos.some(p => p.codigo_sku === c)) return { rows: [], rowCount: 0 };
     produtoVetores.push({ id: nextVetorId++, codigo_sku: c, origem: 'loja', modelo, vetor, foto_versao: null, criado_por: por, atualizado_em: Date.now() });
-    return { rows: [] };
+    return { rows: [], rowCount: 1 };
   }
   if (s.includes('/* VETORES:LOJA_LIMITE */')) {
-    const limite = Number((/LIMIT (\d+)\)/.exec(s) || [])[1]);
+    const limite = params[2];
     const daLoja = produtoVetores.filter(v => v.origem === 'loja' && v.codigo_sku === params[0] && v.modelo === params[1]).sort((a, b) => b.id - a.id);
     const fica = new Set(daLoja.slice(0, limite).map(v => v.id));
     produtoVetores = produtoVetores.filter(v => !(v.origem === 'loja' && v.codigo_sku === params[0] && v.modelo === params[1]) || fica.has(v.id));
