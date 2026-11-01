@@ -5071,10 +5071,34 @@
       cursor: pointer;
     }
 
-    .lcQtd b {
-      min-width: 32px;
+    .lcQtd input[type="number"] {
+      width: 58px;
+      padding: 0;
+      margin: 0;
+      border-radius: 0;
+      height: 40px;
+      border: none;
+      border-left: 1px solid var(--hairline);
+      border-right: 1px solid var(--hairline);
+      background: none;
+      color: var(--ink);
       text-align: center;
-      font-size: 14px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+      -moz-appearance: textfield;
+    }
+
+    .lcQtd input[type="number"]:focus {
+      outline: none;
+      background: var(--fill);
+      box-shadow: none;
+    }
+
+    .lcQtd input::-webkit-outer-spin-button,
+    .lcQtd input::-webkit-inner-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
     }
 
     .lcProntosCab {
@@ -33384,7 +33408,7 @@
       // fala da voz que fica de fora é descartada ao pôr no levantamento: o botão diz isso
       const rotuloForaLista = (l, padrao) => l.fora ? 'Voltar pra lista' : lc && lc.destino === 'lev' ? 'Descartar' : padrao;
       function htmlStepperLista(i, l) {
-        return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
+        return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><input type="number" inputmode="numeric" min="1" step="1" value="${l.qtd}" data-lc-qtd-input="${i}" aria-label="Quantidade"><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
       }
       function htmlBuscaLista(i, l) {
         if (!l.buscando) return `<button type="button" class="lcLink" data-lc-buscar="${i}">Buscar outro produto</button>`;
@@ -33736,6 +33760,23 @@
           }
           renderListaCliente();
           if (t.dataset.lcBuscar !== undefined) { const inp = corpo.querySelector(`[data-lc-busca="${t.dataset.lcBuscar}"]`); if (inp) inp.focus(); }
+        });
+        // quantidade digitada (pedido do usuário, 11/2026: com o −/+ era difícil sair de 7617): tocar seleciona o
+        // número todo, e ao sair do campo (ou Enter) vale, no múltiplo da embalagem pra cima
+        corpo.addEventListener('focusin', (e) => { if (e.target.matches('[data-lc-qtd-input]')) e.target.select(); });
+        corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-lc-qtd-input]')) e.target.blur(); });
+        corpo.addEventListener('change', (e) => {
+          const inp = e.target.closest('[data-lc-qtd-input]');
+          const l = inp && lc && lc.linhas && lc.linhas[Number(inp.dataset.lcQtdInput)];
+          if (!l) return;
+          const step = l.campo === 'qty' ? 1 : packStep(productByCod(l.cod));
+          const n = Math.floor(Number(String(inp.value).replace(',', '.')));
+          if (n > 0) {
+            const final = Math.min(99999, Math.ceil(n / step) * step);
+            l.qtd = final;
+            l.ajuste = final !== n ? `digitou ${n} → ${final} (embalagem de ${step})` : 'quantidade digitada';
+          }
+          renderListaCliente();
         });
         // busca dentro da linha: só a lista de resultados redesenha (o campo não perde o foco)
         corpo.addEventListener('input', (e) => {

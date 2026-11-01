@@ -1499,7 +1499,10 @@ Supabase, sem PR — não é mudança de código.
   - **Conferência em grupos** (`renderListaCliente`): Pra escolher (botões com as opções + "Buscar outro produto") · Não achei (busca
     no catálogo) · Quantidade ajustada (com o porquê) · Prontos (recolhido), −/+ na embalagem, "Deixar de fora"/"Tirar". Decisão do
     usuário: **linha em dúvida que não foi escolhida fica de fora**; "Pôr N itens no orçamento" soma (`addToCart`, não troca o
-    orçamento) e o aviso diz o que ficou de fora. Total sem impostos com o classificatório, sem campanha (mesma conta do mix inicial).
+    orçamento) e o aviso diz o que ficou de fora. **A quantidade se digita** (11/2026, pedido do usuário: com o −/+ era
+    difícil sair de um 7617 lido errado): o número entre −/+ é um campo; tocar seleciona tudo, ao sair (ou Enter) vale no
+    múltiplo da embalagem pra cima ("digitou 5 → 6"). Número depois de "Cód."/"Código"/"Ref." é o código do cliente (etiqueta
+    de preço da loja, `codigoDoClienteLista`) e número colado numa letra ("M14", "G120") é especificação: nenhum vira quantidade. Total sem impostos com o classificatório, sem campanha (mesma conta do mix inicial).
     No PDF, linha sem produto e sem unidade é cabeçalho/total e é ignorada ("N sem produto ignoradas").
   - **Foto (e PDF escaneado, até 3 páginas)**: o celular reduz pra JPEG de 1600 px e manda pra `POST /api/assistente/itens-da-imagem`
     (`routes/assistente.js`; até 3 imagens, 20 por 10 min por usuário, confere o login antes de ler o corpo - `ROTAS_PAYLOAD_GRANDE`):
