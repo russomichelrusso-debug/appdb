@@ -9,7 +9,7 @@
        dados renderizados). Mesmo assim isso restringe de onde scripts/estilos/objetos
        podem carregar e bloqueia <object>/<embed>. Sem frame-ancestors: no <meta> ele
        não tem efeito (só em cabeçalho HTTP) - a proteção contra iframe é a de baixo. -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://accounts.google.com; style-src 'self' 'unsafe-inline' https://accounts.google.com; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self' https:; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self';">
   <!-- Contra clickjacking (o app aberto dentro de um iframe de outro site, pra
        enganar o toque): frame-ancestors só vale em cabeçalho HTTP - no <meta> o
        navegador ignora - e o GitHub Pages não deixa mandar cabeçalho. Então a página
@@ -39,7 +39,8 @@
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.min.mjs?tentativa=3": "sha384-QCvhu/UPp22U/TNLVbQNONL82ES2yY717GAiqP9VVu37Y7+m9VPKvadGx9XlFvcp",
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.min.mjs?tentativa=4": "sha384-QCvhu/UPp22U/TNLVbQNONL82ES2yY717GAiqP9VVu37Y7+m9VPKvadGx9XlFvcp",
     "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.min.mjs?tentativa=5": "sha384-QCvhu/UPp22U/TNLVbQNONL82ES2yY717GAiqP9VVu37Y7+m9VPKvadGx9XlFvcp",
-    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.worker.min.mjs": "sha384-NfW/OTMWezITv4oaALvfH7MFLwzPxEvpySmDpoALa1mtTY8MC200l0ZNFD+SOlrM"
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.worker.min.mjs": "sha384-NfW/OTMWezITv4oaALvfH7MFLwzPxEvpySmDpoALa1mtTY8MC200l0ZNFD+SOlrM",
+    "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort-wasm-simd-threaded.mjs": "sha384-L9olMNCg9w3FaNhr+m7EAeeiUpM5zy2Nlh6APnoogtFXjsL4ZZZRXlYhSVJc1r3j"
   }}</script>
   <title>Cortag · Consulta de Preços</title>
   <link rel="manifest" href="manifest.json">
@@ -2832,6 +2833,7 @@
     }
 
     #apFichasCnpjSub.hidden,
+    #apReconhecSub.hidden,
     #apPosicaoLojasSub.hidden {
       display: none;
     }
@@ -4608,7 +4610,8 @@
     }
 
     /* Lista do cliente (texto, foto ou PDF) - opção "C" dos mockups "Cortag · Lista colada do WhatsApp" */
-    #colarListaBtn.buscando {
+    #colarListaBtn.buscando,
+    #etiquetaPedBtn.buscando {
       display: none;
     }
 
@@ -6396,6 +6399,7 @@
     #targetProdWrap.hidden,
     #targetSkuListWrap.hidden,
     #manageUsersGroup.hidden,
+    #reconhecFotoGroup.hidden,
     #apImportTodosWrap.hidden,
     #appConfirmInput.hidden,
     #promocoesVazia.hidden,
@@ -10257,6 +10261,11 @@
       display: none;
     }
 
+    /* "📷 Pela etiqueta" no Levantamento: em toda tela (o .levLeitorBtn sozinho só aparece no tablet) */
+    .levEtiquetaBtn {
+      display: inline-flex;
+    }
+
     .modoLeitor.vozLev {
       padding-left: 16px;
       padding-right: 16px;
@@ -12160,6 +12169,7 @@
         <div class="hint" id="searchHint">Digite ao menos 2 caracteres para buscar.</div>
         <button type="button" class="mixInicialBtn" id="mixInicialBtn">✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>
         <button type="button" class="mixInicialBtn" id="colarListaBtn">📋 Colar lista do cliente <span>texto, foto ou PDF que ele mandou no WhatsApp</span></button>
+        <button type="button" class="mixInicialBtn" id="etiquetaPedBtn">📷 Pela etiqueta <span>foto da embalagem na loja: o app acha o produto pra você conferir</span></button>
         <button type="button" class="listaGuardadaFaixa hidden" id="listaGuardadaFaixa"></button>
       </div>
 
@@ -12306,6 +12316,15 @@
           <line x1="12" y1="19" x2="12" y2="23" />
         </svg>
         Contar por voz
+      </button>
+      <button type="button" class="levLeitorBtn levEtiquetaBtn" id="levEtiquetaBtn"
+        aria-label="Pela etiqueta: foto da embalagem, o app acha o produto e você confere antes de somar no estoque">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 8a2 2 0 012-2h2l2-2h6l2 2h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          <circle cx="12" cy="13" r="4" />
+        </svg>
+        Pela etiqueta
       </button>
       <button type="button" class="levLeitorBtn" id="levLeitorBtn"
         aria-label="Usar o celular como leitor: o levantamento fica nesta tela e cada código lido no celular soma aqui">
@@ -12883,6 +12902,7 @@
         <div class="lcRodape" id="lcRodape"></div>
       </div>
       <input type="file" id="lcFotoInput" accept="image/*" multiple style="display:none" aria-hidden="true" tabindex="-1">
+      <input type="file" id="lcEtiquetaInput" accept="image/*" capture="environment" style="display:none" aria-hidden="true" tabindex="-1">
       <input type="file" id="lcPdfInput" accept="application/pdf,.pdf" style="display:none" aria-hidden="true" tabindex="-1">
     </div>
 
@@ -13139,6 +13159,8 @@
               <div class="ap-status-row"><span class="k">Google Drive</span><span class="v" id="apGoogleDriveStatus">Não conectado</span></div>
               <div class="ap-status-row"><span class="k">Catálogo<small><span id="apSyncCatalogo">—</span> · <span
                       id="apCurSource">—</span></small></span><span class="v" id="apCurCount">—</span></div>
+              <div class="ap-status-row"><span class="k">Reconhecimento por foto<small id="apReconhecSub" class="hidden"></small></span><span
+                  class="v" id="apReconhec">—</span></div>
             </div>
             <button class="restoreBtn hidden" id="apSyncQueueBtn" style="margin-top:10px;">Tentar enviar agora</button>
             <button class="restoreBtn" id="apSyncQueueVerBtn" style="margin-top:8px;">Ver pendências e recusados</button>
@@ -13248,6 +13270,21 @@
               Dashboard (Curva ABC). Marque as que a empresa quer empurrar esse mês.</p>
             <div id="produtosFocoList"></div>
           </details>
+        </details>
+
+        <details class="ap-group hidden" id="reconhecFotoGroup">
+          <summary>Reconhecimento por foto</summary>
+          <div class="ap-groupBody">
+            <div class="ap-card">
+              <h3>Índice das fotos dos produtos</h3>
+              <p class="ap-hint" style="margin-bottom:10px;">No "📷 Pela etiqueta", o celular compara a foto com as fotos do
+                catálogo e manda à IA só os 30 produtos mais parecidos (sem internet, sugere os 5 primeiros). Gere o índice
+                depois de cadastrar ou trocar fotos: só as novas são calculadas, aqui neste aparelho (baixa ~39 MB uma vez;
+                melhor no Wi-Fi). Fotos de etiqueta confirmadas pelos vendedores entram sozinhas.</p>
+              <button class="fileBtn" id="apGerarIndiceBtn">Gerar índice das fotos</button>
+              <div id="apGerarIndiceMsg" style="margin-top:8px;"></div>
+            </div>
+          </div>
         </details>
 
         <details class="ap-group hidden" id="manageUsersGroup">
@@ -13639,6 +13676,11 @@
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.worker.min.mjs': 'sha384-NfW/OTMWezITv4oaALvfH7MFLwzPxEvpySmDpoALa1mtTY8MC200l0ZNFD+SOlrM',
         'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js': 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1',
         'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js': 'sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO',
+        // reconhecimento por foto ("📷 Pela etiqueta"): onnxruntime-web (o .mjs também no import map) e o modelo
+        'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js': 'sha384-tNxIwEqSlcdvKtUte98AsccPbDKM958LBXB/+3BLS42TTihXHKTWgdqPqXI/lot8',
+        'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort-wasm-simd-threaded.mjs': 'sha384-L9olMNCg9w3FaNhr+m7EAeeiUpM5zy2Nlh6APnoogtFXjsL4ZZZRXlYhSVJc1r3j',
+        'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort-wasm-simd-threaded.wasm': 'sha384-bQJgW/bZhNOlc9KU45Zu0dyd0EFfNpkOZjfHyH/90dkZQSBBGkFTsAJaabSyYA4Z',
+        'https://huggingface.co/onnx-community/dinov2-small/resolve/8b1f705a3a7f6f062f6bdd21986c1583d3ef105d/onnx/model_int8.onnx': 'sha384-uXYL7/0pnvBLWgzXA9LjdbiSJg9LG4SM9unuCzmPW7tC813LeC/Dxhono8xKK4iK',
       };
       // <script> de biblioteca da CDN já com o hash conferido pelo navegador
       function scriptDaCdn(src) {
@@ -14745,6 +14787,12 @@
           const p = porCodigo(c);
           if (p) return pronto(p);
         }
+        // opções que já vêm de fora (etiqueta sem leitura: os mais parecidos pela foto): o vendedor escolhe
+        if (item.opcoes) {
+          const ops = item.opcoes.map(porCodigo).filter(Boolean);
+          const queCompra = ops.filter(p => comprados.has(p.c));
+          return { estado: ops.length ? 'escolher' : 'nao', produto: null, opcoes: [...queCompra, ...ops.filter(p => !comprados.has(p.c))], maisOpcoes: 0, medida };
+        }
         const { termo, pacote } = pacoteNoTermoLista(item.termo);
         // Pacote: com "50PCS" no produto fica o de 50 (ou, sem ele, nada maior); com "50 un" de quantidade,
         // o granel/balde (300+ peças) maior que o pedido sai, menos o que o cliente já compra (o "50PCS" escrito vale mais).
@@ -14807,6 +14855,17 @@
         // o único das opções que ele já compra vai pronto, também quando faltou palavra (o "eco", o "videa"),
         // desde que caiba no pacote pedido
         if (queCompra.length === 1 && (exato || cabe(queCompra[0]))) return pronto(queCompra[0]);
+        // Só na etiqueta (ctx.etiqueta): a embalagem traz o nome inteiro, então no empate vai o único nome que
+        // ela descreve por inteiro - nenhuma palavra (nem sigla de 2 letras, "HD") e nenhum número além dos
+        // impressos ("disco de corte diamantado porcelanato turbo 110 mm" = o 60863, não o "PORCELANATO PLUS";
+        // foto real de 11/2026). Na lista do cliente e na voz o texto é curto ("cortador 750", "rodel 7") e
+        // continua pra escolher (achado do revisor-cortag: 281 de 2.802 termos curtos mudariam)
+        if (exato && ctx && ctx.etiqueta) {
+          const escritas = new Set(normalizarBusca(termo || '').split(' ').map(radicalBusca));
+          const sobra = (p) => p._tok.filter(w => w.length >= 2 && !PALAVRAS_LIGACAO.has(w) && !escritas.has(radicalBusca(w))).length;
+          const inteiros = opcoes.filter(p => sobra(p) === 0);
+          if (inteiros.length === 1) return pronto(inteiros[0]);
+        }
         opcoes = [...queCompra, ...opcoes.filter(p => !comprados.has(p.c))];
         return { estado: 'escolher', produto: null, opcoes: opcoes.slice(0, 6), maisOpcoes: Math.max(0, opcoes.length - 6), medida };
       }
@@ -14937,6 +14996,49 @@
         return { qtd: item.qtd, ajuste: null };
       }
       // </motor-lista>
+
+      // <motor-vetores> - reconhecimento por foto ("📷 Pela etiqueta", 11/2026), sem DOM; rodado isolado pelo
+      // test/run_tests.js. Vetor da foto = CLS do DINOv2-small (384 números), guardado em int8 com escala
+      // por vetor (o cosseno não muda com a escala: volta normalizado em vetorNormalizado).
+      const VETOR_DIM = 384;
+      function quantizarVetor(f) {
+        let m = 0;
+        for (let i = 0; i < f.length; i++) m = Math.max(m, Math.abs(f[i]));
+        const q = new Int8Array(f.length);
+        for (let i = 0; i < f.length; i++) q[i] = m ? Math.round(f[i] / m * 127) : 0;
+        return q;
+      }
+      function vetorNormalizado(q) {
+        const v = new Float32Array(q.length);
+        let soma = 0;
+        for (let i = 0; i < q.length; i++) { v[i] = q[i]; soma += q[i] * q[i]; }
+        const n = Math.sqrt(soma) || 1;
+        for (let i = 0; i < v.length; i++) v[i] /= n;
+        return v;
+      }
+      function base64DeVetor(q) {
+        const u = new Uint8Array(q.buffer, q.byteOffset, q.length);
+        let bin = '';
+        for (let i = 0; i < u.length; i++) bin += String.fromCharCode(u[i]);
+        return btoa(bin);
+      }
+      function vetorDeBase64(b64) {
+        const bin = atob(b64), q = new Int8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) q[i] = (bin.charCodeAt(i) << 24) >> 24;
+        return q;
+      }
+      // os k códigos de foto mais parecida: um código vale pela melhor das fotos dele (catálogo ou loja)
+      function candidatosPorVetor(v, itens, k) {
+        const melhor = new Map();
+        for (const it of itens) {
+          const w = it.v;
+          let s = 0;
+          for (let i = 0; i < VETOR_DIM; i++) s += v[i] * w[i];
+          if (!(melhor.get(it.c) >= s)) melhor.set(it.c, s);
+        }
+        return [...melhor].sort((a, b) => b[1] - a[1]).slice(0, k).map(([c, s]) => ({ c, s }));
+      }
+      // </motor-vetores>
 
       // ---------------- Fichas técnicas (balão de informação) ----------------
       // Carregado em segundo plano, sem bloquear a abertura do app - a maioria
@@ -15146,6 +15248,7 @@
         list.classList.remove('emTabela');
         document.getElementById('mixInicialBtn').classList.toggle('buscando', q.trim().length >= 2);
         document.getElementById('colarListaBtn').classList.toggle('buscando', q.trim().length >= 2);
+        document.getElementById('etiquetaPedBtn').classList.toggle('buscando', q.trim().length >= 2);
         // ✕ da busca também quando o app limpa o campo sozinho (código que entrou na lista de preços)
         const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
         if (limpar) limpar.classList.toggle('hidden', !q);
@@ -21640,7 +21743,10 @@
           } catch (e) {
             // o servidor recusou (ex.: alterar pedido que foi excluído): reenviar
             // não muda nada - antes ficava na fila pra sempre, de 30 em 30 s
-            if (e.recusado) recusados.push({ item, erro: e.message });
+            // foto de etiqueta pro reconhecimento recusada (modelo trocado, código fora do catálogo): é só
+            // aprendizado em segundo plano - sai da fila sem aviso nem "recusado" no Painel
+            if (e.recusado && item.tipo === 'vetor-foto') tirar.add(item.id);
+            else if (e.recusado) recusados.push({ item, erro: e.message });
             // sem rede / servidor fora / 400 (pode ser passageiro): mantém na fila,
             // com o erro guardado pra aparecer no Painel
             else erros.set(item.id, e.message);
@@ -23058,6 +23164,7 @@
         if (elPromo) marcarStatus(elPromo, PROMO_SOURCE, PROMO_SOURCE === 'Nenhuma campanha ativa' ? 'cinza' : '');
         carregarStatusFichasCnpj();
         carregarStatusPosicaoLojas();
+        atualizarStatusReconhecedor();
 
         marcarStatus(elServidor, 'Verificando…', 'cinza');
         marcarStatus(elCatalogo, 'verificando…');
@@ -23830,6 +23937,7 @@
           document.getElementById('apLoggedInEmail').textContent = state.currentUser.email || '';
           if (state.currentUser.is_admin) {
             document.getElementById('manageUsersGroup').classList.remove('hidden');
+            document.getElementById('reconhecFotoGroup').classList.remove('hidden');
             renderUsersList();
           }
         }
@@ -28621,7 +28729,7 @@
         // FOTOS_PRODUTO vazio apagaria as miniaturas que são justamente pra esse caso
         if (listaDoServidor) limparFotosAntigasDoAparelho();
         // primeiro as fotos das campanhas (o que o vendedor manda), depois as miniaturas do catálogo
-        setTimeout(async () => { await baixarFotosDasCampanhas(); baixarMiniaturas(); }, 15000);
+        setTimeout(async () => { await baixarFotosDasCampanhas(); await baixarMiniaturas(); prepararReconhecedor(); }, 15000);
       }
       // Foto retirada ou trocada (em outro aparelho) sai do Cache Storage.
       async function limparFotosAntigasDoAparelho() {
@@ -28757,6 +28865,23 @@
       const MINIATURA_KB = 15; // média, pra dizer quanto falta baixar
       const MINIATURAS_4G_LS_KEY = 'cortagMiniaturas4g_v1'; // o vendedor tocou em "baixar agora" no 4G
       let miniaturasStatus = null; // { guardadas, total, esperandoWifi }
+      // download grande (miniaturas, reconhecedor de fotos): sozinho só fora da rede móvel (Android diz o tipo;
+      // iPhone não diz, baixa) e sem "economia de dados" - ou depois que o vendedor tocou em "baixar agora"
+      // semPedido (reconhecedor, ~39 MB): não vale o "baixar agora" das miniaturas e, sem o navegador dizer o
+      // tipo de conexão (iPhone), não baixa sozinho - só pelo "baixar agora" da tela da etiqueta
+      function esperandoWifiPraBaixar(semPedido) {
+        const con = navigator.connection;
+        if (semPedido) {
+          // Wi-Fi/cabo dito pelo navegador; computador (o Chrome de mesa não diz o tipo) também; celular que não diz, não
+          if (con && con.saveData) return true;
+          const tipo = con && con.type;
+          if (tipo) return tipo !== 'wifi' && tipo !== 'ethernet';
+          return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+        }
+        let pediu = false;
+        try { pediu = localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
+        return !pediu && !!con && (con.saveData || con.type === 'cellular');
+      }
       function atualizarStatusMiniaturas() {
         const el = document.getElementById('catFotosOffline');
         if (el) el.innerHTML = textoStatusMiniaturas();
@@ -28780,12 +28905,7 @@
           const guardadas = new Set((await cache.keys()).map(r => r.url));
           const codigos = Object.keys(FOTOS_PRODUTO);
           let pendentes = codigos.filter(c => !guardadas.has(chaveCacheFoto(c, FOTOS_PRODUTO[c], true)));
-          // ~30 MB: sozinho só fora da rede móvel (Android diz o tipo; iPhone não diz,
-          // baixa) e sem "economia de dados" - ou depois que o vendedor pediu uma vez
-          const con = navigator.connection;
-          let pediu = false;
-          try { pediu = localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
-          const esperandoWifi = !pediu && !!con && (con.saveData || con.type === 'cellular');
+          const esperandoWifi = esperandoWifiPraBaixar(); // ~30 MB
           miniaturasStatus = { guardadas: codigos.length - pendentes.length, total: codigos.length, esperandoWifi };
           atualizarStatusMiniaturas();
           if (!pendentes.length || navigator.onLine === false || esperandoWifi) return;
@@ -32712,15 +32832,18 @@
           if (lcVelha(g)) return;
         }
         const comprados = escolherSozinho ? compradosDoCliente(sugerido.cliente) : lcComprados();
-        const ctx = { comprados, porCodigo: findByExactCode }; // a mesma do leitor: EAN, DUN, zeros à esquerda
+        const ctx = { comprados, porCodigo: findByExactCode, etiqueta: !!(lc && lc.modo === 'etiqueta') }; // porCodigo: a mesma do leitor (EAN, DUN, zeros à esquerda)
         let ignoradas = 0;
         const linhas = [];
         for (const item of itens) {
-          const r = produtoDaLinhaLista(item, ctx);
+          let r = produtoDaLinhaLista(item, ctx);
+          // etiqueta lida mas sem produto achado: os mais parecidos pela foto viram as opções
+          if (r.estado === 'nao' && lc && lc.opcoesPelaFoto) r = produtoDaLinhaLista({ ...item, opcoes: lc.opcoesPelaFoto }, ctx);
           // PDF tem cabeçalho, endereço, total...: linha que não acha produto nenhum não é item
           // (só fica a que tem quantidade com unidade, "3 UN": é item que o catálogo não tem)
           if (r.estado === 'nao' && origem === 'pdf' && !item.unidade) { ignoradas++; continue; }
           const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
+            sugeridos: new Set([...(r.produto ? [r.produto.c] : []), ...(r.opcoes || []).map(p => p.c)]),
             cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: item.campo || null };
           if (r.produto) lcEscolher(l, r.produto);
           linhas.push(l);
@@ -32738,8 +32861,10 @@
       function lcEscolher(l, p) {
         if (!p._tok) prepararProdutoParaBusca(p);
         const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
-        // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem
-        const q = l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
+        // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem.
+        // Etiqueta: a foto não diz quantidade - 1 no estoque (Levantamento) ou 1 embalagem (Pedido), sem aviso
+        const q = lc && lc.modo === 'etiqueta' ? { qtd: l.campo === 'qty' ? 1 : (p.emb > 0 ? p.emb : 1), ajuste: null }
+          : l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
       function lerTextoDaLista(texto, origem) {
@@ -32765,7 +32890,8 @@
         } catch (e) {
           if (lcVelha(g)) return;
           showToast('Não deu pra abrir essa imagem.', 'erro');
-          if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
+          // etiqueta não volta pra tela da lista (Colar texto/PDF): o modo e o destino dela seguiriam ligados
+          if (lc) { lc = lc.modo === 'etiqueta' ? { ...lc, fase: 'erroLeitura', erro: 'Não deu pra abrir essa foto. Tire outra.', imagens: null } : { ...lc, fase: 'entrada' }; renderListaCliente(); }
         }
       }
       // PDF com texto: lido aqui. PDF escaneado (só imagem): as 3 primeiras páginas viram foto.
@@ -32799,31 +32925,334 @@
           if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
         }
       }
-      async function pedirLeituraDaImagem(imagens, signal) {
-        const r = await apiFetch('/api/assistente/itens-da-imagem', { method: 'POST', body: JSON.stringify({ imagens }), signal });
-        const cnpj = r && /^\d{14}$/.test(r.cnpj || '') && r.cnpj !== CORTAG_CNPJ_DIGITS ? r.cnpj : null;
-        return { itens: (r && Array.isArray(r.itens) ? r.itens : []).map(linhaDaImagemLista).filter(Boolean), cnpjs: cnpj ? [cnpj] : [] };
+      // modo 'etiqueta': foto da embalagem; a IA não lê quantidade, então o texto inteiro é o produto
+      // candidatos (etiqueta): os produtos de foto mais parecida; o código que a IA escolher entre eles vai pronto
+      async function pedirLeituraDaImagem(imagens, signal, modo, candidatos) {
+        const etiqueta = modo === 'etiqueta';
+        const corpo = etiqueta ? { imagens, modo, candidatos } : { imagens };
+        const r = await apiFetch('/api/assistente/itens-da-imagem', { method: 'POST', body: JSON.stringify(corpo), signal });
+        const cnpj = !etiqueta && r && /^\d{14}$/.test(r.cnpj || '') && r.cnpj !== CORTAG_CNPJ_DIGITS ? r.cnpj : null;
+        const lidos = r && Array.isArray(r.itens) ? r.itens : [];
+        const itens = lidos.map(it => {
+          const l = linhaDaImagemLista(etiqueta ? { ...it, quantidade: 1, unidade: null } : it);
+          // o código/EAN impresso que veio no texto vale mais que a escolha da IA entre os parecidos pela foto
+          if (l && etiqueta && it.codigo && productByCod(String(it.codigo))) l.codigos = [...(l.codigos || []), String(it.codigo)];
+          return l;
+        }).filter(Boolean);
+        return { itens, cnpjs: cnpj ? [cnpj] : [] };
       }
+      const ETIQUETA_SEM_SINAL = 'Sem internet agora: a leitura da etiqueta precisa de sinal. Use o código de barras ou a busca pelo nome.';
       async function lerImagensDaLista(imagens, origem) {
         if (!lc) return;
-        if (!navigator.onLine) { await guardarListaCliente(imagens, origem); return; }
+        const etiqueta = lc.modo === 'etiqueta';
         const g = lcGeracao;
+        // etiqueta: com o reconhecedor no aparelho, os produtos de foto mais parecida (vão pra IA escolher;
+        // sem internet ou com a leitura falhando, os primeiros viram as opções da conferência)
+        let parecidos = null;
+        if (etiqueta) {
+          lc = { ...lc, fase: 'lendo', msg: 'Comparando com as fotos do catálogo…', sub: '' };
+          renderListaCliente();
+          parecidos = await parecidosDaFoto(imagens[0].dados);
+          if (lcVelha(g)) return;
+          lc.vetorFoto = parecidos ? parecidos.vetor : null;
+          lc.opcoesPelaFoto = parecidos && parecidos.cands.length ? parecidos.cands.slice(0, SUGESTOES_SEM_INTERNET).map(x => x.c) : null;
+        }
+        // leitura que não deu: na etiqueta com o reconhecedor, os mais parecidos pela foto viram as opções;
+        // senão a tela de erro (semImagem: sem "Tentar de novo", que é o caso de sem sinal)
+        const falhouLeitura = (erro, semImagem) => {
+          if (parecidos && parecidos.cands.length) {
+            if (erro !== ETIQUETA_SEM_SINAL) showToast(`${erro} · mostrando os mais parecidos pela foto`, 'erro');
+            const opcoes = parecidos.cands.slice(0, SUGESTOES_SEM_INTERNET).map(x => x.c);
+            conferirItensDaLista([{ texto: 'Pela foto, sem a leitura da etiqueta: escolha o produto', termo: '', qtd: 1, unidade: null, codigos: [], opcoes,
+              ...(lc.destino === 'lev' ? { campo: 'qty' } : {}) }], origem, { pistas: { cnpjs: [] }, rotulo: `Sem a leitura da etiqueta · os ${opcoes.length} mais parecidos pela foto` });
+            return;
+          }
+          lc = { ...lc, fase: 'erroLeitura', erro, abortar: null, ...(semImagem ? { imagens: null } : {}) };
+          renderListaCliente();
+        };
+        // etiqueta não fica guardada: na loja, o código de barras e a busca resolvem na hora
+        const semSinal = async () => {
+          if (!etiqueta) { await guardarListaCliente(imagens, origem); return; }
+          falhouLeitura(ETIQUETA_SEM_SINAL, true);
+        };
+        if (!navigator.onLine) { await semSinal(); return; }
         const abortar = new AbortController();
-        lc = { ...lc, fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
+        lc = { ...lc, fase: 'lendo', msg: etiqueta ? 'Lendo a etiqueta…' : 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
         renderListaCliente();
+        const candidatos = parecidos ? parecidos.cands.map(x => ({ c: x.c, n: productByCod(x.c).n })) : null;
         let lido;
-        try { lido = await pedirLeituraDaImagem(imagens, abortar.signal); }
+        try { lido = await pedirLeituraDaImagem(imagens, abortar.signal, lc.modo, candidatos); }
         catch (e) {
           if (lcVelha(g) || abortar.signal.aborted) return;
-          if (!e.status) { await guardarListaCliente(imagens, origem); return; } // sem conexão: guarda
-          lc = { ...lc, fase: 'erroLeitura', erro: e.message, abortar: null };
-          renderListaCliente();
+          if (!e.status) { await semSinal(); return; } // sem conexão: guarda (a lista) ou avisa (a etiqueta)
+          falhouLeitura(e.message);
           return;
         }
         if (lcVelha(g) || abortar.signal.aborted) return;
         lc.abortar = null;
-        if (!lido.itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
-        conferirItensDaLista(lido.itens, origem, { pistas: { cnpjs: lido.cnpjs } });
+        if (!lido.itens.length) {
+          falhouLeitura(etiqueta ? 'Não deu pra ler a etiqueta nessa foto. Tire mais de perto, com a etiqueta inteira e sem reflexo.' : 'Não achei linhas de produto nessa imagem.');
+          return;
+        }
+        // no Levantamento, cada produto lido na etiqueta soma no estoque (o campo vai na linha, como na voz)
+        const itens = etiqueta && lc.destino === 'lev' ? lido.itens.map(it => ({ ...it, campo: 'qty' })) : lido.itens;
+        conferirItensDaLista(itens, origem, { pistas: { cnpjs: lido.cnpjs } });
+      }
+      // "📷 Pela etiqueta" (11/2026, depois do teste com fotos reais de discos e lâminas: a imagem sozinha
+      // não separa a medida, a etiqueta diz tudo): foto da embalagem -> Gemini lê a etiqueta (modo 'etiqueta'
+      // da mesma rota da lista) -> busca do app -> a mesma conferência. destino 'lev' = Levantamento
+      // (soma 1 no estoque); sem destino = orçamento. A câmera abre no mesmo toque (o navegador exige).
+      function abrirEtiqueta(destino) {
+        abrirListaCliente();
+        lc = { ...lc, fase: 'etiqueta', modo: 'etiqueta', destino: destino || null };
+        renderListaCliente();
+        document.getElementById('lcEtiquetaInput').click();
+        prepararReconhecedor(); // sem o reconhecedor no aparelho: começa a baixar (no Wi-Fi) pra próxima
+      }
+
+      // ---- Reconhecimento por foto no aparelho (11/2026) ----
+      // DINOv2-small int8 (Meta, Apache 2.0, ~24 MB) no onnxruntime-web (~15 MB de WebAssembly). Testado com
+      // fotos reais de blisters: acerta o tipo e quase sempre a linha, não a medida (a etiqueta diz); por isso
+      // só corta a lista pra IA escolher. O MobileCLIP ficou de fora: a licença da Apple só permite pesquisa
+      // não comercial. Os 4 arquivos vão pelo cache de bibliotecas do sw.js (LIBS, conferidos pelo hash):
+      // baixa uma vez e funciona sem internet. Baixa sozinho só fora da rede móvel (a mesma regra e o mesmo
+      // "baixar agora" das miniaturas) e só quando o índice do servidor já tem fotos (o admin gera no Painel).
+      const MODELO_VETOR = 'dinov2-small-int8@8b1f705'; // igual ao routes/lib/vetoresFoto.js
+      const ORT_URL = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js';
+      const ORT_DIR = ORT_URL.slice(0, ORT_URL.lastIndexOf('/') + 1); // a pasta (os outros arquivos ficam nela)
+      const ORT_MJS_URL = ORT_DIR + 'ort-wasm-simd-threaded.mjs';
+      const ORT_WASM_URL = ORT_DIR + 'ort-wasm-simd-threaded.wasm';
+      const DINO_URL = 'https://huggingface.co/onnx-community/dinov2-small/resolve/8b1f705a3a7f6f062f6bdd21986c1583d3ef105d/onnx/model_int8.onnx';
+      const RECONHECEDOR_ARQUIVOS = [ORT_URL, ORT_MJS_URL, ORT_WASM_URL, DINO_URL];
+      const RECONHECEDOR_MB = 39;
+      const CANDIDATOS_GEMINI = 30;
+      const SUGESTOES_SEM_INTERNET = 5;
+      const RECONHECER_PRAZO_MS = 20000; // 1ª foto do dia carrega o modelo (~2-5 s no celular)
+      let indiceFotos = null; // { modelo, versao, ultimo, vetores: [{ id, c, o, f, v: base64 }] } (como veio do servidor)
+      let indiceFotosPromise = null; // leitura do IndexedDB em andamento (status e preparo ao mesmo tempo)
+      let reconhecedorPromise = null; // sessão do onnxruntime, carregada na 1ª foto
+      let reconhecedorGuardado = false; // os 4 arquivos já no cache (não muda mais na sessão)
+      let preparandoReconhecedor = false;
+      let reconhecedorNaoGuardou = false;
+      let inferindo = false; // o onnxruntime roda uma foto por vez (a que passou do prazo ainda pode estar rodando)
+      const fetchConferido = (url) => fetch(url, { mode: 'cors', credentials: 'omit', integrity: INTEGRIDADE_CDN[url] });
+      // o onnxruntime 1.31 exige WebAssembly SIMD (iPhone antes do iOS 16.4 não tem): sem ele nunca baixa nem roda
+      const RECONHECEDOR_RODA = (() => {
+        try { return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11])); } catch (e) { return false; }
+      })();
+      async function reconhecedorNoAparelho() {
+        if (!RECONHECEDOR_RODA) return false;
+        if (reconhecedorGuardado || typeof caches === 'undefined') return reconhecedorGuardado;
+        try { reconhecedorGuardado = (await Promise.all(RECONHECEDOR_ARQUIVOS.map(u => caches.match(u)))).every(Boolean); } catch (e) { }
+        return reconhecedorGuardado;
+      }
+      function carregarReconhecedor() {
+        if (reconhecedorPromise) return reconhecedorPromise;
+        reconhecedorPromise = (async () => {
+          if (!window.ort) {
+            await new Promise((ok, falha) => {
+              const s = scriptDaCdn(ORT_URL);
+              s.onload = ok;
+              s.onerror = () => falha(new Error('Não deu pra carregar o reconhecedor de fotos.'));
+              document.head.appendChild(s);
+            });
+          }
+          const [wasm, modelo] = await Promise.all([ORT_WASM_URL, DINO_URL].map(async (u) => {
+            const r = await fetchConferido(u);
+            if (!r.ok) throw new Error('Não deu pra baixar o reconhecedor de fotos.');
+            return r.arrayBuffer();
+          }));
+          window.ort.env.wasm.numThreads = 1; // GitHub Pages não tem cross-origin isolation: sem threads
+          window.ort.env.wasm.wasmPaths = ORT_DIR; // o .mjs vem por import() (hash no import map)
+          window.ort.env.wasm.wasmBinary = wasm; // o .wasm já conferido pelo hash
+          const sessao = await window.ort.InferenceSession.create(modelo, { executionProviders: ['wasm'] });
+          window.ort.env.wasm.wasmBinary = null; // já compilado: não segura os ~15 MB
+          return sessao;
+        })();
+        reconhecedorPromise.catch(() => { reconhecedorPromise = null; }); // falhou: tenta de novo na próxima foto
+        return reconhecedorPromise;
+      }
+      // Pré-processamento do DINOv2: lado menor 256, recorte central 224, média/desvio do ImageNet. Reduz pela
+      // metade até perto do tamanho (de 4000 px pra 256 de uma vez serrilha). createImageBitmap gira pelo EXIF.
+      async function vetorDaFoto(blob) {
+        const sessao = await carregarReconhecedor();
+        const bmp = await createImageBitmap(blob);
+        const f = 256 / Math.min(bmp.width, bmp.height);
+        const w = Math.round(bmp.width * f), h = Math.round(bmp.height * f);
+        const tela = (cw, ch) => { const c = document.createElement('canvas'); c.width = cw; c.height = ch; return c; };
+        let src = bmp, sw = bmp.width, sh = bmp.height;
+        while (sw / 2 >= w) {
+          const m = tela(Math.round(sw / 2), Math.round(sh / 2)), gm = m.getContext('2d');
+          gm.imageSmoothingQuality = 'high';
+          gm.drawImage(src, 0, 0, m.width, m.height);
+          src = m; sw = m.width; sh = m.height;
+        }
+        const c = tela(224, 224), g = c.getContext('2d');
+        g.imageSmoothingQuality = 'high';
+        g.drawImage(src, -Math.floor((w - 224) / 2), -Math.floor((h - 224) / 2), w, h);
+        if (bmp.close) bmp.close();
+        const px = g.getImageData(0, 0, 224, 224).data, n = 224 * 224, dados = new Float32Array(3 * n);
+        const M = [0.485, 0.456, 0.406], D = [0.229, 0.224, 0.225];
+        for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) dados[k * n + i] = (px[i * 4 + k] / 255 - M[k]) / D[k];
+        const saida = await sessao.run({ pixel_values: new window.ort.Tensor('float32', dados, [1, 3, 224, 224]) });
+        return quantizarVetor(saida.last_hidden_state.data.slice(0, VETOR_DIM)); // 1º token = o da imagem inteira (int8)
+      }
+      // ---- índice (do servidor; cópia no aparelho pra funcionar sem internet)
+      const indiceFotosOp = (modo, fazer) => idbOp('cortag-vetores', 'dados', 'id', modo, fazer);
+      // os vetores decodificados só na 1ª foto (status e preparo, que todo aparelho roda, só contam)
+      function itensDoIndice(idx) {
+        if (!idx._itens) idx._itens = idx.vetores.map(x => ({ c: x.c, v: vetorNormalizado(vetorDeBase64(x.v)) }));
+        return idx._itens;
+      }
+      function lerIndiceFotos() {
+        if (indiceFotos) return Promise.resolve(indiceFotos);
+        if (!indiceFotosPromise) {
+          indiceFotosPromise = (async () => {
+            try {
+              const reg = await indiceFotosOp('readonly', s => s.get('indice'));
+              if (reg && reg.modelo === MODELO_VETOR && Array.isArray(reg.vetores) && !indiceFotos) indiceFotos = reg;
+            } catch (e) { }
+            indiceFotosPromise = null;
+            return indiceFotos;
+          })();
+        }
+        return indiceFotosPromise;
+      }
+      // Versão nova no servidor: baixa só o que mudou desde a última (?desde=); o índice inteiro só na 1ª vez
+      // ou quando a contagem não fecha (vetor apagado no servidor: foto retirada, foto de loja antiga)
+      async function atualizarIndiceFotos() {
+        const atual = await lerIndiceFotos();
+        const st = await apiFetch('/api/produto-vetores/versao');
+        if (!st || st.modelo !== MODELO_VETOR) return atual; // app e servidor em versões diferentes
+        if (atual && atual.versao === st.versao) return atual;
+        let vetores = null;
+        if (atual && atual.ultimo && atual.vetores) {
+          const mudou = await apiFetch(`/api/produto-vetores?desde=${atual.ultimo}`);
+          if (mudou && mudou.modelo === MODELO_VETOR && Array.isArray(mudou.ids)) {
+            const existem = new Set(mudou.ids); // o que o servidor apagou sai daqui também
+            const porId = new Map(atual.vetores.filter(x => existem.has(x.id)).map(x => [x.id, x]));
+            for (const x of mudou.vetores || []) porId.set(x.id, x);
+            if (porId.size === st.total) vetores = [...porId.values()];
+          }
+        }
+        if (!vetores) {
+          const lista = st.total ? await apiFetch('/api/produto-vetores') : { modelo: MODELO_VETOR, vetores: [] };
+          if (!lista || lista.modelo !== MODELO_VETOR) return atual;
+          vetores = lista.vetores || [];
+        }
+        const reg = { id: 'indice', modelo: MODELO_VETOR, versao: st.versao, ultimo: st.ultimo, vetores };
+        try { await indiceFotosOp('readwrite', s => s.put(reg)); } catch (e) { }
+        indiceFotos = reg;
+        return indiceFotos;
+      }
+      // Em segundo plano (depois das miniaturas, e ao abrir o "Pela etiqueta"): índice novo e, com ele não vazio,
+      // os arquivos do reconhecedor (o sw.js guarda). Só com o service worker ativo: sem ele não fica guardado
+      // e baixaria 39 MB a cada abertura.
+      async function prepararReconhecedor(agora) {
+        if (!RECONHECEDOR_RODA || preparandoReconhecedor || typeof caches === 'undefined' || navigator.onLine === false || !getStoredToken()) return;
+        preparandoReconhecedor = true;
+        try {
+          let idx;
+          try { idx = await atualizarIndiceFotos(); } catch (e) { idx = await lerIndiceFotos(); }
+          if (!idx || !idx.vetores.length || await reconhecedorNoAparelho()) return;
+          if (!(navigator.serviceWorker && navigator.serviceWorker.controller) || reconhecedorNaoGuardou) return;
+          if (!agora && esperandoWifiPraBaixar(true)) return;
+          for (const u of RECONHECEDOR_ARQUIVOS) {
+            const r = await fetchConferido(u);
+            if (!r.ok) return;
+            const leitor = r.body.getReader(); // lê até o fim sem juntar na memória: quem guarda é o sw.js
+            while (!(await leitor.read()).done);
+          }
+          // o sw.js ainda é o da versão anterior (sem estes arquivos na LIBS): não guardou; não baixa de novo
+          // nesta sessão (o novo assume logo, skipWaiting)
+          reconhecedorNaoGuardou = !(await reconhecedorNoAparelho());
+        } catch (e) { } finally {
+          preparandoReconhecedor = false;
+          atualizarStatusReconhecedor();
+        }
+      }
+      // Foto da etiqueta (JPEG base64) -> { vetor, cands: [{ c, s }] }; null sem reconhecedor/índice ou se demorar
+      async function parecidosDaFoto(b64) {
+        try {
+          const idx = await lerIndiceFotos();
+          if (!idx || !idx.vetores.length || !(await reconhecedorNoAparelho())) return null;
+          if (inferindo) return null; // a foto anterior ainda roda: esta vai só pela leitura da etiqueta
+          const foto = new Blob([Uint8Array.from(atob(b64), ch => ch.charCodeAt(0))], { type: 'image/jpeg' });
+          inferindo = true;
+          const rodando = vetorDaFoto(foto).finally(() => { inferindo = false; });
+          let prazo;
+          const vetor = await Promise.race([rodando, new Promise((ok, falha) => { prazo = setTimeout(() => falha(new Error('demorou')), RECONHECER_PRAZO_MS); })])
+            .finally(() => clearTimeout(prazo));
+          const cands = candidatosPorVetor(vetorNormalizado(vetor), itensDoIndice(idx), CANDIDATOS_GEMINI + 10).filter(x => productByCod(x.c)).slice(0, CANDIDATOS_GEMINI);
+          return { vetor, cands }; // vetor em int8 (o que vai pro servidor se a foto for confirmada)
+        } catch (e) { return null; }
+      }
+      // Foto de etiqueta com um produto só, confirmado na conferência: vira referência "da loja" desse código
+      // (no teste, uma foto de loja levou o produto certo de 45º pra 5º). Uma vez por foto; pela fila sem internet.
+      function aprenderFotoDaEtiqueta(incl) {
+        if (!lc || lc.modo !== 'etiqueta' || !lc.vetorFoto || !lc.linhas || lc.linhas.length !== 1 || incl.length !== 1) return;
+        // o que o vendedor achou em "Buscar outro produto" não ensina: só o que veio da leitura ou das sugestões
+        if (!(incl[0].sugeridos && incl[0].sugeridos.has(incl[0].cod))) return;
+        const c = incl[0].cod, q = lc.vetorFoto;
+        lc.vetorFoto = null;
+        if (indiceFotos && indiceFotos._itens) indiceFotos._itens.push({ c, v: vetorNormalizado(q) }); // já vale na próxima foto
+        apiFetch('/api/produto-vetores/loja', { method: 'POST', body: JSON.stringify({ modelo: MODELO_VETOR, c, v: base64DeVetor(q) }) },
+          { tipo: 'vetor-foto', descricao: 'Foto de etiqueta (reconhecimento por foto)' }).catch(() => { });
+      }
+      async function atualizarStatusReconhecedor() {
+        const el = document.getElementById('apReconhec'), sub = document.getElementById('apReconhecSub');
+        if (!el) return;
+        const itens = (await lerIndiceFotos() || { vetores: [] }).vetores;
+        const fotos = itens.length;
+        const noAparelho = await reconhecedorNoAparelho();
+        const daLoja = itens.filter(x => x.o === 'loja').length;
+        if (!fotos) marcarStatus(el, 'Índice ainda não gerado', 'cinza');
+        else if (noAparelho) marcarStatus(el, '✓ Pronto', 'ok');
+        else marcarStatus(el, preparandoReconhecedor ? 'Baixando…' : `Baixa no Wi-Fi (~${RECONHECEDOR_MB} MB)`, 'cinza');
+        if (sub) {
+          sub.textContent = fotos ? `${fotos.toLocaleString('pt-BR')} fotos no índice${daLoja ? ` (${daLoja.toLocaleString('pt-BR')} de etiquetas)` : ''}` : '';
+          sub.classList.toggle('hidden', !fotos);
+        }
+      }
+      // Painel (admin): vetor de cada foto do catálogo que ainda não está no índice (ou foi trocada), calculado
+      // aqui a partir da miniatura e enviado aos lotes
+      async function gerarIndiceDeFotos() {
+        const btn = document.getElementById('apGerarIndiceBtn'), msg = document.getElementById('apGerarIndiceMsg');
+        const aviso = (t, tipo) => { msg.innerHTML = `<div class="ap-msg${tipo ? ' ' + tipo : ''}">${escapeHtml(t)}</div>`; };
+        btn.disabled = true;
+        try {
+          aviso(await reconhecedorNoAparelho() ? 'Carregando o reconhecedor…' : `Baixando o reconhecedor (~${RECONHECEDOR_MB} MB, uma vez)…`);
+          await carregarReconhecedor();
+          const idx = await atualizarIndiceFotos();
+          const feito = new Map((idx ? idx.vetores : []).filter(x => x.o === 'catalogo').map(x => [x.c, String(x.f)]));
+          const pendentes = Object.keys(FOTOS_PRODUTO).filter(c => feito.get(c) !== String(FOTOS_PRODUTO[c]));
+          if (!pendentes.length) { aviso(`✓ Índice em dia: ${feito.size.toLocaleString('pt-BR')} fotos`, 'success'); return; }
+          let lote = [], feitos = 0, semFoto = 0;
+          const enviar = async () => {
+            if (!lote.length) return;
+            await apiFetch('/api/produto-vetores/catalogo', { method: 'POST', body: JSON.stringify({ modelo: MODELO_VETOR, vetores: lote }) });
+            lote = [];
+          };
+          let ilegiveis = 0;
+          for (const c of pendentes) {
+            const blob = await blobDaFoto(c, true);
+            if (!blob) { semFoto++; continue; }
+            let v;
+            try { v = await vetorDaFoto(blob); } catch (e) { ilegiveis++; continue; } // foto que o navegador não abre: segue
+            lote.push({ c, f: Number(FOTOS_PRODUTO[c]), v: base64DeVetor(v) });
+            feitos++;
+            if (lote.length >= 200) await enviar(); // o máximo por pedido do servidor
+            if (feitos % 10 === 0) aviso(`Calculando… ${feitos.toLocaleString('pt-BR')} de ${pendentes.length.toLocaleString('pt-BR')}`);
+          }
+          await enviar();
+          await atualizarIndiceFotos();
+          aviso(`✓ ${feitos.toLocaleString('pt-BR')} foto${feitos === 1 ? '' : 's'} no índice${semFoto ? ` · ${semFoto} sem foto baixada (sem internet?)` : ''}${ilegiveis ? ` · ${ilegiveis} que não deu pra abrir` : ''}`, 'success');
+        } catch (e) {
+          aviso(e.message || 'Erro ao gerar o índice.', 'error');
+        } finally {
+          btn.disabled = false;
+          atualizarStatusReconhecedor();
+        }
       }
 
       // ---- lista guardada pra ler quando a internet voltar (IndexedDB: fotos não cabem no localStorage)
@@ -33020,8 +33449,18 @@
           document.getElementById('lcTexto').addEventListener('input', (e) => { if (lc) lc.texto = e.target.value; });
           return;
         }
+        if (lc.fase === 'etiqueta') {
+          titulo.textContent = 'Pela etiqueta';
+          sub.textContent = lc.destino === 'lev' ? 'soma no estoque do levantamento' : (state.levCliente ? state.levCliente.nome : '');
+          corpo.innerHTML = `<p class="lcDica">Tire a foto de perto, com a etiqueta da embalagem inteira e sem reflexo. O app acha o produto e você confere antes de ${lc.destino === 'lev' ? 'somar no levantamento' : 'entrar no orçamento'}.</p>
+            <div class="lcFontes"><button type="button" class="lcFonte" id="lcEtiquetaFotoBtn"><span aria-hidden="true">📷</span>Tirar foto</button></div>
+            <p class="lcNota">Precisa de internet. Sem sinal, use o código de barras ou a busca pelo nome.</p>
+            ${RECONHECEDOR_RODA && indiceFotos && indiceFotos.vetores.length && !reconhecedorGuardado ? `<p class="lcNota">Reconhecimento por foto (ajuda a IA e sugere sem internet): ${preparandoReconhecedor ? 'baixando…' : `baixa sozinho no Wi-Fi · <button type="button" class="lcLink" id="lcBaixarReconhecBtn">baixar agora (~${RECONHECEDOR_MB} MB)</button>`}</p>` : ''}`;
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
+          return;
+        }
         if (lc.fase === 'lendo') {
-          titulo.textContent = 'Lendo a lista';
+          titulo.textContent = lc.modo === 'etiqueta' ? 'Lendo a etiqueta' : 'Lendo a lista';
           corpo.innerHTML = `<div class="lcLendo"><span class="lcGira" aria-hidden="true"></span><b>${escapeHtml(lc.msg || 'Lendo…')}</b>${lc.sub ? `<p>${escapeHtml(lc.sub)}</p>` : ''}</div>`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
           return;
@@ -33029,6 +33468,10 @@
         if (lc.fase === 'erroLeitura') {
           titulo.textContent = 'Não deu pra ler';
           corpo.innerHTML = `<div class="ap-msg error">${escapeHtml(lc.erro || 'Erro ao ler a lista.')}</div>`;
+          if (lc.modo === 'etiqueta') {
+            rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>${lc.imagens ? '<button type="button" class="restoreBtn" id="lcTentarBtn">Tentar de novo</button>' : ''}<button type="button" class="btnPrimary" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
+            return;
+          }
           rodape.innerHTML = lc.imagens
             ? `<button type="button" class="restoreBtn" id="lcGuardarBtn">Guardar e ler depois</button><button type="button" class="btnPrimary" id="lcTentarBtn">Tentar de novo</button>`
             : `<button type="button" class="restoreBtn" id="lcVoltarBtn">Voltar</button>`;
@@ -33054,10 +33497,12 @@
           return;
         }
         // conferir
-        const praLev = lc.destino === 'lev'; // falas do levantamento por voz
-        titulo.textContent = praLev ? 'Conferir falas' : 'Conferir lista';
+        const praLev = lc.destino === 'lev'; // falas do levantamento por voz ou etiqueta no Levantamento
+        const etiqueta = lc.modo === 'etiqueta', falas = praLev && !etiqueta;
+        titulo.textContent = etiqueta ? 'Conferir etiqueta' : praLev ? 'Conferir falas' : 'Conferir lista';
         const ls = lc.linhas;
-        sub.textContent = lc.rotulo || `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`;
+        sub.textContent = lc.rotulo || (etiqueta ? `${ls.length} produto${ls.length === 1 ? '' : 's'} lido${ls.length === 1 ? '' : 's'} na foto${praLev ? ' · soma no estoque' : ''}`
+          : `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`);
         const escolher = [], nao = [], ajustadas = [], prontas = [];
         ls.forEach((l, i) => {
           if (l.estado === 'escolher') escolher.push(i);
@@ -33069,7 +33514,7 @@
         const resumoProntas = prontas.map(i => { const p = productByCod(ls[i].cod); return `${p ? p.n : ls[i].cod} ×${ls[i].qtd}`; }).join(' · ');
         const outroSugerido = sug && !confere
           ? `<button type="button" class="lcSugerido" id="lcUsarSugeridoBtn"><span>A lista parece ser de <b>${escapeHtml(sug.cliente.nome)}</b> (${escapeHtml(porQue)})</span><em>Usar</em></button>` : '';
-        const descartarTodas = praLev ? `<div class="lcDescartarTodas"><button type="button" class="lcLink" id="lcDescartarTodasBtn">${ls.length === 1 ? 'Descartar a fala' : `Descartar todas as ${ls.length} falas`}</button></div>` : '';
+        const descartarTodas = falas ? `<div class="lcDescartarTodas"><button type="button" class="lcLink" id="lcDescartarTodasBtn">${ls.length === 1 ? 'Descartar a fala' : `Descartar todas as ${ls.length} falas`}</button></div>` : '';
         corpo.innerHTML = descartarTodas + outroSugerido + secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
           + secao('nao', 'Não achei', nao, htmlLinhaNaoAchei)
           + secao('ajustada', 'Quantidade ajustada', ajustadas, htmlLinhaPronta)
@@ -33084,6 +33529,12 @@
           // "Pra conferir" da voz: o que não for pro levantamento é descartado junto, e sem nada escolhido o
           // botão descarta tudo (antes ficava desligado e a lista não saía mais, relato do usuário, 10/2026)
           const fora = ls.length - incl.length;
+          if (etiqueta) { // etiqueta não fica guardada: fechar = desistir dela
+            rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento</button>
+              <button type="button" class="restoreBtn" id="lcEtiquetaFotoBtn">${incl.length ? 'Pôr e tirar outra foto' : 'Tirar outra foto'}</button>`;
+            corpo.scrollTop = rolagem;
+            return;
+          }
           const rotulo = !incl.length ? `Descartar ${ls.length} fala${ls.length === 1 ? '' : 's'}`
             : `Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento${fora ? ` e descartar ${fora}` : ''}`;
           rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn">${rotulo}</button>
@@ -33101,6 +33552,14 @@
       function porFalasNoLevantamento(incl) {
         for (const l of incl) somarNoLevantamento(l.cod, l.campo, l.qtd);
         const fora = lc.linhas.length - incl.length;
+        if (lc.modo === 'etiqueta') { // as falas pendentes da voz não são desta conferência
+          aprenderFotoDaEtiqueta(incl);
+          saveLevSurvey();
+          fecharListaCliente();
+          renderLevList();
+          showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
+          return;
+        }
         gravarPendentesVoz([]);
         saveLevSurvey();
         fecharListaCliente();
@@ -33114,9 +33573,11 @@
         if (!incl.length) return;
         for (const l of incl) addToCart(l.cod, l.qtd, true);
         const fora = lc.linhas.filter(l => !l.cod || l.fora).map(l => l.item.texto);
+        const deOnde = lc.modo === 'etiqueta' ? 'da etiqueta' : 'da lista'; // antes de fechar (lc vira null)
+        aprenderFotoDaEtiqueta(incl);
         if (lc.guardadaId) await apagarListaGuardada(lc.guardadaId);
         fecharListaCliente();
-        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} da lista no orçamento${fora.length ? ` · ficou de fora: ${fora.slice(0, 3).join(', ')}${fora.length > 3 ? '…' : ''}` : ''}`, 'longo');
+        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} ${deOnde} no orçamento${fora.length ? ` · ficou de fora: ${fora.slice(0, 3).join(', ')}${fora.length > 3 ? '…' : ''}` : ''}`, 'longo');
         renderResults();
         openDrawer();
       }
@@ -33156,6 +33617,11 @@
         const corpo = document.getElementById('lcCorpo');
         const fotoInput = document.getElementById('lcFotoInput'), pdfInput = document.getElementById('lcPdfInput');
         document.getElementById('colarListaBtn').addEventListener('click', abrirListaCliente);
+        const etiquetaInput = document.getElementById('lcEtiquetaInput');
+        document.getElementById('etiquetaPedBtn').addEventListener('click', () => abrirEtiqueta(null));
+        document.getElementById('apGerarIndiceBtn').addEventListener('click', gerarIndiceDeFotos);
+        document.getElementById('levEtiquetaBtn').addEventListener('click', () => abrirEtiqueta('lev'));
+        etiquetaInput.addEventListener('change', () => { const f = etiquetaInput.files; if (f && f.length && lc) lcFotosEscolhidas(f); etiquetaInput.value = ''; });
         document.getElementById('listaGuardadaFaixa').addEventListener('click', abrirListasGuardadas);
         document.getElementById('lcFecharBtn').addEventListener('click', fecharListaCliente);
         document.getElementById('lcParaBtn').addEventListener('click', async () => {
@@ -33187,6 +33653,28 @@
             return;
           }
           if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
+          if (t.id === 'lcBaixarReconhecBtn') {
+            showToast(`Baixando o reconhecimento por foto (~${RECONHECEDOR_MB} MB) · vale a partir da próxima foto`);
+            prepararReconhecedor(true).then(() => renderListaCliente());
+            renderListaCliente();
+            return;
+          }
+          if (t.id === 'lcEtiquetaFotoBtn') {
+            // no Levantamento, o que já foi conferido soma antes da próxima foto (não se perde); tudo síncrono:
+            // a câmera só abre dentro do toque
+            const conferidos = lc.fase === 'conferir' && lc.destino === 'lev' ? lcIncluidas() : [];
+            if (conferidos.length) {
+              aprenderFotoDaEtiqueta(conferidos);
+              for (const l of conferidos) somarNoLevantamento(l.cod, l.campo, l.qtd);
+              saveLevSurvey();
+              renderLevList();
+              showToast(`${conferidos.length} ite${conferidos.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
+            }
+            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, opcoesPelaFoto: null, rotulo: null, sugerido: null, pistas: null };
+            renderListaCliente();
+            etiquetaInput.click();
+            return;
+          }
           if (t.id === 'lcPdfBtn') { pdfInput.click(); return; }
           if (t.id === 'lcLerBtn') { lerTextoDaLista(document.getElementById('lcTexto').value, 'texto'); return; }
           if (t.id === 'lcTentarBtn') { lerImagensDaLista(lc.imagens, lc.origemImagem || 'foto'); return; }

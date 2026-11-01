@@ -780,6 +780,23 @@ CREATE TABLE IF NOT EXISTS produto_fotos (
 -- na primeira vez que o app pede (routes/lib/miniaturaFoto.js); trocar a foto zera.
 ALTER TABLE produto_fotos ADD COLUMN IF NOT EXISTS miniatura BYTEA;
 
+-- Vetores das fotos pro "📷 Pela etiqueta" (11/2026, routes/produtoVetores.js): o celular roda o
+-- DINOv2-small (Apache 2.0) e acha os ~30 produtos de foto mais parecida, que vão pro Gemini escolher.
+-- 'catalogo' = da foto do produto (gerado pelo admin no Painel, um por código e modelo); 'loja' = foto
+-- de etiqueta que o vendedor confirmou (até 8 por código). vetor = 384 int8 (escala por vetor).
+CREATE TABLE IF NOT EXISTS produto_vetores (
+  id SERIAL PRIMARY KEY,
+  codigo_sku TEXT NOT NULL,
+  origem TEXT NOT NULL CHECK (origem IN ('catalogo', 'loja')),
+  modelo TEXT NOT NULL,
+  vetor BYTEA NOT NULL,
+  foto_versao BIGINT,
+  criado_por INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_produto_vetores_catalogo ON produto_vetores (codigo_sku, modelo) WHERE origem = 'catalogo';
+CREATE INDEX IF NOT EXISTS idx_produto_vetores_sku ON produto_vetores (codigo_sku, modelo);
+
 -- Ocorrência no Pós-Vendas (botão "Abrir ocorrência" no card do pedido oficial
 -- com NF, routes/ocorrencias.js). O e-mail sai do celular do vendedor (o app só
 -- monta o texto e as fotos); aqui fica só o registro, gravado quando ele confirma
@@ -835,4 +852,5 @@ ALTER TABLE contas_salesforce ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reativacao_alvos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produto_fotos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE produto_vetores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ocorrencias_pos_venda ENABLE ROW LEVEL SECURITY;

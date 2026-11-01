@@ -126,13 +126,30 @@ const imagemLimiter = rateLimit({
   keyGenerator: (req) => String(req.usuario?.id || req.ip),
   message: { erro: 'Muitas fotos lidas em pouco tempo — espera uns minutos e tenta de novo.' },
 });
+// Etiqueta (Levantamento: uma foto por produto) tem limite próprio, maior: 25 produtos de uma gôndola
+// estourariam o da lista (achado do revisor-cortag). A cota do Gemini grátis é o teto de verdade.
+const etiquetaLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.usuario?.id || req.ip),
+  message: { erro: 'Muitas etiquetas lidas em pouco tempo — espera uns minutos ou use o código de barras.' },
+});
+// O modo vem do app: o teto de 60 vale pra todo pedido do usuário (lista e etiqueta juntas), e a lista
+// do cliente ainda tem o dela, de 20 (mandar modo 'etiqueta' não passa do teto)
+const limiteDaImagem = (req, res, next) => etiquetaLimiter(req, res, (erro) => {
+  if (erro || (req.body && req.body.modo === 'etiqueta')) return next(erro);
+  imagemLimiter(req, res, next);
+});
 const MAX_IMAGENS = 3;
 const MAX_BASE64_POR_IMAGEM = 4 * 1024 * 1024; // ~3 MB de imagem; o app manda ~300 KB
 const MAX_ITENS_DA_IMAGEM = 80;
 const TIPOS_IMAGEM = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-// Resposta do Gemini -> [{ texto, quantidade, unidade }] limpo (nada além disso passa)
-function itensDaRespostaGemini(resultado) {
+// Resposta do Gemini -> [{ texto, quantidade, unidade }] limpo (nada além disso passa). Com
+// candidatos (etiqueta), "codigo" só passa se for um deles: código inventado não entra.
+function itensDaRespostaGemini(resultado, codigosPermitidos = new Set()) {
   const lista = Array.isArray(resultado) ? resultado : (resultado && Array.isArray(resultado.itens) ? resultado.itens : []);
   const itens = [];
   for (const it of lista) {
@@ -142,13 +159,48 @@ function itensDaRespostaGemini(resultado) {
     const q = Number(String(it.quantidade ?? '').replace(',', '.'));
     const quantidade = q > 0 && q <= 99999 ? Math.round(q * 1000) / 1000 : null;
     const unidade = ['un', 'cx', 'pct'].includes(it.unidade) ? it.unidade : null;
-    itens.push({ texto, quantidade, unidade });
+    const codigo = codigosPermitidos.has(String(it.codigo ?? '')) ? String(it.codigo) : null;
+    itens.push(codigo ? { texto, quantidade, unidade, codigo } : { texto, quantidade, unidade });
     if (itens.length >= MAX_ITENS_DA_IMAGEM) break;
   }
   return itens;
 }
 
-router.post('/itens-da-imagem', imagemLimiter, async (req, res) => {
+const PROMPT_ETIQUETA = `As imagens são fotos tiradas numa loja da EMBALAGEM (cartela, blister, caixa ou etiqueta) de produtos de ferramentas para construção civil, quase sempre da marca Cortag.
+
+Para cada produto cuja embalagem dá pra ler, devolva um item:
+- "texto": o que identifica o produto, em português, como está impresso: o tipo (ex.: "disco de corte diamantado", "lâmina de serra circular"), a linha/modelo (ex.: "turbo", "porcelanato", "turbo flex", "segmentado eco", "contínuo"), o material indicado quando faz parte do nome (ex.: "madeira"), a medida principal (ex.: "110 mm") e o número de dentes se houver. Se aparecer impresso um código Cortag de 5 dígitos (começa com 6) ou um código de barras com os números legíveis, inclua no fim. Não inclua furo, rotação (RPM), norma (EN), textos em inglês/espanhol, lote nem frases de uso.
+- "quantidade": null
+- "unidade": null
+
+Um item por produto diferente (embalagens iguais lado a lado = um item só). Ignore embalagens que não dá pra ler e produtos de outras marcas quando a marca está visível. Não invente o que não está escrito.
+
+Responda SOMENTE com um JSON válido neste formato:
+{"itens": [{"texto": "disco de corte diamantado turbo 110 mm", "quantidade": null, "unidade": null}], "cnpj": null}`;
+
+const MAX_CANDIDATOS = 40;
+const { CODIGO_SKU_REGEX: CODIGO_CANDIDATO } = require('./lib/vetoresFoto');
+// [{ c, n }] -> limpo; ausente = []; não-lista ou mais de 40 = null. Candidato inválido só sai da lista
+// (não derruba a leitura da etiqueta)
+function candidatosDaEtiqueta(lista) {
+  if (lista == null) return [];
+  if (!Array.isArray(lista) || lista.length > MAX_CANDIDATOS) return null;
+  const vistos = new Set(), out = [];
+  for (const x of lista) {
+    const c = String((x && x.c) ?? ''), n = String((x && x.n) ?? '').replace(/[\r\n"]+/g, ' ').trim().slice(0, 120);
+    if (CODIGO_CANDIDATO.test(c) && n && !vistos.has(c)) { vistos.add(c); out.push({ c, n }); }
+  }
+  return out;
+}
+function textoDosCandidatos(candidatos) {
+  if (!candidatos.length) return '';
+  return `
+
+Pela foto, o produto deve ser um destes do catálogo (código | nome). Se a etiqueta for de um deles, inclua no item "codigo" com o código da lista; se não for nenhum, não inclua "codigo" (o "texto" continua obrigatório). Não escolha só pela aparência: confira o tipo, a linha e a medida impressos.
+${candidatos.map(x => `${x.c} | ${x.n}`).join('\n')}`;
+}
+
+router.post('/itens-da-imagem', limiteDaImagem, async (req, res) => {
   const imagens = req.body && req.body.imagens;
   if (!Array.isArray(imagens) || !imagens.length || imagens.length > MAX_IMAGENS) {
     return res.status(422).json({ erro: `Envie de 1 a ${MAX_IMAGENS} imagens.` });
@@ -161,7 +213,13 @@ router.post('/itens-da-imagem', imagemLimiter, async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ erro: 'Leitura de foto não configurada — falta GEMINI_API_KEY no servidor.' });
   const modelo = modeloGemini();
-  const prompt = `As imagens são de uma lista de compras, pedido ou orçamento de ferramentas para construção civil que um cliente mandou ao vendedor (pode ser foto de papel, print de tela ou PDF escaneado; pode ser de outra marca).
+  // "📷 Pela etiqueta" (Pedido e Levantamento, 11/2026): foto da EMBALAGEM de um produto na loja.
+  // A IA só lê a etiqueta; o produto sai da busca do app e passa pela mesma conferência da lista.
+  const etiqueta = req.body.modo === 'etiqueta';
+  // candidatos: os produtos de foto mais parecida, calculados no celular (routes/produtoVetores.js)
+  const candidatos = etiqueta ? candidatosDaEtiqueta(req.body.candidatos) : [];
+  if (candidatos === null) return res.status(422).json({ erro: 'Lista de produtos parecidos inválida.' });
+  const prompt = etiqueta ? PROMPT_ETIQUETA + textoDosCandidatos(candidatos) : `As imagens são de uma lista de compras, pedido ou orçamento de ferramentas para construção civil que um cliente mandou ao vendedor (pode ser foto de papel, print de tela ou PDF escaneado; pode ser de outra marca).
 
 Liste cada linha de PRODUTO, na ordem em que aparece. Para cada uma:
 - "texto": a descrição do produto exatamente como está escrita, com medidas e o código se houver (sem preço, sem total)
@@ -188,7 +246,7 @@ Responda SOMENTE com um JSON válido neste formato:
     if (!resultado) return res.status(502).json({ erro: 'Não deu pra ler a foto agora — tenta de novo.' });
     // CNPJ da loja (o app sugere o cliente por ele); só 14 dígitos passam
     const cnpj = String((resultado && resultado.cnpj) || '').replace(/\D/g, '');
-    res.json({ itens: itensDaRespostaGemini(resultado), cnpj: cnpj.length === 14 ? cnpj : null });
+    res.json({ itens: itensDaRespostaGemini(resultado, new Set(candidatos.map(x => x.c))), cnpj: !etiqueta && cnpj.length === 14 ? cnpj : null });
   } catch (e) {
     console.error('Erro ao ler a imagem:', e.message);
     res.status(502).json({ erro: e.name === 'TimeoutError' ? 'A leitura da foto demorou demais — tenta de novo.' : 'Erro ao ler a foto.' });
@@ -196,3 +254,4 @@ Responda SOMENTE com um JSON válido neste formato:
 });
 
 module.exports = router;
+module.exports.PROMPT_ETIQUETA = PROMPT_ETIQUETA;
