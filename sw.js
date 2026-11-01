@@ -24,7 +24,8 @@
 // e um cache com nome parecido de um aparelho esquecido não pode ser reaproveitado.
 // v6 (10/2026): manifest.json com "share_target" (o app aparece no Compartilhar do WhatsApp no Android).
 // v7 (10/2026): tela de abertura nova com logo-abertura.png (precisa estar no cache pra abrir sem internet).
-const CACHE_VERSION = 'cortag-sw-v7';
+// v8 (11/2026): ícones do aviso no celular (badge-96.png e icon-notificacao-192.png, o "C" da Cortag).
+const CACHE_VERSION = 'cortag-sw-v8';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.
@@ -37,6 +38,8 @@ const STATIC_ASSETS = [
   './icon-512.png',
   './icon-512-maskable.png',
   './logo-abertura.png',
+  './badge-96.png',
+  './icon-notificacao-192.png',
 ];
 
 // O app e as páginas separadas, guardados já na instalação: o SW é registrado
@@ -322,8 +325,11 @@ self.addEventListener('push', (event) => {
     body: dados.texto || '',
     tag: dados.tag || 'cortag',
     renotify: false,
-    icon: './icon-192.png',
-    badge: './icon-192.png',
+    // badge = o ícone pequeno da barra de status do Android: o celular usa só a
+    // transparência da imagem (pinta tudo de uma cor). Com o icon-192.png (fundo
+    // branco, sem transparência) saía um quadrado branco/o ícone do Chrome.
+    icon: './icon-notificacao-192.png',
+    badge: './badge-96.png',
     data: { url: dados.url || './index.html#novidades' },
   }));
 });
