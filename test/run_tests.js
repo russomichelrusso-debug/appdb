@@ -4388,7 +4388,7 @@ async function main() {
         assert(false, 'etiqueta: trecho <motor-lista> não encontrado no index.html');
       } else {
         const porCodigoE = (c) => prodsE.find(p => p.c === c) || null;
-        const etiqueta = (texto) => ctxE.produtoDaLinhaLista(ctxE.linhaDaImagemLista({ texto, quantidade: 1, unidade: null }), { porCodigo: porCodigoE });
+        const etiqueta = (texto, comprados) => ctxE.produtoDaLinhaLista(ctxE.linhaDaImagemLista({ texto, quantidade: 1, unidade: null }), { porCodigo: porCodigoE, etiqueta: true, comprados });
         const casos = [
           ['lâmina de serra circular madeira 110 mm 24 dentes', '60864'],
           ['disco de corte diamantado porcelanato turbo 110 mm', '60863'],
@@ -4404,6 +4404,19 @@ async function main() {
         const amplo = etiqueta('disco porcelanato 110');
         assert(amplo.estado === 'escolher' && amplo.opcoes.some(p => p.c === '60863') && amplo.opcoes.some(p => p.c === '61314'),
           `etiqueta: texto que não descreve um nome inteiro continua pra escolher (${amplo.estado})`);
+        // o desempate é só da etiqueta: na lista do cliente/voz (sem ctx.etiqueta) o mesmo texto continua pra escolher
+        const naLista = ctxE.produtoDaLinhaLista(ctxE.linhaDaImagemLista({ texto: 'disco de corte diamantado porcelanato turbo 110 mm', quantidade: 1, unidade: null }), { porCodigo: porCodigoE });
+        assert(naLista.estado === 'escolher', `etiqueta: fora da etiqueta o desempate não vale (${naLista.estado})`);
+        // o histórico vem antes: o cliente que compra o PLUS fica com o PLUS
+        const doCliente = etiqueta('disco de corte diamantado porcelanato turbo 110 mm', new Set(['61314']));
+        assert(doCliente.estado === 'pronto' && doCliente.produto.c === '61314', `etiqueta: o que o cliente já compra vence o desempate (${doCliente.produto && doCliente.produto.c})`);
+        // número ou sigla do nome que não está escrito impede ("rodel 7" não é o "Ø7 X 80"; "cortador 750" não é o "HD-750 G2")
+        const ctxR = { DB: { products: [{ c: '60200', n: 'RODEL Ø7 X 80 mm', emb: 1 }, { c: '60201', n: 'RODEL Ø7 X 100 UNIVERSAL', emb: 1 },
+          { c: '61190', n: 'CORTADOR HD-750 G2', emb: 1 }, { c: '61191', n: 'CORTADOR SUPER 750', emb: 1 }] }, normalize: ctxE.normalize };
+        vmE.createContext(ctxR);
+        vmE.runInContext(trechoE('// <motor-busca>', '// </motor-busca>') + trechoE('// <motor-lista>', '// </motor-lista>'), ctxR);
+        const naoInteiro = ['rodel 7', 'cortador 750'].map(t => ctxR.produtoDaLinhaLista(ctxR.linhaDaImagemLista({ texto: t, quantidade: 1, unidade: null }), { porCodigo: () => null, etiqueta: true }));
+        assert(naoInteiro.every(r => r.estado !== 'pronto'), `etiqueta: número/sigla do nome que não foi lido não decide sozinho (${naoInteiro.map(r => r.estado + ':' + (r.produto ? r.produto.c : '')).join(', ')})`);
       }
     }
 

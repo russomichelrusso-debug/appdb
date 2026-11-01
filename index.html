@@ -14819,20 +14819,22 @@
           if (melhores.length) opcoes = [...melhores, ...opcoes.filter(p => !melhores.includes(p))];
         }
         if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
-        // empate em que só um nome não tem palavra além das escritas (etiqueta "disco de corte diamantado
-        // porcelanato turbo 110 mm" × o "... TURBO PORCELANATO PLUS 110 mm", foto real de 11/2026): a etiqueta
-        // diria o "plus", então vai o que ela descreve por inteiro
-        if (exato) {
-          const escritas = new Set(normalizarBusca(termo || '').split(' ').map(radicalBusca));
-          const sobra = (p) => p._tok.filter(w => w.length >= 3 && !ehNumeroBusca(w) && !PALAVRAS_LIGACAO.has(w) && !escritas.has(radicalBusca(w))).length;
-          const inteiros = opcoes.filter(p => sobra(p) === 0);
-          if (inteiros.length === 1) return pronto(inteiros[0]);
-        }
         const queCompra = opcoes.filter(p => comprados.has(p.c));
         // histórico do cliente (10/2026, pedido do usuário: "buscar sempre o histórico pra fazer o cruzamento"):
         // o único das opções que ele já compra vai pronto, também quando faltou palavra (o "eco", o "videa"),
         // desde que caiba no pacote pedido
         if (queCompra.length === 1 && (exato || cabe(queCompra[0]))) return pronto(queCompra[0]);
+        // Só na etiqueta (ctx.etiqueta): a embalagem traz o nome inteiro, então no empate vai o único nome que
+        // ela descreve por inteiro - nenhuma palavra (nem sigla de 2 letras, "HD") e nenhum número além dos
+        // impressos ("disco de corte diamantado porcelanato turbo 110 mm" = o 60863, não o "PORCELANATO PLUS";
+        // foto real de 11/2026). Na lista do cliente e na voz o texto é curto ("cortador 750", "rodel 7") e
+        // continua pra escolher (achado do revisor-cortag: 281 de 2.802 termos curtos mudariam)
+        if (exato && ctx && ctx.etiqueta) {
+          const escritas = new Set(normalizarBusca(termo || '').split(' ').map(radicalBusca));
+          const sobra = (p) => p._tok.filter(w => w.length >= 2 && !PALAVRAS_LIGACAO.has(w) && !escritas.has(radicalBusca(w))).length;
+          const inteiros = opcoes.filter(p => sobra(p) === 0);
+          if (inteiros.length === 1) return pronto(inteiros[0]);
+        }
         opcoes = [...queCompra, ...opcoes.filter(p => !comprados.has(p.c))];
         return { estado: 'escolher', produto: null, opcoes: opcoes.slice(0, 6), maisOpcoes: Math.max(0, opcoes.length - 6), medida };
       }
@@ -32739,7 +32741,7 @@
           if (lcVelha(g)) return;
         }
         const comprados = escolherSozinho ? compradosDoCliente(sugerido.cliente) : lcComprados();
-        const ctx = { comprados, porCodigo: findByExactCode }; // a mesma do leitor: EAN, DUN, zeros à esquerda
+        const ctx = { comprados, porCodigo: findByExactCode, etiqueta: !!(lc && lc.modo === 'etiqueta') }; // porCodigo: a mesma do leitor (EAN, DUN, zeros à esquerda)
         let ignoradas = 0;
         const linhas = [];
         for (const item of itens) {
@@ -32794,7 +32796,8 @@
         } catch (e) {
           if (lcVelha(g)) return;
           showToast('Não deu pra abrir essa imagem.', 'erro');
-          if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
+          // etiqueta não volta pra tela da lista (Colar texto/PDF): o modo e o destino dela seguiriam ligados
+          if (lc) { lc = lc.modo === 'etiqueta' ? { ...lc, fase: 'erroLeitura', erro: 'Não deu pra abrir essa foto. Tire outra.', imagens: null } : { ...lc, fase: 'entrada' }; renderListaCliente(); }
         }
       }
       // PDF com texto: lido aqui. PDF escaneado (só imagem): as 3 primeiras páginas viram foto.
@@ -33157,7 +33160,7 @@
           const fora = ls.length - incl.length;
           if (etiqueta) { // etiqueta não fica guardada: fechar = desistir dela
             rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento</button>
-              <button type="button" class="restoreBtn" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
+              <button type="button" class="restoreBtn" id="lcEtiquetaFotoBtn">${incl.length ? 'Pôr e tirar outra foto' : 'Tirar outra foto'}</button>`;
             corpo.scrollTop = rolagem;
             return;
           }
@@ -33276,7 +33279,21 @@
             return;
           }
           if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
-          if (t.id === 'lcEtiquetaFotoBtn') { lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null }; renderListaCliente(); etiquetaInput.click(); return; }
+          if (t.id === 'lcEtiquetaFotoBtn') {
+            // no Levantamento, o que já foi conferido soma antes da próxima foto (não se perde); tudo síncrono:
+            // a câmera só abre dentro do toque
+            const conferidos = lc.fase === 'conferir' && lc.destino === 'lev' ? lcIncluidas() : [];
+            if (conferidos.length) {
+              for (const l of conferidos) somarNoLevantamento(l.cod, l.campo, l.qtd);
+              saveLevSurvey();
+              renderLevList();
+              showToast(`${conferidos.length} ite${conferidos.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
+            }
+            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null };
+            renderListaCliente();
+            etiquetaInput.click();
+            return;
+          }
           if (t.id === 'lcPdfBtn') { pdfInput.click(); return; }
           if (t.id === 'lcLerBtn') { lerTextoDaLista(document.getElementById('lcTexto').value, 'texto'); return; }
           if (t.id === 'lcTentarBtn') { lerImagensDaLista(lc.imagens, lc.origemImagem || 'foto'); return; }

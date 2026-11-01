@@ -126,6 +126,17 @@ const imagemLimiter = rateLimit({
   keyGenerator: (req) => String(req.usuario?.id || req.ip),
   message: { erro: 'Muitas fotos lidas em pouco tempo — espera uns minutos e tenta de novo.' },
 });
+// Etiqueta (Levantamento: uma foto por produto) tem limite próprio, maior: 25 produtos de uma gôndola
+// estourariam o da lista (achado do revisor-cortag). A cota do Gemini grátis é o teto de verdade.
+const etiquetaLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => String(req.usuario?.id || req.ip),
+  message: { erro: 'Muitas etiquetas lidas em pouco tempo — espera uns minutos ou use o código de barras.' },
+});
+const limiteDaImagem = (req, res, next) => (req.body && req.body.modo === 'etiqueta' ? etiquetaLimiter : imagemLimiter)(req, res, next);
 const MAX_IMAGENS = 3;
 const MAX_BASE64_POR_IMAGEM = 4 * 1024 * 1024; // ~3 MB de imagem; o app manda ~300 KB
 const MAX_ITENS_DA_IMAGEM = 80;
@@ -160,7 +171,7 @@ Um item por produto diferente (embalagens iguais lado a lado = um item só). Ign
 Responda SOMENTE com um JSON válido neste formato:
 {"itens": [{"texto": "disco de corte diamantado turbo 110 mm", "quantidade": null, "unidade": null}], "cnpj": null}`;
 
-router.post('/itens-da-imagem', imagemLimiter, async (req, res) => {
+router.post('/itens-da-imagem', limiteDaImagem, async (req, res) => {
   const imagens = req.body && req.body.imagens;
   if (!Array.isArray(imagens) || !imagens.length || imagens.length > MAX_IMAGENS) {
     return res.status(422).json({ erro: `Envie de 1 a ${MAX_IMAGENS} imagens.` });
