@@ -14894,13 +14894,14 @@
         }
         return vocabularioLista.palavras;
       }
-      // achados da busca de reserva sem nenhum exato: na frente quem tem as palavras mais raras do termo
-      // (o "vidro" do 62796 diz mais que o "corte" que dezenas de discos têm)
+      // achados da busca sem as palavras fora do catálogo: KAEF por último, depois quem falta menos palavras e, no empate,
+      // quem tem as palavras mais raras do termo (o "vidro" do 62796 diz mais que o "corte" que dezenas de discos têm)
       function pelaPalavraRaraLista(achados, termo) {
         const voc = palavrasDoCatalogoLista();
         const rad = [...new Set(String(termo || '').split(' ').filter(w => w.length >= 3 && !ehNumeroBusca(w)).map(radicalBusca))].filter(r => voc.has(r));
         const peso = (x) => rad.reduce((s, r) => s + (x.p._n.includes(r) ? 1 / voc.get(r) : 0), 0); // no nome inteiro ("PORCELANATO/VIDRO" é uma palavra só)
-        return achados.map((x, i) => ({ x, i, w: peso(x) })).sort((a, b) => b.w - a.w || a.i - b.i).map(o => o.x);
+        return achados.map((x, i) => ({ x, i, w: peso(x) }))
+          .sort((a, b) => (!!a.x.p._kaef - !!b.x.p._kaef) || (a.x.nivel - b.x.nivel) || (b.w - a.w) || a.i - b.i).map(o => o.x);
       }
       // tira as palavras de 4+ letras que nenhum nome do catálogo tem, nem abreviada ("desempenadeira" fica: o catálogo
       // escreve "DESEMP."); números e palavras curtas ficam. Sobram ao menos 2 palavras, senão nada muda
@@ -14912,11 +14913,12 @@
           if (w.length < 4 || ehNumeroBusca(w) || PALAVRAS_LIGACAO.has(w)) return true;
           const r = radicalBusca(w);
           if (voc.has(r)) return true;
-          for (const v of voc) if (v.length >= 4 && (r.startsWith(v) || v.startsWith(r))) return true;
+          for (const v of voc.keys()) if (v.length >= 4 && (r.startsWith(v) || v.startsWith(r))) return true;
           return false;
         };
         const ficam = pal.filter(conhece);
-        return ficam.length >= 2 && ficam.length < pal.length ? ficam.join(' ') : termo;
+        const fortes = ficam.filter(w => w.length >= 3 && !ehNumeroBusca(w) && !PALAVRAS_LIGACAO.has(w)).length; // número e sigla não contam
+        return fortes >= 2 && ficam.length < pal.length ? ficam.join(' ') : termo;
       }
       function produtoDaLinhaLista(item, ctx) {
         const comprados = (ctx && ctx.comprados) || new Set();
@@ -14969,11 +14971,15 @@
           if (limpo !== termo) { const a2 = buscar(limpo); if (a2.length) { achados = a2; termoUsado = limpo; limpou = true; } }
           // e sem a palavra que nenhum nome do catálogo tem ("DIAMOND FORCE", o nome da linha na caixa; foto real de 11/2026):
           // ela nunca ajuda a achar
+          // nunca vai pronto: tirar a palavra pode ter tirado o atributo que o cliente pediu ("cortador hd 150 titanium")
           if (!achados.length) {
             const conhecidas = semPalavrasForaDoCatalogoLista(limpo);
-            if (conhecidas !== limpo) { const a3 = buscar(conhecidas); if (a3.length) { achados = a3; termoUsado = conhecidas; limpou = true; } }
+            const a3 = conhecidas !== limpo ? buscar(conhecidas) : [];
+            if (a3.length) {
+              const ops = pelaPalavraRaraLista(a3, conhecidas).map(x => x.p);
+              return { estado: 'escolher', produto: null, opcoes: ops.slice(0, 6), maisOpcoes: Math.max(0, ops.length - 6), medida };
+            }
           }
-          if (limpou && achados.length > 1 && !(achados[0].topo || achados[0].nivel === 0)) achados = pelaPalavraRaraLista(achados, termoUsado);
         }
         // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
         // "CUNHA SLIM 100PC"; "NIVELADOR 1,5MM ECO 50PCS": o ECO vem em C/500): tenta sem cada número

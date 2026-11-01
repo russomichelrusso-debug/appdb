@@ -1600,6 +1600,12 @@ Supabase, sem PR — não é mudança de código.
     sem nenhum achado, `semFuroNemPolegadaLista` (`<motor-lista>`) busca de novo sem "furo N mm" (só quando sobra outra medida em
     mm: em serra copo/broca o furo é o tamanho) e sem a fração logo depois de "N mm"; o achado assim nunca é `seguro` (não entra
     direto). Vale pra lista do cliente, etiqueta e voz.
+    **3º teste real (11/2026)**: etiqueta lida como "disco de corte diamantado porcelanato vidro diamond force 110 mm 62118" dava
+    "Não achei" ("Diamond Force" é o nome da linha na caixa; o 62118 não existe - o produto é o 62796, confirmado pelo usuário).
+    Ainda sem achado, `semPalavrasForaDoCatalogoLista` tira as palavras de 4+ letras que nenhum nome do catálogo tem (nem
+    abreviada: "titanium" fica pelo "TITAN"; vocabulário em `palavrasDoCatalogoLista`, "porcelanato/vidro" = duas) e o achado
+    vai **sempre pra escolher** (tirar a palavra pode tirar o atributo pedido), ordenado por `pelaPalavraRaraLista` (KAEF por
+    último, menos palavras faltando, palavra mais rara na frente: o "vidro" do 62796 antes dos turbo porcelanato).
   - **Reconhecimento por foto no aparelho** (11/2026, 2º PR): antes do Gemini, o celular calcula o vetor da foto com o **DINOv2-small
     int8** (Meta, **Apache 2.0**, 24 MB) no **onnxruntime-web 1.31.1** (15 MB de WebAssembly) e manda junto os **30 produtos de foto
     mais parecida** (`candidatos`, até 40, na rota da etiqueta): o Gemini escolhe dentro da lista e o servidor só devolve `codigo` que
