@@ -4608,7 +4608,8 @@
     }
 
     /* Lista do cliente (texto, foto ou PDF) - opção "C" dos mockups "Cortag · Lista colada do WhatsApp" */
-    #colarListaBtn.buscando {
+    #colarListaBtn.buscando,
+    #etiquetaPedBtn.buscando {
       display: none;
     }
 
@@ -10257,6 +10258,11 @@
       display: none;
     }
 
+    /* "📷 Pela etiqueta" no Levantamento: em toda tela (o .levLeitorBtn sozinho só aparece no tablet) */
+    .levEtiquetaBtn {
+      display: inline-flex;
+    }
+
     .modoLeitor.vozLev {
       padding-left: 16px;
       padding-right: 16px;
@@ -12160,6 +12166,7 @@
         <div class="hint" id="searchHint">Digite ao menos 2 caracteres para buscar.</div>
         <button type="button" class="mixInicialBtn" id="mixInicialBtn">✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>
         <button type="button" class="mixInicialBtn" id="colarListaBtn">📋 Colar lista do cliente <span>texto, foto ou PDF que ele mandou no WhatsApp</span></button>
+        <button type="button" class="mixInicialBtn" id="etiquetaPedBtn">📷 Pela etiqueta <span>foto da embalagem na loja: o app acha o produto pra você conferir</span></button>
         <button type="button" class="listaGuardadaFaixa hidden" id="listaGuardadaFaixa"></button>
       </div>
 
@@ -12306,6 +12313,15 @@
           <line x1="12" y1="19" x2="12" y2="23" />
         </svg>
         Contar por voz
+      </button>
+      <button type="button" class="levLeitorBtn levEtiquetaBtn" id="levEtiquetaBtn"
+        aria-label="Pela etiqueta: foto da embalagem, o app acha o produto e você confere antes de somar no estoque">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+          stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 8a2 2 0 012-2h2l2-2h6l2 2h2a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+          <circle cx="12" cy="13" r="4" />
+        </svg>
+        Pela etiqueta
       </button>
       <button type="button" class="levLeitorBtn" id="levLeitorBtn"
         aria-label="Usar o celular como leitor: o levantamento fica nesta tela e cada código lido no celular soma aqui">
@@ -12883,6 +12899,7 @@
         <div class="lcRodape" id="lcRodape"></div>
       </div>
       <input type="file" id="lcFotoInput" accept="image/*" multiple style="display:none" aria-hidden="true" tabindex="-1">
+      <input type="file" id="lcEtiquetaInput" accept="image/*" capture="environment" style="display:none" aria-hidden="true" tabindex="-1">
       <input type="file" id="lcPdfInput" accept="application/pdf,.pdf" style="display:none" aria-hidden="true" tabindex="-1">
     </div>
 
@@ -14802,6 +14819,15 @@
           if (melhores.length) opcoes = [...melhores, ...opcoes.filter(p => !melhores.includes(p))];
         }
         if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
+        // empate em que só um nome não tem palavra além das escritas (etiqueta "disco de corte diamantado
+        // porcelanato turbo 110 mm" × o "... TURBO PORCELANATO PLUS 110 mm", foto real de 11/2026): a etiqueta
+        // diria o "plus", então vai o que ela descreve por inteiro
+        if (exato) {
+          const escritas = new Set(normalizarBusca(termo || '').split(' ').map(radicalBusca));
+          const sobra = (p) => p._tok.filter(w => w.length >= 3 && !ehNumeroBusca(w) && !PALAVRAS_LIGACAO.has(w) && !escritas.has(radicalBusca(w))).length;
+          const inteiros = opcoes.filter(p => sobra(p) === 0);
+          if (inteiros.length === 1) return pronto(inteiros[0]);
+        }
         const queCompra = opcoes.filter(p => comprados.has(p.c));
         // histórico do cliente (10/2026, pedido do usuário: "buscar sempre o histórico pra fazer o cruzamento"):
         // o único das opções que ele já compra vai pronto, também quando faltou palavra (o "eco", o "videa"),
@@ -15146,6 +15172,7 @@
         list.classList.remove('emTabela');
         document.getElementById('mixInicialBtn').classList.toggle('buscando', q.trim().length >= 2);
         document.getElementById('colarListaBtn').classList.toggle('buscando', q.trim().length >= 2);
+        document.getElementById('etiquetaPedBtn').classList.toggle('buscando', q.trim().length >= 2);
         // ✕ da busca também quando o app limpa o campo sozinho (código que entrou na lista de preços)
         const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
         if (limpar) limpar.classList.toggle('hidden', !q);
@@ -32738,8 +32765,10 @@
       function lcEscolher(l, p) {
         if (!p._tok) prepararProdutoParaBusca(p);
         const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
-        // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem
-        const q = l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
+        // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem.
+        // Etiqueta: a foto não diz quantidade - 1 no estoque (Levantamento) ou 1 embalagem (Pedido), sem aviso
+        const q = lc && lc.modo === 'etiqueta' ? { qtd: l.campo === 'qty' ? 1 : (p.emb > 0 ? p.emb : 1), ajuste: null }
+          : l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
       function lerTextoDaLista(texto, origem) {
@@ -32799,31 +32828,58 @@
           if (lc) { lc.fase = 'entrada'; renderListaCliente(); }
         }
       }
-      async function pedirLeituraDaImagem(imagens, signal) {
-        const r = await apiFetch('/api/assistente/itens-da-imagem', { method: 'POST', body: JSON.stringify({ imagens }), signal });
-        const cnpj = r && /^\d{14}$/.test(r.cnpj || '') && r.cnpj !== CORTAG_CNPJ_DIGITS ? r.cnpj : null;
-        return { itens: (r && Array.isArray(r.itens) ? r.itens : []).map(linhaDaImagemLista).filter(Boolean), cnpjs: cnpj ? [cnpj] : [] };
+      // modo 'etiqueta': foto da embalagem; a IA não lê quantidade, então o texto inteiro é o produto
+      async function pedirLeituraDaImagem(imagens, signal, modo) {
+        const etiqueta = modo === 'etiqueta';
+        const r = await apiFetch('/api/assistente/itens-da-imagem', { method: 'POST', body: JSON.stringify(etiqueta ? { imagens, modo } : { imagens }), signal });
+        const cnpj = !etiqueta && r && /^\d{14}$/.test(r.cnpj || '') && r.cnpj !== CORTAG_CNPJ_DIGITS ? r.cnpj : null;
+        const lidos = r && Array.isArray(r.itens) ? r.itens : [];
+        return { itens: lidos.map(it => linhaDaImagemLista(etiqueta ? { ...it, quantidade: 1, unidade: null } : it)).filter(Boolean), cnpjs: cnpj ? [cnpj] : [] };
       }
+      const ETIQUETA_SEM_SINAL = 'Sem internet agora: a leitura da etiqueta precisa de sinal. Use o código de barras ou a busca pelo nome.';
       async function lerImagensDaLista(imagens, origem) {
         if (!lc) return;
-        if (!navigator.onLine) { await guardarListaCliente(imagens, origem); return; }
+        const etiqueta = lc.modo === 'etiqueta';
+        // etiqueta não fica guardada: na loja, o código de barras e a busca resolvem na hora
+        const semSinal = async () => {
+          if (!etiqueta) { await guardarListaCliente(imagens, origem); return; }
+          lc = { ...lc, fase: 'erroLeitura', erro: ETIQUETA_SEM_SINAL, abortar: null, imagens: null };
+          renderListaCliente();
+        };
+        if (!navigator.onLine) { await semSinal(); return; }
         const g = lcGeracao;
         const abortar = new AbortController();
-        lc = { ...lc, fase: 'lendo', msg: 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
+        lc = { ...lc, fase: 'lendo', msg: etiqueta ? 'Lendo a etiqueta…' : 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
         renderListaCliente();
         let lido;
-        try { lido = await pedirLeituraDaImagem(imagens, abortar.signal); }
+        try { lido = await pedirLeituraDaImagem(imagens, abortar.signal, lc.modo); }
         catch (e) {
           if (lcVelha(g) || abortar.signal.aborted) return;
-          if (!e.status) { await guardarListaCliente(imagens, origem); return; } // sem conexão: guarda
+          if (!e.status) { await semSinal(); return; } // sem conexão: guarda (a lista) ou avisa (a etiqueta)
           lc = { ...lc, fase: 'erroLeitura', erro: e.message, abortar: null };
           renderListaCliente();
           return;
         }
         if (lcVelha(g) || abortar.signal.aborted) return;
         lc.abortar = null;
-        if (!lido.itens.length) { lc = { ...lc, fase: 'erroLeitura', erro: 'Não achei linhas de produto nessa imagem.' }; renderListaCliente(); return; }
-        conferirItensDaLista(lido.itens, origem, { pistas: { cnpjs: lido.cnpjs } });
+        if (!lido.itens.length) {
+          lc = { ...lc, fase: 'erroLeitura', erro: etiqueta ? 'Não deu pra ler a etiqueta nessa foto. Tire mais de perto, com a etiqueta inteira e sem reflexo.' : 'Não achei linhas de produto nessa imagem.' };
+          renderListaCliente();
+          return;
+        }
+        // no Levantamento, cada produto lido na etiqueta soma no estoque (o campo vai na linha, como na voz)
+        const itens = etiqueta && lc.destino === 'lev' ? lido.itens.map(it => ({ ...it, campo: 'qty' })) : lido.itens;
+        conferirItensDaLista(itens, origem, { pistas: { cnpjs: lido.cnpjs } });
+      }
+      // "📷 Pela etiqueta" (11/2026, depois do teste com fotos reais de discos e lâminas: a imagem sozinha
+      // não separa a medida, a etiqueta diz tudo): foto da embalagem -> Gemini lê a etiqueta (modo 'etiqueta'
+      // da mesma rota da lista) -> busca do app -> a mesma conferência. destino 'lev' = Levantamento
+      // (soma 1 no estoque); sem destino = orçamento. A câmera abre no mesmo toque (o navegador exige).
+      function abrirEtiqueta(destino) {
+        abrirListaCliente();
+        lc = { ...lc, fase: 'etiqueta', modo: 'etiqueta', destino: destino || null };
+        renderListaCliente();
+        document.getElementById('lcEtiquetaInput').click();
       }
 
       // ---- lista guardada pra ler quando a internet voltar (IndexedDB: fotos não cabem no localStorage)
@@ -33020,8 +33076,17 @@
           document.getElementById('lcTexto').addEventListener('input', (e) => { if (lc) lc.texto = e.target.value; });
           return;
         }
+        if (lc.fase === 'etiqueta') {
+          titulo.textContent = 'Pela etiqueta';
+          sub.textContent = lc.destino === 'lev' ? 'soma no estoque do levantamento' : (state.levCliente ? state.levCliente.nome : '');
+          corpo.innerHTML = `<p class="lcDica">Tire a foto de perto, com a etiqueta da embalagem inteira e sem reflexo. O app acha o produto e você confere antes de ${lc.destino === 'lev' ? 'somar no levantamento' : 'entrar no orçamento'}.</p>
+            <div class="lcFontes"><button type="button" class="lcFonte" id="lcEtiquetaFotoBtn"><span aria-hidden="true">📷</span>Tirar foto</button></div>
+            <p class="lcNota">Precisa de internet. Sem sinal, use o código de barras ou a busca pelo nome.</p>`;
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
+          return;
+        }
         if (lc.fase === 'lendo') {
-          titulo.textContent = 'Lendo a lista';
+          titulo.textContent = lc.modo === 'etiqueta' ? 'Lendo a etiqueta' : 'Lendo a lista';
           corpo.innerHTML = `<div class="lcLendo"><span class="lcGira" aria-hidden="true"></span><b>${escapeHtml(lc.msg || 'Lendo…')}</b>${lc.sub ? `<p>${escapeHtml(lc.sub)}</p>` : ''}</div>`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
           return;
@@ -33029,6 +33094,10 @@
         if (lc.fase === 'erroLeitura') {
           titulo.textContent = 'Não deu pra ler';
           corpo.innerHTML = `<div class="ap-msg error">${escapeHtml(lc.erro || 'Erro ao ler a lista.')}</div>`;
+          if (lc.modo === 'etiqueta') {
+            rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>${lc.imagens ? '<button type="button" class="restoreBtn" id="lcTentarBtn">Tentar de novo</button>' : ''}<button type="button" class="btnPrimary" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
+            return;
+          }
           rodape.innerHTML = lc.imagens
             ? `<button type="button" class="restoreBtn" id="lcGuardarBtn">Guardar e ler depois</button><button type="button" class="btnPrimary" id="lcTentarBtn">Tentar de novo</button>`
             : `<button type="button" class="restoreBtn" id="lcVoltarBtn">Voltar</button>`;
@@ -33054,10 +33123,12 @@
           return;
         }
         // conferir
-        const praLev = lc.destino === 'lev'; // falas do levantamento por voz
-        titulo.textContent = praLev ? 'Conferir falas' : 'Conferir lista';
+        const praLev = lc.destino === 'lev'; // falas do levantamento por voz ou etiqueta no Levantamento
+        const etiqueta = lc.modo === 'etiqueta', falas = praLev && !etiqueta;
+        titulo.textContent = etiqueta ? 'Conferir etiqueta' : praLev ? 'Conferir falas' : 'Conferir lista';
         const ls = lc.linhas;
-        sub.textContent = lc.rotulo || `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`;
+        sub.textContent = lc.rotulo || (etiqueta ? `${ls.length} produto${ls.length === 1 ? '' : 's'} lido${ls.length === 1 ? '' : 's'} na foto${praLev ? ' · soma no estoque' : ''}`
+          : `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`);
         const escolher = [], nao = [], ajustadas = [], prontas = [];
         ls.forEach((l, i) => {
           if (l.estado === 'escolher') escolher.push(i);
@@ -33069,7 +33140,7 @@
         const resumoProntas = prontas.map(i => { const p = productByCod(ls[i].cod); return `${p ? p.n : ls[i].cod} ×${ls[i].qtd}`; }).join(' · ');
         const outroSugerido = sug && !confere
           ? `<button type="button" class="lcSugerido" id="lcUsarSugeridoBtn"><span>A lista parece ser de <b>${escapeHtml(sug.cliente.nome)}</b> (${escapeHtml(porQue)})</span><em>Usar</em></button>` : '';
-        const descartarTodas = praLev ? `<div class="lcDescartarTodas"><button type="button" class="lcLink" id="lcDescartarTodasBtn">${ls.length === 1 ? 'Descartar a fala' : `Descartar todas as ${ls.length} falas`}</button></div>` : '';
+        const descartarTodas = falas ? `<div class="lcDescartarTodas"><button type="button" class="lcLink" id="lcDescartarTodasBtn">${ls.length === 1 ? 'Descartar a fala' : `Descartar todas as ${ls.length} falas`}</button></div>` : '';
         corpo.innerHTML = descartarTodas + outroSugerido + secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
           + secao('nao', 'Não achei', nao, htmlLinhaNaoAchei)
           + secao('ajustada', 'Quantidade ajustada', ajustadas, htmlLinhaPronta)
@@ -33084,6 +33155,12 @@
           // "Pra conferir" da voz: o que não for pro levantamento é descartado junto, e sem nada escolhido o
           // botão descarta tudo (antes ficava desligado e a lista não saía mais, relato do usuário, 10/2026)
           const fora = ls.length - incl.length;
+          if (etiqueta) { // etiqueta não fica guardada: fechar = desistir dela
+            rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento</button>
+              <button type="button" class="restoreBtn" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
+            corpo.scrollTop = rolagem;
+            return;
+          }
           const rotulo = !incl.length ? `Descartar ${ls.length} fala${ls.length === 1 ? '' : 's'}`
             : `Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento${fora ? ` e descartar ${fora}` : ''}`;
           rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn">${rotulo}</button>
@@ -33101,6 +33178,13 @@
       function porFalasNoLevantamento(incl) {
         for (const l of incl) somarNoLevantamento(l.cod, l.campo, l.qtd);
         const fora = lc.linhas.length - incl.length;
+        if (lc.modo === 'etiqueta') { // as falas pendentes da voz não são desta conferência
+          saveLevSurvey();
+          fecharListaCliente();
+          renderLevList();
+          showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
+          return;
+        }
         gravarPendentesVoz([]);
         saveLevSurvey();
         fecharListaCliente();
@@ -33114,9 +33198,10 @@
         if (!incl.length) return;
         for (const l of incl) addToCart(l.cod, l.qtd, true);
         const fora = lc.linhas.filter(l => !l.cod || l.fora).map(l => l.item.texto);
+        const deOnde = lc.modo === 'etiqueta' ? 'da etiqueta' : 'da lista'; // antes de fechar (lc vira null)
         if (lc.guardadaId) await apagarListaGuardada(lc.guardadaId);
         fecharListaCliente();
-        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} da lista no orçamento${fora.length ? ` · ficou de fora: ${fora.slice(0, 3).join(', ')}${fora.length > 3 ? '…' : ''}` : ''}`, 'longo');
+        showToast(`${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} ${deOnde} no orçamento${fora.length ? ` · ficou de fora: ${fora.slice(0, 3).join(', ')}${fora.length > 3 ? '…' : ''}` : ''}`, 'longo');
         renderResults();
         openDrawer();
       }
@@ -33156,6 +33241,10 @@
         const corpo = document.getElementById('lcCorpo');
         const fotoInput = document.getElementById('lcFotoInput'), pdfInput = document.getElementById('lcPdfInput');
         document.getElementById('colarListaBtn').addEventListener('click', abrirListaCliente);
+        const etiquetaInput = document.getElementById('lcEtiquetaInput');
+        document.getElementById('etiquetaPedBtn').addEventListener('click', () => abrirEtiqueta(null));
+        document.getElementById('levEtiquetaBtn').addEventListener('click', () => abrirEtiqueta('lev'));
+        etiquetaInput.addEventListener('change', () => { const f = etiquetaInput.files; if (f && f.length && lc) lcFotosEscolhidas(f); etiquetaInput.value = ''; });
         document.getElementById('listaGuardadaFaixa').addEventListener('click', abrirListasGuardadas);
         document.getElementById('lcFecharBtn').addEventListener('click', fecharListaCliente);
         document.getElementById('lcParaBtn').addEventListener('click', async () => {
@@ -33187,6 +33276,7 @@
             return;
           }
           if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
+          if (t.id === 'lcEtiquetaFotoBtn') { lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null }; renderListaCliente(); etiquetaInput.click(); return; }
           if (t.id === 'lcPdfBtn') { pdfInput.click(); return; }
           if (t.id === 'lcLerBtn') { lerTextoDaLista(document.getElementById('lcTexto').value, 'texto'); return; }
           if (t.id === 'lcTentarBtn') { lerImagensDaLista(lc.imagens, lc.origemImagem || 'foto'); return; }

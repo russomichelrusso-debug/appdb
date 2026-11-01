@@ -4361,6 +4361,52 @@ async function main() {
       }
     }
 
+    // "📷 Pela etiqueta" (11/2026): o texto lido na embalagem vai pela mesma busca da lista. Fotos reais de
+    // discos e lâminas: cada etiqueta acha o seu produto, e o empate "porcelanato" × "porcelanato PLUS" vai
+    // pro que a etiqueta descreve por inteiro (sem o "plus" escrito)
+    {
+      const fsE = require('fs');
+      const vmE = require('vm');
+      const htmlE = fsE.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+      const trechoE = (a, b) => { const i = htmlE.indexOf(a), f = htmlE.indexOf(b); return i >= 0 && f > i ? htmlE.slice(i, f) : ''; };
+      const prodsE = [
+        { c: '60599', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm', emb: 10 },
+        { c: '60598', n: 'DISCO DE CORTE DIAMANTADO TURBO ECO 110 mm', emb: 10 },
+        { c: '60863', n: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm', emb: 10 },
+        { c: '61314', n: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO PLUS 110 mm', emb: 10 },
+        { c: '61549', n: 'DISCO DE CORTE DIAMANTADO TURBO FLEX 115 mm', emb: 10 },
+        { c: '61577', n: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO FLEX 115 mm', emb: 10 },
+        { c: '60942', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm KAEF', emb: 10 },
+        { c: '60864', n: 'LAMINA DE SERRA CIRCULAR P/ MADEIRA 24 DENTES Ø 110 mm', emb: 10 },
+        { c: '60879', n: 'LAMINA DE SERRA CIRCULAR P/ MADEIRA 36 DENTES Ø 110 mm', emb: 10 },
+        { c: '61346', n: 'DISCO DE CORTE TUNGSTÊNIO P/ MADEIRA 110mm', emb: 10 },
+      ];
+      const ctxE = { DB: { products: prodsE }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase() };
+      vmE.createContext(ctxE);
+      vmE.runInContext(trechoE('// <motor-busca>', '// </motor-busca>') + trechoE('// <motor-lista>', '// </motor-lista>'), ctxE);
+      if (!ctxE.linhaDaImagemLista) {
+        assert(false, 'etiqueta: trecho <motor-lista> não encontrado no index.html');
+      } else {
+        const porCodigoE = (c) => prodsE.find(p => p.c === c) || null;
+        const etiqueta = (texto) => ctxE.produtoDaLinhaLista(ctxE.linhaDaImagemLista({ texto, quantidade: 1, unidade: null }), { porCodigo: porCodigoE });
+        const casos = [
+          ['lâmina de serra circular madeira 110 mm 24 dentes', '60864'],
+          ['disco de corte diamantado porcelanato turbo 110 mm', '60863'],
+          ['disco de corte diamantado turbo flex 115 mm', '61549'],
+          ['disco de corte diamantado turbo 110 mm', '60599'],
+          ['disco de corte diamantado turbo porcelanato plus 110 mm', '61314'],
+        ];
+        for (const [texto, cod] of casos) {
+          const r = etiqueta(texto);
+          assert(r.estado === 'pronto' && r.produto.c === cod, `etiqueta: "${texto}" acha ${cod} pronto (${r.estado} ${r.produto ? r.produto.c : (r.opcoes || []).map(p => p.c).join(',')})`);
+        }
+        // sem nenhum nome descrito por inteiro continua pra escolher (a lista do cliente "disco porcelanato 110")
+        const amplo = etiqueta('disco porcelanato 110');
+        assert(amplo.estado === 'escolher' && amplo.opcoes.some(p => p.c === '60863') && amplo.opcoes.some(p => p.c === '61314'),
+          `etiqueta: texto que não descreve um nome inteiro continua pra escolher (${amplo.estado})`);
+      }
+    }
+
     // Lista do cliente (index.html, trecho <motor-lista>): texto colado do WhatsApp / PDF / o que a
     // IA leu da foto -> produto + quantidade pra conferir (10/2026, opção "C" dos mockups).
     {
@@ -5449,6 +5495,13 @@ async function main() {
         && itens[1].quantidade === null && itens[1].unidade === null && itens[2].unidade === 'pct' && !('extra' in itens[2])
         && enviado && enviado.contents[0].parts[1].inline_data.mime_type === 'image/jpeg' && r.body.cnpj === '09345595000191',
         `foto da lista: só texto/quantidade/unidade válidos voltam, a imagem vai pro Gemini: ${JSON.stringify(r.body)}`);
+      assert(!/EMBALAGEM/.test(enviado.contents[0].parts[0].text), 'foto da lista: sem modo, o pedido ao Gemini é o da lista do cliente');
+      // "📷 Pela etiqueta" (11/2026): foto da embalagem na loja, outro pedido ao Gemini e sem CNPJ (o da
+      // embalagem é o da Cortag, não o da loja)
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+      assert(r.status === 200 && r.body.itens.length === 3 && r.body.cnpj === null
+        && /EMBALAGEM/.test(enviado.contents[0].parts[0].text) && /código Cortag de 5 dígitos/.test(enviado.contents[0].parts[0].text),
+        `foto pela etiqueta: pede ao Gemini a leitura da embalagem e não devolve CNPJ: ${JSON.stringify(r.body)}`);
       const semLogin = authToken; authToken = '';
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
       authToken = semLogin;

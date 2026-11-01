@@ -148,6 +148,18 @@ function itensDaRespostaGemini(resultado) {
   return itens;
 }
 
+const PROMPT_ETIQUETA = `As imagens são fotos tiradas numa loja da EMBALAGEM (cartela, blister, caixa ou etiqueta) de produtos de ferramentas para construção civil, quase sempre da marca Cortag.
+
+Para cada produto cuja embalagem dá pra ler, devolva um item:
+- "texto": o que identifica o produto, em português, como está impresso: o tipo (ex.: "disco de corte diamantado", "lâmina de serra circular"), a linha/modelo (ex.: "turbo", "porcelanato", "turbo flex", "segmentado eco", "contínuo"), o material indicado quando faz parte do nome (ex.: "madeira"), a medida principal (ex.: "110 mm") e o número de dentes se houver. Se aparecer impresso um código Cortag de 5 dígitos (começa com 6) ou um código de barras com os números legíveis, inclua no fim. Não inclua furo, rotação (RPM), norma (EN), textos em inglês/espanhol, lote nem frases de uso.
+- "quantidade": null
+- "unidade": null
+
+Um item por produto diferente (embalagens iguais lado a lado = um item só). Ignore embalagens que não dá pra ler e produtos de outras marcas quando a marca está visível. Não invente o que não está escrito.
+
+Responda SOMENTE com um JSON válido neste formato:
+{"itens": [{"texto": "disco de corte diamantado turbo 110 mm", "quantidade": null, "unidade": null}], "cnpj": null}`;
+
 router.post('/itens-da-imagem', imagemLimiter, async (req, res) => {
   const imagens = req.body && req.body.imagens;
   if (!Array.isArray(imagens) || !imagens.length || imagens.length > MAX_IMAGENS) {
@@ -161,7 +173,10 @@ router.post('/itens-da-imagem', imagemLimiter, async (req, res) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ erro: 'Leitura de foto não configurada — falta GEMINI_API_KEY no servidor.' });
   const modelo = modeloGemini();
-  const prompt = `As imagens são de uma lista de compras, pedido ou orçamento de ferramentas para construção civil que um cliente mandou ao vendedor (pode ser foto de papel, print de tela ou PDF escaneado; pode ser de outra marca).
+  // "📷 Pela etiqueta" (Pedido e Levantamento, 11/2026): foto da EMBALAGEM de um produto na loja.
+  // A IA só lê a etiqueta; o produto sai da busca do app e passa pela mesma conferência da lista.
+  const etiqueta = req.body.modo === 'etiqueta';
+  const prompt = etiqueta ? PROMPT_ETIQUETA : `As imagens são de uma lista de compras, pedido ou orçamento de ferramentas para construção civil que um cliente mandou ao vendedor (pode ser foto de papel, print de tela ou PDF escaneado; pode ser de outra marca).
 
 Liste cada linha de PRODUTO, na ordem em que aparece. Para cada uma:
 - "texto": a descrição do produto exatamente como está escrita, com medidas e o código se houver (sem preço, sem total)
@@ -188,7 +203,7 @@ Responda SOMENTE com um JSON válido neste formato:
     if (!resultado) return res.status(502).json({ erro: 'Não deu pra ler a foto agora — tenta de novo.' });
     // CNPJ da loja (o app sugere o cliente por ele); só 14 dígitos passam
     const cnpj = String((resultado && resultado.cnpj) || '').replace(/\D/g, '');
-    res.json({ itens: itensDaRespostaGemini(resultado), cnpj: cnpj.length === 14 ? cnpj : null });
+    res.json({ itens: itensDaRespostaGemini(resultado), cnpj: !etiqueta && cnpj.length === 14 ? cnpj : null });
   } catch (e) {
     console.error('Erro ao ler a imagem:', e.message);
     res.status(502).json({ erro: e.name === 'TimeoutError' ? 'A leitura da foto demorou demais — tenta de novo.' : 'Erro ao ler a foto.' });
@@ -196,3 +211,4 @@ Responda SOMENTE com um JSON válido neste formato:
 });
 
 module.exports = router;
+module.exports.PROMPT_ETIQUETA = PROMPT_ETIQUETA;

@@ -1552,6 +1552,21 @@ Supabase, sem PR — não é mudança de código.
     (`buscaPedeKaef`, "kae" já vale) ou o código/nome exato dele. Na lista do cliente KAEF não empata com outra marca (não vira
     "Pra escolher" por causa dele).
 
+- **"📷 Pela etiqueta"** (11/2026, a partir de um teste com fotos reais de expositor e blisters de discos/lâminas; pedido do
+  usuário depois de ver o resultado): botão no Pedido (abaixo de "Colar lista do cliente", some com a busca digitada) e no
+  Levantamento (ao lado de "Contar por voz"). Abre a câmera no mesmo toque (`#lcEtiquetaInput`, `capture="environment"`), a foto vai
+  pra `/api/assistente/itens-da-imagem` com `modo: 'etiqueta'` (`PROMPT_ETIQUETA`, `routes/assistente.js`: lê tipo, linha, medida,
+  dentes e o código de 5 dígitos impressos; sem CNPJ na resposta) e os itens passam pela **mesma conferência da lista do cliente**
+  (`lc.modo = 'etiqueta'`, `abrirEtiqueta`, `index.html`): no Pedido, 1 embalagem no orçamento; no Levantamento (`lc.destino = 'lev'`),
+  +1 no estoque, sem mexer nas falas pendentes da voz. **Sem internet não guarda a foto** (avisa: código de barras ou busca resolvem
+  na hora). O teste que levou a isso: comparação por imagem (CLIP, inclusive o MobileCLIP que caberia no celular) acerta o **tipo**
+  (lâmina × disco) mas não a medida/linha, e no expositor inteiro errou todos os discos diamantados; a etiqueta diz tudo e a busca do
+  app já acha o produto. Junto, desempate no `produtoDaLinhaLista` (`<motor-lista>`, vale pra lista do cliente também): no empate sem
+  palavra faltando, o **único** nome sem palavra além das escritas vai pronto ("... porcelanato turbo 110 mm" = 60863, não o
+  "PORCELANATO PLUS"). Próximo passo combinado (não feito): MobileCLIP no celular pra separar ~30 candidatos antes do Gemini (ele
+  escolhe dentro da lista) e sugerir sem internet, guardando o vetor de cada produto confirmado como referência da loja — no teste,
+  uma foto de loja como referência levou o produto certo de 45º pra 5º e de 7º pra 1º.
+
 - **Tela acesa com o app aberto** (10/2026, pedido do usuário: no levantamento a tela apagava pelo tempo do celular): Wake Lock
   do navegador (`pedirTelaAcesa`/`initTelaAcesa`, `index.html`), ligado por padrão, pedido de novo ao voltar pro app e no 1º
   toque; o celular solta sozinho ao trocar de app/bloquear e pode recusar com economia de bateria. ⚙ › "Deixar a tela apagar
