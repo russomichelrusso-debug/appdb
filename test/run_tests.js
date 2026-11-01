@@ -5676,7 +5676,8 @@ async function main() {
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos });
       const texto = enviado.contents[0].parts[0].text;
       assert(r.status === 200 && r.body.itens[0].codigo === '60599' && !('codigo' in r.body.itens[1])
-        && /60599 \| DISCO DE CORTE DIAMANTADO TURBO 110 mm/.test(texto) && /60863 \|/.test(texto),
+        && /60599 \| DISCO DE CORTE DIAMANTADO TURBO 110 mm/.test(texto) && /60863 \|/.test(texto)
+        && /Pela foto, os produtos podem estar/.test(texto) && /várias embalagens/.test(texto),
         `etiqueta com candidatos: a lista vai pro Gemini e só código dela volta: ${JSON.stringify(r.body.itens)}`);
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos: [{ c: 'x y', n: 'nome' }, { c: '60599', n: '' }, { c: '60599', n: 'DISCO TURBO' }] });
       const textoFiltrado = enviado.contents[0].parts[0].text;
@@ -5684,7 +5685,7 @@ async function main() {
       assert(r.status === 200 && !/x y \|/.test(textoFiltrado) && /60599 \| DISCO TURBO/.test(textoFiltrado) && rMuitos.status === 422,
         `etiqueta com candidatos: candidato inválido sai da lista sem derrubar a leitura; mais de 40 = 422 (${r.status}, ${rMuitos.status})`);
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
-      assert(r.status === 200 && r.body.itens.every(it => !('codigo' in it)) && !/Pela foto, o produto deve ser/.test(enviado.contents[0].parts[0].text),
+      assert(r.status === 200 && r.body.itens.every(it => !('codigo' in it)) && !/Pela foto, os produtos podem estar/.test(enviado.contents[0].parts[0].text),
         'etiqueta sem candidatos: nenhum código volta e o pedido não traz lista');
     } finally {
       global.fetch = fetchAntes;

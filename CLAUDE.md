@@ -1587,6 +1587,14 @@ Supabase, sem PR — não é mudança de código.
     a cada 5 min), foto da etiqueta em 1280 px, reconhecedor já carregado espera 3 s com internet (sem ela, os 20 s de antes).
     Testado no app local (Chromium, EAN-13 desenhado, Gemini simulado); **não testado em celular** (o BarcodeDetector do Android
     com foto real de blister).
+    **1º teste real (Android, 11/2026)**: foto de longe com 4 embalagens (joelheira, fresa, disco strip, limpador) devolveu só 2 da
+    IA; de perto, 2 de 2 (a fresa "Ø 5 mm a 35 mm" fica em "Pra escolher" com a 60215 "35 x 76mm": o catálogo não escreve o 5).
+    Corrigido: foto da etiqueta **de volta a 1600 px** (a 1280 do PR #338 perdia texto), a frase dos parecidos no prompt fala de
+    **várias embalagens** (antes "o produto deve ser um destes" puxava a IA a ficar só no que estava na lista) e, opção **"A"** do
+    usuário, o produto do código de barras entra na hora e a IA lê a mesma foto **em segundo plano** (`procurarOutrosNaFoto`, sem
+    parecidos): o que houver a mais aparece em "Também na foto: N · Conferir"; o do código (ou leitura em dúvida com ele entre as
+    opções) não volta. No máximo 20 dessas leituras a cada 10 min por aparelho (`OUTROS_NA_FOTO_MAX`; a rota aceita 60 e a etiqueta
+    sem código de barras não pode ficar sem); passou disso ou falhou, fica o "Ler a foto inteira" à mão.
   - **Reconhecimento por foto no aparelho** (11/2026, 2º PR): antes do Gemini, o celular calcula o vetor da foto com o **DINOv2-small
     int8** (Meta, **Apache 2.0**, 24 MB) no **onnxruntime-web 1.31.1** (15 MB de WebAssembly) e manda junto os **30 produtos de foto
     mais parecida** (`candidatos`, até 40, na rota da etiqueta): o Gemini escolhe dentro da lista e o servidor só devolve `codigo` que

@@ -4889,6 +4889,14 @@
       animation: lcGira 0.9s linear infinite;
     }
 
+    .lcGira.pequeno {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-width: 2px;
+      vertical-align: -1px;
+    }
+
     @keyframes lcGira {
       to {
         transform: rotate(360deg);
@@ -32887,6 +32895,7 @@
       function fecharListaCliente() {
         if (lc && lc.fase === 'adicionado' && lc.feitos && lc.feitos.length) aprenderFotoDaEtiqueta(lc.linhas); // saiu sem desfazer: confirmado
         if (lc && lc.abortar) lc.abortar.abort();
+        pararOutrosNaFoto();
         lcGeracao++;
         lc = null;
         document.getElementById('listaClienteModal').classList.add('hidden');
@@ -32957,10 +32966,49 @@
         lc.feitos = [];
         for (const l of lc.linhas) somarEtiquetaDireto(l.cod, l.campo || 'qty', l.qtd);
         lc.fase = 'adicionado';
+        if (lc.porBarras && lc.imagens && !lc.outros && navigator.onLine) procurarOutrosNaFoto();
         playScanBeep(true);
         if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) { } }
         renderListaCliente();
         if (!lev) renderResults();
+      }
+      // Opção "A" do usuário (11/2026, foto real com 4 embalagens): o código de barras achou um produto e ele já
+      // entrou; a IA lê a mesma foto em segundo plano e o que houver a mais aparece em "Também na foto · Conferir"
+      // no máximo 20 a cada 10 min por aparelho: o limite da rota é 60 e a etiqueta sem código de barras
+      // (a que precisa da IA) não pode ficar sem; passou disso, fica o "Ler a foto inteira" à mão
+      const OUTROS_NA_FOTO_MAX = 20;
+      let outrosNaFotoEm = [];
+      function procurarOutrosNaFoto() {
+        const agora = Date.now();
+        outrosNaFotoEm = outrosNaFotoEm.filter(t => agora - t < 10 * 60000);
+        if (outrosNaFotoEm.length >= OUTROS_NA_FOTO_MAX) return;
+        outrosNaFotoEm.push(agora);
+        const imagens = lc.imagens, abortar = new AbortController();
+        lc.outros = { estado: 'lendo', abortar };
+        const valendo = () => lc && lc.imagens === imagens && lc.outros && lc.outros.abortar === abortar && !abortar.signal.aborted;
+        pedirLeituraDaImagem(imagens, abortar.signal, 'etiqueta', null).then(lido => {
+          if (!valendo()) return;
+          const ctx = { comprados: lcComprados(), porCodigo: findByExactCode, etiqueta: true };
+          const vistos = new Set(lc.linhas.map(l => l.cod)); // o do código de barras não volta
+          const itens = lido.itens.filter(it => {
+            const r = produtoDaLinhaLista(it, ctx), c = r.produto && r.produto.c;
+            if (c && vistos.has(c)) return false;
+            // em dúvida com o do código de barras entre as opções: é a mesma embalagem lida de outro jeito
+            if (!c && (r.opcoes || []).some(p => vistos.has(p.c))) return false;
+            if (c) vistos.add(c);
+            return true;
+          });
+          lc.outros = { estado: 'ok', abortar, itens: lc.destino === 'lev' ? itens.map(it => ({ ...it, campo: 'qty' })) : itens };
+          if (lc.fase === 'adicionado') renderListaCliente();
+        }).catch(() => {
+          if (!valendo()) return;
+          lc.outros = { estado: 'erro', abortar };
+          if (lc.fase === 'adicionado') renderListaCliente();
+        });
+      }
+      function pararOutrosNaFoto() {
+        if (lc && lc.outros && lc.outros.abortar) lc.outros.abortar.abort();
+        if (lc) lc.outros = null;
       }
       function somarEtiquetaDireto(cod, campo, qtd) {
         if (lc.destino === 'lev') {
@@ -32995,6 +33043,18 @@
         if (lev) { saveLevSurvey(); renderLevList(); }
         else { renderCart(); renderCartBar(); renderResults(); }
       }
+      function htmlOutrosNaFoto() {
+        if (!lc.porBarras) return '';
+        const o = lc.outros;
+        if (o && o.estado === 'lendo') return '<p class="lcNota"><span class="lcGira pequeno" aria-hidden="true"></span> Procurando outros produtos na foto…</p>';
+        if (o && o.estado === 'ok') {
+          const n = o.itens.length;
+          return n ? `<button type="button" class="lcSugerido" id="lcConferirOutrosBtn"><span>Também na foto: <b>${n} produto${n > 1 ? 's' : ''}</b></span><em>Conferir</em></button>`
+            : '<p class="lcNota">Nenhum outro produto na foto.</p>';
+        }
+        // sem sinal ou a leitura falhou: dá pra tentar à mão
+        return lc.imagens && navigator.onLine ? '<p class="lcNota">Tinha outra embalagem na foto? <button type="button" class="lcLink" id="lcLerFotoInteiraBtn">Ler a foto inteira</button></p>' : '';
+      }
       function htmlEtiquetaAdicionada() {
         const lev = lc.destino === 'lev';
         const porCod = new Map();
@@ -33023,8 +33083,6 @@
       // print com transparência): sobe rápido no 4G e cabe no aparelho se ficar guardada
       const jpegBase64 = async (blob) => (await blobParaDataUrl(blob)).split(',')[1];
       const reduzirImagemLista = async (arquivo) => jpegBase64(await reduzirFoto(arquivo, [[1600, 0.82], [1200, 0.72], [900, 0.65]], 900 * 1024));
-      // etiqueta: 1280 px bastam pra IA ler a embalagem de perto e sobem mais rápido no 4G
-      const reduzirImagemEtiqueta = async (arquivo) => jpegBase64(await reduzirFoto(arquivo, [[1280, 0.8], [1024, 0.72], [900, 0.65]], 900 * 1024));
       async function lcFotosEscolhidas(arquivos) {
         const lista = [...arquivos].slice(0, LC_MAX_IMAGENS);
         if (!lista.length || !lc) return;
@@ -33034,7 +33092,8 @@
         renderListaCliente();
         try {
           // etiqueta: o código de barras da foto (na foto inteira, junto com a redução) resolve sem servidor
-          const reduzidas = lista.map(f => etiqueta ? reduzirImagemEtiqueta(f) : reduzirImagemLista(f));
+          // etiqueta também em 1600 px: em 1280 (PR #338) a foto de longe com 4 embalagens perdeu 2 (teste real, 11/2026)
+          const reduzidas = lista.map(f => reduzirImagemLista(f));
           const barras = etiqueta ? codigosDeBarrasDaFoto(lista[0], reduzidas[0]) : null;
           const imagens = [];
           for (const r of reduzidas) imagens.push({ tipo: 'image/jpeg', dados: await r });
@@ -33120,6 +33179,7 @@
             showToast(`${erro} · ficou o do código de barras`, 'erro');
             const itens = lc.barrasItens;
             lc.porBarras = true;
+            lc.outros = { estado: 'erro' }; // não lê de novo em segundo plano logo depois de falhar
             conferirItensDaLista(itens, origem, { pistas: { cnpjs: [] } });
             return;
           }
@@ -33713,7 +33773,7 @@
               <button type="button" class="restoreBtn compacto" id="lcDesfazerEtiquetaBtn">Desfazer</button>
               <button type="button" class="restoreBtn compacto" id="lcMaisUmEtiquetaBtn">+1 de novo</button>
             </div>
-            ${lc.porBarras && lc.imagens && navigator.onLine ? '<p class="lcNota">Tinha outra embalagem na foto? <button type="button" class="lcLink" id="lcLerFotoInteiraBtn">Ler a foto inteira</button></p>' : ''}`;
+            ${htmlOutrosNaFoto()}`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>
             <button type="button" class="btnPrimary" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
           return;
@@ -33924,6 +33984,7 @@
             // no Levantamento, o que já foi conferido soma antes da próxima foto (não se perde); tudo síncrono:
             // a câmera só abre dentro do toque
             if (lc.fase === 'adicionado' && lc.feitos && lc.feitos.length) aprenderFotoDaEtiqueta(lc.linhas); // saiu sem desfazer
+            pararOutrosNaFoto();
             const conferidos = lc.fase === 'conferir' && lc.destino === 'lev' ? lcIncluidas() : [];
             if (conferidos.length) {
               aprenderFotoDaEtiqueta(conferidos);
@@ -33939,6 +34000,7 @@
           }
           if (t.id === 'lcDesfazerEtiquetaBtn') {
             // volta pra conferência das mesmas linhas: dá pra escolher outro produto ou tirar outra foto
+            pararOutrosNaFoto();
             desfazerEtiquetaDireto();
             for (const l of lc.linhas) l.fora = true; // "Tirar outra foto"/"Pôr" não põem de volta; dá pra incluir ou escolher outro
             lc.fase = 'conferir';
@@ -33954,7 +34016,16 @@
             if (lc.destino !== 'lev') renderResults();
             return;
           }
+          if (t.id === 'lcConferirOutrosBtn') {
+            // o do código de barras fica onde está (já entrou); os outros passam pela conferência (um só e certo entra direto)
+            const itens = lc.outros && lc.outros.itens;
+            if (!itens || !itens.length) return;
+            lc = { ...lc, porBarras: false, barrasItens: null, outros: null, feitos: null, linhas: null };
+            conferirItensDaLista(itens, 'foto', { pistas: { cnpjs: [] } });
+            return;
+          }
           if (t.id === 'lcLerFotoInteiraBtn') {
+            pararOutrosNaFoto();
             if (!navigator.onLine) { showToast(ETIQUETA_SEM_SINAL, 'erro'); return; }
             desfazerEtiquetaDireto(); // o do código de barras volta junto da leitura (lc.barrasItens)
             lerImagensDaLista(lc.imagens, 'foto');
