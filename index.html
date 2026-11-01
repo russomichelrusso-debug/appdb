@@ -14878,6 +14878,46 @@
         });
         return pal.filter((_, i) => !fora.has(i)).join(' ');
       }
+      // palavras dos nomes do catálogo (radical), refeitas quando o catálogo muda
+      // (Map radical -> em quantos produtos aparece: palavra rara pesa mais na ordem das opções)
+      let vocabularioLista = { produtos: null, n: 0, palavras: null };
+      function palavrasDoCatalogoLista() {
+        const ps = (DB && DB.products) || [];
+        if (vocabularioLista.produtos !== ps || vocabularioLista.n !== ps.length) {
+          const palavras = new Map();
+          for (const p of ps) {
+            if (!p._tok) prepararProdutoParaBusca(p);
+            const doProduto = new Set(p._tok.flatMap(w => w.split('/')).filter(w => w.length >= 3 && !ehNumeroBusca(w)).map(radicalBusca)); // "porcelanato/vidro" = duas
+            for (const r of doProduto) palavras.set(r, (palavras.get(r) || 0) + 1);
+          }
+          vocabularioLista = { produtos: ps, n: ps.length, palavras };
+        }
+        return vocabularioLista.palavras;
+      }
+      // achados da busca de reserva sem nenhum exato: na frente quem tem as palavras mais raras do termo
+      // (o "vidro" do 62796 diz mais que o "corte" que dezenas de discos têm)
+      function pelaPalavraRaraLista(achados, termo) {
+        const voc = palavrasDoCatalogoLista();
+        const rad = [...new Set(String(termo || '').split(' ').filter(w => w.length >= 3 && !ehNumeroBusca(w)).map(radicalBusca))].filter(r => voc.has(r));
+        const peso = (x) => rad.reduce((s, r) => s + (x.p._n.includes(r) ? 1 / voc.get(r) : 0), 0); // no nome inteiro ("PORCELANATO/VIDRO" é uma palavra só)
+        return achados.map((x, i) => ({ x, i, w: peso(x) })).sort((a, b) => b.w - a.w || a.i - b.i).map(o => o.x);
+      }
+      // tira as palavras de 4+ letras que nenhum nome do catálogo tem, nem abreviada ("desempenadeira" fica: o catálogo
+      // escreve "DESEMP."); números e palavras curtas ficam. Sobram ao menos 2 palavras, senão nada muda
+      function semPalavrasForaDoCatalogoLista(termo) {
+        const pal = String(termo || '').split(' ').filter(Boolean);
+        const voc = palavrasDoCatalogoLista();
+        if (!voc.size) return termo;
+        const conhece = (w) => {
+          if (w.length < 4 || ehNumeroBusca(w) || PALAVRAS_LIGACAO.has(w)) return true;
+          const r = radicalBusca(w);
+          if (voc.has(r)) return true;
+          for (const v of voc) if (v.length >= 4 && (r.startsWith(v) || v.startsWith(r))) return true;
+          return false;
+        };
+        const ficam = pal.filter(conhece);
+        return ficam.length >= 2 && ficam.length < pal.length ? ficam.join(' ') : termo;
+      }
       function produtoDaLinhaLista(item, ctx) {
         const comprados = (ctx && ctx.comprados) || new Set();
         const porCodigo = (ctx && ctx.porCodigo) || (() => null);
@@ -14927,6 +14967,13 @@
         if (!achados.length && termo) {
           const limpo = semFuroNemPolegadaLista(termo);
           if (limpo !== termo) { const a2 = buscar(limpo); if (a2.length) { achados = a2; termoUsado = limpo; limpou = true; } }
+          // e sem a palavra que nenhum nome do catálogo tem ("DIAMOND FORCE", o nome da linha na caixa; foto real de 11/2026):
+          // ela nunca ajuda a achar
+          if (!achados.length) {
+            const conhecidas = semPalavrasForaDoCatalogoLista(limpo);
+            if (conhecidas !== limpo) { const a3 = buscar(conhecidas); if (a3.length) { achados = a3; termoUsado = conhecidas; limpou = true; } }
+          }
+          if (limpou && achados.length > 1 && !(achados[0].topo || achados[0].nivel === 0)) achados = pelaPalavraRaraLista(achados, termoUsado);
         }
         // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
         // "CUNHA SLIM 100PC"; "NIVELADOR 1,5MM ECO 50PCS": o ECO vem em C/500): tenta sem cada número

@@ -4494,6 +4494,7 @@ async function main() {
         { c: '62950', n: 'TORQUÊS  AZULEJISTA CORTE FURO 7.1/2"', emb: 1 },
         { c: '70001', n: 'SERRA COPO BIMETAL 25 mm', emb: 1 },
         { c: '70002', n: 'ESPACADOR NIVELADOR 1/16" 3 mm', emb: 1 },
+        { c: '62796', n: 'DISCO DIAMANTADO PORCELANATO/VIDRO 110mm', emb: 10 },
       ];
       const ctxL = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
       vmL.createContext(ctxL);
@@ -4516,6 +4517,11 @@ async function main() {
           && lamina('torques azulejista corte furo 7.1/2"') === 'pronto:62950'
           && lamina('serra copo furo 22 mm').startsWith('escolher') && lamina('espacador nivelador 1/8 3 mm').startsWith('escolher'),
           `lista do cliente: furo e polegada da embalagem saem da busca só quando nada foi achado, e o furo/fração que é a medida fica (${lamina('LÂMINA DE SERRA CIRCULAR 110 mm - 4.3/8" Furo - 20 mm - 13/16" 36 dentes')})`);
+        // nome da linha na caixa ("DIAMOND FORCE") que nenhum nome do catálogo tem: sai da busca, e a palavra rara ("vidro") vem na frente
+        const rForce = ctxL.produtoDaLinhaLista(ctxL.linhaDaImagemLista({ texto: 'disco de corte diamantado porcelanato vidro diamond force 110 mm 62118', quantidade: null, unidade: null }), { porCodigo });
+        const codForce = rForce.produto ? rForce.produto.c : (rForce.opcoes[0] || {}).c;
+        assert(codForce === '62796' && !rForce.seguro,
+          `lista do cliente: palavra fora do catálogo sai da busca de reserva, o achado não entra direto (${rForce.estado}: ${codForce})`);
         // levantamento por voz: uma fala = um item (código falado com "meia", número por extenso, "pedido" na fala)
         const falaLev = (t) => ctxL.itemDaFalaLevantamento(t, porCodigo);
         const fCod = falaLev('meia zero oito sete meia, com seis');
