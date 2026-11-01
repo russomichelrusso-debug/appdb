@@ -4678,6 +4678,14 @@ async function main() {
         const kaefBuscado = ctxL.buscarComPontos('colher kaef').map(x => x.p.c);
         assert(kaefFim[kaefFim.length - 1] === '60709' && kaefBuscado[0] === '60709' && ctxL.buscarComPontos('60709')[0].p.c === '60709',
           `busca: KAEF por último, primeiro quando buscado: ${kaefFim.join(',')} / ${kaefBuscado.join(',')}`);
+        // foto real de 11/2026: "Cód. 7617" (código do cliente) virava 7.617 serras, com ou sem a IA devolver o número
+        for (const quantidade of [null, 7617]) {
+          const serra = ctxL.linhaDaImagemLista({ texto: 'SERRA COPO DIAM P/ESMERILHADEIRA 50MM ROSCA M14 62093 Cód. 7617', quantidade });
+          assert(serra.qtd == null && !/7617|cod/.test(serra.termo) && serra.codigos.includes('62093'),
+            `lista do cliente: número depois de "Cód." não é quantidade (IA ${quantidade}): ${JSON.stringify(serra)}`);
+        }
+        const comQtd = ctxL.interpretarLinhaLista('serra copo 50mm cod 7617 - 3');
+        assert(comQtd.qtd === 3 && !/7617/.test(comQtd.termo), `lista do cliente: "cod 7617 - 3" = 3: ${JSON.stringify(comQtd)}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

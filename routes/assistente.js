@@ -223,7 +223,7 @@ router.post('/itens-da-imagem', limiteDaImagem, async (req, res) => {
 
 Liste cada linha de PRODUTO, na ordem em que aparece. Para cada uma:
 - "texto": a descrição do produto exatamente como está escrita, com medidas e o código se houver (sem preço, sem total)
-- "quantidade": o número pedido, ou null se não estiver escrito
+- "quantidade": o número pedido, ou null se não estiver escrito (o número depois de "Cód.", "Código" ou "Ref." é o código do produto na loja, NÃO é quantidade)
 - "unidade": "cx" se a quantidade for em caixas, "pct" se for em pacotes, "un" se for em unidades/peças, ou null
 
 Ignore cabeçalho, dados de cliente, telefone, endereço, preços, totais, prazo, frete, assinatura e observações nas linhas de produto. Não invente linhas que não estão na imagem.

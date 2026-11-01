@@ -14622,6 +14622,16 @@
       function termoDasPalavrasLista(tok) {
         return tok.filter(t => !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
       }
+      // "Cód. 7617"/"Ref 3893": o número depois de cód/código/ref é o código DO CLIENTE (foto real de
+      // 11/2026: "SERRA COPO ... 62093 Cód. 7617" virava 7.617 serras) - nem quantidade nem palavra da busca.
+      // Índices da palavra e do número (o de 5+ dígitos já é tratado como código Cortag).
+      function codigoDoClienteLista(tok) {
+        const fora = new Set();
+        tok.forEach((t, i) => {
+          if (/^(cod|codigo|cods|ref|refs|referencia)$/.test(t) && /^\d{1,4}$/.test(tok[i + 1] || '')) { fora.add(i); fora.add(i + 1); }
+        });
+        return fora;
+      }
       // Uma linha -> { texto, termo, qtd (null = sem quantidade), unidade ('un'|'cx'|'pct'|null),
       // talvez (o único número é o do fim, sem unidade: pode ser medida ou quantidade), codigos }.
       function interpretarLinhaLista(linhaBruta, modoPdf) {
@@ -14658,6 +14668,7 @@
         const tirar = new Set();
         // código/EAN (5+ dígitos, com o "P" do promocional antes) nunca é quantidade nem palavra da busca
         tok.forEach((t, i) => { if (/^\d{5,}$/.test(t)) { tirar.add(i); if (tok[i - 1] === 'p') tirar.add(i - 1); } });
+        codigoDoClienteLista(tok).forEach(i => tirar.add(i));
         const ehMedida = (i) => MEDIDAS_LISTA.has(tok[i + 1]);
         // 1) número com unidade ("2 cx", "500 pc"), "x 12", "qtd 12" ou "12 x colher"
         const codigo = new Set(tirar);
@@ -14684,7 +14695,9 @@
         // 2) número no fim ("colher 8 pol 12", "cortador 75 cm - 1")
         let ult = tok.length - 1;
         while (ult > 0 && codigo.has(ult)) ult--;
-        if (qtd == null && ult > 0 && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
+        // "ROSCA M14", "LIXA G120": número colado numa letra é a especificação do produto, não a quantidade
+        const colado = ult > 0 && /^[a-wyz]$/.test(tok[ult - 1]) && new RegExp('[A-Za-z]' + tok[ult] + '(?!\\d)').test(linha);
+        if (qtd == null && ult > 0 && !colado && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
           const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && !codigo.has(i));
           qtd = +tok[ult]; tirar.add(ult);
           talvez = !outros && !separado;
@@ -14911,7 +14924,10 @@
         if (!item || qtd == null) return item;
         // o número de 4+ dígitos no começo é o código DO CLIENTE ("3860 CORTAG APLICADOR..." da foto real de 10/2026)
         const pal = palavrasDaLinhaLista(item.texto);
-        const termo = termoDasPalavrasLista(pal.filter((t, i) => !/^\d{5,}$/.test(t)
+        const doCliente = codigoDoClienteLista(pal);
+        // a IA às vezes devolve o "Cód. 7617" como quantidade: aí fica sem quantidade (1 embalagem)
+        if ([...doCliente].some(i => /^\d+$/.test(pal[i]) && +pal[i] === qtd)) return { ...item, qtd: null, unidade: null, talvez: false };
+        const termo = termoDasPalavrasLista(pal.filter((t, i) => !/^\d{5,}$/.test(t) && !doCliente.has(i)
           && !(i === 0 && /^\d{4}$/.test(t) && !MEDIDAS_LISTA.has(pal[1]))));
         return { ...item, termo, qtd, unidade, talvez: false };
       }
