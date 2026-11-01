@@ -1595,6 +1595,11 @@ Supabase, sem PR — não é mudança de código.
     parecidos): o que houver a mais aparece em "Também na foto: N · Conferir"; o do código (ou leitura em dúvida com ele entre as
     opções) não volta. No máximo 20 dessas leituras a cada 10 min por aparelho (`OUTROS_NA_FOTO_MAX`; a rota aceita 60 e a etiqueta
     sem código de barras não pode ficar sem); passou disso ou falhou, fica o "Ler a foto inteira" à mão.
+    **2º teste real (gancheira de discos e lâminas, 11/2026)**: a IA leu 'LÂMINA DE SERRA CIRCULAR 110 mm - 4.3/8" Furo - 20 mm -
+    13/16" 36 dentes' e dava "Não achei" sem opção (o catálogo não escreve furo nem polegada; o plano B tira só um número). Agora,
+    sem nenhum achado, `semFuroNemPolegadaLista` (`<motor-lista>`) busca de novo sem "furo N mm" (só quando sobra outra medida em
+    mm: em serra copo/broca o furo é o tamanho) e sem a fração logo depois de "N mm"; o achado assim nunca é `seguro` (não entra
+    direto). Vale pra lista do cliente, etiqueta e voz.
   - **Reconhecimento por foto no aparelho** (11/2026, 2º PR): antes do Gemini, o celular calcula o vetor da foto com o **DINOv2-small
     int8** (Meta, **Apache 2.0**, 24 MB) no **onnxruntime-web 1.31.1** (15 MB de WebAssembly) e manda junto os **30 produtos de foto
     mais parecida** (`candidatos`, até 40, na rota da etiqueta): o Gemini escolhe dentro da lista e o servidor só devolve `codigo` que

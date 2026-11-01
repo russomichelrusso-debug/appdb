@@ -14861,12 +14861,30 @@
         const i = pal.findIndex((w, k) => /^\d+$/.test(w) && +w > 1 && unidades.test(pal[k + 1] || ''));
         return i < 0 ? { termo, pacote: 0 } : { termo: pal.filter((_, k) => k !== i && k !== i + 1).join(' '), pacote: +pal[i] };
       }
+      // "furo 20 mm" e a polegada ("4.3/8", "13/16") que a embalagem escreve junto da medida em mm ("110 mm 4.3/8").
+      // O furo só sai quando sobra outra medida em mm (em serra copo e broca o "furo 22 mm" é o tamanho do produto);
+      // a fração só logo depois de "N mm" (o "1/8" de "espaçador 1/8 3 mm" é a medida; achados do revisor-cortag)
+      function semFuroNemPolegadaLista(termo) {
+        const pal = String(termo || '').split(' ');
+        const num = (w) => /^\d+([.,]\d+)?$/.test(w || '');
+        const fora = new Set();
+        pal.forEach((w, i) => {
+          if (/^\d+([.,]\d+)?\/\d+$/.test(w) && pal[i - 1] === 'mm' && num(pal[i - 2])) fora.add(i);
+        });
+        pal.forEach((w, i) => {
+          if (w !== 'furo' || !num(pal[i + 1])) return;
+          const furo = new Set([i, i + 1, ...(pal[i + 2] === 'mm' ? [i + 2] : [])]);
+          if (pal.some((x, k) => !furo.has(k) && num(x) && pal[k + 1] === 'mm')) furo.forEach(k => fora.add(k));
+        });
+        return pal.filter((_, i) => !fora.has(i)).join(' ');
+      }
       function produtoDaLinhaLista(item, ctx) {
         const comprados = (ctx && ctx.comprados) || new Set();
         const porCodigo = (ctx && ctx.porCodigo) || (() => null);
         let medida = false;
         // seguro: código/EAN, nome sem palavra faltando ou o desempate da etiqueta (a etiqueta entra direto só assim)
-        const pronto = (p, seguro) => ({ estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c), medida, seguro: !!seguro });
+        let limpou = false; // achado só sem o furo/polegada da embalagem: nunca entra direto
+        const pronto = (p, seguro) => ({ estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c), medida, seguro: !!seguro && !limpou });
         for (const c of item.codigos || []) {
           const p = porCodigo(c);
           if (p) return pronto(p, true);
@@ -14903,10 +14921,17 @@
         let achados = item.talvez && item.qtd != null && termo ? buscar(termo + ' ' + item.qtd) : [];
         if (achados.length && (achados[0].topo || achados[0].nivel === 0)) medida = true;
         else achados = termo ? buscar(termo) : [];
+        // a embalagem traz o furo e a medida em polegada junto ("LÂMINA ... 110 mm - 4.3/8" Furo - 20 mm - 13/16"
+        // 36 dentes", foto real de 11/2026): sem nenhum achado, busca de novo sem eles (o catálogo não escreve)
+        let termoUsado = termo;
+        if (!achados.length && termo) {
+          const limpo = semFuroNemPolegadaLista(termo);
+          if (limpo !== termo) { const a2 = buscar(limpo); if (a2.length) { achados = a2; termoUsado = limpo; limpou = true; } }
+        }
         // um número que o catálogo não escreve ("REBOLO COPO CONICO 4 M14 G120 100MM": o 4 é polegada;
         // "CUNHA SLIM 100PC"; "NIVELADOR 1,5MM ECO 50PCS": o ECO vem em C/500): tenta sem cada número
         const semCadaNumero = () => {
-          const pal = normalizarBusca(termo || '').split(' ');
+          const pal = normalizarBusca(termoUsado || '').split(' ');
           const vistos = new Set(), sem = [];
           pal.forEach((w, i) => {
             if (!ehNumeroBusca(w)) return;
@@ -14945,7 +14970,7 @@
         // foto real de 11/2026). Na lista do cliente e na voz o texto é curto ("cortador 750", "rodel 7") e
         // continua pra escolher (achado do revisor-cortag: 281 de 2.802 termos curtos mudariam)
         if (exato && ctx && ctx.etiqueta) {
-          const escritas = new Set(normalizarBusca(termo || '').split(' ').map(radicalBusca));
+          const escritas = new Set(normalizarBusca(termoUsado || '').split(' ').map(radicalBusca));
           const sobra = (p) => p._tok.filter(w => w.length >= 2 && !PALAVRAS_LIGACAO.has(w) && !escritas.has(radicalBusca(w))).length;
           const inteiros = opcoes.filter(p => sobra(p) === 0);
           if (inteiros.length === 1) return pronto(inteiros[0], true);
