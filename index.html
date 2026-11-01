@@ -5149,6 +5149,38 @@
       flex-shrink: 0;
     }
 
+    /* etiqueta que entrou direto (fase 'adicionado') */
+    .lcAdicionado {
+      margin-bottom: 8px;
+      padding: 12px;
+      border-radius: var(--r-md);
+      border-left: 4px solid var(--success);
+      background: var(--success-bg);
+    }
+
+    .lcAdicionado b {
+      display: block;
+      font-size: 15px;
+    }
+
+    .lcAdicionado small {
+      display: block;
+      margin-top: 2px;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    .lcAdicionadoAcoes {
+      display: flex;
+      gap: 8px;
+      margin: 4px 0 8px;
+    }
+
+    .lcAdicionadoAcoes .restoreBtn {
+      flex: 1;
+      min-height: 44px;
+    }
+
     #ocorrenciaModal {
       padding: 12px;
     }
@@ -14825,10 +14857,11 @@
         const comprados = (ctx && ctx.comprados) || new Set();
         const porCodigo = (ctx && ctx.porCodigo) || (() => null);
         let medida = false;
-        const pronto = (p) => ({ estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c), medida });
+        // seguro: código/EAN, nome sem palavra faltando ou o desempate da etiqueta (a etiqueta entra direto só assim)
+        const pronto = (p, seguro) => ({ estado: 'pronto', produto: p, opcoes: [], jaCompra: comprados.has(p.c), medida, seguro: !!seguro });
         for (const c of item.codigos || []) {
           const p = porCodigo(c);
-          if (p) return pronto(p);
+          if (p) return pronto(p, true);
         }
         // opções que já vêm de fora (etiqueta sem leitura: os mais parecidos pela foto): o vendedor escolhe
         if (item.opcoes) {
@@ -14882,7 +14915,7 @@
           return { estado: 'escolher', produto: null, opcoes: ops.slice(0, 6), maisOpcoes: Math.max(0, ops.length - 6), medida };
         }
         const a = achados[0];
-        if (a.topo && a.nivel <= 1) return pronto(a.p);
+        if (a.topo && a.nivel <= 1) return pronto(a.p, a.nivel === 0);
         const exato = a.topo || a.nivel === 0; // nome começando com a busca, ou nenhuma palavra faltando
         const empatado = (x) => x.topo === a.topo && x.nivel === a.nivel && x.pen === a.pen && !!x.p._kaef === !!a.p._kaef;
         let opcoes = (exato ? achados.filter(empatado) : achados.slice(0, 4)).map(x => x.p);
@@ -14892,7 +14925,7 @@
           const melhores = semCadaNumero().filter(x => x.topo || x.nivel < a.nivel).map(x => x.p);
           if (melhores.length) opcoes = [...melhores, ...opcoes.filter(p => !melhores.includes(p))];
         }
-        if (opcoes.length === 1 && exato) return pronto(opcoes[0]);
+        if (opcoes.length === 1 && exato) return pronto(opcoes[0], a.nivel === 0);
         const queCompra = opcoes.filter(p => comprados.has(p.c));
         // histórico do cliente (10/2026, pedido do usuário: "buscar sempre o histórico pra fazer o cruzamento"):
         // o único das opções que ele já compra vai pronto, também quando faltou palavra (o "eco", o "videa"),
@@ -14907,7 +14940,7 @@
           const escritas = new Set(normalizarBusca(termo || '').split(' ').map(radicalBusca));
           const sobra = (p) => p._tok.filter(w => w.length >= 2 && !PALAVRAS_LIGACAO.has(w) && !escritas.has(radicalBusca(w))).length;
           const inteiros = opcoes.filter(p => sobra(p) === 0);
-          if (inteiros.length === 1) return pronto(inteiros[0]);
+          if (inteiros.length === 1) return pronto(inteiros[0], true);
         }
         opcoes = [...queCompra, ...opcoes.filter(p => !comprados.has(p.c))];
         return { estado: 'escolher', produto: null, opcoes: opcoes.slice(0, 6), maisOpcoes: Math.max(0, opcoes.length - 6), medida };
@@ -32852,6 +32885,7 @@
         renderListaCliente();
       }
       function fecharListaCliente() {
+        if (lc && lc.fase === 'adicionado' && lc.feitos && lc.feitos.length) aprenderFotoDaEtiqueta(lc.linhas); // saiu sem desfazer: confirmado
         if (lc && lc.abortar) lc.abortar.abort();
         lcGeracao++;
         lc = null;
@@ -32876,7 +32910,7 @@
         // o histórico do cliente decide entre opções parecidas (pacote × granel, o "eco" faltando): sem ele
         // no aparelho, busca antes de conferir (até 6 s; sem internet segue sem)
         const doCliente = escolherSozinho ? sugerido.cliente : (guardado || state.levCliente);
-        if (doCliente && doCliente.id && !COMPRADOS_CACHE.has(doCliente.id) && !lerCompradosLS()[doCliente.id] && navigator.onLine && lc) {
+        if (doCliente && doCliente.id && !COMPRADOS_CACHE.has(doCliente.id) && !lerCompradosLS()[doCliente.id] && navigator.onLine && lc && !lc.porBarras) {
           const g = lcGeracao;
           lc = { ...lc, fase: 'lendo', msg: 'Buscando o histórico do cliente…', sub: '' };
           renderListaCliente();
@@ -32894,9 +32928,11 @@
           // PDF tem cabeçalho, endereço, total...: linha que não acha produto nenhum não é item
           // (só fica a que tem quantidade com unidade, "3 UN": é item que o catálogo não tem)
           if (r.estado === 'nao' && origem === 'pdf' && !item.unidade) { ignoradas++; continue; }
+          // etiqueta: o produto do código de barras que a IA também leu ("Ler a foto inteira") fica uma vez só
+          if (ctx.etiqueta && r.produto && linhas.some(x => x.cod === r.produto.c)) continue;
           const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
             sugeridos: new Set([...(r.produto ? [r.produto.c] : []), ...(r.opcoes || []).map(p => p.c)]),
-            cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: item.campo || null };
+            cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: item.campo || null, seguro: !!r.seguro };
           if (r.produto) lcEscolher(l, r.produto);
           linhas.push(l);
         }
@@ -32908,14 +32944,73 @@
         }
         if (escolherSozinho) setLevCliente(sugerido.cliente);
         lc = { ...(lc || {}), fase: 'conferir', origem, linhas, ignoradas, comprados, sugerido, prontosAbertos: false, ...(extra || {}) };
+        // etiqueta em que todo produto saiu certo (código de barras, código impresso ou um só produto que bate):
+        // entra direto, com Desfazer - sem a tela de conferência entre uma foto e outra (11/2026)
+        // só com um produto na foto (o código do blister vizinho no canto não entra calado) e só o "pronto" seguro
+        if (lc.modo === 'etiqueta' && origem === 'foto' && linhas.length === 1 && linhas.every(l => l.estado === 'pronto' && l.seguro && l.cod && !l.ajuste && !l.item.duasEmbalagens)) { etiquetaDireto(); return; }
         renderListaCliente();
+      }
+      // etiqueta certa: soma no levantamento (estoque) ou no orçamento e mostra o que entrou, com Desfazer,
+      // "+1 de novo" e "Tirar outra foto" (a câmera só abre dentro de um toque)
+      function etiquetaDireto() {
+        const lev = lc.destino === 'lev';
+        lc.feitos = [];
+        for (const l of lc.linhas) somarEtiquetaDireto(l.cod, l.campo || 'qty', l.qtd);
+        lc.fase = 'adicionado';
+        playScanBeep(true);
+        if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) { } }
+        renderListaCliente();
+        if (!lev) renderResults();
+      }
+      function somarEtiquetaDireto(cod, campo, qtd) {
+        if (lc.destino === 'lev') {
+          const criado = !itemDoLevantamento(cod, false);
+          somarNoLevantamento(cod, campo, qtd);
+          lc.feitos.push({ cod, campo, qtd, criado });
+          saveLevSurvey();
+          renderLevList();
+        } else {
+          addToCart(cod, qtd, true);
+          lc.feitos.push({ cod, campo, qtd });
+        }
+      }
+      // tira o que a etiqueta somou (Desfazer, e antes de "Ler a foto inteira")
+      function desfazerEtiquetaDireto() {
+        const lev = lc.destino === 'lev';
+        const criados = new Set((lc.feitos || []).filter(f => f.criado).map(f => f.cod)); // com "+1 de novo", só o 1º criou
+        for (const f of lc.feitos || []) {
+          if (lev) {
+            const it = itemDoLevantamento(f.cod, false);
+            if (!it) continue;
+            it[f.campo] = Math.max(0, (Number(it[f.campo]) || 0) - f.qtd);
+            if (criados.has(f.cod) && !(Number(it.qty) > 0) && !(Number(it.ped) > 0)) state.survey = state.survey.filter(x => x !== it);
+          } else {
+            const it = state.cart.find(i => i.cod === f.cod);
+            if (!it) continue;
+            it.qty -= f.qtd;
+            if (!(it.qty > 0)) state.cart = state.cart.filter(x => x !== it);
+          }
+        }
+        lc.feitos = [];
+        if (lev) { saveLevSurvey(); renderLevList(); }
+        else { renderCart(); renderCartBar(); renderResults(); }
+      }
+      function htmlEtiquetaAdicionada() {
+        const lev = lc.destino === 'lev';
+        const porCod = new Map();
+        for (const f of lc.feitos) porCod.set(f.cod, (porCod.get(f.cod) || 0) + f.qtd);
+        return [...porCod].map(([cod, qtd]) => {
+          const p = productByCod(cod);
+          const total = lev ? (itemDoLevantamento(cod, false) || {}).qty : (state.cart.find(i => i.cod === cod) || {}).qty;
+          return `<div class="lcAdicionado"><b>${escapeHtml(p ? p.n : cod)}</b><small>${escapeHtml(cod)} · +${qtd} ${lev ? 'no estoque' : 'no orçamento'}${total ? ` · agora ${total}` : ''}</small></div>`;
+        }).join('');
       }
       function lcEscolher(l, p) {
         if (!p._tok) prepararProdutoParaBusca(p);
         const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
         // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem.
         // Etiqueta: a foto não diz quantidade - 1 no estoque (Levantamento) ou 1 embalagem (Pedido), sem aviso
-        const q = lc && lc.modo === 'etiqueta' ? { qtd: stepDaLinhaLista(l, p), ajuste: null }
+        const q = lc && lc.modo === 'etiqueta' ? { qtd: l.item.caixa && l.campo === 'qty' ? packStep(p) : stepDaLinhaLista(l, p), ajuste: null }
           : l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
@@ -32928,16 +33023,24 @@
       // print com transparência): sobe rápido no 4G e cabe no aparelho se ficar guardada
       const jpegBase64 = async (blob) => (await blobParaDataUrl(blob)).split(',')[1];
       const reduzirImagemLista = async (arquivo) => jpegBase64(await reduzirFoto(arquivo, [[1600, 0.82], [1200, 0.72], [900, 0.65]], 900 * 1024));
+      // etiqueta: 1280 px bastam pra IA ler a embalagem de perto e sobem mais rápido no 4G
+      const reduzirImagemEtiqueta = async (arquivo) => jpegBase64(await reduzirFoto(arquivo, [[1280, 0.8], [1024, 0.72], [900, 0.65]], 900 * 1024));
       async function lcFotosEscolhidas(arquivos) {
         const lista = [...arquivos].slice(0, LC_MAX_IMAGENS);
         if (!lista.length || !lc) return;
         const g = lcGeracao;
-        lc = { ...lc, fase: 'lendo', msg: 'Preparando a foto…' };
+        const etiqueta = lc.modo === 'etiqueta';
+        lc = { ...lc, fase: 'lendo', msg: etiqueta ? 'Procurando o código de barras…' : 'Preparando a foto…', sub: '', barrasItens: null };
         renderListaCliente();
         try {
+          // etiqueta: o código de barras da foto (na foto inteira, junto com a redução) resolve sem servidor
+          const reduzidas = lista.map(f => etiqueta ? reduzirImagemEtiqueta(f) : reduzirImagemLista(f));
+          const barras = etiqueta ? codigosDeBarrasDaFoto(lista[0], reduzidas[0]) : null;
           const imagens = [];
-          for (const f of lista) imagens.push({ tipo: 'image/jpeg', dados: await reduzirImagemLista(f) });
+          for (const r of reduzidas) imagens.push({ tipo: 'image/jpeg', dados: await r });
+          const lidos = barras ? await barras : [];
           if (lcVelha(g)) return;
+          if (lidos.length) { await etiquetaPorCodigoDeBarras(lidos, imagens); return; }
           await lerImagensDaLista(imagens, 'foto');
         } catch (e) {
           if (lcVelha(g)) return;
@@ -33012,6 +33115,14 @@
         // leitura que não deu: na etiqueta com o reconhecedor, os mais parecidos pela foto viram as opções;
         // senão a tela de erro (semImagem: sem "Tentar de novo", que é o caso de sem sinal)
         const falhouLeitura = (erro, semImagem) => {
+          // "Ler a foto inteira" que não deu: volta o que o código de barras já tinha achado
+          if (etiqueta && lc.barrasItens) {
+            showToast(`${erro} · ficou o do código de barras`, 'erro');
+            const itens = lc.barrasItens;
+            lc.porBarras = true;
+            conferirItensDaLista(itens, origem, { pistas: { cnpjs: [] } });
+            return;
+          }
           if (parecidos && parecidos.cands.length) {
             if (erro !== ETIQUETA_SEM_SINAL) showToast(`${erro} · mostrando os mais parecidos pela foto`, 'erro');
             const opcoes = parecidos.cands.slice(0, SUGESTOES_SEM_INTERNET).map(x => x.c);
@@ -33029,7 +33140,7 @@
         };
         if (!navigator.onLine) { await semSinal(); return; }
         const abortar = new AbortController();
-        lc = { ...lc, fase: 'lendo', msg: etiqueta ? 'Lendo a etiqueta…' : 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
+        lc = { ...lc, porBarras: false, fase: 'lendo', msg: etiqueta ? 'Lendo a etiqueta…' : 'Lendo a lista…', sub: 'A primeira leitura do dia pode levar até 1 minuto (o servidor estava dormindo).', abortar, imagens, origemImagem: origem };
         renderListaCliente();
         const candidatos = parecidos ? parecidos.cands.map(x => ({ c: x.c, n: productByCod(x.c).n })) : null;
         let lido;
@@ -33047,14 +33158,71 @@
           return;
         }
         // no Levantamento, cada produto lido na etiqueta soma no estoque (o campo vai na linha, como na voz)
-        const itens = etiqueta && lc.destino === 'lev' ? lido.itens.map(it => ({ ...it, campo: 'qty' })) : lido.itens;
+        const daIA = etiqueta && lc.destino === 'lev' ? lido.itens.map(it => ({ ...it, campo: 'qty' })) : lido.itens;
+        const itens = etiqueta && lc.barrasItens ? [...lc.barrasItens, ...daIA] : daIA; // o do código de barras na frente
         conferirItensDaLista(itens, origem, { pistas: { cnpjs: lido.cnpjs } });
       }
       // "📷 Pela etiqueta" (11/2026, depois do teste com fotos reais de discos e lâminas: a imagem sozinha
       // não separa a medida, a etiqueta diz tudo): foto da embalagem -> Gemini lê a etiqueta (modo 'etiqueta'
       // da mesma rota da lista) -> busca do app -> a mesma conferência. destino 'lev' = Levantamento
       // (soma 1 no estoque); sem destino = orçamento. A câmera abre no mesmo toque (o navegador exige).
+      // Código de barras impresso na foto da etiqueta, lido no aparelho (sem servidor e sem internet): os que
+      // o catálogo conhece -> [{ code, p, caixa }] (DUN = caixa fechada). Até 2,5 s; sem leitor ou sem código, [].
+      const BARRAS_FOTO_PRAZO_MS = 2500;
+      const FORMATOS_BARRAS_FOTO = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'itf'];
+      // reduzida: a mesma foto já reduzida pra IA (Promise do base64), que o ZXing usa (não decodifica os 12 MP de novo)
+      async function codigosDeBarrasDaFoto(arquivo, reduzida) {
+        const ler = async () => {
+          let textos = [];
+          let nativo = false;
+          if ('BarcodeDetector' in window) {
+            try { nativo = (await BarcodeDetector.getSupportedFormats()).includes('ean_13'); } catch (e) { }
+          }
+          if (nativo) {
+            const bmp = await createImageBitmap(arquivo);
+            try { textos = (await new BarcodeDetector({ formats: FORMATOS_BARRAS_FOTO }).detect(bmp)).map(x => x.rawValue); }
+            finally { if (bmp.close) bmp.close(); }
+          } else {
+            await loadZXingScript();
+            const url = 'data:image/jpeg;base64,' + await reduzida;
+            try { textos = [(await new ZXing.BrowserMultiFormatReader().decodeFromImageUrl(url)).getText()]; }
+            catch (e) { textos = []; } // sem código legível na foto
+          }
+          const porCod = new Map();
+          for (const t of textos) {
+            const r = resolverCodigoDoLeitor(t);
+            if (!r) continue;
+            const ja = porCod.get(r.p.c);
+            if (!ja) porCod.set(r.p.c, { code: String(t).trim(), p: r.p, caixa: r.caixa });
+            else if (ja.caixa !== r.caixa) Object.assign(ja, { caixa: false, duasEmbalagens: true }); // unidade e caixa à vista: confere
+          }
+          return [...porCod.values()];
+        };
+        let prazo;
+        try {
+          return await Promise.race([ler(), new Promise(ok => { prazo = setTimeout(() => ok([]), BARRAS_FOTO_PRAZO_MS); })]);
+        } catch (e) { return []; } finally { clearTimeout(prazo); }
+      }
+      // produtos achados pelo código de barras: mesma conferência (que, toda certa, entra direto). A foto
+      // fica pra "Ler a foto inteira" (outra embalagem na foto sem o código à vista)
+      async function etiquetaPorCodigoDeBarras(lidos, imagens) {
+        const lev = lc.destino === 'lev';
+        lc = { ...lc, imagens, origemImagem: 'foto', vetorFoto: null, opcoesPelaFoto: null, porBarras: true };
+        const itens = lidos.map(x => ({ texto: x.duasEmbalagens ? `Código de barras ${x.code} · unidade e caixa na foto: confira a quantidade` : `Código de barras ${x.code}`,
+          termo: '', qtd: 1, unidade: null, codigos: [x.p.c], caixa: x.caixa, duasEmbalagens: !!x.duasEmbalagens, ...(lev ? { campo: 'qty' } : {}) }));
+        lc.barrasItens = itens; // "Ler a foto inteira": entram junto da leitura da IA (e voltam se ela falhar)
+        await conferirItensDaLista(itens, 'foto', { pistas: { cnpjs: [] } });
+      }
+      // Render free dorme: a 1ª leitura do dia esperava 30-50 s. Abrir a etiqueta já acorda o servidor
+      // enquanto o vendedor tira a foto (no máximo uma vez a cada 5 min)
+      let servidorAcordadoEm = 0;
+      function acordarServidor() {
+        if (!navigator.onLine || Date.now() - servidorAcordadoEm < 5 * 60000) return;
+        servidorAcordadoEm = Date.now();
+        fetch(getApiConfig().baseUrl + '/health', { cache: 'no-store' }).catch(() => { });
+      }
       function abrirEtiqueta(destino) {
+        acordarServidor();
         abrirListaCliente();
         lc = { ...lc, fase: 'etiqueta', modo: 'etiqueta', destino: destino || null };
         renderListaCliente();
@@ -33080,6 +33248,9 @@
       const CANDIDATOS_GEMINI = 30;
       const SUGESTOES_SEM_INTERNET = 5;
       const RECONHECER_PRAZO_MS = 20000; // 1ª foto do dia carrega o modelo (~2-5 s no celular)
+      // modelo já carregado: passou disso, a foto vai pra IA sem a lista de parecidos (não espera o celular lento)
+      const RECONHECER_PRAZO_CARREGADO_MS = 3000;
+      let reconhecedorCarregado = false;
       let indiceFotos = null; // { modelo, versao, ultimo, vetores: [{ id, c, o, f, v: base64 }] } (como veio do servidor)
       let indiceFotosPromise = null; // leitura do IndexedDB em andamento (status e preparo ao mesmo tempo)
       let reconhecedorPromise = null; // sessão do onnxruntime, carregada na 1ª foto
@@ -33119,6 +33290,7 @@
           window.ort.env.wasm.wasmBinary = wasm; // o .wasm já conferido pelo hash
           const sessao = await window.ort.InferenceSession.create(modelo, { executionProviders: ['wasm'] });
           window.ort.env.wasm.wasmBinary = null; // já compilado: não segura os ~15 MB
+          reconhecedorCarregado = true;
           return sessao;
         })();
         reconhecedorPromise.catch(() => { reconhecedorPromise = null; }); // falhou: tenta de novo na próxima foto
@@ -33233,7 +33405,7 @@
           inferindo = true;
           const rodando = vetorDaFoto(foto).finally(() => { inferindo = false; });
           let prazo;
-          const vetor = await Promise.race([rodando, new Promise((ok, falha) => { prazo = setTimeout(() => falha(new Error('demorou')), RECONHECER_PRAZO_MS); })])
+          const vetor = await Promise.race([rodando, new Promise((ok, falha) => { prazo = setTimeout(() => falha(new Error('demorou')), reconhecedorCarregado && navigator.onLine ? RECONHECER_PRAZO_CARREGADO_MS : RECONHECER_PRAZO_MS); })])
             .finally(() => clearTimeout(prazo));
           const cands = candidatosPorVetor(vetorNormalizado(vetor), itensDoIndice(idx), CANDIDATOS_GEMINI + 10).filter(x => productByCod(x.c)).slice(0, CANDIDATOS_GEMINI);
           return { vetor, cands }; // vetor em int8 (o que vai pro servidor se a foto for confirmada)
@@ -33526,11 +33698,24 @@
         if (lc.fase === 'etiqueta') {
           titulo.textContent = 'Pela etiqueta';
           sub.textContent = lc.destino === 'lev' ? 'soma no estoque do levantamento' : (state.levCliente ? state.levCliente.nome : '');
-          corpo.innerHTML = `<p class="lcDica">Tire a foto de perto, com a etiqueta da embalagem inteira e sem reflexo. O app acha o produto e você confere antes de ${lc.destino === 'lev' ? 'somar no levantamento' : 'entrar no orçamento'}.</p>
+          corpo.innerHTML = `<p class="lcDica">Tire a foto de perto, com a etiqueta da embalagem inteira e sem reflexo (com o código de barras à vista, melhor). Lido certinho, o produto ${lc.destino === 'lev' ? 'soma no levantamento' : 'entra no orçamento'} direto (dá pra desfazer); em dúvida, você confere.</p>
             <div class="lcFontes"><button type="button" class="lcFonte" id="lcEtiquetaFotoBtn"><span aria-hidden="true">📷</span>Tirar foto</button></div>
-            <p class="lcNota">Precisa de internet. Sem sinal, use o código de barras ou a busca pelo nome.</p>
+            <p class="lcNota">O código de barras na foto é lido sem internet; a etiqueta sem ele precisa de sinal.</p>
             ${RECONHECEDOR_RODA && indiceFotos && indiceFotos.vetores.length && !reconhecedorGuardado ? `<p class="lcNota">Reconhecimento por foto (ajuda a IA e sugere sem internet): ${preparandoReconhecedor ? 'baixando…' : `baixa sozinho no Wi-Fi · <button type="button" class="lcLink" id="lcBaixarReconhecBtn">baixar agora (~${RECONHECEDOR_MB} MB)</button>`}</p>` : ''}`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
+          return;
+        }
+        if (lc.fase === 'adicionado') {
+          const lev = lc.destino === 'lev';
+          titulo.textContent = lev ? '✓ No levantamento' : '✓ No orçamento';
+          sub.textContent = lc.porBarras ? 'pelo código de barras da foto' : 'pela etiqueta';
+          corpo.innerHTML = htmlEtiquetaAdicionada() + `<div class="lcAdicionadoAcoes">
+              <button type="button" class="restoreBtn compacto" id="lcDesfazerEtiquetaBtn">Desfazer</button>
+              <button type="button" class="restoreBtn compacto" id="lcMaisUmEtiquetaBtn">+1 de novo</button>
+            </div>
+            ${lc.porBarras && lc.imagens && navigator.onLine ? '<p class="lcNota">Tinha outra embalagem na foto? <button type="button" class="lcLink" id="lcLerFotoInteiraBtn">Ler a foto inteira</button></p>' : ''}`;
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>
+            <button type="button" class="btnPrimary" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
           return;
         }
         if (lc.fase === 'lendo') {
@@ -33738,6 +33923,7 @@
           if (t.id === 'lcEtiquetaFotoBtn') {
             // no Levantamento, o que já foi conferido soma antes da próxima foto (não se perde); tudo síncrono:
             // a câmera só abre dentro do toque
+            if (lc.fase === 'adicionado' && lc.feitos && lc.feitos.length) aprenderFotoDaEtiqueta(lc.linhas); // saiu sem desfazer
             const conferidos = lc.fase === 'conferir' && lc.destino === 'lev' ? lcIncluidas() : [];
             if (conferidos.length) {
               aprenderFotoDaEtiqueta(conferidos);
@@ -33746,9 +33932,32 @@
               renderLevList();
               showToast(`${conferidos.length} ite${conferidos.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
             }
-            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, opcoesPelaFoto: null, rotulo: null, sugerido: null, pistas: null };
+            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, opcoesPelaFoto: null, rotulo: null, sugerido: null, pistas: null, feitos: null, porBarras: false };
             renderListaCliente();
             etiquetaInput.click();
+            return;
+          }
+          if (t.id === 'lcDesfazerEtiquetaBtn') {
+            // volta pra conferência das mesmas linhas: dá pra escolher outro produto ou tirar outra foto
+            desfazerEtiquetaDireto();
+            for (const l of lc.linhas) l.fora = true; // "Tirar outra foto"/"Pôr" não põem de volta; dá pra incluir ou escolher outro
+            lc.fase = 'conferir';
+            lc.prontosAbertos = true;
+            showToast('Desfeito');
+            renderListaCliente();
+            return;
+          }
+          if (t.id === 'lcMaisUmEtiquetaBtn') {
+            for (const l of lc.linhas) somarEtiquetaDireto(l.cod, l.campo || 'qty', l.qtd);
+            playScanBeep(true);
+            renderListaCliente();
+            if (lc.destino !== 'lev') renderResults();
+            return;
+          }
+          if (t.id === 'lcLerFotoInteiraBtn') {
+            if (!navigator.onLine) { showToast(ETIQUETA_SEM_SINAL, 'erro'); return; }
+            desfazerEtiquetaDireto(); // o do código de barras volta junto da leitura (lc.barrasItens)
+            lerImagensDaLista(lc.imagens, 'foto');
             return;
           }
           if (t.id === 'lcPdfBtn') { pdfInput.click(); return; }
