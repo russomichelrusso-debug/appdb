@@ -3629,7 +3629,9 @@ async function main() {
     {
       const lista = res.body.clientes || [];
       const por = (id) => lista.find(c => c.cliente_id === id);
-      const ids = lista.map(c => c.cliente_id);
+      // só as lojas deste teste (96xx): as de testes anteriores, com datas fixas, entram sozinhas na faixa
+      // "mais de 12 meses" conforme o tempo passa (em 11/2026 as 9404/9405, compra de 10/2025)
+      const ids = lista.map(c => c.cliente_id).filter(id => id >= 9600 && id < 9700);
       assert(res.status === 200 && res.body.relatorio.data === hojeBr && !por(9603) && !por(9604) && !por(9606)
         && por(9601) && por(9601).mes_ultima_compra === mesISO(4) && por(9601).fat === 5000 && por(9601).fat_origem === 'erp_12m' && por(9601).cidade === 'Maringa'
         && por(9602) && por(9605) && por(9605).no_relatorio === false && por(9605).mes_ultima_compra === mesISO(20)
