@@ -142,8 +142,9 @@ const MAX_BASE64_POR_IMAGEM = 4 * 1024 * 1024; // ~3 MB de imagem; o app manda ~
 const MAX_ITENS_DA_IMAGEM = 80;
 const TIPOS_IMAGEM = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-// Resposta do Gemini -> [{ texto, quantidade, unidade }] limpo (nada além disso passa)
-function itensDaRespostaGemini(resultado) {
+// Resposta do Gemini -> [{ texto, quantidade, unidade }] limpo (nada além disso passa). Com
+// candidatos (etiqueta), "codigo" só passa se for um deles: código inventado não entra.
+function itensDaRespostaGemini(resultado, codigosPermitidos) {
   const lista = Array.isArray(resultado) ? resultado : (resultado && Array.isArray(resultado.itens) ? resultado.itens : []);
   const itens = [];
   for (const it of lista) {
@@ -153,7 +154,8 @@ function itensDaRespostaGemini(resultado) {
     const q = Number(String(it.quantidade ?? '').replace(',', '.'));
     const quantidade = q > 0 && q <= 99999 ? Math.round(q * 1000) / 1000 : null;
     const unidade = ['un', 'cx', 'pct'].includes(it.unidade) ? it.unidade : null;
-    itens.push({ texto, quantidade, unidade });
+    const codigo = codigosPermitidos && codigosPermitidos.has(String(it.codigo ?? '')) ? String(it.codigo) : null;
+    itens.push(codigo ? { texto, quantidade, unidade, codigo } : { texto, quantidade, unidade });
     if (itens.length >= MAX_ITENS_DA_IMAGEM) break;
   }
   return itens;
@@ -171,6 +173,28 @@ Um item por produto diferente (embalagens iguais lado a lado = um item só). Ign
 Responda SOMENTE com um JSON válido neste formato:
 {"itens": [{"texto": "disco de corte diamantado turbo 110 mm", "quantidade": null, "unidade": null}], "cnpj": null}`;
 
+const MAX_CANDIDATOS = 40;
+const CODIGO_CANDIDATO = /^[A-Za-z0-9._-]{1,30}$/;
+// [{ c, n }] -> limpo; ausente = []; formato errado = null
+function candidatosDaEtiqueta(lista) {
+  if (lista == null) return [];
+  if (!Array.isArray(lista) || lista.length > MAX_CANDIDATOS) return null;
+  const vistos = new Set(), out = [];
+  for (const x of lista) {
+    const c = String((x && x.c) ?? ''), n = String((x && x.n) ?? '').replace(/[\r\n"]+/g, ' ').trim().slice(0, 120);
+    if (!CODIGO_CANDIDATO.test(c) || !n) return null;
+    if (!vistos.has(c)) { vistos.add(c); out.push({ c, n }); }
+  }
+  return out;
+}
+function textoDosCandidatos(candidatos) {
+  if (!candidatos.length) return '';
+  return `
+
+Pela foto, o produto deve ser um destes do catálogo (código | nome). Se a etiqueta for de um deles, inclua no item "codigo" com o código da lista; se não for nenhum, não inclua "codigo" (o "texto" continua obrigatório). Não escolha só pela aparência: confira o tipo, a linha e a medida impressos.
+${candidatos.map(x => `${x.c} | ${x.n}`).join('\n')}`;
+}
+
 router.post('/itens-da-imagem', limiteDaImagem, async (req, res) => {
   const imagens = req.body && req.body.imagens;
   if (!Array.isArray(imagens) || !imagens.length || imagens.length > MAX_IMAGENS) {
@@ -187,7 +211,10 @@ router.post('/itens-da-imagem', limiteDaImagem, async (req, res) => {
   // "📷 Pela etiqueta" (Pedido e Levantamento, 11/2026): foto da EMBALAGEM de um produto na loja.
   // A IA só lê a etiqueta; o produto sai da busca do app e passa pela mesma conferência da lista.
   const etiqueta = req.body.modo === 'etiqueta';
-  const prompt = etiqueta ? PROMPT_ETIQUETA : `As imagens são de uma lista de compras, pedido ou orçamento de ferramentas para construção civil que um cliente mandou ao vendedor (pode ser foto de papel, print de tela ou PDF escaneado; pode ser de outra marca).
+  // candidatos: os produtos de foto mais parecida, calculados no celular (routes/produtoVetores.js)
+  const candidatos = etiqueta ? candidatosDaEtiqueta(req.body.candidatos) : [];
+  if (candidatos === null) return res.status(422).json({ erro: 'Lista de produtos parecidos inválida.' });
+  const prompt = etiqueta ? PROMPT_ETIQUETA + textoDosCandidatos(candidatos) : `As imagens são de uma lista de compras, pedido ou orçamento de ferramentas para construção civil que um cliente mandou ao vendedor (pode ser foto de papel, print de tela ou PDF escaneado; pode ser de outra marca).
 
 Liste cada linha de PRODUTO, na ordem em que aparece. Para cada uma:
 - "texto": a descrição do produto exatamente como está escrita, com medidas e o código se houver (sem preço, sem total)
@@ -214,7 +241,8 @@ Responda SOMENTE com um JSON válido neste formato:
     if (!resultado) return res.status(502).json({ erro: 'Não deu pra ler a foto agora — tenta de novo.' });
     // CNPJ da loja (o app sugere o cliente por ele); só 14 dígitos passam
     const cnpj = String((resultado && resultado.cnpj) || '').replace(/\D/g, '');
-    res.json({ itens: itensDaRespostaGemini(resultado), cnpj: !etiqueta && cnpj.length === 14 ? cnpj : null });
+    const permitidos = candidatos.length ? new Set(candidatos.map(x => x.c)) : null;
+    res.json({ itens: itensDaRespostaGemini(resultado, permitidos), cnpj: !etiqueta && cnpj.length === 14 ? cnpj : null });
   } catch (e) {
     console.error('Erro ao ler a imagem:', e.message);
     res.status(502).json({ erro: e.name === 'TimeoutError' ? 'A leitura da foto demorou demais — tenta de novo.' : 'Erro ao ler a foto.' });

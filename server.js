@@ -30,6 +30,7 @@ const reativacaoRoutes = require('./routes/reativacao');
 const visitasRoutes = require('./routes/visitas');
 const inadimplenciaRoutes = require('./routes/inadimplencia');
 const produtoFotosRoutes = require('./routes/produtoFotos');
+const produtoVetoresRoutes = require('./routes/produtoVetores');
 const novidadesRoutes = require('./routes/novidades');
 const importacaoEmailRoutes = require('./routes/importacaoEmail');
 const segundaTelaRoutes = require('./routes/segundaTela');
@@ -176,6 +177,7 @@ app.use('/api/reativacao', requireAuth, limiteRotasPesadas, reativacaoRoutes);
 app.use('/api/visitas', requireAuth, limiteRotasPesadas, visitasRoutes);
 app.use('/api/inadimplencia', requireAuth, limiteRotasPesadas, inadimplenciaRoutes);
 app.use('/api/produto-fotos', requireAuth, limiteRotasPesadas, produtoFotosRoutes);
+app.use('/api/produto-vetores', requireAuth, limiteRotasPesadas, produtoVetoresRoutes); // índice do reconhecimento por foto
 app.use('/api/novidades', requireAuth, limiteRotasPesadas, novidadesRoutes);
 app.use('/api/segunda-tela', requireAuth, limiteRotasPesadas, segundaTelaRoutes); // tablet como tela do cliente
 // /arquivo pela chave do script do Gmail; /status exige login (dentro da rota)

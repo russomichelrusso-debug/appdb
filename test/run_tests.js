@@ -4361,6 +4361,43 @@ async function main() {
       }
     }
 
+    // Reconhecimento por foto (index.html, trecho <motor-vetores>, 11/2026): int8 com escala por vetor
+    // (cosseno igual ao do vetor original), base64 ida e volta, candidatos = melhor foto de cada código
+    {
+      const fsV = require('fs');
+      const vmV = require('vm');
+      const htmlV = fsV.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+      const i = htmlV.indexOf('// <motor-vetores>'), f = htmlV.indexOf('// </motor-vetores>');
+      const ctxV = { atob: (b) => Buffer.from(b, 'base64').toString('latin1'), btoa: (t) => Buffer.from(t, 'latin1').toString('base64') };
+      vmV.createContext(ctxV);
+      if (i < 0 || f < i) {
+        assert(false, 'vetores: trecho <motor-vetores> não encontrado no index.html');
+      } else {
+        vmV.runInContext(htmlV.slice(i, f) + '\nthis.VETOR_DIM = VETOR_DIM;', ctxV);
+        const D = ctxV.VETOR_DIM;
+        let semente = 7;
+        const aleatorio = () => { semente = (semente * 16807) % 2147483647; return semente / 2147483647 - 0.5; };
+        const vet = () => { const v = new Float32Array(D); let n = 0; for (let k = 0; k < D; k++) { v[k] = aleatorio(); n += v[k] * v[k]; } n = Math.sqrt(n); return v.map(x => x / n); };
+        const a = vet(), b = vet();
+        const dot = (x, y) => x.reduce((s, xi, k) => s + xi * y[k], 0);
+        const qa = ctxV.quantizarVetor(a), volta = ctxV.vetorDeBase64(ctxV.base64DeVetor(qa));
+        const na = ctxV.vetorNormalizado(volta);
+        assert(qa.length === D && Math.max(...qa.map(Math.abs)) === 127 && volta.every((x, k) => x === qa[k]) && dot(a, na) > 0.999
+          && Buffer.from(ctxV.base64DeVetor(qa), 'base64').length === D,
+          `vetores: int8 ida e volta pelo base64, ~mesmo vetor (cosseno ${dot(a, na).toFixed(4)})`);
+        const perto = a.map((x, k) => x + 0.02 * b[k]);
+        const itens = [{ c: 'A', v: ctxV.vetorNormalizado(ctxV.quantizarVetor(b)) }, { c: 'B', v: na },
+          { c: 'A', v: ctxV.vetorNormalizado(ctxV.quantizarVetor(perto)) }, { c: 'C', v: ctxV.vetorNormalizado(ctxV.quantizarVetor(vet())) }];
+        const top = ctxV.candidatosPorVetor(na, itens, 2);
+        assert(top.length === 2 && top[0].c === 'B' && top[1].c === 'A' && top[1].s > 0.9,
+          `vetores: candidatos por código, cada um pela melhor foto dele: ${JSON.stringify(top)}`);
+      }
+      const modeloApp = (htmlV.match(/const MODELO_VETOR = '([^']+)'/) || [])[1];
+      assert(modeloApp && modeloApp === require('../routes/lib/vetoresFoto').MODELO_VETOR,
+        `vetores: o modelo do app (${modeloApp}) é o mesmo do servidor (routes/lib/vetoresFoto.js)`);
+      assert(/script-src[^;]*'wasm-unsafe-eval'/.test(htmlV), 'vetores: o CSP do index.html deixa rodar o WebAssembly do reconhecedor');
+    }
+
     // "📷 Pela etiqueta" (11/2026): o texto lido na embalagem vai pela mesma busca da lista. Fotos reais de
     // discos e lâminas: cada etiqueta acha o seu produto, e o empate "porcelanato" × "porcelanato PLUS" vai
     // pro que a etiqueta descreve por inteiro (sem o "plus" escrito)
@@ -5013,8 +5050,14 @@ async function main() {
     const index = fs.readFileSync(path.join(raiz, 'index.html'), 'utf8');
     const blocoIndex = (index.match(/const INTEGRIDADE_CDN = \{([\s\S]*?)\};/) || [])[1] || '';
     const hashIndex = new Map([...blocoIndex.matchAll(/'(https:\/\/[^']+)':\s*'(sha384-[A-Za-z0-9+/=]{64})'/g)].map(m => [m[1], m[2]]));
+    // fora das CDNs só o modelo do reconhecimento por foto (Hugging Face, preso à revisão do repositório):
+    // tem de estar no index.html, no INTEGRIDADE_CDN, com o mesmo hash (o resto do teste confere)
+    const naoCdn = [...hashSw.keys()].filter(u => !/^https:\/\/(?:cdnjs\.cloudflare\.com|cdn\.jsdelivr\.net)\//.test(u));
+    const naoCdnErrado = naoCdn.filter(u => !/^https:\/\/huggingface\.co\/[^/]+\/[^/]+\/resolve\/[0-9a-f]{40}\//.test(u) || !index.includes(`'${u}'`));
+    for (const u of naoCdn) hashSw.delete(u);
     const semHash = [...usadas].filter(u => !hashSw.has(u));
-    const diferentes = [...new Set([...hashSw.keys(), ...hashIndex.keys()])].filter(u => hashSw.get(u) !== hashIndex.get(u));
+    const hashSwTodos = new Map([...blocoLibs.matchAll(/'(https:\/\/[^']+)',\s*'(sha384-[A-Za-z0-9+/=]{64})'/g)].map(m => [m[1], m[2]]));
+    const diferentes = [...new Set([...hashSwTodos.keys(), ...hashIndex.keys()])].filter(u => hashSwTodos.get(u) !== hashIndex.get(u));
     // tags <script src> e import map: o hash de cada endereço = o da LIBS
     const problemasTag = [];
     for (const f of ['index.html', 'curva-abc.html', 'calculadora-materiais.html', 'ficha-cnpj.html', 'tela-cliente.html']) {
@@ -5045,8 +5088,8 @@ async function main() {
       if (!integMap[`${pdfMin}?tentativa=${i}`]) problemasTag.push(`import map sem ?tentativa=${i}`);
     }
     if (!(maxTentativas >= 1) || !/Math\.min\(loadPdfJs\.falhas, PDFJS_MAX_TENTATIVAS\)/.test(index)) problemasTag.push('loadPdfJs sem limite de tentativas');
-    assert(hashSw.size === usadas.size && semHash.length === 0 && diferentes.length === 0 && problemasTag.length === 0,
-      `bibliotecas de CDN com o mesmo hash (SRI) no sw.js e nas páginas: ${JSON.stringify({ semHash, diferentes, problemasTag })}`);
+    assert(hashSw.size === usadas.size && semHash.length === 0 && diferentes.length === 0 && problemasTag.length === 0 && naoCdnErrado.length === 0,
+      `bibliotecas de CDN com o mesmo hash (SRI) no sw.js e nas páginas: ${JSON.stringify({ semHash, diferentes, problemasTag, naoCdnErrado })}`);
     assert(/integrity: LIBS\.get\(url\)/.test(sw) && !/\(\) => fetch\(req\)/.test(sw) && /CACHE_LIBS = 'cortag-libs-v2'/.test(sw)
       && /migrarLibsAnteriores\(cache\)/.test(sw) && /hashSri\(velha\.clone\(\)\)\) === LIBS\.get\(url\)/.test(sw),
       'service worker baixa as bibliotecas conferindo o hash, sem busca sem conferência, em cache novo (trazendo do anterior só o que bate)');
@@ -5519,6 +5562,75 @@ async function main() {
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
       authToken = semLogin;
       assert(r.status === 401, `foto da lista: sem login = 401 antes de ler o corpo (${r.status})`);
+    } finally {
+      global.fetch = fetchAntes;
+      if (chaveAntes === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = chaveAntes;
+    }
+  }
+
+  {
+    // Índice de fotos do reconhecimento (routes/produtoVetores.js, 11/2026): o admin grava os vetores
+    // das fotos do catálogo, o vendedor grava a foto de etiqueta confirmada (até 8 por código), o
+    // aparelho lê a versão e o índice do modelo atual. Vetor = 384 bytes em base64.
+    const { MODELO_VETOR, VETOR_DIM } = require('../routes/lib/vetoresFoto');
+    const vet = (b) => Buffer.alloc(VETOR_DIM, b).toString('base64');
+    mockDb.__getProdutoFotos().VT1 = { imagem: Buffer.from('x'), tamanho: 1, versao: 111 };
+    mockDb.__getProdutoFotos().VT2 = { imagem: Buffer.from('x'), tamanho: 1, versao: 222 };
+    mockDb.__seed({ catalogoPrecos: [{ codigo_sku: 'VT1', nome: 'DISCO VT1', emb: 10 }] });
+    let r = await req('GET', '/api/produto-vetores/versao');
+    assert(r.status === 200 && r.body.modelo === MODELO_VETOR && r.body.total === 0 && r.body.versao === '0-0', `vetores: índice começa vazio (${JSON.stringify(r.body)})`);
+    r = await req('POST', '/api/produto-vetores/catalogo', { modelo: 'outro', vetores: [{ c: 'VT1', f: 111, v: vet(3) }] });
+    const rCurto = await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 111, v: Buffer.alloc(10, 3).toString('base64') }] });
+    assert(r.status === 422 && rCurto.status === 422, `vetores: modelo diferente ou vetor de tamanho errado = 422 (${r.status}, ${rCurto.status})`);
+    r = await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 111, v: vet(3) }, { c: 'VT2', f: 222, v: vet(4) }, { c: 'SEMFOTO', f: 1, v: vet(5) }] });
+    assert(r.status === 200 && r.body.gravados === 2, `vetores: o admin grava os do catálogo (só de produto com foto): ${JSON.stringify(r.body)}`);
+    r = await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 333, v: vet(6) }] });
+    const v1 = mockDb.__getProdutoVetores().filter(v => v.codigo_sku === 'VT1' && v.origem === 'catalogo');
+    assert(r.status === 200 && v1.length === 1 && v1[0].foto_versao === 333 && v1[0].vetor[0] === 6, 'vetores: foto trocada regrava o vetor do catálogo (um por código)');
+    for (let i = 1; i <= 10; i++) r = await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, c: 'VT1', v: vet(10 + i) });
+    const daLoja = mockDb.__getProdutoVetores().filter(v => v.codigo_sku === 'VT1' && v.origem === 'loja');
+    assert(r.status === 200 && daLoja.length === 8 && daLoja.every(v => v.vetor[0] >= 13), `vetores: foto da loja guarda só as 8 mais recentes do código (${daLoja.length})`);
+    r = await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, c: 'NAOEXISTE', v: vet(9) });
+    assert(r.status === 422, `vetores: foto da loja de produto fora do catálogo = 422 (${r.status})`);
+    r = await req('GET', '/api/produto-vetores');
+    const lista = r.body && r.body.vetores;
+    assert(r.status === 200 && lista.length === 10 && lista.filter(x => x.o === 'catalogo').length === 2
+      && lista.find(x => x.c === 'VT2').f === 222 && Buffer.from(lista[0].v, 'base64').length === VETOR_DIM,
+      `vetores: o índice traz catálogo + loja do modelo atual: ${lista && lista.length}`);
+    const rv = await req('GET', '/api/produto-vetores/versao');
+    assert(rv.body.total === 10 && rv.body.versao !== '0-0', `vetores: a versão muda com o índice (${rv.body.versao})`);
+    delete mockDb.__getProdutoFotos().VT2;
+    await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 333, v: vet(6) }] });
+    assert(!mockDb.__getProdutoVetores().some(v => v.codigo_sku === 'VT2'), 'vetores: foto que saiu do produto tira o vetor do índice');
+    const semLogin = authToken; authToken = '';
+    r = await req('GET', '/api/produto-vetores');
+    authToken = semLogin;
+    assert(r.status === 401, `vetores: sem login = 401 (${r.status})`);
+
+    // Etiqueta com candidatos: vão no pedido ao Gemini e só código da lista volta
+    const fetchAntes = global.fetch, chaveAntes = process.env.GEMINI_API_KEY;
+    let enviado = null;
+    global.fetch = async (url, opts) => {
+      if (!String(url).includes('generativelanguage.googleapis.com')) return fetchAntes(url, opts);
+      enviado = JSON.parse(opts.body);
+      const resposta = { itens: [{ texto: 'disco turbo 110 mm', quantidade: null, codigo: '60599' }, { texto: 'lâmina 24 dentes', codigo: '99999' }] };
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(resposta) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+      process.env.GEMINI_API_KEY = 'chave-falsa';
+      const img = { tipo: 'image/jpeg', dados: Buffer.from('jpeg falso').toString('base64') };
+      const candidatos = [{ c: '60599', n: 'DISCO DE CORTE DIAMANTADO TURBO 110 mm' }, { c: '60863', n: 'DISCO DE CORTE DIAMANTADO TURBO PORCELANATO 110 mm' }];
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos });
+      const texto = enviado.contents[0].parts[0].text;
+      assert(r.status === 200 && r.body.itens[0].codigo === '60599' && !('codigo' in r.body.itens[1])
+        && /60599 \| DISCO DE CORTE DIAMANTADO TURBO 110 mm/.test(texto) && /60863 \|/.test(texto),
+        `etiqueta com candidatos: a lista vai pro Gemini e só código dela volta: ${JSON.stringify(r.body.itens)}`);
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos: [{ c: 'x y', n: 'nome' }] });
+      const rMuitos = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos: Array.from({ length: 41 }, (_, i) => ({ c: 'C' + i, n: 'n' })) });
+      assert(r.status === 422 && rMuitos.status === 422, `etiqueta com candidatos: código inválido ou mais de 40 = 422 (${r.status}, ${rMuitos.status})`);
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+      assert(r.status === 200 && r.body.itens.every(it => !('codigo' in it)) && !/Pela foto, o produto deve ser/.test(enviado.contents[0].parts[0].text),
+        'etiqueta sem candidatos: nenhum código volta e o pedido não traz lista');
     } finally {
       global.fetch = fetchAntes;
       if (chaveAntes === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = chaveAntes;

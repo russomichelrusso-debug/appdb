@@ -93,6 +93,13 @@ const LIBS = new Map([
   ['https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js', 'sha384-mZT2gIty7ZDdOGkxfP6joZcYdMW1Jvj9dRlfpTmaJAKKXTqzygtB22k7FLe+KZC1'],
   // Mapa da carteira (aba Clientes, laptop)
   ['https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js', 'sha384-NElt3Op+9NBMCYaef5HxeJmU4Xeard/Lku8ek6hoPTvYkQPh3zLIrJP7KiRocsxO'],
+  // Reconhecimento por foto ("📷 Pela etiqueta", index.html): onnxruntime-web e o modelo DINOv2-small
+  // (Hugging Face, endereço preso à revisão do repositório: o arquivo não muda). ~39 MB, guardados só
+  // quando o app pede (fora da rede móvel, com o índice de fotos já gerado).
+  ['https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort.wasm.min.js', 'sha384-tNxIwEqSlcdvKtUte98AsccPbDKM958LBXB/+3BLS42TTihXHKTWgdqPqXI/lot8'],
+  ['https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort-wasm-simd-threaded.mjs', 'sha384-L9olMNCg9w3FaNhr+m7EAeeiUpM5zy2Nlh6APnoogtFXjsL4ZZZRXlYhSVJc1r3j'],
+  ['https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/ort-wasm-simd-threaded.wasm', 'sha384-bQJgW/bZhNOlc9KU45Zu0dyd0EFfNpkOZjfHyH/90dkZQSBBGkFTsAJaabSyYA4Z'],
+  ['https://huggingface.co/onnx-community/dinov2-small/resolve/8b1f705a3a7f6f062f6bdd21986c1583d3ef105d/onnx/model_int8.onnx', 'sha384-uXYL7/0pnvBLWgzXA9LjdbiSJg9LG4SM9unuCzmPW7tC813LeC/Dxhono8xKK4iK'],
 ]);
 // Baixa a biblioteca conferindo o hash: arquivo diferente = erro (nunca vai pro cache).
 // Em modo CORS mesmo pro <script> sem crossorigin: resposta opaca não deixa

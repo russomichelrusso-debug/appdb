@@ -1563,9 +1563,31 @@ Supabase, sem PR — não é mudança de código.
   (lâmina × disco) mas não a medida/linha, e no expositor inteiro errou todos os discos diamantados; a etiqueta diz tudo e a busca do
   app já acha o produto. Junto, desempate no `produtoDaLinhaLista` (`<motor-lista>`, vale pra lista do cliente também): no empate sem
   palavra faltando, o **único** nome sem palavra além das escritas vai pronto ("... porcelanato turbo 110 mm" = 60863, não o
-  "PORCELANATO PLUS"). Próximo passo combinado (não feito): MobileCLIP no celular pra separar ~30 candidatos antes do Gemini (ele
-  escolhe dentro da lista) e sugerir sem internet, guardando o vetor de cada produto confirmado como referência da loja — no teste,
-  uma foto de loja como referência levou o produto certo de 45º pra 5º e de 7º pra 1º.
+  "PORCELANATO PLUS"). O desempate vale **só na etiqueta** (`ctx.etiqueta`), depois da regra do histórico do cliente, e sigla de 2
+  letras/número do nome que não foi lido impede ("cortador 750" não vira o "HD-750 G2") — achado do `revisor-cortag`: na lista do
+  cliente e na voz mudava 281 de 2.802 termos curtos. Limite próprio da etiqueta (60 fotos/10 min; a lista do cliente é 20).
+  - **Reconhecimento por foto no aparelho** (11/2026, 2º PR): antes do Gemini, o celular calcula o vetor da foto com o **DINOv2-small
+    int8** (Meta, **Apache 2.0**, 24 MB) no **onnxruntime-web 1.31.1** (15 MB de WebAssembly) e manda junto os **30 produtos de foto
+    mais parecida** (`candidatos`, até 40, na rota da etiqueta): o Gemini escolhe dentro da lista e o servidor só devolve `codigo` que
+    esteja nela (vai pronto na conferência pelo `codigos` da linha). **Sem internet** (ou com a leitura falhando), a conferência mostra
+    os 5 mais parecidos pra escolher (`opcoesFoto`). Foto de etiqueta com **um produto só, confirmado**, vira referência "da loja" do
+    código (`POST /api/produto-vetores/loja`, pela fila offline, até 8 por código). **O MobileCLIP ficou de fora: a licença da Apple
+    só permite pesquisa não comercial.** Escolha do modelo pelo teste com fotos reais (13 fotos, 70 referências do site): DINOv2 pôs o
+    certo entre os 6 primeiros em 8 de 9 recortes da gancheira (pior 21º), melhor que o MobileCLIP S2 (pior 45º). Cuidado medido:
+    foto de celular tem EXIF de rotação (o navegador gira; o Python dos testes não girava). Vetor = CLS normalizado, 384 int8 (escala
+    por vetor), pré-processamento do modelo (lado menor 256, recorte central 224, média/desvio do ImageNet, redução pela metade até o
+    tamanho); conferido JS × Python: cosseno 0,993.
+    - Índice: `produto_vetores` (`routes/produtoVetores.js`, `routes/lib/vetoresFoto.js`, `MODELO_VETOR` igual no `index.html` — o
+      teste confere); 'catalogo' = foto do produto, **gerado pelo admin no Painel** (grupo "Reconhecimento por foto", "Gerar índice das
+      fotos": calcula no próprio aparelho a partir das miniaturas, só as fotos novas/trocadas; 70 fotos em 31 s no laptop) — o Render
+      free não roda o modelo. Aparelho baixa `GET /versao` (barato) e o índice inteiro (~1 MB) só quando muda; cópia no IndexedDB
+      `cortag-vetores`. Status na linha "Reconhecimento por foto" do card do Painel.
+    - Arquivos do reconhecedor na `LIBS` do `sw.js` (conferidos pelo hash, guardados na 1ª vez), `INTEGRIDADE_CDN` e o `.mjs` no import
+      map; o modelo fica no **Hugging Face, endereço preso à revisão** (o teste de SRI aceita só esse host fora das CDNs). CSP ganhou
+      `'wasm-unsafe-eval'`. Baixa sozinho (`prepararReconhecedor`) só com o índice não vazio, com o service worker ativo e fora da rede
+      móvel (mesma regra/"baixar agora" das miniaturas); sem ele no aparelho, a etiqueta funciona como antes (só o Gemini).
+    - Testado no app local (Chromium, Gemini simulado): etiquetas reais com o certo em 1º, 4º, 1º e 1º dos 30, ~0,7 s por foto;
+      sem internet, o certo entre os 5. **Não testado num celular de verdade** (tempo e memória do modelo no Android/iPhone).
 
 - **Tela acesa com o app aberto** (10/2026, pedido do usuário: no levantamento a tela apagava pelo tempo do celular): Wake Lock
   do navegador (`pedirTelaAcesa`/`initTelaAcesa`, `index.html`), ligado por padrão, pedido de novo ao voltar pro app e no 1º
