@@ -21743,7 +21743,10 @@
           } catch (e) {
             // o servidor recusou (ex.: alterar pedido que foi excluído): reenviar
             // não muda nada - antes ficava na fila pra sempre, de 30 em 30 s
-            if (e.recusado) recusados.push({ item, erro: e.message });
+            // foto de etiqueta pro reconhecimento recusada (modelo trocado, código fora do catálogo): é só
+            // aprendizado em segundo plano - sai da fila sem aviso nem "recusado" no Painel
+            if (e.recusado && item.tipo === 'vetor-foto') tirar.add(item.id);
+            else if (e.recusado) recusados.push({ item, erro: e.message });
             // sem rede / servidor fora / 400 (pode ser passageiro): mantém na fila,
             // com o erro guardado pra aparecer no Painel
             else erros.set(item.id, e.message);
@@ -28864,11 +28867,19 @@
       let miniaturasStatus = null; // { guardadas, total, esperandoWifi }
       // download grande (miniaturas, reconhecedor de fotos): sozinho só fora da rede móvel (Android diz o tipo;
       // iPhone não diz, baixa) e sem "economia de dados" - ou depois que o vendedor tocou em "baixar agora"
-      // semPedido: não vale o "baixar agora" das miniaturas (o reconhecedor, ~39 MB, nunca baixa sozinho no 4G)
+      // semPedido (reconhecedor, ~39 MB): não vale o "baixar agora" das miniaturas e, sem o navegador dizer o
+      // tipo de conexão (iPhone), não baixa sozinho - só pelo "baixar agora" da tela da etiqueta
       function esperandoWifiPraBaixar(semPedido) {
         const con = navigator.connection;
+        if (semPedido) {
+          // Wi-Fi/cabo dito pelo navegador; computador (o Chrome de mesa não diz o tipo) também; celular que não diz, não
+          if (con && con.saveData) return true;
+          const tipo = con && con.type;
+          if (tipo) return tipo !== 'wifi' && tipo !== 'ethernet';
+          return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent));
+        }
         let pediu = false;
-        try { pediu = !semPedido && localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
+        try { pediu = localStorage.getItem(MINIATURAS_4G_LS_KEY) === '1'; } catch (e) { }
         return !pediu && !!con && (con.saveData || con.type === 'cellular');
       }
       function atualizarStatusMiniaturas() {
@@ -32825,11 +32836,14 @@
         let ignoradas = 0;
         const linhas = [];
         for (const item of itens) {
-          const r = produtoDaLinhaLista(item, ctx);
+          let r = produtoDaLinhaLista(item, ctx);
+          // etiqueta lida mas sem produto achado: os mais parecidos pela foto viram as opções
+          if (r.estado === 'nao' && lc && lc.opcoesPelaFoto) r = produtoDaLinhaLista({ ...item, opcoes: lc.opcoesPelaFoto }, ctx);
           // PDF tem cabeçalho, endereço, total...: linha que não acha produto nenhum não é item
           // (só fica a que tem quantidade com unidade, "3 UN": é item que o catálogo não tem)
           if (r.estado === 'nao' && origem === 'pdf' && !item.unidade) { ignoradas++; continue; }
           const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
+            sugeridos: new Set([...(r.produto ? [r.produto.c] : []), ...(r.opcoes || []).map(p => p.c)]),
             cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: item.campo || null };
           if (r.produto) lcEscolher(l, r.produto);
           linhas.push(l);
@@ -32921,7 +32935,8 @@
         const lidos = r && Array.isArray(r.itens) ? r.itens : [];
         const itens = lidos.map(it => {
           const l = linhaDaImagemLista(etiqueta ? { ...it, quantidade: 1, unidade: null } : it);
-          if (l && etiqueta && it.codigo && productByCod(String(it.codigo))) l.codigos = [String(it.codigo), ...(l.codigos || [])];
+          // o código/EAN impresso que veio no texto vale mais que a escolha da IA entre os parecidos pela foto
+          if (l && etiqueta && it.codigo && productByCod(String(it.codigo))) l.codigos = [...(l.codigos || []), String(it.codigo)];
           return l;
         }).filter(Boolean);
         return { itens, cnpjs: cnpj ? [cnpj] : [] };
@@ -32940,6 +32955,7 @@
           parecidos = await parecidosDaFoto(imagens[0].dados);
           if (lcVelha(g)) return;
           lc.vetorFoto = parecidos ? parecidos.vetor : null;
+          lc.opcoesPelaFoto = parecidos && parecidos.cands.length ? parecidos.cands.slice(0, SUGESTOES_SEM_INTERNET).map(x => x.c) : null;
         }
         // leitura que não deu: na etiqueta com o reconhecedor, os mais parecidos pela foto viram as opções;
         // senão a tela de erro (semImagem: sem "Tentar de novo", que é o caso de sem sinal)
@@ -33020,7 +33036,12 @@
       let reconhecedorNaoGuardou = false;
       let inferindo = false; // o onnxruntime roda uma foto por vez (a que passou do prazo ainda pode estar rodando)
       const fetchConferido = (url) => fetch(url, { mode: 'cors', credentials: 'omit', integrity: INTEGRIDADE_CDN[url] });
+      // o onnxruntime 1.31 exige WebAssembly SIMD (iPhone antes do iOS 16.4 não tem): sem ele nunca baixa nem roda
+      const RECONHECEDOR_RODA = (() => {
+        try { return typeof WebAssembly === 'object' && WebAssembly.validate(new Uint8Array([0, 97, 115, 109, 1, 0, 0, 0, 1, 5, 1, 96, 0, 1, 123, 3, 2, 1, 0, 10, 10, 1, 8, 0, 65, 0, 253, 15, 253, 98, 11])); } catch (e) { return false; }
+      })();
       async function reconhecedorNoAparelho() {
+        if (!RECONHECEDOR_RODA) return false;
         if (reconhecedorGuardado || typeof caches === 'undefined') return reconhecedorGuardado;
         try { reconhecedorGuardado = (await Promise.all(RECONHECEDOR_ARQUIVOS.map(u => caches.match(u)))).every(Boolean); } catch (e) { }
         return reconhecedorGuardado;
@@ -33128,7 +33149,7 @@
       // os arquivos do reconhecedor (o sw.js guarda). Só com o service worker ativo: sem ele não fica guardado
       // e baixaria 39 MB a cada abertura.
       async function prepararReconhecedor(agora) {
-        if (preparandoReconhecedor || typeof caches === 'undefined' || navigator.onLine === false || !getStoredToken()) return;
+        if (!RECONHECEDOR_RODA || preparandoReconhecedor || typeof caches === 'undefined' || navigator.onLine === false || !getStoredToken()) return;
         preparandoReconhecedor = true;
         try {
           let idx;
@@ -33170,6 +33191,8 @@
       // (no teste, uma foto de loja levou o produto certo de 45º pra 5º). Uma vez por foto; pela fila sem internet.
       function aprenderFotoDaEtiqueta(incl) {
         if (!lc || lc.modo !== 'etiqueta' || !lc.vetorFoto || !lc.linhas || lc.linhas.length !== 1 || incl.length !== 1) return;
+        // o que o vendedor achou em "Buscar outro produto" não ensina: só o que veio da leitura ou das sugestões
+        if (!(incl[0].sugeridos && incl[0].sugeridos.has(incl[0].cod))) return;
         const c = incl[0].cod, q = lc.vetorFoto;
         lc.vetorFoto = null;
         if (indiceFotos && indiceFotos._itens) indiceFotos._itens.push({ c, v: vetorNormalizado(q) }); // já vale na próxima foto
@@ -33431,7 +33454,8 @@
           sub.textContent = lc.destino === 'lev' ? 'soma no estoque do levantamento' : (state.levCliente ? state.levCliente.nome : '');
           corpo.innerHTML = `<p class="lcDica">Tire a foto de perto, com a etiqueta da embalagem inteira e sem reflexo. O app acha o produto e você confere antes de ${lc.destino === 'lev' ? 'somar no levantamento' : 'entrar no orçamento'}.</p>
             <div class="lcFontes"><button type="button" class="lcFonte" id="lcEtiquetaFotoBtn"><span aria-hidden="true">📷</span>Tirar foto</button></div>
-            <p class="lcNota">Precisa de internet. Sem sinal, use o código de barras ou a busca pelo nome.</p>`;
+            <p class="lcNota">Precisa de internet. Sem sinal, use o código de barras ou a busca pelo nome.</p>
+            ${RECONHECEDOR_RODA && indiceFotos && indiceFotos.vetores.length && !reconhecedorGuardado ? `<p class="lcNota">Reconhecimento por foto (ajuda a IA e sugere sem internet): ${preparandoReconhecedor ? 'baixando…' : `baixa sozinho no Wi-Fi · <button type="button" class="lcLink" id="lcBaixarReconhecBtn">baixar agora (~${RECONHECEDOR_MB} MB)</button>`}</p>` : ''}`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button>`;
           return;
         }
@@ -33629,6 +33653,12 @@
             return;
           }
           if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
+          if (t.id === 'lcBaixarReconhecBtn') {
+            showToast(`Baixando o reconhecimento por foto (~${RECONHECEDOR_MB} MB) · vale a partir da próxima foto`);
+            prepararReconhecedor(true).then(() => renderListaCliente());
+            renderListaCliente();
+            return;
+          }
           if (t.id === 'lcEtiquetaFotoBtn') {
             // no Levantamento, o que já foi conferido soma antes da próxima foto (não se perde); tudo síncrono:
             // a câmera só abre dentro do toque
@@ -33640,7 +33670,7 @@
               renderLevList();
               showToast(`${conferidos.length} ite${conferidos.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
             }
-            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, rotulo: null, sugerido: null, pistas: null };
+            lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, opcoesPelaFoto: null, rotulo: null, sugerido: null, pistas: null };
             renderListaCliente();
             etiquetaInput.click();
             return;

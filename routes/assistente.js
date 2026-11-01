@@ -180,15 +180,15 @@ Responda SOMENTE com um JSON válido neste formato:
 
 const MAX_CANDIDATOS = 40;
 const { CODIGO_SKU_REGEX: CODIGO_CANDIDATO } = require('./lib/vetoresFoto');
-// [{ c, n }] -> limpo; ausente = []; formato errado = null
+// [{ c, n }] -> limpo; ausente = []; não-lista ou mais de 40 = null. Candidato inválido só sai da lista
+// (não derruba a leitura da etiqueta)
 function candidatosDaEtiqueta(lista) {
   if (lista == null) return [];
   if (!Array.isArray(lista) || lista.length > MAX_CANDIDATOS) return null;
   const vistos = new Set(), out = [];
   for (const x of lista) {
     const c = String((x && x.c) ?? ''), n = String((x && x.n) ?? '').replace(/[\r\n"]+/g, ' ').trim().slice(0, 120);
-    if (!CODIGO_CANDIDATO.test(c) || !n) return null;
-    if (!vistos.has(c)) { vistos.add(c); out.push({ c, n }); }
+    if (CODIGO_CANDIDATO.test(c) && n && !vistos.has(c)) { vistos.add(c); out.push({ c, n }); }
   }
   return out;
 }

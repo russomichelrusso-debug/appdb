@@ -1588,6 +1588,13 @@ Supabase, sem PR — não é mudança de código.
       móvel (mesma regra/"baixar agora" das miniaturas); sem ele no aparelho, a etiqueta funciona como antes (só o Gemini).
     - Testado no app local (Chromium, Gemini simulado): etiquetas reais com o certo em 1º, 4º, 1º e 1º dos 30, ~0,7 s por foto;
       sem internet, o certo entre os 5. **Não testado num celular de verdade** (tempo e memória do modelo no Android/iPhone).
+    - Achados do `revisor-cortag` já tratados: o código/EAN lido no texto vale mais que o palpite da IA entre os parecidos; o
+      reconhecedor só baixa sozinho com Wi-Fi/cabo dito pelo navegador ou em computador (iPhone não diz: só pelo "baixar agora"
+      da tela da etiqueta) e nunca sem WebAssembly SIMD (iPhone antes do iOS 16.4); foto da loja recusada pelo servidor sai da
+      fila calada (`tipo: 'vetor-foto'`); só ensina o índice o produto que veio da leitura ou das sugestões (não o de "Buscar
+      outro produto"); linha "Não achei" da etiqueta ganha as sugestões pela foto. **Pendente:** o admin não tem como apagar
+      fotos "da loja" de um código (confirmação errada puxa o código pra cima em fotos parecidas) — se acontecer, SQL no Supabase
+      (`DELETE FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = '...'`) ou um botão no Painel.
 
 - **Tela acesa com o app aberto** (10/2026, pedido do usuário: no levantamento a tela apagava pelo tempo do celular): Wake Lock
   do navegador (`pedirTelaAcesa`/`initTelaAcesa`, `index.html`), ligado por padrão, pedido de novo ao voltar pro app e no 1º

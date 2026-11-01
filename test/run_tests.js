@@ -5647,9 +5647,11 @@ async function main() {
       assert(r.status === 200 && r.body.itens[0].codigo === '60599' && !('codigo' in r.body.itens[1])
         && /60599 \| DISCO DE CORTE DIAMANTADO TURBO 110 mm/.test(texto) && /60863 \|/.test(texto),
         `etiqueta com candidatos: a lista vai pro Gemini e só código dela volta: ${JSON.stringify(r.body.itens)}`);
-      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos: [{ c: 'x y', n: 'nome' }] });
+      r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos: [{ c: 'x y', n: 'nome' }, { c: '60599', n: '' }, { c: '60599', n: 'DISCO TURBO' }] });
+      const textoFiltrado = enviado.contents[0].parts[0].text;
       const rMuitos = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta', candidatos: Array.from({ length: 41 }, (_, i) => ({ c: 'C' + i, n: 'n' })) });
-      assert(r.status === 422 && rMuitos.status === 422, `etiqueta com candidatos: código inválido ou mais de 40 = 422 (${r.status}, ${rMuitos.status})`);
+      assert(r.status === 200 && !/x y \|/.test(textoFiltrado) && /60599 \| DISCO TURBO/.test(textoFiltrado) && rMuitos.status === 422,
+        `etiqueta com candidatos: candidato inválido sai da lista sem derrubar a leitura; mais de 40 = 422 (${r.status}, ${rMuitos.status})`);
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
       assert(r.status === 200 && r.body.itens.every(it => !('codigo' in it)) && !/Pela foto, o produto deve ser/.test(enviado.contents[0].parts[0].text),
         'etiqueta sem candidatos: nenhum código volta e o pedido não traz lista');
