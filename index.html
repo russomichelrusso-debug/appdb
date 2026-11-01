@@ -14648,9 +14648,9 @@
         return tok.filter(t => !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
       }
       // "Cód. 7617"/"Ref 3893": o número depois de cód/código/ref é o código DO CLIENTE (etiqueta de preço da
-      // loja, foto real de 11/2026: "SERRA COPO ... 62093 Cód. 7617" virava 7.617 serras). Só 3-4 dígitos e sem
-      // medida depois ("ref 12" e "ref 20 kg" continuam quantidade/medida; "ref" também é "reforçado").
-      const PALAVRAS_COD_CLIENTE_LISTA = new Set(['cod', 'cods', 'codigo', 'ref', 'refs', 'referencia']);
+      // loja, foto real de 11/2026: "SERRA COPO ... 62093 Cód. 7617" virava 7.617 serras). Cód com 3-4 dígitos,
+      // ref só com 4 ("ref" também é "reforçado": "disco ref 115", "ref 12") e nunca com medida depois ("ref 20 kg").
+      const DIGITOS_COD_CLIENTE_LISTA = { cod: /^\d{3,4}$/, cods: /^\d{3,4}$/, codigo: /^\d{3,4}$/, ref: /^\d{4}$/, refs: /^\d{4}$/, referencia: /^\d{4}$/ };
       // Índices que são código (nem quantidade nem palavra da busca): código Cortag/EAN (5+ dígitos), o
       // código do cliente depois de cód/ref e, com a quantidade já sabida (foto, tabela), os 4 dígitos do
       // começo ("3860 CORTAG APLICADOR...", foto real de 10/2026).
@@ -14658,7 +14658,8 @@
         const fora = new Set();
         tok.forEach((t, i) => {
           if (/^\d{5,}$/.test(t)) fora.add(i);
-          if (PALAVRAS_COD_CLIENTE_LISTA.has(t) && /^\d{3,4}$/.test(tok[i + 1] || '') && !MEDIDAS_LISTA.has(tok[i + 2])) { fora.add(i); fora.add(i + 1); }
+          const digitos = Object.hasOwn(DIGITOS_COD_CLIENTE_LISTA, t) && DIGITOS_COD_CLIENTE_LISTA[t];
+          if (digitos && digitos.test(tok[i + 1] || '') && !MEDIDAS_LISTA.has(tok[i + 2])) { fora.add(i); fora.add(i + 1); }
         });
         if (qtdSabida && /^\d{4}$/.test(tok[0] || '') && !MEDIDAS_LISTA.has(tok[1])) fora.add(0);
         return fora;
@@ -14726,8 +14727,8 @@
         // 2) número no fim ("colher 8 pol 12", "cortador 75 cm - 1")
         let ult = tok.length - 1;
         while (ult > 0 && codigo.has(ult)) ult--;
-        if (qtd == null && ult > 0 && !codigo.has(ult) && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
-          const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && !codigo.has(i));
+        if (qtd == null && ult > 0 && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
+          const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && (!codigo.has(i) || colados.has(i))); // o 60 do "G60" é número do produto
           qtd = +tok[ult]; tirar.add(ult);
           talvez = !outros && !separado;
         }
@@ -14954,8 +14955,11 @@
         const pal = palavrasDaLinhaLista(item.texto);
         const fora = codigosDaLinhaLista(pal, true);
         const termo = termoDasPalavrasLista(pal.filter((t, i) => !fora.has(i)));
-        // a IA às vezes devolve um código da linha como quantidade ("Cód. 7617", o 62093): fica sem (1 embalagem)
-        if (daIA && [...fora].some(i => +pal[i] === qtd)) return { ...item, termo, qtd: null, unidade: null, talvez: false };
+        // a IA às vezes devolve um código da linha como quantidade ("Cód. 7617", o 62093): vale a do texto ("- 3"),
+        // ou fica sem (1 embalagem). Os 4 dígitos do começo não contam: ali o número pode ser a quantidade ("1000 BUCHA")
+        if (daIA && [...fora].some(i => i > 0 && +pal[i] === qtd)) {
+          return item.qtd != null && !item.talvez ? item : { ...item, termo, qtd: null, unidade: null, talvez: false };
+        }
         return { ...item, termo, qtd, unidade, talvez: false };
       }
       // Mensagens copiadas/compartilhadas do WhatsApp vêm com data e quem mandou na frente:
@@ -15617,10 +15621,10 @@
         const mais = campanhas.length > 1 ? ` +${campanhas.length - 1}` : '';
         return `<button type="button" class="tCampanha${ehCampanhaBlackFriday(r) ? ' bf' : ''}" data-campanha-item="${escapeHtml(p.c)}" aria-label="Ver condições da campanha ${escapeHtml(r.name || '')}" title="${escapeHtml(r.name || 'Campanha')}">${escapeHtml(rotuloPctDaFita(r))}${mais}</button>`;
       }
-      // quantidade digitada: no múltiplo da embalagem, pra cima (como o resto do app)
-      // Quantidade digitada -> { n, q } (q no múltiplo da embalagem pra cima), ou null se não é número > 0
+      // Quantidade digitada -> { n, q } (q no múltiplo da embalagem pra cima, como o resto do app), ou null se
+      // não é número > 0. "1.000" é mil
       function qtdDigitadaNoMultiplo(valor, step) {
-        const n = Math.floor(Number(String(valor).replace(',', '.')));
+        const n = Math.floor(Number(semPontoDeMilharLista(String(valor).trim()).replace(',', '.')));
         return n > 0 ? { n, q: Math.ceil(n / step) * step } : null;
       }
       function qtdDigitadaNaTabela(inp) {
@@ -33417,6 +33421,25 @@
       const rotuloForaLista = (l, padrao) => l.fora ? 'Voltar pra lista' : lc && lc.destino === 'lev' ? 'Descartar' : padrao;
       // passo do −/+: fala pro estoque soma 1 a 1, o resto anda na embalagem
       const stepDaLinhaLista = (l, p) => l.campo === 'qty' ? 1 : packStep(p || productByCod(l.cod));
+      // campo de quantidade -> linha (no múltiplo da embalagem), valor e total na hora. true = era da lista
+      function aplicarQtdDigitadaLista(inp) {
+        const l = lc && lc.linhas && lc.linhas[Number(inp.dataset.lcQtdInput)];
+        if (!l) return false;
+        const step = stepDaLinhaLista(l), d = qtdDigitadaNoMultiplo(inp.value, step);
+        if (d && d.q !== l.qtd) {
+          l.qtd = d.q;
+          // a linha fica no grupo em que está: só ganha nota quando arredondou, já tinha nota ou ficou alta
+          const notas = [];
+          if (d.q !== d.n) notas.push(`digitou ${d.n} → ${d.q} (embalagem de ${step})`);
+          else if (l.ajuste) notas.push('quantidade digitada');
+          if (d.q > 5000) notas.push('quantidade alta · confira');
+          l.ajuste = notas.join(' · ') || null;
+        }
+        inp.value = l.qtd;
+        const total = document.querySelector('#lcRodape .lcTotal b');
+        if (total) total.textContent = brl(totalDaListaCliente(lcIncluidas()));
+        return true;
+      }
       function htmlStepperLista(i, l) {
         return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><input type="text" inputmode="numeric" autocomplete="off" value="${l.qtd}" data-lc-qtd-input="${i}" aria-label="Quantidade"><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
       }
@@ -33693,6 +33716,8 @@
           if (!lc) return;
           const t = e.target.closest('button, [data-lc-fechar]');
           if (!t) return;
+          const emFoco = document.activeElement;
+          if (emFoco && emFoco.matches && emFoco.matches('[data-lc-qtd-input]')) aplicarQtdDigitadaLista(emFoco);
           if (t.matches('[data-lc-fechar]')) { fecharListaCliente(); return; }
           if (t.id === 'lcColarBtn') {
             try {
@@ -33778,37 +33803,22 @@
         corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-lc-qtd-input]')) e.target.blur(); });
         corpo.addEventListener('change', (e) => {
           const inp = e.target.closest('[data-lc-qtd-input]');
-          const l = inp && lc && lc.linhas && lc.linhas[Number(inp.dataset.lcQtdInput)];
-          if (!l) return;
-          const step = stepDaLinhaLista(l), d = qtdDigitadaNoMultiplo(inp.value, step);
-          if (d) {
-            l.qtd = d.q;
-            // a linha fica no grupo em que está: só ganha nota quando arredondou, já tinha nota ou ficou alta
-            const notas = [];
-            if (d.q !== d.n) notas.push(`digitou ${d.n} → ${d.q} (embalagem de ${step})`);
-            else if (l.ajuste) notas.push('quantidade digitada');
-            if (d.q > 5000) notas.push('quantidade alta · confira');
-            l.ajuste = notas.join(' · ') || null;
-          }
-          // no lugar, sem redesenhar: o change vem no toque seguinte (− / + / Pôr no orçamento), e trocar ou
-          // mover o botão entre o apertar e o soltar fazia o clique se perder. Valor e total não mudam a
-          // altura; a nota (que muda) espera o toque acabar
-          inp.value = l.qtd;
-          const total = document.querySelector('#lcRodape .lcTotal b');
-          if (total) total.textContent = brl(totalDaListaCliente(lcIncluidas()));
-          const linha = inp.closest('.lcLinha'), texto = l.ajuste;
-          notaDepoisDoToque = () => {
-            let nota = linha.querySelector('.lcAjuste');
-            if (texto && !nota) { nota = document.createElement('div'); nota.className = 'lcAjuste'; linha.querySelector('.lcOriginal').after(nota); }
-            if (nota) { if (texto) nota.textContent = texto; else nota.remove(); }
-          };
-          if (!dedoNaTela) { notaDepoisDoToque(); notaDepoisDoToque = null; }
+          if (!inp || !aplicarQtdDigitadaLista(inp)) return;
+          // o change vem no toque seguinte (− / + / Pôr no orçamento / outro campo): redesenhar agora trocaria o
+          // botão entre o apertar e o soltar e o clique se perdia. Valor e total já mudaram (não mexem na altura);
+          // o resto (nota, grupo, resumo dos prontos) é redesenhado quando o toque acaba
+          if (dedoNaTela) redesenharDepoisDoToque = true; else renderListaCliente();
         });
-        let dedoNaTela = false, notaDepoisDoToque = null;
+        let dedoNaTela = false, redesenharDepoisDoToque = false;
         document.addEventListener('pointerdown', () => { dedoNaTela = true; }, true);
         const soltou = () => setTimeout(() => { // depois do click, que vem logo após o pointerup
           dedoNaTela = false;
-          if (notaDepoisDoToque) { const f = notaDepoisDoToque; notaDepoisDoToque = null; f(); } // linha já redesenhada: mexe numa solta, sem efeito
+          if (!redesenharDepoisDoToque) return;
+          redesenharDepoisDoToque = false;
+          const foco = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.lcQtdInput;
+          renderListaCliente();
+          const campo = foco != null && corpo.querySelector(`[data-lc-qtd-input="${foco}"]`);
+          if (campo) campo.focus(); // tocou noutro campo de quantidade: continua nele
         }, 0);
         document.addEventListener('pointerup', soltou, true);
         document.addEventListener('pointercancel', soltou, true);

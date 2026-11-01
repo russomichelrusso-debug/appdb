@@ -4697,6 +4697,14 @@ async function main() {
         const refs = ['aplicador silicone ref - 6', 'aplicador silicone ref 12', 'disco turbo 110 ref 3'].map(t => ctxL.interpretarLinhaLista(t).qtd);
         const arg = ctxL.interpretarLinhaLista('argamassa ref 20 kg 5');
         assert(refs.join() === '6,12,3' && arg.qtd === 5 && /20/.test(arg.termo), `lista do cliente: "ref" com número curto continua quantidade: ${refs} / ${JSON.stringify(arg)}`);
+        // achados do /code-review: os 4 dígitos do começo podem ser a quantidade; com a IA errada vale a do texto;
+        // "ref" + 3 dígitos é medida; o 60 do "G60" ainda conta como número do produto (o 4 é quantidade firme)
+        const bucha = ctxL.linhaDaImagemLista({ texto: '1000 BUCHA 8MM', quantidade: 1000 });
+        const doTexto = ctxL.linhaDaImagemLista({ texto: 'SERRA COPO 50MM Cód. 7617 - 3', quantidade: 7617 });
+        const ref115 = ctxL.interpretarLinhaLista('disco corte ref 115 - 2');
+        const flap = ctxL.interpretarLinhaLista('Disco flap G60 4');
+        assert(bucha.qtd === 1000 && doTexto.qtd === 3 && ref115.qtd === 2 && /115/.test(ref115.termo) && flap.qtd === 4 && !flap.talvez,
+          `lista do cliente: quantidade do começo, do texto, ref com medida e G60: ${JSON.stringify([bucha.qtd, doTexto.qtd, ref115, flap])}`);
         const lixa = ['Lixa G120', 'lixa g 120', 'lixa G120 - 10', 'Disco flap G60 2'].map(t => ctxL.interpretarLinhaLista(t).qtd);
         assert(lixa.join() === ',120,10,2', `lista do cliente: só o número colado na letra deixa de ser quantidade: ${lixa}`);
         const comQtd = ctxL.interpretarLinhaLista('serra copo 50mm cod 7617 - 3');
