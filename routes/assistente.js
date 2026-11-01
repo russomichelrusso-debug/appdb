@@ -196,7 +196,7 @@ function textoDosCandidatos(candidatos) {
   if (!candidatos.length) return '';
   return `
 
-Pela foto, o produto deve ser um destes do catálogo (código | nome). Se a etiqueta for de um deles, inclua no item "codigo" com o código da lista; se não for nenhum, não inclua "codigo" (o "texto" continua obrigatório). Não escolha só pela aparência: confira o tipo, a linha e a medida impressos.
+Pela foto, os produtos podem estar entre estes do catálogo (código | nome). A foto pode ter várias embalagens: para cada item cuja etiqueta seja de um deles, inclua "codigo" com o código da lista; produto da foto que não estiver na lista também entra, sem "codigo" (o "texto" continua obrigatório). Não escolha só pela aparência: confira o tipo, a linha e a medida impressos.
 ${candidatos.map(x => `${x.c} | ${x.n}`).join('\n')}`;
 }
 
