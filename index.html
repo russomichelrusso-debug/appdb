@@ -33711,7 +33711,7 @@
           sub.textContent = lc.porBarras ? 'pelo código de barras da foto' : 'pela etiqueta';
           corpo.innerHTML = htmlEtiquetaAdicionada() + `<div class="lcAdicionadoAcoes">
               <button type="button" class="restoreBtn compacto" id="lcDesfazerEtiquetaBtn">Desfazer</button>
-              <button type="button" class="restoreBtn compacto" id="lcMaisUmEtiquetaBtn">+${lev ? 1 : ' 1 embalagem'} de novo</button>
+              <button type="button" class="restoreBtn compacto" id="lcMaisUmEtiquetaBtn">+1 de novo</button>
             </div>
             ${lc.porBarras && lc.imagens && navigator.onLine ? '<p class="lcNota">Tinha outra embalagem na foto? <button type="button" class="lcLink" id="lcLerFotoInteiraBtn">Ler a foto inteira</button></p>' : ''}`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>
