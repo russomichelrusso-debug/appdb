@@ -1574,6 +1574,19 @@ Supabase, sem PR — não é mudança de código.
   "PORCELANATO PLUS"). O desempate vale **só na etiqueta** (`ctx.etiqueta`), depois da regra do histórico do cliente, e sigla de 2
   letras/número do nome que não foi lido impede ("cortador 750" não vira o "HD-750 G2") — achado do `revisor-cortag`: na lista do
   cliente e na voz mudava 281 de 2.802 termos curtos. Limite próprio da etiqueta (60 fotos/10 min; a lista do cliente é 20).
+  - **Mais rápido entre uma foto e outra** (11/2026, PR 1 de 2 da conversa "como dar mais agilidade entre uma leitura e
+    outra"; decisões do usuário: entra direto também no orçamento, não só no Levantamento). (A) **Código de barras da foto
+    primeiro**: `codigosDeBarrasDaFoto` (BarcodeDetector na foto inteira; sem ele, ZXing na foto já reduzida; até 2,5 s) e, com
+    produto do catálogo, sem Gemini (`etiquetaPorCodigoDeBarras`) - funciona sem internet; DUN no Levantamento soma a caixa,
+    unidade + caixa do mesmo produto na foto vão pra conferência. (B) **Entra direto** (`etiquetaDireto`, fase `'adicionado'`)
+    só com **um produto na foto** e "pronto" **seguro** (`seguro` no `produtoDaLinhaLista`: código/EAN, nome sem palavra
+    faltando ou o desempate da etiqueta; o pronto pelo histórico do cliente continua na conferência): tela "✓ No levantamento/
+    orçamento" com Desfazer (volta pra conferência com a linha fora), "+1 de novo", "Tirar outra foto" e, pelo código de barras
+    e com sinal, "Ler a foto inteira" (o do código entra junto da leitura da IA, `lc.barrasItens`, e volta se ela falhar). A
+    foto só ensina o índice ("da loja") ao sair dessa tela sem desfazer. (E) Abrir a etiqueta acorda o servidor (`/health`, 1×
+    a cada 5 min), foto da etiqueta em 1280 px, reconhecedor já carregado espera 3 s com internet (sem ela, os 20 s de antes).
+    Testado no app local (Chromium, EAN-13 desenhado, Gemini simulado); **não testado em celular** (o BarcodeDetector do Android
+    com foto real de blister).
   - **Reconhecimento por foto no aparelho** (11/2026, 2º PR): antes do Gemini, o celular calcula o vetor da foto com o **DINOv2-small
     int8** (Meta, **Apache 2.0**, 24 MB) no **onnxruntime-web 1.31.1** (15 MB de WebAssembly) e manda junto os **30 produtos de foto
     mais parecida** (`candidatos`, até 40, na rota da etiqueta): o Gemini escolhe dentro da lista e o servidor só devolve `codigo` que
@@ -1694,6 +1707,9 @@ Supabase, sem PR — não é mudança de código.
      campanhas, total em vermelho, cartões de pagamento, frete (`metaPedidoMinimo`) e validade, avisos fiscais (`avisosDoOrcamento`)
      e o contato; no catálogo, só código/produto/embalagem. Arquivo `Proposta-<cliente>-DDMMAA.pdf` / `Selecao-…`. Produto sem
      foto sai sem o quadro da foto (texto na largura toda).
+- **Etiqueta, PR 2 (depois do vendedor testar o PR 1 na loja)**: câmera ao vivo dentro do app (como o `#modoLeitor`: um
+  toque por foto, sem a câmera do celular) e fila em segundo plano (tira a próxima foto enquanto a anterior é lida; lista
+  "lendo · prontos · pra conferir").
 - **Code Mode (Cloudflare) — ideia registrada, não fazer agora** (10/2026, pesquisa a pedido do usuário; ele decidiu **não
   implementar** e guardar como caminho futuro). Code Mode = o modelo escreve código contra uma API tipada (gerada das ferramentas MCP)
   que roda numa sandbox isolada (Dynamic Workers, sem internet, chaves fora do código); vale com muitas ferramentas/passos encadeados
