@@ -3629,7 +3629,9 @@ async function main() {
     {
       const lista = res.body.clientes || [];
       const por = (id) => lista.find(c => c.cliente_id === id);
-      const ids = lista.map(c => c.cliente_id);
+      // só as lojas deste teste (96xx): as de testes anteriores, com datas fixas, entram sozinhas na faixa
+      // "mais de 12 meses" conforme o tempo passa (em 11/2026 as 9404/9405, compra de 10/2025)
+      const ids = lista.map(c => c.cliente_id).filter(id => id >= 9600 && id < 9700);
       assert(res.status === 200 && res.body.relatorio.data === hojeBr && !por(9603) && !por(9604) && !por(9606)
         && por(9601) && por(9601).mes_ultima_compra === mesISO(4) && por(9601).fat === 5000 && por(9601).fat_origem === 'erp_12m' && por(9601).cidade === 'Maringa'
         && por(9602) && por(9605) && por(9605).no_relatorio === false && por(9605).mes_ultima_compra === mesISO(20)
@@ -4678,6 +4680,35 @@ async function main() {
         const kaefBuscado = ctxL.buscarComPontos('colher kaef').map(x => x.p.c);
         assert(kaefFim[kaefFim.length - 1] === '60709' && kaefBuscado[0] === '60709' && ctxL.buscarComPontos('60709')[0].p.c === '60709',
           `busca: KAEF por último, primeiro quando buscado: ${kaefFim.join(',')} / ${kaefBuscado.join(',')}`);
+        // foto real de 11/2026: "Cód. 7617" (código do cliente) virava 7.617 serras, com ou sem a IA devolver o número
+        for (const quantidade of [null, 7617]) {
+          const serra = ctxL.linhaDaImagemLista({ texto: 'SERRA COPO DIAM P/ESMERILHADEIRA 50MM ROSCA M14 62093 Cód. 7617', quantidade });
+          assert(serra.qtd == null && !/7617|cod/.test(serra.termo) && serra.codigos.includes('62093'),
+            `lista do cliente: número depois de "Cód." não é quantidade (IA ${quantidade}): ${JSON.stringify(serra)}`);
+        }
+        // achados do revisor-cortag: a medida fica no termo quando a IA devolve o código; a coluna Qtde do PDF vale
+        // mesmo igual ao "REF"; "ref" curto ("reforçado") e "ref 20 kg" continuam quantidade/medida
+        const disco = ctxL.linhaDaImagemLista({ texto: 'DISCO TURBO 110 Cód. 7617', quantidade: 7617 });
+        assert(disco.qtd == null && disco.termo === 'disco turbo 110', `lista do cliente: código da IA sai sem levar a medida: ${JSON.stringify(disco)}`);
+        const doCortag = ctxL.linhaDaImagemLista({ texto: 'SERRA COPO 50MM 62093', quantidade: 62093 });
+        assert(doCortag.qtd == null, `lista do cliente: IA devolvendo o código Cortag como quantidade fica sem: ${JSON.stringify(doCortag)}`);
+        const tab = ctxL.linhaComQuantidadeLista('COLHER PEDREIRO 8 REF 1200', 1200, null);
+        assert(tab.qtd === 1200 && tab.termo === 'colher pedreiro 8', `lista do cliente: na tabela do PDF a coluna Qtde vale: ${JSON.stringify(tab)}`);
+        const refs = ['aplicador silicone ref - 6', 'aplicador silicone ref 12', 'disco turbo 110 ref 3'].map(t => ctxL.interpretarLinhaLista(t).qtd);
+        const arg = ctxL.interpretarLinhaLista('argamassa ref 20 kg 5');
+        assert(refs.join() === '6,12,3' && arg.qtd === 5 && /20/.test(arg.termo), `lista do cliente: "ref" com número curto continua quantidade: ${refs} / ${JSON.stringify(arg)}`);
+        // achados do /code-review: os 4 dígitos do começo podem ser a quantidade; com a IA errada vale a do texto;
+        // "ref" + 3 dígitos é medida; o 60 do "G60" ainda conta como número do produto (o 4 é quantidade firme)
+        const bucha = ctxL.linhaDaImagemLista({ texto: '1000 BUCHA 8MM', quantidade: 1000 });
+        const doTexto = ctxL.linhaDaImagemLista({ texto: 'SERRA COPO 50MM Cód. 7617 - 3', quantidade: 7617 });
+        const ref115 = ctxL.interpretarLinhaLista('disco corte ref 115 - 2');
+        const flap = ctxL.interpretarLinhaLista('Disco flap G60 4');
+        assert(bucha.qtd === 1000 && doTexto.qtd === 3 && ref115.qtd === 2 && /115/.test(ref115.termo) && flap.qtd === 4 && !flap.talvez,
+          `lista do cliente: quantidade do começo, do texto, ref com medida e G60: ${JSON.stringify([bucha.qtd, doTexto.qtd, ref115, flap])}`);
+        const lixa = ['Lixa G120', 'lixa g 120', 'lixa G120 - 10', 'Disco flap G60 2'].map(t => ctxL.interpretarLinhaLista(t).qtd);
+        assert(lixa.join() === ',120,10,2', `lista do cliente: só o número colado na letra deixa de ser quantidade: ${lixa}`);
+        const comQtd = ctxL.interpretarLinhaLista('serra copo 50mm cod 7617 - 3');
+        assert(comQtd.qtd === 3 && !/7617/.test(comQtd.termo), `lista do cliente: "cod 7617 - 3" = 3: ${JSON.stringify(comQtd)}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
         const foto = ctxL.linhaDaImagemLista({ texto: 'Disco diamantado turbo 110', quantidade: 5, unidade: 'un' });
         assert(foto.qtd === 5 && foto.termo === 'disco diamantado turbo 110' && !foto.talvez, `lista do cliente: linha da foto com a quantidade da IA: ${JSON.stringify(foto)}`);

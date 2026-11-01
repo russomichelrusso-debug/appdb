@@ -5071,10 +5071,27 @@
       cursor: pointer;
     }
 
-    .lcQtd b {
-      min-width: 32px;
+    .minimodal-card .lcQtd input {
+      width: 58px;
+      padding: 0;
+      margin: 0;
+      border-radius: 0;
+      height: 40px;
+      border: none;
+      border-left: 1px solid var(--hairline);
+      border-right: 1px solid var(--hairline);
+      background: none;
+      color: var(--ink);
       text-align: center;
-      font-size: 14px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .minimodal-card .lcQtd input:focus {
+      outline: none;
+      background: var(--fill);
+      box-shadow: none;
     }
 
     .lcProntosCab {
@@ -14607,20 +14624,45 @@
       function semPontoDeMilharLista(s) {
         return String(s).replace(/(^|[^\d.,])(\d{1,3})\.(\d{3})(?![\d.,])/g, '$1$2$3');
       }
-      function palavrasDaLinhaLista(linha) {
-        return normalize(semPontoDeMilharLista(linha))
+      // colados (opcional): recebe o índice do número que vinha grudado numa letra sozinha ("M14", "G120"):
+      // é especificação do produto (fica na busca), nunca a quantidade
+      function palavrasDaLinhaLista(linha, colados) {
+        const tok = normalize(semPontoDeMilharLista(linha))
           .replace(/(\d)\s*("|''|”|″)/g, '$1 pol ')
           .replace(/(\d),(\d)/g, '$1.$2')
           .replace(/(\d)\s*x\s*(\d)/g, '$1×$2')
           .replace(/(\d)([a-z])/g, '$1 $2')
+          .replace(/(^|[^a-z])([a-wyz])(\d)/g, '$1$2 ¦$3')
           .replace(/([a-z])(\d)/g, '$1 $2')
-          .replace(/[^a-z0-9.×/]+/g, ' ')
+          .replace(/[^a-z0-9.×/¦]+/g, ' ')
           .replace(/(^|\s)[./]+|[./]+(?=\s|$)/g, ' ')
           .trim().split(/\s+/).filter(Boolean);
+        return tok.map((t, i) => {
+          if (t[0] !== '¦') return t;
+          if (colados) colados.add(i);
+          return t.slice(1);
+        }).filter(Boolean);
       }
       // O que vai pra busca: sem os enfeites, e "pol" sai (o catálogo escreve 8", não POL)
       function termoDasPalavrasLista(tok) {
         return tok.filter(t => !ENFEITES_LISTA.has(t) && !/^pol(egadas?)?$/.test(t)).join(' ').replace(/×/g, 'x');
+      }
+      // "Cód. 7617"/"Ref 3893": o número depois de cód/código/ref é o código DO CLIENTE (etiqueta de preço da
+      // loja, foto real de 11/2026: "SERRA COPO ... 62093 Cód. 7617" virava 7.617 serras). Cód com 3-4 dígitos,
+      // ref só com 4 ("ref" também é "reforçado": "disco ref 115", "ref 12") e nunca com medida depois ("ref 20 kg").
+      const DIGITOS_COD_CLIENTE_LISTA = { cod: /^\d{3,4}$/, cods: /^\d{3,4}$/, codigo: /^\d{3,4}$/, ref: /^\d{4}$/, refs: /^\d{4}$/, referencia: /^\d{4}$/ };
+      // Índices que são código (nem quantidade nem palavra da busca): código Cortag/EAN (5+ dígitos), o
+      // código do cliente depois de cód/ref e, com a quantidade já sabida (foto, tabela), os 4 dígitos do
+      // começo ("3860 CORTAG APLICADOR...", foto real de 10/2026).
+      function codigosDaLinhaLista(tok, qtdSabida) {
+        const fora = new Set();
+        tok.forEach((t, i) => {
+          if (/^\d{5,}$/.test(t)) fora.add(i);
+          const digitos = Object.hasOwn(DIGITOS_COD_CLIENTE_LISTA, t) && DIGITOS_COD_CLIENTE_LISTA[t];
+          if (digitos && digitos.test(tok[i + 1] || '') && !MEDIDAS_LISTA.has(tok[i + 2])) { fora.add(i); fora.add(i + 1); }
+        });
+        if (qtdSabida && /^\d{4}$/.test(tok[0] || '') && !MEDIDAS_LISTA.has(tok[1])) fora.add(0);
+        return fora;
       }
       // Uma linha -> { texto, termo, qtd (null = sem quantidade), unidade ('un'|'cx'|'pct'|null),
       // talvez (o único número é o do fim, sem unidade: pode ser medida ou quantidade), codigos }.
@@ -14652,15 +14694,16 @@
         }
         // código do produto ou EAN escrito na linha ("60882", "P60863", "7898...")
         const codigos = (semPontoDeMilharLista(linha).match(/\b[Pp]?\d{5,6}\b|\b\d{8,14}\b/g) || []).map(c => c.toUpperCase());
-        const tok = palavrasDaLinhaLista(linha);
+        const colados = new Set();
+        const tok = palavrasDaLinhaLista(linha, colados);
         if (!tok.some(t => /[a-z]{2}/.test(t)) && !codigos.length) return null; // só número/símbolo
         let qtd = null, unidade = null, talvez = false;
         const tirar = new Set();
         // código/EAN (5+ dígitos, com o "P" do promocional antes) nunca é quantidade nem palavra da busca
-        tok.forEach((t, i) => { if (/^\d{5,}$/.test(t)) { tirar.add(i); if (tok[i - 1] === 'p') tirar.add(i - 1); } });
+        codigosDaLinhaLista(tok).forEach(i => { tirar.add(i); if (/^\d{5,}$/.test(tok[i]) && tok[i - 1] === 'p') tirar.add(i - 1); });
         const ehMedida = (i) => MEDIDAS_LISTA.has(tok[i + 1]);
         // 1) número com unidade ("2 cx", "500 pc"), "x 12", "qtd 12" ou "12 x colher"
-        const codigo = new Set(tirar);
+        const codigo = new Set([...tirar, ...colados]); // número que não é quantidade (o colado continua na busca)
         let daQtd = [];
         for (let i = 0; i < tok.length; i++) {
           if (!ehInteiroLista(tok[i]) || ehMedida(i) || codigo.has(i)) continue;
@@ -14685,7 +14728,7 @@
         let ult = tok.length - 1;
         while (ult > 0 && codigo.has(ult)) ult--;
         if (qtd == null && ult > 0 && ehInteiroLista(tok[ult]) && (!qtdNoComeco || separado)) {
-          const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && !codigo.has(i));
+          const outros = tok.slice(0, ult).some((t, i) => ehNumeroLista(t) && (!codigo.has(i) || colados.has(i))); // o 60 do "G60" é número do produto
           qtd = +tok[ult]; tirar.add(ult);
           talvez = !outros && !separado;
         }
@@ -14902,17 +14945,21 @@
       // Linha que a IA leu da foto ({ texto, quantidade, unidade }): com a quantidade dela, o texto
       // inteiro é o produto (o "110" de "disco 110" não vira quantidade); sem, lê como texto colado.
       function linhaDaImagemLista(it) {
-        return linhaComQuantidadeLista(it.texto, it.quantidade > 0 ? it.quantidade : null, it.unidade || null);
+        return linhaComQuantidadeLista(it.texto, it.quantidade > 0 ? it.quantidade : null, it.unidade || null, true);
       }
       // Linha cuja quantidade já se sabe (coluna da tabela, leitura da IA): o texto inteiro é o
       // produto (o "110" de "disco 110" não vira quantidade). Sem quantidade, lê como texto colado.
-      function linhaComQuantidadeLista(texto, qtd, unidade) {
+      function linhaComQuantidadeLista(texto, qtd, unidade, daIA) {
         const item = interpretarLinhaLista(texto, true);
         if (!item || qtd == null) return item;
-        // o número de 4+ dígitos no começo é o código DO CLIENTE ("3860 CORTAG APLICADOR..." da foto real de 10/2026)
         const pal = palavrasDaLinhaLista(item.texto);
-        const termo = termoDasPalavrasLista(pal.filter((t, i) => !/^\d{5,}$/.test(t)
-          && !(i === 0 && /^\d{4}$/.test(t) && !MEDIDAS_LISTA.has(pal[1]))));
+        const fora = codigosDaLinhaLista(pal, true);
+        const termo = termoDasPalavrasLista(pal.filter((t, i) => !fora.has(i)));
+        // a IA às vezes devolve um código da linha como quantidade ("Cód. 7617", o 62093): vale a do texto ("- 3"),
+        // ou fica sem (1 embalagem). Os 4 dígitos do começo não contam: ali o número pode ser a quantidade ("1000 BUCHA")
+        if (daIA && [...fora].some(i => i > 0 && +pal[i] === qtd)) {
+          return item.qtd != null && !item.talvez ? item : { ...item, termo, qtd: null, unidade: null, talvez: false };
+        }
         return { ...item, termo, qtd, unidade, talvez: false };
       }
       // Mensagens copiadas/compartilhadas do WhatsApp vêm com data e quem mandou na frente:
@@ -15574,14 +15621,19 @@
         const mais = campanhas.length > 1 ? ` +${campanhas.length - 1}` : '';
         return `<button type="button" class="tCampanha${ehCampanhaBlackFriday(r) ? ' bf' : ''}" data-campanha-item="${escapeHtml(p.c)}" aria-label="Ver condições da campanha ${escapeHtml(r.name || '')}" title="${escapeHtml(r.name || 'Campanha')}">${escapeHtml(rotuloPctDaFita(r))}${mais}</button>`;
       }
-      // quantidade digitada: no múltiplo da embalagem, pra cima (como o resto do app)
+      // Quantidade digitada -> { n, q } (q no múltiplo da embalagem pra cima, como o resto do app), ou null se
+      // não é número > 0. "1.000" é mil
+      function qtdDigitadaNoMultiplo(valor, step) {
+        const n = Math.floor(Number(semPontoDeMilharLista(String(valor).trim()).replace(',', '.')));
+        return n > 0 ? { n, q: Math.ceil(n / step) * step } : null;
+      }
       function qtdDigitadaNaTabela(inp) {
         const p = productByCod(inp.dataset.tabelaQtd);
         if (!p) return;
         const step = packStep(p);
-        const n = Math.floor(Number(String(inp.value).replace(',', '.')));
-        if (!(n > 0)) { inp.value = getPendingQty(p); return; }
-        const q = Math.max(step, Math.ceil(n / step) * step);
+        const d = qtdDigitadaNoMultiplo(inp.value, step);
+        if (!d) { inp.value = getPendingQty(p); return; }
+        const { n, q } = d;
         if (q !== n) showToast(`${p.c}: ${q} un. (embalagem com ${step})`);
         state.pendingQty[p.c] = q;
         inp.value = q;
@@ -32863,7 +32915,7 @@
         const medida = l.medida && p._tok.includes(String(l.item.qtd)); // escolhido pela busca, sem a medida: é quantidade
         // fala do levantamento por voz (l.campo): o estoque é o contado, sem arredondar pra embalagem.
         // Etiqueta: a foto não diz quantidade - 1 no estoque (Levantamento) ou 1 embalagem (Pedido), sem aviso
-        const q = lc && lc.modo === 'etiqueta' ? { qtd: l.campo === 'qty' ? 1 : (p.emb > 0 ? p.emb : 1), ajuste: null }
+        const q = lc && lc.modo === 'etiqueta' ? { qtd: stepDaLinhaLista(l, p), ajuste: null }
           : l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
@@ -33367,8 +33419,29 @@
       const campoDaLinhaLista = (l) => l.campo ? ' · ' + ROTULO_CAMPO[l.campo] : '';
       // fala da voz que fica de fora é descartada ao pôr no levantamento: o botão diz isso
       const rotuloForaLista = (l, padrao) => l.fora ? 'Voltar pra lista' : lc && lc.destino === 'lev' ? 'Descartar' : padrao;
+      // passo do −/+: fala pro estoque soma 1 a 1, o resto anda na embalagem
+      const stepDaLinhaLista = (l, p) => l.campo === 'qty' ? 1 : packStep(p || productByCod(l.cod));
+      // campo de quantidade -> linha (no múltiplo da embalagem), valor e total na hora. true = era da lista
+      function aplicarQtdDigitadaLista(inp) {
+        const l = lc && lc.linhas && lc.linhas[Number(inp.dataset.lcQtdInput)];
+        if (!l) return false;
+        const step = stepDaLinhaLista(l), d = qtdDigitadaNoMultiplo(inp.value, step);
+        if (d && d.q !== l.qtd) {
+          l.qtd = d.q;
+          // a linha fica no grupo em que está: só ganha nota quando arredondou, já tinha nota ou ficou alta
+          const notas = [];
+          if (d.q !== d.n) notas.push(`digitou ${d.n} → ${d.q} (embalagem de ${step})`);
+          else if (l.ajuste) notas.push('quantidade digitada');
+          if (d.q > 5000) notas.push('quantidade alta · confira');
+          l.ajuste = notas.join(' · ') || null;
+        }
+        inp.value = l.qtd;
+        const total = document.querySelector('#lcRodape .lcTotal b');
+        if (total) total.textContent = brl(totalDaListaCliente(lcIncluidas()));
+        return true;
+      }
       function htmlStepperLista(i, l) {
-        return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><b>${l.qtd}</b><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
+        return `<span class="lcQtd"><button type="button" data-lc-qtd="${i}" data-dir="-1" aria-label="Menos">−</button><input type="text" inputmode="numeric" autocomplete="off" value="${l.qtd}" data-lc-qtd-input="${i}" aria-label="Quantidade"><button type="button" data-lc-qtd="${i}" data-dir="1" aria-label="Mais">+</button></span>`;
       }
       function htmlBuscaLista(i, l) {
         if (!l.buscando) return `<button type="button" class="lcLink" data-lc-buscar="${i}">Buscar outro produto</button>`;
@@ -33416,6 +33489,7 @@
         return instalado ? 'Atalho: no WhatsApp, segure a mensagem, foto ou PDF › Compartilhar › Cortag.'
           : 'Com o app instalado, dá pra mandar direto do WhatsApp: segure a mensagem › Compartilhar › Cortag.';
       }
+      const totalDaListaCliente = (incl) => incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
       function renderListaCliente() {
         if (!lc) return;
         const corpo = document.getElementById('lcCorpo'), rodape = document.getElementById('lcRodape');
@@ -33523,7 +33597,7 @@
               ${lc.prontosAbertos ? prontas.map(i => htmlLinhaPronta(i, ls[i])).join('') : ''}
             </div>` : '');
         const incl = lcIncluidas();
-        const total = incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
+        const total = totalDaListaCliente(incl);
         const semEscolha = ls.filter(l => !l.cod && !l.fora).length;
         if (praLev) {
           // "Pra conferir" da voz: o que não for pro levantamento é descartado junto, e sem nada escolhido o
@@ -33642,6 +33716,8 @@
           if (!lc) return;
           const t = e.target.closest('button, [data-lc-fechar]');
           if (!t) return;
+          const emFoco = document.activeElement;
+          if (emFoco && emFoco.matches && emFoco.matches('[data-lc-qtd-input]')) aplicarQtdDigitadaLista(emFoco);
           if (t.matches('[data-lc-fechar]')) { fecharListaCliente(); return; }
           if (t.id === 'lcColarBtn') {
             try {
@@ -33709,7 +33785,7 @@
             const p = productByCod(t.dataset.cod);
             if (p) lcEscolher(l, p);
           } else if (t.dataset.lcQtd !== undefined) {
-            const p = productByCod(l.cod), step = l.campo === 'qty' ? 1 : packStep(p);
+            const step = stepDaLinhaLista(l);
             l.qtd = Math.max(step, l.qtd + Number(t.dataset.dir) * step);
           } else if (t.dataset.lcFora !== undefined) {
             l.fora = !l.fora;
@@ -33721,6 +33797,32 @@
           renderListaCliente();
           if (t.dataset.lcBuscar !== undefined) { const inp = corpo.querySelector(`[data-lc-busca="${t.dataset.lcBuscar}"]`); if (inp) inp.focus(); }
         });
+        // quantidade digitada (pedido do usuário, 11/2026: com o −/+ era difícil sair de 7617): tocar seleciona o
+        // número todo, e ao sair do campo (ou Enter) vale, no múltiplo da embalagem pra cima
+        corpo.addEventListener('focusin', (e) => { if (e.target.matches('[data-lc-qtd-input]')) e.target.select(); });
+        corpo.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('[data-lc-qtd-input]')) e.target.blur(); });
+        corpo.addEventListener('change', (e) => {
+          const inp = e.target.closest('[data-lc-qtd-input]');
+          if (!inp || !aplicarQtdDigitadaLista(inp)) return;
+          // o change vem no toque seguinte (− / + / Pôr no orçamento / outro campo): redesenhar agora trocaria o
+          // botão entre o apertar e o soltar e o clique se perdia. Valor e total já mudaram (não mexem na altura);
+          // o resto (nota, grupo, resumo dos prontos) é redesenhado quando o toque acaba
+          if (dedoNaTela) redesenharDepoisDoToque = true; else renderListaCliente();
+        });
+        let dedoNaTela = false, redesenharDepoisDoToque = false;
+        document.addEventListener('pointerdown', () => { dedoNaTela = true; }, true);
+        const soltou = () => setTimeout(() => { // depois do click, que vem logo após o pointerup
+          dedoNaTela = false;
+          if (!redesenharDepoisDoToque) return;
+          redesenharDepoisDoToque = false;
+          const foco = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.lcQtdInput;
+          renderListaCliente();
+          const campo = foco != null && corpo.querySelector(`[data-lc-qtd-input="${foco}"]`);
+          if (campo) campo.focus(); // tocou noutro campo de quantidade: continua nele
+        }, 0);
+        document.addEventListener('pointerup', soltou, true);
+        document.addEventListener('pointercancel', soltou, true);
+
         // busca dentro da linha: só a lista de resultados redesenha (o campo não perde o foco)
         corpo.addEventListener('input', (e) => {
           const inp = e.target.closest('[data-lc-busca]');
