@@ -4686,6 +4686,19 @@ async function main() {
           assert(serra.qtd == null && !/7617|cod/.test(serra.termo) && serra.codigos.includes('62093'),
             `lista do cliente: número depois de "Cód." não é quantidade (IA ${quantidade}): ${JSON.stringify(serra)}`);
         }
+        // achados do revisor-cortag: a medida fica no termo quando a IA devolve o código; a coluna Qtde do PDF vale
+        // mesmo igual ao "REF"; "ref" curto ("reforçado") e "ref 20 kg" continuam quantidade/medida
+        const disco = ctxL.linhaDaImagemLista({ texto: 'DISCO TURBO 110 Cód. 7617', quantidade: 7617 });
+        assert(disco.qtd == null && disco.termo === 'disco turbo 110', `lista do cliente: código da IA sai sem levar a medida: ${JSON.stringify(disco)}`);
+        const doCortag = ctxL.linhaDaImagemLista({ texto: 'SERRA COPO 50MM 62093', quantidade: 62093 });
+        assert(doCortag.qtd == null, `lista do cliente: IA devolvendo o código Cortag como quantidade fica sem: ${JSON.stringify(doCortag)}`);
+        const tab = ctxL.linhaComQuantidadeLista('COLHER PEDREIRO 8 REF 1200', 1200, null);
+        assert(tab.qtd === 1200 && tab.termo === 'colher pedreiro 8', `lista do cliente: na tabela do PDF a coluna Qtde vale: ${JSON.stringify(tab)}`);
+        const refs = ['aplicador silicone ref - 6', 'aplicador silicone ref 12', 'disco turbo 110 ref 3'].map(t => ctxL.interpretarLinhaLista(t).qtd);
+        const arg = ctxL.interpretarLinhaLista('argamassa ref 20 kg 5');
+        assert(refs.join() === '6,12,3' && arg.qtd === 5 && /20/.test(arg.termo), `lista do cliente: "ref" com número curto continua quantidade: ${refs} / ${JSON.stringify(arg)}`);
+        const lixa = ['Lixa G120', 'lixa g 120', 'lixa G120 - 10', 'Disco flap G60 2'].map(t => ctxL.interpretarLinhaLista(t).qtd);
+        assert(lixa.join() === ',120,10,2', `lista do cliente: só o número colado na letra deixa de ser quantidade: ${lixa}`);
         const comQtd = ctxL.interpretarLinhaLista('serra copo 50mm cod 7617 - 3');
         assert(comQtd.qtd === 3 && !/7617/.test(comQtd.termo), `lista do cliente: "cod 7617 - 3" = 3: ${JSON.stringify(comQtd)}`);
         // linha lida da foto: a quantidade vem da IA e o "110" fica no produto
