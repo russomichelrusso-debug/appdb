@@ -4489,6 +4489,11 @@ async function main() {
         { c: '61750', n: 'REBOLO TIPO COPO CONICO 100 mm G 120 ROSCA M14', emb: 1 },
         { c: '61569', n: 'APLICADOR DE SILICONE PROFISSIONAL 9" - REFORÇADO', emb: 6 },
         { c: '60709', n: 'COLHER P/ PEDREIRO KAEF CABO PLÁSTICO RETA 08"', emb: 6 },
+        { c: '60879', n: 'LAMINA DE SERRA CIRCULAR P/ MADEIRA 36 DENTES Ø 110 mm', emb: 1 },
+        { c: '60864', n: 'LAMINA DE SERRA CIRCULAR P/ MADEIRA 24 DENTES Ø 110 mm', emb: 1 },
+        { c: '62950', n: 'TORQUÊS  AZULEJISTA CORTE FURO 7.1/2"', emb: 1 },
+        { c: '70001', n: 'SERRA COPO BIMETAL 25 mm', emb: 1 },
+        { c: '70002', n: 'ESPACADOR NIVELADOR 1/16" 3 mm', emb: 1 },
       ];
       const ctxL = { DB: { products: prods }, normalize: (s) => (s || '').toString().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase() };
       vmL.createContext(ctxL);
@@ -4504,6 +4509,13 @@ async function main() {
           && resumo[2] === 'espacador nivelador supra 1.5 mm|500|un' && resumo[5] === 'rejunte cinza 20 kg|3|',
           `lista do cliente: saudação fora, quantidade no fim/com unidade, medida fica no produto: ${JSON.stringify(resumo)}`);
         const porCodigo = (c) => prods.find(p => p.c === c) || null;
+        // foto da embalagem (11/2026): o furo e a polegada que vêm junto da medida em mm não impedem de achar
+        const lamina = (t) => { const r = ctxL.produtoDaLinhaLista(ctxL.linhaDaImagemLista({ texto: t, quantidade: null, unidade: null }), { porCodigo }); return r.estado + ':' + (r.produto ? r.produto.c : ''); };
+        assert(lamina('LÂMINA DE SERRA CIRCULAR 110 mm - 4.3/8" Furo - 20 mm - 13/16" 36 dentes') === 'pronto:60879'
+          && lamina('LÂMINA DE SERRA CIRCULAR 110 mm - 4.3/8" Furo - 20 mm - 13/16" 24 dentes') === 'pronto:60864'
+          && lamina('torques azulejista corte furo 7.1/2"') === 'pronto:62950'
+          && lamina('serra copo furo 22 mm').startsWith('escolher') && lamina('espacador nivelador 1/8 3 mm').startsWith('escolher'),
+          `lista do cliente: furo e polegada da embalagem saem da busca só quando nada foi achado, e o furo/fração que é a medida fica (${lamina('LÂMINA DE SERRA CIRCULAR 110 mm - 4.3/8" Furo - 20 mm - 13/16" 36 dentes')})`);
         // levantamento por voz: uma fala = um item (código falado com "meia", número por extenso, "pedido" na fala)
         const falaLev = (t) => ctxL.itemDaFalaLevantamento(t, porCodigo);
         const fCod = falaLev('meia zero oito sete meia, com seis');
