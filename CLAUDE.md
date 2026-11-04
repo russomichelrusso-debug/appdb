@@ -1262,6 +1262,16 @@ Supabase, sem PR — não é mudança de código.
   celular reenvia quando volta). Conexão do celular em `cortagSegundaTela_v1` (sobrevive a reabrir o app); sair do
   app desconecta. Fora desta 1ª versão (decisão do usuário): escolher o que o tablet mostra (preço unitário e
   campanha sempre aparecem, código não).
+- **Catálogo na tela do cliente** (11/2026, PR #346, mockups "Cortag · Catálogo na tela do cliente": A + B ao tocar + C, escolha
+  do usuário: "só aparecia o orçamento"): com a tela do cliente conectada, a família aberta em Produtos › Catálogo ganha **"Mostrar no
+  tablet"** e o celular vira o controle remoto (`#catRemoto`, `telaCatalogo`, `index.html`): Todos / Um produto / Comparar (2 a 4),
+  ‹ ›, "+ N no orçamento", chaves **"Mostrar o orçamento no tablet"** (lateral, pílula e faixa) e **"Mostrar preço"** (desligada; campanha
+  com quantidade mínima vai como preço de 1 un + a condição, pra não brigar com a lateral). O catálogo vai junto do estado do orçamento
+  (`catalogoParaTelaCliente`, até 100 produtos, campanha pelo `seloDaVitrine` - sem o nome da regra); `catalogoQueCabe` corta textos,
+  ficha e produtos do fim pra caber nos 200 KB da sala (413 vira "grande demais", não "sem internet"). No tablet (`tela-cliente.html`):
+  grade com o orçamento na lateral, produto em tela cheia (o cliente também toca e passa; mexer no celular faz a tela voltar a seguir
+  ele, `catLocal`) e comparação em tabela. Sem canal de volta: o "+ no orçamento" do celular é o do destaque do celular, não o que o
+  cliente abriu no tablet. Só no Catálogo (campanhas e Mais vendidos ainda não).
 - **Celular como leitor do levantamento no tablet** (10/2026, 2ª ideia, opção **"cada leitura soma 1"** escolhida nos
   mockups). No tablet/laptop, aba Levantamento › "Usar o celular como leitor" (botão só em tela de 700 px ou mais)
   cria uma sala no modo `'leitor'` e mostra o QR; o celular conecta pelo mesmo "Conectar tablet" e abre a tela de

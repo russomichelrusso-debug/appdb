@@ -10486,6 +10486,15 @@
       cursor: pointer;
     }
 
+    .catRemotoMiniFoto {
+      position: absolute;
+      inset: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: center / contain no-repeat;
+    }
+
     .catRemotoMini.ativo {
       box-shadow: 0 0 0 3px var(--red);
     }
@@ -19498,11 +19507,12 @@
         segundaTelaEnviando = true;
         const id = segundaTela.id;
         try {
-          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: estadoParaTelaCliente() }), signal: prazoSegundaTela(10000) });
+          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: catalogoQueCabe(estadoParaTelaCliente()) }), signal: prazoSegundaTela(10000) });
           if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
         } catch (e) {
           if (segundaTela && segundaTela.id === id) {
             if (e.status === 404) desligarSegundaTela('O tablet desconectou — a tela do cliente foi fechada.');
+            else if (e.status === 413) segundaTelaStatus = 'grande';
             else segundaTelaStatus = 'semRede';
           }
         } finally {
@@ -19518,7 +19528,7 @@
         clearInterval(segundaTelaVigia);
         segundaTelaVigia = setInterval(async () => {
           if (!segundaTela) { clearInterval(segundaTelaVigia); return; }
-          if (segundaTelaStatus === 'semRede') { enviarTelaCliente(); return; }
+          if (segundaTelaStatus === 'semRede' || segundaTelaStatus === 'grande') { enviarTelaCliente(); return; }
           const id = segundaTela.id;
           try {
             const r = await apiFetch(`/api/segunda-tela/salas/${id}`, { signal: prazoSegundaTela(10000) });
@@ -19536,6 +19546,7 @@
         segundaTela = null;
         telaCatalogo = null;
         fecharCatRemoto();
+        redesenharFamiliaDoCatalogo();
         segundaTelaStatus = 'ok';
         clearTimeout(segundaTelaTimer);
         clearInterval(segundaTelaVigia);
@@ -19561,6 +19572,8 @@
           tipo = 'aviso'; titulo = 'Sem internet'; sub = 'o tablet atualiza quando o sinal voltar';
         } else if (segundaTelaStatus === 'semTablet') {
           tipo = 'aviso'; titulo = 'O tablet não está respondendo'; sub = 'confira se a tela do cliente continua aberta nele';
+        } else if (segundaTelaStatus === 'grande') {
+          tipo = 'aviso'; titulo = 'Orçamento grande demais pro tablet'; sub = telaCatalogo ? 'volte ao orçamento ou escolha uma subfamília menor' : 'o tablet ficou com a última versão';
         } else if (telaCatalogo) {
           tipo = 'ok'; titulo = 'Tablet mostrando o catálogo'; sub = 'toque em Controle pra passar os produtos';
         } else {
@@ -19601,6 +19614,13 @@
         abrirCatRemoto();
         enviarCatalogoAgora();
       }
+      // o botão "Mostrar no tablet" da família aberta aparece/some com a conexão
+      function redesenharFamiliaDoCatalogo() {
+        const el = document.getElementById('prodCatalogo');
+        if (!el || el.classList.contains('hidden') || catalogoFamilia === null) return;
+        catalogoScroll = window.scrollY;
+        renderCatalogo();
+      }
       function cortarTexto(t, n) {
         const s = String(t || '').replace(/\s+/g, ' ').trim();
         return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
@@ -19621,7 +19641,11 @@
           let preco = null;
           if (telaCatPrefs.preco) {
             const of = ofertaDoProduto(p);
-            if (of.por > 0) preco = { de: of.regra ? r2(of.de) : null, por: r2(of.por) };
+            // a campanha só vale com quantidade/condição: o tablet mostra o preço
+            // de 1 unidade (o mesmo que entra no orçamento) e a condição embaixo
+            const comCondicao = of.regra && (of.qtd > 1 || (of.condicoes && of.condicoes.length));
+            if (comCondicao) preco = { de: null, por: r2(of.de), cond: `-${of.pct}% ${of.condicoes.join(', ')}` };
+            else if (of.por > 0) preco = { de: of.regra ? r2(of.de) : null, por: r2(of.por) };
           }
           const indicado = cortarTexto(site && (site.indicado || pg.indicado), 220);
           return {
@@ -19639,6 +19663,30 @@
           };
         });
         return { titulo: t.titulo, vista: t.vista, i: t.i, comparar: t.comparar.slice(), orcamento: telaCatPrefs.orcamento, produtos };
+      }
+      // O servidor recusa estado acima de 200 KB (MAX_ESTADO_BYTES, routes/segundaTela.js):
+      // com um orçamento grande, o catálogo perde primeiro os textos, depois a
+      // ficha, e por último produtos do fim (o destaque e os comparados ficam).
+      const TELA_ESTADO_MAX_BYTES = 190 * 1024;
+      function tamanhoJson(o) { return new Blob([JSON.stringify(o)]).size; }
+      function catalogoQueCabe(estado) {
+        const cat = estado.catalogo;
+        if (!cat || tamanhoJson(estado) <= TELA_ESTADO_MAX_BYTES) return estado;
+        cat.produtos.forEach(p => { p.sobre = ''; p.indicado = ''; });
+        if (tamanhoJson(estado) <= TELA_ESTADO_MAX_BYTES) return estado;
+        cat.produtos.forEach(p => { p.specs = []; });
+        const manter = new Set([cat.i, ...cat.comparar]);
+        while (tamanhoJson(estado) > TELA_ESTADO_MAX_BYTES && cat.produtos.length > manter.size) {
+          let k = cat.produtos.length - 1;
+          while (manter.has(k)) k--;
+          if (k < 0) break;
+          cat.produtos.splice(k, 1);
+          // índices depois do que saiu andam uma casa
+          if (cat.i > k) cat.i--;
+          cat.comparar = cat.comparar.map(x => (x > k ? x - 1 : x));
+          manter.clear(); [cat.i, ...cat.comparar].forEach(x => manter.add(x));
+        }
+        return estado;
       }
       // mudança feita no controle: vai pro tablet logo (sem esperar os 350 ms do orçamento)
       function enviarCatalogoAgora() {
@@ -19665,7 +19713,8 @@
         const status = document.getElementById('catRemotoStatus');
         status.textContent = segundaTela && segundaTela.oculto ? 'Tela do tablet escondida'
           : segundaTelaStatus === 'semRede' ? 'Sem internet — o tablet atualiza quando o sinal voltar'
-            : segundaTelaStatus === 'semTablet' ? 'O tablet não está respondendo' : 'Tablet mostrando o catálogo';
+            : segundaTelaStatus === 'semTablet' ? 'O tablet não está respondendo'
+              : segundaTelaStatus === 'grande' ? 'Grande demais pro tablet — escolha uma subfamília menor' : 'Tablet mostrando o catálogo';
         const ps = t.cods.map(productByCod);
         t.i = Math.max(0, Math.min(t.i, ps.length - 1));
         const p = ps[t.i];
@@ -19681,7 +19730,8 @@
           const posComp = t.comparar.indexOf(k);
           const marca = comparando ? (posComp >= 0 ? String(posComp + 1) : '') : (qtdNoOrc(q.c) ? '✓' : '');
           const foto = codigoDaFoto(q.c);
-          return `<button type="button" class="catRemotoMini${(comparando ? posComp >= 0 : k === t.i) ? ' ativo' : ''}" data-cr-i="${k}"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(q.c)}"` : ''} aria-label="${escapeHtml(q.n)}" aria-pressed="${comparando ? posComp >= 0 : k === t.i}">${foto ? '' : escapeHtml(cortarTexto(q.n, 40))}<span class="marca${marca ? '' : ' hidden'}" aria-hidden="true">${marca}</span></button>`;
+          // a foto num filho próprio: carregarFotoEm limpa o conteúdo do alvo (e levaria a marca junto)
+          return `<button type="button" class="catRemotoMini${(comparando ? posComp >= 0 : k === t.i) ? ' ativo' : ''}" data-cr-i="${k}" aria-label="${escapeHtml(q.n)}" aria-pressed="${comparando ? posComp >= 0 : k === t.i}"><span class="catRemotoMiniFoto"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(q.c)}"` : ''}>${foto ? '' : escapeHtml(cortarTexto(q.n, 40))}</span><span class="marca${marca ? '' : ' hidden'}" aria-hidden="true">${marca}</span></button>`;
         }).join('');
         document.getElementById('catRemotoCorpo').innerHTML = `
           <div class="catRemotoTitulo"><small>NO TABLET AGORA</small><b>${escapeHtml(t.titulo)}</b>
@@ -19716,6 +19766,7 @@
           fecharCatRemoto();
           enviarCatalogoAgora();
           renderFaixaSegundaTela();
+          redesenharFamiliaDoCatalogo();
         });
         const corpo = document.getElementById('catRemotoCorpo');
         corpo.addEventListener('change', (e) => {
@@ -19740,9 +19791,8 @@
             if (t.vista === 'comparar') {
               if (t.comparar.includes(k)) t.comparar = t.comparar.filter(x => x !== k);
               else if (t.comparar.length >= TELA_CAT_MAX_COMPARAR) { showToast(`Compara até ${TELA_CAT_MAX_COMPARAR} produtos de cada vez`); return; }
-              else t.comparar.push(k);
-            }
-            t.i = k;
+              else { t.comparar.push(k); t.i = k; }
+            } else t.i = k;
             enviarCatalogoAgora();
             return;
           }
@@ -19797,7 +19847,7 @@
           iniciarVigiaSegundaTela();
           enviarTelaCliente();
           // a família aberta no Catálogo ganha o "Mostrar no tablet"
-          if (!document.getElementById('prodCatalogo').classList.contains('hidden') && catalogoFamilia !== null) { catalogoScroll = window.scrollY; renderCatalogo(); }
+          redesenharFamiliaDoCatalogo();
           showToast('Tablet conectado — ele mostra o orçamento ao vivo');
           return true;
         } catch (e) {

@@ -357,6 +357,8 @@
     .catNome { font-size: 15px; font-weight: 600; line-height: 1.3; padding: 0 4px; overflow-wrap: break-word; }
     .catDet { font-size: 13px; color: var(--gray); padding: 0 4px 4px; }
     .catPreco { padding: 0 4px 4px; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .catCond { font-size: 13px; font-weight: 600; color: var(--success); letter-spacing: 0; margin-top: 2px; }
+    .catProdPreco .catCond { font-size: 17px; }
     .catPreco s { font-size: 13px; color: var(--gray); font-weight: 400; margin-right: 6px; }
 
     .catLado {
@@ -937,7 +939,7 @@
       if (!estado || estado.oculto || !Array.isArray(estado.itens)) { fecharVitrine(); catLocal = null; return; }
       notarMudancaDoCatalogo(antes);
       // com o catálogo na tela, o item novo aparece na lateral e no selo do card
-      if (estado.catalogo) { fecharVitrine(); }
+      if (estado.catalogo) { fecharVitrine(); return; }
       // só o que entrou DEPOIS da 1ª versão vira "novo" (abrir a tela com um
       // orçamento pronto não dispara vitrine), e só se a tela estava à mostra
       if (!antes || antes.oculto || !Array.isArray(antes.itens)) return;
@@ -1046,6 +1048,7 @@
     let catLocal = null; // { vista, i } escolhido aqui no tablet, por cima do celular
     let catOrcAntes = new Set(); // códigos no orçamento na versão anterior (o que entrou fica destacado na lateral)
     let catNovos = new Set();
+    let catRolar = false;
 
     function catalogoValido(c) {
       return !!(c && typeof c === 'object' && Array.isArray(c.produtos) && c.produtos.length);
@@ -1055,7 +1058,10 @@
       const c = estado.catalogo;
       if (!catalogoValido(c)) { catLocal = null; catOrcAntes = new Set(); return; }
       // o vendedor trocou a família, a vista ou o destaque: a tela segue ele
-      if (!a || a.titulo !== c.titulo || a.vista !== c.vista || a.i !== c.i || JSON.stringify(a.comparar) !== JSON.stringify(c.comparar)) catLocal = null;
+      if (!a || a.titulo !== c.titulo || a.vista !== c.vista || a.i !== c.i || JSON.stringify(a.comparar) !== JSON.stringify(c.comparar)) {
+        catLocal = null;
+        catRolar = true; // só aí a grade rola até o destaque (senão o cliente perde onde estava)
+      }
       const agora = new Set((estado.itens || []).map(i => i.cod));
       catNovos = a ? new Set([...agora].filter(x => !catOrcAntes.has(x))) : new Set();
       catOrcAntes = agora;
@@ -1071,11 +1077,31 @@
     function htmlPrecoCat(p, classe) {
       if (!p.preco || !(Number(p.preco.por) > 0)) return '';
       const de = Number(p.preco.de) > Number(p.preco.por) + 0.004 ? `<s>${brl(p.preco.de)}</s>` : '';
-      return `<div class="${classe}">${de}${brl(p.preco.por)}${classe === 'catProdPreco' ? ' <small>cada</small>' : ''}</div>`;
+      const cond = p.preco.cond ? `<div class="catCond">${escapeHtml(p.preco.cond)}</div>` : '';
+      return `<div class="${classe}">${de}${brl(p.preco.por)}${classe === 'catProdPreco' ? ' <small>cada</small>' : ''}${cond}</div>`;
     }
     // fotos: a miniatura na grade (a cheia, se ela não existir); a cheia no produto aberto
+    // Só quando o elemento chega perto da tela: a 1ª abertura de uma família de
+    // 100 produtos pedia as 100 miniaturas de uma vez (sinal fraco, e o servidor
+    // gera a miniatura que ainda não existe).
+    const observadoresCat = {};
     function preencherFotosCat(raiz, produtos, cheia) {
-      raiz.querySelectorAll('[data-cat-foto]').forEach(el => {
+      const chave = cheia ? 'cheia' : raiz.id || raiz.className;
+      if (observadoresCat[chave]) observadoresCat[chave].disconnect();
+      const alvos = [...raiz.querySelectorAll('[data-cat-foto]')];
+      if (typeof IntersectionObserver === 'undefined') { alvos.forEach(el => carregarFotoCat(el, produtos, cheia)); return; }
+      const obs = new IntersectionObserver((entradas) => {
+        for (const e of entradas) {
+          if (!e.isIntersecting) continue;
+          obs.unobserve(e.target);
+          carregarFotoCat(e.target, produtos, cheia);
+        }
+      }, { rootMargin: '400px' });
+      observadoresCat[chave] = obs;
+      alvos.forEach(el => obs.observe(el));
+    }
+    function carregarFotoCat(el, produtos, cheia) {
+      {
         const p = produtos[Number(el.dataset.catFoto)];
         if (!p || !p.foto) return;
         const pedir = cheia ? urlDaFoto(p.foto) : urlDaFoto(p.foto, true).then(u => u || urlDaFoto(p.foto));
@@ -1084,7 +1110,7 @@
           const svg = el.querySelector(':scope > svg');
           if (svg) svg.outerHTML = `<img src="${url}" alt="">`;
         });
-      });
+      }
     }
 
     function desenharCatalogo() {
@@ -1113,7 +1139,8 @@
         desenharProdutoCat(prod, c, i, mostrarOrc);
       } else {
         prod.classList.add('hidden');
-        if (vista === 'grade' && !catLocal) {
+        if (vista === 'grade' && !catLocal && catRolar) {
+          catRolar = false;
           const card = meio.querySelector('.catCard.destaque');
           if (card) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
         }
