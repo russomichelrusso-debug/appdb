@@ -1636,6 +1636,13 @@ Supabase, sem PR — não é mudança de código.
       fotos "da loja" de um código (confirmação errada puxa o código pra cima em fotos parecidas) — se acontecer, SQL no Supabase
       (`DELETE FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = '...'`) ou um botão no Painel.
 
+- **Quantidade digitável em todo −/+** (11/2026, relato do usuário: com embalagem de 1, pôr 80 era apertar o + 80 vezes):
+  o número entre −/+ do card do produto (Pedido/Produtos), do item do orçamento e do Estoque/Pedido do Levantamento é um
+  campo (`ligarCampoQtd`, `index.html`): tocar seleciona tudo, Enter ou sair aplica; orçamento e pedido do levantamento sobem
+  pro múltiplo da embalagem (com aviso, `qtdDigitadaComAviso`), estoque vale 1 a 1, 0 vale no levantamento. **No celular o
+  `change` chega no mousedown, depois do pointerup e antes do click**: o redesenho espera o click (`redesenharDepoisDoToqueQtd`,
+  700 ms se foi rolagem) e o foco volta pro campo tocado (`QTD_CAMPOS`) - redesenhar na hora perdia o toque no +.
+
 - **Tela acesa com o app aberto** (10/2026, pedido do usuário: no levantamento a tela apagava pelo tempo do celular): Wake Lock
   do navegador (`pedirTelaAcesa`/`initTelaAcesa`, `index.html`), ligado por padrão, pedido de novo ao voltar pro app e no 1º
   toque; o celular solta sozinho ao trocar de app/bloquear e pode recusar com economia de bateria. ⚙ › "Deixar a tela apagar

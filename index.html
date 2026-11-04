@@ -10877,6 +10877,26 @@
       font-size: 16px;
     }
 
+    /* quantidade digitável entre o − e o + (11/2026) */
+    .qtybox input {
+      width: 46px;
+      height: 44px;
+      border: none;
+      background: transparent;
+      text-align: center;
+      font-weight: 600;
+      font-size: 16px;
+      font-variant-numeric: tabular-nums;
+      color: var(--ink);
+      padding: 0;
+    }
+    .qtybox input:focus,
+    .levqtybox input:focus {
+      outline: 2px solid var(--red);
+      outline-offset: -2px;
+      border-radius: 6px;
+    }
+
     .levqtybox button {
       width: 44px;
       height: 44px;
@@ -15386,6 +15406,13 @@
         container.querySelectorAll('[data-pending-dec]').forEach(btn => {
           btn.addEventListener('click', () => changePendingQty(btn.dataset.pendingDec, -1));
         });
+        container.querySelectorAll('[data-pending-qty]').forEach(inp => ligarCampoQtd(inp, () => {
+          const p = productByCod(inp.dataset.pendingQty);
+          if (!p) return;
+          const d = qtdDigitadaComAviso(inp.value, p);
+          if (d) state.pendingQty[p.c] = d.q;
+          inp.value = getPendingQty(p); // o card não muda com a quantidade: sem redesenhar
+        }));
         container.querySelectorAll('[data-item-disc]').forEach(inp => {
           inp.addEventListener('change', () => setItemDiscount(inp.dataset.itemDisc, inp.value));
         });
@@ -15678,7 +15705,7 @@
     <div class="qtyrow" style="margin-top:8px;">
       <div class="qtybox">
         <button data-pending-dec="${escapeHtml(p.c)}" aria-label="Diminuir quantidade">−</button>
-        <span>${getPendingQty(p)}</span>
+        <input type="text" inputmode="numeric" autocomplete="off" value="${getPendingQty(p)}" data-pending-qty="${escapeHtml(p.c)}" aria-label="Quantidade" title="Múltiplo de ${packStep(p)}">
         <button data-pending-inc="${escapeHtml(p.c)}" aria-label="Aumentar quantidade">+</button>
       </div>
       <div class="pct-wrap mini">
@@ -15745,6 +15772,53 @@
       function qtdDigitadaNoMultiplo(valor, step) {
         const n = Math.floor(Number(semPontoDeMilharLista(String(valor).trim()).replace(',', '.')));
         return n > 0 ? { n, q: Math.ceil(n / step) * step } : null;
+      }
+      // ...com o aviso quando subiu pro múltiplo da embalagem
+      function qtdDigitadaComAviso(valor, p) {
+        const step = packStep(p);
+        const d = qtdDigitadaNoMultiplo(valor, step);
+        if (d && d.q !== d.n) showToast(`${p ? p.c + ': ' : ''}${d.q} un. (embalagem com ${step})`);
+        return d;
+      }
+      // Campo de quantidade entre o − e o + (11/2026, pedido do usuário: com embalagem de 1, pôr 80 era apertar
+      // o + 80 vezes): tocar seleciona o número, Enter ou sair do campo aplica. O change vem no toque seguinte
+      // (−/+, Adicionar, Finalizar, outro campo): redesenhar na hora trocaria o botão entre o apertar e o soltar
+      // e o clique se perdia (mesmo caso da lista do cliente) - o redesenho espera o toque acabar
+      // No toque do celular o campo só perde o foco (change) no mousedown que vem DEPOIS do pointerup, logo antes
+      // do click: o toque conta até o click (ou 700 ms depois de soltar, quando foi rolagem e não há click)
+      let qtdDedoNaTela = false, qtdFimDoToque = null;
+      const qtdRedesenhos = [];
+      const qtdAcabouToque = (ms) => {
+        clearTimeout(qtdFimDoToque);
+        qtdFimDoToque = setTimeout(() => {
+          qtdDedoNaTela = false;
+          if (!qtdRedesenhos.length) return;
+          // tocou noutro campo de quantidade: o redesenho troca o campo, e o foco tem de ir pro novo
+          const foco = document.activeElement;
+          const attr = foco && foco.tagName === 'INPUT' && QTD_CAMPOS.find(a => foco.hasAttribute(a));
+          const valor = attr && foco.getAttribute(attr);
+          qtdRedesenhos.splice(0).forEach(fn => fn());
+          if (attr && !foco.isConnected) {
+            const novo = document.querySelector(`[${attr}="${CSS.escape(valor)}"]`);
+            if (novo) { novo.focus(); novo.select(); }
+          }
+        }, ms);
+      };
+      document.addEventListener('pointerdown', () => { clearTimeout(qtdFimDoToque); qtdDedoNaTela = true; }, true);
+      document.addEventListener('pointerup', () => qtdAcabouToque(700), true);
+      document.addEventListener('pointercancel', () => qtdAcabouToque(700), true);
+      document.addEventListener('click', () => qtdAcabouToque(0), true);
+      const QTD_CAMPOS = ['data-cart-qty', 'data-lev-qty', 'data-lev-ped-qty', 'data-pending-qty'];
+      function redesenharDepoisDoToqueQtd(fn) {
+        if (!qtdDedoNaTela) { fn(); return; }
+        if (!qtdRedesenhos.includes(fn)) qtdRedesenhos.push(fn);
+      }
+      function redesenharOrcamentoQtd() { renderCart(); renderCartBar(); }
+      function ligarCampoQtd(inp, aplicar) {
+        // select() no próprio focus é desfeito pelo fim do toque no celular (o número novo ia grudado no velho)
+        inp.addEventListener('focus', () => setTimeout(() => { if (document.activeElement === inp) inp.select(); }, 0));
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+        inp.addEventListener('change', aplicar);
       }
       function qtdDigitadaNaTabela(inp) {
         const p = productByCod(inp.dataset.tabelaQtd);
@@ -16819,9 +16893,9 @@
         <div class="bottom">
           <div class="qtyrow">
             <div class="qtybox">
-              <button data-dec="${escapeHtml(p.c)}">−</button>
-              <span>${it.qty}</span>
-              <button data-inc="${escapeHtml(p.c)}">+</button>
+              <button data-dec="${escapeHtml(p.c)}" aria-label="Diminuir quantidade">−</button>
+              <input type="text" inputmode="numeric" autocomplete="off" value="${it.qty}" data-cart-qty="${escapeHtml(p.c)}" aria-label="Quantidade" title="Múltiplo de ${packStep(p)}">
+              <button data-inc="${escapeHtml(p.c)}" aria-label="Aumentar quantidade">+</button>
             </div>
             <div class="pct-wrap mini">
               <input class="num-input${descontoItemVisivel(p) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${descontoItemVisivel(p) > 0 ? descontoItemVisivel(p) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
@@ -16837,6 +16911,15 @@
           body.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => removeFromCart(b.dataset.rm)));
           body.querySelectorAll('[data-inc]').forEach(b => b.addEventListener('click', () => changeQty(b.dataset.inc, 1)));
           body.querySelectorAll('[data-dec]').forEach(b => b.addEventListener('click', () => changeQty(b.dataset.dec, -1)));
+          body.querySelectorAll('[data-cart-qty]').forEach(inp => ligarCampoQtd(inp, () => {
+            const it = state.cart.find(i => i.cod === inp.dataset.cartQty);
+            if (!it) return;
+            const d = qtdDigitadaComAviso(inp.value, productByCod(it.cod));
+            if (!d || d.q === it.qty) { inp.value = it.qty; return; }
+            it.qty = d.q;
+            inp.value = d.q;
+            redesenharDepoisDoToqueQtd(redesenharOrcamentoQtd);
+          }));
           body.querySelectorAll('[data-edit-price]').forEach(b => b.addEventListener('click', () => openPriceEditModal(b.dataset.editPrice)));
           body.querySelectorAll('[data-item-disc]').forEach(inp => {
             inp.addEventListener('change', () => setItemDiscount(inp.dataset.itemDisc, inp.value));
@@ -18795,7 +18878,7 @@
           <label>Estoque no cliente</label>
           <div class="levqtybox">
             <button data-lev-dec="${escapeHtml(p.c)}">−</button>
-            <input type="number" inputmode="numeric" min="0" value="${it.qty}" data-lev-qty="${escapeHtml(p.c)}">
+            <input type="text" inputmode="numeric" autocomplete="off" value="${it.qty}" data-lev-qty="${escapeHtml(p.c)}" aria-label="Estoque no cliente">
             <button data-lev-inc="${escapeHtml(p.c)}">+</button>
           </div>
         </div>
@@ -18804,7 +18887,7 @@
           <div class="qtyrow">
             <div class="levqtybox">
               <button data-lev-peddec="${escapeHtml(p.c)}">−</button>
-              <span class="qtyval">${it.ped || 0}</span>
+              <input type="text" inputmode="numeric" autocomplete="off" value="${it.ped || 0}" data-lev-ped-qty="${escapeHtml(p.c)}" aria-label="Quantidade do pedido" title="Múltiplo de ${packStep(p)}">
               <button data-lev-pedinc="${escapeHtml(p.c)}">+</button>
             </div>
             <div class="pct-wrap mini">
@@ -18824,9 +18907,27 @@
         listEl.querySelectorAll('[data-lev-rm]').forEach(b => b.addEventListener('click', () => removeLevItem(b.dataset.levRm)));
         listEl.querySelectorAll('[data-lev-inc]').forEach(b => b.addEventListener('click', () => changeLevQty(b.dataset.levInc, 1)));
         listEl.querySelectorAll('[data-lev-dec]').forEach(b => b.addEventListener('click', () => changeLevQty(b.dataset.levDec, -1)));
-        listEl.querySelectorAll('[data-lev-qty]').forEach(inp => {
-          inp.addEventListener('change', () => setLevQty(inp.dataset.levQty, parseInt(inp.value, 10)));
-        });
+        // estoque: o que foi contado, 1 a 1 (sem embalagem); pedido: no múltiplo da embalagem. 0 vale nos dois
+        listEl.querySelectorAll('[data-lev-qty]').forEach(inp => ligarCampoQtd(inp, () => {
+          const it = state.survey.find(i => i.cod === inp.dataset.levQty);
+          if (!it) return;
+          const d = String(inp.value).trim() === '0' ? { q: 0 } : qtdDigitadaNoMultiplo(inp.value, 1);
+          if (!d || d.q === it.qty) { inp.value = it.qty; return; }
+          it.qty = d.q;
+          inp.value = d.q;
+          saveLevSurvey();
+          redesenharDepoisDoToqueQtd(renderLevList);
+        }));
+        listEl.querySelectorAll('[data-lev-ped-qty]').forEach(inp => ligarCampoQtd(inp, () => {
+          const it = state.survey.find(i => i.cod === inp.dataset.levPedQty);
+          if (!it) return;
+          const d = String(inp.value).trim() === '0' ? { q: 0 } : qtdDigitadaComAviso(inp.value, productByCod(it.cod));
+          if (!d || d.q === (it.ped || 0)) { inp.value = it.ped || 0; return; }
+          it.ped = d.q;
+          inp.value = d.q;
+          saveLevSurvey();
+          redesenharDepoisDoToqueQtd(renderLevList);
+        }));
         listEl.querySelectorAll('[data-lev-pedinc]').forEach(b => b.addEventListener('click', () => changeLevPed(b.dataset.levPedinc, 1)));
         listEl.querySelectorAll('[data-lev-peddec]').forEach(b => b.addEventListener('click', () => changeLevPed(b.dataset.levPeddec, -1)));
         listEl.querySelectorAll('[data-item-disc]').forEach(inp => {
