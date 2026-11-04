@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Contra clickjacking: mesmo trecho das outras páginas (ver calculadora-materiais.html). -->
+  <style id="antiFrame">html { display: none !important; }</style>
+  <script>
+    if (window.top === window.self) {
+      document.getElementById('antiFrame').remove();
+    } else {
+      try { window.top.location = window.self.location.href; } catch (e) { }
+    }
+  </script>
+  <!-- O GitHub Pages serve esta página pra QUALQUER endereço que não existe, em qualquer
+       pasta (/appdb/x/y/z): endereço relativo (logo, index.html) quebraria. O <base> aponta
+       pra raiz do app - no github.io é a 1ª pasta do caminho (site de projeto); fora dele, "/". -->
+  <script>
+    (function () {
+      var base = '/';
+      if (/\.github\.io$/.test(location.hostname)) {
+        var pasta = location.pathname.split('/')[1];
+        if (pasta) base = '/' + pasta + '/';
+      }
+      var b = document.createElement('base');
+      b.href = base;
+      document.head.appendChild(b);
+    })();
+  </script>
+  <title>Cortag · Página não encontrada</title>
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#CC0935">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    :root {
+      --red: #CC0935;
+      --red-deep: #A30729;
+      --on-accent: #FFFFFF;
+      --fundo: var(--red);
+      --texto-suave: #FFE3E9;
+      --btn-bg: #FFFFFF;
+      --btn-texto: var(--red-deep);
+      color-scheme: light;
+    }
+
+    html[data-theme="dark"] {
+      --fundo: #1C1C1E;
+      --texto-suave: #C7C7CC;
+      --btn-bg: var(--red);
+      --btn-texto: var(--on-accent);
+      color-scheme: dark;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body { height: 100%; }
+
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: var(--fundo);
+      color: var(--on-accent);
+      font-family: -apple-system, BlinkMacSystemFont, "Roboto", "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      justify-content: center;
+      overflow-x: hidden;
+    }
+
+    .pagina {
+      width: 100%;
+      max-width: 440px;
+      min-height: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: max(48px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
+    }
+
+    .logo {
+      width: 120px;
+      height: auto;
+      align-self: center;
+      /* o PNG é vermelho: vira branco sobre o fundo */
+      filter: brightness(0) invert(1);
+    }
+
+    .meio {
+      flex-grow: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      gap: 20px;
+      padding: 32px 0;
+    }
+
+    .numero {
+      font-size: 120px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -6px;
+      display: flex;
+      align-items: flex-end;
+    }
+
+    .numero span { display: inline-block; }
+    .numero .zero { transform: rotate(-12deg) translateY(6px); }
+    .numero .quatro2 { transform: rotate(8deg) translateY(10px); }
+
+    .nivel { width: 300px; max-width: 100%; height: auto; }
+    .nivelCorpo { fill: #1D1D1F; }
+    .nivelTopo { fill: #3A3A3D; }
+    html[data-theme="dark"] .nivelCorpo { fill: #48484A; }
+    html[data-theme="dark"] .nivelTopo { fill: #636366; }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.2;
+      font-weight: 800;
+    }
+
+    p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.45;
+      color: var(--texto-suave);
+      max-width: 300px;
+    }
+
+    .endereco {
+      font-size: 12px;
+      opacity: .8;
+      word-break: break-all;
+    }
+
+    .botoes {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 52px;
+      border-radius: 16px;
+      font: inherit;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .btn.principal { background: var(--btn-bg); color: var(--btn-texto); border: 0; }
+
+    .btn.contorno {
+      min-height: 48px;
+      background: transparent;
+      color: var(--on-accent);
+      border: 1.5px solid rgba(255, 255, 255, .7);
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .btn.contorno.hidden { display: none; }
+
+    .btn:focus-visible { outline: 3px solid var(--on-accent); outline-offset: 3px; }
+
+    @media (hover: hover) {
+      .btn.principal:hover { filter: brightness(.95); }
+      .btn.contorno:hover { background: rgba(255, 255, 255, .1); }
+    }
+  </style>
+  <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
+</head>
+
+<body>
+  <main class="pagina">
+    <img class="logo" src="logo-abertura.png" alt="Cortag Revolution Tools">
+    <div class="meio">
+      <div class="numero" aria-hidden="true"><span>4</span><span class="zero">0</span><span class="quatro2">4</span></div>
+      <svg class="nivel" width="300" height="90" viewBox="0 0 300 90" aria-hidden="true">
+        <g transform="rotate(-6 150 45)">
+          <rect class="nivelCorpo" x="10" y="28" width="280" height="36" rx="6"></rect>
+          <rect class="nivelTopo" x="10" y="28" width="280" height="8" rx="4"></rect>
+          <rect x="110" y="34" width="80" height="24" rx="12" fill="#FFCC00"></rect>
+          <rect x="110" y="34" width="80" height="24" rx="12" fill="none" stroke="#FFFFFF" stroke-opacity=".6" stroke-width="2"></rect>
+          <line x1="138" y1="36" x2="138" y2="56" stroke="#1D1D1F" stroke-width="2"></line>
+          <line x1="162" y1="36" x2="162" y2="56" stroke="#1D1D1F" stroke-width="2"></line>
+          <ellipse cx="178" cy="46" rx="9" ry="7" fill="#FFFFFF"></ellipse>
+          <circle cx="40" cy="46" r="5" fill="#6E6E73"></circle>
+          <circle cx="260" cy="46" r="5" fill="#6E6E73"></circle>
+        </g>
+      </svg>
+      <h1>Essa página saiu do nível</h1>
+      <p>O endereço não existe mais ou foi digitado errado. Nada do seu orçamento se perdeu.</p>
+      <p class="endereco" id="enderecoTentado"></p>
+    </div>
+    <div class="botoes">
+      <a class="btn principal" href="index.html">Voltar pro app</a>
+      <button class="btn contorno hidden" id="btnAnterior" type="button">Página anterior</button>
+    </div>
+  </main>
+  <script>
+    (function () {
+      var end = document.getElementById('enderecoTentado');
+      end.textContent = location.pathname;
+      // aberto direto de um link (WhatsApp, favorito): não há página anterior pra voltar
+      var anterior = document.getElementById('btnAnterior');
+      if (history.length > 1 && document.referrer) {
+        anterior.classList.remove('hidden');
+        anterior.addEventListener('click', function () { history.back(); });
+      }
+    })();
+  </script>
+</body>
+
+</html>

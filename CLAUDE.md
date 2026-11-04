@@ -1659,6 +1659,14 @@ Supabase, sem PR — não é mudança de código.
   sozinha" desliga (`cortagTelaAcesa_v1` = '0'). Navegador sem o recurso (iPhone antes do iOS 16.4) só vê o aviso. A
   `tela-cliente.html` já fazia o mesmo.
 
+- **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
+  `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do
+  nível" (404 torto e um nível de bolha com a bolha fora do centro), o endereço tentado, "Voltar pro app" e "Página anterior" (só
+  quando veio de outra página; aberto de um link do WhatsApp não tem pra onde voltar). Tema escuro pelo `cortagTheme_v1`, mesmo
+  `#antiFrame` das outras páginas. **O Pages serve esse arquivo em qualquer pasta** (`/appdb/x/y`): por isso um `<base>` montado
+  no `<head>` aponta pra raiz do app (1ª pasta do caminho no github.io, `/` fora dele) — endereço relativo novo nela funciona.
+  Não entra no `sw.js` (sem internet a navegação cai na cópia da página pedida, não aqui).
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto
