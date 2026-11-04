@@ -4679,6 +4679,10 @@ async function main() {
           `lista do cliente: ponto de milhar (código e quantidade): ${JSON.stringify(milhar.map(l => [l.codigos.join(), l.qtd, l.termo]))}`);
         const fotoMilhar = ctxL.linhaDaImagemLista({ texto: '60.876 BATEDOR ARGAMASSA', quantidade: 6 });
         assert(fotoMilhar.codigos.includes('60876') && fotoMilhar.termo === 'batedor argamassa', 'lista do cliente: linha da foto com código de ponto de milhar');
+        // foto de uma coluna só de códigos (11/2026): "60.876" sozinho, sem quantidade, acha pelo código
+        const soCodigo = ctxL.linhaDaImagemLista({ texto: '60.876', quantidade: null });
+        const rSoCodigo = ctxL.produtoDaLinhaLista(soCodigo, { porCodigo });
+        assert(rSoCodigo.estado === 'pronto' && rSoCodigo.produto.c === '60876', `lista do cliente: foto só com o código "60.876": ${JSON.stringify(rSoCodigo.estado)}`);
         // pelo nome, com código que não é do catálogo e "7x80" junto (foto real de 10/2026)
         const rodel = ctxL.linhaDaImagemLista({ texto: '99.999 RODEL Ø7 X 80 mm', quantidade: 2 });
         const rRodel = ctxL.produtoDaLinhaLista(rodel, { porCodigo });
@@ -5606,7 +5610,7 @@ async function main() {
       if (!String(url).includes('generativelanguage.googleapis.com')) return fetchAntes(url, opts);
       enviado = JSON.parse(opts.body);
       const resposta = { cnpj: '09.345.595/0001-91', itens: [{ texto: 'Colher de pedreiro 8 aço', quantidade: '12', unidade: 'un' }, { texto: 'R$', quantidade: 3 },
-        { texto: 'Disco turbo 110', quantidade: -1, unidade: 'caixa' }, { texto: '<b>x</b> broca 8mm', quantidade: 6, unidade: 'pct', extra: 'nao passa' }] };
+        { texto: 'Disco turbo 110', quantidade: -1, unidade: 'caixa' }, { texto: '<b>x</b> broca 8mm', quantidade: 6, unidade: 'pct', extra: 'nao passa' }, { texto: '60.863', quantidade: null }, { texto: '60.8' }] };
       return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(resposta) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
     };
     try {
@@ -5620,7 +5624,7 @@ async function main() {
       assert(r.status === 422 && r2.status === 422, `foto da lista: tipo errado e mais de 3 imagens = 422 (${r.status}, ${r2.status})`);
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
       const itens = r.body && r.body.itens;
-      assert(r.status === 200 && Array.isArray(itens) && itens.length === 3
+      assert(r.status === 200 && Array.isArray(itens) && itens.length === 4 && itens[3].texto === '60.863'
         && itens[0].texto === 'Colher de pedreiro 8 aço' && itens[0].quantidade === 12 && itens[0].unidade === 'un'
         && itens[1].quantidade === null && itens[1].unidade === null && itens[2].unidade === 'pct' && !('extra' in itens[2])
         && enviado && enviado.contents[0].parts[1].inline_data.mime_type === 'image/jpeg' && r.body.cnpj === '09345595000191',
@@ -5629,7 +5633,7 @@ async function main() {
       // "📷 Pela etiqueta" (11/2026): foto da embalagem na loja, outro pedido ao Gemini e sem CNPJ (o da
       // embalagem é o da Cortag, não o da loja)
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
-      assert(r.status === 200 && r.body.itens.length === 3 && r.body.cnpj === null
+      assert(r.status === 200 && r.body.itens.length === 4 && r.body.cnpj === null
         && /EMBALAGEM/.test(enviado.contents[0].parts[0].text) && /código Cortag de 5 dígitos/.test(enviado.contents[0].parts[0].text),
         `foto pela etiqueta: pede ao Gemini a leitura da embalagem e não devolve CNPJ: ${JSON.stringify(r.body)}`);
       const semLogin = authToken; authToken = '';

@@ -155,7 +155,8 @@ function itensDaRespostaGemini(resultado, codigosPermitidos = new Set()) {
   for (const it of lista) {
     if (!it || typeof it !== 'object') continue;
     const texto = String(it.texto ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
-    if (!/[a-zA-ZÀ-ÿ]{2}|\d{5,}/.test(texto)) continue;
+    // código só, com ponto de milhar ("60.863", coluna de códigos da tabela de preço, 11/2026) também é linha
+    if (!/[a-zA-ZÀ-ÿ]{2}|\d{5,}/.test(texto.replace(/(\d)\.(?=\d{3}\b)/g, '$1'))) continue;
     const q = Number(String(it.quantidade ?? '').replace(',', '.'));
     const quantidade = q > 0 && q <= 99999 ? Math.round(q * 1000) / 1000 : null;
     const unidade = ['un', 'cx', 'pct'].includes(it.unidade) ? it.unidade : null;
@@ -225,6 +226,8 @@ Liste cada linha de PRODUTO, na ordem em que aparece. Para cada uma:
 - "texto": a descrição do produto exatamente como está escrita, com medidas e o código se houver (sem preço, sem total)
 - "quantidade": o número pedido, ou null se não estiver escrito (o número depois de "Cód.", "Código" ou "Ref." é o código do produto na loja, NÃO é quantidade)
 - "unidade": "cx" se a quantidade for em caixas, "pct" se for em pacotes, "un" se for em unidades/peças, ou null
+
+Uma lista só de códigos (ex.: uma coluna "60.863", "61.577"…) também é lista de produtos: um item por código, com o código em "texto" como está escrito e "quantidade" null.
 
 Ignore cabeçalho, dados de cliente, telefone, endereço, preços, totais, prazo, frete, assinatura e observações nas linhas de produto. Não invente linhas que não estão na imagem.
 
