@@ -65,10 +65,10 @@ router.post('/google', async (req, res) => {
       // que já tem google_sub de outra conta Google associado não entra por
       // aqui - evita que reatribuir o e-mail (comum em Workspace) dê acesso
       // à conta de quem usava esse e-mail antes.
-      const porSub = await client.query('SELECT id, nome, email, is_admin, google_sub, ativo FROM usuarios WHERE google_sub = $1', [google.sub]);
+      const porSub = await client.query('SELECT id, nome, email, is_admin, google_sub, ativo, telefone FROM usuarios WHERE google_sub = $1', [google.sub]);
       const existente = porSub.rows.length > 0
         ? porSub
-        : await client.query('SELECT id, nome, email, is_admin, google_sub, ativo FROM usuarios WHERE email = $1 AND google_sub IS NULL', [google.email]);
+        : await client.query('SELECT id, nome, email, is_admin, google_sub, ativo, telefone FROM usuarios WHERE email = $1 AND google_sub IS NULL', [google.email]);
       if (existente.rows.length === 0) {
         await client.query('ROLLBACK');
         return res.status(403).json({ erro: 'Esse e-mail do Google não está cadastrado — peça pra um administrador te cadastrar antes.' });
@@ -93,7 +93,7 @@ router.post('/google', async (req, res) => {
     );
     await client.query('COMMIT');
     console.log(`Login via Google: ${usuario.email}`);
-    res.json({ token, nome: usuario.nome, email: usuario.email, is_admin: usuario.is_admin });
+    res.json({ token, id: usuario.id, nome: usuario.nome, email: usuario.email, is_admin: usuario.is_admin, telefone: usuario.telefone ?? null });
   } catch (e) {
     if (client) {
       try { await client.query('ROLLBACK'); } catch (rollbackErr) { console.error('Erro no rollback:', rollbackErr); }
@@ -114,7 +114,7 @@ router.get('/me', async (req, res) => {
   if (!token) return res.status(401).json({ erro: 'Sem sessão.' });
   try {
     const result = await pool.query(
-      `SELECT u.nome, u.email, u.is_admin FROM sessoes s
+      `SELECT u.id, u.nome, u.email, u.is_admin, u.telefone FROM sessoes s
        JOIN usuarios u ON u.id = s.usuario_id
        WHERE s.token = $1 AND s.expira_em > now() AND u.ativo`,
       [hashToken(token)]
@@ -165,7 +165,7 @@ router.post('/usuarios', requireAuth, async (req, res) => {
 router.get('/usuarios', requireAuth, async (req, res) => {
   if (!req.usuario.is_admin) return res.status(403).json({ erro: 'Só administrador pode ver a lista de usuários.' });
   try {
-    const result = await pool.query('SELECT id, nome, email, is_admin, ativo, criado_em FROM usuarios ORDER BY ativo DESC, nome');
+    const result = await pool.query('SELECT id, nome, email, is_admin, ativo, telefone, criado_em FROM usuarios ORDER BY ativo DESC, nome');
     res.json(result.rows);
   } catch (e) {
     console.error(e);
@@ -193,6 +193,33 @@ router.put('/usuarios/:id/nome', requireAuth, async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao trocar o nome.' });
+  }
+});
+
+// Troca o telefone do vendedor (rodapé do card de oferta, PDF/imagem/texto do
+// orçamento, apresentação) - cadastrado uma vez, vale em todos os aparelhos.
+// Mesmas regras do nome: admin troca o de qualquer um, quem não é admin só o
+// próprio. Vazio apaga (grava ''); senão, de 10 a 13 dígitos (DDD + número,
+// com ou sem 55), guardado como foi digitado (até 25 letras).
+router.put('/usuarios/:id/telefone', requireAuth, async (req, res) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ erro: 'Usuário inválido.' });
+  if (!req.usuario.is_admin && id !== req.usuario.id) return res.status(403).json({ erro: 'Você só pode trocar o seu próprio telefone.' });
+  const telefone = String((req.body && req.body.telefone) ?? '').replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim();
+  const digitos = telefone.replace(/\D/g, '').length;
+  if (telefone && (digitos < 10 || digitos > 13 || telefone.length > 25 || /[^\d\s()+.\-]/.test(telefone))) {
+    return res.status(400).json({ erro: 'Telefone inválido — use DDD + número, ex.: (44) 99999-0000.' });
+  }
+  try {
+    const result = await pool.query(
+      '/* usuarios:telefone */ UPDATE usuarios SET telefone = $2 WHERE id = $1 RETURNING id, nome, email, is_admin, ativo, telefone',
+      [id, telefone]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    res.json(result.rows[0]);
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao trocar o telefone.' });
   }
 });
 

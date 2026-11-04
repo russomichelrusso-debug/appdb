@@ -12807,7 +12807,7 @@
           <div class="cardTituloSug" id="cardTituloSug"></div>
         </div>
         <div class="cardPrevia" id="cardProdutoPrevia"></div>
-        <label for="cardTelefone">Seu telefone no card</label>
+        <label for="cardTelefone">Seu telefone no card <small>(fica no seu cadastro)</small></label>
         <input type="tel" id="cardTelefone" placeholder="(44) 99999-0000" autocomplete="tel">
         <div class="minimodal-btnrow">
           <button type="button" id="cardFecharBtn">Fechar</button>
@@ -13262,6 +13262,7 @@
             <div class="ap-grupoTit">Conta</div>
             <div class="ap-grupo">
               <div class="ap-status-row"><span class="k"><span id="apLoggedInAs">—</span><small id="apLoggedInEmail"></small></span></div>
+              <div class="ap-status-row"><span class="k">Seu telefone<small>vai nos cards, fotos e orçamentos</small></span><span class="v" id="apTelefoneVendedor">—</span></div>
               <div class="ap-status-row"><span class="k">Tema</span><span class="v" id="apThemeStatus" data-tipo="cinza">Claro</span></div>
             </div>
             <button class="restoreBtn" id="apCompareCatalogBtn" style="margin-top:8px;">Ver diferenças entre servidor e
@@ -13270,6 +13271,7 @@
             <button class="restoreBtn" id="googleDriveConnectBtn" style="margin-top:8px;">Conectar ao Google Drive</button>
             <p class="ap-hint" style="margin:6px 0 0;">Conecta a SUA conta Google — os CSVs de Orçamento e
               Levantamento vão direto pro seu Google Drive.</p>
+            <button class="restoreBtn" id="apTelefoneBtn" style="margin-top:8px;">Cadastrar meu telefone</button>
             <button class="restoreBtn" id="themeToggleBtn" style="margin-top:8px;">Alternar tema</button>
             <button class="restoreBtn" id="telaAcesaBtn" style="margin-top:8px;">Manter a tela acesa</button>
             <p class="ap-hint" id="telaAcesaHint" style="margin:6px 0 0;"></p>
@@ -15898,6 +15900,7 @@
       const ICON_ATIVO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7" fill="currentColor"/></svg>';
       const ICON_INATIVO = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
       const PENCIL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>';
+      const ICONE_TELEFONE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
       // Ícones monocromáticos simples (não são cópia da logomarca registrada) pros
       // links de vídeo do produto no card - ver VIDEOS_MAP.
       const YOUTUBE_SVG = '<svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M23 12s0-3.6-.46-5.3a3 3 0 0 0-2.1-2.1C18.7 4 12 4 12 4s-6.7 0-8.44.6a3 3 0 0 0-2.1 2.1C1 8.4 1 12 1 12s0 3.6.46 5.3a3 3 0 0 0 2.1 2.1C5.3 20 12 20 12 20s6.7 0 8.44-.6a3 3 0 0 0 2.1-2.1C23 15.6 23 12 23 12z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.75 15.5v-7l6 3.5-6 3.5z"/></svg>';
@@ -18707,7 +18710,7 @@
         doc.setTextColor(90, 90, 90);
         doc.text('Levantamento de estoque', 14, headerBottomY);
         doc.setFontSize(9);
-        const infoLinha = (nomeCliente ? nomeCliente + '  ·  ' : '') + new Date().toLocaleDateString('pt-BR') + (state.seller ? `  ·  Vendedor: ${state.seller}` : '');
+        const infoLinha = (nomeCliente ? nomeCliente + '  ·  ' : '') + new Date().toLocaleDateString('pt-BR') + (state.seller ? `  ·  Vendedor: ${state.seller}${telefoneDoVendedor() ? ' ' + telefoneDoVendedor() : ''}` : '');
         doc.text(infoLinha, 14, headerBottomY + 6);
         doc.setDrawColor(180, 180, 180);
         doc.line(14, headerBottomY + 10, 196, headerBottomY + 10);
@@ -20101,7 +20104,7 @@
     <div class="ex-meta">
       <div><div class="k">Estado</div><div class="v">${st.uf} — ${st.name}</div></div>
       ${state.levCliente ? `<div><div class="k">Cliente</div><div class="v">${escapeHtml(state.levCliente.nome)} · ${escapeHtml(clienteDocText(state.levCliente))}</div></div>` : ''}
-      ${state.seller.trim() ? `<div><div class="k">Atendimento</div><div class="v">${escapeHtml(state.seller)}</div></div>` : ''}
+      ${state.seller.trim() ? `<div><div class="k">Atendimento</div><div class="v">${escapeHtml(state.seller)}${telefoneDoVendedor() ? ' · ' + escapeHtml(telefoneDoVendedor()) : ''}</div></div>` : ''}
       ${state.paymentTerm ? `<div><div class="k">Cond. pagamento</div><div class="v">${escapeHtml(rotuloPrazoComDesconto())}</div></div>` : ''}
       <div><div class="k">Total de itens</div><div class="v">${rows.length}</div></div>
     </div>
@@ -20452,6 +20455,8 @@
           ...(state.paymentTerm ? [`Cond. pagamento: ${rotuloPrazoComDesconto()}`] : []),
           ...avisosFiscais.flatMap(a => ['', `*${a.titulo}*`, a.frases.join(' ')]),
         ];
+        const assinatura = [state.seller || (state.currentUser && state.currentUser.nome) || '', telefoneDoVendedor()].filter(Boolean).join(' · ');
+        if (assinatura) partes.push('', assinatura);
         return partes.join('\n');
       }
       async function shareCartAsText(opcoes = {}) {
@@ -20830,7 +20835,8 @@
             linhas.push([{ content: 'Cond. Pagto.', styles: { fontStyle: 'bold' } }, { content: rotuloPrazoComDesconto(), colSpan: 3 }]);
           }
           if (state.seller) {
-            linhas.push([{ content: 'Represent.', styles: { fontStyle: 'bold' } }, { content: state.seller, colSpan: 3 }]);
+            const telVendedor = telefoneDoVendedor();
+            linhas.push([{ content: 'Represent.', styles: { fontStyle: 'bold' } }, { content: state.seller + (telVendedor ? '  ·  ' + telVendedor : ''), colSpan: 3 }]);
           }
           if (endereco) {
             const enderecoTexto = [endereco.logradouro, endereco.numero, endereco.complemento].filter(Boolean).join(', ') || '—';
@@ -23829,6 +23835,8 @@
           applyTheme(novo);
           try { localStorage.setItem(THEME_LS_KEY, novo); } catch (e) { }
         });
+        const telBtn = document.getElementById('apTelefoneBtn');
+        if (telBtn) telBtn.addEventListener('click', editarMeuTelefone);
       }
       // Tela acesa com o app aberto (pedido do usuário, 10/2026: no levantamento a tela apagava pela
       // configuração do celular). Wake Lock do navegador: vale só com o app na frente (o celular solta sozinho
@@ -24207,6 +24215,7 @@
         if (state.currentUser) {
           document.getElementById('apLoggedInAs').textContent = `${state.currentUser.nome}${state.currentUser.is_admin ? ' · admin' : ''}`;
           document.getElementById('apLoggedInEmail').textContent = state.currentUser.email || '';
+          atualizarTelefoneNoPainel();
           if (state.currentUser.is_admin) {
             document.getElementById('manageUsersGroup').classList.remove('hidden');
             document.getElementById('reconhecFotoGroup').classList.remove('hidden');
@@ -24272,10 +24281,11 @@
         <div class="prTop">
           <div>
             <div class="prName${ativo ? '' : ' inactive'}">${escapeHtml(u.nome)}${u.is_admin ? ' <span class="donebadge">admin</span>' : ''}</div>
-            <div class="prDetail">${escapeHtml(u.email || '')}${ativo ? '' : ' · <strong>desativado</strong> (não entra no app)'}</div>
+            <div class="prDetail">${escapeHtml(u.email || '')}${u.telefone ? ' · <span style="white-space:nowrap">' + escapeHtml(u.telefone) + '</span>' : ' · <em>sem telefone</em>'}${ativo ? '' : ' · <strong>desativado</strong> (não entra no app)'}</div>
           </div>
           <div class="prBtns">
             <button data-nome-edit="${u.id}" data-nome-atual="${escapeHtml(u.nome || '')}" data-sou-eu="${souEu ? '1' : ''}" aria-label="Trocar o nome" title="Trocar o nome (aparece no card de oferta e no orçamento)">${PENCIL_SVG}</button>
+            <button data-tel-edit="${u.id}" data-tel-atual="${escapeHtml(u.telefone || '')}" data-nome-atual="${escapeHtml(u.nome || '')}" data-sou-eu="${souEu ? '1' : ''}" aria-label="Telefone" title="Telefone (vai no card de oferta e no orçamento)">${ICONE_TELEFONE}</button>
             ${souEu ? '' : `<button data-ativo-user="${u.id}" data-ativo="${ativo ? '1' : '0'}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="${ativo ? 'prToggleOn' : ''}" aria-label="${ativo ? 'Desativar acesso' : 'Reativar acesso'}" title="${ativo ? 'Ativo — tocar pra desativar o acesso' : 'Desativado — tocar pra reativar o acesso'}">${ativo ? ICON_ATIVO : ICON_INATIVO}</button>`}
             <button data-del-user="${u.id}" data-nome-user="${escapeHtml(u.email || u.nome)}" class="prDeleteBtn" aria-label="Excluir" title="Excluir">${ICON_TRASH}</button>
           </div>
@@ -24314,6 +24324,26 @@
                   state.seller = u.nome;
                 }
                 showToast('Nome trocado: ' + u.nome);
+                renderUsersList();
+              } catch (e) {
+                showToast(e.message, 'erro');
+              }
+            });
+          });
+          wrap.querySelectorAll('[data-tel-edit]').forEach(btn => {
+            btn.addEventListener('click', async () => {
+              const novo = await askText(`Telefone de ${btn.dataset.nomeAtual} (vai no card de oferta, no PDF, na imagem e no texto do orçamento). Vazio apaga:`, btn.dataset.telAtual, 'Salvar');
+              if (novo === null) return;
+              const telefone = novo.trim();
+              if (telefone === btn.dataset.telAtual) return;
+              try {
+                if (btn.dataset.souEu) {
+                  await salvarTelefoneVendedor(telefone);
+                  atualizarTelefoneNoPainel();
+                } else {
+                  await apiFetch(`/api/auth/usuarios/${btn.dataset.telEdit}/telefone`, { method: 'PUT', body: JSON.stringify({ telefone }) });
+                }
+                showToast(telefone ? 'Telefone salvo: ' + telefone : 'Telefone apagado');
                 renderUsersList();
               } catch (e) {
                 showToast(e.message, 'erro');
@@ -28976,7 +29006,8 @@
       // "BLACK FRIDAY" no nome sai no visual escuro.
       const FOTOS_LS_KEY = 'cortagProdutoFotos_v1';
       const CACHE_FOTOS = 'cortag-fotos-v1'; // igual ao sw.js
-      const VENDEDOR_TEL_LS_KEY = 'cortagVendedorTelefone_v1';
+      const VENDEDOR_TEL_LS_KEY = 'cortagVendedorTelefone_v1'; // antigo: só o número, deste aparelho
+      const VENDEDOR_TEL_CACHE_LS_KEY = 'cortagVendedorTelefone_v2'; // {email, tel, pendente} - cópia do cadastro
       const FOTO_LADO_MAX = 900;
       const FOTO_BYTES_MAX = 550 * 1024; // o servidor aceita até 600 KB
       const ICONE_CAMERA = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>';
@@ -29593,10 +29624,104 @@
         seg.classList.toggle('hidden', !pode);
         seg.querySelectorAll('button').forEach(b => b.classList.toggle('active', (b.dataset.ficha === 'com') === cardProduto.comFicha));
       }
+      // Telefone do vendedor: fica no cadastro do usuário (usuarios.telefone) e vale
+      // em todos os aparelhos - card de oferta, PDF/imagem/texto do orçamento,
+      // apresentação, levantamento. Cópia no aparelho (VENDEDOR_TEL_CACHE_LS_KEY,
+      // com o e-mail de quem é) pra abrir sem internet e pra guardar a troca feita
+      // offline (pendente = reenviada na próxima abertura). A chave antiga
+      // (VENDEDOR_TEL_LS_KEY, só o número, digitado no card) sobe pro cadastro uma
+      // vez, quando o cadastro ainda não tem telefone (null = nunca preenchido).
+      // Sem usuário (app aberto sem internet: o /auth/me não respondeu) vale a última
+      // cópia guardada - é a de quem tem a sessão neste aparelho.
+      function lerCacheTelefoneVendedor() {
+        try {
+          const c = JSON.parse(localStorage.getItem(VENDEDOR_TEL_CACHE_LS_KEY));
+          const email = state.currentUser && state.currentUser.email;
+          return c && (!email || c.email === email) ? c : null;
+        } catch (e) { return null; }
+      }
+      function gravarCacheTelefoneVendedor(tel, pendente) {
+        let email = state.currentUser && state.currentUser.email;
+        if (!email) { const c = lerCacheTelefoneVendedor(); email = c && c.email; }
+        if (!email) { try { localStorage.setItem(VENDEDOR_TEL_LS_KEY, tel); } catch (e) { } return; }
+        try { localStorage.setItem(VENDEDOR_TEL_CACHE_LS_KEY, JSON.stringify({ email, tel, pendente: !!pendente })); } catch (e) { }
+      }
+      function telefoneDoVendedor() {
+        const c = lerCacheTelefoneVendedor();
+        if (c && c.pendente) return c.tel || '';
+        const u = state.currentUser;
+        if (u && typeof u.telefone === 'string') return u.telefone;
+        if (c) return c.tel || '';
+        try { return localStorage.getItem(VENDEDOR_TEL_LS_KEY) || ''; } catch (e) { return ''; }
+      }
+      async function enviarTelefoneVendedor(tel) {
+        const u = state.currentUser;
+        if (!u || !u.id) throw new Error('Sem o cadastro do usuário — tente de novo com internet.');
+        const r = await apiFetch(`/api/auth/usuarios/${u.id}/telefone`, { method: 'PUT', body: JSON.stringify({ telefone: tel }) });
+        u.telefone = r.telefone || '';
+        gravarCacheTelefoneVendedor(u.telefone, false);
+        try { localStorage.removeItem(VENDEDOR_TEL_LS_KEY); } catch (e) { }
+        return u.telefone;
+      }
+      // Grava no cadastro. Sem internet fica pendente no aparelho (já vale nele) e
+      // vai na próxima abertura do app. Telefone recusado pelo servidor lança o erro.
+      async function salvarTelefoneVendedor(tel) {
+        tel = String(tel || '').trim();
+        if (tel === telefoneDoVendedor() && !(lerCacheTelefoneVendedor() || {}).pendente) return { ok: true, tel };
+        gravarCacheTelefoneVendedor(tel, true);
+        try {
+          return { ok: true, tel: await enviarTelefoneVendedor(tel) };
+        } catch (e) {
+          if (e && (e.recusado || e.status === 400)) {
+            gravarCacheTelefoneVendedor(state.currentUser && typeof state.currentUser.telefone === 'string' ? state.currentUser.telefone : '', false);
+            throw e;
+          }
+          return { ok: false, tel };
+        }
+      }
+      // Na abertura/login: reenvia a troca pendente, ou sobe o telefone antigo do
+      // aparelho quando o cadastro ainda não tem nenhum.
+      async function sincronizarTelefoneVendedor() {
+        const u = state.currentUser;
+        if (!u) return;
+        const c = lerCacheTelefoneVendedor();
+        let antigo = '';
+        try { antigo = (localStorage.getItem(VENDEDOR_TEL_LS_KEY) || '').trim(); } catch (e) { }
+        try {
+          if (c && c.pendente) await enviarTelefoneVendedor(c.tel || '');
+          else if (u.telefone === null && antigo) await enviarTelefoneVendedor(antigo);
+          else if (typeof u.telefone === 'string') gravarCacheTelefoneVendedor(u.telefone, false);
+        } catch (e) {
+          // recusado (formato antigo inválido): esquece o antigo e fica o do cadastro
+          if (e && (e.recusado || e.status === 400)) {
+            try { localStorage.removeItem(VENDEDOR_TEL_LS_KEY); } catch (er) { }
+            gravarCacheTelefoneVendedor(typeof u.telefone === 'string' ? u.telefone : '', false);
+          }
+        }
+        atualizarTelefoneNoPainel();
+      }
+      function atualizarTelefoneNoPainel() {
+        const el = document.getElementById('apTelefoneVendedor');
+        if (!el) return;
+        const tel = telefoneDoVendedor();
+        el.textContent = tel || 'não cadastrado';
+        el.dataset.tipo = tel ? '' : 'warn';
+        const btn = document.getElementById('apTelefoneBtn');
+        if (btn) btn.textContent = tel ? 'Trocar meu telefone' : 'Cadastrar meu telefone';
+      }
+      async function editarMeuTelefone() {
+        const novo = await askText('Seu telefone (WhatsApp) — vai no card de oferta, no PDF, na imagem e no texto do orçamento, em todos os aparelhos:', telefoneDoVendedor(), 'Salvar');
+        if (novo === null) return;
+        try {
+          const r = await salvarTelefoneVendedor(novo);
+          showToast(r.ok ? (r.tel ? 'Telefone salvo: ' + r.tel : 'Telefone apagado') : 'Sem internet — o telefone vale neste aparelho e vai pro cadastro quando a conexão voltar');
+        } catch (e) {
+          showToast(e.message, 'erro');
+        }
+        atualizarTelefoneNoPainel();
+      }
       function vendedorDoCard() {
-        let tel = '';
-        try { tel = localStorage.getItem(VENDEDOR_TEL_LS_KEY) || ''; } catch (e) { }
-        return { nome: (state.currentUser && state.currentUser.nome) || '', tel };
+        return { nome: (state.currentUser && state.currentUser.nome) || '', tel: telefoneDoVendedor() };
       }
       function rodapeDoCard(telefone) {
         const { nome } = vendedorDoCard();
@@ -30899,10 +31024,18 @@
           cardProduto.formato = b.dataset.formato;
           gerarCardProduto();
         });
-        document.getElementById('cardTelefone').addEventListener('input', (e) => {
-          try { localStorage.setItem(VENDEDOR_TEL_LS_KEY, e.target.value.trim()); } catch (er) { }
+        document.getElementById('cardTelefone').addEventListener('input', () => {
           clearTimeout(cardTelDebounce);
           cardTelDebounce = setTimeout(gerarCardProduto, 600);
+        });
+        // ao sair do campo, o número vai pro cadastro do usuário (vale nos outros aparelhos)
+        document.getElementById('cardTelefone').addEventListener('change', async (e) => {
+          try {
+            const r = await salvarTelefoneVendedor(e.target.value);
+            if (r.ok && r.tel) showToast('Telefone salvo no seu cadastro');
+          } catch (er) {
+            showToast(er.message, 'erro');
+          }
         });
       }
       // =================================================================
@@ -34635,9 +34768,10 @@
         try {
           const result = await apiGoogleLogin(response.credential);
           setStoredToken(result.token, true); // login com Google já fica lembrado por padrão
-          state.currentUser = { nome: result.nome, email: result.email, is_admin: !!result.is_admin };
+          state.currentUser = { id: result.id, nome: result.nome, email: result.email, is_admin: !!result.is_admin, telefone: result.telefone === undefined ? null : result.telefone };
           if (!state.seller) state.seller = result.nome;
           clearSessionData();
+          sincronizarTelefoneVendedor();
           // Sessão que expirou com o app já aberto: init() de novo ligava cada
           // listener duas vezes - um toque em "Finalizar pedido" gravava dois
           // pedidos (achado do revisor-cortag). Recarrega a página limpa.
@@ -34668,6 +34802,8 @@
         await apagarOcorrenciasDoAparelho(); // rascunhos com fotos de cliente não ficam no aparelho
         await apagarListasDoAparelho(); // nem a foto da lista/orçamento que o cliente mandou
         try { await idbOp('cortag-compartilhado', 'itens', 'id', 'readwrite', s => s.clear()); } catch (e) { } // nem o que veio do WhatsApp
+        // o telefone antigo do aparelho (só o número) não sobe pro cadastro de quem entrar depois
+        try { localStorage.removeItem(VENDEDOR_TEL_LS_KEY); } catch (e) { }
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
@@ -34713,6 +34849,7 @@
             const me = await apiMe();
             state.currentUser = me;
             if (!state.seller) state.seller = me.nome;
+            sincronizarTelefoneVendedor();
             await init();
             return;
           } catch (e) {
