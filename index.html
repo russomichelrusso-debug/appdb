@@ -10271,6 +10271,319 @@
       flex-shrink: 0;
     }
 
+    /* Catálogo na tela do cliente (11/2026, mockups A + B + C): o celular vira o
+       controle remoto do catálogo que o tablet/laptop mostra */
+    .catRemoto {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: flex;
+      flex-direction: column;
+      background: var(--fill);
+      color: var(--ink);
+    }
+
+    .catRemoto.hidden {
+      display: none;
+    }
+
+    .catRemotoTopo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: max(8px, env(safe-area-inset-top)) 8px 8px 16px;
+      background: var(--success);
+      color: #FFFFFF;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .catRemotoTopo span {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .catRemotoTopo button {
+      min-height: 44px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, .2);
+      color: #FFFFFF;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .catRemotoCorpo {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 14px 16px calc(24px + env(safe-area-inset-bottom));
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .catRemotoTitulo small {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+      font-weight: 600;
+      letter-spacing: .3px;
+    }
+
+    .catRemotoTitulo b {
+      font-size: 19px;
+    }
+
+    .catRemotoVista {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--neutral-2);
+    }
+
+    .catRemotoVista button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .catRemotoVista button[aria-checked="true"] {
+      background: var(--white);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+    }
+
+    .catRemotoCard {
+      background: var(--white);
+      border-radius: 18px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .catRemotoProd {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .catRemotoFoto {
+      width: 76px;
+      height: 76px;
+      flex: 0 0 76px;
+      border-radius: 12px;
+      border: 1px solid var(--neutral-2);
+      background: #FFFFFF center / contain no-repeat;
+      color: var(--gray);
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+    }
+
+    .catRemotoProd b {
+      display: block;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+
+    .catRemotoProd small {
+      display: block;
+      font-size: 13px;
+      color: var(--gray);
+      margin-top: 4px;
+    }
+
+    .catRemotoNav {
+      display: flex;
+      gap: 10px;
+    }
+
+    .catRemotoNav button {
+      min-height: 52px;
+      border-radius: 12px;
+      border: 1px solid var(--hairline);
+      background: var(--white);
+      color: var(--ink);
+      font: inherit;
+      font-size: 22px;
+      cursor: pointer;
+    }
+
+    .catRemotoNav button:disabled {
+      opacity: .35;
+    }
+
+    .catRemotoNav .seta {
+      flex: 0 0 56px;
+    }
+
+    .catRemotoNav .add {
+      flex: 1;
+      border: 0;
+      background: var(--red);
+      color: var(--on-accent);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .catRemotoChave {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 44px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+
+    .catRemotoChave small {
+      display: block;
+      font-size: 12px;
+      color: var(--gray);
+    }
+
+    /* chave liga/desliga (pedido do usuário, 11/2026): verde ligada, cinza desligada */
+    .catRemotoChave input {
+      -webkit-appearance: none;
+      appearance: none;
+      position: relative;
+      width: 56px;
+      height: 32px;
+      margin: 0;
+      flex-shrink: 0;
+      border-radius: 16px;
+      background: var(--fill);
+      box-shadow: inset 0 0 0 2.5px #8E8E93;
+      cursor: pointer;
+      transition: background-color .2s, box-shadow .2s;
+    }
+
+    .catRemotoChave input::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, .35);
+      transition: transform .2s;
+    }
+
+    .catRemotoChave input:checked {
+      background: #4CD964;
+      box-shadow: none;
+    }
+
+    .catRemotoChave input:checked::after {
+      transform: translateX(24px);
+    }
+
+    .catRemotoChave input:focus-visible {
+      outline: 2px solid var(--info);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .catRemotoChave input,
+      .catRemotoChave input::after {
+        transition: none;
+      }
+    }
+
+    .catRemotoDica {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .catRemotoMinis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .catRemotoMini {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: 12px;
+      border: 1px solid var(--neutral-2);
+      background: #FFFFFF center / contain no-repeat;
+      color: var(--gray);
+      font: inherit;
+      font-size: 11px;
+      padding: 4px;
+      cursor: pointer;
+    }
+
+    .catRemotoMiniFoto {
+      position: absolute;
+      inset: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: center / contain no-repeat;
+    }
+
+    .catRemotoMini.ativo {
+      box-shadow: 0 0 0 3px var(--red);
+    }
+
+    .catRemotoMini .marca {
+      position: absolute;
+      top: 6px;
+      right: 6px;
+      min-width: 24px;
+      height: 24px;
+      border-radius: 12px;
+      background: var(--success);
+      color: #FFFFFF;
+      font-size: 13px;
+      font-weight: 700;
+      line-height: 24px;
+    }
+
+    .catRemotoMini .marca.hidden {
+      display: none;
+    }
+
+    .catTelaBtn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 44px;
+      margin: 4px 0 8px;
+      border: 0;
+      border-radius: var(--r-sm);
+      background: var(--success-bg);
+      color: var(--success);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .catTelaBtn svg {
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+    }
+
     .conectarTabletLer {
       width: 100%;
       min-height: 48px;
@@ -12687,6 +13000,14 @@
         <button type="button" id="vitrineProxBtn" aria-label="Próximo produto">›</button>
       </div>
       <div class="vitrineMinis" id="vitrineMinis"></div>
+    </div>
+
+    <div class="catRemoto hidden" id="catRemoto" role="dialog" aria-label="Controle do catálogo no tablet">
+      <div class="catRemotoTopo">
+        <span id="catRemotoStatus">Tablet mostrando o catálogo</span>
+        <button type="button" id="catRemotoFecharBtn">Voltar ao orçamento</button>
+      </div>
+      <div class="catRemotoCorpo" id="catRemotoCorpo"></div>
     </div>
 
     <div class="modoLeitor hidden" id="modoLeitor" role="dialog" aria-label="Leitor de código de barras do tablet">
@@ -19205,6 +19526,7 @@
         return {
           ...base,
           itens,
+          catalogo: catalogoParaTelaCliente(),
           total: Math.round(total * 100) / 100,
           economia: Math.round(economia * 100) / 100,
           meta: minimo ? {
@@ -19218,6 +19540,7 @@
 
       function agendarEnvioTelaCliente() {
         if (!segundaTela) return;
+        if (telaCatalogo) renderCatRemoto(); // "no orçamento" do controle remoto
         clearTimeout(segundaTelaTimer);
         segundaTelaTimer = setTimeout(enviarTelaCliente, 350);
       }
@@ -19227,11 +19550,12 @@
         segundaTelaEnviando = true;
         const id = segundaTela.id;
         try {
-          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: estadoParaTelaCliente() }), signal: prazoSegundaTela(10000) });
+          const r = await apiFetch(`/api/segunda-tela/salas/${id}/estado`, { method: 'PUT', body: JSON.stringify({ estado: catalogoQueCabe(estadoParaTelaCliente()) }), signal: prazoSegundaTela(10000) });
           if (segundaTela && segundaTela.id === id) segundaTelaStatus = r && r.tablet_conectado ? 'ok' : 'semTablet';
         } catch (e) {
           if (segundaTela && segundaTela.id === id) {
             if (e.status === 404) desligarSegundaTela('O tablet desconectou — a tela do cliente foi fechada.');
+            else if (e.status === 413) segundaTelaStatus = 'grande';
             else segundaTelaStatus = 'semRede';
           }
         } finally {
@@ -19247,7 +19571,7 @@
         clearInterval(segundaTelaVigia);
         segundaTelaVigia = setInterval(async () => {
           if (!segundaTela) { clearInterval(segundaTelaVigia); return; }
-          if (segundaTelaStatus === 'semRede') { enviarTelaCliente(); return; }
+          if (segundaTelaStatus === 'semRede' || segundaTelaStatus === 'grande') { enviarTelaCliente(); return; }
           const id = segundaTela.id;
           try {
             const r = await apiFetch(`/api/segunda-tela/salas/${id}`, { signal: prazoSegundaTela(10000) });
@@ -19263,6 +19587,9 @@
 
       function desligarSegundaTela(aviso) {
         segundaTela = null;
+        telaCatalogo = null;
+        fecharCatRemoto();
+        redesenharFamiliaDoCatalogo();
         segundaTelaStatus = 'ok';
         clearTimeout(segundaTelaTimer);
         clearInterval(segundaTelaVigia);
@@ -19288,15 +19615,243 @@
           tipo = 'aviso'; titulo = 'Sem internet'; sub = 'o tablet atualiza quando o sinal voltar';
         } else if (segundaTelaStatus === 'semTablet') {
           tipo = 'aviso'; titulo = 'O tablet não está respondendo'; sub = 'confira se a tela do cliente continua aberta nele';
+        } else if (segundaTelaStatus === 'grande') {
+          tipo = 'aviso'; titulo = 'Orçamento grande demais pro tablet'; sub = telaCatalogo ? 'volte ao orçamento ou escolha uma subfamília menor' : 'o tablet ficou com a última versão';
+        } else if (telaCatalogo) {
+          tipo = 'ok'; titulo = 'Tablet mostrando o catálogo'; sub = 'toque em Controle pra passar os produtos';
         } else {
           tipo = 'ok'; titulo = 'Tablet mostrando o orçamento'; sub = 'sem classificatório nem dados internos';
         }
         el.dataset.tipo = tipo;
         el.innerHTML = `<span class="segundaTelaPonto" aria-hidden="true"></span>
           <span class="segundaTelaTxt"><b>${escapeHtml(titulo)}</b>${escapeHtml(sub)}</span>
+          ${telaCatalogo && !segundaTela.oculto ? '<button type="button" data-st="controle">Controle</button>' : ''}
           <button type="button" data-st="esconder">${segundaTela.oculto ? 'Mostrar' : 'Esconder'}</button>
           <button type="button" data-st="desconectar" aria-label="Desconectar o tablet">Desconectar</button>`;
         el.classList.remove('hidden');
+        renderCatRemoto();
+      }
+
+      // ---- Catálogo na tela do cliente (11/2026, mockups A + B + C escolhidos pelo usuário) ----
+      // Com o tablet/laptop conectado, a família aberta no Catálogo ganha "Mostrar
+      // no tablet": a tela do cliente troca o orçamento pela grade da família (A,
+      // com o orçamento na lateral), o produto aberto em tela cheia (B, também
+      // quando o cliente toca num produto lá) ou a comparação lado a lado (C). Este
+      // celular vira o controle remoto (#catRemoto): passa os produtos, põe no
+      // orçamento e liga/desliga o preço e o orçamento na tela do cliente. Vai
+      // junto da foto do orçamento (estadoParaTelaCliente), com o mesmo cuidado:
+      // campanha sem o nome da regra (costuma trazer o classificatório). Fica só
+      // na memória: reabrir o app volta a mostrar o orçamento.
+      const TELA_CAT_MAX_PRODUTOS = 100;
+      const TELA_CAT_MAX_COMPARAR = 4;
+      let telaCatalogo = null; // { titulo, cods, i, vista: 'grade'|'produto'|'comparar', comparar: [índices] }
+      const telaCatPrefs = { preco: false, orcamento: true }; // valem ao trocar de família
+      function telaClienteConectada() { return !!(segundaTela && segundaTela.modo === 'cliente'); }
+      function mostrarCatalogoNoTablet(titulo, produtos) {
+        if (!telaClienteConectada() || !produtos.length) return;
+        if (produtos.length > TELA_CAT_MAX_PRODUTOS) {
+          showToast(`O tablet mostra os ${TELA_CAT_MAX_PRODUTOS} primeiros — escolha uma subfamília pra ver o resto`, 'longo');
+        }
+        telaCatalogo = { titulo, cods: produtos.slice(0, TELA_CAT_MAX_PRODUTOS).map(p => p.c), i: 0, vista: 'grade', comparar: [] };
+        if (segundaTela.oculto) { segundaTela.oculto = false; gravarSegundaTela(); }
+        abrirCatRemoto();
+        enviarCatalogoAgora();
+      }
+      // o botão "Mostrar no tablet" da família aberta aparece/some com a conexão
+      function redesenharFamiliaDoCatalogo() {
+        const el = document.getElementById('prodCatalogo');
+        if (!el || el.classList.contains('hidden') || catalogoFamilia === null) return;
+        catalogoScroll = window.scrollY;
+        renderCatalogo();
+      }
+      function cortarTexto(t, n) {
+        const s = String(t || '').replace(/\s+/g, ' ').trim();
+        return s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s;
+      }
+      function catalogoParaTelaCliente() {
+        if (!telaCatalogo) return null;
+        const t = telaCatalogo;
+        const noOrc = new Map(state.cart.filter(i => i.qty > 0).map(i => [i.cod, i.qty]));
+        const r2 = (v) => Math.round(v * 100) / 100;
+        const produtos = t.cods.map(c => {
+          const p = productByCod(c);
+          if (!p) return { cod: c, nome: c };
+          const codFoto = codigoDaFoto(p.c);
+          const selo = seloDaVitrine(p);
+          const site = siteDoProduto(p.c);
+          const pg = (site && site.pagina) || {};
+          const ficha = FICHAS_MAP[p.c];
+          let preco = null;
+          if (telaCatPrefs.preco) {
+            const of = ofertaDoProduto(p);
+            // a campanha só vale com quantidade/condição: o tablet mostra o preço
+            // de 1 unidade (o mesmo que entra no orçamento) e a condição embaixo
+            const comCondicao = of.regra && (of.qtd > 1 || (of.condicoes && of.condicoes.length));
+            if (comCondicao) preco = { de: null, por: r2(of.de), cond: `-${of.pct}% ${of.condicoes.join(', ')}` };
+            else if (of.por > 0) preco = { de: of.regra ? r2(of.de) : null, por: r2(of.por) };
+          }
+          const indicado = cortarTexto(site && (site.indicado || pg.indicado), 220);
+          return {
+            cod: p.c,
+            nome: p.n,
+            det: `Cód. ${p.c}${Number(p.emb) > 1 ? ` · caixa com ${p.emb}` : ''}`,
+            foto: codFoto ? { cod: codFoto, v: FOTOS_PRODUTO[codFoto] } : null,
+            campanha: selo ? selo.texto : null,
+            bf: !!(selo && selo.bf),
+            noOrc: noOrc.get(p.c) || 0,
+            preco,
+            specs: specsDaFicha(p.c).slice(0, 6).map(x => [x.rotulo, cortarTexto(x.valor, 60)]),
+            indicado,
+            sobre: indicado ? '' : cortarTexto(textoCurtoDoSite(pg.texto) || (ficha && ficha.desc), 280),
+          };
+        });
+        return { titulo: t.titulo, vista: t.vista, i: t.i, comparar: t.comparar.slice(), orcamento: telaCatPrefs.orcamento, produtos };
+      }
+      // O servidor recusa estado acima de 200 KB (MAX_ESTADO_BYTES, routes/segundaTela.js):
+      // com um orçamento grande, o catálogo perde primeiro os textos, depois a
+      // ficha, e por último produtos do fim (o destaque e os comparados ficam).
+      const TELA_ESTADO_MAX_BYTES = 190 * 1024;
+      function tamanhoJson(o) { return new Blob([JSON.stringify(o)]).size; }
+      function catalogoQueCabe(estado) {
+        const cat = estado.catalogo;
+        if (!cat || tamanhoJson(estado) <= TELA_ESTADO_MAX_BYTES) return estado;
+        cat.produtos.forEach(p => { p.sobre = ''; p.indicado = ''; });
+        if (tamanhoJson(estado) <= TELA_ESTADO_MAX_BYTES) return estado;
+        cat.produtos.forEach(p => { p.specs = []; });
+        const manter = new Set([cat.i, ...cat.comparar]);
+        while (tamanhoJson(estado) > TELA_ESTADO_MAX_BYTES && cat.produtos.length > manter.size) {
+          let k = cat.produtos.length - 1;
+          while (manter.has(k)) k--;
+          if (k < 0) break;
+          cat.produtos.splice(k, 1);
+          // índices depois do que saiu andam uma casa
+          if (cat.i > k) cat.i--;
+          cat.comparar = cat.comparar.map(x => (x > k ? x - 1 : x));
+          manter.clear(); [cat.i, ...cat.comparar].forEach(x => manter.add(x));
+        }
+        return estado;
+      }
+      // mudança feita no controle: vai pro tablet logo (sem esperar os 350 ms do orçamento)
+      function enviarCatalogoAgora() {
+        renderCatRemoto();
+        if (!segundaTela) return;
+        clearTimeout(segundaTelaTimer);
+        segundaTelaTimer = setTimeout(enviarTelaCliente, 80);
+      }
+      function abrirCatRemoto() {
+        if (!telaCatalogo) return;
+        document.getElementById('catRemoto').classList.remove('hidden');
+        renderCatRemoto();
+      }
+      function fecharCatRemoto() {
+        document.getElementById('catRemoto').classList.add('hidden');
+        if (observadoresDeFoto.catRemoto) observadoresDeFoto.catRemoto.disconnect();
+        document.getElementById('catRemotoCorpo').innerHTML = '';
+      }
+      function renderCatRemoto() {
+        const el = document.getElementById('catRemoto');
+        if (!el || el.classList.contains('hidden')) return;
+        if (!telaCatalogo) { fecharCatRemoto(); return; }
+        const t = telaCatalogo;
+        const status = document.getElementById('catRemotoStatus');
+        status.textContent = segundaTela && segundaTela.oculto ? 'Tela do tablet escondida'
+          : segundaTelaStatus === 'semRede' ? 'Sem internet — o tablet atualiza quando o sinal voltar'
+            : segundaTelaStatus === 'semTablet' ? 'O tablet não está respondendo'
+              : segundaTelaStatus === 'grande' ? 'Grande demais pro tablet — escolha uma subfamília menor' : 'Tablet mostrando o catálogo';
+        const ps = t.cods.map(productByCod);
+        t.i = Math.max(0, Math.min(t.i, ps.length - 1));
+        const p = ps[t.i];
+        const comparando = t.vista === 'comparar';
+        const qtdNoOrc = (c) => { const it = state.cart.find(x => x.cod === c); return it ? it.qty : 0; };
+        const selo = p ? seloDaVitrine(p) : null;
+        const of = p && telaCatPrefs.preco ? ofertaDoProduto(p) : null;
+        const detalhe = p ? [`Cód. ${p.c}`, Number(p.emb) > 1 ? `cx ${p.emb}` : '', selo ? selo.texto : '', of && of.por > 0 ? brl(of.por) : ''].filter(Boolean).join(' · ') : '';
+        const passo = p ? packStep(p) : 1;
+        const vistaBtn = (v, rot) => `<button type="button" role="radio" data-cr-vista="${v}" aria-checked="${t.vista === v}">${rot}</button>`;
+        const minis = ps.map((q, k) => {
+          if (!q) return '';
+          const posComp = t.comparar.indexOf(k);
+          const marca = comparando ? (posComp >= 0 ? String(posComp + 1) : '') : (qtdNoOrc(q.c) ? '✓' : '');
+          const foto = codigoDaFoto(q.c);
+          // a foto num filho próprio: carregarFotoEm limpa o conteúdo do alvo (e levaria a marca junto)
+          return `<button type="button" class="catRemotoMini${(comparando ? posComp >= 0 : k === t.i) ? ' ativo' : ''}" data-cr-i="${k}" aria-label="${escapeHtml(q.n)}" aria-pressed="${comparando ? posComp >= 0 : k === t.i}"><span class="catRemotoMiniFoto"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(q.c)}"` : ''}>${foto ? '' : escapeHtml(cortarTexto(q.n, 40))}</span><span class="marca${marca ? '' : ' hidden'}" aria-hidden="true">${marca}</span></button>`;
+        }).join('');
+        document.getElementById('catRemotoCorpo').innerHTML = `
+          <div class="catRemotoTitulo"><small>NO TABLET AGORA</small><b>${escapeHtml(t.titulo)}</b>
+            <button type="button" class="priceEditResetLink" data-cr="trocar" style="display:inline;width:auto;margin-left:8px;">trocar família</button></div>
+          <div class="catRemotoVista" role="radiogroup" aria-label="O que o tablet mostra">
+            ${vistaBtn('grade', 'Todos')}${vistaBtn('produto', 'Um produto')}${vistaBtn('comparar', 'Comparar')}
+          </div>
+          ${p ? `<div class="catRemotoCard">
+            ${comparando ? `<div class="catRemotoDica">Toque em 2 a ${TELA_CAT_MAX_COMPARAR} produtos embaixo pra comparar no tablet · ${t.comparar.length} escolhido${t.comparar.length === 1 ? '' : 's'}</div>` : ''}
+            <div class="catRemotoProd">
+              <span class="catRemotoFoto"${codigoDaFoto(p.c) ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''}>${codigoDaFoto(p.c) ? '' : 'sem foto'}</span>
+              <div><b>${escapeHtml(p.n)}</b><small>${escapeHtml(detalhe)}</small></div>
+            </div>
+            <div class="catRemotoNav">
+              <button type="button" class="seta" data-cr="ant" aria-label="Produto anterior"${t.i === 0 ? ' disabled' : ''}>‹</button>
+              <button type="button" class="add" data-cr="add">+ ${passo} no orçamento</button>
+              <button type="button" class="seta" data-cr="prox" aria-label="Próximo produto"${t.i === ps.length - 1 ? ' disabled' : ''}>›</button>
+            </div>
+            ${qtdNoOrc(p.c) ? `<div class="catRemotoDica">No orçamento: ${qtdNoOrc(p.c)} un</div>` : ''}
+          </div>` : ''}
+          <div class="catRemotoCard">
+            <label class="catRemotoChave"><span>Mostrar o orçamento no tablet<small>lateral, total e quanto falta pro frete</small></span><input type="checkbox" role="switch" data-cr-chave="orcamento"${telaCatPrefs.orcamento ? ' checked' : ''}></label>
+            <label class="catRemotoChave"><span>Mostrar preço no tablet<small>preço do orçamento aberto (${escapeHtml(rotuloContextoPreco())})</small></span><input type="checkbox" role="switch" data-cr-chave="preco"${telaCatPrefs.preco ? ' checked' : ''}></label>
+          </div>
+          <div class="catRemotoTitulo"><small>${comparando ? 'TOQUE PRA ESCOLHER OS QUE VÃO SER COMPARADOS' : t.vista === 'produto' ? 'TOQUE PRA ABRIR NO TABLET' : 'TOQUE PRA DESTACAR NO TABLET'}</small></div>
+          <div class="catRemotoMinis">${minis}</div>`;
+        preencherFotosAoVer(document.getElementById('catRemotoCorpo'), 'catRemoto');
+      }
+      function initCatRemoto() {
+        document.getElementById('catRemotoFecharBtn').addEventListener('click', () => {
+          telaCatalogo = null;
+          fecharCatRemoto();
+          enviarCatalogoAgora();
+          renderFaixaSegundaTela();
+          redesenharFamiliaDoCatalogo();
+        });
+        const corpo = document.getElementById('catRemotoCorpo');
+        corpo.addEventListener('change', (e) => {
+          const ch = e.target.closest('[data-cr-chave]');
+          if (!ch || !telaCatalogo) return;
+          telaCatPrefs[ch.dataset.crChave] = ch.checked;
+          enviarCatalogoAgora();
+        });
+        corpo.addEventListener('click', (e) => {
+          const t = telaCatalogo;
+          if (!t) return;
+          const vista = e.target.closest('[data-cr-vista]');
+          if (vista) {
+            t.vista = vista.dataset.crVista;
+            if (t.vista === 'comparar' && !t.comparar.length) t.comparar = [t.i];
+            enviarCatalogoAgora();
+            return;
+          }
+          const mini = e.target.closest('[data-cr-i]');
+          if (mini) {
+            const k = Number(mini.dataset.crI);
+            if (t.vista === 'comparar') {
+              if (t.comparar.includes(k)) t.comparar = t.comparar.filter(x => x !== k);
+              else if (t.comparar.length >= TELA_CAT_MAX_COMPARAR) { showToast(`Compara até ${TELA_CAT_MAX_COMPARAR} produtos de cada vez`); return; }
+              else { t.comparar.push(k); t.i = k; }
+            } else t.i = k;
+            enviarCatalogoAgora();
+            return;
+          }
+          const b = e.target.closest('[data-cr]');
+          if (!b) return;
+          if (b.dataset.cr === 'ant' || b.dataset.cr === 'prox') {
+            t.i += b.dataset.cr === 'ant' ? -1 : 1;
+            enviarCatalogoAgora();
+          } else if (b.dataset.cr === 'add') {
+            const p = productByCod(t.cods[t.i]);
+            if (p) addToCart(p.c); // renderCartBar manda o orçamento (e o catálogo) pro tablet
+          } else if (b.dataset.cr === 'trocar') {
+            fecharCatRemoto();
+            showToast('O tablet continua nesta família. Abra outra e toque em "Mostrar no tablet"', 'longo');
+          }
+        });
       }
 
       // Código lido do QR do tablet: o QR traz o endereço do app com ?parear=NNNN
@@ -19334,6 +19889,8 @@
           renderFaixaSegundaTela();
           iniciarVigiaSegundaTela();
           enviarTelaCliente();
+          // a família aberta no Catálogo ganha o "Mostrar no tablet"
+          redesenharFamiliaDoCatalogo();
           showToast('Tablet conectado — ele mostra o orçamento ao vivo');
           return true;
         } catch (e) {
@@ -19360,6 +19917,7 @@
       }
 
       function initSegundaTela() {
+        initCatRemoto();
         document.getElementById('conectarTabletLink').addEventListener('click', (e) => { e.preventDefault(); abrirConectarTablet(); });
         document.getElementById('conectarTabletCancelarBtn').addEventListener('click', () => document.getElementById('conectarTabletModal').classList.add('hidden'));
         document.getElementById('conectarTabletLerBtn').addEventListener('click', () => {
@@ -19380,7 +19938,9 @@
         document.getElementById('segundaTelaFaixa').addEventListener('click', async (e) => {
           const b = e.target.closest('[data-st]');
           if (!b || !segundaTela) return;
-          if (b.dataset.st === 'esconder') {
+          if (b.dataset.st === 'controle') {
+            abrirCatRemoto();
+          } else if (b.dataset.st === 'esconder') {
             segundaTela.oculto = !segundaTela.oculto;
             gravarSegundaTela();
             renderFaixaSegundaTela();
@@ -30703,6 +31263,7 @@
             <button type="button" class="recompraBtn" id="catSelecionarBtn">${catalogoSelecionando ? 'Cancelar' : 'Selecionar'}</button>
             <button type="button" class="recompraBtn" id="catVitrineBtn">Mostrar ao cliente</button>
           </div>
+          ${telaClienteConectada() ? `<button type="button" class="catTelaBtn" id="catTelaBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>Mostrar no tablet${telaCatalogo && telaCatalogo.titulo === titulo ? ' · abrir o controle' : ''}</button>` : ''}
           ${subs.length ? `<div class="catSubs">
             <button type="button" class="catSub${sub ? '' : ' ativo'}" data-cat-sub="">Todas · ${fam.produtos.length}</button>
             ${subs.map(s => `<button type="button" class="catSub${s === sub ? ' ativo' : ''}" data-cat-sub="${escapeHtml(s.codigo)}">${escapeHtml(s.nome)} · ${s.produtos.length}</button>`).join('')}
@@ -30728,6 +31289,10 @@
           renderCatalogo();
         }));
         document.getElementById('catVitrineBtn').addEventListener('click', () => abrirVitrine(titulo, produtos, 0));
+        document.getElementById('catTelaBtn')?.addEventListener('click', () => {
+          if (telaCatalogo && telaCatalogo.titulo === titulo) abrirCatRemoto();
+          else mostrarCatalogoNoTablet(titulo, produtos);
+        });
         document.getElementById('catSelecionarBtn').addEventListener('click', alternarSelecaoCatalogo);
         document.getElementById('catMaisBtn')?.addEventListener('click', () => {
           catalogoMostrar += CATALOGO_VER_MAIS;
