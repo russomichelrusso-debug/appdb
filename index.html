@@ -10455,11 +10455,54 @@
       color: var(--gray);
     }
 
+    /* chave liga/desliga (pedido do usuário, 11/2026): verde ligada, cinza desligada */
     .catRemotoChave input {
-      width: 22px;
-      height: 22px;
+      -webkit-appearance: none;
+      appearance: none;
+      position: relative;
+      width: 56px;
+      height: 32px;
+      margin: 0;
       flex-shrink: 0;
-      accent-color: var(--success);
+      border-radius: 16px;
+      background: var(--fill);
+      box-shadow: inset 0 0 0 2.5px #8E8E93;
+      cursor: pointer;
+      transition: background-color .2s, box-shadow .2s;
+    }
+
+    .catRemotoChave input::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #FFFFFF;
+      box-shadow: 0 2px 5px rgba(0, 0, 0, .35);
+      transition: transform .2s;
+    }
+
+    .catRemotoChave input:checked {
+      background: #4CD964;
+      box-shadow: none;
+    }
+
+    .catRemotoChave input:checked::after {
+      transform: translateX(24px);
+    }
+
+    .catRemotoChave input:focus-visible {
+      outline: 2px solid var(--info);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .catRemotoChave input,
+      .catRemotoChave input::after {
+        transition: none;
+      }
     }
 
     .catRemotoDica {
@@ -19753,8 +19796,8 @@
             ${qtdNoOrc(p.c) ? `<div class="catRemotoDica">No orçamento: ${qtdNoOrc(p.c)} un</div>` : ''}
           </div>` : ''}
           <div class="catRemotoCard">
-            <label class="catRemotoChave"><span>Mostrar o orçamento no tablet<small>lateral, total e quanto falta pro frete</small></span><input type="checkbox" data-cr-chave="orcamento"${telaCatPrefs.orcamento ? ' checked' : ''}></label>
-            <label class="catRemotoChave"><span>Mostrar preço no tablet<small>preço do orçamento aberto (${escapeHtml(rotuloContextoPreco())})</small></span><input type="checkbox" data-cr-chave="preco"${telaCatPrefs.preco ? ' checked' : ''}></label>
+            <label class="catRemotoChave"><span>Mostrar o orçamento no tablet<small>lateral, total e quanto falta pro frete</small></span><input type="checkbox" role="switch" data-cr-chave="orcamento"${telaCatPrefs.orcamento ? ' checked' : ''}></label>
+            <label class="catRemotoChave"><span>Mostrar preço no tablet<small>preço do orçamento aberto (${escapeHtml(rotuloContextoPreco())})</small></span><input type="checkbox" role="switch" data-cr-chave="preco"${telaCatPrefs.preco ? ' checked' : ''}></label>
           </div>
           <div class="catRemotoTitulo"><small>${comparando ? 'TOQUE PRA ESCOLHER OS QUE VÃO SER COMPARADOS' : t.vista === 'produto' ? 'TOQUE PRA ABRIR NO TABLET' : 'TOQUE PRA DESTACAR NO TABLET'}</small></div>
           <div class="catRemotoMinis">${minis}</div>`;
