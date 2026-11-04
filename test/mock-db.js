@@ -2171,7 +2171,7 @@ async function query(sql, params = []) {
     const u = usuarios.find(us => us.id === sessao.usuario_id);
     // "AND u.ativo": usuário desativado pelo admin não passa (middleware/auth.js, /auth/me)
     if (u && s.includes('AND U.ATIVO') && u.ativo === false) return { rows: [] };
-    return { rows: u ? [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin }] : [] };
+    return { rows: u ? [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, telefone: u.telefone ?? null }] : [] };
   }
   if (s.includes('DELETE FROM SESSOES WHERE USUARIO_ID')) {
     const antes = sessoes.length;
@@ -2207,6 +2207,12 @@ async function query(sql, params = []) {
   if (s.startsWith('SELECT') && s.includes('FROM USUARIOS WHERE ID = $1')) {
     return { rows: usuarios.filter(u => u.id == params[0]).map(u => ({ ...u })) };
   }
+  if (s.includes('/* USUARIOS:TELEFONE */')) {
+    const u = usuarios.find(x => x.id == params[0]);
+    if (!u) return { rows: [] };
+    u.telefone = params[1];
+    return { rows: [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo !== false, telefone: u.telefone }] };
+  }
   if (s.includes('/* USUARIOS:NOME */')) {
     const u = usuarios.find(x => x.id == params[0]);
     if (!u) return { rows: [] };
@@ -2219,9 +2225,9 @@ async function query(sql, params = []) {
     u.ativo = params[1];
     return { rows: [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo }] };
   }
-  if (s.startsWith('SELECT ID, NOME, EMAIL, IS_ADMIN, ATIVO, CRIADO_EM FROM USUARIOS')) {
+  if (s.startsWith('SELECT ID, NOME, EMAIL, IS_ADMIN, ATIVO, TELEFONE, CRIADO_EM FROM USUARIOS')) {
     return { rows: usuarios.slice().sort((a, b) => (b.ativo !== false) - (a.ativo !== false) || String(a.nome).localeCompare(b.nome))
-      .map(u => ({ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo !== false })) };
+      .map(u => ({ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, ativo: u.ativo !== false, telefone: u.telefone ?? null })) };
   }
   if (s.startsWith('DELETE FROM USUARIOS WHERE ID')) {
     // chave estrangeira sem ON DELETE: pedidos.usuario_id e import_log.usuario_id

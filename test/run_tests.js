@@ -1999,6 +1999,21 @@ async function main() {
     assert(proprio === 200 && res.status === 403, `vendedor troca o próprio nome, mas não o de outro: ${proprio}/${res.status}`);
     res = await req('PUT', '/api/auth/usuarios/999999/nome', { nome: 'Ninguém' });
     assert(res.status === 404, 'trocar nome de usuário inexistente: 404');
+    // Telefone do vendedor (card, orçamento): mesmas regras do nome; vazio apaga
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/telefone`, { telefone: ' (44) 99812-4471 ' });
+    assert(res.status === 200 && res.body.telefone === '(44) 99812-4471', `admin cadastra o telefone de outro usuário: ${JSON.stringify(res.body)}`);
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/telefone`, { telefone: '1234' });
+    assert(res.status === 400, 'telefone com poucos dígitos é recusado');
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/telefone`, { telefone: 'javascript:alert(1) 4499999000' });
+    assert(res.status === 400, 'telefone com letras é recusado');
+    authToken = tokenOutro;
+    const meOutro = (await req('GET', '/api/auth/me')).body;
+    res = await req('PUT', `/api/auth/usuarios/${outroId}/telefone`, { telefone: '' });
+    const proprioTel = res.status === 200 && res.body.telefone === '';
+    res = await req('PUT', '/api/auth/usuarios/1/telefone', { telefone: '44999990000' });
+    authToken = tokenAdm;
+    assert(meOutro.id === outroId && meOutro.telefone === '(44) 99812-4471' && proprioTel && res.status === 403,
+      `/me devolve id e telefone; vendedor apaga o próprio, não o de outro: ${JSON.stringify(meOutro)} ${proprioTel} ${res.status}`);
   }
   const tokenAntesCotacao = authToken;
   authToken = tokenOutro;

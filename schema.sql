@@ -154,6 +154,10 @@ ALTER TABLE usuarios ALTER COLUMN senha_hash DROP NOT NULL;
 -- Inativo não entra (login Google recusa) e a sessão que ele tinha deixa de valer
 -- (middleware/auth.js); ao desativar, as sessões e os avisos no celular dele são apagados.
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS ativo BOOLEAN NOT NULL DEFAULT true;
+-- Telefone do vendedor (rodapé do card de oferta, PDF/imagem/texto do orçamento,
+-- apresentação): cadastrado uma vez e vale em todos os aparelhos. NULL = nunca
+-- preenchido (o app manda o que estava guardado no aparelho); '' = apagado.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefone TEXT;
 
 -- Registro de quem fez cada importação em massa (catálogo, produtos, clientes,
 -- previsão de estoque, pedidos oficiais) - essas rotas continuam liberadas pra

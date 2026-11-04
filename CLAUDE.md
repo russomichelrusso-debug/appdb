@@ -1636,6 +1636,16 @@ Supabase, sem PR — não é mudança de código.
       fotos "da loja" de um código (confirmação errada puxa o código pra cima em fotos parecidas) — se acontecer, SQL no Supabase
       (`DELETE FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = '...'`) ou um botão no Painel.
 
+- **Telefone do vendedor no cadastro do usuário** (11/2026, pedido do usuário: "fica pras fichas, fotos e orçamentos sem
+  preencher toda vez"): `usuarios.telefone` (NULL = nunca preenchido, '' = apagado), `PUT /api/auth/usuarios/:id/telefone`
+  (mesmas regras do nome: admin troca o de qualquer um, vendedor só o próprio; 10 a 13 dígitos), e `/auth/me` e o login
+  passaram a devolver `id` e `telefone`. Cadastro: Painel › Conta ("Seu telefone" + "Cadastrar/Trocar meu telefone"), o ícone
+  de telefone na lista de usuários (admin) e o próprio campo do card de oferta (ao sair dele, grava). Vale no card/encarte/status,
+  na apresentação, no tablet, no PDF do orçamento ("Represent."), na imagem ("Atendimento"), no fim do texto do WhatsApp e no
+  PDF do levantamento (`telefoneDoVendedor`, `index.html`). Cópia no aparelho `cortagVendedorTelefone_v2` ({email, tel,
+  pendente}): sem internet a troca vale no aparelho e vai na próxima abertura (`sincronizarTelefoneVendedor`); o número antigo
+  digitado no card (`cortagVendedorTelefone_v1`, só deste aparelho) sobe pro cadastro uma vez, se ele ainda não tem telefone.
+
 - **Quantidade digitável em todo −/+** (11/2026, relato do usuário: com embalagem de 1, pôr 80 era apertar o + 80 vezes):
   o número entre −/+ do card do produto (Pedido/Produtos), do item do orçamento e do Estoque/Pedido do Levantamento é um
   campo (`ligarCampoQtd`, `index.html`): tocar seleciona tudo, Enter ou sair aplica; orçamento e pedido do levantamento sobem
