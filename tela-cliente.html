@@ -329,6 +329,125 @@
     .cartao.campanha strong { font-size: 17px; line-height: 1.3; }
     .rodapeOrc { font-size: 12px; color: var(--gray); text-align: center; }
 
+    /* ---- catálogo comandado pelo celular (11/2026, mockups A + B + C) ----
+       A: grade da família no centro, orçamento na lateral; B: um produto em tela
+       cheia (tocar num produto); C: comparar lado a lado. */
+    .catTela { display: flex; align-items: flex-start; gap: 22px; padding: 22px 24px 32px; }
+    .catMeio { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+    .catCab { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .catCab small { display: block; font-size: 13px; color: var(--gray); font-weight: 600; letter-spacing: .3px; }
+    .catCab h1 { margin: 2px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -.4px; }
+    .catCab span { font-size: 14px; color: var(--gray); }
+    .catGrade { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+    .catCard {
+      display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 0; border-radius: 16px;
+      background: var(--white); box-shadow: 0 2px 8px rgba(0, 0, 0, .05); text-align: left; cursor: pointer;
+      touch-action: manipulation;
+    }
+    .catCard.destaque { box-shadow: 0 0 0 3px var(--red), 0 12px 28px rgba(0, 0, 0, .10); }
+    .catFoto {
+      position: relative; aspect-ratio: 1 / 1; border-radius: 12px; background: #FFFFFF; border: 1px solid var(--neutral-2);
+      display: flex; align-items: center; justify-content: center; overflow: hidden;
+    }
+    .catFoto img { width: 100%; height: 100%; object-fit: contain; }
+    .catFoto > svg { width: 40%; height: 40%; color: #C7C7CC; }
+    .catSelo { position: absolute; top: 8px; left: 8px; background: var(--red); color: var(--on-accent); font-size: 13px; font-weight: 700; padding: 4px 9px; border-radius: 7px; }
+    .catSelo.bf { background: #111111; color: #FFD60A; }
+    .catNoOrc { position: absolute; top: 8px; right: 8px; background: var(--success); color: #FFFFFF; font-size: 13px; font-weight: 700; padding: 4px 9px; border-radius: 7px; }
+    .catNome { font-size: 15px; font-weight: 600; line-height: 1.3; padding: 0 4px; overflow-wrap: break-word; }
+    .catDet { font-size: 13px; color: var(--gray); padding: 0 4px 4px; }
+    .catPreco { padding: 0 4px 4px; font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .catPreco s { font-size: 13px; color: var(--gray); font-weight: 400; margin-right: 6px; }
+
+    .catLado {
+      flex: 0 0 360px; position: sticky; top: 90px; max-height: calc(100vh - 112px);
+      display: flex; flex-direction: column; background: var(--white); border-radius: var(--r-lg); overflow: hidden;
+    }
+    .catLadoCab { padding: 20px 20px 12px; border-bottom: 1px solid var(--neutral-2); }
+    .catLadoCab small { display: block; font-size: 13px; color: var(--gray); font-weight: 600; letter-spacing: .3px; }
+    .catLadoCab strong { font-size: 18px; }
+    .catLadoItens { flex: 1 1 auto; overflow-y: auto; }
+    .catLadoItem { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 12px 20px; border-bottom: 1px solid var(--neutral-2); transition: background-color .6s; }
+    .catLadoItem.novo { background: var(--accent-bg); }
+    .catLadoItem .foto { width: 44px; height: 44px; border-radius: 10px; }
+    .catLadoItem .foto svg { width: 20px; height: 20px; }
+    .catLadoItem b { display: block; font-size: 14px; font-weight: 600; line-height: 1.3; }
+    .catLadoItem small { font-size: 13px; color: var(--gray); }
+    .catLadoItem .num { font-size: 15px; font-weight: 700; white-space: nowrap; }
+    .catLadoRodape { padding: 14px 20px 18px; display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--neutral-2); }
+    .catLadoRodape .total { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-weight: 600; }
+    .catLadoRodape .total b { font-size: 28px; font-weight: 800; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+    .catLadoMeta { background: var(--success-bg); color: var(--success); border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; gap: 6px; }
+    .catLadoMeta .barra { margin: 0; height: 6px; }
+    .catLadoEco { font-size: 14px; color: var(--success); font-weight: 600; }
+
+    /* B: um produto em tela cheia */
+    .catProd { position: fixed; inset: 0; z-index: 12; background: var(--white); display: flex; flex-direction: column; }
+    .catProdTopo { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px 28px; }
+    .catProdTopo span { font-size: 16px; font-weight: 600; color: var(--gray); }
+    .catBtn {
+      min-height: 48px; padding: 0 18px; border: 1px solid var(--hairline); border-radius: 12px; background: var(--white);
+      font-size: 16px; font-weight: 600; cursor: pointer; touch-action: manipulation;
+    }
+    .catProdPalco { flex: 1 1 auto; min-height: 0; display: flex; align-items: center; gap: 48px; padding: 0 96px; position: relative; }
+    .catProdFoto { flex: 0 1 560px; aspect-ratio: 1 / 1; max-height: 100%; border-radius: 28px; background: #FFFFFF; border: 1px solid var(--neutral-2); position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    .catProdFoto img { width: 100%; height: 100%; object-fit: contain; }
+    .catProdFoto > svg { width: 40%; height: 40%; color: #C7C7CC; }
+    .catProdFoto .catSelo { top: 18px; left: 18px; font-size: 18px; padding: 8px 14px; border-radius: 10px; }
+    .catProdInfo { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px; max-height: 100%; overflow-y: auto; }
+    .catProdInfo small { font-size: 15px; font-weight: 700; color: var(--red); letter-spacing: .4px; }
+    .catProdInfo h2 { margin: 0; font-size: 40px; line-height: 1.12; letter-spacing: -.7px; overflow-wrap: break-word; }
+    .catProdInfo p { margin: 0; font-size: 18px; line-height: 1.5; color: var(--gray); white-space: pre-line; }
+    .catSpecs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+    .catSpecs div { background: var(--fill); border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+    .catSpecs span { font-size: 13px; color: var(--gray); }
+    .catSpecs b { font-size: 17px; overflow-wrap: break-word; }
+    .catProdPreco { font-size: 44px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+    .catProdPreco s { display: block; font-size: 18px; color: var(--gray); font-weight: 400; letter-spacing: 0; }
+    .catProdPreco small { font-size: 18px; color: var(--gray); font-weight: 500; letter-spacing: 0; }
+    .catJaNoOrc { align-self: flex-start; background: var(--success-bg); color: var(--success); border-radius: 14px; padding: 12px 16px; font-size: 17px; font-weight: 600; }
+    .catSeta {
+      position: absolute; top: 50%; transform: translateY(-50%); width: 60px; height: 60px; border-radius: 30px;
+      border: 1px solid var(--hairline); background: var(--white); font-size: 30px; line-height: 1; cursor: pointer; touch-action: manipulation;
+    }
+    .catSeta:disabled { opacity: .3; cursor: default; }
+    .catSeta.ant { left: 20px; }
+    .catSeta.prox { right: 20px; }
+    .catProdBase { display: flex; align-items: center; gap: 20px; padding: 16px 28px 24px; }
+    .catMinis { flex: 1 1 auto; min-width: 0; display: flex; gap: 10px; overflow-x: auto; padding: 4px; }
+    .catMini { flex: 0 0 68px; height: 68px; border-radius: 12px; border: 1px solid var(--neutral-2); background: #FFFFFF; padding: 0; overflow: hidden; cursor: pointer; }
+    .catMini { display: flex; align-items: center; justify-content: center; }
+    .catMini img { width: 100%; height: 100%; object-fit: contain; }
+    .catMini svg { width: 55%; height: 55%; color: #C7C7CC; }
+    .catMini.ativo { box-shadow: 0 0 0 3px var(--red); }
+    .catPilula { flex: 0 0 auto; display: flex; align-items: center; gap: 16px; background: #1D1D1F; color: #FFFFFF; border-radius: 18px; padding: 12px 20px; }
+    .catPilula small { display: block; font-size: 13px; color: #C7C7CC; }
+    .catPilula b { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; }
+    .catPilula span { font-size: 14px; color: #8FD3A5; font-weight: 600; max-width: 160px; line-height: 1.3; }
+
+    /* C: comparar lado a lado */
+    .catComp { background: var(--white); border-radius: var(--r-lg); overflow-x: auto; }
+    .catComp table { width: 100%; border-collapse: collapse; table-layout: fixed; min-width: 640px; }
+    .catComp th, .catComp td { padding: 14px 18px; border-top: 1px solid var(--neutral-2); text-align: left; vertical-align: top; font-size: 16px; overflow-wrap: break-word; }
+    .catComp thead th { border-top: 0; vertical-align: bottom; }
+    .catComp th[scope="row"] { width: 170px; font-size: 14px; color: var(--gray); font-weight: 600; }
+    .catComp .catFoto { margin-bottom: 12px; max-width: 220px; }
+    .catComp .compNome { font-size: 18px; font-weight: 700; line-height: 1.25; }
+    .catFaixaOrc { display: flex; align-items: center; gap: 16px; background: var(--white); border-radius: 18px; padding: 14px 20px; }
+    .catFaixaOrc small { font-size: 14px; color: var(--gray); font-weight: 600; flex-shrink: 0; }
+    .catFaixaOrc span { flex: 1 1 auto; min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .catFaixaOrc b { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+
+    @media (max-width: 1000px) {
+      .catTela { flex-direction: column; align-items: stretch; }
+      .catLado { flex: 0 0 auto; position: static; max-height: none; }
+      .catProdPalco { flex-direction: column; padding: 0 20px; gap: 18px; overflow-y: auto; }
+      .catProdFoto { flex: 0 0 auto; width: min(100%, 420px); }
+      .catSeta { display: none; }
+      .catProdInfo h2 { font-size: 28px; }
+      .catProdBase { flex-wrap: wrap; }
+    }
+
     /* ---- vitrine temporária do item que acabou de entrar (opção B por cima da A) ---- */
     .vitrine {
       position: fixed;
@@ -471,7 +590,7 @@
           </div>
           <div class="dica">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V7a4 4 0 018 0v4" /></svg>
-            <span>Este tablet mostra só o orçamento. Classificatório, ficha e histórico do cliente ficam no celular.</span>
+            <span>Este tablet mostra só o orçamento e o catálogo que você escolher no celular. Classificatório, ficha e histórico do cliente ficam no celular.</span>
           </div>
         </div>
       </div>
@@ -512,8 +631,14 @@
         <div class="rodapeOrc" id="rodapeTxt"></div>
       </aside>
     </section>
+
+    <section class="catTela hidden" id="telaCatalogo" aria-label="Catálogo de produtos">
+      <div class="catMeio" id="catMeio"></div>
+      <aside class="catLado hidden" id="catLado" aria-label="Seu orçamento"></aside>
+    </section>
   </div>
 
+  <div class="catProd hidden" id="catProd" role="dialog" aria-label="Produto em destaque"></div>
   <div class="vitrine hidden" id="vitrine" role="dialog" aria-label="Produto que acabou de entrar no orçamento"></div>
   <div class="conexaoAviso hidden" id="conexaoAviso" role="status"></div>
 
@@ -800,6 +925,8 @@
       document.getElementById('telaParear').classList.toggle('hidden', qual !== 'parear');
       document.getElementById('telaAguardando').classList.toggle('hidden', qual !== 'aguardando');
       document.getElementById('telaOrcamento').classList.toggle('hidden', qual !== 'orcamento');
+      document.getElementById('telaCatalogo').classList.toggle('hidden', qual !== 'catalogo');
+      if (qual !== 'catalogo') document.getElementById('catProd').classList.add('hidden');
     }
 
     let novosCods = new Set();
@@ -807,7 +934,10 @@
       const antes = estado;
       estado = novo && typeof novo === 'object' ? novo : null;
       novosCods = new Set();
-      if (!estado || estado.oculto || !Array.isArray(estado.itens)) { fecharVitrine(); return; }
+      if (!estado || estado.oculto || !Array.isArray(estado.itens)) { fecharVitrine(); catLocal = null; return; }
+      notarMudancaDoCatalogo(antes);
+      // com o catálogo na tela, o item novo aparece na lateral e no selo do card
+      if (estado.catalogo) { fecharVitrine(); }
       // só o que entrou DEPOIS da 1ª versão vira "novo" (abrir a tela com um
       // orçamento pronto não dispara vitrine), e só se a tela estava à mostra
       if (!antes || antes.oculto || !Array.isArray(antes.itens)) return;
@@ -828,6 +958,11 @@
       document.getElementById('topoVendedorSub').textContent = estado ? [estado.telefone, estado.data].filter(Boolean).join(' · ') : '';
 
       if (!pareada) { mostrar('parear'); return; }
+      if (estado && !estado.oculto && catalogoValido(estado.catalogo)) {
+        mostrar('catalogo');
+        desenharCatalogo();
+        return;
+      }
       if (!estado || estado.oculto || !Array.isArray(estado.itens) || !estado.itens.length) {
         document.getElementById('aguardandoTitulo').textContent = estado && estado.oculto ? 'Seu orçamento volta já' : 'Celular conectado';
         document.getElementById('aguardandoTxt').textContent = estado && estado.oculto
@@ -897,6 +1032,220 @@
       document.getElementById('rodapeTxt').textContent = `Preços com impostos${estado.uf ? ' · ' + estado.uf : ''} · valem para hoje`;
     }
 
+    // ---------------- catálogo comandado pelo celular (11/2026) ----------------
+    // Mockups escolhidos pelo usuário: A (grade da família no centro, orçamento
+    // na lateral) com B ao tocar num produto (tela cheia) e C pra comparar lado
+    // a lado. O celular manda junto do orçamento um `catalogo`: os produtos da
+    // família (sem o nome da regra de campanha, que costuma trazer o
+    // classificatório), a vista (grade/produto/comparar), o produto em destaque,
+    // se o preço aparece e se o orçamento aparece (chave do controle remoto).
+    // Aqui o cliente também pode tocar num produto e passar com as setas
+    // (catLocal); quando o vendedor muda a vista ou o destaque no celular, a
+    // tela volta a seguir o celular.
+    const ICONE_FOTO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21l7-7"/><path d="M10 14l2.5-2.5"/><path d="M12.5 11.5L20 4l1 6-6.5 4.5z"/></svg>';
+    let catLocal = null; // { vista, i } escolhido aqui no tablet, por cima do celular
+    let catOrcAntes = new Set(); // códigos no orçamento na versão anterior (o que entrou fica destacado na lateral)
+    let catNovos = new Set();
+
+    function catalogoValido(c) {
+      return !!(c && typeof c === 'object' && Array.isArray(c.produtos) && c.produtos.length);
+    }
+    function notarMudancaDoCatalogo(antes) {
+      const a = antes && !antes.oculto ? antes.catalogo : null;
+      const c = estado.catalogo;
+      if (!catalogoValido(c)) { catLocal = null; catOrcAntes = new Set(); return; }
+      // o vendedor trocou a família, a vista ou o destaque: a tela segue ele
+      if (!a || a.titulo !== c.titulo || a.vista !== c.vista || a.i !== c.i || JSON.stringify(a.comparar) !== JSON.stringify(c.comparar)) catLocal = null;
+      const agora = new Set((estado.itens || []).map(i => i.cod));
+      catNovos = a ? new Set([...agora].filter(x => !catOrcAntes.has(x))) : new Set();
+      catOrcAntes = agora;
+    }
+    function vistaDoCatalogo(c) {
+      const v = catLocal ? catLocal.vista : c.vista;
+      const i = catLocal ? catLocal.i : Number(c.i) || 0;
+      return { vista: ['grade', 'produto', 'comparar'].includes(v) ? v : 'grade', i: Math.max(0, Math.min(i, c.produtos.length - 1)) };
+    }
+    function htmlFotoCat(p, i, classe) {
+      return `<div class="${classe}" data-cat-foto="${i}">${ICONE_FOTO}${p.campanha ? `<span class="catSelo${p.bf ? ' bf' : ''}">${escapeHtml(p.campanha)}</span>` : ''}${Number(p.noOrc) > 0 && classe === 'catFoto' ? '<span class="catNoOrc">✓ No orçamento</span>' : ''}</div>`;
+    }
+    function htmlPrecoCat(p, classe) {
+      if (!p.preco || !(Number(p.preco.por) > 0)) return '';
+      const de = Number(p.preco.de) > Number(p.preco.por) + 0.004 ? `<s>${brl(p.preco.de)}</s>` : '';
+      return `<div class="${classe}">${de}${brl(p.preco.por)}${classe === 'catProdPreco' ? ' <small>cada</small>' : ''}</div>`;
+    }
+    // fotos: a miniatura na grade (a cheia, se ela não existir); a cheia no produto aberto
+    function preencherFotosCat(raiz, produtos, cheia) {
+      raiz.querySelectorAll('[data-cat-foto]').forEach(el => {
+        const p = produtos[Number(el.dataset.catFoto)];
+        if (!p || !p.foto) return;
+        const pedir = cheia ? urlDaFoto(p.foto) : urlDaFoto(p.foto, true).then(u => u || urlDaFoto(p.foto));
+        pedir.then(url => {
+          if (!url || !el.isConnected) return;
+          const svg = el.querySelector(':scope > svg');
+          if (svg) svg.outerHTML = `<img src="${url}" alt="">`;
+        });
+      });
+    }
+
+    function desenharCatalogo() {
+      const c = estado.catalogo;
+      const { vista, i } = vistaDoCatalogo(c);
+      const mostrarOrc = c.orcamento !== false && estado.itens.length > 0;
+      const meio = document.getElementById('catMeio');
+      const lado = document.getElementById('catLado');
+      const prod = document.getElementById('catProd');
+      fecharVitrine();
+      if (vista === 'comparar') {
+        const sel = (Array.isArray(c.comparar) ? c.comparar : []).map(Number).filter(k => c.produtos[k]).slice(0, 4);
+        if (sel.length >= 2) {
+          prod.classList.add('hidden');
+          lado.classList.add('hidden');
+          meio.innerHTML = htmlComparar(c, sel) + (mostrarOrc ? htmlFaixaOrc() : '');
+          preencherFotosCat(meio, c.produtos, false);
+          return;
+        }
+      }
+      meio.innerHTML = htmlGrade(c, vista === 'grade' ? i : -1);
+      preencherFotosCat(meio, c.produtos, false);
+      lado.classList.toggle('hidden', !mostrarOrc);
+      if (mostrarOrc) desenharLadoCat(lado);
+      if (vista === 'produto') {
+        desenharProdutoCat(prod, c, i, mostrarOrc);
+      } else {
+        prod.classList.add('hidden');
+        if (vista === 'grade' && !catLocal) {
+          const card = meio.querySelector('.catCard.destaque');
+          if (card) card.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+      }
+    }
+    function htmlGrade(c, destaque) {
+      const cards = c.produtos.map((p, k) => `<button type="button" class="catCard${k === destaque ? ' destaque' : ''}" data-cat-abrir="${k}">
+          ${htmlFotoCat(p, k, 'catFoto')}
+          <span class="catNome">${escapeHtml(p.nome)}</span>
+          ${p.det ? `<span class="catDet">${escapeHtml(p.det)}</span>` : ''}
+          ${htmlPrecoCat(p, 'catPreco')}
+        </button>`).join('');
+      return `<div class="catCab">
+          <div><small>CATÁLOGO CORTAG</small><h1>${escapeHtml(c.titulo || 'Produtos')}</h1></div>
+          <span>${c.produtos.length} ${c.produtos.length === 1 ? 'produto' : 'produtos'} · toque num produto pra ver maior</span>
+        </div>
+        <div class="catGrade">${cards}</div>`;
+    }
+    function desenharLadoCat(lado) {
+      const meta = estado.meta;
+      const f = meta ? Math.max(0, Math.min(1, Number(meta.fracao) || 0)) : 0;
+      lado.innerHTML = `<div class="catLadoCab"><small>SEU ORÇAMENTO</small>${estado.cliente ? `<strong>${escapeHtml(estado.cliente)}</strong>` : ''}</div>
+        <div class="catLadoItens">${estado.itens.map((it, k) => `<div class="catLadoItem${catNovos.has(it.cod) ? ' novo' : ''}">
+            <div class="foto" data-lado-foto="${k}">${ICONE_CAIXA}</div>
+            <div><b>${escapeHtml(it.nome)}</b><small>${escapeHtml(it.qtd)} un${it.campanha ? ' · ' + escapeHtml(it.campanha) : ''}</small></div>
+            <span class="num">${brl(it.total)}</span>
+          </div>`).join('')}</div>
+        <div class="catLadoRodape">
+          ${meta ? `<div class="catLadoMeta"><span>${escapeHtml(meta.texto || '')}</span><div class="barra" aria-hidden="true"><div style="width:${(f * 100).toFixed(1)}%"></div></div></div>` : ''}
+          ${Number(estado.economia) >= 0.01 ? `<div class="catLadoEco">Economia com campanhas: ${brl(estado.economia)}</div>` : ''}
+          <div class="total"><span>Total com impostos</span><b>${brl(estado.total)}</b></div>
+        </div>`;
+      lado.querySelectorAll('[data-lado-foto]').forEach(el => {
+        const it = estado.itens[Number(el.dataset.ladoFoto)];
+        if (it && it.foto) urlDaFoto(it.foto, true).then(u => u || urlDaFoto(it.foto)).then(url => { if (url && el.isConnected) el.innerHTML = `<img src="${url}" alt="">`; });
+      });
+      const novo = lado.querySelector('.catLadoItem.novo');
+      if (novo) novo.scrollIntoView({ block: 'nearest' });
+    }
+    function htmlPilulaOrc() {
+      const n = estado.itens.length;
+      return `<div class="catPilula">
+          <div><small>Seu orçamento · ${n} ${n === 1 ? 'item' : 'itens'}</small><b>${brl(estado.total)}</b></div>
+          ${estado.meta && estado.meta.texto ? `<span>${escapeHtml(estado.meta.texto)}</span>` : ''}
+        </div>`;
+    }
+    function htmlFaixaOrc() {
+      const n = estado.itens.length;
+      const resumo = estado.itens.slice(0, 4).map(it => `${it.nome} ${it.qtd} un`).join(', ') + (n > 4 ? ' …' : '');
+      return `<div class="catFaixaOrc"><small>SEU ORÇAMENTO</small><span>${n} ${n === 1 ? 'item' : 'itens'} · ${escapeHtml(resumo)}</span><b>${brl(estado.total)}</b></div>`;
+    }
+    function desenharProdutoCat(prod, c, i, mostrarOrc) {
+      const p = c.produtos[i];
+      const specs = Array.isArray(p.specs) ? p.specs.filter(s => Array.isArray(s) && s[0] && s[1]).slice(0, 6) : [];
+      prod.innerHTML = `<div class="catProdTopo">
+          <span>${escapeHtml(c.titulo || '')} · ${i + 1} de ${c.produtos.length}</span>
+          <button type="button" class="catBtn" data-cat-grade>Ver todos</button>
+        </div>
+        <div class="catProdPalco">
+          <button type="button" class="catSeta ant" data-cat-passo="-1" aria-label="Produto anterior"${i === 0 ? ' disabled' : ''}>‹</button>
+          ${htmlFotoCat(p, i, 'catProdFoto')}
+          <div class="catProdInfo">
+            ${c.titulo ? `<small>${escapeHtml(String(c.titulo).toLocaleUpperCase('pt-BR'))}</small>` : ''}
+            <h2>${escapeHtml(p.nome)}</h2>
+            ${p.det ? `<p style="font-size:15px;">${escapeHtml(p.det)}</p>` : ''}
+            ${p.indicado ? `<p>${escapeHtml(p.indicado)}</p>` : p.sobre ? `<p>${escapeHtml(p.sobre)}</p>` : ''}
+            ${specs.length ? `<div class="catSpecs">${specs.map(s => `<div><span>${escapeHtml(s[0])}</span><b>${escapeHtml(s[1])}</b></div>`).join('')}</div>` : ''}
+            ${htmlPrecoCat(p, 'catProdPreco')}
+            ${Number(p.noOrc) > 0 ? `<span class="catJaNoOrc">✓ Já está no seu orçamento · ${escapeHtml(p.noOrc)} un</span>` : ''}
+          </div>
+          <button type="button" class="catSeta prox" data-cat-passo="1" aria-label="Próximo produto"${i === c.produtos.length - 1 ? ' disabled' : ''}>›</button>
+        </div>
+        <div class="catProdBase">
+          <div class="catMinis">${c.produtos.map((q, k) => `<button type="button" class="catMini${k === i ? ' ativo' : ''}" data-cat-ir="${k}" data-cat-foto="${k}" aria-label="${escapeHtml(q.nome)}">${ICONE_FOTO}</button>`).join('')}</div>
+          ${mostrarOrc ? htmlPilulaOrc() : ''}
+        </div>`;
+      prod.classList.remove('hidden');
+      preencherFotosCat(prod.querySelector('.catProdPalco'), c.produtos, true);
+      preencherFotosCat(prod.querySelector('.catMinis'), c.produtos, false);
+      const ativo = prod.querySelector('.catMini.ativo');
+      if (ativo) ativo.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+    function htmlComparar(c, sel) {
+      const ps = sel.map(k => c.produtos[k]);
+      const rotulos = [];
+      for (const p of ps) for (const s of (Array.isArray(p.specs) ? p.specs : [])) if (s && s[0] && !rotulos.includes(s[0])) rotulos.push(s[0]);
+      const valor = (p, r) => { const s = (p.specs || []).find(x => x && x[0] === r); return s ? s[1] : '—'; };
+      const linhas = rotulos.slice(0, 8).map(r => `<tr><th scope="row">${escapeHtml(r)}</th>${ps.map(p => `<td>${escapeHtml(valor(p, r))}</td>`).join('')}</tr>`);
+      if (ps.some(p => p.indicado)) linhas.push(`<tr><th scope="row">Pra que serve</th>${ps.map(p => `<td>${escapeHtml(p.indicado || '—')}</td>`).join('')}</tr>`);
+      if (ps.some(p => p.det)) linhas.push(`<tr><th scope="row">Código · caixa</th>${ps.map(p => `<td>${escapeHtml(p.det || '—')}</td>`).join('')}</tr>`);
+      if (ps.some(p => p.preco)) linhas.push(`<tr><th scope="row">Preço</th>${ps.map(p => `<td>${htmlPrecoCat(p, 'catPreco') || '—'}</td>`).join('')}</tr>`);
+      return `<div class="catCab"><div><small>COMPARANDO ${ps.length} PRODUTOS</small><h1>${escapeHtml(c.titulo || 'Produtos')}</h1></div></div>
+        <div class="catComp"><table>
+          <colgroup><col style="width:170px">${ps.map(() => '<col>').join('')}</colgroup>
+          <thead><tr><td></td>${ps.map((p, j) => `<th scope="col">${htmlFotoCat(p, sel[j], 'catFoto')}<div class="compNome">${escapeHtml(p.nome)}</div></th>`).join('')}</tr></thead>
+          <tbody>${linhas.join('')}</tbody>
+        </table></div>`;
+    }
+    function irNoCatalogo(vista, i) {
+      if (!estado || !catalogoValido(estado.catalogo)) return;
+      catLocal = { vista, i };
+      desenharCatalogo();
+    }
+    document.getElementById('catMeio').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cat-abrir]');
+      if (b) irNoCatalogo('produto', Number(b.dataset.catAbrir));
+    });
+    document.getElementById('catProd').addEventListener('click', (e) => {
+      if (!estado || !catalogoValido(estado.catalogo)) return;
+      const atual = vistaDoCatalogo(estado.catalogo);
+      const passo = e.target.closest('[data-cat-passo]');
+      if (passo) { irNoCatalogo('produto', atual.i + Number(passo.dataset.catPasso)); return; }
+      const ir = e.target.closest('[data-cat-ir]');
+      if (ir) { irNoCatalogo('produto', Number(ir.dataset.catIr)); return; }
+      if (e.target.closest('[data-cat-grade]')) irNoCatalogo('grade', atual.i);
+    });
+    // passar com o dedo no produto aberto
+    (() => {
+      let x0 = null, y0 = null;
+      const prod = document.getElementById('catProd');
+      prod.addEventListener('pointerdown', (e) => { x0 = e.clientX; y0 = e.clientY; });
+      prod.addEventListener('pointerup', (e) => {
+        if (x0 === null || !estado || !catalogoValido(estado.catalogo)) return;
+        const dx = e.clientX - x0, dy = e.clientY - y0;
+        x0 = null;
+        if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 1.5 || e.target.closest('.catMinis')) return;
+        const atual = vistaDoCatalogo(estado.catalogo);
+        const novo = atual.i + (dx < 0 ? 1 : -1);
+        if (novo >= 0 && novo < estado.catalogo.produtos.length) irNoCatalogo('produto', novo);
+      });
+    })();
+
     // ---------------- vitrine temporária ----------------
     let vitrineTimer = null;
     function abrirVitrine(it) {
@@ -939,9 +1288,10 @@
     // Mesmo endereço (e mesmo Cache Storage) do index.html: foto que o app já
     // baixou neste aparelho nem vai à rede.
     const fotosMemo = new Map();
-    function urlDaFoto(foto) {
+    // mini: a miniatura do catálogo (300 px) - a mesma chave que o app guarda
+    function urlDaFoto(foto, mini) {
       if (!foto || !foto.cod || !foto.v) return Promise.resolve(null);
-      const chave = `${getApiConfig().baseUrl}/api/produto-fotos/${encodeURIComponent(foto.cod)}?v=${encodeURIComponent(foto.v)}`;
+      const chave = `${getApiConfig().baseUrl}/api/produto-fotos/${encodeURIComponent(foto.cod)}${mini ? '/mini' : ''}?v=${encodeURIComponent(foto.v)}`;
       if (!fotosMemo.has(chave)) {
         fotosMemo.set(chave, (async () => {
           try {
