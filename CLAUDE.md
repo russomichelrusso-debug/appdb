@@ -141,6 +141,9 @@ Pegadinhas de ambiente:
   internet. Agora `juntarPromocionaisAoCatalogo` os põe no catálogo antes do `applyDB`, pela cópia da lista (chave `promocionais`,
   gravada como cópia independente); a lista do servidor entra depois por `mergeProdutosPromocionais`, sem segurar a abertura (só a
   1ª abertura sem cópia espera o servidor).
+  Campanhas (`loadActivePromoRules`), descontos por classificatório e previsão de estoque são pedidos **junto com o catálogo**,
+  no começo de `carregarCatalogoEExtras` (lote 3, 11/2026: eram um atrás do outro depois dele; com 300 ms por chamada, 2,2 s →
+  0,76 s; com 1,5 s, 9,3 s → 3,2 s). Busca nova da abertura que não depende do catálogo vai junto, não depois.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
