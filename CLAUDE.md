@@ -1278,6 +1278,10 @@ Supabase, sem PR — não é mudança de código.
   grade com o orçamento na lateral, produto em tela cheia (o cliente também toca e passa; mexer no celular faz a tela voltar a seguir
   ele, `catLocal`) e comparação em tabela. Sem canal de volta: o "+ no orçamento" do celular é o do destaque do celular, não o que o
   cliente abriu no tablet. Só no Catálogo (campanhas e Mais vendidos ainda não).
+  **Item em falta no controle** (11/2026, relato do usuário: "ao apresentar não sei que está em falta nem quando chega"): o
+  produto em destaque mostra o selo da planilha de itens em falta (`renderEstoqueDaFicha`: "chega DD/MM"/"sem previsão" +
+  disponível/em compra) e cada miniatura ganha uma faixa "📦 DD/MM"/"⚠ falta" (`previsaoCurta`); a grade do Catálogo também mostra
+  o selo. **Só no celular do vendedor: o tablet não recebe** (decisão nossa, dá pra virar chave como o preço).
 - **Tipos automáticos e seleção pro tablet no Catálogo** (11/2026, mockups "Cortag · Escolher produtos pro tablet": 2A + 2B
   com a 1A; relato do usuário: "o motor de subfamília não funciona, nas brocas não tem como"). Família com 60+ produtos e sem
   subfamília de marketing abre pelos **tipos tirados do nome** (`<motor-tipos>` no `index.html`, testado: `tiposDaFamilia` = o nome

@@ -157,6 +157,16 @@
       color: #F09595;
     }
 
+    html[data-theme="dark"] .catRemotoMini .falta {
+      background: #501313;
+      color: #F09595;
+    }
+
+    html[data-theme="dark"] .catRemotoMini .falta.ok {
+      background: #042C53;
+      color: #85B7EB;
+    }
+
     html[data-theme="dark"] .abcPill {
       background: var(--white);
     }
@@ -10591,6 +10601,35 @@
       display: none;
     }
 
+    .catRemotoMini .falta {
+      position: absolute;
+      left: 4px;
+      right: 4px;
+      bottom: 4px;
+      border-radius: 8px;
+      padding: 2px 4px;
+      background: #FDECEC;
+      color: var(--danger);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 16px;
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    .catRemotoMini .falta.ok {
+      background: #E7F0FE;
+      color: #1155CC;
+    }
+
+    .catRemotoProd .ofertaEstoque {
+      margin-top: 6px;
+    }
+
+    .catItemInfo .previsaoBadge {
+      margin: 4px 0 0;
+    }
+
     .catTelaBtn {
       display: flex;
       align-items: center;
@@ -16270,6 +16309,14 @@
         if (!cliente || !cliente.codigo_oficial) return '';
         return ` <span style="font-weight:400;color:var(--gray);font-size:0.78em;">(${escapeHtml(String(cliente.codigo_oficial))})</span>`;
       }
+      // Leitura curta da previsão pro controle do tablet (marca na miniatura):
+      // mesma régua do selo abaixo.
+      function previsaoCurta(codigo) {
+        const html = renderPrevisaoBadge(codigo);
+        if (!html) return null;
+        const m = html.match(/chega (\d\d\/\d\d)/);
+        return m ? { ok: true, texto: m[1] } : { ok: false, texto: '⚠' };
+      }
       function renderPrevisaoBadge(codigo) {
         const prev = PREVISAO_MAP[codigo];
         if (!prev) return '';
@@ -20136,7 +20183,10 @@
           const marca = comparando ? (posComp >= 0 ? String(posComp + 1) : '') : (qtdNoOrc(q.c) ? '✓' : '');
           const foto = codigoDaFoto(q.c);
           // a foto num filho próprio: carregarFotoEm limpa o conteúdo do alvo (e levaria a marca junto)
-          return `<button type="button" class="catRemotoMini${(comparando ? posComp >= 0 : k === t.i) ? ' ativo' : ''}" data-cr-i="${k}" aria-label="${escapeHtml(q.n)}" aria-pressed="${comparando ? posComp >= 0 : k === t.i}"><span class="catRemotoMiniFoto"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(q.c)}"` : ''}>${foto ? '' : escapeHtml(cortarTexto(q.n, 40))}</span><span class="marca${marca ? '' : ' hidden'}" aria-hidden="true">${marca}</span></button>`;
+          // item em falta (planilha de previsão de estoque): só o vendedor vê, o tablet não
+          const falta = previsaoCurta(q.c);
+          const rotuloFalta = falta ? (falta.ok ? `, em falta, chega ${falta.texto}` : ', em falta, sem previsão de chegada') : '';
+          return `<button type="button" class="catRemotoMini${(comparando ? posComp >= 0 : k === t.i) ? ' ativo' : ''}" data-cr-i="${k}" aria-label="${escapeHtml(q.n + rotuloFalta)}" aria-pressed="${comparando ? posComp >= 0 : k === t.i}"><span class="catRemotoMiniFoto"${foto ? ` data-foto-mini data-foto-cod="${escapeHtml(q.c)}"` : ''}>${foto ? '' : escapeHtml(cortarTexto(q.n, 40))}</span><span class="marca${marca ? '' : ' hidden'}" aria-hidden="true">${marca}</span>${falta ? `<span class="falta${falta.ok ? ' ok' : ''}" aria-hidden="true">${falta.ok ? '📦 ' + falta.texto : '⚠ falta'}</span>` : ''}</button>`;
         }).join('');
         document.getElementById('catRemotoCorpo').innerHTML = `
           <div class="catRemotoTitulo"><small>NO TABLET AGORA</small><b>${escapeHtml(t.titulo)}</b>
@@ -20148,7 +20198,7 @@
             ${comparando ? `<div class="catRemotoDica">Toque em 2 a ${TELA_CAT_MAX_COMPARAR} produtos embaixo pra comparar no tablet · ${t.comparar.length} escolhido${t.comparar.length === 1 ? '' : 's'}</div>` : ''}
             <div class="catRemotoProd">
               <span class="catRemotoFoto"${codigoDaFoto(p.c) ? ` data-foto-mini data-foto-cod="${escapeHtml(p.c)}"` : ''}>${codigoDaFoto(p.c) ? '' : 'sem foto'}</span>
-              <div><b>${escapeHtml(p.n)}</b><small>${escapeHtml(detalhe)}</small></div>
+              <div><b>${escapeHtml(p.n)}</b><small>${escapeHtml(detalhe)}</small>${renderEstoqueDaFicha(p.c)}</div>
             </div>
             <div class="catRemotoNav">
               <button type="button" class="seta" data-cr="ant" aria-label="Produto anterior"${t.i === 0 ? ' disabled' : ''}>‹</button>
@@ -31881,6 +31931,7 @@
                 <div class="campItemCod">${escapeHtml(p.c)}${Number(p.emb) > 1 ? ` · cx ${escapeHtml(String(p.emb))}` : ''}</div>
                 ${of.regra ? `<div class="campItemDe">${brl(of.de)}</div>` : ''}
                 <div class="campItemPor">${of.por > 0 ? brl(of.por) : '—'}</div>
+                ${renderPrevisaoBadge(p.c)}
               </div>
             </button>
             ${of.regra ? `<span class="campItemOff${of.blackFriday ? ' bf' : ''}">-${of.pct}%</span>` : ''}
