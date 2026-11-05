@@ -1273,7 +1273,7 @@ Supabase, sem PR — não é mudança de código.
   ele, `catLocal`) e comparação em tabela. Sem canal de volta: o "+ no orçamento" do celular é o do destaque do celular, não o que o
   cliente abriu no tablet. Só no Catálogo (campanhas e Mais vendidos ainda não).
 - **Tipos automáticos e seleção pro tablet no Catálogo** (11/2026, mockups "Cortag · Escolher produtos pro tablet": 2A + 2B
-  com a 1A; relato do usuário: "o motor de subfamília não funciona, nas brocas não tem como"). Família com 24+ produtos e sem
+  com a 1A; relato do usuário: "o motor de subfamília não funciona, nas brocas não tem como"). Família com 60+ produtos e sem
   subfamília de marketing abre pelos **tipos tirados do nome** (`<motor-tipos>` no `index.html`, testado: `tiposDaFamilia` = o nome
   até a 1ª palavra com número, "PARA" = "P/", jogos/kits juntos, tipo pequeno que só continua outro entra nele, menos de 3 = "Outras",
   o começo comum - "BROCA", "SERRA COPO" - sai do rótulo; cache `TIPOS_CACHE` pela referência do `DB.products`). Brocas: 270 produtos

@@ -31148,7 +31148,7 @@
       // com "PARA" = "P/", jogos/kits juntos e tipo pequeno que só continua outro juntado nele;
       // o que fica com menos de 3 produtos vai pra "Outras". Medida = o 1º "N mm" do nome.
       const TIPOS_CONECTIVOS = new Set(['C/', 'P/', 'DE', 'DA', 'DO', 'PARA', 'E', 'COM', 'EM']);
-      const TIPOS_MIN_PRODUTOS = 24; // família menor que isso não precisa de tipos
+      const TIPOS_MIN_PRODUTOS = 60; // família menor que isso (cortadores: 32) abre direto na grade
       const TIPO_MIN = 3;
       const TIPO_KITS = '_kits', TIPO_OUTRAS = '_outras';
       function semAcentoTipo(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
