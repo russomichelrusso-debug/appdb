@@ -299,7 +299,7 @@
       .fichaGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
       #clientPickerCard { max-width: 640px; }
       .fichaGrid #fichaHost { grid-column: 1; grid-row: 1; min-width: 0; }
-      .fichaGrid #contatosHost { grid-column: 2; grid-row: 1; position: sticky; top: 12px; }
+      .fichaGrid #contatosHost { grid-column: 2; grid-row: 1; position: sticky; top: 76px; } /* abaixo da .subBar */
       .fichaGrid #contatosHost .card { margin-bottom: 0; }
       .topoNome { font-size: 34px; }
     }
@@ -335,6 +335,7 @@
        das páginas separadas"): a barra escura presa no topo, como a do index.html, com voltar, o nome da
        página e uma linha que muda (em vez da descrição fixa). O box-shadow + clip-path pinta a faixa na
        largura toda da janela sem mexer na largura do .wrap (o conteúdo continua alinhado). ---------- */
+    html { scroll-padding-top: 80px; } /* rolar até um elemento não para embaixo da .subBar */
     .subBar {
       position: sticky; top: 0; z-index: 30;
       display: flex; align-items: center; gap: 10px;
@@ -355,6 +356,7 @@
     /* cards como os do app: raio 16, borda fina, sem sombra; título 16 e dica 13 */
     .card, .chartCard, .kpi, .kpiExpandPanel { border-radius: var(--r-md); box-shadow: none; border: 0.75px solid var(--hairline); }
     .card h2, .card h3, .chartCard h2 { font-size: 16px; }
+    .card .cartaoTit { font-size: 11.5px; } /* rótulo pequeno dos cartões da ficha continua rótulo */
     .cardHint, .chartCard .head p, .card p.hint { font-size: 13px; }
     #clientPickerInput { min-height: 44px; font-size: 15px; border-radius: 12px; border-color: transparent; background: var(--fill); padding: 0 14px; box-sizing: border-box; }
   </style>

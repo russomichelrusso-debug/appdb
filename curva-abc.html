@@ -636,8 +636,8 @@
       .abcTopo .abcClasses { grid-column: span 5; gap: 12px; }
       .abcCorpo { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
       .abcCorpo .abcEsq { grid-column: span 7; gap: 16px; }
-      .abcCorpo .abcLista { grid-column: span 5; position: sticky; top: 12px; }
-      .abcLista .prodTableScroll { max-height: calc(100vh - 230px); }
+      .abcCorpo .abcLista { grid-column: span 5; position: sticky; top: 76px; } /* abaixo da .subBar (64 px) */
+      .abcLista .prodTableScroll { max-height: calc(100vh - 294px); }
       .abcClasse:hover .clAcao { text-decoration: underline; }
       .pareto { height: 240px; }
     }
@@ -666,6 +666,7 @@
        das páginas separadas"): a barra escura presa no topo, como a do index.html, com voltar, o nome da
        página e uma linha que muda (em vez da descrição fixa). O box-shadow + clip-path pinta a faixa na
        largura toda da janela sem mexer na largura do .wrap (o conteúdo continua alinhado). ---------- */
+    html { scroll-padding-top: 80px; } /* rolar até um elemento não para embaixo da .subBar */
     .subBar {
       position: sticky; top: 0; z-index: 30;
       display: flex; align-items: center; gap: 10px;
@@ -689,7 +690,7 @@
     .cardHint, .chartCard .head p, .card p.hint { font-size: 13px; }
     .dashLista.card { border-top: 4px solid var(--corLista); }
     .segmented { border-radius: 12px; padding: 3px; gap: 3px; }
-    .segmented button { font-size: 14px; padding: 9px 14px; min-height: 40px; border-radius: 10px; }
+    .segmented button { font-size: 14px; padding: 9px 14px; min-height: 44px; border-radius: 10px; }
     #tabSegPrincipal { display: flex; }
     #tabSegPrincipal button { flex: 1; }
     @media (min-width: 700px) { #tabSegPrincipal { display: inline-flex; } #tabSegPrincipal button { flex: none; min-width: 140px; } }
@@ -2086,7 +2087,13 @@
     }
 
     let subDashboard = 'faturamento e metas do mês';
+    let dashCarregando = false; // o "Atualizar" tocado várias vezes não dispara a carga de novo (rotas pesadas, 40/min)
     async function carregarDashboardPrincipal() {
+      if (dashCarregando) return;
+      dashCarregando = true;
+      try { await carregarDashboardPrincipalAgora(); } finally { dashCarregando = false; }
+    }
+    async function carregarDashboardPrincipalAgora() {
       const hero = document.getElementById('dashHero');
       hero.innerHTML = '<div class="chartEmpty">Carregando…</div>';
       try {
