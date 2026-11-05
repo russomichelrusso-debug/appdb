@@ -3323,6 +3323,16 @@ async function main() {
       && subfamiliaDoProduto('P62535').codigo === 'S42' && subfamiliaDoProduto('63593').curto === 'Forjadas' && subfamiliaDoProduto('99999') === null,
       `catálogo de preços: subfamília de marketing pelo código (promocional cai no base): ${JSON.stringify(colher)}`);
     mockDb.__getCatalogoPrecos().pop();
+    // produto oculto (routes/lib/produtosOcultos.js): fica no banco, não vai pro app nem conta no Painel
+    const { produtoOculto } = require('../routes/lib/produtosOcultos');
+    mockDb.__getCatalogoPrecos().push({ codigo_sku: '62202', nome: 'ESPAÇADOR VONDER' });
+    mockDb.__fixarVersaoTabelas(4);
+    const c6 = await req('GET', '/api/catalogo-precos');
+    const cont6 = await req('GET', '/api/produtos/contagem');
+    assert(c6.status === 200 && !c6.body.produtos.some(p => p.codigo_sku === '62202') && c6.body.produtos.length === 3
+      && cont6.body.catalogo === 3 && produtoOculto('P161397') === true && produtoOculto('61400') && !produtoOculto('60863'),
+      `catálogo de preços: produto oculto não vai pro app nem conta no Painel: ${JSON.stringify(cont6.body)}`);
+    mockDb.__getCatalogoPrecos().pop();
     const f1 = await req('GET', '/api/fichas-tecnicas');
     res = await req('POST', '/api/fichas-tecnicas/importar', { fichas: { CAT05: { nome: 'FICHA', desc: 'd', foto: '', specs: { a: 1 } } } });
     const f2 = await req('GET', '/api/fichas-tecnicas');
