@@ -7934,6 +7934,34 @@
       cursor: pointer;
     }
 
+    .catVoltarTipos {
+      display: block;
+      width: auto;
+      min-height: 40px;
+      margin: 0;
+      text-align: left;
+    }
+
+    .catLinhaMarcar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .catLinhaMarcar .priceEditResetLink {
+      display: inline;
+      width: auto;
+      margin: 0 0 0 auto;
+      min-height: 36px;
+    }
+
+    #catBarra .recompraBtn--tablet {
+      background: var(--success);
+      color: #FFFFFF;
+      border-color: var(--success);
+    }
+
     .catSub.ativo {
       border-color: var(--red);
       color: var(--red);
@@ -19647,12 +19675,12 @@
       let telaCatalogo = null; // { titulo, cods, i, vista: 'grade'|'produto'|'comparar', comparar: [índices] }
       const telaCatPrefs = { preco: false, orcamento: true }; // valem ao trocar de família
       function telaClienteConectada() { return !!(segundaTela && segundaTela.modo === 'cliente'); }
-      function mostrarCatalogoNoTablet(titulo, produtos) {
+      function mostrarCatalogoNoTablet(titulo, produtos, grupos) {
         if (!telaClienteConectada() || !produtos.length) return;
         if (produtos.length > TELA_CAT_MAX_PRODUTOS) {
-          showToast(`O tablet mostra os ${TELA_CAT_MAX_PRODUTOS} primeiros — escolha uma subfamília pra ver o resto`, 'longo');
+          showToast(`O tablet mostra os ${TELA_CAT_MAX_PRODUTOS} primeiros — escolha um tipo ou uma medida pra ver o resto`, 'longo');
         }
-        telaCatalogo = { titulo, cods: produtos.slice(0, TELA_CAT_MAX_PRODUTOS).map(p => p.c), i: 0, vista: 'grade', comparar: [] };
+        telaCatalogo = { titulo, cods: produtos.slice(0, TELA_CAT_MAX_PRODUTOS).map(p => p.c), i: 0, vista: 'grade', comparar: [], grupos: grupos || null };
         if (segundaTela.oculto) { segundaTela.oculto = false; gravarSegundaTela(); }
         abrirCatRemoto();
         enviarCatalogoAgora();
@@ -19663,6 +19691,31 @@
         if (!el || el.classList.contains('hidden') || catalogoFamilia === null) return;
         catalogoScroll = window.scrollY;
         renderCatalogo();
+      }
+      // Produtos marcados no Catálogo (opção "1A" dos mockups): vão pro tablet juntos, de
+      // qualquer família, agrupados pelo tipo ("Brocas · Aço rápido") ou pela família.
+      function grupoDoProdutoNoCatalogo(p, familias) {
+        const fam = familias.find(f => f.chave === (productFamilia(p) || ''));
+        if (!fam) return 'Outros';
+        const tipos = tiposDaFamiliaDoCatalogo(fam);
+        const t = tipos && tipos.find(x => x.produtos.includes(p));
+        if (t) return `${fam.nome} · ${t.nome}`;
+        const s = subfamiliasDaFamilia(fam).find(x => x.produtos.includes(p));
+        return s ? `${fam.nome} · ${s.nome}` : fam.nome;
+      }
+      function mostrarSelecaoNoTablet() {
+        const produtos = catalogoSelecionados.map(productByCod).filter(Boolean);
+        if (!produtos.length) return;
+        const familias = familiasDoCatalogo();
+        const grupos = {};
+        const ordem = [];
+        for (const p of produtos) {
+          const g = grupoDoProdutoNoCatalogo(p, familias);
+          grupos[p.c] = g;
+          if (!ordem.includes(g)) ordem.push(g);
+        }
+        const ordenados = ordem.flatMap(g => produtos.filter(p => grupos[p.c] === g));
+        mostrarCatalogoNoTablet('Seleção pra você', ordenados, grupos);
       }
       function cortarTexto(t, n) {
         const s = String(t || '').replace(/\s+/g, ' ').trim();
@@ -19703,6 +19756,7 @@
             specs: specsDaFicha(p.c).slice(0, 6).map(x => [x.rotulo, cortarTexto(x.valor, 60)]),
             indicado,
             sobre: indicado ? '' : cortarTexto(textoCurtoDoSite(pg.texto) || (ficha && ficha.desc), 280),
+            grupo: t.grupos ? t.grupos[p.c] || '' : undefined,
           };
         });
         return { titulo: t.titulo, vista: t.vista, i: t.i, comparar: t.comparar.slice(), orcamento: telaCatPrefs.orcamento, produtos };
@@ -31086,6 +31140,146 @@
       // internet aparece a que já foi vista ou é de campanha (já baixada).
       // Produto do catálogo = Lista de Preços sem os promocionais do Painel (o
       // descontinuado já não está nela).
+      // <motor-tipos>
+      // Tipos e medidas dentro de uma família grande do Catálogo (11/2026, opção "2A + 2B"
+      // escolhida pelo usuário: as subfamílias à mão não davam conta das brocas, 269 produtos).
+      // Tipo = o nome até a 1ª palavra com número (a mesma régua do grupoDoProduto do servidor),
+      // com "PARA" = "P/", jogos/kits juntos e tipo pequeno que só continua outro juntado nele;
+      // o que fica com menos de 3 produtos vai pra "Outras". Medida = o 1º "N mm" do nome.
+      const TIPOS_CONECTIVOS = new Set(['C/', 'P/', 'DE', 'DA', 'DO', 'PARA', 'E', 'COM', 'EM']);
+      const TIPOS_MIN_PRODUTOS = 24; // família menor que isso não precisa de tipos
+      const TIPO_MIN = 3;
+      const TIPO_KITS = '_kits', TIPO_OUTRAS = '_outras';
+      function semAcentoTipo(s) { return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+      function palavrasDoTipo(nome) {
+        const palavras = String(nome || '').trim().split(/\s+-\s+/)[0].split(/\s+/).filter(Boolean);
+        const out = [];
+        for (const p of palavras) { if (/\d/.test(p) || p === 'Ø') break; out.push(p); }
+        while (out.length > 1 && TIPOS_CONECTIVOS.has(semAcentoTipo(out[out.length - 1]).toUpperCase())) out.pop();
+        return out;
+      }
+      function chaveDaPalavraTipo(p) {
+        const u = semAcentoTipo(p).toUpperCase();
+        return u === 'PARA' ? 'P/' : u;
+      }
+      function ehKitTipo(palavras) {
+        const u = palavras.map(chaveDaPalavraTipo);
+        return u[0] === 'JOGO' || u[0] === 'KIT' || u.includes('JG') || u[0] === 'JG';
+      }
+      function rotuloPalavraTipo(p, primeira) {
+        const sa = semAcentoTipo(p).toUpperCase();
+        if (/\//.test(p)) { const l = p.toLocaleLowerCase('pt-BR'); return primeira ? l.charAt(0).toLocaleUpperCase('pt-BR') + l.slice(1) : l; }
+        if (p === p.toUpperCase() && !/[AEIOU]/.test(sa)) return p; // sigla: SDS, PVC
+        const m = p.toLocaleLowerCase('pt-BR');
+        return primeira ? m.charAt(0).toLocaleUpperCase('pt-BR') + m.slice(1) : m;
+      }
+      // produtos: [{ c, n }] -> null (sem tipos) ou [{ chave, nome, produtos }]
+      function tiposDaFamilia(produtos) {
+        if (!Array.isArray(produtos) || produtos.length < TIPOS_MIN_PRODUTOS) return null;
+        const grupos = new Map();
+        for (const p of produtos) {
+          const pal = palavrasDoTipo(p.n);
+          const kit = ehKitTipo(pal);
+          const chave = kit ? TIPO_KITS : pal.map(chaveDaPalavraTipo).join(' ');
+          if (!grupos.has(chave)) grupos.set(chave, { chave, palavras: pal, produtos: [] });
+          grupos.get(chave).produtos.push(p);
+        }
+        // tipo pequeno que só tem uma continuação ("BROCA CHATA" -> "BROCA CHATA P/ MADEIRA")
+        for (const g of [...grupos.values()]) {
+          if (g.chave === TIPO_KITS || g.produtos.length >= TIPO_MIN) continue;
+          const filhos = [...grupos.values()].filter(o => o !== g && o.chave !== TIPO_KITS && o.chave.startsWith(g.chave + ' '));
+          const pais = [...grupos.values()].filter(o => o !== g && o.chave !== TIPO_KITS && g.chave.startsWith(o.chave + ' ') && o.produtos.length >= TIPO_MIN);
+          const alvo = filhos.length === 1 ? filhos[0] : (pais.length === 1 && !filhos.length ? pais[0] : null);
+          if (alvo) { alvo.produtos.push(...g.produtos); grupos.delete(g.chave); }
+        }
+        // o começo que quase todo produto tem ("BROCA", "SERRA COPO") sai do rótulo
+        const prefixo = [];
+        for (let i = 0; i < 3; i++) {
+          const cont = new Map();
+          for (const g of grupos.values()) {
+            if (g.chave === TIPO_KITS) continue;
+            const ch = g.palavras.slice(0, i + 1).map(chaveDaPalavraTipo).join(' ');
+            cont.set(ch, (cont.get(ch) || 0) + g.produtos.length);
+          }
+          const [ch, qtd] = [...cont.entries()].sort((a, b) => b[1] - a[1])[0] || ['', 0];
+          if (!ch || qtd < produtos.length * 0.6 || ch.split(' ').length < i + 1) break;
+          prefixo.splice(0, prefixo.length, ...ch.split(' '));
+        }
+        const outras = [];
+        const tipos = [];
+        let kits = null;
+        for (const g of grupos.values()) {
+          if (g.chave === TIPO_KITS) { kits = g; continue; }
+          let pal = g.palavras.slice();
+          const temPrefixo = prefixo.length && prefixo.every((w, i) => chaveDaPalavraTipo(pal[i] || '') === w);
+          const soFamilia = temPrefixo && pal.length === prefixo.length;
+          if (temPrefixo && !soFamilia) pal = pal.slice(prefixo.length);
+          while (pal.length > 1 && TIPOS_CONECTIVOS.has(chaveDaPalavraTipo(pal[0]))) pal = pal.slice(1);
+          if (g.produtos.length < TIPO_MIN || soFamilia) { outras.push(...g.produtos); continue; }
+          tipos.push({ chave: g.chave, nome: pal.map((p, i) => rotuloPalavraTipo(p, i === 0)).join(' '), produtos: g.produtos });
+        }
+        tipos.sort((a, b) => b.produtos.length - a.produtos.length || a.nome.localeCompare(b.nome, 'pt-BR'));
+        if (kits && kits.produtos.length >= 2) tipos.push({ chave: TIPO_KITS, nome: 'Jogos e kits', produtos: kits.produtos });
+        else if (kits) outras.push(...kits.produtos);
+        if (outras.length) tipos.push({ chave: TIPO_OUTRAS, nome: 'Outras', produtos: outras });
+        return tipos.length >= 3 ? tipos : null;
+      }
+      // Medida do nome: a 1ª que aparece - "6,5 mm", "4,0mm x 75 mm" (o diâmetro, antes do x),
+      // "8,0 x 200 x 260mm" ou polegada "1/8''", "3/4\"" (convertida pra ordenar, mm = false).
+      function medidaDoNome(nome) {
+        const t = String(nome || '');
+        const achados = [];
+        let m = /(\d+(?:[.,]\d+)?)\s*(?:mm)?\s*x\s*\d/i.exec(t); if (m) achados.push({ i: m.index, v: Number(m[1].replace(',', '.')), mm: true });
+        m = /(\d+(?:[.,]\d+)?)\s*mm\b/i.exec(t); if (m) achados.push({ i: m.index, v: Number(m[1].replace(',', '.')), mm: true });
+        m = /(?:^|\s)(\d+)\s*\/\s*(\d+)\s*(?:''|"|”|pol)/i.exec(t); if (m) achados.push({ i: m.index, v: Number(m[1]) / Number(m[2]) * 25.4, mm: false, txt: `${m[1]}/${m[2]}"` });
+        m = /(?:^|\s)(\d+)\s*(?:''|"|”)(?!\/)/.exec(t); if (m) achados.push({ i: m.index, v: Number(m[1]) * 25.4, mm: false, txt: `${m[1]}"` });
+        if (!achados.length) return null;
+        achados.sort((a, b) => a.i - b.i);
+        return achados[0];
+      }
+      function textoMedida(v) { return String(Math.round(v * 10) / 10).replace('.', ',') + ' mm'; }
+      // Faixas de medida pros chips: até 8 medidas = uma por chip; mais que isso = até 6 faixas
+      // com quantidades parecidas ("6,5 a 8 mm"); polegada num chip só; sem medida = "Outras medidas".
+      function faixasDeMedida(produtos) {
+        const valores = new Map();
+        let sem = 0, pol = 0;
+        for (const p of produtos) {
+          const md = medidaDoNome(p.n);
+          if (!md) { sem++; continue; }
+          if (!md.mm) { pol++; continue; }
+          valores.set(md.v, (valores.get(md.v) || 0) + 1);
+        }
+        const vs = [...valores.keys()].sort((a, b) => a - b);
+        let faixas = [];
+        if (vs.length <= 8) faixas = vs.map(v => ({ tipo: 'mm', min: v, max: v, qtd: valores.get(v) }));
+        else {
+          const total = vs.reduce((s, v) => s + valores.get(v), 0);
+          const alvo = total / 6;
+          let atual = null;
+          for (const v of vs) {
+            if (!atual) atual = { tipo: 'mm', min: v, max: v, qtd: 0 };
+            atual.max = v; atual.qtd += valores.get(v);
+            if (atual.qtd >= alvo && faixas.length < 5) { faixas.push(atual); atual = null; }
+          }
+          if (atual) faixas.push(atual);
+        }
+        faixas = faixas.map(f => ({ ...f, rotulo: f.min === f.max ? textoMedida(f.min) : `${textoMedida(f.min).replace(' mm', '')} a ${textoMedida(f.max)}` }));
+        if (pol) faixas.push({ tipo: 'pol', qtd: pol, rotulo: 'Em polegada' });
+        if (sem) faixas.push({ tipo: 'sem', qtd: sem, rotulo: 'Outras medidas' });
+        return faixas.length >= 2 ? faixas : [];
+      }
+      function naFaixaDeMedida(p, f) {
+        const md = medidaDoNome(p.n);
+        if (f.tipo === 'sem') return !md;
+        if (f.tipo === 'pol') return !!md && !md.mm;
+        return !!md && md.mm && md.v >= f.min && md.v <= f.max;
+      }
+      // ordem da grade dentro de um tipo: pela medida (mm, depois polegada), sem medida no fim
+      function pelaMedida(produtos) {
+        const peso = (p) => { const md = medidaDoNome(p.n); return md ? (md.mm ? 0 : 1) * 1e6 + md.v : 2e6; };
+        return produtos.map((p, i) => ({ p, i, w: peso(p) })).sort((a, b) => a.w - b.w || a.i - b.i).map(x => x.p);
+      }
+      // </motor-tipos>
       const PROD_MODO_LS_KEY = 'cortagProdModo_v1';
       const CATALOGO_POR_PAGINA = 40;
       const CATALOGO_VER_MAIS = 80;
@@ -31093,13 +31287,26 @@
       let prodModo = (() => { try { return localStorage.getItem(PROD_MODO_LS_KEY) === 'catalogo' ? 'catalogo' : 'lista'; } catch (e) { return 'lista'; } })();
       let catalogoFamilia = null; // chave da família aberta (null = cards das famílias)
       let catalogoSubfamilia = null; // código da subfamília escolhida na família aberta (null = todas)
+      // tipos automáticos (<motor-tipos>) da família sem subfamília de marketing: null = os cards
+      // dos tipos, '*' = todos os produtos, ou a chave do tipo aberto; medida = índice da faixa
+      let catalogoTipo = null;
+      let catalogoMedida = null;
+      const TIPOS_CACHE = new Map(); // chave da família -> { n, tipos } (refeito se o nº de produtos muda)
+      function tiposDaFamiliaDoCatalogo(fam) {
+        if (subfamiliasDaFamilia(fam).length) return null;
+        const c = TIPOS_CACHE.get(fam.chave);
+        if (c && c.n === fam.produtos.length) return c.tipos;
+        const tipos = tiposDaFamilia(fam.produtos);
+        TIPOS_CACHE.set(fam.chave, { n: fam.produtos.length, tipos });
+        return tipos;
+      }
       let catalogoMostrar = CATALOGO_POR_PAGINA;
       let catalogoScroll = null;
       let vitrine = null; // { titulo, produtos, i, separados }
       // Selecionar vários produtos pra mandar um card/encarte (10/2026, mockups
       // escolhidos pelo usuário): "Selecionar" na família liga; tocar no produto
       // marca em vez de abrir; a seleção continua ao trocar de família.
-      const CATALOGO_SEL_MAX = 24; // = CARD_MAX_PRODUTOS (4 imagens de 6)
+      const CATALOGO_SEL_MAX = 100; // pro tablet (TELA_CAT_MAX_PRODUTOS); o card leva os 24 primeiros (CARD_MAX_PRODUTOS)
       let catalogoSelecionando = false;
       let catalogoSelecionados = [];
       // Voltar do Android (e o gesto de voltar do iPhone) com a vitrine aberta: sem
@@ -31160,7 +31367,8 @@
             <span class="catBarraBtns">
               <button type="button" class="recompraBtn" id="catLimparBtn">Limpar</button>
               <button type="button" class="recompraBtn" id="catOrcamentoBtn">+ Orçamento</button>
-              <button type="button" class="recompraBtn recompraBtn--principal" id="catEnviarBtn"></button>
+              <button type="button" class="recompraBtn${telaClienteConectada() ? '' : ' recompraBtn--principal'}" id="catEnviarBtn"></button>
+              ${telaClienteConectada() ? '<button type="button" class="recompraBtn recompraBtn--tablet" id="catTabletBtn">Tablet</button>' : ''}
             </span>
           </div>`);
           document.getElementById('catLimparBtn').addEventListener('click', () => {
@@ -31173,7 +31381,11 @@
             cods.forEach(c => addToCart(c, undefined, true));
             showToast(`${cods.length} produto${cods.length === 1 ? '' : 's'} no orçamento`);
           });
-          document.getElementById('catEnviarBtn').addEventListener('click', () => abrirCardProduto(catalogoSelecionados.slice()));
+          document.getElementById('catEnviarBtn').addEventListener('click', () => {
+            if (catalogoSelecionados.length > CARD_MAX_PRODUTOS) showToast(`O card leva até ${CARD_MAX_PRODUTOS} produtos: vão os ${CARD_MAX_PRODUTOS} primeiros`);
+            abrirCardProduto(catalogoSelecionados.slice(0, CARD_MAX_PRODUTOS));
+          });
+          document.getElementById('catTabletBtn')?.addEventListener('click', mostrarSelecaoNoTablet);
           document.getElementById('catCancelarSelBtn')?.addEventListener('click', alternarSelecaoCatalogo);
           atualizarSelecaoCatalogo();
         }
@@ -31210,6 +31422,8 @@
       function abrirFamiliaDoCatalogo(chave) {
         catalogoFamilia = chave;
         catalogoSubfamilia = null;
+        catalogoTipo = null;
+        catalogoMedida = null;
         catalogoMostrar = CATALOGO_POR_PAGINA;
         renderCatalogo();
         window.scrollTo(0, 0);
@@ -31227,16 +31441,80 @@
         const subs = [...m.values()].sort((a, b) => a.ordem - b.ordem);
         return subs.length > 1 ? subs : [];
       }
+      function htmlChipsDasFamilias(familias, fam) {
+        return `<button type="button" class="catChip" data-cat-voltar>‹ Famílias</button>`
+          + familias.map(f => `<button type="button" class="catChip${f === fam ? ' ativo' : ''}" data-cat-familia="${escapeHtml(f.chave)}">${escapeHtml(f.nome)}</button>`).join('');
+      }
+      function ligarChipsDasFamilias(el, fam) {
+        el.querySelector('[data-cat-voltar]').addEventListener('click', () => { catalogoFamilia = null; renderCatalogo(); window.scrollTo(0, 0); });
+        el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => {
+          if (b.dataset.catFamilia !== fam.chave) abrirFamiliaDoCatalogo(b.dataset.catFamilia);
+        }));
+        // chip da família aberta à vista (só rola a fileira, não a página)
+        const faixa = document.getElementById('catChips');
+        const ativo = faixa.querySelector('.catChip.ativo');
+        if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
+      }
+      // Família grande sem subfamília de marketing (as brocas: 269 produtos) abre pelos
+      // tipos automáticos (opção "2A" dos mockups "Cortag · Escolher produtos pro tablet")
+      function renderTiposDaFamilia(el, familias, fam, tipos) {
+        const cards = tipos.map(t => {
+          const fotos = t.produtos.filter(p => codigoDaFoto(p.c)).slice(0, 4);
+          const tiles = [0, 1, 2, 3].map(i => fotos[i] ? `<span class="catFamFoto" data-foto-mini data-foto-cod="${escapeHtml(fotos[i].c)}"></span>` : '<span class="catFamFoto"></span>').join('');
+          const mm = t.produtos.map(p => medidaDoNome(p.n)).filter(m => m && m.mm).map(m => m.v);
+          const faixa = mm.length > 1 && Math.min(...mm) !== Math.max(...mm) ? ` · ${textoMedida(Math.min(...mm)).replace(' mm', '')} a ${textoMedida(Math.max(...mm))}` : '';
+          const marcados = catalogoSelecionando ? t.produtos.filter(p => catalogoSelecionados.includes(p.c)).length : 0;
+          return `<button type="button" class="catFam" data-cat-tipo="${escapeHtml(t.chave)}">
+            <span class="catFamMosaico">${tiles}</span>
+            <span class="catFamNome">${escapeHtml(t.nome)}</span>
+            <span class="catFamQtd">${t.produtos.length} produto${t.produtos.length === 1 ? '' : 's'}${escapeHtml(faixa)}</span>
+            ${marcados ? `<span class="catFamTag">${marcados} marcado${marcados === 1 ? '' : 's'}</span>` : ''}
+          </button>`;
+        }).join('');
+        el.innerHTML = `<div class="catChips" id="catChips">${htmlChipsDasFamilias(familias, fam)}</div>
+          <div class="catCabeca">
+            <b>${escapeHtml(fam.nome)}</b>
+            <button type="button" class="recompraBtn" id="catSelecionarBtn">${catalogoSelecionando ? 'Cancelar' : 'Selecionar'}</button>
+            <button type="button" class="recompraBtn" id="catTodosBtn">Ver todos</button>
+          </div>
+          <div class="ofertaCtx">${fam.produtos.length} produtos · ${tipos.length} tipos · toque num tipo pra ver as medidas</div>
+          <div class="catFamGrade">${cards}</div>`;
+        ligarChipsDasFamilias(el, fam);
+        el.querySelectorAll('[data-cat-tipo]').forEach(b => b.addEventListener('click', () => {
+          catalogoTipo = b.dataset.catTipo;
+          catalogoMedida = null;
+          catalogoMostrar = CATALOGO_POR_PAGINA;
+          renderCatalogo();
+          window.scrollTo(0, 0);
+        }));
+        document.getElementById('catTodosBtn').addEventListener('click', () => {
+          catalogoTipo = '*';
+          catalogoMedida = null;
+          catalogoMostrar = CATALOGO_POR_PAGINA;
+          renderCatalogo();
+          window.scrollTo(0, 0);
+        });
+        document.getElementById('catSelecionarBtn').addEventListener('click', alternarSelecaoCatalogo);
+        preencherFotosAoVer(el, 'catalogo');
+      }
       function renderCatalogoDaFamilia(el, familias, fam) {
         const subs = subfamiliasDaFamilia(fam);
         const sub = catalogoSubfamilia !== null ? subs.find(s => s.codigo === catalogoSubfamilia) : null;
         if (!sub) catalogoSubfamilia = null;
-        const produtos = sub ? sub.produtos : fam.produtos;
-        const titulo = sub ? `${fam.nome} · ${sub.nome}` : fam.nome;
+        const tipos = tiposDaFamiliaDoCatalogo(fam);
+        if (tipos && catalogoTipo === null) { renderTiposDaFamilia(el, familias, fam, tipos); return; }
+        const tipo = tipos && catalogoTipo !== '*' ? tipos.find(t => t.chave === catalogoTipo) || null : null;
+        if (tipos && catalogoTipo !== '*' && !tipo) { catalogoTipo = null; renderTiposDaFamilia(el, familias, fam, tipos); return; }
+        const base = sub ? sub.produtos : tipo ? pelaMedida(tipo.produtos) : fam.produtos;
+        const faixas = tipo ? faixasDeMedida(base) : [];
+        const faixa = catalogoMedida !== null ? faixas[catalogoMedida] || null : null;
+        if (!faixa) catalogoMedida = null;
+        const produtos = faixa ? base.filter(p => naFaixaDeMedida(p, faixa)) : base;
+        const titulo = sub ? `${fam.nome} · ${sub.nome}` : tipo ? `${fam.nome} · ${tipo.nome}${faixa ? ` · ${faixa.rotulo}` : ''}` : fam.nome;
         const mostrar = produtos.slice(0, catalogoMostrar);
         const resto = produtos.length - mostrar.length;
-        const chips = `<button type="button" class="catChip" data-cat-voltar>‹ Famílias</button>`
-          + familias.map(f => `<button type="button" class="catChip${f === fam ? ' ativo' : ''}" data-cat-familia="${escapeHtml(f.chave)}">${escapeHtml(f.nome)}</button>`).join('');
+        const chips = htmlChipsDasFamilias(familias, fam);
+        const todosMarcados = produtos.length > 0 && produtos.every(p => catalogoSelecionados.includes(p.c));
         const itens = mostrar.map(p => {
           const of = ofertaDoProduto(p);
           const foto = codigoDaFoto(p.c);
@@ -31258,8 +31536,9 @@
           </div>`;
         }).join('');
         el.innerHTML = `<div class="catChips" id="catChips">${chips}</div>
+          ${tipos ? `<button type="button" class="priceEditResetLink catVoltarTipos" data-cat-tipos>‹ Tipos de ${escapeHtml(fam.nome)}</button>` : ''}
           <div class="catCabeca">
-            <b>${escapeHtml(fam.nome)}</b>
+            <b>${escapeHtml(tipo ? tipo.nome : fam.nome)}</b>
             <button type="button" class="recompraBtn" id="catSelecionarBtn">${catalogoSelecionando ? 'Cancelar' : 'Selecionar'}</button>
             <button type="button" class="recompraBtn" id="catVitrineBtn">Mostrar ao cliente</button>
           </div>
@@ -31268,20 +31547,46 @@
             <button type="button" class="catSub${sub ? '' : ' ativo'}" data-cat-sub="">Todas · ${fam.produtos.length}</button>
             ${subs.map(s => `<button type="button" class="catSub${s === sub ? ' ativo' : ''}" data-cat-sub="${escapeHtml(s.codigo)}">${escapeHtml(s.nome)} · ${s.produtos.length}</button>`).join('')}
           </div>` : ''}
-          <div class="ofertaCtx">${produtos.length} produto${produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b></div>
+          ${faixas.length ? `<div class="catSubs" aria-label="Medida">
+            <button type="button" class="catSub${faixa ? '' : ' ativo'}" data-cat-medida="">Todas · ${base.length}</button>
+            ${faixas.map((f, i) => `<button type="button" class="catSub${f === faixa ? ' ativo' : ''}" data-cat-medida="${i}">${escapeHtml(f.rotulo)} · ${f.qtd}</button>`).join('')}
+          </div>` : ''}
+          <div class="ofertaCtx catLinhaMarcar">${produtos.length} produto${produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b>
+            ${(tipo || faixa || catalogoSelecionando) && produtos.length ? `<button type="button" class="priceEditResetLink" id="catMarcarTodosBtn">${todosMarcados ? 'Desmarcar todos' : `Marcar todos (${produtos.length})`}</button>` : ''}</div>
           ${catalogoSelecionando ? `<div class="ofertaCtx" style="margin-top:4px;">Toque nos produtos pra marcar (até ${CATALOGO_SEL_MAX}). A seleção continua nas outras famílias.</div>` : ''}
           <div class="campGrade">${itens}</div>
           ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
-        el.querySelector('[data-cat-voltar]').addEventListener('click', () => { catalogoFamilia = null; renderCatalogo(); window.scrollTo(0, 0); });
-        el.querySelectorAll('[data-cat-familia]').forEach(b => b.addEventListener('click', () => {
-          if (b.dataset.catFamilia !== fam.chave) abrirFamiliaDoCatalogo(b.dataset.catFamilia);
+        ligarChipsDasFamilias(el, fam);
+        el.querySelectorAll('.catSubs .catSub.ativo').forEach(subAtivo => { subAtivo.parentElement.scrollLeft = subAtivo.offsetLeft - subAtivo.parentElement.offsetLeft - 16; });
+        el.querySelector('[data-cat-tipos]')?.addEventListener('click', () => {
+          catalogoTipo = null;
+          catalogoMedida = null;
+          renderCatalogo();
+          window.scrollTo(0, 0);
+        });
+        el.querySelectorAll('[data-cat-medida]').forEach(b => b.addEventListener('click', () => {
+          catalogoMedida = b.dataset.catMedida === '' ? null : Number(b.dataset.catMedida);
+          catalogoMostrar = CATALOGO_POR_PAGINA;
+          catalogoScroll = window.scrollY;
+          renderCatalogo();
         }));
-        // chip da família aberta à vista (só rola a fileira, não a página)
-        const faixa = document.getElementById('catChips');
-        const ativo = faixa.querySelector('.catChip.ativo');
-        if (ativo) faixa.scrollLeft = ativo.offsetLeft - (faixa.clientWidth - ativo.offsetWidth) / 2;
-        const subAtivo = el.querySelector('.catSubs .catSub.ativo');
-        if (subAtivo) subAtivo.parentElement.scrollLeft = subAtivo.offsetLeft - subAtivo.parentElement.offsetLeft - 16;
+        document.getElementById('catMarcarTodosBtn')?.addEventListener('click', () => {
+          if (todosMarcados) {
+            const tirar = new Set(produtos.map(p => p.c));
+            catalogoSelecionados = catalogoSelecionados.filter(c => !tirar.has(c));
+          } else {
+            catalogoSelecionando = true;
+            let cheio = false;
+            for (const p of produtos) {
+              if (catalogoSelecionados.includes(p.c)) continue;
+              if (catalogoSelecionados.length >= CATALOGO_SEL_MAX) { cheio = true; break; }
+              catalogoSelecionados.push(p.c);
+            }
+            if (cheio) showToast(`Até ${CATALOGO_SEL_MAX} produtos marcados`);
+          }
+          catalogoScroll = window.scrollY;
+          renderCatalogo();
+        });
         el.querySelectorAll('[data-cat-sub]').forEach(b => b.addEventListener('click', () => {
           catalogoSubfamilia = b.dataset.catSub || null;
           catalogoMostrar = CATALOGO_POR_PAGINA;
@@ -31317,7 +31622,7 @@
       // marcar só mexe no item, nos chips e na barra (refazer a grade recarregava as fotos)
       function marcarNoCatalogo(c) {
         if (catalogoSelecionados.includes(c)) catalogoSelecionados = catalogoSelecionados.filter(x => x !== c);
-        else if (catalogoSelecionados.length >= CATALOGO_SEL_MAX) { showToast(`Até ${CATALOGO_SEL_MAX} produtos por envio`); return; }
+        else if (catalogoSelecionados.length >= CATALOGO_SEL_MAX) { showToast(`Até ${CATALOGO_SEL_MAX} produtos marcados`); return; }
         else catalogoSelecionados.push(c);
         const marcado = catalogoSelecionados.includes(c);
         document.querySelectorAll('#prodCatalogo [data-cat-item]').forEach(item => {
@@ -31347,8 +31652,10 @@
         const k = catalogoSelecionados.length;
         barra.classList.toggle('hidden', !k);
         barra.querySelector('.txt').innerHTML = `<b>${k}</b> selecionado${k === 1 ? '' : 's'}${porFam.size > 1 ? ` · ${porFam.size} famílias` : ''}`;
-        const imagens = Math.ceil(k / ENCARTE_MAX);
-        document.getElementById('catEnviarBtn').textContent = k === 1 ? 'Enviar card' : imagens > 1 ? `Enviar ${imagens} imagens` : `Enviar encarte (${k})`;
+        const noCard = Math.min(k, CARD_MAX_PRODUTOS), imagens = Math.ceil(noCard / ENCARTE_MAX);
+        document.getElementById('catEnviarBtn').textContent = noCard === 1 ? 'Enviar card' : imagens > 1 ? `Enviar ${imagens} imagens` : `Enviar encarte (${noCard})`;
+        const tab = document.getElementById('catTabletBtn');
+        if (tab) tab.textContent = `Tablet (${k})`;
       }
       // ---- Vitrine pro cliente (D) ----
       function abrirVitrine(titulo, produtos, inicio) {
