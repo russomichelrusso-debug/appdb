@@ -1723,9 +1723,13 @@ Supabase, sem PR — não é mudança de código.
   claro no escuro em todas as páginas (opção "A" dos mockups), abas/azul/verde/laranja da Curva ABC, cartão do mês do
   Dashboard sem botão dentro de botão ("Ver pedidos do mês"), campos com nome — axe sem violação nas 6 páginas, nos
   dois temas; falta o teste com TalkBack/VoiceOver num celular de verdade) e
-  **unificar o visual das páginas
-  separadas** com o `index.html` (cabeçalho, cards e botões próprios em cada uma — hoje só os
-  tokens e o tema escuro foram alinhados).
+  **unificar o visual das páginas separadas** — feito em 11/2026 (opção "B" dos mockups "Cortag · Visual das páginas
+  separadas"): Dashboard/Curva ABC, Ficha e Calculadora abrem com a barra escura presa no topo (`.subBar`: voltar redondo,
+  nome da página, uma linha que muda — "pedidos do ERP até DD/MM", "toda a carteira · últimos 90 dias · por valor", o
+  cliente da ficha — e a ação da página: Atualizar, Trocar cliente) no lugar de logo + "← App" + título + descrição; cards
+  como os do app (raio 16, borda fina, sem sombra, título 16, dica 13), campos de 44 px, abas maiores e o botão secundário
+  da Ficha igual ao `.fileBtn`. A faixa escura pinta a largura toda por `box-shadow` + `clip-path` sem mexer no `.wrap`.
+  A Tela do cliente fica de fora (tablet na mão do cliente, sem voltar de propósito).
 
 - **Dois aparelhos — pendências** (PR #245): o leitor contínuo do celular (`#modoLeitor`) só foi testado com câmera
   falsa (leituras simuladas) — conferir num aparelho de verdade, principalmente no iPhone (sem BarcodeDetector, usa o
