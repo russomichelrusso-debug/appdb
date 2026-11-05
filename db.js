@@ -11,12 +11,18 @@ const path = require('path');
 //
 // Limites do pool: no máximo POOL_MAX conexões (o padrão do pg, agora explícito);
 // quem espera conexão livre desiste em ESPERA_CONEXAO_MS em vez de ficar parado
-// pra sempre; conexão ociosa fecha em 30 s. Cada consulta tem no máximo
+// pra sempre; conexão ociosa fica aberta CONEXAO_OCIOSA_MS (10 min). Cada consulta tem no máximo
 // LIMITE_CONSULTA_MS (statement_timeout, ver o onConnect abaixo) - uma consulta
 // que trava não segura uma conexão do pool indefinidamente.
 const POOL_MAX = Number(process.env.PG_POOL_MAX) || 10;
 const ESPERA_CONEXAO_MS = 20000;
 const LIMITE_CONSULTA_MS = 60000;
+// Conexão ociosa aberta por 10 min (era 30 s; PG_CONEXAO_OCIOSA_MS no Render troca). O servidor fica
+// em Oregon e o Supabase em São Paulo: abrir conexão (TLS + login no pooler + SET statement_timeout)
+// custa várias idas e voltas, e com 30 s quase toda requisição abria uma nova - no log [lenta]
+// (11/2026) até GET /api/novidades com 304 levava ~1,6 s, e o pgbouncer.get_auth tinha 192 mil
+// logins em 74 dias. Conexão que o pooler derrubar sai sozinha (pool.on('error') abaixo).
+const CONEXAO_OCIOSA_MS = Number(process.env.PG_CONEXAO_OCIOSA_MS) || 10 * 60 * 1000;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -25,7 +31,9 @@ const pool = new Pool({
     : false,
   max: POOL_MAX,
   connectionTimeoutMillis: ESPERA_CONEXAO_MS,
-  idleTimeoutMillis: 30000,
+  idleTimeoutMillis: CONEXAO_OCIOSA_MS,
+  // keep-alive do TCP: a conexão parada não é cortada no meio do caminho sem o pool saber
+  keepAlive: true,
   // statement_timeout por SET na conexão nova (e não como parâmetro de partida):
   // funciona igual no Postgres local e no Session pooler do Supabase, que mantém
   // a sessão. O pool espera esse hook terminar antes de entregar a conexão.
