@@ -85,7 +85,7 @@
       --gold-bg: #FFF6D6;
       /* versões sólidas das cores de status, pra FUNDO com texto branco
          (botão Finalizar, badges, pontos de status) - iguais nos dois temas. */
-      --success-strong: #1E8E3E;
+      --success-strong: #1E7B34; /* 5,3:1 com texto branco (era #1E8E3E, 4,2:1) */
       --success-deep: #166B2E;
       --warning-strong: #B36B00;
       --danger-strong: #B3261E;
@@ -835,9 +835,8 @@
     }
 
     .classiBtn small {
-      font-size: 9.5px;
+      font-size: 10.5px;
       font-weight: 700;
-      opacity: .85;
     }
 
     #channelSeg .classiBtn--exclusive {
@@ -12559,7 +12558,7 @@
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="searchInput" placeholder="Código, nome ou medida do produto"
+          <input type="text" id="searchInput" aria-label="Buscar produto" placeholder="Código, nome ou medida do produto"
             autocomplete="off" enterkeyhint="search">
           <div class="searchBoxActions">
             <button type="button" class="searchClearBtn hidden" data-limpar-busca="searchInput" aria-label="Limpar busca">
@@ -12699,7 +12698,7 @@
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="levInput" placeholder="Escaneie ou busque o produto" autocomplete="off">
+          <input type="text" id="levInput" aria-label="Escanear ou buscar produto" placeholder="Escaneie ou busque o produto" autocomplete="off">
           <div class="searchBoxActions">
             <button type="button" class="camBtn" id="scanBtnLev" aria-label="Ler código de barras pela câmera">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -12779,7 +12778,7 @@
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="prodTabSearch" placeholder="Código, nome ou medida (ex.: serra copo 50)" autocomplete="off" enterkeyhint="search">
+          <input type="text" id="prodTabSearch" aria-label="Buscar produto" placeholder="Código, nome ou medida (ex.: serra copo 50)" autocomplete="off" enterkeyhint="search">
           <div class="searchBoxActions">
             <button type="button" class="searchClearBtn hidden" data-limpar-busca="prodTabSearch" aria-label="Limpar busca">
               <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
@@ -12829,7 +12828,7 @@
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4.3-4.3" />
           </svg>
-          <input type="text" id="clienteTabSearch" placeholder="Buscar cliente: nome, fantasia, CNPJ, código ou cidade" autocomplete="off">
+          <input type="text" id="clienteTabSearch" aria-label="Buscar cliente" placeholder="Buscar cliente: nome, fantasia, CNPJ, código ou cidade" autocomplete="off">
           <button type="button" class="searchClearBtn hidden" data-limpar-busca="clienteTabSearch" aria-label="Limpar busca">
             <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"
                 aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg></span>
@@ -13172,7 +13171,7 @@
           <span id="clientPickerAtualNome"></span>
           <button type="button" id="clientPickerLimpar">Limpar seleção</button>
         </div>
-        <input type="text" id="clientPickerSearch" placeholder="Nome, fantasia, CNPJ/CPF, código ou cidade..." autocomplete="off">
+        <input type="text" id="clientPickerSearch" aria-label="Buscar cliente" placeholder="Nome, fantasia, CNPJ/CPF, código ou cidade..." autocomplete="off">
         <div id="clientPickerResults"></div>
         <button type="button" class="priceEditResetLink" id="clientPickerNewToggle"
           style="text-decoration:none;color:var(--red);font-weight:700;margin:6px 0 14px;">+ cadastrar cliente
@@ -13486,7 +13485,7 @@
     <div class="minimodal hidden" id="levOpenModal">
       <div class="minimodal-card" style="max-height:80vh;display:flex;flex-direction:column;">
         <h3>Levantamentos salvos</h3>
-        <input type="text" id="levOpenSearch" placeholder="Buscar por cliente ou vendedor..." autocomplete="off"
+        <input type="text" id="levOpenSearch" aria-label="Buscar levantamento" placeholder="Buscar por cliente ou vendedor..." autocomplete="off"
           style="margin-bottom:12px;">
         <div id="savedSurveysList" style="overflow-y:auto;flex:1;min-height:0;"></div>
         <div class="minimodal-btnrow" style="margin-top:12px;">
@@ -13558,6 +13557,7 @@
     </div>
 
     <div class="toast" id="toast"></div>
+    <div class="srOnly" id="avisoLeitor" role="status" aria-live="polite"></div>
 
     <div class="overlay hidden" id="adminOverlay"></div>
     <div class="adminPanel hidden" id="adminPanel">
@@ -13745,7 +13745,7 @@
               <h3>Gerenciar clientes</h3>
               <p class="ap-hint" style="margin-bottom:10px;">Buscar e excluir clientes cadastrados. Só é possível
                 excluir quem ainda não tem pedido ou levantamento registrado.</p>
-              <input type="text" id="manageClientSearch" placeholder="Buscar cliente: nome, fantasia, CNPJ ou código...">
+              <input type="text" id="manageClientSearch" aria-label="Buscar cliente" placeholder="Buscar cliente: nome, fantasia, CNPJ ou código...">
               <div id="manageClientResults"></div>
             </div>
           </div>
@@ -13908,18 +13908,18 @@
           <button type="button" data-v="all">Pedido todo</button>
         </div>
         <div id="targetCatWrap">
-          <select id="promoTargetCat" style="margin-bottom:16px;"></select>
+          <select id="promoTargetCat" aria-label="Categoria da campanha" style="margin-bottom:16px;"></select>
         </div>
         <div id="targetSubWrap" class="hidden">
-          <select id="promoTargetSub" style="margin-bottom:16px;"></select>
+          <select id="promoTargetSub" aria-label="Subfamília da campanha" style="margin-bottom:16px;"></select>
         </div>
         <div id="targetProdWrap" class="hidden">
-          <input type="text" id="promoTargetProd" placeholder="Código do produto (ex: 60863)"
+          <input type="text" id="promoTargetProd" aria-label="Código do produto da campanha" placeholder="Código do produto (ex: 60863)"
             style="margin-bottom:4px;">
           <div class="prodResolveMsg" id="targetProdResolve"></div>
         </div>
         <div id="targetSkuListWrap" class="hidden">
-          <input type="text" id="promoTargetSkuList"
+          <input type="text" id="promoTargetSkuList" aria-label="Códigos dos produtos da campanha"
             placeholder="Códigos separados por vírgula (ex: 61748, 62112, 61749)" style="margin-bottom:4px;">
           <div class="prodResolveMsg" id="targetSkuListResolve"></div>
           <p class="ap-hint" style="margin:0 0 16px;">Use pra quando vários produtos diferentes dividem o mesmo degrau,
@@ -14043,32 +14043,32 @@
           <button type="button" data-v="skuList">Grupo de produtos</button>
         </div>
         <div id="classiTargetCatWrap">
-          <select id="classiTargetCat" style="margin-bottom:16px;"></select>
+          <select id="classiTargetCat" aria-label="Categoria do desconto" style="margin-bottom:16px;"></select>
         </div>
         <div id="classiTargetSubWrap" class="hidden">
-          <select id="classiTargetSub" style="margin-bottom:16px;"></select>
+          <select id="classiTargetSub" aria-label="Subfamília do desconto" style="margin-bottom:16px;"></select>
         </div>
         <div id="classiTargetProdWrap" class="hidden">
-          <input type="text" id="classiTargetProd" placeholder="Código do produto (ex: 60863)" style="margin-bottom:4px;">
+          <input type="text" id="classiTargetProd" aria-label="Código do produto do desconto" placeholder="Código do produto (ex: 60863)" style="margin-bottom:4px;">
           <div class="prodResolveMsg" id="classiTargetProdResolve"></div>
         </div>
         <div id="classiTargetSkuListWrap" class="hidden">
-          <input type="text" id="classiTargetSkuList" placeholder="Códigos separados por vírgula" style="margin-bottom:4px;">
+          <input type="text" id="classiTargetSkuList" aria-label="Códigos dos produtos do desconto" placeholder="Códigos separados por vírgula" style="margin-bottom:4px;">
           <div class="prodResolveMsg" id="classiTargetSkuListResolve"></div>
         </div>
 
         <label>Desconto por classificatório (%)</label>
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">
           <div style="display:flex;align-items:center;gap:8px;">
-            <span style="flex:1;font-size:13px;">Varejo Master</span>
+            <label for="classiPctMaster" style="flex:1;font-size:13px;margin:0;font-weight:400;color:inherit;">Varejo Master (%)</label>
             <input class="num-input" type="number" id="classiPctMaster" min="0" max="90" step="0.5" placeholder="0" style="width:80px;margin:0;">
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <span style="flex:1;font-size:13px;">Varejo Premium</span>
+            <label for="classiPctPremium" style="flex:1;font-size:13px;margin:0;font-weight:400;color:inherit;">Varejo Premium (%)</label>
             <input class="num-input" type="number" id="classiPctPremium" min="0" max="90" step="0.5" placeholder="0" style="width:80px;margin:0;">
           </div>
           <div style="display:flex;align-items:center;gap:8px;">
-            <span style="flex:1;font-size:13px;">Varejo Exclusive</span>
+            <label for="classiPctExclusive" style="flex:1;font-size:13px;margin:0;font-weight:400;color:inherit;">Varejo Exclusive (%)</label>
             <input class="num-input" type="number" id="classiPctExclusive" min="0" max="90" step="0.5" placeholder="0" style="width:80px;margin:0;">
           </div>
         </div>
@@ -15937,7 +15937,7 @@
     <div class="priceListItem">
       <span class="itemNum" title="${escapeHtml(itemNumLabel(idx))}">${idx + 1}</span>
       ${renderCard(p)}
-      <button class="rm" data-pricelist-rm="${escapeHtml(p.c)}" aria-label="Remover">&times;</button>
+      <button class="rm" data-pricelist-rm="${escapeHtml(p.c)}" aria-label="Tirar ${escapeHtml(p.n)} da Lista de preços">&times;</button>
     </div>
   `).join('');
         wireProductCardButtons(wrap);
@@ -16055,9 +16055,9 @@
     ${renderPrevisaoBadge(p.c)}
     <div class="qtyrow" style="margin-top:8px;">
       <div class="qtybox">
-        <button data-pending-dec="${escapeHtml(p.c)}" aria-label="Diminuir quantidade">−</button>
-        <input type="text" inputmode="numeric" autocomplete="off" value="${getPendingQty(p)}" data-pending-qty="${escapeHtml(p.c)}" aria-label="Quantidade" title="Múltiplo de ${packStep(p)}">
-        <button data-pending-inc="${escapeHtml(p.c)}" aria-label="Aumentar quantidade">+</button>
+        <button data-pending-dec="${escapeHtml(p.c)}" aria-label="Tirar ${packStep(p)} de ${escapeHtml(p.n)}">−</button>
+        <input type="text" inputmode="numeric" autocomplete="off" value="${getPendingQty(p)}" data-pending-qty="${escapeHtml(p.c)}" aria-label="Quantidade de ${escapeHtml(p.n)}" title="Múltiplo de ${packStep(p)}">
+        <button data-pending-inc="${escapeHtml(p.c)}" aria-label="Pôr mais ${packStep(p)} de ${escapeHtml(p.n)}">+</button>
       </div>
       <div class="pct-wrap mini">
         <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
@@ -16148,7 +16148,9 @@
           const foco = document.activeElement;
           const attr = foco && foco.tagName === 'INPUT' && QTD_CAMPOS.find(a => foco.hasAttribute(a));
           const valor = attr && foco.getAttribute(attr);
+          const botao = !attr && focoDoBotaoQtd(); // tocou num −/+ de outro item: o foco volta pra ele
           qtdRedesenhos.splice(0).forEach(fn => fn());
+          if (botao && !foco.isConnected) devolverFocoQtd(botao);
           if (attr && !foco.isConnected) {
             const novo = document.querySelector(`[${attr}="${CSS.escape(valor)}"]`);
             if (novo) { novo.focus(); novo.select(); }
@@ -16362,14 +16364,42 @@
       function getPendingQty(p) {
         return state.pendingQty[p.c] > 0 ? state.pendingQty[p.c] : packStep(p);
       }
+      // Leitor de tela (TalkBack/VoiceOver): o −/+ redesenha a lista, então o
+      // resultado é falado por uma região escondida (#avisoLeitor) e o foco volta
+      // pro botão tocado - sem isso o leitor perdia o lugar e não dizia a quantidade.
+      function anunciarLeitor(texto) {
+        const el = document.getElementById('avisoLeitor');
+        if (!el) return;
+        el.textContent = '';
+        setTimeout(() => { el.textContent = texto; }, 60);
+      }
+      // O mesmo produto pode estar na Lista de preços e na busca: guarda a posição
+      // do botão entre os iguais pra voltar pro card tocado, não pro 1º da página.
+      function focoDoBotaoQtd() {
+        const a = document.activeElement;
+        if (!a || a.tagName !== 'BUTTON') return null;
+        const attr = ['data-pending-inc', 'data-pending-dec', 'data-inc', 'data-dec', 'data-lev-inc', 'data-lev-dec', 'data-lev-pedinc', 'data-lev-peddec'].find(n => a.hasAttribute(n));
+        if (!attr) return null;
+        const sel = `[${attr}="${CSS.escape(a.getAttribute(attr))}"]`;
+        return { sel, idx: [...document.querySelectorAll(sel)].indexOf(a) };
+      }
+      function devolverFocoQtd(f) {
+        if (!f) return;
+        const iguais = document.querySelectorAll(f.sel);
+        const b = iguais[f.idx] || iguais[iguais.length - 1];
+        if (b && b !== document.activeElement) b.focus({ preventScroll: true });
+      }
       function changePendingQty(cod, direction) {
         const p = productByCod(cod);
         if (!p) return;
+        const foco = focoDoBotaoQtd();
         const step = packStep(p);
         const atual = getPendingQty(p);
         state.pendingQty[cod] = Math.max(step, atual + direction * step);
         renderResults();
         renderPriceList();
+        devolverFocoQtd(foco);
+        anunciarLeitor(`Quantidade ${state.pendingQty[cod]}`);
       }
       // Sem isso o orçamento só vive na memória da aba - sair pra outra página
       // (ex: a calculadora de materiais, que é uma página HTML separada) descarrega
@@ -16530,11 +16560,25 @@
       function changeQty(cod, direction) {
         const it = state.cart.find(i => i.cod === cod);
         if (!it) return;
+        const foco = focoDoBotaoQtd();
         const step = packStep(productByCod(cod));
         it.qty += direction * step;
-        if (it.qty <= 0) { removeFromCart(cod); return; }
+        if (it.qty <= 0) {
+          // o botão tocado some com o item: o foco vai pro item vizinho (ou pro fechar da gaveta)
+          const pos = state.cart.indexOf(it);
+          removeFromCart(cod);
+          if (foco) {
+            const viz = state.cart[pos] || state.cart[pos - 1];
+            const alvo = (viz && document.querySelector(`#drawer [data-dec="${CSS.escape(viz.cod)}"]`)) || document.getElementById('closeDrawer');
+            if (alvo) alvo.focus({ preventScroll: true });
+          }
+          anunciarLeitor('Tirado do orçamento');
+          return;
+        }
         renderCart();
         renderCartBar();
+        devolverFocoQtd(foco);
+        anunciarLeitor(`${it.qty} no orçamento`);
       }
       // =================================================================
       // ---------------- Campanhas promocionais -------------------------
@@ -17240,14 +17284,14 @@
             <div class="pcode">Cód. ${escapeHtml(p.c)}${p.emb > 1 ? ' · múltiplos de ' + p.emb : ''}</div>
             ${renderPrevisaoBadge(p.c)}
           </div>
-          <button class="rm" data-rm="${escapeHtml(p.c)}" aria-label="Remover">&times;</button>
+          <button class="rm" data-rm="${escapeHtml(p.c)}" aria-label="Tirar ${escapeHtml(p.n)} do orçamento">&times;</button>
         </div>
         <div class="bottom">
           <div class="qtyrow">
             <div class="qtybox">
-              <button data-dec="${escapeHtml(p.c)}" aria-label="Diminuir quantidade">−</button>
-              <input type="text" inputmode="numeric" autocomplete="off" value="${it.qty}" data-cart-qty="${escapeHtml(p.c)}" aria-label="Quantidade" title="Múltiplo de ${packStep(p)}">
-              <button data-inc="${escapeHtml(p.c)}" aria-label="Aumentar quantidade">+</button>
+              <button data-dec="${escapeHtml(p.c)}" aria-label="Tirar ${packStep(p)} de ${escapeHtml(p.n)} do orçamento">−</button>
+              <input type="text" inputmode="numeric" autocomplete="off" value="${it.qty}" data-cart-qty="${escapeHtml(p.c)}" aria-label="Quantidade de ${escapeHtml(p.n)} no orçamento" title="Múltiplo de ${packStep(p)}">
+              <button data-inc="${escapeHtml(p.c)}" aria-label="Pôr mais ${packStep(p)} de ${escapeHtml(p.n)} no orçamento">+</button>
             </div>
             <div class="pct-wrap mini">
               <input class="num-input${descontoItemVisivel(p) > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${descontoItemVisivel(p) > 0 ? descontoItemVisivel(p) : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto individual do item" title="Desconto individual do item" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>
@@ -17515,7 +17559,10 @@
       function changeLevQty(cod, delta) {
         const it = state.survey.find(i => i.cod === cod);
         if (!it) return;
+        const foco = focoDoBotaoQtd();
         setLevQty(cod, it.qty + delta);
+        devolverFocoQtd(foco);
+        anunciarLeitor(`${it.qty} no estoque`);
       }
 
       // ---- Pedido (quantidade a comprar, decidida pelo cliente/vendedor - independente do estoque) ----
@@ -17523,11 +17570,14 @@
         const it = state.survey.find(i => i.cod === cod);
         if (!it) return;
         const step = packStep(productByCod(cod));
+        const foco = focoDoBotaoQtd();
         let v = (it.ped || 0) + direction * step;
         if (v < 0) v = 0;
         it.ped = v;
         saveLevSurvey();
         renderLevList();
+        devolverFocoQtd(foco);
+        anunciarLeitor(`${v} no pedido`);
       }
 
       // Desconto extra por quantidade (por produto) - independente do desconto de canal/promocional.
@@ -19229,18 +19279,18 @@
         <div class="levqtygroup">
           <label>Estoque no cliente</label>
           <div class="levqtybox">
-            <button data-lev-dec="${escapeHtml(p.c)}">−</button>
-            <input type="text" inputmode="numeric" autocomplete="off" value="${it.qty}" data-lev-qty="${escapeHtml(p.c)}" aria-label="Estoque no cliente">
-            <button data-lev-inc="${escapeHtml(p.c)}">+</button>
+            <button data-lev-dec="${escapeHtml(p.c)}" aria-label="Tirar 1 do estoque de ${escapeHtml(p.n)}">−</button>
+            <input type="text" inputmode="numeric" autocomplete="off" value="${it.qty}" data-lev-qty="${escapeHtml(p.c)}" aria-label="Estoque no cliente de ${escapeHtml(p.n)}">
+            <button data-lev-inc="${escapeHtml(p.c)}" aria-label="Pôr mais 1 no estoque de ${escapeHtml(p.n)}">+</button>
           </div>
         </div>
         <div class="levqtygroup pedido">
           <label>Pedido</label>
           <div class="qtyrow">
             <div class="levqtybox">
-              <button data-lev-peddec="${escapeHtml(p.c)}">−</button>
-              <input type="text" inputmode="numeric" autocomplete="off" value="${it.ped || 0}" data-lev-ped-qty="${escapeHtml(p.c)}" aria-label="Quantidade do pedido" title="Múltiplo de ${packStep(p)}">
-              <button data-lev-pedinc="${escapeHtml(p.c)}">+</button>
+              <button data-lev-peddec="${escapeHtml(p.c)}" aria-label="Tirar ${packStep(p)} do pedido de ${escapeHtml(p.n)}">−</button>
+              <input type="text" inputmode="numeric" autocomplete="off" value="${it.ped || 0}" data-lev-ped-qty="${escapeHtml(p.c)}" aria-label="Pedido de ${escapeHtml(p.n)}" title="Múltiplo de ${packStep(p)}">
+              <button data-lev-pedinc="${escapeHtml(p.c)}" aria-label="Pôr mais ${packStep(p)} no pedido de ${escapeHtml(p.n)}">+</button>
             </div>
             <div class="pct-wrap mini">
               <input class="num-input${qtyDisc > 0 ? ' hasval' : ''}" type="number" min="0" max="90" step="0.5" value="${qtyDisc > 0 ? qtyDisc : ''}" placeholder="0" inputmode="decimal" data-item-disc="${escapeHtml(p.c)}" aria-label="Desconto extra por quantidade" title="Desconto extra por quantidade" ${isPrecoFixoParaCanal(p) ? 'disabled' : ''}>

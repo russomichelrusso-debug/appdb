@@ -1715,9 +1715,12 @@ Supabase, sem PR — não é mudança de código.
   primeiro** e depois levada pra v2 (merge deste `main` lá); nada da v2 volta pra cá antes da troca;
   a v2 **nunca** usa o `DATABASE_URL` da produção (o `db.js` roda o `schema.sql` na subida).
 
-- Padronização visual que ficou pra depois (levantada na análise de UI): **acessibilidade** (a área
-  de toque de 44 px foi feita em 10/2026; faltam campos só com placeholder, sem `<label>`, e steppers
-  −/+ do orçamento sem `aria-label`) e **unificar o visual das páginas
+- Padronização visual que ficou pra depois (levantada na análise de UI): **acessibilidade** (área de
+  toque de 44 px em 10/2026; em 11/2026, opções recomendadas dos mockups "Cortag · Acessibilidade": nome
+  nas 7 buscas e nos campos das regras do Painel, −/+ com o produto e o passo no nome, resultado falado
+  depois do toque por `#avisoLeitor`/`anunciarLeitor` com o foco devolvido ao botão (`focoDoBotaoQtd`), e
+  contraste da fita de campanha e do % do classificatório; faltam as páginas separadas, não auditadas) e
+  **unificar o visual das páginas
   separadas** com o `index.html` (cabeçalho, cards e botões próprios em cada uma — hoje só os
   tokens e o tema escuro foram alinhados).
 
