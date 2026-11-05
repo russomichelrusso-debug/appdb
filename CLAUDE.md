@@ -133,7 +133,9 @@ Pegadinhas de ambiente:
   `atualizarCatalogoGuardado` (logo depois dos promocionais, sem esperar campanhas/previsão) aplica a nova só se a assinatura
   mudou, com os promocionais do Painel e o último mapa de códigos reaplicados na hora (`aplicarCodigosProduto`), toast "Preços
   atualizados…"; `catalogoGeracao` descarta a resposta pedida antes de um recarregar/importação. Sem cópia, é a rede como antes.
-  O Painel › recarregar a fonte usa `preferirRede`. Logout apaga a cópia. Tela nova que dependa do catálogo pode receber dois
+  O Painel › recarregar a fonte usa `preferirRede`. Logout apaga a cópia. Enquanto a tela está com a cópia não confirmada pelo
+  servidor (`CATALOGO_DA_COPIA_EM`), a gaveta do orçamento mostra "Preços da tabela de DD/MM/AAAA (sem conexão)" e o PDF, a
+  imagem e o texto levam o recado "Tabela de preços" (`avisoTabelaDaCopia`, em `avisosDoOrcamento`), pedido do usuário. Tela nova que dependa do catálogo pode receber dois
   `applyDB` na mesma abertura (cópia e depois servidor). **Ainda falta** (já era assim antes): o 1º `applyDB` roda antes de
   `mergeProdutosPromocionais` e tira do orçamento guardado os itens P/P1/P2 do Painel; sem internet eles nem chegam.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):

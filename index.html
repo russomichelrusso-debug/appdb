@@ -13410,6 +13410,7 @@
       </div>
       <div class="drawer-body" id="cartItems"></div>
       <div class="drawer-footer">
+        <div class="pedidoMinimoAviso hidden" id="tabelaCopiaAviso"></div>
         <div class="pedidoMinimoAviso hidden" id="pedidoMinimoAviso"></div>
         <div class="pedidoMinimoAviso hidden" id="campanhaAviso" style="white-space:pre-line;"></div>
         <div class="subtotalrow">
@@ -17798,6 +17799,7 @@
         try { renderCartCorpo(); } finally { renderCartRodando = false; }
       }
       function renderCartCorpo() {
+        atualizarAvisoTabelaCopia();
         salvarContextoDoCarrinho(); // estado/canal/descontos/prazo mudam e o carrinho é redesenhado
         atualizarResumoContexto();
         const { rows, total, totalSemImpostos, avisosCampanha } = cartTotals();
@@ -22055,7 +22057,21 @@
       }
       // Recados fiscais do orçamento (PDF, imagem e texto), cada um com a sua marca no item.
       function avisosDoOrcamento(rows) {
-        return [avisoStPr2026(rows), avisoIpiProgramado(rows)].filter(Boolean);
+        return [avisoStPr2026(rows), avisoIpiProgramado(rows), avisoTabelaDaCopia()].filter(Boolean);
+      }
+      // Catálogo aberto pela cópia do aparelho e ainda não confirmado pelo servidor (sem internet,
+      // ou o Render acordando): o orçamento, o PDF, a imagem e o texto dizem de que dia é a tabela.
+      const diaDaTabelaDaCopia = () => new Date(CATALOGO_DA_COPIA_EM).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+      function avisoTabelaDaCopia() {
+        if (!CATALOGO_DA_COPIA_EM) return null;
+        return { marcados: new Set(), marca: '', titulo: 'Tabela de preços',
+          frases: [`Preços da tabela de ${diaDaTabelaDaCopia()}, sem conexão com o servidor na hora deste orçamento: sujeitos a confirmação.`] };
+      }
+      function atualizarAvisoTabelaCopia() {
+        const el = document.getElementById('tabelaCopiaAviso');
+        if (!el) return;
+        el.textContent = CATALOGO_DA_COPIA_EM ? `Preços da tabela de ${diaDaTabelaDaCopia()} (sem conexão) · confira quando o sinal voltar` : '';
+        el.classList.toggle('hidden', !CATALOGO_DA_COPIA_EM);
       }
       const marcaDosAvisos = (avisos, p) => avisos.filter(a => a.marcados.has(p.c)).map(a => ' ' + a.marca).join('');
       // Destaque visual (fundo azul claro) pras colunas/linha de preço já COM
@@ -33157,6 +33173,7 @@
       // recarregar a fonte, importação da Lista de Preços): a resposta pedida antes não passa por cima.
       let catalogoDoServidorPendente = null;
       let catalogoGeracao = 0;
+      let CATALOGO_DA_COPIA_EM = null; // hora em que a cópia aberta foi baixada; null = catálogo confirmado pelo servidor (ou não é a cópia)
       async function atualizarCatalogoGuardado() {
         const pendente = catalogoDoServidorPendente;
         catalogoDoServidorPendente = null;
@@ -33165,6 +33182,8 @@
         if (!remoto || pendente.geracao !== catalogoGeracao) return; // sem internet: fica a cópia (ACTIVE_SOURCE diz de quando)
         try { if (localStorage.getItem(LS_KEY)) return; } catch (e) { } // catálogo só deste aparelho importado no meio-tempo
         ACTIVE_SOURCE = 'baixado ' + quandoCurto(remoto.baixadoEm);
+        CATALOGO_DA_COPIA_EM = null;
+        atualizarAvisoTabelaCopia();
         if (remoto.assinatura === pendente.assinatura) { refreshAdminCatalogStatus(); return; }
         const novos = converterCatalogoDoServidor(remoto.produtos);
         const codigos = new Set(novos.map(p => p.c));
@@ -33184,6 +33203,7 @@
 
       async function loadActiveDB(opcoes = {}) {
         if (opcoes.preferirRede) { catalogoGeracao++; catalogoDoServidorPendente = null; }
+        CATALOGO_DA_COPIA_EM = null;
         // 1) override manual feito neste aparelho (Painel Administrativo) - prioridade máxima,
         //    é uma ação intencional e recente de quem está usando ESTE celular
         try {
@@ -33209,6 +33229,7 @@
         const copia = await lerCopiaCatalogo('catalogo');
         const daCopia = () => {
           ACTIVE_SOURCE = 'guardado no aparelho · baixado ' + quandoCurto(copia.baixadoEm);
+          CATALOGO_DA_COPIA_EM = copia.baixadoEm;
           return { products: converterCatalogoDoServidor(copia.produtos), categories: [] };
         };
         if (copia && !opcoes.preferirRede) {
