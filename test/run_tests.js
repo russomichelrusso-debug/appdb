@@ -4618,8 +4618,9 @@ async function main() {
         const fDentes = fala('lâmina de serra madeira trinta e seis dentes cento e dez dois');
         const fConversa = fala('ô Zé traz o carrinho');
         const fSemCorte = fala('colher rejunte azul dez cinco desempenadeira xpto');
-        assert(fEmend === '60162×10 | 61010×2 cx' && fDentes === '60879×2' && fConversa === 'nao×null' && /emendada$/.test(fSemCorte),
-          `lista falada: a fala emendada vira um item por produto, "36 dentes" não corta e o que não separa vai marcado pra IA (${fEmend} / ${fDentes} / ${fConversa} / ${fSemCorte})`);
+        const fMedida = fala('duas lâmina de serra madeira cento e dez madeira');
+        assert(fEmend === '60162×10 | 61010×2 cx' && fDentes === '60879×2' && fConversa === 'nao×null' && /emendada$/.test(fSemCorte) && !fMedida.includes('|'),
+          `lista falada: a fala emendada vira um item por produto, "36 dentes" não corta e o que não separa vai marcado pra IA (${fEmend} / ${fDentes} / ${fConversa} / ${fSemCorte} / ${fMedida})`);
         const fCx = falaLev('pedido batedor argamassa uma caixa');
         const pBat = porCodigo('60876');
         assert(fCx && fCx.campo === 'ped' && fCx.item.qtd === 1 && fCx.item.unidade === 'cx'

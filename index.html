@@ -15905,11 +15905,15 @@
         const inteiro = interpretarLinhaLista(linha);
         if (!inteiro) return [];
         const base = { ...inteiro, texto: String(fala || '').trim() };
-        if (produtoDaLinhaLista(base, ctx).estado === 'pronto') return [base];
+        const estado = produtoDaLinhaLista(base, ctx).estado;
+        if (estado === 'pronto') return [base];
         const pedacos = pedacosDaFalaLista(linha);
         if (pedacos.length < 2) return [base];
         const itens = pedacos.map(p => interpretarLinhaLista(p));
-        if (itens.every(it => it && produtoDaLinhaLista(it, ctx).estado !== 'nao')) return itens;
+        // inteira em dúvida ("duas lâmina de serra cento e dez madeira": 24 ou 36 dentes), o corte só vale com
+        // todo pedaço certo - senão o "110 madeira" virava um item de 110 (achado do revisor-cortag)
+        const vale = estado === 'nao' ? (e) => e !== 'nao' : (e) => e === 'pronto';
+        if (itens.every(it => it && vale(produtoDaLinhaLista(it, ctx).estado))) return itens;
         return [{ ...base, emendada: true }];
       }
       // Quanto soma no levantamento: no estoque é o que foi contado (caixa = embalagem inteira, sem arredondar);
@@ -34577,6 +34581,10 @@
       }
       // conferência das fotos da câmera: fechar descarta o que estava em dúvida (o que já entrou continua) - pergunta
       async function fecharListaClientePerguntando() {
+        if (lc && lc.fase === 'falando' && lc.falas && lc.falas.length) {
+          const n = lc.falas.length;
+          if (!await askConfirm(`Fechar e descartar ${n === 1 ? 'a fala ouvida' : `as ${n} falas ouvidas`}?`, 'Descartar', { perigo: true })) return;
+        }
         if (lc && lc.varias && lc.fase === 'conferir' && !lc.guardadaId) {
           const n = lc.linhas ? lc.linhas.filter(l => !l.fora).length : 0;
           if (n && !await askConfirm(`Fechar sem pôr? ${n === 1 ? 'A foto em dúvida é descartada' : `As ${n} fotos em dúvida são descartadas`} (o que já entrou continua).`, 'Descartar', { perigo: true })) return;
@@ -34769,7 +34777,9 @@
       // C: o aparelho separa os itens (itensDaFalaLista, <motor-lista>) e só a fala que ele não separou vai pra
       // IA (/api/assistente/itens-da-fala), com sinal. A: a mesma conferência, com o "Ouvi:" e o microfone pra
       // falar de novo só aquela linha. Nada vai pro orçamento sem a conferência.
-      const FALA_LISTA_JUNTA_MS = 8000; // pedaço da mesma frase que o Chrome do Android entrega como final
+      // pedaço da mesma frase que o Chrome do Android entrega como final: chega em seguida. Janela curta pra
+      // "cinco desempenadeira" e, logo depois, "cinco desempenadeira dentada" não virarem uma fala só
+      const FALA_LISTA_JUNTA_MS = 3000;
       function abrirFalaLista() {
         if (!SpeechRecognitionCtor) { showToast('Este navegador não reconhece voz — cole o texto ou dite pelo teclado', 'erro'); return; }
         if (!window.isSecureContext) { showToast('A voz só funciona com o app hospedado em HTTPS', 'erro'); return; }
@@ -34835,6 +34845,9 @@
         const chave = palavrasDaFala(alts[0]).join(' ');
         if (!chave || !lc || !lc.falas) return;
         const ult = lc.falas[lc.falas.length - 1], agora = Date.now();
+        // o pedaço mais completo da fala que acabou de ser apagada não a traz de volta
+        const ap = lc.falaApagada;
+        if (ap && agora - ap.em < FALA_LISTA_JUNTA_MS && mesmaFalaOuContinua(chave, ap.chave)) { ap.em = agora; ap.chave = chave; return; }
         if (ult && agora - ult.em < FALA_LISTA_JUNTA_MS) {
           if (mesmaFalaOuContinua(chave, ult.chave)) { Object.assign(ult, { alts, chave, em: agora }); return; }
           if (mesmaFalaOuContinua(ult.chave, chave)) return; // pedaço velho chegando depois da frase inteira
@@ -34870,12 +34883,14 @@
         const g = lcGeracao;
         const ctx = { comprados: lcComprados(), porCodigo: findByExactCode };
         let itens = lc.falas.flatMap(f => itensDeUmaFala(f.alts, ctx));
-        const emendadas = itens.filter(it => it.emendada).slice(0, 10);
+        // a rota aceita até 10 falas de até 400 letras: uma fala longa (ditou sem pausa) não derruba as outras
+        const emendadas = itens.filter(it => it.emendada && it.texto.length <= 400).slice(0, 10);
         if (emendadas.length && navigator.onLine) {
-          lc = { ...lc, fase: 'lendo', msg: 'Separando os itens emendados…', sub: 'A 1ª vez do dia pode levar até ~40 s (o servidor acorda).' };
+          const abortar = new AbortController(); // fechar a janela cancela (não gasta a cota à toa)
+          lc = { ...lc, fase: 'lendo', msg: 'Separando os itens emendados…', sub: 'A 1ª vez do dia pode levar até ~40 s (o servidor acorda).', abortar };
           renderListaCliente();
           try {
-            const r = await apiFetch('/api/assistente/itens-da-fala', { method: 'POST', body: JSON.stringify({ falas: emendadas.map(it => it.texto) }) });
+            const r = await apiFetch('/api/assistente/itens-da-fala', { method: 'POST', body: JSON.stringify({ falas: emendadas.map(it => it.texto) }), signal: abortar.signal });
             if (lcVelha(g)) return;
             const daIa = new Map();
             for (const it of (r && r.itens) || []) {
@@ -34891,12 +34906,18 @@
           }
         }
         if (lcVelha(g)) return;
+        lc.abortar = null;
         await conferirItensDaLista(itens, 'fala', { rotulo: `${lc.falas.length} fala${lc.falas.length === 1 ? '' : 's'} ouvida${lc.falas.length === 1 ? '' : 's'}` });
       }
       // conferência: falar de novo só uma linha (uma escuta curta; o resultado troca a linha)
       function refalarLinhaLista(i) {
         if (!lc || !lc.linhas || !lc.linhas[i] || !SpeechRecognitionCtor) return;
-        if (lc.refalar) { try { lc.refalar.rec.abort(); } catch (e) { } lc.refalar = null; renderListaCliente(); return; }
+        if (lc.refalar) {
+          const era = lc.refalar.i;
+          try { lc.refalar.rec.abort(); } catch (e) { }
+          lc.refalar = null;
+          if (era === i) { renderListaCliente(); return; } // o mesmo microfone para; o de outra linha passa pra ela
+        }
         let rec;
         try { rec = new SpeechRecognitionCtor(); } catch (e) { showToast('Não foi possível ligar o microfone', 'erro'); return; }
         rec.lang = 'pt-BR';
@@ -36235,7 +36256,12 @@
           if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
           if (t.id === 'lcFalarBtn') { abrirFalaLista(); return; }
           if (t.id === 'lcFalasProntoBtn') { falasParaConferir(); return; }
-          if (t.id === 'lcApagarFalaBtn') { if (lc.falas) lc.falas.pop(); renderListaCliente(); return; }
+          if (t.id === 'lcApagarFalaBtn') {
+            const ap = lc.falas && lc.falas.pop();
+            if (ap) lc.falaApagada = { chave: ap.chave, em: Date.now() };
+            renderListaCliente();
+            return;
+          }
           if (t.id === 'lcEscutaBtn' && lc.fala) {
             if (lc.fala.ativo) pararFalaLista(); else { lc.fala.ativo = true; lc.fala.msg = ''; falaListaIniciar(); }
             renderListaCliente();
