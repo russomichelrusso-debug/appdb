@@ -256,5 +256,60 @@ Responda SOMENTE com um JSON válido neste formato:
   }
 });
 
+// Lista falada no Pedido (11/2026): a fala que o próprio aparelho não conseguiu separar em itens
+// ("dez colher de pedreiro oito polegadas cinco desempenadeira dezoito por trinta" sem produto achado)
+// vem pra cá só ela; a IA só separa o texto em itens com quantidade, o produto sai da busca do app.
+const MAX_FALAS = 10;
+const MAX_LETRAS_FALA = 400;
+router.post('/itens-da-fala', interpretarLimiter, async (req, res) => {
+  const falas = req.body && req.body.falas;
+  if (!Array.isArray(falas) || !falas.length || falas.length > MAX_FALAS
+    || falas.some(f => typeof f !== 'string' || !f.trim() || f.length > MAX_LETRAS_FALA)) {
+    return res.status(422).json({ erro: `Envie de 1 a ${MAX_FALAS} falas de até ${MAX_LETRAS_FALA} letras.` });
+  }
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return res.status(503).json({ erro: 'Leitura da fala não configurada — falta GEMINI_API_KEY no servidor.' });
+  const modelo = modeloGemini();
+  const prompt = `Cada linha abaixo é uma fala transcrita (reconhecimento de voz, sem pontuação) de um vendedor ou cliente ditando um pedido de ferramentas para construção civil. Uma fala pode ter vários produtos emendados.
+
+Separe cada fala nos produtos dela, na ordem. Para cada produto:
+- "fala": o número da fala (o que vem antes de ":")
+- "texto": o produto com as medidas, escrito com números ("colher de pedreiro 8 polegadas", "desempenadeira 18x30", "disco porcelanato 110 mm"), sem a quantidade
+- "quantidade": o número pedido daquele produto, ou null
+- "unidade": "cx" se for em caixas, "pct" se for em pacotes, "un" se for em unidades/peças, ou null
+
+O número logo antes de uma medida (mm, cm, polegadas, "por") é medida, não quantidade. Ignore conversa que não é produto. Não invente produtos.
+
+${falas.map((f, i) => `${i + 1}: ${f.replace(/[\r\n]+/g, ' ').trim()}`).join('\n')}
+
+Responda SOMENTE com um JSON válido neste formato:
+{"itens": [{"fala": 1, "texto": "colher de pedreiro 8 polegadas", "quantidade": 10, "unidade": null}]}`;
+  try {
+    const resp = await chamarGemini(prompt, apiKey, modelo, 1, 30000);
+    if (!resp.ok) {
+      console.error('Erro do Gemini (fala):', resp.status, (await resp.text()).slice(0, 500));
+      return res.status(502).json({ erro: mensagemErroGemini(resp.status, modelo) });
+    }
+    const data = await resp.json();
+    let resultado = null;
+    try { resultado = JSON.parse(data.candidates?.[0]?.content?.parts?.[0]?.text || ''); } catch (e) { }
+    if (!resultado) return res.status(502).json({ erro: 'Não deu pra separar a fala agora — tenta de novo.' });
+    const lista = Array.isArray(resultado.itens) ? resultado.itens : [];
+    // cada item volta com o número da fala dele (0 a n-1); item sem fala válida não passa
+    const itens = [];
+    for (const it of lista) {
+      const n = Number(it && it.fala);
+      if (!Number.isInteger(n) || n < 1 || n > falas.length) continue;
+      const [limpo] = itensDaRespostaGemini([it]);
+      if (limpo) itens.push({ ...limpo, fala: n - 1 });
+      if (itens.length >= MAX_ITENS_DA_IMAGEM) break;
+    }
+    res.json({ itens });
+  } catch (e) {
+    console.error('Erro ao separar a fala:', e.message);
+    res.status(502).json({ erro: e.name === 'TimeoutError' ? 'A IA demorou demais pra separar a fala — tenta de novo.' : 'Erro ao separar a fala.' });
+  }
+});
+
 module.exports = router;
 module.exports.PROMPT_ETIQUETA = PROMPT_ETIQUETA;
