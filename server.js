@@ -7,6 +7,7 @@ const rateLimit = require('express-rate-limit');
 const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
 const { limiteRotasPesadas } = require('./middleware/limiteRotasPesadas');
+const { registrarRequisicoesLentas } = require('./middleware/requisicaoLenta');
 
 const authRoutes = require('./routes/auth');
 const clientesRoutes = require('./routes/clientes');
@@ -40,6 +41,9 @@ const { iniciarEnvioAgendado } = require('./routes/lib/novidades');
 
 const app = express();
 app.set('trust proxy', 1);  
+// Primeiro de tudo: mede a requisição inteira, inclusive CORS, login e leitura do corpo
+// (uma linha no log pra cada uma que passa de 1 s - middleware/requisicaoLenta.js).
+app.use(registrarRequisicoesLentas());
 
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.

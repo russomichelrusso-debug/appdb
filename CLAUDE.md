@@ -144,6 +144,12 @@ Pegadinhas de ambiente:
   Campanhas (`loadActivePromoRules`), descontos por classificatório e previsão de estoque são pedidos **junto com o catálogo**,
   no começo de `carregarCatalogoEExtras` (lote 3, 11/2026: eram um atrás do outro depois dele; com 300 ms por chamada, 2,2 s →
   0,76 s; com 1,5 s, 9,3 s → 3,2 s). Busca nova da abertura que não depende do catálogo vai junto, não depois.
+- **Requisição lenta no log do Render** (11/2026, lote 5 da auditoria): `middleware/requisicaoLenta.js`, o 1º `app.use` do
+  `server.js`, escreve `[lenta] 3412 ms GET /api/clientes/:id/historico 200 u=5 servidor acordou há 8 s` pra toda requisição acima
+  de `LOG_REQUISICAO_LENTA_MS` (padrão 1000, 0 desliga). Endereço sem query e com todo trecho com número ou "@" trocado por `:id`
+  (log sem CNPJ/código/e-mail); "acordou há N s" = servidor no ar há menos de 60 s (Render grátis acordando); "cancelada pelo
+  aparelho" = a conexão caiu antes da resposta. A espera longa da tela do cliente (`GET /api/segunda-tela/salas/:id`) fica fora.
+  Pra achar o que demora: Render › Logs, filtrar por `[lenta]`.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
