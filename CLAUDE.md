@@ -1733,6 +1733,20 @@ Supabase, sem PR — não é mudança de código.
     Leitura com prazo de 60 s; 429/5xx ou falha de rede deixam a foto esperando (não "não li"); ✕ durante o "Pronto" fecha
     já e guarda as que estavam lendo. **não testado num celular de verdade** (foco e nitidez do quadro do vídeo × a foto da câmera do celular).
 
+- **Trocar câmera e zoom iguais em toda câmera do app** (11/2026, relato do usuário: o leitor de código de barras sofria com a
+  grande angular como a etiqueta; pedido junto: "padroniza esses botões em todos os lugares onde se usa a câmera"): o leitor de
+  código de barras (`#scannerModal`), o celular como leitor do tablet (`#modoLeitor`) e a etiqueta (`#etqCam`) têm o mesmo botão
+  redondo de trocar câmera (`.camTrocar`, só traseiras, some com uma só) e o mesmo 1x/2x (`.camZoom`), com a câmera e o zoom
+  guardados no aparelho e valendo nas três (`cortagEtqCamera_v1`/`cortagEtqZoom_v1`, nomes da 1ª versão de propósito). Funções em
+  comum: `abrirCameraTraseira`, `listarCamerasTraseiras`, `proximaCameraTraseira`, `aplicarZoomCamera` (1x nunca abaixo de 1: o
+  `zoom.min` 0,5 é a grande angular), `focoContinuo`, `ligarControlesCamera`; tela nova com câmera usa as mesmas. Zoom sem suporte
+  da câmera = digital: o leitor nativo lê o meio do quadro (`quadroDoLeitor`), a etiqueta recorta a foto; no ZXing só amplia a
+  tela (a dica do leitor não sugere o 2x nesse caso). **Bug corrigido junto:** o `@zxing/library` 0.21 não devolve "controles"
+  (isso é do `@zxing/browser`) e o leitor chamava `controls.stop()` na 1ª leitura: no iPhone (sem BarcodeDetector) o leitor de
+  código parava sem entregar o código e, no `#modoLeitor`, a câmera não desligava. Agora o app abre o stream e usa
+  `decodeFromStream` + `reset()`. Testado no app local com vídeo falso de EAN-13 (antes não lia em 15 s; agora 26 ms) e fechar no
+  meio da abertura sem câmera ligada; **não testado num celular de verdade** (troca entre lentes, zoom da câmera).
+
 - **Telefone do vendedor no cadastro do usuário** (11/2026, pedido do usuário: "fica pras fichas, fotos e orçamentos sem
   preencher toda vez"): `usuarios.telefone` (NULL = nunca preenchido, '' = apagado), `PUT /api/auth/usuarios/:id/telefone`
   (mesmas regras do nome: admin troca o de qualquer um, vendedor só o próprio; 10 a 13 dígitos), e `/auth/me` e o login
