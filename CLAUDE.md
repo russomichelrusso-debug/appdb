@@ -130,9 +130,12 @@ Pegadinhas de ambiente:
   ainda **apagava o orçamento guardado** (filtra o carrinho pelos produtos do catálogo); o EAN/DUN-14 também só vinha da rede.
   Agora `loadActiveDB` abre pela cópia do IndexedDB `cortag-catalogo` (`lerCopiaCatalogo`, chaves `catalogo` = produtos crus
   da API + `assinatura` + `baixadoEm`, e `codigos`) e já pede a versão do servidor; no fim de `carregarCatalogoEExtras`,
-  `atualizarCatalogoGuardado` aplica a nova só se a assinatura mudou (com os promocionais do Painel e os códigos de novo por
-  cima, toast "Preços atualizados…"). Sem cópia, é a rede como antes. O Painel › recarregar a fonte usa `preferirRede`. Logout
-  apaga a cópia. Tela nova que dependa do catálogo pode receber dois `applyDB` na mesma abertura (cópia e depois servidor).
+  `atualizarCatalogoGuardado` (logo depois dos promocionais, sem esperar campanhas/previsão) aplica a nova só se a assinatura
+  mudou, com os promocionais do Painel e o último mapa de códigos reaplicados na hora (`aplicarCodigosProduto`), toast "Preços
+  atualizados…"; `catalogoGeracao` descarta a resposta pedida antes de um recarregar/importação. Sem cópia, é a rede como antes.
+  O Painel › recarregar a fonte usa `preferirRede`. Logout apaga a cópia. Tela nova que dependa do catálogo pode receber dois
+  `applyDB` na mesma abertura (cópia e depois servidor). **Ainda falta** (já era assim antes): o 1º `applyDB` roda antes de
+  `mergeProdutosPromocionais` e tira do orçamento guardado os itens P/P1/P2 do Painel; sem internet eles nem chegam.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a

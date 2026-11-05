@@ -16893,6 +16893,19 @@
       // além de montar um índice pra achar rápido qual produto é dono de qual
       // DUN-14 na hora de escanear.
       let DUN_INDEX = {};
+      // Último mapa de códigos EAN/DUN-14 lido (rede ou cópia): reaplicado na hora quando o
+      // catálogo é trocado (atualizarCatalogoGuardado), antes de a rede responder de novo.
+      let CODIGOS_PRODUTO_MAPA = null;
+      function aplicarCodigosProduto(mapa) {
+        if (!mapa) return;
+        for (const codigo in mapa) {
+          const p = DB.productIndex[codigo];
+          if (!p) continue;
+          const info = mapa[codigo];
+          if (info.ean) { p.e = info.ean; DB.eanIndex[info.ean] = p; }
+          if (info.dun14) { p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
+        }
+      }
       async function loadCodigosProduto() {
         let mapa = null;
         try {
@@ -16904,16 +16917,11 @@
           mapa = copia && copia.mapa;
         }
         if (!mapa) return;
+        CODIGOS_PRODUTO_MAPA = mapa;
         try {
-          for (const codigo in mapa) {
-            const p = DB.productIndex[codigo];
-            if (!p) continue;
-            const info = mapa[codigo];
-            if (info.ean) { p.e = info.ean; DB.eanIndex[info.ean] = p; }
-            if (info.dun14) { p.dun = info.dun14; DUN_INDEX[info.dun14] = codigo; }
-          }
+          aplicarCodigosProduto(mapa);
           renderResults();
-        } catch (e) { /* sem rede ou nada importado ainda - ok, segue sem isso */ }
+        } catch (e) { /* segue sem os códigos */ }
       }
 
       function packStep(p) {
@@ -33145,31 +33153,37 @@
       }
       // Catálogo aberto da cópia: a versão do servidor que loadActiveDB já pediu. Aplicada só se
       // mudou, com os promocionais do Painel e os códigos EAN/DUN-14 de novo por cima.
+      // catalogoGeracao sobe quando o catálogo é recarregado por outro caminho (Painel ›
+      // recarregar a fonte, importação da Lista de Preços): a resposta pedida antes não passa por cima.
       let catalogoDoServidorPendente = null;
+      let catalogoGeracao = 0;
       async function atualizarCatalogoGuardado() {
         const pendente = catalogoDoServidorPendente;
         catalogoDoServidorPendente = null;
         if (!pendente) return;
         const remoto = await pendente.promessa;
-        if (!remoto) return; // sem internet ou servidor fora: fica a cópia (ACTIVE_SOURCE diz de quando)
-        ACTIVE_SOURCE = 'baixado ' + quandoCurto(remoto.baixadoEm);
-        if (remoto.assinatura === pendente.assinatura) return;
+        if (!remoto || pendente.geracao !== catalogoGeracao) return; // sem internet: fica a cópia (ACTIVE_SOURCE diz de quando)
         try { if (localStorage.getItem(LS_KEY)) return; } catch (e) { } // catálogo só deste aparelho importado no meio-tempo
+        ACTIVE_SOURCE = 'baixado ' + quandoCurto(remoto.baixadoEm);
+        if (remoto.assinatura === pendente.assinatura) { refreshAdminCatalogStatus(); return; }
         const novos = converterCatalogoDoServidor(remoto.produtos);
         const codigos = new Set(novos.map(p => p.c));
         const promocionais = DB.products.filter(p => p._promocional && !codigos.has(p.c));
         applyDB({ products: novos.concat(promocionais), categories: [] });
-        await loadCodigosProduto();
+        aplicarCodigosProduto(CODIGOS_PRODUTO_MAPA); // o leitor de EAN não fica sem os códigos até a rede responder
+        loadCodigosProduto();
         revalidarLevSurveyContraCatalogo();
         renderPriceList();
         renderLevList();
         renderCartBar();
-        atualizarProdutosInicio();
+        if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio();
         refreshAdminCatalogStatus();
+        verificarESincronizarTudo(true).catch(() => { }); // a 1ª checagem comparou a cópia com o servidor
         showToast('Preços atualizados com a tabela do servidor');
       }
 
       async function loadActiveDB(opcoes = {}) {
+        if (opcoes.preferirRede) { catalogoGeracao++; catalogoDoServidorPendente = null; }
         // 1) override manual feito neste aparelho (Painel Administrativo) - prioridade máxima,
         //    é uma ação intencional e recente de quem está usando ESTE celular
         try {
@@ -33198,7 +33212,7 @@
           return { products: converterCatalogoDoServidor(copia.produtos), categories: [] };
         };
         if (copia && !opcoes.preferirRede) {
-          catalogoDoServidorPendente = { promessa: baixarCatalogoDoServidor().catch(() => null), assinatura: copia.assinatura };
+          catalogoDoServidorPendente = { promessa: baixarCatalogoDoServidor().catch(() => null), assinatura: copia.assinatura, geracao: catalogoGeracao };
           return daCopia();
         }
         try {
@@ -37229,6 +37243,8 @@
         try {
           applyDB(await loadActiveDB());
           try { mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); } catch (e) { }
+          // aberto pela cópia do aparelho: a versão do servidor entra assim que chegar, sem esperar o resto
+          atualizarCatalogoGuardado().catch(e => console.warn('Não foi possível atualizar o catálogo guardado:', e));
         } catch (e) {
           console.warn('Não foi possível carregar o catálogo de produtos:', e);
         }
@@ -37255,8 +37271,6 @@
         refreshPromoStatus();
         renderPromoRulesList();
         renderClassiDiscountRulesList(); // mesmo problema, mesma causa (ver comentário acima)
-        // aberto pela cópia do aparelho: a versão do servidor entra quando chegar, sem segurar o resto
-        atualizarCatalogoGuardado().catch(e => console.warn('Não foi possível atualizar o catálogo guardado:', e));
       }
 
       // init() liga os listeners da tela inteira: só uma vez por carga de página
