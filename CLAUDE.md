@@ -96,6 +96,12 @@ Automação do Claude Code (`.claude/`):
   skills `ponytail`, `-review`, `-audit`, `-debt`, `-gain`, `-help`. Só grava no aparelho (`~/.claude/.ponytail-active`,
   `~/.config/ponytail/`; o webhook opcional vem vazio). O "mínimo de código" dele não passa por cima deste arquivo: fluxo de PR,
   `/simplify` + `/code-review` antes de PR grande, CRLF do `index.html`, testes e as regras de "Pegadinhas" continuam valendo.
+- Skills de projeto em `.claude/skills/` (11/2026, pedido do usuário; instaladas com `npx skills add <fonte> -a claude-code -y`,
+  origem e hash em `skills-lock.json`, `npx skills update -p` atualiza; só markdown, sem script): **`supabase-postgres-best-practices`**
+  (Supabase: índices, RLS, migração, consulta lenta, pooler — vale pro `schema.sql` e pras rotas com SQL), **`accessibility`**
+  (`addyosmani/web-quality-skills`, WCAG 2.2: os `<label>`/`aria-label` que faltam, ver "Caminho a seguir") e
+  **`playwright-best-practices`** (currents.dev: testes de tela, offline/service worker, geolocalização, toque). Como as dos
+  plugins, são regras gerais: este arquivo e o `revisor-cortag` valem por cima (ex.: RLS sem `FORCE`, o app conecta como dono).
 - MCP **Playwright** (`.mcp.json` → `.claude/mcp-playwright.js`): navegador com tela de celular
   (Pixel 7) pra abrir o app e tirar print. Com `scripts/app-local.js` rodando, abrir
   `http://localhost:8080/__entrar`. Na nuvem usa o Chromium de `/opt/pw-browsers` (sem janela,
