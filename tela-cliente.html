@@ -319,6 +319,7 @@
     .cartao { background: var(--white); border-radius: var(--r-lg); padding: 22px 24px; display: flex; flex-direction: column; gap: 6px; }
     .cartao .rot { font-size: 14px; color: var(--gray); }
     .totalGrande { font-size: 44px; font-weight: 700; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.1; }
+    .pagamentoTxt { font-size: 18px; }
     .economia { font-size: 14px; color: var(--success); font-weight: 600; }
     .metaTitulo { display: flex; align-items: center; gap: 10px; font-size: 16px; font-weight: 600; }
     .metaTitulo svg { width: 22px; height: 22px; color: var(--success); flex-shrink: 0; }
@@ -386,6 +387,8 @@
     .catLadoMeta { background: var(--success-bg); color: var(--success); border-radius: 12px; padding: 10px 12px; font-size: 14px; font-weight: 600; display: flex; flex-direction: column; gap: 6px; }
     .catLadoMeta .barra { margin: 0; height: 6px; }
     .catLadoEco { font-size: 14px; color: var(--success); font-weight: 600; }
+    .catLadoPag { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; }
+    .catLadoPag span { color: var(--gray); }
 
     /* B: um produto em tela cheia */
     .catProd { position: fixed; inset: 0; z-index: 12; background: var(--white); display: flex; flex-direction: column; }
@@ -621,6 +624,10 @@
           <span class="totalGrande" id="totalTxt"></span>
           <span class="rot" id="contagemTxt"></span>
           <span class="economia hidden" id="economiaTxt"></span>
+        </div>
+        <div class="cartao hidden" id="pagamentoCartao">
+          <span class="rot">Condição de pagamento</span>
+          <strong class="pagamentoTxt" id="pagamentoTxt"></strong>
         </div>
         <div class="cartao hidden" id="metaCartao">
           <span class="metaTitulo">
@@ -1024,6 +1031,10 @@
       eco.textContent = Number(estado.economia) >= 0.01 ? `Você economiza ${brl(estado.economia)} nas campanhas` : '';
       eco.classList.toggle('hidden', !(Number(estado.economia) >= 0.01));
 
+      const pag = estado.pagamento;
+      document.getElementById('pagamentoCartao').classList.toggle('hidden', !pag);
+      document.getElementById('pagamentoTxt').textContent = pag || '';
+
       const meta = estado.meta;
       document.getElementById('metaCartao').classList.toggle('hidden', !meta);
       if (meta) {
@@ -1187,6 +1198,7 @@
         <div class="catLadoRodape">
           ${meta ? `<div class="catLadoMeta"><span>${escapeHtml(meta.texto || '')}</span><div class="barra" aria-hidden="true"><div style="width:${(f * 100).toFixed(1)}%"></div></div></div>` : ''}
           ${Number(estado.economia) >= 0.01 ? `<div class="catLadoEco">Economia com campanhas: ${brl(estado.economia)}</div>` : ''}
+          ${estado.pagamento ? `<div class="catLadoPag"><span>Pagamento</span><b>${escapeHtml(estado.pagamento)}</b></div>` : ''}
           <div class="total"><span>Total com impostos</span><b>${brl(estado.total)}</b></div>
         </div>`;
       lado.querySelectorAll('[data-lado-foto]').forEach(el => {
