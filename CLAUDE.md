@@ -150,6 +150,13 @@ Pegadinhas de ambiente:
   (log sem CNPJ/código/e-mail); "acordou há N s" = servidor no ar há menos de 60 s (Render grátis acordando); "cancelada pelo
   aparelho" = a conexão caiu antes da resposta. A espera longa da tela do cliente (`GET /api/segunda-tela/salas/:id`) fica fora.
   Pra achar o que demora: Render › Logs, filtrar por `[lenta]`.
+- **Busca do Pedido desenhada em partes** (11/2026, lote 4 da auditoria): busca **nova** com mais de 8 resultados desenha os 8
+  primeiros cards na hora e o resto de 12 em 12 nos quadros seguintes (`desenharRestoDosResultados`, `geracaoResultados` cancela o
+  que sobrou quando outra busca redesenha; os botões dos cards novos são ligados num `div` à parte antes de entrar na lista, pra não
+  ligar duas vezes os de cima). A seção "Pela ficha técnica" entra no último pedaço. Redesenho da **mesma** busca (−/+, campanhas
+  que chegaram, catálogo trocado) e a tabela do laptop continuam de uma vez: o foco do campo de quantidade tocado tem de voltar pro
+  card. Medido com CPU 4x: pior atraso ao digitar 152–328 ms → 96–120 ms. Código novo que procure um card da busca logo depois do
+  `renderResults()` de uma busca nova pode não achar os de baixo da 8ª posição.
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a

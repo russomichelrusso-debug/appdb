@@ -16326,7 +16326,31 @@
       // "Adicionar todos ao orçamento" (index.html:3775-3777), que precisa
       // saber exatamente quais produtos estão visíveis agora.
       let ultimosResultados = [];
+      // Busca nova desenha só os primeiros cards na hora e o resto nos quadros seguintes (lote 4
+      // da auditoria de performance, 11/2026): os 50 cards de uma vez levavam 110-185 ms num celular
+      // médio a cada tecla. Redesenho da MESMA busca (quantidade, campanhas que chegaram) continua
+      // desenhando tudo junto - o foco do campo de quantidade tocado tem de voltar pro card.
+      const PRIMEIROS_CARDS = 8;
+      const CARDS_POR_QUADRO = 12;
+      let geracaoResultados = 0;
+      let ultimaBuscaDesenhada = '';
+      const noProximoQuadro = fn => requestAnimationFrame(() => setTimeout(fn, 0));
+      function desenharRestoDosResultados(list, resto, q, pelaFicha, geracao) {
+        const passo = () => {
+          if (geracao !== geracaoResultados || !list.isConnected) return; // outra busca já redesenhou
+          const lote = resto.splice(0, CARDS_POR_QUADRO);
+          let html = lote.map(p => renderCard(p)).join('');
+          if (!resto.length && pelaFicha.length) html += htmlBuscaPelaFicha(q, pelaFicha, false);
+          const tmp = document.createElement('div');
+          tmp.innerHTML = html;
+          wireProductCardButtons(tmp); // só os novos: os de cima já estão ligados
+          list.append(...tmp.childNodes);
+          if (resto.length) noProximoQuadro(passo);
+        };
+        noProximoQuadro(passo);
+      }
       function renderResults() {
+        const geracao = ++geracaoResultados;
         const q = document.getElementById('searchInput').value;
         const list = document.getElementById('resultsList');
         const hint = document.getElementById('searchHint');
@@ -16342,6 +16366,7 @@
         const limpar = document.querySelector('[data-limpar-busca="searchInput"]');
         if (limpar) limpar.classList.toggle('hidden', !q);
         if (q.trim().length < 2) {
+          ultimaBuscaDesenhada = '';
           list.innerHTML = '';
           hint.style.display = 'block';
           addAllBar.classList.add('hidden');
@@ -16353,6 +16378,7 @@
         const items = searchProducts(q);
         const pelaFicha = searchProductsPelaFicha(q, FICHAS_MAP, items, SITE_BUSCA);
         ultimosResultados = items;
+        if (items.length === 0) ultimaBuscaDesenhada = ''; // "discox" sem achado e de volta a "disco" = busca nova
         if (items.length === 0 && pelaFicha.length) {
           addAllBar.classList.add('hidden');
           const tabelaF = tabelaAgora();
@@ -16379,6 +16405,14 @@
           ? 'Adicionar ao orçamento' : `Adicionar os ${items.length} ao orçamento`;
         const tabela = tabelaAgora();
         list.classList.toggle('emTabela', tabela);
+        const buscaNova = q !== ultimaBuscaDesenhada;
+        ultimaBuscaDesenhada = q;
+        if (!tabela && buscaNova && items.length > PRIMEIROS_CARDS) {
+          list.innerHTML = items.slice(0, PRIMEIROS_CARDS).map(p => renderCard(p)).join('');
+          wireProductCardButtons(list);
+          desenharRestoDosResultados(list, items.slice(PRIMEIROS_CARDS), q, pelaFicha, geracao);
+          return;
+        }
         list.innerHTML = (tabela ? htmlTabelaProdutos(items) : items.map(p => renderCard(p)).join(''))
           + (pelaFicha.length ? htmlBuscaPelaFicha(q, pelaFicha, tabela) : '');
         wireProductCardButtons(list);
