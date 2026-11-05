@@ -5604,6 +5604,37 @@ async function main() {
   }
 
   {
+    // Log de requisição lenta (middleware/requisicaoLenta.js, lote 5 da auditoria de performance)
+    const { EventEmitter } = require('events');
+    const { registrarRequisicoesLentas, rotaParaLog } = require('../middleware/requisicaoLenta');
+    const linhas = [];
+    const rodar = async ({ url, method = 'GET', esperaMs, status = 200, cancelar = false, usuario, noAr = 3600, limiteMs = 30 }) => {
+      const mw = registrarRequisicoesLentas({ limiteMs, log: l => linhas.push(l), tempoNoAr: () => noAr });
+      const reqF = { method, originalUrl: url, usuario };
+      const resF = new EventEmitter();
+      resF.statusCode = status;
+      resF.writableFinished = false;
+      let seguiu = false;
+      mw(reqF, resF, () => { seguiu = true; });
+      await new Promise(r => setTimeout(r, esperaMs));
+      if (cancelar) resF.emit('close');
+      else { resF.writableFinished = true; resF.emit('finish'); resF.emit('close'); }
+      return seguiu;
+    };
+    const seguiu = await rodar({ url: '/api/produtos', esperaMs: 0 });
+    await rodar({ url: '/api/clientes/123/historico?cnpj=12345678000199&email=a@b.com', esperaMs: 50, usuario: { id: 7 }, noAr: 5 });
+    await rodar({ url: '/api/levantamentos', method: 'POST', esperaMs: 50, cancelar: true });
+    await rodar({ url: '/api/segunda-tela/salas/abcXYZ', esperaMs: 50 });
+    await rodar({ url: '/api/recompra', esperaMs: 50, limiteMs: 0 });
+    assert(seguiu && linhas.length === 2
+      && /^\[lenta\] \d+ ms GET \/api\/clientes\/:id\/historico 200 u=7 servidor acordou há 5 s$/.test(linhas[0])
+      && /^\[lenta\] \d+ ms POST \/api\/levantamentos cancelada pelo aparelho$/.test(linhas[1])
+      && !linhas.join(' ').includes('12345678000199') && !linhas.join(' ').includes('@')
+      && rotaParaLog('/api/produtos/60863/clientes') === '/api/produtos/:id/clientes',
+      `requisição lenta: só as que passam do limite, sem dado do endereço, sem a espera da tela do cliente: ${JSON.stringify(linhas)}`);
+  }
+
+  {
     // Limite de requisições nas rotas de leitura pesadas (middleware/limiteRotasPesadas.js):
     // por usuário, só GET, contado uma vez mesmo passando por vários app.use('/api…')
     const { grupoDaRota, LIMITE_CARTEIRA, LIMITE_CLIENTE } = require('../middleware/limiteRotasPesadas');
