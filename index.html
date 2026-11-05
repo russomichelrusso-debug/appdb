@@ -3639,6 +3639,41 @@
       height: 18px;
     }
 
+    /* Recolher o card do cliente (Pedido e Levantamento): fica só nome, selo e CNPJ.
+       Os avisos que não podem passar despercebidos (devedor contumaz, bloqueio, saldo
+       a cancelar, inadimplência) continuam à vista. Escolha lembrada no aparelho. */
+    .clienteRecolherBtn {
+      flex: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      border: none;
+      background: var(--fill);
+      color: var(--gray);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+
+    .clienteRecolherBtn svg {
+      width: 18px;
+      height: 18px;
+      transition: transform .2s;
+    }
+
+    .clienteCard.recolhido .clienteRecolherBtn svg {
+      transform: rotate(180deg);
+    }
+
+    .clienteCard.recolhido .clienteProgresso,
+    .clienteCard.recolhido .clienteCortadores,
+    .clienteCard.recolhido .clienteReativar,
+    .clienteCard.recolhido .clienteVisita,
+    .clienteCard.recolhido .clienteWhats,
+    .clienteCard.recolhido .clienteAcoes {
+      display: none;
+    }
+
     .clienteProgresso:empty {
       display: none;
     }
@@ -12886,6 +12921,11 @@
               <div class="clienteNome" id="precosClientName"></div>
               <div class="clienteMeta"><span id="precosClientBadge"></span><span id="precosClientDoc"></span></div>
             </div>
+            <button type="button" class="clienteRecolherBtn" id="precosRecolherClientBtn" aria-expanded="true"
+              aria-label="Recolher detalhes do cliente" title="Recolher detalhes do cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+            </button>
             <button type="button" class="clienteTrocarBtn" id="precosTrocarClientBtn" aria-label="Trocar ou limpar cliente"
               title="Trocar ou limpar cliente">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -13042,6 +13082,11 @@
               <div class="clienteNome" id="levClientName"></div>
               <div class="clienteMeta"><span id="levClientBadge"></span><span id="levClientDoc"></span></div>
             </div>
+            <button type="button" class="clienteRecolherBtn" id="levRecolherClientBtn" aria-expanded="true"
+              aria-label="Recolher detalhes do cliente" title="Recolher detalhes do cliente">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"
+                stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6" /></svg>
+            </button>
             <button type="button" class="clienteTrocarBtn" id="levTrocarClientBtn" aria-label="Trocar ou limpar cliente"
               title="Trocar ou limpar cliente">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -19682,9 +19727,35 @@
       // em setLevCliente). O botão "Limpar" aqui é mais simples que o do
       // Levantamento: não mexe em levLoadedId/levLoadedName, que são só do
       // fluxo de levantamento salvo e não fazem sentido vindos da aba Preços.
+      // Card do cliente recolhido (Pedido e Levantamento juntos): o CSS de .clienteCard.recolhido
+      // esconde o resto e deixa os avisos vermelhos. Vale pro aparelho (cortagClienteRecolhido_v1).
+      function initRecolherCliente() {
+        const CHAVE = 'cortagClienteRecolhido_v1';
+        let recolhido = false;
+        try { recolhido = localStorage.getItem(CHAVE) === '1'; } catch (e) { }
+        const aplicar = () => {
+          for (const pre of ['precos', 'lev']) {
+            document.getElementById(pre + 'ClienteCard').classList.toggle('recolhido', recolhido);
+            const btn = document.getElementById(pre + 'RecolherClientBtn');
+            const txt = recolhido ? 'Mostrar detalhes do cliente' : 'Recolher detalhes do cliente';
+            btn.setAttribute('aria-expanded', String(!recolhido));
+            btn.setAttribute('aria-label', txt);
+            btn.title = txt;
+          }
+        };
+        for (const pre of ['precos', 'lev']) {
+          document.getElementById(pre + 'RecolherClientBtn').addEventListener('click', () => {
+            recolhido = !recolhido;
+            try { localStorage.setItem(CHAVE, recolhido ? '1' : '0'); } catch (e) { }
+            aplicar();
+          });
+        }
+        aplicar();
+      }
       function initPrecosCliente() {
         document.getElementById('precosSelectClientBtn').addEventListener('click', () => selectLevClient('precos'));
         document.getElementById('precosTrocarClientBtn').addEventListener('click', () => selectLevClient('precos'));
+        initRecolherCliente();
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
         document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('precosWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));

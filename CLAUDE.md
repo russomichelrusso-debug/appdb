@@ -569,6 +569,12 @@ Supabase, sem PR — não é mudança de código.
     "os objetivos do trimestre atual ainda não foram importados", e o card do Pedido/Levantamento volta pra
     meta automática da faixa. Objetivos não chegam por e-mail: alguém tem de importar a cada trimestre.
 
+- **Card do cliente recolhível** (11/2026, opção "A" dos mockups "Cortag · Card do cliente recolhível"): botão de seta entre o
+  nome e o ⇄ no card do Pedido e do Levantamento (`initRecolherCliente`, `index.html`). Recolhido (`.clienteCard.recolhido`, só CSS)
+  fica o nome, o selo e o CNPJ; somem régua/acumulado, cortadores, sem comprar, última visita, Contatos e as ações. Decisões do
+  usuário: **os avisos que não podem passar continuam à vista** (devedor contumaz, bloqueado, saldo a cancelar, inadimplência) e a
+  escolha **vale pro aparelho**, nos dois cards juntos (`cortagClienteRecolhido_v1`). Faixa nova no card: decidir se recolhe.
+
 - **Trocar de cliente limpa o que era do anterior** (10/2026, relato do usuário: trocar o cliente deixava o
   levantamento e o carrinho do anterior na tela — a contagem ia pro cliente novo e "Finalizar" gravava um pedido
   dele com os produtos do outro). Só no ⇄ de A → B (`deixarClienteAnterior`, `index.html`); os outros caminhos
