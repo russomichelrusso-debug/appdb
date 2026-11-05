@@ -536,6 +536,30 @@ async function main() {
     assert(rPdfRuim.status === 422 && !mockDb.__getProdutos().some(p => p.codigo_sku === 'AB CD<script>')
       && rPdfOk.status === 201 && mockDb.__getProdutos().some(p => p.codigo_sku === 'PDF-901' && p.nome === 'ITEM DO PDF'),
       `pedido de PDF: código novo fora do formato aceito é recusado (422); no formato, criado com a descrição: ${JSON.stringify([rPdfRuim.body, rPdfOk.body])}`);
+    // vários itens de uma vez (11/2026: um SELECT pros códigos e um INSERT pros itens; antes
+    // ~2 consultas por item, ~1 s cada até o Supabase): já cadastrado + criado do catálogo +
+    // repetido, na ordem, cada um uma linha; código com espaço acha o produto
+    mockDb.__seed({ catalogoPrecos: [linhaCat('NOVO79', 'COLHER NOVA 79', '16 - COLHERES')] });
+    res = await req('POST', '/api/levantamentos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      itens: [{ codigo_sku: '60863', quantidade_contada: 5, quantidade_pedido: 2 }, { codigo_sku: 'NOVO79', quantidade_contada: 0, quantidade_pedido: 6 },
+        { codigo_sku: ' 60863 ', quantidade_contada: 1 }],
+    });
+    {
+      const p63 = mockDb.__getProdutos().find(p => p.codigo_sku === '60863');
+      const p79 = mockDb.__getProdutos().find(p => p.codigo_sku === 'NOVO79');
+      const linhas = mockDb.__getLevantamentoItens().filter(i => i.levantamento_id === res.body.levantamento_id)
+        .map(i => [i.produto_id, Number(i.quantidade_contada), Number(i.quantidade_pedido)]);
+      assert(res.status === 201 && p79 && JSON.stringify(linhas) === JSON.stringify([[p63.id, 5, 2], [p79.id, 0, 6], [p63.id, 1, 0]]),
+        `levantamento com vários itens grava todos de uma vez, na ordem (cadastrado, criado do catálogo, repetido): ${JSON.stringify([res.body, linhas])}`);
+    }
+    const nItensAntes = mockDb.__getPedidoItens().length;
+    res = await req('POST', '/api/pedidos', {
+      cliente: { cliente_id: clienteId, nome: 'João Silva Materiais' },
+      itens: [{ codigo_sku: '60863', quantidade: 2, preco_unitario: 10 }, { codigo_sku: 'NAO-EXISTE-2', quantidade: 1, preco_unitario: 5 }],
+    });
+    assert(res.status === 400 && res.body.erro.includes('NAO-EXISTE-2') && mockDb.__getPedidoItens().length === nItensAntes,
+      `pedido com um código desconhecido no meio dos itens: 400 sem gravar item nenhum: ${JSON.stringify(res.body)}`);
     // não sujar o histórico do cliente usado nos testes seguintes (o mock não desfaz
     // a transação: o pedido/levantamento recusado no meio também fica)
     for (const [lista, n] of tamanhosAntes) lista.splice(n, Infinity);

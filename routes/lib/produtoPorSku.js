@@ -61,6 +61,23 @@ async function acharOuCriarProdutoPorSku(client, codigo_sku, descricaoSeNovo) {
   throw new Error(`Produto com código ${codigo_sku} não encontrado no catálogo.`);
 }
 
+// Vários códigos de uma vez (itens do pedido/levantamento): um SELECT pra todos e
+// o caminho de um por um só pro código que ainda não está em produtos (produto
+// novo da Lista de Preços, raro). Antes eram uma consulta por item, cada uma uma
+// ida e volta Render (Oregon) <-> Supabase (São Paulo), mais o INSERT de cada item:
+// levantamento salvo em 38 s e pedido em 8-14 s (log [lenta] de 11/2026).
+// Devolve os ids na mesma ordem dos códigos.
+async function acharOuCriarProdutosPorSku(client, codigos, descricoesSeNovo) {
+  const unicos = [...new Set(codigos)];
+  const r = await client.query('/* produtos:por-sku */ SELECT id, codigo_sku FROM produtos WHERE codigo_sku = ANY($1::text[])', [unicos]);
+  const porCodigo = new Map(r.rows.map(x => [x.codigo_sku, x.id]));
+  for (let i = 0; i < codigos.length; i++) {
+    if (porCodigo.has(codigos[i])) continue;
+    porCodigo.set(codigos[i], await acharOuCriarProdutoPorSku(client, codigos[i], descricoesSeNovo ? descricoesSeNovo[i] : null));
+  }
+  return codigos.map(c => porCodigo.get(c));
+}
+
 // Texto do erro que pode ir pro app: só o que nós mesmos lançamos com
 // new Error('...') (mensagem pensada pra quem usa o app ler). Erro do driver do
 // Postgres (tem .code) e erro de programação (TypeError, RangeError...: "Cannot
@@ -69,4 +86,4 @@ function mensagemParaApp(e, padrao) {
   return e && !e.code && Object.getPrototypeOf(e) === Error.prototype && e.message ? e.message : padrao;
 }
 
-module.exports = { acharOuCriarProdutoPorSku, ErroPermanente, CODIGO_SKU_REGEX, mensagemParaApp };
+module.exports = { acharOuCriarProdutoPorSku, acharOuCriarProdutosPorSku, ErroPermanente, CODIGO_SKU_REGEX, mensagemParaApp };

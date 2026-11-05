@@ -151,6 +151,13 @@ Pegadinhas de ambiente:
   (log sem CNPJ/código/e-mail); "acordou há N s" = servidor no ar há menos de 60 s (Render grátis acordando); "cancelada pelo
   aparelho" = a conexão caiu antes da resposta. A espera longa da tela do cliente (`GET /api/segunda-tela/salas/:id`) fica fora.
   Pra achar o que demora: Render › Logs, filtrar por `[lenta]`.
+- **Itens do pedido e do levantamento gravados de uma vez** (11/2026, lote 6 da auditoria; log `[lenta]`: levantamento salvo em
+  38 s, pedido em 8–14 s): cada consulta custa ~1 s de ida e volta Render (Oregon) ↔ Supabase (São Paulo), e eram ~2 por item
+  (achar o produto + INSERT). Agora `acharOuCriarProdutosPorSku` (`routes/lib/produtoPorSku.js`) acha todos os códigos num SELECT
+  (o caminho de um por um só pro que falta em `produtos`) e os itens entram num `INSERT ... SELECT $1, * FROM UNNEST(...)` (POST de
+  levantamento, POST de pedido e `trocarItensDoPedido`). Rota nova que grave vários itens: o mesmo padrão, nunca um INSERT por item
+  num laço. O PR #366 (conexão ociosa de 10 min) **não** baixou o piso de ~1 s das rotas simples: a demora é por consulta, não por
+  conexão aberta.
 - **Busca do Pedido desenhada em partes** (11/2026, lote 4 da auditoria): busca **nova** com mais de 8 resultados desenha os 8
   primeiros cards na hora e o resto de 12 em 12 nos quadros seguintes (`desenharRestoDosResultados`, `geracaoResultados` cancela o
   que sobrou quando outra busca redesenha; os botões dos cards novos são ligados num `div` à parte antes de entrar na lista, pra não
