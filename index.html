@@ -28761,10 +28761,10 @@
           if (!p || state.cart.some(i => i.cod === p.c) || itemSemPrevisaoDeChegada(p.c)) continue;
           const passo = packStep(p);
           const qtd = Math.max(1, Math.ceil((Number(c.qtd) || passo) / passo)) * passo;
-          const unit = precoUnitarioSemImpostos(p);
-          if (!(unit > 0) || (soma > 0 && soma + unit * qtd > teto)) continue;
-          addToCart(p.c, qtd, true);
-          soma += unit * qtd;
+          if (!(precoUnitarioSemImpostos(p) > 0)) continue;
+          const total = incluirAteOTeto(p, qtd, soma > 0 ? teto : null);
+          if (total == null) continue;
+          soma = total;
           porOrigem[c.de]++;
         }
         renderResults();
@@ -31657,6 +31657,19 @@
       function precoUnitarioSemImpostos(p) {
         return clientPrice(listPriceSemImposto(p, state.uf), classificatorioEfetivo(), state.promoDiscount, isPrecoFixoParaCanal(p), 0);
       }
+      // Põe o item no orçamento e devolve o total sem impostos de verdade (com
+      // campanha e desconto por classificatório da categoria, igual ao "Total S/
+      // Impostos" da gaveta). Passou do teto: tira de novo e devolve null. Mix
+      // inicial e proposta pra faixa somavam pelo preço sem campanha e paravam
+      // abaixo do valor (11/2026: mix de R$ 1.200 saiu com R$ 1.099,32 sem impostos).
+      function incluirAteOTeto(p, qtd, teto) {
+        const antes = state.cart.slice();
+        state.cart.push({ cod: p.c, qty: qtd });
+        autoFillClassificatorioDiscount(p.c);
+        const total = cartTotals().totalSemImpostos;
+        if (teto != null && total > teto) { state.cart = antes; return null; }
+        return total;
+      }
       async function montarMixInicial() {
         const dados = await carregarMixInicial(true);
         if (!dados) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
@@ -31673,17 +31686,17 @@
         // "até o valor": item cuja embalagem passaria mais de 10% do valor fica de
         // fora e o próximo da lista é tentado (embalagem de 24 x R$ 30 no fim estourava)
         const teto = alvo * 1.1;
-        let soma = 0, n = 0;
+        let soma = cartTotals().totalSemImpostos, n = 0;
         for (const { p } of r.itens) {
           if (soma >= alvo) break;
           if (state.cart.some(i => i.cod === p.c)) continue;
-          const qtd = packStep(p);
-          const unit = precoUnitarioSemImpostos(p);
-          if (!(unit > 0) || soma + unit * qtd > teto) continue;
-          addToCart(p.c, qtd, true);
-          soma += unit * qtd;
+          if (!(precoUnitarioSemImpostos(p) > 0)) continue;
+          const total = incluirAteOTeto(p, packStep(p), teto);
+          if (total == null) continue;
+          soma = total;
           n++;
         }
+        renderCartBar();
         if (!n) { showToast('Nenhum produto do mix coube no orçamento.', 'erro'); return; }
         showToast(`Mix inicial: ${n} produto${n === 1 ? '' : 's'} · ≈ ${brl(soma)} sem impostos${soma < alvo ? ' (acabaram os mais vendidos)' : ''}`, 'longo');
         renderResults();
