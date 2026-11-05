@@ -21154,6 +21154,49 @@
       // sem converter pra cinza - usado no PDF de orçamento, que agora usa o
       // logo colorido de verdade (mais perto da cotação oficial).
       let logoDimsPromise = null;
+      // Logo oficial em alta resolução (logo-abertura.png, 1434 px, no cache do sw.js) pro PDF do
+      // orçamento: o LOGO_B64 embutido tem 288 px e borrava na impressão. Sem o arquivo (1ª vez
+      // sem internet), cai no embutido.
+      let logoPdfPromise = null;
+      function logoDoPdf() {
+        if (logoPdfPromise) return logoPdfPromise;
+        logoPdfPromise = (async () => {
+          try {
+            const resp = await fetch('logo-abertura.png');
+            if (!resp.ok) throw new Error('sem logo');
+            const blob = await resp.blob();
+            const dataUrl = await new Promise((ok, falha) => {
+              const r = new FileReader();
+              r.onload = () => ok(r.result);
+              r.onerror = falha;
+              r.readAsDataURL(blob);
+            });
+            const img = await new Promise((ok, falha) => {
+              const im = new Image();
+              im.onload = () => ok(im);
+              im.onerror = falha;
+              im.src = dataUrl;
+            });
+            // 720 px de largura = ~450 dpi nos 40 mm do PDF; o arquivo inteiro (1434 px) deixava o PDF com 2,5 MB
+            const largura = Math.min(720, img.naturalWidth);
+            const altura = Math.round(img.naturalHeight * largura / img.naturalWidth);
+            const canvas = document.createElement('canvas');
+            canvas.width = largura;
+            canvas.height = altura;
+            const ctx = canvas.getContext('2d');
+            // JPEG no fundo branco do cabeçalho: PNG no jsPDF sai sem compressão (650 KB só o logo)
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0, 0, largura, altura);
+            ctx.drawImage(img, 0, 0, largura, altura);
+            return { dataUrl: canvas.toDataURL('image/jpeg', 0.92), formato: 'JPEG', width: largura, height: altura };
+          } catch (e) {
+            logoPdfPromise = null; // tenta de novo no próximo PDF
+            const dims = await getLogoDimensions();
+            return { dataUrl: LOGO_B64, ...dims };
+          }
+        })();
+        return logoPdfPromise;
+      }
       function getLogoDimensions() {
         if (logoDimsPromise) return logoDimsPromise;
         logoDimsPromise = new Promise((resolve, reject) => {
@@ -21393,10 +21436,10 @@
         const HEADER_TOP = MARGIN;
         let logoBottomY = HEADER_TOP + 14;
         try {
-          const logoDims = await getLogoDimensions();
-          const logoWidthMM = 30;
-          const logoHeightMM = logoWidthMM * (logoDims.height / logoDims.width);
-          doc.addImage(LOGO_B64, 'PNG', MARGIN_L, HEADER_TOP, logoWidthMM, logoHeightMM);
+          const logo = await logoDoPdf();
+          const logoWidthMM = 40;
+          const logoHeightMM = logoWidthMM * (logo.height / logo.width);
+          doc.addImage(logo.dataUrl, logo.formato || 'PNG', MARGIN_L, HEADER_TOP, logoWidthMM, logoHeightMM);
           logoBottomY = HEADER_TOP + logoHeightMM;
         } catch (e) {
           doc.setFont('helvetica', 'bold');
