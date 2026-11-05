@@ -21405,20 +21405,33 @@
       }
 
       // Compartilha um arquivo (se o navegador suportar) ou baixa como fallback.
+      // Imagem/PDF levam alguns segundos pra gerar (html2canvas, fotos da
+      // Apresentação) e o navegador só deixa compartilhar logo depois de um
+      // toque (~5 s no Chrome): passado isso o share é recusado com
+      // NotAllowedError e antes o app baixava o arquivo calado (relato do
+      // usuário, 11/2026: "não abre a caixa do WhatsApp, salva direto"). Agora,
+      // sem o toque valendo, abre a mesma janela do CSV ("Enviar no WhatsApp /
+      // Compartilhar" sai do toque novo); só baixa se o navegador não
+      // compartilha esse arquivo de jeito nenhum.
       async function shareOrDownloadBlob(blob, fileName, shareTitle, successMsg) {
         const file = new File([blob], fileName, { type: blob.type });
-        if (navigator.share) {
-          try {
-            await navigator.share({ files: [file], title: shareTitle });
-            return;
-          } catch (e) {
-            // fechou a janela de compartilhar sem escolher: não baixa por conta própria
-            if (e && e.name === 'AbortError') return;
-            /* o navegador recusou esse tipo de arquivo: cai para o download */
-          }
+        if (!podeCompartilharArquivo(file)) {
+          baixarBlob(blob, fileName);
+          showToast(successMsg);
+          return;
         }
-        baixarBlob(blob, fileName);
-        showToast(successMsg);
+        const janela = () => abrirEnvioCsv(blob, fileName, shareTitle, successMsg, { titulo: 'Arquivo pronto' });
+        const ua = navigator.userActivation;
+        if (ua && !ua.isActive) { janela(); return; }
+        try {
+          await navigator.share({ files: [file], title: shareTitle });
+        } catch (e) {
+          // fechou a janela de compartilhar sem escolher: não baixa por conta própria
+          if (e && e.name === 'AbortError') return;
+          // toque expirado (NotAllowedError) ou outra recusa: pede um toque novo
+          console.warn('Compartilhar arquivo falhou:', e);
+          janela();
+        }
       }
       function baixarBlob(blob, fileName) {
         const url = URL.createObjectURL(blob);
@@ -21487,6 +21500,14 @@
           envio.compartilhando = false;
         }
       }
+      function tipoDoArquivoSalvar(fileName, blob) {
+        const ext = (String(fileName).match(/\.[a-z0-9]+$/i) || ['.csv'])[0].toLowerCase();
+        if (ext === '.pdf') return { description: 'PDF', accept: { 'application/pdf': ['.pdf'] } };
+        if (ext === '.jpg' || ext === '.jpeg') return { description: 'Imagem', accept: { 'image/jpeg': ['.jpg', '.jpeg'] } };
+        if (ext === '.png') return { description: 'Imagem', accept: { 'image/png': ['.png'] } };
+        if (ext === '.csv') return { description: 'Planilha CSV', accept: { 'text/csv': ['.csv'] } };
+        return { description: 'Arquivo', accept: { [(blob && blob.type) || 'application/octet-stream']: [ext] } };
+      }
       async function salvarEnvioCsv() {
         const envio = csvEnvio;
         if (!envio) return;
@@ -21501,7 +21522,7 @@
         try {
           handle = await window.showSaveFilePicker({
             suggestedName: fileName,
-            types: [{ description: 'Planilha CSV', accept: { 'text/csv': ['.csv'] } }],
+            types: [tipoDoArquivoSalvar(fileName, blob)],
           });
         } catch (e) {
           if (e && e.name === 'AbortError') return; // fechou a janela sem salvar
