@@ -348,6 +348,12 @@
     .copiarBtn:active { opacity: .7; }
     .copiarTudoBtn { width: 100%; min-height: 42px; margin-top: 10px; border: none; border-radius: 10px; background: var(--red); color: #fff; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
     .copiarTudoBtn:disabled { opacity: .5; cursor: default; }
+      /* logo oficial (o mesmo da abertura do app, já no cache do sw.js) */
+    .topoLogo { height: 34px; width: auto; display: block; flex-shrink: 0; }
+    .loadingScreen .brandLogo { width: 180px; height: auto; display: block; }
+    .loginCard .brandLogo { width: 170px; height: auto; display: block; margin: 0 auto 16px; }
+    /* celular: logo e "← App" numa linha, o título embaixo na largura toda */
+    @media (max-width: 520px) { .topoLogo { height: 28px; } .topoLogo + .backLink { margin-left: auto; } .topbar > .topoLogo ~ div:last-child { flex: 1 1 100% !important; } }
   </style>
 </head>
 
@@ -355,13 +361,13 @@
   <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
 
   <div id="loadingScreen" class="loadingScreen">
-    <div class="brand">Cortag</div>
+    <img class="brandLogo" src="logo-abertura.png" alt="Cortag Revolution Tools">
     <div class="loadingBar"><div class="loadingBarFill"></div></div>
   </div>
 
   <div id="loginScreen" class="loginScreen hidden">
     <div class="loginCard">
-      <div class="brandDot">C</div>
+      <img class="brandLogo" src="logo-abertura.png" alt="Cortag Revolution Tools">
       <h2>Entrar</h2>
       <div id="loginMsg"></div>
       <p class="ap-hint">Entre com a mesma conta Google usada no app de preços — a sessão é compartilhada.</p>
@@ -371,6 +377,7 @@
 
   <div class="wrap hidden" id="pageWrap">
     <div class="topbar">
+      <img class="topoLogo" src="logo-abertura.png" alt="Cortag Revolution Tools">
       <a class="backLink" href="index.html">← App</a>
       <div style="flex:1;min-width:200px;">
         <h1>Ficha Cadastral do Cliente</h1>

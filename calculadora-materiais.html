@@ -305,6 +305,12 @@
     @media (hover: none), (pointer: coarse) {
       .atalho, .juntaBtn { min-height: 44px; }
     }
+      /* logo oficial (o mesmo da abertura do app, já no cache do sw.js) */
+    .topoLogo { height: 34px; width: auto; display: block; flex-shrink: 0; }
+    .loadingScreen .brandLogo { width: 180px; height: auto; display: block; }
+    .loginCard .brandLogo { width: 170px; height: auto; display: block; margin: 0 auto 16px; }
+    /* celular: logo e "← App" numa linha, o título embaixo na largura toda */
+    @media (max-width: 520px) { .topoLogo { height: 28px; } .topoLogo + .backLink { margin-left: auto; } .topbar > .topoLogo ~ div:last-child { flex: 1 1 100% !important; } }
   </style>
 </head>
 
@@ -313,6 +319,7 @@
 
   <div class="wrap">
     <div class="topbar">
+      <img class="topoLogo" src="logo-abertura.png" alt="Cortag Revolution Tools">
       <a class="backLink" href="index.html">← App</a>
       <div style="flex:1;min-width:200px;">
         <h1>Calculadora de Materiais</h1>
