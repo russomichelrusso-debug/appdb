@@ -118,7 +118,8 @@ Pegadinhas de ambiente:
   vale em banco novo: em 10/2026 `levantamento_itens.quantidade_pedido` faltava em produção (todo levantamento
   dava "Erro ao gravar levantamento") e o `UNIQUE` de `vendedores.nome` também (pedido/levantamento com nome de
   vendedor novo dava 42P10 no `ON CONFLICT (nome)`). O pool (`db.js`) tem `max` 10 (`PG_POOL_MAX`), espera de conexão de
-  20 s e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
+  20 s, conexão ociosa aberta 10 min (`PG_CONEXAO_OCIOSA_MS`; era 30 s e quase toda requisição abria conexão nova até São
+  Paulo, ~1,6 s até no `GET /api/novidades` - log `[lenta]` de 11/2026), keep-alive e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
   andamento (até 25 s) e fecha o pool.
 - **Egress do Supabase** (10/2026, aviso de cota estourada do plano grátis, 5,5 GB/mês): todo dado que sai do banco pro
   Render conta. Leitura de tabela inteira que todo aparelho faz ao abrir (catálogo de preços ~1,25 MB, fichas, códigos,

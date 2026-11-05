@@ -78,6 +78,7 @@ Variáveis de ambiente:
 | `ADMIN_EMAIL` | Não | Se definida, só esse e-mail pode virar o **primeiro** usuário (admin) num banco sem usuários. Sem ela, quem logar primeiro vira admin. |
 | `ALLOWED_ORIGINS` | Não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://usuario.github.io`). Sem ela, a API aceita qualquer origem. |
 | `LOG_REQUISICAO_LENTA_MS` | Não | Requisição que passa disso (ms) vira uma linha `[lenta]` no log do Render, com o endereço sem dado de cliente (`middleware/requisicaoLenta.js`). Padrão 1000; `0` desliga. |
+| `PG_CONEXAO_OCIOSA_MS` | Não | Quanto tempo (ms) uma conexão parada com o banco fica aberta no pool antes de fechar. Padrão 600000 (10 min); abrir conexão nova até o Supabase custa ~1 s. |
 | `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini: assistente de voz e leitura da foto da lista/orçamento do cliente (`/api/assistente/itens-da-imagem`). |
 | `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.5-flash`. |
 | `IMPORTACAO_EMAIL_CHAVE` | Não (para a importação por e-mail) | Chave secreta (≥ 32 caracteres, `openssl rand -hex 32`) que o script do Gmail manda no cabeçalho `X-Chave-Importacao`. Sem ela, `POST /api/importacao-email/arquivo` fica fechado. Ver `docs/IMPORTACAO-EMAIL.md`. |
