@@ -125,6 +125,14 @@ Pegadinhas de ambiente:
   nomes dos produtos) passa por `routes/lib/cacheTabela.js` (`lerComCache`), que só relê quando os contadores de
   `pg_stat_user_tables` mudam; importação chama `esquecerTabela` (os contadores chegam com ~1 s de atraso). Leitura
   grande nova repetida a cada abertura do app: usar o mesmo cache.
+- **Catálogo de preços guardado no aparelho** (11/2026, lote 1 da auditoria de performance): até então o catálogo do servidor
+  nunca ficava no aparelho (`saveActiveDB` não era chamado). Aberto sem internet o app ficava com **0 produtos** e o `applyDB`
+  ainda **apagava o orçamento guardado** (filtra o carrinho pelos produtos do catálogo); o EAN/DUN-14 também só vinha da rede.
+  Agora `loadActiveDB` abre pela cópia do IndexedDB `cortag-catalogo` (`lerCopiaCatalogo`, chaves `catalogo` = produtos crus
+  da API + `assinatura` + `baixadoEm`, e `codigos`) e já pede a versão do servidor; no fim de `carregarCatalogoEExtras`,
+  `atualizarCatalogoGuardado` aplica a nova só se a assinatura mudou (com os promocionais do Painel e os códigos de novo por
+  cima, toast "Preços atualizados…"). Sem cópia, é a rede como antes. O Painel › recarregar a fonte usa `preferirRede`. Logout
+  apaga a cópia. Tela nova que dependa do catálogo pode receber dois `applyDB` na mesma abertura (cópia e depois servidor).
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
