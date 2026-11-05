@@ -138,7 +138,9 @@ Pegadinhas de ambiente:
   imagem e o texto levam o recado "Tabela de preços" (`avisoTabelaDaCopia`, em `avisosDoOrcamento`), pedido do usuário. Tela nova que dependa do catálogo pode receber dois
   `applyDB` na mesma abertura (cópia e depois servidor). **Promocionais do Painel** (P/P1/P2): até 11/2026 entravam depois do
   1º `applyDB` (`mergeProdutosPromocionais`), que já tinha tirado esses itens do orçamento guardado, a cada abertura, com ou sem
-  internet. Agora `juntarPromocionaisAoCatalogo` os põe no catálogo antes do `applyDB`, e a lista tem cópia (chave `promocionais`).
+  internet. Agora `juntarPromocionaisAoCatalogo` os põe no catálogo antes do `applyDB`, pela cópia da lista (chave `promocionais`,
+  gravada como cópia independente); a lista do servidor entra depois por `mergeProdutosPromocionais`, sem segurar a abertura (só a
+  1ª abertura sem cópia espera o servidor).
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
