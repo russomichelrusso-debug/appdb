@@ -51,6 +51,8 @@
     :root {
       --red: #CC0935;
       --red-deep: #A30729;
+      --red-texto: #CC0935; /* vermelho pra texto; no escuro troca pelo claro (fundo vermelho continua var(--red)) */
+      --red-texto-forte: #A30729; /* o vermelho escuro de antes (realce/selecionado); no escuro, o mesmo claro */
       --ink: #1D1D1F;
       --gray: #6E6E73;
       --fill: #F5F5F7;
@@ -100,6 +102,8 @@
      clarinho fixo (classificatório, previsão, ABC) ganham ajuste à parte
      logo abaixo, porque não usam essas variáveis - senão ficariam lavados.  */
     html[data-theme="dark"] {
+      --red-texto: #FF7A8C; /* 5,6:1 sobre #2C2C2E (o --red dava 2,4:1) */
+      --red-texto-forte: #FF7A8C;
       --ink: #F2F2F4;
       --gray: #98989D;
       --fill: #1C1C1E;
@@ -675,7 +679,7 @@
       gap: 3px;
       background: none;
       border: none;
-      color: var(--red);
+      color: var(--red-texto);
       cursor: pointer;
       font-size: 11px;
       font-weight: 700;
@@ -691,7 +695,7 @@
     }
 
     .gpsBtn:active {
-      color: var(--red-deep);
+      color: var(--red-texto-forte);
     }
 
     .gpsBtn.busy svg {
@@ -979,7 +983,7 @@
     }
 
     .searchClearBtn:active {
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     /* ✕ ao lado do leitor (aba Produtos): no fluxo dos botões, não absoluto */
@@ -1131,11 +1135,11 @@
 
     .micBtn:active,
     .camBtn:active {
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .micBtn.listening {
-      color: var(--red);
+      color: var(--red-texto);
       animation: micPulse 1s ease-in-out infinite;
     }
 
@@ -1303,7 +1307,7 @@
       font-weight: 600;
       letter-spacing: 0;
       text-transform: none;
-      color: var(--red);
+      color: var(--red-texto);
       background: none;
       padding: 0;
       border-radius: 0;
@@ -1657,7 +1661,7 @@
       border: 1px solid var(--red);
       border-radius: var(--r-sm);
       background: var(--white);
-      color: var(--red);
+      color: var(--red-texto);
       font: inherit;
       font-size: 14px;
       font-weight: 700;
@@ -1838,7 +1842,7 @@
       height: 38px;
       flex-shrink: 0;
       background: rgba(204, 9, 53, .1);
-      color: var(--red);
+      color: var(--red-texto);
       border: none;
       border-radius: 50%;
       display: flex;
@@ -2187,7 +2191,7 @@
       font-size: 16px;
       font-weight: 700;
       cursor: pointer;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .qtybox span {
@@ -2281,7 +2285,7 @@
       padding: 4px 2px;
       font: inherit;
       font-weight: 700;
-      color: var(--red);
+      color: var(--red-texto);
       cursor: pointer;
     }
 
@@ -2984,7 +2988,7 @@
 
     .promoTipoTag--campanha {
       background: rgba(204, 9, 53, .12);
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .promoTipoTag--classificatorio {
@@ -3069,7 +3073,7 @@
       width: 100%;
       text-align: center;
       background: var(--fill);
-      color: var(--red);
+      color: var(--red-texto);
       border: none;
       border-radius: var(--r-sm);
       padding: 13px;
@@ -3179,7 +3183,7 @@
     .restoreBtn {
       background: var(--fill);
       border: none;
-      color: var(--red);
+      color: var(--red-texto);
       border-radius: var(--r-sm);
       padding: 13px;
       font-weight: 600;
@@ -3449,7 +3453,7 @@
       border: 1.5px dashed var(--hairline);
       border-radius: 14px;
       background: transparent;
-      color: var(--red);
+      color: var(--red-texto);
       font-weight: 700;
       font-size: 14px;
       cursor: pointer;
@@ -4222,7 +4226,7 @@
     .pdfDropzone svg {
       width: 32px;
       height: 32px;
-      color: var(--red);
+      color: var(--red-texto);
       margin: 0 auto 10px;
       display: block;
     }
@@ -4602,7 +4606,7 @@
       border: none;
       padding: 0;
       min-height: 32px;
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
@@ -4748,7 +4752,7 @@
       font-style: normal;
       font-size: 13px;
       font-weight: 600;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .lcFechar {
@@ -5008,7 +5012,7 @@
     .lcOpcao.sel {
       border: 2px solid var(--red);
       background: var(--accent-bg);
-      color: var(--red-deep);
+      color: var(--red-texto-forte);
       font-weight: 600;
     }
 
@@ -5039,7 +5043,7 @@
       padding: 0;
       border: none;
       background: none;
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 13px;
       font-weight: 600;
       cursor: pointer;
@@ -5488,7 +5492,7 @@
     .ocBotoes button.marcado {
       border: 1.5px solid var(--red);
       background: var(--accent-bg);
-      color: var(--red);
+      color: var(--red-texto);
       font-weight: 600;
     }
 
@@ -5548,7 +5552,7 @@
     .ocAnexo.obrig .ocAnexoBtn {
       border-color: var(--red);
       background-color: var(--accent-bg);
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .ocAnexo.tem .ocAnexoBtn {
@@ -5976,7 +5980,7 @@
     .csvNomeSugestoes button.ativo,
     .whatsSugestoes button.ativo {
       border-color: var(--red);
-      color: var(--red);
+      color: var(--red-texto);
       font-weight: 600;
     }
 
@@ -6078,7 +6082,7 @@
     .shareSheetPara button {
       border: none;
       background: none;
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 13px;
       font-weight: 600;
       padding: 6px 4px;
@@ -6684,7 +6688,7 @@
     .lev-summary .levCountBig {
       font-size: 20px;
       font-weight: 800;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .levNumWrap {
@@ -6780,7 +6784,7 @@
       flex-shrink: 0;
       background: var(--fill);
       border: none;
-      color: var(--red);
+      color: var(--red-texto);
       border-radius: var(--r-sm);
       padding: 9px 12px;
       font-weight: 600;
@@ -6889,7 +6893,7 @@
     }
 
     .novidadesFaixa .seta {
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 18px;
       font-weight: 700;
     }
@@ -7081,7 +7085,7 @@
     .ofertaPor {
       font-size: 24px;
       font-weight: 800;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .ofertaOff {
@@ -7149,7 +7153,7 @@
       width: 20px;
       height: 20px;
       flex-shrink: 0;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .fichaTecTitulo {
@@ -7443,7 +7447,7 @@
       font-size: 11px;
       font-weight: 800;
       letter-spacing: 1px;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .campGrupo--escuro .campGrupoNome small {
@@ -7704,7 +7708,7 @@
     .campItemPor {
       font-size: 16px;
       font-weight: 800;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .campItemOff {
@@ -7854,7 +7858,7 @@
       padding: 2px 7px;
       border-radius: 7px;
       background: var(--accent-bg);
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 11px;
       font-weight: 800;
     }
@@ -7963,7 +7967,7 @@
 
     .catSub.ativo {
       border-color: var(--red);
-      color: var(--red);
+      color: var(--red-texto);
       background: var(--white);
     }
 
@@ -7984,7 +7988,7 @@
       flex: none;
       background: var(--white);
       border: 0.75px solid var(--hairline);
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .catItemInfo {
@@ -8220,7 +8224,7 @@
       border: 1.5px solid var(--red);
       border-radius: var(--r-sm);
       background: var(--white);
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 14px;
       font-weight: 700;
       cursor: pointer;
@@ -8270,7 +8274,7 @@
       position: absolute;
       top: -2px;
       right: 2px;
-      color: var(--red);
+      color: var(--red); /* sobre a miniatura, fundo branco fixo nos dois temas */
       font-size: 13px;
     }
 
@@ -9145,7 +9149,7 @@
       padding: 6px 12px;
       border: 1px solid var(--red);
       border-radius: 999px;
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 13px;
       font-weight: 600;
       white-space: nowrap;
@@ -9393,7 +9397,7 @@
 
     .recompraBtn--principal {
       flex: 2;
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .recompraMais {
@@ -9401,7 +9405,7 @@
       width: 100%;
       background: none;
       border: none;
-      color: var(--red);
+      color: var(--red-texto);
       font-weight: 600;
       font-size: 13px;
       padding: 10px 0 2px;
@@ -9655,7 +9659,7 @@
     }
 
     .levsubtotal b {
-      color: var(--red);
+      color: var(--red-texto);
       font-weight: 700;
       font-size: 15px;
       font-variant-numeric: tabular-nums;
@@ -9677,7 +9681,7 @@
     }
 
     .levqtygroup.pedido label {
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .levqtybox {
@@ -9706,7 +9710,7 @@
     }
 
     .levqtygroup.pedido .levqtybox button {
-      color: var(--red);
+      color: var(--red-texto);
     }
 
     .levqtybox input {
@@ -9738,7 +9742,7 @@
       justify-content: center;
       font-weight: 700;
       font-size: 14px;
-      color: var(--red);
+      color: var(--red-texto);
       font-variant-numeric: tabular-nums;
     }
 
@@ -10194,7 +10198,7 @@
     }
 
     .ctxResumoAlterar {
-      color: var(--red);
+      color: var(--red-texto);
       font-size: 13px;
       font-weight: 600;
       white-space: nowrap;
@@ -10236,7 +10240,7 @@
     }
 
     .levLembrete b {
-      color: var(--red);
+      color: var(--red-texto);
       white-space: nowrap;
     }
 
@@ -11297,7 +11301,7 @@
        cheio; Compartilhar vira contorno. */
     .shareOptBtn {
       background: transparent;
-      color: var(--red);
+      color: var(--red-texto);
       box-shadow: inset 0 0 0 1.5px var(--red);
     }
 
@@ -12073,7 +12077,7 @@
       border: 1px solid var(--hairline);
       border-radius: 999px;
       background: var(--white);
-      color: var(--red);
+      color: var(--red-texto);
       font: inherit;
       font-size: 12.5px;
       font-weight: 700;
@@ -13174,7 +13178,7 @@
         <input type="text" id="clientPickerSearch" aria-label="Buscar cliente" placeholder="Nome, fantasia, CNPJ/CPF, código ou cidade..." autocomplete="off">
         <div id="clientPickerResults"></div>
         <button type="button" class="priceEditResetLink" id="clientPickerNewToggle"
-          style="text-decoration:none;color:var(--red);font-weight:700;margin:6px 0 14px;">+ cadastrar cliente
+          style="text-decoration:none;color:var(--red-texto);font-weight:700;margin:6px 0 14px;">+ cadastrar cliente
           novo</button>
         <div id="clientPickerNewForm" class="hidden">
           <label for="clientPickerNewNome">Nome</label>
@@ -13942,7 +13946,7 @@
           <label>Degraus (mínimo → desconto)</label>
           <div id="promoTiersList"></div>
           <button type="button" class="priceEditResetLink" id="addTierBtn"
-            style="text-decoration:none;color:var(--red);font-weight:700;margin-bottom:16px;">+ adicionar
+            style="text-decoration:none;color:var(--red-texto);font-weight:700;margin-bottom:16px;">+ adicionar
             degrau</button>
         </div>
 
@@ -13959,7 +13963,7 @@
           </div>
           <div id="basketItemsList"></div>
           <button type="button" class="priceEditResetLink" id="addBasketItemBtn"
-            style="text-decoration:none;color:var(--red);font-weight:700;margin-bottom:14px;">+ adicionar item à
+            style="text-decoration:none;color:var(--red-texto);font-weight:700;margin-bottom:14px;">+ adicionar item à
             cesta</button>
           <label for="promoComboPct">Desconto quando a cesta estiver completa</label>
           <div class="pct-wrap" style="margin-bottom:16px;">
