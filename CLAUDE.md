@@ -1719,7 +1719,10 @@ Supabase, sem PR — não é mudança de código.
   toque de 44 px em 10/2026; em 11/2026, opções recomendadas dos mockups "Cortag · Acessibilidade": nome
   nas 7 buscas e nos campos das regras do Painel, −/+ com o produto e o passo no nome, resultado falado
   depois do toque por `#avisoLeitor`/`anunciarLeitor` com o foco devolvido ao botão (`focoDoBotaoQtd`), e
-  contraste da fita de campanha e do % do classificatório; faltam as páginas separadas, não auditadas) e
+  contraste da fita de campanha e do % do classificatório; depois as páginas separadas e o tema escuro: `--red-texto`
+  claro no escuro em todas as páginas (opção "A" dos mockups), abas/azul/verde/laranja da Curva ABC, cartão do mês do
+  Dashboard sem botão dentro de botão ("Ver pedidos do mês"), campos com nome — axe sem violação nas 6 páginas, nos
+  dois temas; falta o teste com TalkBack/VoiceOver num celular de verdade) e
   **unificar o visual das páginas
   separadas** com o `index.html` (cabeçalho, cards e botões próprios em cada uma — hoje só os
   tokens e o tema escuro foram alinhados).

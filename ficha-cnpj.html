@@ -63,7 +63,7 @@
       --shadow-2: 0 2px 8px rgba(0, 0, 0, .35), 0 12px 28px rgba(0, 0, 0, .3);
       --success: #5BC27A;
       --warning: #F0A54A;
-      --danger: #FF6B61;
+      --danger: #FF9B92; /* 5,8:1 na mensagem de erro (era #FF6B61, 4,2:1) */
       --success-bg: rgba(52, 199, 89, .16);
       --warning-bg: rgba(255, 159, 10, .16);
       --danger-bg: rgba(255, 69, 58, .16);
@@ -388,7 +388,7 @@
     <div class="card" id="clientPickerCard">
       <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver a ficha cadastral dele.</p>
       <div id="clientPickerSearch">
-        <input type="text" id="clientPickerInput" placeholder="Nome, fantasia, CNPJ, código ou cidade…">
+        <input type="text" id="clientPickerInput" aria-label="Buscar cliente" placeholder="Nome, fantasia, CNPJ, código ou cidade…">
         <div id="clientPickerResults" style="margin-top:8px;"></div>
       </div>
       <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">

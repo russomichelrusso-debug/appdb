@@ -28,22 +28,25 @@
     :root {
       --red: #CC0935;
       --red-deep: #A30729;
+      --red-texto: #CC0935; /* vermelho pra texto; no escuro troca pelo claro (fundo vermelho continua var(--red)) */
       --amber: #B36B00;
       --ink: #1D1D1F;
       --gray: #6E6E73;
       --fill: #F5F5F7;
       --hairline: #D2D2D7;
+      --gray-seg: #4A4A4F; /* aba não selecionada sobre o --hairline: 5,9:1 (o --gray dava 3,4:1) */
       --blue: #0071E3;
+      --blue-texto: #0071E3;
       --white: #FFFFFF;
       --r-sm: 10px;
       --r-md: 16px;
       --r-lg: 22px;
       --shadow-1: 0 1px 2px rgba(0, 0, 0, .04), 0 1px 1px rgba(0, 0, 0, .04);
       --shadow-2: 0 2px 8px rgba(0, 0, 0, .06), 0 12px 28px rgba(0, 0, 0, .07);
-      /* mesmos tokens de status do index.html */
+      /* tokens de status do index.html; --success/--warning um tom mais escuros aqui (texto sobre branco, 4,5:1) */
       --on-accent: #FFFFFF;
-      --success: #1E8E3E;
-      --warning: #B36B00;
+      --success: #1E7B34; /* 5,3:1 (era #1E8E3E, 4,2:1, mesmo do index.html) */
+      --warning: #9A5B00; /* 5,4:1 (era #B36B00, 4,2:1) */
       --danger: #B3261E;
       --success-bg: #E7F3EC;
       --warning-bg: #FFF4E5;
@@ -53,6 +56,9 @@
     }
 
     html[data-theme="dark"] {
+      --red-texto: #FF7A8C; /* 5,6:1 sobre #2C2C2E (o --red dava 2,4:1) */
+      --blue-texto: #5AA9FF; /* 5,7:1 (o --blue dava 3,0:1) */
+      --gray-seg: #C7C7CC; /* aba não selecionada sobre o --hairline: 6,7:1 */
       --ink: #F2F2F4;
       --gray: #98989D;
       --fill: #1C1C1E;
@@ -230,7 +236,7 @@
       font: inherit;
       font-size: 12.5px;
       font-weight: 600;
-      color: var(--gray);
+      color: var(--gray-seg);
       padding: 7px 13px;
       border-radius: 8px;
       cursor: pointer;
@@ -331,10 +337,10 @@
     /* Nome do cliente que abre ele no app + "Montar proposta"/"Histórico" (10/2026). */
     .listaAlertaItem:has(.cliAcoes) { flex-wrap: wrap; row-gap: 4px; }
     .cliLink { flex: 1 1 0; min-width: 0; border: none; background: none; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-    .cliLink:hover, .cliLink:focus-visible { color: var(--red); text-decoration: underline; }
+    .cliLink:hover, .cliLink:focus-visible { color: var(--red-texto); text-decoration: underline; }
     .cliAcoes { flex-basis: 100%; display: flex; gap: 6px; flex-wrap: wrap; }
     .cliAcoes button { border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit; font-size: 12px; font-weight: 600; padding: 5px 10px; min-height: 32px; border-radius: 8px; cursor: pointer; }
-    .cliAcoes button.principal { border-color: var(--red); color: var(--red); }
+    .cliAcoes button.principal { border-color: var(--red); color: var(--red-texto); }
     .cliAcoes button:hover { background: var(--fill); }
     .dashTop .cliAcoes { margin: 6px 0 2px 30px; }
 
@@ -391,7 +397,7 @@
     .gavProd .txt b { display: block; font-size: 13px; font-weight: 600; }
     .gavProd .txt span { display: block; font-size: 11.5px; color: var(--gray); }
     .gavProd[data-parou] .txt span { color: var(--warning); }
-    .gavMais { min-width: 44px; height: 44px; padding: 0 10px; border: none; border-radius: 999px; background: var(--accent-bg); color: var(--red); font: inherit; font-size: 20px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
+    .gavMais { min-width: 44px; height: 44px; padding: 0 10px; border: none; border-radius: 999px; background: var(--accent-bg); color: var(--red-texto); font: inherit; font-size: 20px; font-weight: 700; cursor: pointer; flex-shrink: 0; }
     .gavMais[aria-pressed="true"] { background: var(--red); color: #fff; font-size: 13px; }
     .gavVazio { font-size: 12.5px; color: var(--gray); }
     .gavRodape { padding: 12px 20px 18px; border-top: 1px solid var(--hairline); display: flex; flex-direction: column; gap: 8px; }
@@ -425,11 +431,12 @@
     }
     .dashHero .chartEmpty { color: rgba(255, 255, 255, .9); }
     .dashHero.active { box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .85); }
-    .dashHero:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
     .dashHero .heroTexto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
     .dashHero .heroTopo { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
     .dashHero .heroLbl { font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
-    .dashHero .heroAte { font-size: 12px; opacity: .85; margin-top: -2px; }
+    .dashHero .heroAte { font-size: 12px; margin-top: -2px; }
+    .dashHero .heroVerPedidos { align-self: flex-start; min-height: 36px; padding: 0 12px; border: 1.5px solid #fff; border-radius: 10px; background: transparent; color: #fff; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+    .dashHero .heroVerPedidos:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
     .dashHero .heroPilula { background: rgba(255, 255, 255, .18); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 700; }
     .dashHero .heroValor { font-size: 40px; font-weight: 800; letter-spacing: -.03em; line-height: 1.05; }
     .dashHero .heroLinha { font-size: 12.5px; color: rgba(255, 255, 255, .92); line-height: 1.45; }
@@ -475,7 +482,7 @@
     .barras { position: relative; display: flex; align-items: flex-end; gap: 6px; height: 170px; border-bottom: 1px solid var(--hairline); }
     .barras .barCol { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
     .barras .barVal { font-size: 10.5px; font-weight: 700; white-space: nowrap; }
-    .barras .barCol.atual .barVal { color: var(--red); }
+    .barras .barCol.atual .barVal { color: var(--red-texto); }
     .barras .bar { width: 72%; max-width: 46px; min-height: 2px; background: var(--accent-bg); border-radius: 5px 5px 2px 2px; box-shadow: inset 0 0 0 1px rgba(204, 9, 53, .18); }
     .barras .barCol.atual .bar { background: var(--red); box-shadow: none; }
     .barras .linhaRef { position: absolute; left: 0; right: 0; height: 0; pointer-events: none; }
@@ -496,7 +503,7 @@
     .famLinha .famBarra { height: 100%; background: var(--blue); border-radius: 4px; }
     .famLinha.foco .famBarra { background: var(--red); }
     .famLinha .famValor { width: 70px; text-align: right; font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; flex-shrink: 0; }
-    .focoTag { color: var(--red); font-weight: 700; }
+    .focoTag { color: var(--red-texto); font-weight: 700; }
     .rankItem .rankTrilho { flex-basis: 100%; height: 5px; background: var(--fill); border-radius: 999px; margin: 6px 0 0 30px; }
     .rankItem .rankBarra { height: 100%; background: var(--red); border-radius: 999px; }
     .dashTop .rankItem { flex-wrap: wrap; }
@@ -548,9 +555,9 @@
       .dashAtencaoLista { grid-template-columns: minmax(0, 1fr); gap: 0; }
       .atItem { flex-direction: row; align-items: center; min-height: 60px; padding: 8px 0; gap: 12px; box-shadow: none; border-radius: 0; border-bottom: 1px solid var(--hairline); background: transparent; }
       .atItem:last-child { border-bottom: none; }
-      .atItem:hover .atTit { color: var(--red); }
+      .atItem:hover .atTit { color: var(--red-texto); }
       .atItem.active { box-shadow: none; }
-      .atItem.active .atTit { color: var(--red); }
+      .atItem.active .atTit { color: var(--red-texto); }
       .atItem .atNum { width: 44px; height: 44px; font-size: 20px; }
       .atItem .atTexto { width: auto; }
       .atItem[data-cor="danger"] .atNum { background: var(--danger-bg); }
@@ -600,8 +607,8 @@
     .abcClasse .clQtd { font-size: 22px; font-weight: 800; letter-spacing: -.02em; }
     .abcClasse .clSub { font-size: 11.5px; color: var(--gray); }
     .abcClasse .clValor { font-size: 14px; font-weight: 800; margin-top: 4px; }
-    .abcClasse .clAcao { font-size: 11.5px; font-weight: 700; color: var(--blue); margin-top: auto; padding-top: 6px; }
-    .abcClasse.active .clAcao { color: var(--red); }
+    .abcClasse .clAcao { font-size: 11.5px; font-weight: 700; color: var(--blue-texto); margin-top: auto; padding-top: 6px; }
+    .abcClasse.active .clAcao { color: var(--red-texto); }
     .abcCorpo { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
     .abcEsq { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
     .abcEsq .chartCard { margin-bottom: 0; }
@@ -616,7 +623,7 @@
     .pareto svg { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
     .pareto .parCorte { position: absolute; left: 0; right: 0; border-top: 1px dashed; pointer-events: none; }
     .pareto .parCorte span { position: absolute; top: -17px; font-size: 10.5px; font-weight: 700; background: var(--white); padding: 0 4px; white-space: nowrap; }
-    .pareto .parCorte.a { border-color: var(--red); color: var(--red); }
+    .pareto .parCorte.a { border-color: var(--red); color: var(--red-texto); }
     .pareto .parCorte.a span { left: 0; }
     .pareto .parCorte.b { border-color: var(--amber); color: var(--amber); }
     .pareto .parCorte.b span { right: 0; }
@@ -789,7 +796,7 @@
           <p class="cardHint">Pelo último pedido — vale uma ligação antes que percam a faixa.</p>
           <div class="listaAlerta" id="listaSemComprar"></div>
         </div>
-        <div class="card dashLista" style="--corLista: var(--blue);">
+        <div class="card dashLista" style="--corLista: var(--blue-texto);">
           <h3>Produtos mais vendidos</h3>
           <p class="cardHint">Top 3 por faturamento no período.</p>
           <div id="rankTopProdutos"></div>
@@ -822,7 +829,7 @@
     <div class="card hidden" id="clientPickerCard" style="margin-bottom:14px;">
       <div id="clientPickerSearch">
         <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver o que ele mais e menos compra (mesma classificação A/B/C, só que sobre o histórico faturado desse cliente).</p>
-        <input type="text" id="clientPickerInput" placeholder="Cliente: nome, fantasia, CNPJ, código, cidade…" style="font:inherit;font-size:13px;border:1px solid var(--hairline);border-radius:9px;padding:9px 12px;width:100%;background:var(--white);color:var(--ink);">
+        <input type="text" id="clientPickerInput" aria-label="Buscar cliente" placeholder="Cliente: nome, fantasia, CNPJ, código, cidade…" style="font:inherit;font-size:13px;border:1px solid var(--hairline);border-radius:9px;padding:9px 12px;width:100%;background:var(--white);color:var(--ink);">
         <div id="clientPickerResults" style="margin-top:8px;"></div>
       </div>
       <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -868,9 +875,9 @@
             <button data-classe="B">B</button>
             <button data-classe="C">C</button>
           </div>
-          <select id="categoriaFiltro"><option value="">Todas as categorias</option></select>
-          <select id="subfamiliaFiltro" class="hidden"><option value="">Todas as subfamílias</option></select>
-          <input type="text" id="produtoBusca" placeholder="Nome, código ou medida (ex.: serra copo 50)…">
+          <select id="categoriaFiltro" aria-label="Filtrar por categoria"><option value="">Todas as categorias</option></select>
+          <select id="subfamiliaFiltro" class="hidden" aria-label="Filtrar por subfamília"><option value="">Todas as subfamílias</option></select>
+          <input type="text" id="produtoBusca" aria-label="Buscar produto" placeholder="Nome, código ou medida (ex.: serra copo 50)…">
         </div>
         <div class="prodCount" id="prodFiltroCount"></div>
         <div class="prodTableScroll" id="topTableHost"></div>
@@ -1033,11 +1040,13 @@
     function toggleKpiExpand(tipo) {
       const panel = document.getElementById('kpiExpandPanel');
       document.querySelectorAll('#tabDashboardPrincipal [data-kpi-tipo]').forEach(el => el.classList.remove('active'));
+      document.querySelector('.heroVerPedidos')?.setAttribute('aria-expanded', 'false');
       if (kpiExpandAberto === tipo) { panel.classList.add('hidden'); kpiExpandAberto = null; return; }
       kpiExpandAberto = tipo;
       const cfg = kpiExpandData[tipo];
       if (!cfg) return;
       document.querySelector(`#tabDashboardPrincipal [data-kpi-tipo="${tipo}"]`)?.classList.add('active');
+      document.querySelector('.heroVerPedidos')?.setAttribute('aria-expanded', String(tipo === 'entradaPedidos'));
       panel.classList.remove('hidden');
       panel.innerHTML = `
         <h3>${escapeHtml(cfg.titulo)}</h3>
@@ -1884,10 +1893,12 @@
       const entradaAteTxt = entradaAte ? `<div class="heroAte">pedidos do ERP até ${entradaAte.split('-').reverse().slice(0, 2).join('/')} · o Salesforce é ao vivo</div>` : '';
       const hero = document.getElementById('dashHero');
       hero.dataset.kpiTipo = 'entradaPedidos';
-      hero.setAttribute('role', 'button');
-      hero.tabIndex = 0;
+      // Não é role="button": tem botões dentro (lápis do objetivo), e botão dentro de botão confunde o
+      // leitor de tela e o teclado. O toque no cartão continua; teclado/leitor usam o "Ver pedidos do mês".
+      hero.removeAttribute('role');
+      hero.removeAttribute('tabindex');
+      hero.onkeydown = null;
       hero.onclick = () => toggleKpiExpand('entradaPedidos');
-      hero.onkeydown = (e) => { if (e.target !== hero) return; if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleKpiExpand('entradaPedidos'); } };
       hero.innerHTML = `
         <div class="heroTexto">
           <div class="heroTopo">
@@ -1897,6 +1908,7 @@
           <div class="heroValor">${escapeHtml(formatCompact(fatAtual, true))}</div>${entradaAteTxt}
           <div class="heroLinha">${linhaMeta} ${lapisMeta}</div>
           <div class="heroNums">${numerosHtml}</div>
+          <button type="button" class="heroVerPedidos" aria-controls="kpiExpandPanel" aria-expanded="${kpiExpandAberto === 'entradaPedidos'}">Ver pedidos do mês ›</button>
         </div>
         ${anel}`;
 

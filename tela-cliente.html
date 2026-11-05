@@ -25,6 +25,8 @@
     :root {
       --red: #CC0935;
       --red-deep: #A30729;
+      --red-texto: #CC0935; /* vermelho pra texto; no escuro troca pelo claro (fundo vermelho continua var(--red)) */
+      --red-texto-forte: #A30729; /* o vermelho escuro de antes (realce/selecionado); no escuro, o mesmo claro */
       --ink: #1D1D1F;
       --gray: #6E6E73;
       --fill: #F5F5F7;
@@ -51,6 +53,8 @@
     }
 
     html[data-theme="dark"] {
+      --red-texto: #FF7A8C; /* 5,6:1 sobre #2C2C2E (o --red dava 2,4:1) */
+      --red-texto-forte: #FF7A8C;
       --ink: #F2F2F4;
       --gray: #98989D;
       --fill: #1C1C1E;
@@ -249,7 +253,7 @@
     }
     .dica svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
     .parearRodape { font-size: 13px; color: var(--gray); }
-    .voltarApp { color: var(--red); font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px; }
+    .voltarApp { color: var(--red-texto); font-size: 15px; font-weight: 600; text-decoration: none; padding: 12px; }
 
     /* ---- conectado, sem orçamento / tela escondida ---- */
     .aguardando {
@@ -326,7 +330,7 @@
     .barra { height: 10px; background: var(--neutral-2); border-radius: 5px; overflow: hidden; margin: 6px 0 2px; }
     .barra div { height: 100%; background: var(--success-strong); border-radius: 5px; transition: width .4s; }
     .cartao.campanha { background: var(--accent-bg); }
-    .cartao.campanha .rot { color: var(--red-deep); font-weight: 700; font-size: 13px; letter-spacing: .4px; }
+    .cartao.campanha .rot { color: var(--red-texto-forte); font-weight: 700; font-size: 13px; letter-spacing: .4px; }
     html[data-theme="dark"] .cartao.campanha .rot { color: #FF8FA6; }
     .cartao.campanha strong { font-size: 17px; line-height: 1.3; }
     .rodapeOrc { font-size: 12px; color: var(--gray); text-align: center; }
@@ -404,7 +408,7 @@
     .catProdFoto > svg { width: 40%; height: 40%; color: #C7C7CC; }
     .catProdFoto .catSelo { top: 18px; left: 18px; font-size: 18px; padding: 8px 14px; border-radius: 10px; }
     .catProdInfo { flex: 1 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 16px; max-height: 100%; overflow-y: auto; }
-    .catProdInfo small { font-size: 15px; font-weight: 700; color: var(--red); letter-spacing: .4px; }
+    .catProdInfo small { font-size: 15px; font-weight: 700; color: var(--red-texto); letter-spacing: .4px; }
     .catProdInfo h2 { margin: 0; font-size: 40px; line-height: 1.12; letter-spacing: -.7px; overflow-wrap: break-word; }
     .catProdInfo p { margin: 0; font-size: 18px; line-height: 1.5; color: var(--gray); white-space: pre-line; }
     .catSpecs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
@@ -502,7 +506,7 @@
     .vitrineFoto > svg { width: 110px; height: 110px; color: var(--gray); }
     .vitrinePct { position: absolute; top: 16px; left: 16px; background: var(--red); color: var(--on-accent); font-size: 16px; font-weight: 700; border-radius: 8px; padding: 6px 12px; }
     .vitrineInfo { flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
-    .vitrineTag { font-size: 14px; font-weight: 600; color: var(--red); letter-spacing: .3px; }
+    .vitrineTag { font-size: 14px; font-weight: 600; color: var(--red-texto); letter-spacing: .3px; }
     .vitrineInfo h2 { margin: 0; font-size: 34px; line-height: 1.15; font-weight: 700; letter-spacing: -.5px; overflow-wrap: break-word; }
     .vitrineDe { font-size: 18px; color: var(--gray); text-decoration: line-through; font-variant-numeric: tabular-nums; }
     .vitrinePor { font-size: 52px; font-weight: 800; letter-spacing: -1px; font-variant-numeric: tabular-nums; line-height: 1.05; }
