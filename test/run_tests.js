@@ -4479,6 +4479,48 @@ async function main() {
       }
     }
 
+    // Tipos e medidas da família grande no Catálogo (index.html, trecho <motor-tipos>, 11/2026):
+    // as brocas do catálogo embutido viram tipos (aço rápido, concreto, SDS Plus…) e cada tipo
+    // ganha chips de medida.
+    {
+      const fsT = require('fs');
+      const vmT = require('vm');
+      const htmlT = fsT.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+      const i = htmlT.indexOf('// <motor-tipos>'), f = htmlT.indexOf('// </motor-tipos>');
+      const ctxT = { window: {} };
+      vmT.createContext(ctxT);
+      if (i < 0 || f < i) {
+        assert(false, 'tipos: trecho <motor-tipos> não encontrado no index.html');
+      } else {
+        vmT.runInContext(htmlT.slice(i, f) + ';this.T = { tiposDaFamilia, faixasDeMedida, naFaixaDeMedida, medidaDoNome, pelaMedida };', ctxT);
+        vmT.runInContext(fsT.readFileSync(require('path').join(__dirname, '..', 'catalogo-embutido.js'), 'utf8'), ctxT);
+        const T = ctxT.T;
+        const brocas = ctxT.window.DB_EMBUTIDO.products.filter(p => p.cat === 13);
+        const tipos = T.tiposDaFamilia(brocas);
+        assert(tipos && tipos.length >= 6 && tipos.length <= 15, `tipos: brocas viram de 6 a 15 tipos (${tipos ? tipos.length : 0})`);
+        const nomes = tipos ? tipos.map(t => t.nome) : [];
+        const soma = tipos ? tipos.reduce((n, t) => n + t.produtos.length, 0) : 0;
+        assert(soma === brocas.length, `tipos: todo produto fica em um tipo só (${soma} de ${brocas.length})`);
+        assert(nomes[0] === 'Aço rapido' && tipos[0].produtos.length > 100, `tipos: o maior tipo é o aço rápido, sem "Broca de" no nome (${nomes[0]})`);
+        assert(nomes.some(n => /SDS plus/.test(n)) && nomes.some(n => /^Chata/.test(n)), `tipos: SDS Plus e chata pra madeira (${nomes.join(' | ')})`);
+        assert(nomes.includes('Jogos e kits') && nomes[nomes.length - 1] === 'Outras', `tipos: jogos juntos e "Outras" no fim (${nomes.join(' | ')})`);
+        const chata = tipos && tipos.find(t => /^Chata/.test(t.nome));
+        assert(chata && chata.produtos.length >= 15, `tipos: "BROCA CHATA" entra no "BROCA CHATA P/ MADEIRA" (${chata ? chata.produtos.length : 0})`);
+        assert(T.tiposDaFamilia(brocas.slice(0, 10)) === null, 'tipos: família pequena não ganha tipos');
+        assert(T.medidaDoNome('BROCA C/ PONTA DE METAL DURO P/ CONCRETO  4,0mm x 75 mm - PC').v === 4, 'tipos: medida antes do "x" é o diâmetro');
+        assert(T.medidaDoNome('BROCA C/ ENCAIXE SDS PLUS P/ CONCRETO 8,0 x 200 x 260mm').v === 8, 'tipos: SDS 8,0 x 200 x 260mm = 8 mm');
+        const pol = T.medidaDoNome('BROCA DE AÇO RAPIDO 1/8"');
+        assert(pol && pol.mm === false && Math.abs(pol.v - 3.175) < 0.01, 'tipos: 1/8" é polegada');
+        const aco = tipos ? T.pelaMedida(tipos[0].produtos) : [];
+        const faixas = T.faixasDeMedida(aco);
+        assert(faixas.length >= 4 && faixas.length <= 8, `tipos: aço rápido em 4 a 8 chips de medida (${faixas.map(x => x.rotulo).join(' ')})`);
+        assert(faixas.some(x => x.rotulo === 'Em polegada'), 'tipos: as de polegada num chip só');
+        const contados = aco.filter(p => faixas.some(x => T.naFaixaDeMedida(p, x))).length;
+        assert(contados === aco.length, `tipos: todo produto do tipo cai num chip de medida (${contados} de ${aco.length})`);
+        console.log('OK: tipos automáticos das brocas: ' + nomes.map((n, k) => `${n} ${tipos[k].produtos.length}`).join(' | '));
+      }
+    }
+
     // Lista do cliente (index.html, trecho <motor-lista>): texto colado do WhatsApp / PDF / o que a
     // IA leu da foto -> produto + quantidade pra conferir (10/2026, opção "C" dos mockups).
     {

@@ -96,7 +96,7 @@
       z-index: 50;
       padding: 16px;
     }
-    .brand { font-size: 26px; font-weight: 800; letter-spacing: -.5px; color: var(--red); }
+    .brand { width: min(220px, 60vw); height: auto; display: block; margin: 0 auto; }
     .loginCard {
       width: 100%;
       max-width: 380px;
@@ -126,7 +126,8 @@
       padding: 10px 24px;
     }
     .topoEsq { display: flex; align-items: center; gap: 18px; min-width: 0; }
-    .marca { font-size: 23px; font-weight: 800; letter-spacing: -.5px; color: var(--red); flex-shrink: 0; }
+    /* logo oficial (o mesmo da abertura do app, já no cache do sw.js) */
+    .marca { height: 40px; width: auto; display: block; flex-shrink: 0; }
     .topoDiv { width: 1px; height: 32px; background: var(--hairline); flex-shrink: 0; }
     .topoCliente { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
     .topoCliente small { font-size: 13px; color: var(--gray); }
@@ -261,7 +262,7 @@
       padding: 32px 16px;
       text-align: center;
     }
-    .aguardando .marcaGrande { font-size: 56px; font-weight: 800; letter-spacing: -1.5px; color: var(--red); }
+    .aguardando .marcaGrande { width: min(360px, 70vw); height: auto; margin-bottom: 16px; }
     .aguardando h2 { margin: 0; font-size: 24px; font-weight: 600; }
     .aguardando p { margin: 0; font-size: 16px; color: var(--gray); }
 
@@ -338,6 +339,9 @@
     .catCab small { display: block; font-size: 13px; color: var(--gray); font-weight: 600; letter-spacing: .3px; }
     .catCab h1 { margin: 2px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -.4px; }
     .catCab span { font-size: 14px; color: var(--gray); }
+    .catSecao { display: flex; flex-direction: column; gap: 10px; }
+    .catSecao h2 { margin: 6px 0 0; font-size: 17px; font-weight: 700; }
+    .catSecao h2 span { color: var(--gray); font-weight: 500; }
     .catGrade { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
     .catCard {
       display: flex; flex-direction: column; gap: 10px; padding: 10px; border: 0; border-radius: 16px;
@@ -535,12 +539,12 @@
   <script>try { document.documentElement.setAttribute('data-theme', localStorage.getItem('cortagTheme_v1') || 'light'); } catch (e) { }</script>
 
   <div id="loadingScreen" class="loadingScreen">
-    <div class="brand">Cortag</div>
+    <img class="brand" src="logo-abertura.png" alt="Cortag Revolution Tools">
   </div>
 
   <div id="loginScreen" class="loginScreen hidden">
     <div class="loginCard">
-      <div class="brand">Cortag</div>
+      <img class="brand" src="logo-abertura.png" alt="Cortag Revolution Tools">
       <h2>Entrar</h2>
       <div id="loginMsg"></div>
       <p class="ap-hint">Entre com a <b>mesma conta Google do celular</b> que vai montar o orçamento.</p>
@@ -551,7 +555,7 @@
   <div id="pagina" class="hidden">
     <header class="topo">
       <div class="topoEsq">
-        <span class="marca">CORTAG</span>
+        <img class="marca" src="logo-abertura.png" alt="Cortag Revolution Tools">
         <span class="topoDiv hidden" id="topoDiv"></span>
         <div class="topoCliente hidden" id="topoCliente">
           <small>Orçamento para</small>
@@ -601,7 +605,7 @@
     </section>
 
     <section class="aguardando hidden" id="telaAguardando">
-      <div class="marcaGrande">CORTAG</div>
+      <img class="marcaGrande" src="logo-abertura.png" alt="Cortag Revolution Tools">
       <h2 id="aguardandoTitulo">Celular conectado</h2>
       <p id="aguardandoTxt">O orçamento aparece aqui assim que o primeiro produto entrar.</p>
     </section>
@@ -1147,17 +1151,29 @@
       }
     }
     function htmlGrade(c, destaque) {
-      const cards = c.produtos.map((p, k) => `<button type="button" class="catCard${k === destaque ? ' destaque' : ''}" data-cat-abrir="${k}">
+      const card = (p, k) => `<button type="button" class="catCard${k === destaque ? ' destaque' : ''}" data-cat-abrir="${k}">
           ${htmlFotoCat(p, k, 'catFoto')}
           <span class="catNome">${escapeHtml(p.nome)}</span>
           ${p.det ? `<span class="catDet">${escapeHtml(p.det)}</span>` : ''}
           ${htmlPrecoCat(p, 'catPreco')}
-        </button>`).join('');
+        </button>`;
+      // seleção de várias famílias/tipos (o celular manda o grupo de cada produto): uma seção por grupo
+      const grupos = [];
+      c.produtos.forEach((p, k) => {
+        const g = typeof p.grupo === 'string' ? p.grupo : null;
+        let sec = grupos[grupos.length - 1];
+        if (!sec || sec.nome !== g) { sec = { nome: g, itens: [] }; grupos.push(sec); }
+        sec.itens.push(card(p, k));
+      });
+      const comSecoes = grupos.length > 1 && grupos.every(g => g.nome);
+      const cards = comSecoes
+        ? grupos.map(g => `<section class="catSecao"><h2>${escapeHtml(g.nome)} <span>· ${g.itens.length}</span></h2><div class="catGrade">${g.itens.join('')}</div></section>`).join('')
+        : `<div class="catGrade">${grupos.map(g => g.itens.join('')).join('')}</div>`;
       return `<div class="catCab">
           <div><small>CATÁLOGO CORTAG</small><h1>${escapeHtml(c.titulo || 'Produtos')}</h1></div>
           <span>${c.produtos.length} ${c.produtos.length === 1 ? 'produto' : 'produtos'} · toque num produto pra ver maior</span>
         </div>
-        <div class="catGrade">${cards}</div>`;
+        ${cards}`;
     }
     function desenharLadoCat(lado) {
       const meta = estado.meta;
