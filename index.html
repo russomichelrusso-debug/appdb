@@ -19557,6 +19557,8 @@
           catalogo: catalogoParaTelaCliente(),
           total: Math.round(total * 100) / 100,
           economia: Math.round(economia * 100) / 100,
+          // "28/56 dias" / "A Vista (+2% desc. financeiro)" - o mesmo texto do PDF do orçamento
+          pagamento: state.paymentTerm ? rotuloPrazoComDesconto() : null,
           meta: minimo ? {
             texto: `Faltam ${brl(minimo.falta)} ${minimo.rotulo === 'pro frete CIF' ? 'pro frete CIF' : 'pro pedido mínimo'}`,
             sub: `${minimo.rotulo === 'pro frete CIF' ? 'Frete por conta da Cortag' : 'Pedido mínimo'} a partir de ${brl(minimo.alvo)} sem impostos`,
