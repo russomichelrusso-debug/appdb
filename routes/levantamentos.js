@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
-const { acharOuCriarProdutoPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
+const { acharOuCriarProdutosPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 async function acharOuCriarVendedor(client, nomeVendedor) {
@@ -103,14 +103,14 @@ router.post('/', async (req, res) => {
     );
     const levantamentoId = levResult.rows[0].id;
 
-    for (const item of itens) {
-      // produto novo da Lista de Preços que ainda não está em produtos é criado do catálogo
-      const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku, null);
-      await client.query(
-        'INSERT INTO levantamento_itens (levantamento_id, produto_id, quantidade_contada, quantidade_pedido) VALUES ($1, $2, $3, $4)',
-        [levantamentoId, produtoId, item.quantidade_contada, quantidadePedido(item)]
-      );
-    }
+    // produto novo da Lista de Preços que ainda não está em produtos é criado do catálogo;
+    // todos os itens num INSERT só (um por item custava ~1 s cada até o Supabase)
+    const produtoIds = await acharOuCriarProdutosPorSku(client, itens.map(it => String(it.codigo_sku).trim()), null);
+    await client.query(
+      `INSERT INTO levantamento_itens (levantamento_id, produto_id, quantidade_contada, quantidade_pedido)
+       SELECT $1, * FROM UNNEST($2::int[], $3::numeric[], $4::numeric[])`,
+      [levantamentoId, produtoIds, itens.map(it => Number(it.quantidade_contada)), itens.map(quantidadePedido)]
+    );
 
     let localizacaoRegistrada = false;
     if (localizacao && localizacao.precisao_m <= LOCALIZACAO_PRECISAO_MAX_M) {

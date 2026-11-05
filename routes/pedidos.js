@@ -4,7 +4,7 @@ const { pool } = require('../db');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlDiaDoPedido } = require('./lib/comprasApp');
-const { acharOuCriarProdutoPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
+const { acharOuCriarProdutosPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
 
@@ -245,15 +245,11 @@ router.post('/', async (req, res) => {
       dataPedidoFinal = pedidoResult.rows[0].data_pedido;
     }
 
-    for (const item of itens) {
-      // trim como em trocarItensDoPedido: " 60863" passava no itensValidos, não
-      // achava o produto e o pedido voltava 400 pra sempre na fila offline
-      const produtoId = await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), criarProdutosDesconhecidos ? item.descricao : null);
-      await client.query(
-        'INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario) VALUES ($1, $2, $3, $4)',
-        [pedidoId, produtoId, item.quantidade, item.preco_unitario]
-      );
-    }
+    // trim como em trocarItensDoPedido: " 60863" passava no itensValidos, não
+    // achava o produto e o pedido voltava 400 pra sempre na fila offline
+    const produtoIds = await acharOuCriarProdutosPorSku(client, itens.map(it => it.codigo_sku.trim()),
+      criarProdutosDesconhecidos ? itens.map(it => it.descricao) : null);
+    await inserirItensDoPedido(client, pedidoId, itens, produtoIds);
 
     await client.query('COMMIT');
     console.log(`Pedido #${pedidoId} ${atualizado ? 'ATUALIZADO (versão mais nova do PDF)' : 'gravado'} (cliente ${clienteId}, ${itens.length} item(ns))${numero_cotacao ? ` [cotação ${numero_cotacao}]` : ''}.`);
@@ -345,15 +341,17 @@ function mesmosItens(a, b) {
 // Troca os itens do pedido. Acha todos os produtos ANTES de apagar os antigos:
 // código que não existe recusa a troca já aqui, com o pedido intacto.
 async function trocarItensDoPedido(client, pedidoId, itens) {
-  const produtoIds = [];
-  for (const item of itens) produtoIds.push(await acharOuCriarProdutoPorSku(client, item.codigo_sku.trim(), null));
+  const produtoIds = await acharOuCriarProdutosPorSku(client, itens.map(it => it.codigo_sku.trim()), null);
   await client.query('DELETE FROM pedido_itens WHERE pedido_id = $1', [pedidoId]);
-  for (let i = 0; i < itens.length; i++) {
-    await client.query(
-      'INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario) VALUES ($1, $2, $3, $4)',
-      [pedidoId, produtoIds[i], Number(itens[i].quantidade), Number(itens[i].preco_unitario)]
-    );
-  }
+  await inserirItensDoPedido(client, pedidoId, itens, produtoIds);
+}
+// todos os itens num INSERT só: um por item custava ~1 s cada até o Supabase (log [lenta], 11/2026)
+async function inserirItensDoPedido(client, pedidoId, itens, produtoIds) {
+  await client.query(
+    `INSERT INTO pedido_itens (pedido_id, produto_id, quantidade, preco_unitario)
+     SELECT $1, * FROM UNNEST($2::int[], $3::numeric[], $4::numeric[])`,
+    [pedidoId, produtoIds, itens.map(it => Number(it.quantidade)), itens.map(it => Number(it.preco_unitario))]
+  );
 }
 
 function itensValidos(itens) {

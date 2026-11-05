@@ -1876,6 +1876,9 @@ async function query(sql, params = []) {
   }
 
   // produtos
+  if (s.includes('/* PRODUTOS:POR-SKU */')) {
+    return { rows: produtos.filter(p => params[0].includes(p.codigo_sku)).map(p => ({ id: p.id, codigo_sku: p.codigo_sku })) };
+  }
   if (s.includes('SELECT ID FROM PRODUTOS WHERE CODIGO_SKU')) {
     return { rows: produtos.filter(p => p.codigo_sku === params[0]) };
   }
@@ -2048,7 +2051,10 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('INSERT INTO PEDIDO_ITENS')) {
-    pedidoItens.push({ id: nextId.pedido_itens++, pedido_id: params[0], produto_id: params[1], quantidade: params[2], preco_unitario: params[3] });
+    // UNNEST: um INSERT com todos os itens (routes/pedidos.js, inserirItensDoPedido)
+    const n = Array.isArray(params[1]) ? params[1].length : 1;
+    const at = (v, i) => (Array.isArray(v) ? v[i] : v);
+    for (let i = 0; i < n; i++) pedidoItens.push({ id: nextId.pedido_itens++, pedido_id: params[0], produto_id: at(params[1], i), quantidade: at(params[2], i), preco_unitario: at(params[3], i) });
     return { rows: [] };
   }
 
@@ -2084,7 +2090,9 @@ async function query(sql, params = []) {
     return { rowCount: 0, rows: [] };
   }
   if (s.includes('INSERT INTO LEVANTAMENTO_ITENS')) {
-    levantamentoItens.push({ id: nextId.levantamento_itens++, levantamento_id: params[0], produto_id: params[1], quantidade_contada: params[2], quantidade_pedido: params[3] || 0 });
+    const n = Array.isArray(params[1]) ? params[1].length : 1;
+    const at = (v, i) => (Array.isArray(v) ? v[i] : v);
+    for (let i = 0; i < n; i++) levantamentoItens.push({ id: nextId.levantamento_itens++, levantamento_id: params[0], produto_id: at(params[1], i), quantidade_contada: at(params[2], i), quantidade_pedido: at(params[3], i) || 0 });
     return { rows: [] };
   }
 
