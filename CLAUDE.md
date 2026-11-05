@@ -1592,8 +1592,8 @@ Supabase, sem PR — não é mudança de código.
   pra `/api/assistente/itens-da-imagem` com `modo: 'etiqueta'` (`PROMPT_ETIQUETA`, `routes/assistente.js`: lê tipo, linha, medida,
   dentes e o código de 5 dígitos impressos; sem CNPJ na resposta) e os itens passam pela **mesma conferência da lista do cliente**
   (`lc.modo = 'etiqueta'`, `abrirEtiqueta`, `index.html`): no Pedido, 1 embalagem no orçamento; no Levantamento (`lc.destino = 'lev'`),
-  +1 no estoque, sem mexer nas falas pendentes da voz. **Sem internet não guarda a foto** (avisa: código de barras ou busca resolvem
-  na hora). O teste que levou a isso: comparação por imagem (CLIP, inclusive o MobileCLIP que caberia no celular) acerta o **tipo**
+  +1 no estoque, sem mexer nas falas pendentes da voz. Sem internet, a foto do "Tirar foto" antigo não é guardada; a da câmera dentro do app
+  (ver "Câmera dentro do app" abaixo) é guardada e lida quando o sinal volta. O teste que levou a isso: comparação por imagem (CLIP, inclusive o MobileCLIP que caberia no celular) acerta o **tipo**
   (lâmina × disco) mas não a medida/linha, e no expositor inteiro errou todos os discos diamantados; a etiqueta diz tudo e a busca do
   app já acha o produto. Junto, desempate no `produtoDaLinhaLista` (`<motor-lista>`, vale pra lista do cliente também): no empate sem
   palavra faltando, o **único** nome sem palavra além das escritas vai pronto ("... porcelanato turbo 110 mm" = 60863, não o
@@ -1676,7 +1676,8 @@ Supabase, sem PR — não é mudança de código.
     li". Sinal que volta com a câmera aberta põe as que esperavam de novo na fila; app em segundo plano solta a câmera; logout
     fecha. Sem câmera no app (sem permissão, navegador sem `getUserMedia`): o "Tirar foto" do PR 1, com aviso. Testado no app
     local (Chromium com câmera falsa, IA simulada): certa/dúvida/ilegível, escolher na folha, Desfazer, sem internet e o Pedido;
-    **não testado num celular de verdade** (foco e nitidez do quadro do vídeo × a foto da câmera do celular).
+    Leitura com prazo de 60 s; 429/5xx ou falha de rede deixam a foto esperando (não "não li"); ✕ durante o "Pronto" fecha
+    já e guarda as que estavam lendo. **não testado num celular de verdade** (foco e nitidez do quadro do vídeo × a foto da câmera do celular).
 
 - **Telefone do vendedor no cadastro do usuário** (11/2026, pedido do usuário: "fica pras fichas, fotos e orçamentos sem
   preencher toda vez"): `usuarios.telefone` (NULL = nunca preenchido, '' = apagado), `PUT /api/auth/usuarios/:id/telefone`
