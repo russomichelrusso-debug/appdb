@@ -25,7 +25,8 @@
 // v6 (10/2026): manifest.json com "share_target" (o app aparece no Compartilhar do WhatsApp no Android).
 // v7 (10/2026): tela de abertura nova com logo-abertura.png (precisa estar no cache pra abrir sem internet).
 // v8 (11/2026): ícones do aviso no celular (badge-96.png e icon-notificacao-192.png, o "C" da Cortag).
-const CACHE_VERSION = 'cortag-sw-v8';
+// v9 (11/2026): reconhecedor-worker.js (o reconhecedor por foto roda num worker; precisa abrir sem internet).
+const CACHE_VERSION = 'cortag-sw-v9';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.
@@ -51,6 +52,7 @@ const PAGINAS_OFFLINE = [
   './',
   './index.html',
   './importadores.js',
+  './reconhecedor-worker.js',
   './curva-abc.html',
   './calculadora-materiais.html',
   './ficha-cnpj.html',

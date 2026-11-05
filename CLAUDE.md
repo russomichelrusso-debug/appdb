@@ -1695,6 +1695,13 @@ Supabase, sem PR — não é mudança de código.
       map; o modelo fica no **Hugging Face, endereço preso à revisão** (o teste de SRI aceita só esse host fora das CDNs). CSP ganhou
       `'wasm-unsafe-eval'`. Baixa sozinho (`prepararReconhecedor`) só com o índice não vazio, com o service worker ativo e fora da rede
       móvel (mesma regra/"baixar agora" das miniaturas); sem ele no aparelho, a etiqueta funciona como antes (só o Gemini).
+    - **O modelo roda num worker** (`reconhecedor-worker.js`, 11/2026, relato do usuário: "uns 5 segundos do clique até a foto
+      ser capturada"): com 1 thread o onnxruntime roda a foto inteira de uma vez e, na página, travava a tela ~3 s por foto (CPU 6x:
+      2,6-2,9 s; a 1ª foto ainda carregava o modelo, 6,8 s) - o toque seguinte no botão da câmera esperava. A página baixa e confere
+      os 4 arquivos (`fetchConferido`) e manda o conteúdo pro worker (`reconhecedorNoWorker`; o worker não baixa da CDN, `importScripts`
+      não confere SRI); worker que não abre = roda na página como antes (`reconhecedorNaPagina`). O worker está em `PAGINAS_OFFLINE` do
+      `sw.js` (v9). Junto, o flash e a ficha saem logo depois de copiar o quadro e o JPEG é feito depois. Medido (CPU 6x, câmera falsa):
+      do dedo ao flash 2,1-3,7 s → ~0,2 s a partir da 2ª foto.
     - Testado no app local (Chromium, Gemini simulado): etiquetas reais com o certo em 1º, 4º, 1º e 1º dos 30, ~0,7 s por foto;
       sem internet, o certo entre os 5. **Não testado num celular de verdade** (tempo e memória do modelo no Android/iPhone).
     - Achados do `revisor-cortag` já tratados: o código/EAN lido no texto vale mais que o palpite da IA entre os parecidos; o

@@ -35721,13 +35721,19 @@
         const z = etq.zoomDigital ? 2 : 1; // zoom digital: só o meio do quadro, como aparece na tela
         canvas.width = Math.round(vw / z); canvas.height = Math.round(vh / z);
         canvas.getContext('2d').drawImage(video, (vw - canvas.width) / 2, (vh - canvas.height) / 2, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
-        const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
-        if (!blob || !etq) return;
+        // o quadro já está copiado: o flash e a ficha saem agora; o JPEG (2560 px, ~0,3 s no celular) fica pra
+        // depois do quadro desenhado, pra o toque não esperar a compressão
         const cam = document.getElementById('etqCam');
         cam.classList.remove('flash'); void cam.offsetWidth; cam.classList.add('flash');
+        const g = etqGeracao;
         etq.n++;
-        etq.fila.push({ id: etqGeracao + '-' + etq.n, n: etq.n, estado: 'lendo', blob, imagens: null, itens: null, opcoes: null, vetor: null, feito: null, sugeridos: null, erro: null });
+        const f = { id: etqGeracao + '-' + etq.n, n: etq.n, estado: 'lendo', blob: null, imagens: null, itens: null, opcoes: null, vetor: null, feito: null, sugeridos: null, erro: null };
+        etq.fila.push(f);
         renderCameraEtiqueta();
+        await new Promise(ok => requestAnimationFrame(() => setTimeout(ok, 0)));
+        f.blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
+        if (etqVelha(g) || f.estado !== 'lendo') return;
+        if (!f.blob) { f.estado = 'nao'; f.erro = 'Não deu pra abrir essa foto.'; f.itens = []; renderCameraEtiqueta(); return; }
         processarFilaEtiqueta();
       }
       async function processarFilaEtiqueta() {
@@ -35736,7 +35742,7 @@
         etq.processando = true;
         try {
           let f;
-          while (!etqVelha(g) && (f = etq.fila.find(x => x.estado === 'lendo'))) {
+          while (!etqVelha(g) && (f = etq.fila.find(x => x.estado === 'lendo' && (x.blob || x.imagens)))) {
             await processarFotoEtiqueta(f, g);
             if (etqVelha(g)) return;
             renderCameraEtiqueta();
@@ -35907,13 +35913,15 @@
       function concluirCameraEtiqueta(agora) {
         if (!etq) return;
         if (agora === true && etq.encerrando) {
-          for (const f of etq.fila) if (f.estado === 'lendo') { if (f.abortar) f.abortar.abort(); f.estado = 'esperando'; }
+          // a que ainda virava JPEG (tocou no ✕ logo depois do disparo) não tem o que guardar
+          for (const f of etq.fila) if (f.estado === 'lendo') { if (f.abortar) f.abortar.abort(); f.estado = f.blob || f.imagens ? 'esperando' : 'tirada'; }
         }
         if (etq.fila.some(f => f.estado === 'lendo')) {
           etq.encerrando = true;
           etq.folha = null;
           renderCameraEtiqueta();
-          processarFilaEtiqueta();
+          // a que ainda vira JPEG chama a fila quando termina (chamar daqui sem foto pronta voltava pra cá sem parar)
+          if (etq.fila.some(f => f.estado === 'lendo' && (f.blob || f.imagens))) processarFilaEtiqueta();
           return;
         }
         const { destino, fila } = etq;
@@ -36031,6 +36039,7 @@
       // modelo já carregado: passou disso, a foto vai pra IA sem a lista de parecidos (não espera o celular lento)
       const RECONHECER_PRAZO_CARREGADO_MS = 3000;
       let reconhecedorCarregado = false;
+      let reconhecedorEmWorker = null; // true = no reconhecedor-worker.js; false = na página (worker não abriu)
       let indiceFotos = null; // { modelo, versao, ultimo, vetores: [{ id, c, o, f, v: base64 }] } (como veio do servidor)
       let indiceFotosPromise = null; // leitura do IndexedDB em andamento (status e preparo ao mesmo tempo)
       let reconhecedorPromise = null; // sessão do onnxruntime, carregada na 1ª foto
@@ -36049,29 +36058,76 @@
         try { reconhecedorGuardado = (await Promise.all(RECONHECEDOR_ARQUIVOS.map(u => caches.match(u)))).every(Boolean); } catch (e) { }
         return reconhecedorGuardado;
       }
+      // O DINOv2 roda num worker (reconhecedor-worker.js, 11/2026, relato do usuário: "uns 5 segundos do clique até a
+      // foto ser capturada"): com 1 thread o onnxruntime roda a foto inteira de uma vez e, na página, travava a tela
+      // ~3 s por foto no celular - o toque seguinte no botão da câmera esperava. A página baixa e confere os arquivos
+      // (fetchConferido) e manda o conteúdo pro worker. Worker que não abre (navegador antigo): roda aqui, como antes.
+      const RECONHECEDOR_WORKER_PRAZO_MS = 60000;
+      async function baixarArquivosDoReconhecedor() {
+        return Promise.all(RECONHECEDOR_ARQUIVOS.map(async (u) => {
+          const r = await fetchConferido(u);
+          if (!r.ok) throw new Error('Não deu pra baixar o reconhecedor de fotos.');
+          return u === ORT_URL || u === ORT_MJS_URL ? r.text() : r.arrayBuffer();
+        }));
+      }
+      async function reconhecedorNoWorker() {
+        if (typeof Worker === 'undefined') throw new Error('sem worker');
+        const [ort, mjs, wasm, modelo] = await baixarArquivosDoReconhecedor();
+        const w = new Worker('reconhecedor-worker.js');
+        let prazo;
+        try {
+          await new Promise((ok, falha) => {
+            prazo = setTimeout(() => falha(new Error('demorou')), RECONHECEDOR_WORKER_PRAZO_MS);
+            w.onmessage = (ev) => (ev.data && ev.data.erro ? falha(new Error(ev.data.erro)) : ok());
+            w.onerror = (e) => { e.preventDefault(); falha(new Error('worker')); };
+            w.postMessage({ tipo: 'carregar', ort, mjs, wasm, modelo }, [wasm, modelo]);
+          });
+        } catch (e) { w.terminate(); throw e; } finally { clearTimeout(prazo); }
+        const pendentes = new Map();
+        let n = 0;
+        w.onmessage = (ev) => {
+          const p = pendentes.get(ev.data && ev.data.id);
+          if (!p) return;
+          pendentes.delete(ev.data.id);
+          if (ev.data.erro) p.falha(new Error(ev.data.erro)); else p.ok(ev.data.vetor);
+        };
+        w.onerror = (e) => { e.preventDefault(); for (const p of pendentes.values()) p.falha(new Error('worker')); pendentes.clear(); };
+        return {
+          rodar: (dados) => new Promise((ok, falha) => {
+            const id = ++n;
+            pendentes.set(id, { ok, falha });
+            w.postMessage({ tipo: 'rodar', id, dados, dim: VETOR_DIM }, [dados.buffer]);
+          }),
+        };
+      }
+      async function reconhecedorNaPagina() {
+        if (!window.ort) {
+          await new Promise((ok, falha) => {
+            const s = scriptDaCdn(ORT_URL);
+            s.onload = ok;
+            s.onerror = () => falha(new Error('Não deu pra carregar o reconhecedor de fotos.'));
+            document.head.appendChild(s);
+          });
+        }
+        const [, , wasm, modelo] = await baixarArquivosDoReconhecedor();
+        window.ort.env.wasm.numThreads = 1; // GitHub Pages não tem cross-origin isolation: sem threads
+        window.ort.env.wasm.wasmPaths = ORT_DIR; // o .mjs vem por import() (hash no import map)
+        window.ort.env.wasm.wasmBinary = wasm; // o .wasm já conferido pelo hash
+        const sessao = await window.ort.InferenceSession.create(modelo, { executionProviders: ['wasm'] });
+        window.ort.env.wasm.wasmBinary = null; // já compilado: não segura os ~15 MB
+        return {
+          rodar: async (dados) => (await sessao.run({ pixel_values: new window.ort.Tensor('float32', dados, [1, 3, 224, 224]) }))
+            .last_hidden_state.data.slice(0, VETOR_DIM), // 1º token = o da imagem inteira
+        };
+      }
       function carregarReconhecedor() {
         if (reconhecedorPromise) return reconhecedorPromise;
         reconhecedorPromise = (async () => {
-          if (!window.ort) {
-            await new Promise((ok, falha) => {
-              const s = scriptDaCdn(ORT_URL);
-              s.onload = ok;
-              s.onerror = () => falha(new Error('Não deu pra carregar o reconhecedor de fotos.'));
-              document.head.appendChild(s);
-            });
-          }
-          const [wasm, modelo] = await Promise.all([ORT_WASM_URL, DINO_URL].map(async (u) => {
-            const r = await fetchConferido(u);
-            if (!r.ok) throw new Error('Não deu pra baixar o reconhecedor de fotos.');
-            return r.arrayBuffer();
-          }));
-          window.ort.env.wasm.numThreads = 1; // GitHub Pages não tem cross-origin isolation: sem threads
-          window.ort.env.wasm.wasmPaths = ORT_DIR; // o .mjs vem por import() (hash no import map)
-          window.ort.env.wasm.wasmBinary = wasm; // o .wasm já conferido pelo hash
-          const sessao = await window.ort.InferenceSession.create(modelo, { executionProviders: ['wasm'] });
-          window.ort.env.wasm.wasmBinary = null; // já compilado: não segura os ~15 MB
+          let r;
+          try { r = await reconhecedorNoWorker(); reconhecedorEmWorker = true; }
+          catch (e) { r = await reconhecedorNaPagina(); reconhecedorEmWorker = false; }
           reconhecedorCarregado = true;
-          return sessao;
+          return r;
         })();
         reconhecedorPromise.catch(() => { reconhecedorPromise = null; }); // falhou: tenta de novo na próxima foto
         return reconhecedorPromise;
@@ -36098,8 +36154,7 @@
         const px = g.getImageData(0, 0, 224, 224).data, n = 224 * 224, dados = new Float32Array(3 * n);
         const M = [0.485, 0.456, 0.406], D = [0.229, 0.224, 0.225];
         for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) dados[k * n + i] = (px[i * 4 + k] / 255 - M[k]) / D[k];
-        const saida = await sessao.run({ pixel_values: new window.ort.Tensor('float32', dados, [1, 3, 224, 224]) });
-        return quantizarVetor(saida.last_hidden_state.data.slice(0, VETOR_DIM)); // 1º token = o da imagem inteira (int8)
+        return quantizarVetor(await sessao.rodar(dados)); // em int8
       }
       // ---- índice (do servidor; cópia no aparelho pra funcionar sem internet)
       const indiceFotosOp = (modo, fazer) => idbOp('cortag-vetores', 'dados', 'id', modo, fazer);
