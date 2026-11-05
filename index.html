@@ -25263,6 +25263,7 @@
         }));
         await apiImportarPrevisaoEstoque(itens);
         PREVISAO_MAP = mapa;
+        edicoesNaCarga.previsao++;
         PREVISAO_SOURCE = quandoCurto(new Date());
         refreshPrevisaoStatus();
         if (document.getElementById('searchInput').value.trim()) renderResults();
@@ -33392,6 +33393,7 @@
         return [];
       }
       async function salvarPromoRulesServidor(rules) {
+        edicoesNaCarga.promo++; // a busca da abertura, pedida antes, não passa por cima (carregarCatalogoEExtras)
         await apiFetch('/api/configuracoes/promocoes', { method: 'POST', body: JSON.stringify({ valor: rules }) });
         PROMO_SOURCE = quandoCurto(new Date());
       }
@@ -33404,6 +33406,7 @@
         catch (e) { return []; }
       }
       async function salvarClassiDiscountRulesServidor(rules) {
+        edicoesNaCarga.classi++;
         await apiFetch('/api/configuracoes/descontos_por_classificatorio_categoria', { method: 'POST', body: JSON.stringify({ valor: rules }) });
       }
 
@@ -37289,11 +37292,15 @@
       // Preços/Levantamento/Produtos e pelo Painel Admin - a aba Clientes não toca
       // nisso. Por isso roda em paralelo, sem segurar a tela de carregamento nem
       // o resto do boot (ver chamada em init(), sem await).
+      const edicoesNaCarga = { promo: 0, classi: 0, previsao: 0 }; // salvos no Painel nesta abertura
       async function carregarCatalogoEExtras() {
         // Campanhas, descontos por classificatório e previsão de estoque não dependem do catálogo:
         // pedidos já, junto com ele (antes eram um atrás do outro depois do catálogo - com o Render
         // lento, cada um somava uma ida e volta; lote 3 da auditoria de performance). Cada um já
         // tem a própria reserva quando falha; null = falhou mesmo, fica o que estava.
+        // Salvo pelo Painel enquanto a abertura carrega (o Painel já funciona nesse tempo): a resposta
+        // pedida antes é descartada - senão a campanha excluída voltava e o próximo salvar a regravava.
+        const edicoesAntes = { ...edicoesNaCarga };
         const promoRulesP = loadActivePromoRules().catch(() => null);
         const classiRulesP = loadActiveClassiDiscountRules().catch(() => null);
         const previsaoP = loadActivePrevisao().catch(() => null);
@@ -37312,13 +37319,13 @@
           console.warn('Não foi possível carregar o catálogo de produtos:', e);
         }
         const promoRules = await promoRulesP;
-        if (promoRules) state.promoRules = promoRules;
+        if (promoRules && edicoesNaCarga.promo === edicoesAntes.promo) state.promoRules = promoRules;
         if (prodTabSelected) renderProdutoOferta(prodTabSelected); // ficha aberta antes das campanhas chegarem
         else atualizarProdutosInicio();
         const classiRules = await classiRulesP;
-        if (classiRules) state.classiDiscountRules = classiRules;
+        if (classiRules && edicoesNaCarga.classi === edicoesAntes.classi) state.classiDiscountRules = classiRules;
         const previsao = await previsaoP;
-        if (previsao) PREVISAO_MAP = previsao;
+        if (previsao && edicoesNaCarga.previsao === edicoesAntes.previsao) PREVISAO_MAP = previsao;
         syncClientesLocaisComInsistenciaNoInicio(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
         // corrige a busca/carrinho depois que o catálogo terminar de chegar, caso o
         // vendedor já tenha aberto Preços ou mexido no carrinho antes disso - inclui
