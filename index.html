@@ -10955,6 +10955,236 @@
       z-index: 1;
     }
 
+    /* Etiqueta com a câmera dentro do app (11/2026): fichas das fotos, disparo e a folha por cima da câmera */
+    .etqCam.flash::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      background: #FFFFFF;
+      opacity: 0;
+      pointer-events: none;
+      animation: etqFlash .25s ease-out;
+    }
+
+    @keyframes etqFlash {
+      from { opacity: .6; }
+      to { opacity: 0; }
+    }
+
+    .etqMira div {
+      width: min(300px, 82%);
+      height: min(360px, 44vh);
+    }
+
+    .etqMira div::after {
+      display: none;
+    }
+
+    .modoLeitor > .etqAviso {
+      position: absolute;
+      top: calc(72px + env(safe-area-inset-top));
+      left: 16px;
+      right: 16px;
+      z-index: 2;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 10px 14px;
+      border-radius: 14px;
+      background: rgba(30, 123, 52, .96);
+    }
+
+    .etqAviso b {
+      font-size: 15px;
+    }
+
+    .etqAviso span {
+      font-size: 13px;
+    }
+
+    .etqFichas {
+      display: flex;
+      gap: 8px;
+      min-height: 44px;
+      overflow-x: auto;
+      scrollbar-width: none;
+    }
+
+    .etqFicha {
+      flex-shrink: 0;
+      max-width: 220px;
+      min-height: 44px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 12px;
+      background: rgba(0, 0, 0, .6);
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      cursor: pointer;
+    }
+
+    .etqFicha[data-estado="pronta"] {
+      background: #1E7B34;
+    }
+
+    .etqFicha[data-estado="conferir"] {
+      background: #9A5B00;
+    }
+
+    .etqFicha[data-estado="nao"] {
+      background: #A30729;
+    }
+
+    .etqFicha[data-estado="esperando"] {
+      box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, .7);
+    }
+
+    .etqAcoes {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .etqLado {
+      min-width: 96px;
+      min-height: 48px;
+      padding: 0 16px;
+      border: none;
+      border-radius: 24px;
+      background: rgba(0, 0, 0, .6);
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .etqLado:disabled,
+    .etqDisparo:disabled {
+      opacity: .45;
+    }
+
+    .etqPronto {
+      background: #FFFFFF;
+      color: #1D1D1F;
+      font-weight: 700;
+    }
+
+    .etqDisparo {
+      width: 76px;
+      height: 76px;
+      flex-shrink: 0;
+      border: 5px solid #FFFFFF;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, .45);
+      cursor: pointer;
+    }
+
+    .etqDisparo:active {
+      transform: scale(.94);
+    }
+
+    .modoLeitor > .etqFolha {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      z-index: 4;
+      max-height: 75%;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 16px 16px calc(18px + env(safe-area-inset-bottom));
+      border-radius: 22px 22px 0 0;
+      background: var(--white);
+      color: var(--ink);
+    }
+
+    .etqFolhaTopo {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .etqFolhaTopo img {
+      width: 76px;
+      height: 76px;
+      flex-shrink: 0;
+      object-fit: cover;
+      border-radius: 12px;
+      background: var(--fill);
+    }
+
+    .etqFolhaTopo > div {
+      min-width: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .etqFolhaTopo em {
+      font-style: normal;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--gray);
+    }
+
+    .etqFolhaTopo b {
+      font-size: 15px;
+    }
+
+    .etqFolhaTopo small {
+      font-size: 13px;
+      color: var(--gray);
+    }
+
+    .etqOpcao {
+      width: 100%;
+      min-height: 48px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      padding: 8px 12px;
+      border: .75px solid var(--hairline);
+      border-radius: 12px;
+      background: var(--white);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .etqFolhaAcoes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .etqFolhaAcoes > button {
+      flex: 1 1 120px;
+    }
+
+    .etqAviso.hidden,
+    .etqFolha.hidden {
+      display: none;
+    }
+
     .leitorTopo {
       display: flex;
       align-items: center;
@@ -12756,6 +12986,7 @@
         </svg>
         Usar o celular como leitor
       </button>
+      <button type="button" class="listaGuardadaFaixa hidden" id="listaGuardadaFaixaLev"></button>
       <div class="lev-list" id="levList"></div>
       <div class="levComprados hidden" id="levComprados"></div>
       <div class="lev-empty" id="levEmpty">
@@ -13061,6 +13292,26 @@
         <button type="button" id="leitorDigitarBtn" disabled>Digitar quantidade</button>
       </div>
       <p class="leitorNota" id="leitorNota"></p>
+    </div>
+
+    <div class="modoLeitor etqCam hidden" id="etqCam" role="dialog" aria-label="Fotos de etiqueta">
+      <video id="etqVideo" playsinline muted></video>
+      <div class="leitorTopo">
+        <span class="leitorStatus" id="etqStatus" role="status"></span>
+        <button type="button" class="leitorFechar" id="etqFecharBtn" aria-label="Concluir as fotos de etiqueta">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
+      <div class="etqAviso hidden" id="etqAviso" role="status"></div>
+      <div class="leitorMira etqMira" aria-hidden="true"><div></div></div>
+      <div class="leitorMsg" id="etqMsg" role="status"></div>
+      <div class="etqFichas" id="etqFichas" aria-label="Fotos tiradas"></div>
+      <div class="etqAcoes">
+        <button type="button" class="etqLado" id="etqDesfazerBtn" disabled>Desfazer</button>
+        <button type="button" class="etqDisparo" id="etqDisparoBtn" aria-label="Tirar foto"></button>
+        <button type="button" class="etqLado etqPronto" id="etqProntoBtn">Pronto</button>
+      </div>
+      <div class="etqFolha hidden" id="etqFolha"></div>
     </div>
 
     <div class="modoLeitor vozLev hidden" id="vozLev" role="dialog" aria-label="Levantamento por voz">
@@ -34188,6 +34439,14 @@
         lc = null;
         document.getElementById('listaClienteModal').classList.add('hidden');
       }
+      // conferência das fotos da câmera: fechar descarta o que estava em dúvida (o que já entrou continua) - pergunta
+      async function fecharListaClientePerguntando() {
+        if (lc && lc.varias && lc.fase === 'conferir' && !lc.guardadaId) {
+          const n = lc.linhas ? lc.linhas.filter(l => !l.fora).length : 0;
+          if (n && !await askConfirm(`Fechar sem pôr? ${n === 1 ? 'A foto em dúvida é descartada' : `As ${n} fotos em dúvida são descartadas`} (o que já entrou continua).`, 'Descartar', { perigo: true })) return;
+        }
+        fecharListaCliente();
+      }
       function lcComprados() {
         return compradosDoCliente((lc && lc.clienteDaLista) || state.levCliente); // lista guardada: o que compra o cliente dela
       }
@@ -34221,12 +34480,13 @@
         for (const item of itens) {
           let r = produtoDaLinhaLista(item, ctx);
           // etiqueta lida mas sem produto achado: os mais parecidos pela foto viram as opções
-          if (r.estado === 'nao' && lc && lc.opcoesPelaFoto) r = produtoDaLinhaLista({ ...item, opcoes: lc.opcoesPelaFoto }, ctx);
+          const opcoesFoto = item.opcoesFoto || (lc && lc.opcoesPelaFoto); // a câmera manda as da própria foto
+          if (r.estado === 'nao' && opcoesFoto) r = produtoDaLinhaLista({ ...item, opcoes: opcoesFoto }, ctx);
           // PDF tem cabeçalho, endereço, total...: linha que não acha produto nenhum não é item
           // (só fica a que tem quantidade com unidade, "3 UN": é item que o catálogo não tem)
           if (r.estado === 'nao' && origem === 'pdf' && !item.unidade) { ignoradas++; continue; }
           // etiqueta: o produto do código de barras que a IA também leu ("Ler a foto inteira") fica uma vez só
-          if (ctx.etiqueta && r.produto && linhas.some(x => x.cod === r.produto.c)) continue;
+          if (ctx.etiqueta && !(lc && lc.varias) && r.produto && linhas.some(x => x.cod === r.produto.c)) continue;
           const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
             sugeridos: new Set([...(r.produto ? [r.produto.c] : []), ...(r.opcoes || []).map(p => p.c)]),
             cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: item.campo || null, seguro: !!r.seguro };
@@ -34244,7 +34504,7 @@
         // etiqueta em que todo produto saiu certo (código de barras, código impresso ou um só produto que bate):
         // entra direto, com Desfazer - sem a tela de conferência entre uma foto e outra (11/2026)
         // só com um produto na foto (o código do blister vizinho no canto não entra calado) e só o "pronto" seguro
-        if (lc.modo === 'etiqueta' && origem === 'foto' && linhas.length === 1 && linhas.every(l => l.estado === 'pronto' && l.seguro && l.cod && !l.ajuste && !l.item.duasEmbalagens)) { etiquetaDireto(); return; }
+        if (lc.modo === 'etiqueta' && !lc.varias && origem === 'foto' && linhas.length === 1 && linhas.every(l => l.estado === 'pronto' && l.seguro && l.cod && !l.ajuste && !l.item.duasEmbalagens)) { etiquetaDireto(); return; }
         renderListaCliente();
       }
       // etiqueta certa: soma no levantamento (estoque) ou no orçamento e mostra o que entrou, com Desfazer,
@@ -34299,22 +34559,29 @@
         if (lc) lc.outros = null;
       }
       function somarEtiquetaDireto(cod, campo, qtd) {
-        if (lc.destino === 'lev') {
+        lc.feitos.push(somarEtiquetaNoDestino(lc.destino, cod, campo, qtd));
+      }
+      // soma no levantamento (destino 'lev') ou no orçamento; devolve o que somou (pro Desfazer)
+      function somarEtiquetaNoDestino(destino, cod, campo, qtd) {
+        if (destino === 'lev') {
           const criado = !itemDoLevantamento(cod, false);
           somarNoLevantamento(cod, campo, qtd);
-          lc.feitos.push({ cod, campo, qtd, criado });
           saveLevSurvey();
           renderLevList();
-        } else {
-          addToCart(cod, qtd, true);
-          lc.feitos.push({ cod, campo, qtd });
+          return { cod, campo, qtd, criado };
         }
+        addToCart(cod, qtd, true);
+        return { cod, campo, qtd };
       }
       // tira o que a etiqueta somou (Desfazer, e antes de "Ler a foto inteira")
       function desfazerEtiquetaDireto() {
-        const lev = lc.destino === 'lev';
-        const criados = new Set((lc.feitos || []).filter(f => f.criado).map(f => f.cod)); // com "+1 de novo", só o 1º criou
-        for (const f of lc.feitos || []) {
+        desfazerEtiquetaNoDestino(lc.destino, lc.feitos || []);
+        lc.feitos = [];
+      }
+      function desfazerEtiquetaNoDestino(destino, feitos) {
+        const lev = destino === 'lev';
+        const criados = new Set(feitos.filter(f => f.criado).map(f => f.cod)); // com "+1 de novo", só o 1º criou
+        for (const f of feitos) {
           if (lev) {
             const it = itemDoLevantamento(f.cod, false);
             if (!it) continue;
@@ -34327,7 +34594,6 @@
             if (!(it.qty > 0)) state.cart = state.cart.filter(x => x !== it);
           }
         }
-        lc.feitos = [];
         if (lev) { saveLevSurvey(); renderLevList(); }
         else { renderCart(); renderCartBar(); renderResults(); }
       }
@@ -34571,11 +34837,363 @@
       }
       function abrirEtiqueta(destino) {
         acordarServidor();
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) { abrirCameraEtiqueta(destino); prepararReconhecedor(); return; }
         abrirListaCliente();
         lc = { ...lc, fase: 'etiqueta', modo: 'etiqueta', destino: destino || null };
         renderListaCliente();
         document.getElementById('lcEtiquetaInput').click();
         prepararReconhecedor(); // sem o reconhecedor no aparelho: começa a baixar (no Wi-Fi) pra próxima
+      }
+
+      // ---- Etiqueta com a câmera dentro do app (11/2026, "Etiqueta, PR 2"; opções "A" dos mockups "Cortag · Etiqueta
+      // com câmera ao vivo"): a câmera fica aberta e cada toque no botão é uma foto; a leitura roda atrás, uma foto por vez
+      // (código de barras, reconhecedor e IA, como no PR 1). Cada foto vira uma ficha: lendo · pronta (um produto com
+      // certeza: soma na hora, como o "entra direto") · pra conferir · não li · sem internet. "Pronto" espera o que está
+      // lendo, guarda no aparelho o que esperava internet (lido quando o sinal volta, faixa 📋) e abre a conferência de
+      // hoje só com o que ficou em dúvida. Sem câmera no app (sem permissão, navegador antigo): o fluxo do PR 1.
+      let etq = null; // { destino, fila: [{ id, n, estado, blob, imagens, itens, opcoes, vetor, feito, sugeridos, erro }], ... }
+      let etqGeracao = 0;
+      let etqCamGeracao = 0; // cada desligar invalida o getUserMedia que ainda não respondeu
+      let etqAvisoTimer = null;
+      const ETQ_LEITURA_PRAZO_MS = 60000; // 4G ruim: a leitura parada vira "sem internet" (guardada), não trava a câmera
+      const ETQ_TENTAR_DEPOIS = new Set([429, 502, 503, 504]); // limite de fotos, IA fora do ar: guarda e lê depois
+      const ETQ_FOTO_LADO = 2560;
+      const etqVelha = (g) => g !== etqGeracao || !etq;
+      async function abrirCameraEtiqueta(destino) {
+        etqGeracao++;
+        etq = { destino: destino || null, fila: [], n: 0, processando: false, encerrando: false, stream: null, folha: null };
+        document.getElementById('etqCam').classList.remove('hidden');
+        renderCameraEtiqueta();
+        const g = etqGeracao;
+        if (!await ligarCameraEtiqueta() && !etqVelha(g)) {
+          // câmera do app não abriu: o "Tirar foto" de antes (a câmera do celular, que abre dentro de um toque)
+          fecharTelaCameraEtiqueta();
+          abrirListaCliente();
+          lc = { ...lc, fase: 'etiqueta', modo: 'etiqueta', destino: destino || null };
+          renderListaCliente();
+          showToast('A câmera não abriu dentro do app — toque em "Tirar foto" pra usar a do celular.', 'erro');
+        }
+      }
+      async function ligarCameraEtiqueta() {
+        const g = etqGeracao, cg = ++etqCamGeracao;
+        const video = document.getElementById('etqVideo');
+        document.getElementById('etqMsg').textContent = 'Abrindo a câmera…';
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: ETQ_FOTO_LADO }, height: { ideal: 1440 } } });
+          // fechou, foi pro segundo plano ou pediu de novo enquanto abria: esta não fica ligada
+          if (etqVelha(g) || cg !== etqCamGeracao || document.hidden) { stream.getTracks().forEach(t => t.stop()); return true; }
+          if (etq.stream) etq.stream.getTracks().forEach(t => t.stop());
+          etq.stream = stream;
+          video.srcObject = stream;
+          try { await video.play(); } catch (e) { }
+          document.getElementById('etqMsg').textContent = 'Enquadre a etiqueta e toque no botão';
+          return true;
+        } catch (e) { return false; }
+      }
+      function desligarCameraEtiqueta() {
+        etqCamGeracao++;
+        if (etq && etq.stream) { etq.stream.getTracks().forEach(t => t.stop()); etq.stream = null; }
+        const video = document.getElementById('etqVideo');
+        if (video) video.srcObject = null;
+      }
+      function fecharTelaCameraEtiqueta() {
+        desligarCameraEtiqueta();
+        if (etq) for (const f of etq.fila) { if (f.abortar) f.abortar.abort(); if (f.url && f.url.startsWith('blob:')) URL.revokeObjectURL(f.url); }
+        etqGeracao++;
+        etq = null;
+        clearTimeout(etqAvisoTimer);
+        document.getElementById('etqCam').classList.add('hidden');
+      }
+      // quadro da câmera -> JPEG (o tamanho do vídeo; a leitura reduz pra 1600 px como a foto do PR 1)
+      async function fotografarEtiqueta() {
+        if (!etq || etq.encerrando) return;
+        const video = document.getElementById('etqVideo');
+        if (!etq.stream || video.readyState < 2 || !video.videoWidth) { document.getElementById('etqMsg').textContent = 'A câmera ainda está abrindo…'; return; }
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
+        if (!blob || !etq) return;
+        const cam = document.getElementById('etqCam');
+        cam.classList.remove('flash'); void cam.offsetWidth; cam.classList.add('flash');
+        etq.n++;
+        etq.fila.push({ id: etqGeracao + '-' + etq.n, n: etq.n, estado: 'lendo', blob, imagens: null, itens: null, opcoes: null, vetor: null, feito: null, sugeridos: null, erro: null });
+        renderCameraEtiqueta();
+        processarFilaEtiqueta();
+      }
+      async function processarFilaEtiqueta() {
+        if (!etq || etq.processando) return;
+        const g = etqGeracao;
+        etq.processando = true;
+        try {
+          let f;
+          while (!etqVelha(g) && (f = etq.fila.find(x => x.estado === 'lendo'))) {
+            await processarFotoEtiqueta(f, g);
+            if (etqVelha(g)) return;
+            renderCameraEtiqueta();
+          }
+        } finally { if (!etqVelha(g)) etq.processando = false; }
+        if (!etqVelha(g) && etq.encerrando) concluirCameraEtiqueta();
+      }
+      // uma foto: o mesmo caminho do PR 1 (código de barras primeiro, depois os parecidos pela foto + a leitura da IA)
+      async function processarFotoEtiqueta(f, g) {
+        const lev = etq.destino === 'lev';
+        try {
+          if (!f.imagens) {
+            const reduzida = reduzirImagemLista(f.blob);
+            const lidos = await codigosDeBarrasDaFoto(f.blob, reduzida);
+            f.imagens = [{ tipo: 'image/jpeg', dados: await reduzida }];
+            if (f.url && f.url.startsWith('blob:')) { URL.revokeObjectURL(f.url); f.url = null; }
+            f.blob = null; // a foto cheia (1-2 MB) não fica na memória: a folha mostra a reduzida
+            if (etqVelha(g) || f.estado !== 'lendo') return;
+            if (lidos.length) {
+              f.itens = lidos.map(x => ({ texto: x.duasEmbalagens ? `Código de barras ${x.code} · unidade e caixa na foto: confira a quantidade` : `Código de barras ${x.code}`,
+                termo: '', qtd: 1, unidade: null, codigos: [x.p.c], caixa: x.caixa, duasEmbalagens: !!x.duasEmbalagens, ...(lev ? { campo: 'qty' } : {}) }));
+              classificarFotoEtiqueta(f);
+              return;
+            }
+          }
+          // os parecidos pela foto rodam no aparelho: sem internet viram as opções da folha (como no PR 1)
+          if (!f.vetor) {
+            const parecidos = await parecidosDaFoto(f.imagens[0].dados);
+            if (etqVelha(g) || f.estado !== 'lendo') return;
+            f.vetor = parecidos ? parecidos.vetor : null;
+            f.cands = parecidos ? parecidos.cands : [];
+            f.opcoes = parecidos && parecidos.cands.length ? parecidos.cands.slice(0, SUGESTOES_SEM_INTERNET).map(x => x.c) : null;
+          }
+          if (!navigator.onLine) { f.estado = 'esperando'; return; }
+          f.abortar = new AbortController();
+          const abortar = f.abortar, prazo = setTimeout(() => abortar.abort(), ETQ_LEITURA_PRAZO_MS);
+          const candidatos = f.cands && f.cands.length ? f.cands.map(x => ({ c: x.c, n: productByCod(x.c).n })) : null;
+          let lido;
+          try { lido = await pedirLeituraDaImagem(f.imagens, abortar.signal, 'etiqueta', candidatos); }
+          catch (e) {
+            if (etqVelha(g) || f.estado !== 'lendo') return;
+            // sem sinal, prazo, limite de fotos ou IA fora do ar: guarda e lê depois (com espera, lerListasGuardadas)
+            if (!e.status || ETQ_TENTAR_DEPOIS.has(e.status)) { f.estado = 'esperando'; return; }
+            f.estado = 'nao'; f.erro = e.message; f.itens = [];
+            return;
+          } finally { clearTimeout(prazo); }
+          if (etqVelha(g) || f.estado !== 'lendo') return;
+          f.itens = lev ? lido.itens.map(it => ({ ...it, campo: 'qty' })) : lido.itens;
+          classificarFotoEtiqueta(f);
+        } catch (e) {
+          if (etqVelha(g) || f.estado !== 'lendo') return;
+          f.estado = 'nao'; f.erro = 'Não deu pra abrir essa foto.'; f.itens = [];
+        }
+      }
+      // um produto só e "pronto" seguro (a régua do entra direto): soma na hora; o resto fica pro fim
+      function classificarFotoEtiqueta(f) {
+        if (!f.itens.length) { f.estado = 'nao'; return; }
+        const ctx = { comprados: compradosDoCliente(state.levCliente), porCodigo: findByExactCode, etiqueta: true };
+        let r = produtoDaLinhaLista(f.itens[0], ctx);
+        if (r.estado === 'nao' && f.opcoes) r = produtoDaLinhaLista({ ...f.itens[0], opcoes: f.opcoes }, ctx);
+        f.r = r;
+        if (f.itens.length === 1 && r.estado === 'pronto' && r.seguro && r.produto && !f.itens[0].duasEmbalagens) {
+          f.sugeridos = new Set([r.produto.c]);
+          somarFotoEtiqueta(f, r.produto, f.itens[0]);
+          return;
+        }
+        f.estado = 'conferir';
+      }
+      function qtdDaEtiqueta(item, p, lev) { return lev && item.caixa ? packStep(p) : lev ? 1 : packStep(p); }
+      function somarFotoEtiqueta(f, p, item) {
+        const lev = etq.destino === 'lev';
+        f.feito = somarEtiquetaNoDestino(etq.destino, p.c, 'qty', qtdDaEtiqueta(item || {}, p, lev));
+        f.estado = 'pronta';
+        playScanBeep(true);
+        if (navigator.vibrate) { try { navigator.vibrate(60); } catch (e) { } }
+        const total = lev ? (itemDoLevantamento(p.c, false) || {}).qty : (state.cart.find(i => i.cod === p.c) || {}).qty;
+        avisoCameraEtiqueta(`✓ +${f.feito.qtd} ${lev ? 'no estoque' : 'no orçamento'}`, `${p.n}${total ? ` · agora ${total}` : ''}`);
+      }
+      function desfazerFotoEtiqueta(f) {
+        if (!f || f.estado !== 'pronta' || !f.feito) return;
+        desfazerEtiquetaNoDestino(etq.destino, [f.feito]);
+        f.feito = null;
+        f.estado = 'desfeita';
+        if (f.url && f.url.startsWith('blob:')) URL.revokeObjectURL(f.url);
+        f.url = null;
+        avisoCameraEtiqueta('Desfeito', '');
+      }
+      function avisoCameraEtiqueta(titulo, texto) {
+        const el = document.getElementById('etqAviso');
+        el.innerHTML = `<b>${escapeHtml(titulo)}</b>${texto ? `<span>${escapeHtml(texto)}</span>` : ''}`;
+        el.classList.remove('hidden');
+        clearTimeout(etqAvisoTimer);
+        etqAvisoTimer = setTimeout(() => el.classList.add('hidden'), 2200);
+      }
+      const ETQ_ROTULO = { lendo: 'lendo…', esperando: 'sem internet', nao: 'não li' };
+      function nomeDaFichaEtiqueta(f) {
+        if (f.estado === 'pronta' && f.feito) { const p = productByCod(f.feito.cod); return p ? p.n : f.feito.cod; }
+        if (f.estado === 'conferir') { const it = f.itens && f.itens[0]; return it ? (it.texto || it.termo || '') : ''; }
+        return ETQ_ROTULO[f.estado] || '';
+      }
+      function renderCameraEtiqueta() {
+        if (!etq) return;
+        const lev = etq.destino === 'lev';
+        const visiveis = etq.fila.filter(f => f.estado !== 'desfeita' && f.estado !== 'tirada');
+        const c = state.levCliente;
+        document.getElementById('etqStatus').textContent = `${lev ? 'Levantamento' : 'Orçamento'}${c ? ' · ' + c.nome : ''}`;
+        const icone = { pronta: '✓', lendo: '◌', conferir: '?', nao: '✕', esperando: '⌛' };
+        document.getElementById('etqFichas').innerHTML = visiveis.slice().reverse().map(f =>
+          `<button type="button" class="etqFicha" data-estado="${f.estado}" data-etq-ficha="${escapeHtml(f.id)}" aria-label="Foto ${f.n}: ${escapeHtml(nomeDaFichaEtiqueta(f))}"><span aria-hidden="true">${icone[f.estado] || ''}</span>${escapeHtml(nomeCurtoDoCard(nomeDaFichaEtiqueta(f)).slice(0, 26))}</button>`).join('');
+        const prontas = etq.fila.filter(f => f.estado === 'pronta').length;
+        document.getElementById('etqDesfazerBtn').disabled = !prontas;
+        const lendo = etq.fila.filter(f => f.estado === 'lendo').length;
+        const pronto = document.getElementById('etqProntoBtn');
+        pronto.textContent = etq.encerrando ? `Lendo ${lendo}…` : `Pronto${visiveis.length ? ' · ' + visiveis.length : ''}`;
+        pronto.disabled = etq.encerrando;
+        document.getElementById('etqDisparoBtn').disabled = etq.encerrando;
+        if (etq.encerrando) document.getElementById('etqMsg').textContent = `Terminando a leitura de ${lendo} foto${lendo === 1 ? '' : 's'}… (✕ fecha já e guarda pra ler depois)`;
+        renderFolhaEtiqueta();
+      }
+      // tocar numa ficha: a foto, o que foi lido e o que dá pra fazer, numa folha por cima da câmera
+      function renderFolhaEtiqueta() {
+        const el = document.getElementById('etqFolha');
+        const f = etq && etq.folha ? etq.fila.find(x => x.id === etq.folha) : null;
+        if (!f || f.estado === 'desfeita' || f.estado === 'tirada') { el.classList.add('hidden'); el.innerHTML = ''; if (etq) etq.folha = null; return; }
+        const lev = etq.destino === 'lev';
+        if (!f.url && (f.blob || f.imagens)) f.url = f.blob ? URL.createObjectURL(f.blob) : 'data:image/jpeg;base64,' + f.imagens[0].dados;
+        const it = f.itens && f.itens[0];
+        let estado = '', corpo = '', acoes = '';
+        if (f.estado === 'pronta') {
+          const p = productByCod(f.feito.cod);
+          estado = `✓ ${lev ? 'No estoque' : 'No orçamento'} · +${f.feito.qtd}`;
+          corpo = `<b>${escapeHtml(p ? p.n : f.feito.cod)}</b><small>${escapeHtml(f.feito.cod)}</small>`;
+          acoes = '<button type="button" class="restoreBtn" data-etq-acao="desfazer">Desfazer</button>';
+        } else if (f.estado === 'conferir') {
+          const ops = [...(f.r && f.r.produto ? [f.r.produto] : []), ...((f.r && f.r.opcoes) || [])].filter((p, i, a) => p && a.findIndex(x => x.c === p.c) === i).slice(0, 4);
+          estado = f.itens.length > 1 ? `Pra conferir · ${f.itens.length} produtos na foto` : 'Pra conferir';
+          corpo = `<b>${escapeHtml(it ? it.texto || it.termo : '')}</b><small>lido na ${it && /^Código de barras/.test(it.texto || '') ? 'foto' : 'etiqueta'}</small>`;
+          if (f.itens.length === 1) corpo += ops.map(p => `<button type="button" class="etqOpcao" data-etq-usar="${escapeHtml(p.c)}"><span>${escapeHtml(p.n)}</span><small>${escapeHtml(p.c)}</small></button>`).join('');
+          acoes = `<button type="button" class="restoreBtn" data-etq-acao="tirar">Tirar da fila</button><button type="button" class="btnPrimary" data-etq-acao="fechar">Deixar pro fim</button>`;
+        } else if (f.estado === 'lendo') {
+          estado = 'Lendo…'; acoes = '<button type="button" class="restoreBtn" data-etq-acao="tirar">Tirar da fila</button>';
+        } else if (f.estado === 'esperando') {
+          estado = 'Esperando internet';
+          corpo = `<small>Fica guardada no aparelho e é lida quando o sinal voltar.${f.opcoes ? ' Ou escolha agora, pela foto:' : ''}</small>`
+            + (f.opcoes || []).map(c => productByCod(c)).filter(Boolean).map(p => `<button type="button" class="etqOpcao" data-etq-usar="${escapeHtml(p.c)}"><span>${escapeHtml(p.n)}</span><small>${escapeHtml(p.c)}</small></button>`).join('');
+          acoes = '<button type="button" class="restoreBtn" data-etq-acao="tirar">Tirar da fila</button>';
+        } else {
+          estado = 'Não deu pra ler'; corpo = `<small>${escapeHtml(f.erro || 'Tire mais de perto, com a etiqueta inteira e sem reflexo.')} Fica pro fim, pra buscar o produto.</small>`;
+          acoes = '<button type="button" class="restoreBtn" data-etq-acao="tirar">Tirar da fila</button>';
+        }
+        el.innerHTML = `<div class="etqFolhaTopo">${f.url ? `<img src="${escapeHtml(f.url)}" alt="Foto ${f.n}">` : ''}<div><em>Foto ${f.n} · ${escapeHtml(estado)}</em>${corpo}</div></div>
+          <div class="etqFolhaAcoes">${acoes}${f.estado === 'conferir' ? '' : '<button type="button" class="restoreBtn" data-etq-acao="fechar">Fechar</button>'}</div>`;
+        el.classList.remove('hidden');
+      }
+      function acaoNaFolhaEtiqueta(acao, cod) {
+        const f = etq && etq.folha ? etq.fila.find(x => x.id === etq.folha) : null;
+        if (!f) return;
+        if (acao === 'desfazer') desfazerFotoEtiqueta(f);
+        else if (acao === 'tirar') { if (f.abortar) f.abortar.abort(); if (f.estado === 'pronta') desfazerFotoEtiqueta(f); f.estado = 'tirada'; if (f.url && f.url.startsWith('blob:')) URL.revokeObjectURL(f.url); f.url = null; }
+        else if (acao === 'usar' && (f.estado === 'conferir' || f.estado === 'esperando')) {
+          const p = productByCod(cod);
+          if (p) { f.sugeridos = new Set([p.c]); somarFotoEtiqueta(f, p, (f.itens && f.itens[0]) || {}); }
+        }
+        etq.folha = null;
+        renderCameraEtiqueta();
+      }
+      // "Pronto" (ou o ✕): espera o que está lendo e fecha
+      function concluirCameraEtiqueta(agora) {
+        if (!etq) return;
+        if (agora === true && etq.encerrando) {
+          for (const f of etq.fila) if (f.estado === 'lendo') { if (f.abortar) f.abortar.abort(); f.estado = 'esperando'; }
+        }
+        if (etq.fila.some(f => f.estado === 'lendo')) {
+          etq.encerrando = true;
+          etq.folha = null;
+          renderCameraEtiqueta();
+          processarFilaEtiqueta();
+          return;
+        }
+        const { destino, fila } = etq;
+        const vivas = fila.filter(f => f.estado !== 'desfeita' && f.estado !== 'tirada');
+        fecharTelaCameraEtiqueta();
+        // confirmada (não desfeita) com o vetor da foto: vira referência "da loja" do código, como no PR 1
+        for (const f of vivas) if (f.estado === 'pronta' && f.vetor && f.feito && f.sugeridos && f.sugeridos.has(f.feito.cod) && f.itens && f.itens.length === 1) ensinarFotoDaEtiqueta(f.feito.cod, f.vetor);
+        const prontas = vivas.filter(f => f.estado === 'pronta').length;
+        const esperando = vivas.filter(f => f.estado === 'esperando');
+        if (esperando.length) guardarFotosDeEtiqueta(esperando, destino);
+        const resto = vivas.filter(f => f.estado === 'conferir' || f.estado === 'nao');
+        const lev = destino === 'lev';
+        const partes = [];
+        if (prontas) partes.push(`${prontas} ${lev ? 'no levantamento' : 'no orçamento'}`);
+        const escolher = resto.filter(f => f.estado === 'conferir').length, naoLi = resto.length - escolher;
+        if (escolher) partes.push(`${escolher} pra escolher`);
+        if (naoLi) partes.push(`${naoLi} não li`);
+        if (esperando.length) partes.push(`${esperando.length} esperando internet`);
+        if (!resto.length) {
+          if (partes.length) showToast('✓ ' + partes.join(' · '), 'longo');
+          if (!lev) renderResults();
+          return;
+        }
+        const itens = [];
+        for (const f of resto) {
+          const opcoes = f.opcoes;
+          if (f.itens && f.itens.length) for (const it of f.itens) itens.push(opcoes ? { ...it, opcoesFoto: opcoes } : it);
+          else itens.push({ texto: `Foto ${f.n}: não deu pra ler a etiqueta`, termo: '', qtd: 1, unidade: null, codigos: [], ...(lev ? { campo: 'qty' } : {}), ...(opcoes ? { opcoes } : {}) });
+        }
+        abrirListaCliente();
+        lc = { ...lc, fase: 'lendo', modo: 'etiqueta', destino, msg: 'Preparando a conferência…', sub: '', varias: true };
+        renderListaCliente();
+        conferirItensDaLista(itens, 'foto', { pistas: { cnpjs: [] }, rotulo: partes.join(' · ') });
+        if (!lev) renderResults();
+      }
+      function ensinarFotoDaEtiqueta(c, q) {
+        if (indiceFotos && indiceFotos._itens) indiceFotos._itens.push({ c, v: vetorNormalizado(q) });
+        apiFetch('/api/produto-vetores/loja', { method: 'POST', body: JSON.stringify({ modelo: MODELO_VETOR, c, v: base64DeVetor(q) }) },
+          { tipo: 'vetor-foto', descricao: 'Foto de etiqueta (reconhecimento por foto)' }).catch(() => { });
+      }
+      // sem internet na loja: a foto fica no aparelho (o mesmo lugar da lista do cliente) e é lida quando o sinal voltar
+      async function guardarFotosDeEtiqueta(fotos, destino) {
+        const c = state.levCliente;
+        let falhou = 0;
+        for (const f of fotos) {
+          if (!f.imagens && f.blob) { try { f.imagens = [{ tipo: 'image/jpeg', dados: await reduzirImagemLista(f.blob) }]; } catch (e) { falhou++; continue; } }
+          if (!f.imagens) continue;
+          const reg = { id: Date.now() + '-' + Math.random().toString(36).slice(2, 8), criadaEm: Date.now(), origem: 'foto', imagens: f.imagens,
+            cliente: c ? { id: c.id, nome: c.nome } : null, itens: null, modo: 'etiqueta', destino: destino || null };
+          try { await lcBancoOp('readwrite', s => s.put(reg)); } catch (e) { falhou++; }
+        }
+        if (falhou) showToast(`Sem espaço no aparelho: ${falhou} foto${falhou === 1 ? '' : 's'} de etiqueta NÃO ficou guardada.`, 'erro');
+        atualizarFaixaListas();
+      }
+      function initCameraEtiqueta() {
+        document.getElementById('etqDisparoBtn').addEventListener('click', fotografarEtiqueta);
+        document.getElementById('etqProntoBtn').addEventListener('click', () => concluirCameraEtiqueta());
+        document.getElementById('etqFecharBtn').addEventListener('click', () => concluirCameraEtiqueta(true)); // tocado durante o "Lendo N…": fecha já
+        document.getElementById('etqDesfazerBtn').addEventListener('click', () => {
+          if (!etq) return;
+          const f = [...etq.fila].reverse().find(x => x.estado === 'pronta');
+          desfazerFotoEtiqueta(f);
+          renderCameraEtiqueta();
+        });
+        document.getElementById('etqFichas').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-etq-ficha]');
+          if (!b || !etq || etq.encerrando) return;
+          etq.folha = b.dataset.etqFicha;
+          renderFolhaEtiqueta();
+        });
+        document.getElementById('etqFolha').addEventListener('click', (e) => {
+          const usar = e.target.closest('[data-etq-usar]');
+          if (usar) { acaoNaFolhaEtiqueta('usar', usar.dataset.etqUsar); return; }
+          const b = e.target.closest('[data-etq-acao]');
+          if (b) acaoNaFolhaEtiqueta(b.dataset.etqAcao);
+        });
+        // sinal voltou com a câmera aberta: as fotos que esperavam voltam pra fila
+        window.addEventListener('online', () => {
+          if (!etq) return;
+          let voltou = false;
+          for (const f of etq.fila) if (f.estado === 'esperando') { f.estado = 'lendo'; voltou = true; }
+          if (voltou) { renderCameraEtiqueta(); processarFilaEtiqueta(); }
+        });
+        // app em segundo plano: a câmera solta; ao voltar, abre de novo
+        document.addEventListener('visibilitychange', () => {
+          if (!etq) return;
+          if (document.hidden) desligarCameraEtiqueta();
+          else if (!etq.stream) ligarCameraEtiqueta();
+        });
       }
 
       // ---- Reconhecimento por foto no aparelho (11/2026) ----
@@ -34873,7 +35491,7 @@
             const tent = reg.tentativas || 0;
             if (!agora && (tent >= LC_ESPERAS_MIN.length || (reg.proximaEm && Date.now() < reg.proximaEm))) continue;
             let itens;
-            try { const lido = await pedirLeituraDaImagem(reg.imagens); itens = lido.itens; reg.cnpjs = lido.cnpjs; }
+            try { const lido = await pedirLeituraDaImagem(reg.imagens, undefined, reg.modo); itens = lido.itens; reg.cnpjs = lido.cnpjs; }
             catch (e) {
               if (!e.status) break; // caiu a conexão: tenta de novo quando voltar
               reg.erro = e.message;
@@ -34895,20 +35513,24 @@
           else await ler();
         } finally { lendoGuardadas = false; }
         if (listasApagadas) return;
-        if (lidas) showToast(`Lista do cliente lida${lidas > 1 ? ` (${lidas})` : ''} · toque em "Conferir" no Pedido`, 'longo');
+        if (lidas) showToast(`Foto guardada lida${lidas > 1 ? ` (${lidas})` : ''} · toque em "Conferir" na faixa 📋`, 'longo');
         atualizarFaixaListas();
       }
       async function atualizarFaixaListas() {
-        const el = document.getElementById('listaGuardadaFaixa');
-        if (!el) return;
         const regs = await listasGuardadas();
+        for (const id of ['listaGuardadaFaixa', 'listaGuardadaFaixaLev']) desenharFaixaListas(document.getElementById(id), regs);
+      }
+      function desenharFaixaListas(el, regs) {
+        if (!el) return;
         const lidas = regs.filter(r => r.itens && r.itens.length), esperando = regs.filter(r => !r.itens);
         const semProduto = regs.length - lidas.length - esperando.length;
         if (!regs.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
         const partes = [];
         if (semProduto) partes.push(`${semProduto} sem produto lido`);
-        if (lidas.length) partes.push(`${lidas.length} lista${lidas.length > 1 ? 's' : ''} do cliente lida${lidas.length > 1 ? 's' : ''}`);
-        if (esperando.length) partes.push(lidas.length ? `${esperando.length} esperando internet` : `${esperando.length} lista${esperando.length > 1 ? 's' : ''} do cliente esperando internet`);
+        // foto de etiqueta (a câmera, sem internet) × lista do cliente
+        const nome = (rs) => rs.every(r => r.modo === 'etiqueta') ? (rs.length > 1 ? 'fotos de etiqueta' : 'foto de etiqueta') : (rs.length > 1 ? 'listas do cliente' : 'lista do cliente');
+        if (lidas.length) partes.push(`${lidas.length} ${nome(lidas)} lida${lidas.length > 1 ? 's' : ''}`);
+        if (esperando.length) partes.push(lidas.length ? `${esperando.length} esperando internet` : `${esperando.length} ${nome(esperando)} esperando internet`);
         el.innerHTML = `<span>📋 ${escapeHtml(partes.join(' · '))}</span><b>${lidas.length ? 'Conferir' : 'Ver'}</b>`;
         el.classList.toggle('lida', lidas.length > 0);
         el.classList.remove('hidden');
@@ -34924,14 +35546,17 @@
       async function abrirListaGuardada(reg) {
         const atual = state.levCliente;
         if (reg.cliente && (!atual || atual.id !== reg.cliente.id)) {
-          const msg = `Essa lista é de ${reg.cliente.nome}, e o orçamento aberto ${atual ? 'é de ' + atual.nome : 'está sem cliente'}. Conferir pra pôr no orçamento aberto?`;
+          const onde = reg.modo === 'etiqueta' && reg.destino === 'lev' ? 'levantamento aberto' : 'orçamento aberto';
+          const msg = `${reg.modo === 'etiqueta' ? 'Essa foto' : 'Essa lista'} é de ${reg.cliente.nome}, e o ${onde} ${atual ? 'é de ' + atual.nome : 'está sem cliente'}. Conferir pra pôr no ${onde}?`;
           if (!await askConfirm(msg, 'Conferir assim')) return;
         }
         const rotulo = `${reg.origem === 'pdf' ? 'PDF' : 'Foto'} de ${quandoCurto(reg.criadaEm)}${reg.cliente ? ' · ' + reg.cliente.nome : ''}`;
         lcGeracao++;
-        lc = { fase: 'conferir', clienteDaLista: reg.cliente || null };
+        const etiqueta = reg.modo === 'etiqueta';
+        lc = { fase: 'conferir', clienteDaLista: reg.cliente || null, ...(etiqueta ? { modo: 'etiqueta', destino: reg.destino || null, varias: true } : {}) };
         document.getElementById('listaClienteModal').classList.remove('hidden');
-        conferirItensDaLista(reg.itens, 'foto', { guardadaId: reg.id, rotulo, pistas: { cnpjs: reg.cnpjs || [] } });
+        const itens = etiqueta && reg.destino === 'lev' ? reg.itens.map(it => ({ ...it, campo: 'qty' })) : reg.itens;
+        conferirItensDaLista(itens, 'foto', { guardadaId: reg.id, rotulo: etiqueta ? `Etiqueta fotografada ${quandoCurto(reg.criadaEm)} sem internet` : rotulo, pistas: { cnpjs: reg.cnpjs || [] } });
       }
 
       // ---- tela
@@ -35138,7 +35763,7 @@
           const fora = ls.length - incl.length;
           if (etiqueta) { // etiqueta não fica guardada: fechar = desistir dela
             rodape.innerHTML = `<button type="button" class="btnPrimary" id="lcPorBtn"${incl.length ? '' : ' disabled'}>Pôr ${incl.length} ite${incl.length === 1 ? 'm' : 'ns'} no levantamento</button>
-              <button type="button" class="restoreBtn" id="lcEtiquetaFotoBtn">${incl.length ? 'Pôr e tirar outra foto' : 'Tirar outra foto'}</button>`;
+              <button type="button" class="restoreBtn" id="lcEtiquetaFotoBtn">${incl.length ? (lc.varias ? 'Pôr e tirar mais fotos' : 'Pôr e tirar outra foto') : (lc.varias ? 'Tirar mais fotos' : 'Tirar outra foto')}</button>`;
             corpo.scrollTop = rolagem;
             return;
           }
@@ -35161,6 +35786,7 @@
         const fora = lc.linhas.length - incl.length;
         if (lc.modo === 'etiqueta') { // as falas pendentes da voz não são desta conferência
           aprenderFotoDaEtiqueta(incl);
+          if (lc.guardadaId) apagarListaGuardada(lc.guardadaId); // foto guardada sem internet: conferida, não soma de novo
           saveLevSurvey();
           fecharListaCliente();
           renderLevList();
@@ -35230,7 +35856,9 @@
         document.getElementById('levEtiquetaBtn').addEventListener('click', () => abrirEtiqueta('lev'));
         etiquetaInput.addEventListener('change', () => { const f = etiquetaInput.files; if (f && f.length && lc) lcFotosEscolhidas(f); etiquetaInput.value = ''; });
         document.getElementById('listaGuardadaFaixa').addEventListener('click', abrirListasGuardadas);
-        document.getElementById('lcFecharBtn').addEventListener('click', fecharListaCliente);
+        document.getElementById('listaGuardadaFaixaLev').addEventListener('click', abrirListasGuardadas);
+        initCameraEtiqueta();
+        document.getElementById('lcFecharBtn').addEventListener('click', fecharListaClientePerguntando);
         document.getElementById('lcParaBtn').addEventListener('click', async () => {
           const g = lcGeracao;
           const modal = document.getElementById('listaClienteModal');
@@ -35251,7 +35879,7 @@
           if (!t) return;
           const emFoco = document.activeElement;
           if (emFoco && emFoco.matches && emFoco.matches('[data-lc-qtd-input]')) aplicarQtdDigitadaLista(emFoco);
-          if (t.matches('[data-lc-fechar]')) { fecharListaCliente(); return; }
+          if (t.matches('[data-lc-fechar]')) { fecharListaClientePerguntando(); return; }
           if (t.id === 'lcColarBtn') {
             try {
               const txt = await navigator.clipboard.readText();
@@ -35280,7 +35908,10 @@
               saveLevSurvey();
               renderLevList();
               showToast(`${conferidos.length} ite${conferidos.length === 1 ? 'm' : 'ns'} da etiqueta no levantamento`);
+              if (lc.guardadaId) apagarListaGuardada(lc.guardadaId);
             }
+            // conferência das fotos da câmera do app: volta pra câmera (o conferido já somou acima)
+            if (lc.varias && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) { const destino = lc.destino; fecharListaCliente(); abrirCameraEtiqueta(destino); return; }
             lc = { ...lc, fase: 'etiqueta', linhas: null, imagens: null, vetorFoto: null, opcoesPelaFoto: null, rotulo: null, sugerido: null, pistas: null, feitos: null, porBarras: false };
             renderListaCliente();
             etiquetaInput.click();
@@ -35774,6 +36405,7 @@
         desconectarLeitorTablet(); // nem somando leituras num levantamento depois do logout
         fecharVozLev(true);
         gravarPendentesVoz([]);
+        if (etq) fecharTelaCameraEtiqueta();
         if (leitorCelular) { const id = leitorCelular.id; sairDoModoLeitor(); apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { }); }
         await apagarOcorrenciasDoAparelho(); // rascunhos com fotos de cliente não ficam no aparelho
         await apagarListasDoAparelho(); // nem a foto da lista/orçamento que o cliente mandou

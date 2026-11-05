@@ -1592,8 +1592,8 @@ Supabase, sem PR — não é mudança de código.
   pra `/api/assistente/itens-da-imagem` com `modo: 'etiqueta'` (`PROMPT_ETIQUETA`, `routes/assistente.js`: lê tipo, linha, medida,
   dentes e o código de 5 dígitos impressos; sem CNPJ na resposta) e os itens passam pela **mesma conferência da lista do cliente**
   (`lc.modo = 'etiqueta'`, `abrirEtiqueta`, `index.html`): no Pedido, 1 embalagem no orçamento; no Levantamento (`lc.destino = 'lev'`),
-  +1 no estoque, sem mexer nas falas pendentes da voz. **Sem internet não guarda a foto** (avisa: código de barras ou busca resolvem
-  na hora). O teste que levou a isso: comparação por imagem (CLIP, inclusive o MobileCLIP que caberia no celular) acerta o **tipo**
+  +1 no estoque, sem mexer nas falas pendentes da voz. Sem internet, a foto do "Tirar foto" antigo não é guardada; a da câmera dentro do app
+  (ver "Câmera dentro do app" abaixo) é guardada e lida quando o sinal volta. O teste que levou a isso: comparação por imagem (CLIP, inclusive o MobileCLIP que caberia no celular) acerta o **tipo**
   (lâmina × disco) mas não a medida/linha, e no expositor inteiro errou todos os discos diamantados; a etiqueta diz tudo e a busca do
   app já acha o produto. Junto, desempate no `produtoDaLinhaLista` (`<motor-lista>`, vale pra lista do cliente também): no empate sem
   palavra faltando, o **único** nome sem palavra além das escritas vai pronto ("... porcelanato turbo 110 mm" = 60863, não o
@@ -1661,6 +1661,23 @@ Supabase, sem PR — não é mudança de código.
       outro produto"); linha "Não achei" da etiqueta ganha as sugestões pela foto. **Pendente:** o admin não tem como apagar
       fotos "da loja" de um código (confirmação errada puxa o código pra cima em fotos parecidas) — se acontecer, SQL no Supabase
       (`DELETE FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = '...'`) ou um botão no Painel.
+  - **Câmera dentro do app e fila em segundo plano** (11/2026, "Etiqueta, PR 2"; opções "A" dos mockups "Cortag · Etiqueta com
+    câmera ao vivo": toque pra fotografar + a pronta entra na hora): "📷 Pela etiqueta" abre `#etqCam` (`abrirCameraEtiqueta`,
+    `index.html`; câmera pelo `getUserMedia`, como o `#modoLeitor`) e cada toque no disparo é uma foto (quadro do vídeo em JPEG).
+    A leitura roda atrás, uma foto por vez (`processarFilaEtiqueta`/`processarFotoEtiqueta`: código de barras, parecidos pela
+    foto e a IA, o mesmo caminho do PR 1) e cada foto vira uma ficha embaixo: lendo · **pronta** (um produto só e "pronto"
+    `seguro`, a régua do entra direto: soma na hora, aviso verde de 2 s, `somarEtiquetaNoDestino`) · pra conferir · não li · sem
+    internet. Tocar na ficha abre uma folha com a foto (escolher entre as opções, Desfazer, Tirar da fila); "Desfazer" desfaz a
+    última pronta. **"Pronto"** (ou o ✕) espera o que está lendo, ensina o índice com as prontas confirmadas que tinham o vetor
+    (`ensinarFotoDaEtiqueta`), guarda no aparelho a foto que esperava internet (mesmo IndexedDB da lista do cliente, com `modo:
+    'etiqueta'`/`destino`; a faixa 📋 agora aparece também no Levantamento, `listaGuardadaFaixaLev`, e a leitura usa o modo da
+    foto) e abre a conferência de hoje só com o que ficou em dúvida (`lc.varias`: sem o "entra direto"; opções pela foto de cada
+    foto em `item.opcoesFoto`; "Tirar mais fotos" volta pra câmera), com o resumo "N no levantamento · M pra escolher · K não
+    li". Sinal que volta com a câmera aberta põe as que esperavam de novo na fila; app em segundo plano solta a câmera; logout
+    fecha. Sem câmera no app (sem permissão, navegador sem `getUserMedia`): o "Tirar foto" do PR 1, com aviso. Testado no app
+    local (Chromium com câmera falsa, IA simulada): certa/dúvida/ilegível, escolher na folha, Desfazer, sem internet e o Pedido;
+    Leitura com prazo de 60 s; 429/5xx ou falha de rede deixam a foto esperando (não "não li"); ✕ durante o "Pronto" fecha
+    já e guarda as que estavam lendo. **não testado num celular de verdade** (foco e nitidez do quadro do vídeo × a foto da câmera do celular).
 
 - **Telefone do vendedor no cadastro do usuário** (11/2026, pedido do usuário: "fica pras fichas, fotos e orçamentos sem
   preencher toda vez"): `usuarios.telefone` (NULL = nunca preenchido, '' = apagado), `PUT /api/auth/usuarios/:id/telefone`
@@ -1787,9 +1804,6 @@ Supabase, sem PR — não é mudança de código.
      campanhas, total em vermelho, cartões de pagamento, frete (`metaPedidoMinimo`) e validade, avisos fiscais (`avisosDoOrcamento`)
      e o contato; no catálogo, só código/produto/embalagem. Arquivo `Proposta-<cliente>-DDMMAA.pdf` / `Selecao-…`. Produto sem
      foto sai sem o quadro da foto (texto na largura toda).
-- **Etiqueta, PR 2 (depois do vendedor testar o PR 1 na loja)**: câmera ao vivo dentro do app (como o `#modoLeitor`: um
-  toque por foto, sem a câmera do celular) e fila em segundo plano (tira a próxima foto enquanto a anterior é lida; lista
-  "lendo · prontos · pra conferir").
 - **Code Mode (Cloudflare) — ideia registrada, não fazer agora** (10/2026, pesquisa a pedido do usuário; ele decidiu **não
   implementar** e guardar como caminho futuro). Code Mode = o modelo escreve código contra uma API tipada (gerada das ferramentas MCP)
   que roda numa sandbox isolada (Dynamic Workers, sem internet, chaves fora do código); vale com muitas ferramentas/passos encadeados
