@@ -16378,6 +16378,7 @@
         const items = searchProducts(q);
         const pelaFicha = searchProductsPelaFicha(q, FICHAS_MAP, items, SITE_BUSCA);
         ultimosResultados = items;
+        if (items.length === 0) ultimaBuscaDesenhada = ''; // "discox" sem achado e de volta a "disco" = busca nova
         if (items.length === 0 && pelaFicha.length) {
           addAllBar.classList.add('hidden');
           const tabelaF = tabelaAgora();
