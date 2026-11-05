@@ -1200,19 +1200,23 @@
       background: rgba(0, 0, 0, .4);
     }
 
+    /* mesmos botões redondos de 44 px das outras câmeras do app (.leitorFechar), claros sobre a faixa escura */
     .scanner-header button {
       background: rgba(255, 255, 255, .15);
       border: none;
       color: #fff;
-      font-size: 18px;
       cursor: pointer;
-      width: 30px;
-      height: 30px;
-      border-radius: 50%;
-      line-height: 1;
+      width: 44px;
+      height: 44px;
+      border-radius: 22px;
       display: flex;
       align-items: center;
       justify-content: center;
+    }
+
+    .scanner-header button svg {
+      width: 20px;
+      height: 20px;
     }
 
     .scanner-header-btns {
@@ -1222,14 +1226,6 @@
       flex-shrink: 0;
     }
 
-    .scanner-switchBtn svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    .scanner-switchBtn.hidden {
-      display: none;
-    }
 
     .scanner-videoWrap {
       position: relative;
@@ -11358,12 +11354,12 @@
       flex-shrink: 0;
     }
 
-    .etqTrocarCam.hidden {
+    .camTrocar.hidden {
       display: none;
     }
 
-    /* zoom 1x/2x: o da câmera quando o celular deixa, senão digital (vídeo ampliado e foto recortada) */
-    .etqZoom {
+    /* zoom 1x/2x, o mesmo em toda câmera do app: o da câmera quando o celular deixa, senão digital (vídeo ampliado) */
+    .camZoom {
       align-self: center;
       display: flex;
       gap: 4px;
@@ -11372,7 +11368,7 @@
       background: rgba(0, 0, 0, .6);
     }
 
-    .etqZoom button {
+    .camZoom button {
       min-width: 44px;
       min-height: 38px;
       border: none;
@@ -11385,13 +11381,21 @@
       cursor: pointer;
     }
 
-    .etqZoom button.active {
+    .camZoom button.active {
       background: #FFFFFF;
       color: #1D1D1F;
     }
 
-    .etqCam video.zoomDigital {
+    video.zoomDigital {
       transform: scale(2);
+    }
+
+    .scanner-videoWrap .camZoom {
+      position: absolute;
+      left: 50%;
+      bottom: calc(96px + env(safe-area-inset-bottom));
+      transform: translateX(-50%);
+      z-index: 2;
     }
 
     .etqCam .leitorStatus {
@@ -13510,9 +13514,14 @@
       <video id="leitorVideo" playsinline muted></video>
       <div class="leitorTopo">
         <span class="leitorStatus" id="leitorStatus" role="status"></span>
-        <button type="button" class="leitorFechar" id="leitorFecharBtn" aria-label="Sair do modo leitor">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        </button>
+        <div class="etqTopoBtns">
+          <button type="button" class="leitorFechar camTrocar hidden" id="leitorTrocarCamBtn" aria-label="Trocar câmera" title="Trocar câmera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-3l-2-3H9L7 7H4a1 1 0 00-1 1v11a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z" /><path d="M9 13.5a3 3 0 015.2-2" /><path d="M15 10v2h-2" /><path d="M15 13.5a3 3 0 01-5.2 2" /><path d="M9 17v-2h2" /></svg>
+          </button>
+          <button type="button" class="leitorFechar" id="leitorFecharBtn" aria-label="Sair do modo leitor">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
       </div>
       <div class="leitorCampo" id="leitorCampo" role="radiogroup" aria-label="Cada leitura soma em">
         <button type="button" role="radio" data-campo="qty" aria-checked="true" class="active">+1 no estoque</button>
@@ -13521,6 +13530,10 @@
       <div class="leitorMira" aria-hidden="true"><div></div></div>
       <div class="leitorMsg" id="leitorMsg" role="status"></div>
       <section class="leitorUltima hidden" id="leitorUltima" aria-label="Última leitura"></section>
+      <div class="camZoom" id="leitorZoom" role="radiogroup" aria-label="Zoom da câmera">
+        <button type="button" role="radio" data-cam-zoom="1" aria-checked="true" class="active">1x</button>
+        <button type="button" role="radio" data-cam-zoom="2" aria-checked="false">2x</button>
+      </div>
       <div class="leitorAcoes">
         <button type="button" id="leitorDesfazerBtn" disabled>Desfazer última</button>
         <button type="button" id="leitorDigitarBtn" disabled>Digitar quantidade</button>
@@ -13533,7 +13546,7 @@
       <div class="leitorTopo">
         <span class="leitorStatus" id="etqStatus" role="status"></span>
         <div class="etqTopoBtns">
-          <button type="button" class="leitorFechar etqTrocarCam hidden" id="etqTrocarCamBtn" aria-label="Trocar câmera" title="Trocar câmera">
+          <button type="button" class="leitorFechar camTrocar hidden" id="etqTrocarCamBtn" aria-label="Trocar câmera" title="Trocar câmera">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-3l-2-3H9L7 7H4a1 1 0 00-1 1v11a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z" /><path d="M9 13.5a3 3 0 015.2-2" /><path d="M15 10v2h-2" /><path d="M15 13.5a3 3 0 01-5.2 2" /><path d="M9 17v-2h2" /></svg>
           </button>
           <button type="button" class="leitorFechar" id="etqFecharBtn" aria-label="Concluir as fotos de etiqueta">
@@ -13545,9 +13558,9 @@
       <div class="leitorMira etqMira" aria-hidden="true"><div></div></div>
       <div class="leitorMsg" id="etqMsg" role="status"></div>
       <div class="etqFichas" id="etqFichas" aria-label="Fotos tiradas"></div>
-      <div class="etqZoom" id="etqZoom" role="radiogroup" aria-label="Zoom da câmera">
-        <button type="button" role="radio" data-etq-zoom="1" aria-checked="true" class="active">1x</button>
-        <button type="button" role="radio" data-etq-zoom="2" aria-checked="false">2x</button>
+      <div class="camZoom" id="etqZoom" role="radiogroup" aria-label="Zoom da câmera">
+        <button type="button" role="radio" data-cam-zoom="1" aria-checked="true" class="active">1x</button>
+        <button type="button" role="radio" data-cam-zoom="2" aria-checked="false">2x</button>
       </div>
       <div class="etqAcoes">
         <button type="button" class="etqLado" id="etqDesfazerBtn" disabled>Desfazer</button>
@@ -14036,20 +14049,21 @@
       <div class="scanner-header">
         <span>Aponte para o código de barras</span>
         <div class="scanner-header-btns">
-          <button type="button" class="scanner-switchBtn hidden" id="scannerSwitchBtn" aria-label="Trocar câmera">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-              stroke-linejoin="round">
-              <path d="M23 4v6h-6" />
-              <path d="M1 20v-6h6" />
-              <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" />
-            </svg>
+          <button type="button" class="leitorFechar camTrocar hidden" id="scannerSwitchBtn" aria-label="Trocar câmera" title="Trocar câmera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-3l-2-3H9L7 7H4a1 1 0 00-1 1v11a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z" /><path d="M9 13.5a3 3 0 015.2-2" /><path d="M15 10v2h-2" /><path d="M15 13.5a3 3 0 01-5.2 2" /><path d="M9 17v-2h2" /></svg>
           </button>
-          <button type="button" id="scannerClose" aria-label="Fechar">&times;</button>
+          <button type="button" id="scannerClose" aria-label="Fechar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
         </div>
       </div>
       <div class="scanner-videoWrap">
         <video id="scannerVideo" playsinline muted></video>
         <div class="scanner-frame"></div>
+        <div class="camZoom" id="scannerZoom" role="radiogroup" aria-label="Zoom da câmera">
+          <button type="button" role="radio" data-cam-zoom="1" aria-checked="true" class="active">1x</button>
+          <button type="button" role="radio" data-cam-zoom="2" aria-checked="false">2x</button>
+        </div>
       </div>
       <div class="scanner-status hidden" id="scannerStatus"></div>
     </div>
@@ -20976,6 +20990,7 @@
       let leitorReenvio = null;
       let leitorVigia = null;
       let leitorStream = null;
+      let leitorCameraId = '';
       let leitorIntervalo = null;
       let leitorControlesZxing = null;
       let leitorUltimoTexto = ''; // código no quadro agora
@@ -21041,47 +21056,54 @@
         apiFetch(`/api/segunda-tela/salas/${id}`, { method: 'DELETE', signal: prazoSegundaTela(4000) }).catch(() => { });
       }
 
-      async function ligarCameraLeitor() {
+      async function ligarCameraLeitor(deviceId) {
         desligarCameraLeitor();
         const g = leitorCameraGeracao;
         const valendo = () => g === leitorCameraGeracao && !!leitorCelular;
         const video = document.getElementById('leitorVideo');
         const msg = document.getElementById('leitorMsg');
         msg.textContent = 'Abrindo a câmera…';
-        const restricoes = { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } };
+        const tamanho = { width: { ideal: 1280 }, height: { ideal: 720 } };
         try {
           let nativo = false;
           if ('BarcodeDetector' in window) {
             try { nativo = (await BarcodeDetector.getSupportedFormats()).includes('ean_13'); } catch (e) { nativo = false; }
           }
+          if (!nativo) await loadZXingScript();
+          if (!valendo()) return;
+          // a mesma câmera escolhida e o mesmo zoom das outras câmeras do app
+          const stream = await abrirCameraTraseira(deviceId, tamanho);
+          if (!valendo()) { stream.getTracks().forEach(t => t.stop()); return; }
+          leitorStream = stream;
+          leitorCameraId = idDaCamera(stream);
+          focoContinuo(stream);
+          aplicarZoomCamera(stream, video, zoomSalvo(), 'leitorZoom');
+          listarCamerasTraseiras();
           if (nativo) {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: restricoes });
-            if (!valendo()) { stream.getTracks().forEach(t => t.stop()); return; }
-            leitorStream = stream;
             video.srcObject = leitorStream;
             try { await video.play(); } catch (e) { }
             const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'code_93', 'codabar', 'itf'] });
+            const recorte = document.createElement('canvas');
             let ocupado = false;
             leitorIntervalo = setInterval(async () => {
               if (ocupado || video.readyState < 2) return;
               ocupado = true;
               try {
-                const lidos = await detector.detect(video);
+                const lidos = await detector.detect(quadroDoLeitor(video, recorte));
                 if (lidos && lidos.length) aoLerNoModoLeitor(lidos[0].rawValue);
                 else leitorForaDoQuadro();
               } catch (e) { }
               ocupado = false;
             }, 200);
           } else {
-            await loadZXingScript();
-            if (!valendo()) return;
+            // @zxing/library 0.21: para com reset() (não devolve controles); antes a câmera ficava ligada ao sair
             const leitor = new ZXing.BrowserMultiFormatReader();
-            const controles = await leitor.decodeFromConstraints({ video: restricoes }, video, (result) => {
+            leitorControlesZxing = { stop: () => leitor.reset() };
+            await leitor.decodeFromStream(stream, video, (result) => {
               if (result) aoLerNoModoLeitor(result.getText());
               else leitorForaDoQuadro();
             });
-            if (!valendo()) { try { controles.stop(); } catch (e) { } return; }
-            leitorControlesZxing = controles;
+            if (!valendo()) { try { leitor.reset(); } catch (e) { } return; }
           }
           msg.textContent = 'Aponte pro código de barras';
         } catch (e) {
@@ -21090,6 +21112,18 @@
           if (e && e.name === 'NotAllowedError') texto = 'Permissão de câmera negada — libere a câmera pro app.';
           else if (e && e.message === 'load-error') texto = 'Não deu pra carregar o leitor (sem internet).';
           msg.innerHTML = `${escapeHtml(texto)} <button type="button" class="leitorTentarBtn" data-leitor-acao="camera">Tentar de novo</button>`;
+        }
+      }
+      async function trocarCameraLeitor() {
+        const prox = leitorCelular && proximaCameraTraseira(leitorCameraId);
+        if (!prox) return;
+        const btn = document.getElementById('leitorTrocarCamBtn');
+        btn.disabled = true;
+        await ligarCameraLeitor(prox.deviceId);
+        btn.disabled = false;
+        if (leitorStream) {
+          guardarCamera(leitorCameraId || prox.deviceId);
+          document.getElementById('leitorMsg').textContent = `${rotuloDaCamera(leitorCameraId || prox.deviceId)} · aponte pro código de barras`;
         }
       }
       function desligarCameraLeitor() {
@@ -21278,6 +21312,8 @@
           if (await askConfirm('Desconectar o celular? As leituras dele deixam de entrar neste levantamento.', 'Desconectar')) desconectarLeitorTablet();
         });
         document.getElementById('leitorFecharBtn').addEventListener('click', fecharModoLeitor);
+        ligarControlesCamera('leitorTrocarCamBtn', 'leitorZoom', trocarCameraLeitor,
+          (n) => aplicarZoomCamera(leitorStream, document.getElementById('leitorVideo'), n, 'leitorZoom'));
         document.getElementById('leitorDesfazerBtn').addEventListener('click', desfazerUltimaLeitura);
         document.getElementById('leitorDigitarBtn').addEventListener('click', digitarQuantidadeLeitor);
         document.getElementById('leitorCampo').addEventListener('click', (e) => {
@@ -35596,62 +35632,116 @@
       const ETQ_TENTAR_DEPOIS = new Set([429, 502, 503, 504]); // limite de fotos, IA fora do ar: guarda e lê depois
       const ETQ_FOTO_LADO = 2560;
       const etqVelha = (g) => g !== etqGeracao || !etq;
-      // Trocar de câmera (11/2026, relato do usuário: a grande angular que o celular escolhe não foca de perto).
-      // Só as traseiras (a frontal não serve pra etiqueta); a escolhida fica no aparelho pra próxima vez.
-      const ETQ_CAMERA_CHAVE = 'cortagEtqCamera_v1';
-      let etqCameras = [];
-      // Zoom 1x/2x (11/2026, pedido do usuário): pela câmera (applyConstraints zoom, Chrome do Android; numa câmera
-      // com várias lentes costuma passar pra lente melhor) ou, sem isso, digital: o vídeo ampliado e a foto recortada no
-      // meio. Serve pra fotografar de mais longe, onde a câmera foca. A escolha fica no aparelho.
-      const ETQ_ZOOM_CHAVE = 'cortagEtqZoom_v1';
-      const etqZoomSalvo = () => { try { return localStorage.getItem(ETQ_ZOOM_CHAVE) === '2' ? 2 : 1; } catch (e) { return 1; } };
-      async function aplicarZoomEtiqueta(nivel, guardar) {
-        if (!etq) return;
-        const video = document.getElementById('etqVideo');
-        const track = etq.stream && etq.stream.getVideoTracks()[0];
-        let caps = null;
-        try { caps = track && track.getCapabilities && track.getCapabilities().zoom; } catch (e) { }
-        etq.zoomDigital = false;
-        if (caps && caps.max >= 1.5) {
-          const v = nivel === 2 ? Math.min(2, caps.max) : (caps.min || 1);
-          try { await track.applyConstraints({ advanced: [{ zoom: v }] }); }
-          catch (e) { etq.zoomDigital = nivel === 2; }
-        } else etq.zoomDigital = nivel === 2;
-        video.classList.toggle('zoomDigital', etq.zoomDigital);
-        etq.zoom = nivel;
-        document.querySelectorAll('#etqZoom [data-etq-zoom]').forEach(b => {
-          const on = Number(b.dataset.etqZoom) === nivel;
-          b.classList.toggle('active', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
-        });
-        if (guardar) try { localStorage.setItem(ETQ_ZOOM_CHAVE, String(nivel)); } catch (e) { }
-      }
-      const etqCameraSalva = () => { try { return localStorage.getItem(ETQ_CAMERA_CHAVE) || ''; } catch (e) { return ''; } };
+      // ---- Câmera do app: trocar de câmera e zoom 1x/2x iguais em todo lugar (11/2026, pedido do usuário) ----
+      // Leitor de código de barras (#scannerModal), celular como leitor do tablet (#modoLeitor) e etiqueta (#etqCam).
+      // A grande angular que o celular escolhe sozinho não foca de perto: a câmera escolhida e o zoom ficam no
+      // aparelho e valem nas três telas. Só as traseiras entram na troca (a frontal não serve pra ler código).
+      // Zoom: o da câmera (applyConstraints zoom, Chrome do Android; numa câmera de várias lentes costuma passar pra
+      // lente melhor) ou, sem isso, digital: o vídeo ampliado (a etiqueta recorta o meio da foto). Serve pra ficar mais
+      // longe, onde a câmera foca.
+      const CAMERA_CHAVE = 'cortagEtqCamera_v1'; // nomes da 1ª versão (só da etiqueta): a escolha feita lá continua valendo
+      const ZOOM_CHAVE = 'cortagEtqZoom_v1';
+      let camerasTraseiras = []; // o navegador só diz quais há depois da permissão
+      const cameraSalva = () => { try { return localStorage.getItem(CAMERA_CHAVE) || ''; } catch (e) { return ''; } };
+      const zoomSalvo = () => { try { return localStorage.getItem(ZOOM_CHAVE) === '2' ? 2 : 1; } catch (e) { return 1; } };
+      function guardarCamera(id) { try { if (id) localStorage.setItem(CAMERA_CHAVE, id); } catch (e) { } }
+      function guardarZoom(nivel) { try { localStorage.setItem(ZOOM_CHAVE, String(nivel)); } catch (e) { } }
       function cameraFrontal(d) {
         try { const fm = d.getCapabilities && d.getCapabilities().facingMode; if (fm && fm.length) return fm.includes('user') && !fm.includes('environment'); } catch (e) { }
         return /front|frontal|user|selfie|facetime/i.test(d.label || '');
       }
-      async function listarCamerasEtiqueta() {
+      async function listarCamerasTraseiras() {
         try {
           const todas = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.deviceId);
-          etqCameras = todas.filter(d => !cameraFrontal(d));
-        } catch (e) { etqCameras = []; }
-        const btn = document.getElementById('etqTrocarCamBtn');
-        if (btn) btn.classList.toggle('hidden', etqCameras.length < 2);
+          camerasTraseiras = todas.filter(d => !cameraFrontal(d));
+        } catch (e) { camerasTraseiras = []; }
+        document.querySelectorAll('.camTrocar').forEach(btn => btn.classList.toggle('hidden', camerasTraseiras.length < 2));
+        return camerasTraseiras;
+      }
+      // a escolhida (ou a pedida); a escolhida que sumiu (outro aparelho, atualização) sai e vale a traseira padrão
+      async function abrirCameraTraseira(deviceId, tamanho) {
+        const escolhida = deviceId || cameraSalva();
+        if (escolhida) {
+          try { return await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: escolhida }, ...tamanho } }); }
+          catch (e) {
+            if (deviceId) throw e;
+            try { localStorage.removeItem(CAMERA_CHAVE); } catch (e2) { }
+          }
+        }
+        return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, ...tamanho } });
+      }
+      function idDaCamera(stream) {
+        try { return stream.getVideoTracks()[0].getSettings().deviceId || ''; } catch (e) { return ''; }
+      }
+      // a câmera seguinte na lista (muito Android não abre duas ao mesmo tempo: quem chama desliga a atual antes)
+      function proximaCameraTraseira(atualId) {
+        if (camerasTraseiras.length < 2) return null;
+        const i = camerasTraseiras.findIndex(d => d.deviceId === atualId);
+        return camerasTraseiras[(i + 1) % camerasTraseiras.length];
+      }
+      function rotuloDaCamera(id) {
+        const i = camerasTraseiras.findIndex(d => d.deviceId === id);
+        return i >= 0 ? `Câmera ${i + 1} de ${camerasTraseiras.length}` : '';
+      }
+      // foco contínuo quando o celular deixa escolher (alguns abrem com o foco parado)
+      async function focoContinuo(stream) {
+        const track = stream && stream.getVideoTracks()[0];
+        try {
+          const fm = track && track.getCapabilities && track.getCapabilities().focusMode;
+          if (fm && fm.includes('continuous')) await track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] });
+        } catch (e) { }
+      }
+      // devolve true quando o zoom ficou digital (o vídeo ampliado por CSS)
+      async function aplicarZoomCamera(stream, video, nivel, grupoId) {
+        const track = stream && stream.getVideoTracks()[0];
+        let caps = null, digital = nivel === 2;
+        try { caps = track && track.getCapabilities && track.getCapabilities().zoom; } catch (e) { }
+        if (caps && caps.max >= 1.5) {
+          // 1x nunca abaixo de 1: vários celulares dizem zoom.min 0,5-0,6, que é a grande angular (não foca de perto)
+          const v = nivel === 2 ? Math.min(2, caps.max) : Math.max(1, caps.min || 1);
+          try { await track.applyConstraints({ advanced: [{ zoom: v }] }); digital = false; } catch (e) { }
+        }
+        if (video) video.classList.toggle('zoomDigital', digital);
+        document.querySelectorAll(`#${grupoId} [data-cam-zoom]`).forEach(b => {
+          const on = Number(b.dataset.camZoom) === nivel;
+          b.classList.toggle('active', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+        return digital;
+      }
+      // zoom digital no leitor de código: lê o meio do quadro (o que a tela mostra ampliado), não o quadro inteiro
+      function quadroDoLeitor(video, canvas) {
+        if (!video.classList.contains('zoomDigital') || !video.videoWidth) return video;
+        const w = Math.round(video.videoWidth / 2), h = Math.round(video.videoHeight / 2);
+        if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
+        canvas.getContext('2d').drawImage(video, w / 2, h / 2, w, h, 0, 0, w, h);
+        return canvas;
+      }
+      // os botões de cada tela: trocar (some com uma câmera traseira só) e o grupo 1x/2x
+      function ligarControlesCamera(trocarId, zoomId, trocar, zoom) {
+        document.getElementById(trocarId).addEventListener('click', trocar);
+        document.getElementById(zoomId).addEventListener('click', (e) => {
+          const b = e.target.closest('[data-cam-zoom]');
+          if (b) { const n = Number(b.dataset.camZoom); guardarZoom(n); zoom(n); }
+        });
+      }
+
+      async function aplicarZoomEtiqueta(nivel) {
+        if (!etq) return;
+        etq.zoomDigital = await aplicarZoomCamera(etq.stream, document.getElementById('etqVideo'), nivel, 'etqZoom');
+        etq.zoom = nivel;
       }
       async function trocarCameraEtiqueta() {
-        if (!etq || etqCameras.length < 2) return;
+        const prox = etq && proximaCameraTraseira(etq.cameraId);
+        if (!prox) return;
         const btn = document.getElementById('etqTrocarCamBtn');
-        const atual = etqCameras.findIndex(d => d.deviceId === etq.cameraId);
-        const prox = etqCameras[(atual + 1) % etqCameras.length];
         btn.disabled = true;
-        desligarCameraEtiqueta(); // muito Android não abre duas câmeras ao mesmo tempo
+        desligarCameraEtiqueta();
         const ok = await ligarCameraEtiqueta(prox.deviceId);
         btn.disabled = false;
         if (!etq) return;
         if (!ok) { document.getElementById('etqMsg').textContent = 'Essa câmera não abriu — toque de novo pra tentar a próxima'; return; }
-        try { localStorage.setItem(ETQ_CAMERA_CHAVE, etq.cameraId || prox.deviceId); } catch (e) { }
-        const i = etqCameras.findIndex(d => d.deviceId === (etq.cameraId || prox.deviceId));
-        document.getElementById('etqMsg').textContent = `Câmera ${i + 1} de ${etqCameras.length} · enquadre a etiqueta e toque no botão`;
+        guardarCamera(etq.cameraId || prox.deviceId);
+        document.getElementById('etqMsg').textContent = `${rotuloDaCamera(etq.cameraId || prox.deviceId)} · enquadre a etiqueta e toque no botão`;
       }
       async function abrirCameraEtiqueta(destino) {
         etqGeracao++;
@@ -35673,27 +35763,19 @@
         const video = document.getElementById('etqVideo');
         document.getElementById('etqMsg').textContent = 'Abrindo a câmera…';
         const tamanho = { width: { ideal: ETQ_FOTO_LADO }, height: { ideal: 1440 } };
-        const escolhida = deviceId || etqCameraSalva();
         try {
-          let stream = null;
-          if (escolhida) {
-            try { stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: escolhida }, ...tamanho } }); }
-            catch (e) {
-              if (deviceId) throw e;
-              try { localStorage.removeItem(ETQ_CAMERA_CHAVE); } catch (e2) { } // a guardada sumiu (outro aparelho, atualização)
-            }
-          }
-          if (!stream) stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, ...tamanho } });
+          const stream = await abrirCameraTraseira(deviceId, tamanho);
           // fechou, foi pro segundo plano ou pediu de novo enquanto abria: esta não fica ligada
           if (etqVelha(g) || cg !== etqCamGeracao || document.hidden) { stream.getTracks().forEach(t => t.stop()); return true; }
           if (etq.stream) etq.stream.getTracks().forEach(t => t.stop());
           etq.stream = stream;
-          try { etq.cameraId = stream.getVideoTracks()[0].getSettings().deviceId || ''; } catch (e) { etq.cameraId = ''; }
+          etq.cameraId = idDaCamera(stream);
           video.srcObject = stream;
           try { await video.play(); } catch (e) { }
           document.getElementById('etqMsg').textContent = 'Enquadre a etiqueta e toque no botão';
-          aplicarZoomEtiqueta(etqZoomSalvo(), false);
-          if (!etqCameras.length) listarCamerasEtiqueta(); // depois da permissão: aí o navegador diz quais câmeras há
+          focoContinuo(stream);
+          aplicarZoomEtiqueta(zoomSalvo());
+          listarCamerasTraseiras();
           return true;
         } catch (e) { return false; }
       }
@@ -35978,11 +36060,7 @@
       }
       function initCameraEtiqueta() {
         document.getElementById('etqDisparoBtn').addEventListener('click', fotografarEtiqueta);
-        document.getElementById('etqTrocarCamBtn').addEventListener('click', trocarCameraEtiqueta);
-        document.getElementById('etqZoom').addEventListener('click', (e) => {
-          const b = e.target.closest('[data-etq-zoom]');
-          if (b) aplicarZoomEtiqueta(Number(b.dataset.etqZoom), true);
-        });
+        ligarControlesCamera('etqTrocarCamBtn', 'etqZoom', trocarCameraEtiqueta, aplicarZoomEtiqueta);
         document.getElementById('etqProntoBtn').addEventListener('click', () => concluirCameraEtiqueta());
         document.getElementById('etqFecharBtn').addEventListener('click', () => concluirCameraEtiqueta(true)); // tocado durante o "Lendo N…": fecha já
         document.getElementById('etqDesfazerBtn').addEventListener('click', () => {
@@ -36978,8 +37056,9 @@
       let scannerEngine = null; // 'native' | 'zxing'
       let scannerNativeIntervalId = null;
       let scannerNativeDetector = null;
-      let scannerCameras = [];
-      let scannerCameraIndex = 0;
+      let scannerStream = null; // a câmera aberta (o app abre; no ZXing ela é entregue ao leitor)
+      let scannerCameraId = '';
+      let scannerGeracao = 0; // fechar no meio da abertura não deixa a câmera ligada
       let scannerCodeReader = null;
       let scannerAttemptCount = 0;
       let scannerTargetInput = 'levInput';
@@ -37045,37 +37124,63 @@
           if (scannerAttemptCount === 0 && s >= 3) {
             showScannerStatus(`O leitor não conseguiu nem começar a tentar (0 quadros lidos em ${s}s) — pode ser bloqueio da própria câmera. Feche e abra de novo.`, true);
           } else if (s < 5) showScannerStatus(`Procurando código… (${n} quadros lidos)`);
-          else if (s < 12) showScannerStatus(`Ainda procurando (${n} quadros lidos)… aproxime bem, deixando o código ocupar quase toda a moldura.`);
-          else showScannerStatus(`Sem sucesso ainda (${n} quadros lidos) — tente mais luz, mais perto, e segure firme.`);
+          else if (s < 12) showScannerStatus(`Ainda procurando (${n} quadros lidos)… desfocado de perto? ${dicaCameraDoScanner()}`);
+          else showScannerStatus(`Sem sucesso ainda (${n} quadros lidos) — tente mais luz e segure firme. ${dicaCameraDoScanner()}`);
         }, 1000);
+      }
+      // o 2x só ajuda quando a câmera tem zoom ou o leitor lê o meio do quadro (nativo); no ZXing o digital só amplia a tela
+      function dicaCameraDoScanner() {
+        const v = document.getElementById('scannerVideo');
+        const zoomAjuda = scannerEngine === 'native' || !(v && v.classList.contains('zoomDigital'));
+        const partes = [];
+        if (zoomAjuda) partes.push('afaste um pouco e use o 2x');
+        if (camerasTraseiras.length > 1) partes.push('troque a câmera no topo');
+        return partes.length ? partes.join(' ou ').replace(/^./, c => c.toUpperCase()) + '.' : 'Afaste um pouco até focar.';
       }
       function stopScannerTicker() {
         if (scannerTickerId) { clearInterval(scannerTickerId); scannerTickerId = null; }
       }
 
       async function releaseCameraStream() {
+        scannerGeracao++;
         const videoEl = document.getElementById('scannerVideo');
         if (scannerNativeIntervalId) { clearInterval(scannerNativeIntervalId); scannerNativeIntervalId = null; }
         if (scannerControls) { try { scannerControls.stop(); } catch (e) { } scannerControls = null; }
+        if (scannerStream) { try { scannerStream.getTracks().forEach(t => t.stop()); } catch (e) { } scannerStream = null; }
         if (videoEl.srcObject) {
           try { videoEl.srcObject.getTracks().forEach(t => t.stop()); } catch (e) { }
           videoEl.srcObject = null;
         }
       }
 
-      async function startNativeScanning(deviceId) {
+      // a câmera escolhida no aparelho (ou a pedida pelo "trocar"), com foco contínuo e o zoom guardado;
+      // null = o leitor foi fechado enquanto a câmera abria
+      async function abrirCameraDoScanner(deviceId) {
         stopScannerTicker();
         await releaseCameraStream();
+        const g = scannerGeracao;
         await new Promise(r => setTimeout(r, 350)); // dá tempo do hardware da câmera liberar
-
+        if (g !== scannerGeracao) return null;
+        const stream = await abrirCameraTraseira(deviceId, { width: { ideal: 1280 }, height: { ideal: 720 } });
+        if (g !== scannerGeracao) { stream.getTracks().forEach(t => t.stop()); return null; }
         const videoEl = document.getElementById('scannerVideo');
-        const videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
-        if (deviceId) videoConstraints.deviceId = { exact: deviceId };
-        else videoConstraints.facingMode = { ideal: 'environment' };
+        scannerStream = stream;
+        scannerCameraId = idDaCamera(stream);
+        focoContinuo(stream);
+        await aplicarZoomCamera(stream, videoEl, zoomSalvo(), 'scannerZoom');
+        if (g !== scannerGeracao) return null; // o release já parou o stream
+        listarCamerasTraseiras();
+        return { videoEl, stream, g };
+      }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
+      async function startNativeScanning(deviceId) {
+        const aberto = await abrirCameraDoScanner(deviceId);
+        if (!aberto) return;
+        const { videoEl, stream, g } = aberto;
         videoEl.srcObject = stream;
         try { await videoEl.play(); } catch (e) { /* autoplay com muted+playsinline cobre a maioria dos casos */ }
+        if (g !== scannerGeracao) return;
+        const recorte = document.createElement('canvas');
 
         if (!scannerNativeDetector) {
           scannerNativeDetector = new BarcodeDetector({
@@ -37087,7 +37192,7 @@
         scannerNativeIntervalId = setInterval(async () => {
           if (videoEl.readyState < 2) return;
           try {
-            const barcodes = await scannerNativeDetector.detect(videoEl);
+            const barcodes = await scannerNativeDetector.detect(quadroDoLeitor(videoEl, recorte));
             scannerAttemptCount++;
             if (barcodes && barcodes.length) {
               const text = barcodes[0].rawValue;
@@ -37098,33 +37203,21 @@
             console.warn('Erro no BarcodeDetector:', e);
           }
         }, 220);
-
-        if (scannerCameras.length === 0) {
-          try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            scannerCameras = devices.filter(d => d.kind === 'videoinput');
-            document.getElementById('scannerSwitchBtn').classList.toggle('hidden', scannerCameras.length < 2);
-          } catch (e) { /* enumerateDevices indisponível em algum navegador - ok, só não mostra o botão */ }
-        }
       }
 
+      // O @zxing/library 0.21 não devolve "controles" (isso é do @zxing/browser): o callback recebe só
+      // (resultado, erro) e para com reset(). Antes o código chamava controls.stop() no callback, que dava
+      // erro na 1ª leitura e parava o leitor sem entregar o código (iPhone, que não tem BarcodeDetector).
       async function startZXingScanning(deviceId) {
-        stopScannerTicker();
-        await releaseCameraStream();
-        await new Promise(r => setTimeout(r, 350)); // dá tempo do hardware da câmera liberar
-
-        const videoEl = document.getElementById('scannerVideo');
-        const videoConstraints = { width: { ideal: 1280 }, height: { ideal: 720 } };
-        if (deviceId) videoConstraints.deviceId = { exact: deviceId };
-        else videoConstraints.facingMode = { ideal: 'environment' };
-
+        const aberto = await abrirCameraDoScanner(deviceId);
+        if (!aberto) return;
+        const leitor = scannerCodeReader;
+        scannerControls = { stop: () => leitor.reset() };
         startScannerTicker();
-        scannerControls = await scannerCodeReader.decodeFromConstraints({ video: videoConstraints }, videoEl, (result, err, controls) => {
+        const pronto = leitor.decodeFromStream(aberto.stream, aberto.videoEl, (result, err) => {
           scannerAttemptCount++;
           if (result) {
             const text = result.getText();
-            controls.stop();
-            scannerControls = null;
             closeBarcodeScanner();
             onScanSuccess(text);
             return;
@@ -37133,14 +37226,8 @@
             console.warn('Erro inesperado no scanner:', err);
           }
         });
-
-        if (scannerCameras.length === 0) {
-          try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            scannerCameras = devices.filter(d => d.kind === 'videoinput');
-            document.getElementById('scannerSwitchBtn').classList.toggle('hidden', scannerCameras.length < 2);
-          } catch (e) { /* enumerateDevices indisponível em algum navegador - ok, só não mostra o botão */ }
-        }
+        await pronto;
+        if (aberto.g !== scannerGeracao) { try { leitor.reset(); } catch (e) { } stopScannerTicker(); }
       }
 
       function startScanning(deviceId) {
@@ -37150,16 +37237,15 @@
       async function openBarcodeScanner(targetInputId) {
         scannerTargetInput = targetInputId || 'levInput';
         document.getElementById('scannerModal').classList.remove('hidden');
-        document.getElementById('scannerSwitchBtn').classList.add('hidden');
-        scannerCameras = [];
-        scannerCameraIndex = 0;
         scannerNativeDetector = null;
+        const fechado = () => document.getElementById('scannerModal').classList.contains('hidden'); // × no meio da abertura
 
         // tenta primeiro a API nativa do navegador (geralmente mais robusta em
         // condição real de foto do que um decodificador em JS puro)
         if ('BarcodeDetector' in window) {
           try {
             const supported = await BarcodeDetector.getSupportedFormats();
+            if (fechado()) return;
             if (supported.includes('ean_13')) {
               scannerEngine = 'native';
               await startScanning(null);
@@ -37176,6 +37262,7 @@
           showScannerStatus('Não foi possível carregar o leitor de código — verifique sua internet.', true);
           return;
         }
+        if (fechado()) return;
         try {
           scannerCodeReader = new ZXing.BrowserMultiFormatReader();
           await startScanning(null);
@@ -37192,14 +37279,14 @@
       }
 
       async function switchScannerCamera() {
-        if (scannerCameras.length < 2) return;
+        const dev = proximaCameraTraseira(scannerCameraId);
+        if (!dev) return;
         const btn = document.getElementById('scannerSwitchBtn');
         btn.disabled = true;
-        scannerCameraIndex = (scannerCameraIndex + 1) % scannerCameras.length;
-        const dev = scannerCameras[scannerCameraIndex];
         showScannerStatus('Trocando câmera…');
         try {
           await startScanning(dev.deviceId);
+          if (scannerStream) guardarCamera(scannerCameraId || dev.deviceId); // vale na próxima vez, aqui e nas outras câmeras do app
         } catch (e) {
           console.error(e);
           const detail = e && e.name ? ` (${e.name})` : '';
@@ -37220,7 +37307,8 @@
         document.getElementById('scanBtnLev').addEventListener('click', () => openBarcodeScanner('levInput'));
         document.getElementById('scanBtnSearch').addEventListener('click', () => openBarcodeScanner('searchInput'));
         document.getElementById('scannerClose').addEventListener('click', closeBarcodeScanner);
-        document.getElementById('scannerSwitchBtn').addEventListener('click', switchScannerCamera);
+        ligarControlesCamera('scannerSwitchBtn', 'scannerZoom', switchScannerCamera,
+          (n) => aplicarZoomCamera(scannerStream, document.getElementById('scannerVideo'), n, 'scannerZoom'));
       }
 
       // ---------------- Wire up ----------------
