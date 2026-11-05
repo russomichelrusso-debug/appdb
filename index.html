@@ -33298,9 +33298,36 @@
       async function apiCatalogoPrecosImportar(arquivoBase64) {
         return apiFetch('/api/catalogo-precos/importar', { method: 'POST', body: JSON.stringify({ arquivoBase64 }) });
       }
+      // Promocionais do Painel (P/P1/P2 fora da Lista de Preços), com cópia no aparelho junto da
+      // do catálogo: sem internet eles não chegavam e saíam do orçamento guardado.
       async function apiProdutosPromocionaisConfig() {
-        try { return await apiFetch('/api/configuracoes/produtos_promocionais'); }
-        catch (e) { return { valor: [] }; }
+        try {
+          const r = await apiFetch('/api/configuracoes/produtos_promocionais');
+          if (r && Array.isArray(r.valor)) gravarCopiaCatalogo('promocionais', { valor: r.valor });
+          return r;
+        } catch (e) {
+          const copia = await lerCopiaCatalogo('promocionais');
+          return { valor: (copia && Array.isArray(copia.valor)) ? copia.valor : [] };
+        }
+      }
+      // Junta os promocionais ao catálogo ANTES do applyDB: o applyDB tira do orçamento (e do
+      // levantamento, preço editado, desconto por quantidade) o código que não está no catálogo, e
+      // juntar depois (mergeProdutosPromocionais) apagava os itens P/P1/P2 do orçamento guardado
+      // a cada abertura do app (achado do revisor-cortag, 11/2026).
+      function juntarPromocionaisAoCatalogo(db, lista) {
+        const porCodigo = new Map(db.products.map(p => [p.c, p]));
+        for (const p of lista || []) {
+          if (!p || !p.c || porCodigo.has(p.c)) continue;
+          p._promocional = true; // fora do catalogo_precos: não entra na comparação do Painel
+          if (!p.subfamilia) { // os cadastrados antes não guardaram: herda do código base
+            const base = /^P[12]?(.+)$/.exec(p.c);
+            const orig = base && porCodigo.get(base[1]);
+            if (orig && orig.subfamilia) p.subfamilia = orig.subfamilia;
+          }
+          db.products.push(p);
+          porCodigo.set(p.c, p);
+        }
+        return db;
       }
       async function salvarProdutosPromocionaisServidor(lista) {
         await apiFetch('/api/configuracoes/produtos_promocionais', { method: 'POST', body: JSON.stringify({ valor: lista }) });
@@ -34380,8 +34407,8 @@
         try { hasLocalOverride = !!localStorage.getItem(LS_KEY); } catch (e) { }
         if (hasLocalOverride && !await askConfirm('Remover a atualização feita neste aparelho e voltar a usar a fonte automática (remota, se disponível, ou a original do app)?')) return false;
         try { localStorage.removeItem(LS_KEY); } catch (e) { }
-        applyDB(await loadActiveDB({ preferirRede: true }));
-        try { mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); } catch (e) { }
+        const [db, promocionais] = await Promise.all([loadActiveDB({ preferirRede: true }), apiProdutosPromocionaisConfig().catch(() => ({ valor: [] }))]);
+        applyDB(juntarPromocionaisAoCatalogo(db, (promocionais && promocionais.valor) || []));
         await loadCodigosProduto(); // catálogo foi recarregado do zero - reaplica o EAN/DUN-14, senão o scanner para de achar produto
         refreshAdminCatalogStatus();
         return true;
@@ -37262,8 +37289,8 @@
       // o resto do boot (ver chamada em init(), sem await).
       async function carregarCatalogoEExtras() {
         try {
-          applyDB(await loadActiveDB());
-          try { mergeProdutosPromocionais((await apiProdutosPromocionaisConfig()).valor || []); } catch (e) { }
+          const [db, promocionais] = await Promise.all([loadActiveDB(), apiProdutosPromocionaisConfig().catch(() => ({ valor: [] }))]);
+          applyDB(juntarPromocionaisAoCatalogo(db, (promocionais && promocionais.valor) || []));
           // aberto pela cópia do aparelho: a versão do servidor entra assim que chegar, sem esperar o resto
           atualizarCatalogoGuardado().catch(e => console.warn('Não foi possível atualizar o catálogo guardado:', e));
         } catch (e) {

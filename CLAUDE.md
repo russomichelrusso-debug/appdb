@@ -136,8 +136,9 @@ Pegadinhas de ambiente:
   O Painel › recarregar a fonte usa `preferirRede`. Logout apaga a cópia. Enquanto a tela está com a cópia não confirmada pelo
   servidor (`CATALOGO_DA_COPIA_EM`), a gaveta do orçamento mostra "Preços da tabela de DD/MM/AAAA (sem conexão)" e o PDF, a
   imagem e o texto levam o recado "Tabela de preços" (`avisoTabelaDaCopia`, em `avisosDoOrcamento`), pedido do usuário. Tela nova que dependa do catálogo pode receber dois
-  `applyDB` na mesma abertura (cópia e depois servidor). **Ainda falta** (já era assim antes): o 1º `applyDB` roda antes de
-  `mergeProdutosPromocionais` e tira do orçamento guardado os itens P/P1/P2 do Painel; sem internet eles nem chegam.
+  `applyDB` na mesma abertura (cópia e depois servidor). **Promocionais do Painel** (P/P1/P2): até 11/2026 entravam depois do
+  1º `applyDB` (`mergeProdutosPromocionais`), que já tinha tirado esses itens do orçamento guardado, a cada abertura, com ou sem
+  internet. Agora `juntarPromocionaisAoCatalogo` os põe no catálogo antes do `applyDB`, e a lista tem cópia (chave `promocionais`).
 - `index.html` **não tem regra `.hidden` genérica** (as páginas separadas têm, com `!important`):
   cada componente declara o seu `.X.hidden { display: none }`. Elemento que liga/desliga por
   `.hidden` não pode ter `display` no `style=""` inline — o inline ganha e ele nunca some (foi a
