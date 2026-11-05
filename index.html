@@ -19676,7 +19676,8 @@
       const telaCatPrefs = { preco: false, orcamento: true }; // valem ao trocar de família
       function telaClienteConectada() { return !!(segundaTela && segundaTela.modo === 'cliente'); }
       function mostrarCatalogoNoTablet(titulo, produtos, grupos) {
-        if (!telaClienteConectada() || !produtos.length) return;
+        if (!telaClienteConectada()) { showToast('O tablet não está conectado — conecte em ⋯ Atalhos › Conectar tablet', 'longo'); redesenharFamiliaDoCatalogo(); return; }
+        if (!produtos.length) return;
         if (produtos.length > TELA_CAT_MAX_PRODUTOS) {
           showToast(`O tablet mostra os ${TELA_CAT_MAX_PRODUTOS} primeiros — escolha um tipo ou uma medida pra ver o resto`, 'longo');
         }
@@ -19698,9 +19699,9 @@
         const fam = familias.find(f => f.chave === (productFamilia(p) || ''));
         if (!fam) return 'Outros';
         const tipos = tiposDaFamiliaDoCatalogo(fam);
-        const t = tipos && tipos.find(x => x.produtos.includes(p));
+        const t = tipos && tipos.find(x => x.produtos.some(q => q.c === p.c));
         if (t) return `${fam.nome} · ${t.nome}`;
-        const s = subfamiliasDaFamilia(fam).find(x => x.produtos.includes(p));
+        const s = subfamiliasDaFamilia(fam).find(x => x.produtos.some(q => q.c === p.c));
         return s ? `${fam.nome} · ${s.nome}` : fam.nome;
       }
       function mostrarSelecaoNoTablet() {
@@ -31291,13 +31292,14 @@
       // dos tipos, '*' = todos os produtos, ou a chave do tipo aberto; medida = índice da faixa
       let catalogoTipo = null;
       let catalogoMedida = null;
-      const TIPOS_CACHE = new Map(); // chave da família -> { n, tipos } (refeito se o nº de produtos muda)
+      const TIPOS_CACHE = new Map(); // chave da família -> { ref, n, tipos } (refeito quando o catálogo é trocado)
       function tiposDaFamiliaDoCatalogo(fam) {
         if (subfamiliasDaFamilia(fam).length) return null;
         const c = TIPOS_CACHE.get(fam.chave);
-        if (c && c.n === fam.produtos.length) return c.tipos;
+        // applyDB troca DB.products por objetos novos: com a mesma contagem, os tipos guardavam os velhos
+        if (c && c.ref === DB.products && c.n === fam.produtos.length) return c.tipos;
         const tipos = tiposDaFamilia(fam.produtos);
-        TIPOS_CACHE.set(fam.chave, { n: fam.produtos.length, tipos });
+        TIPOS_CACHE.set(fam.chave, { ref: DB.products, n: fam.produtos.length, tipos });
         return tipos;
       }
       let catalogoMostrar = CATALOGO_POR_PAGINA;
@@ -31515,6 +31517,8 @@
         const resto = produtos.length - mostrar.length;
         const chips = htmlChipsDasFamilias(familias, fam);
         const todosMarcados = produtos.length > 0 && produtos.every(p => catalogoSelecionados.includes(p.c));
+        // "Marcar todos" só quando a lista inteira cabe na seleção (com 269 marcaria os 100 primeiros, sem dizer)
+        const cabeTodos = produtos.length <= CATALOGO_SEL_MAX - catalogoSelecionados.filter(c => !produtos.some(p => p.c === c)).length;
         const itens = mostrar.map(p => {
           const of = ofertaDoProduto(p);
           const foto = codigoDaFoto(p.c);
@@ -31552,7 +31556,7 @@
             ${faixas.map((f, i) => `<button type="button" class="catSub${f === faixa ? ' ativo' : ''}" data-cat-medida="${i}">${escapeHtml(f.rotulo)} · ${f.qtd}</button>`).join('')}
           </div>` : ''}
           <div class="ofertaCtx catLinhaMarcar">${produtos.length} produto${produtos.length === 1 ? '' : 's'} · preço de <b>${escapeHtml(rotuloContextoPreco())}</b>
-            ${(tipo || faixa || catalogoSelecionando) && produtos.length ? `<button type="button" class="priceEditResetLink" id="catMarcarTodosBtn">${todosMarcados ? 'Desmarcar todos' : `Marcar todos (${produtos.length})`}</button>` : ''}</div>
+            ${(tipo || faixa || catalogoSelecionando) && produtos.length && (todosMarcados || cabeTodos) ? `<button type="button" class="priceEditResetLink" id="catMarcarTodosBtn">${todosMarcados ? 'Desmarcar todos' : `Marcar todos (${produtos.length})`}</button>` : ''}</div>
           ${catalogoSelecionando ? `<div class="ofertaCtx" style="margin-top:4px;">Toque nos produtos pra marcar (até ${CATALOGO_SEL_MAX}). A seleção continua nas outras famílias.</div>` : ''}
           <div class="campGrade">${itens}</div>
           ${resto > 0 ? `<button type="button" class="recompraMais" id="catMaisBtn">Ver mais ${Math.min(resto, CATALOGO_VER_MAIS)}${resto > CATALOGO_VER_MAIS ? ` de ${resto}` : ''}</button>` : ''}`;
@@ -31653,7 +31657,8 @@
         barra.classList.toggle('hidden', !k);
         barra.querySelector('.txt').innerHTML = `<b>${k}</b> selecionado${k === 1 ? '' : 's'}${porFam.size > 1 ? ` · ${porFam.size} famílias` : ''}`;
         const noCard = Math.min(k, CARD_MAX_PRODUTOS), imagens = Math.ceil(noCard / ENCARTE_MAX);
-        document.getElementById('catEnviarBtn').textContent = noCard === 1 ? 'Enviar card' : imagens > 1 ? `Enviar ${imagens} imagens` : `Enviar encarte (${noCard})`;
+        document.getElementById('catEnviarBtn').textContent = (noCard === 1 ? 'Enviar card' : imagens > 1 ? `Enviar ${imagens} imagens` : `Enviar encarte (${noCard})`)
+          + (k > CARD_MAX_PRODUTOS ? ` · ${noCard} de ${k}` : '');
         const tab = document.getElementById('catTabletBtn');
         if (tab) tab.textContent = `Tablet (${k})`;
       }

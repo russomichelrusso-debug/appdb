@@ -1272,6 +1272,16 @@ Supabase, sem PR — não é mudança de código.
   grade com o orçamento na lateral, produto em tela cheia (o cliente também toca e passa; mexer no celular faz a tela voltar a seguir
   ele, `catLocal`) e comparação em tabela. Sem canal de volta: o "+ no orçamento" do celular é o do destaque do celular, não o que o
   cliente abriu no tablet. Só no Catálogo (campanhas e Mais vendidos ainda não).
+- **Tipos automáticos e seleção pro tablet no Catálogo** (11/2026, mockups "Cortag · Escolher produtos pro tablet": 2A + 2B
+  com a 1A; relato do usuário: "o motor de subfamília não funciona, nas brocas não tem como"). Família com 24+ produtos e sem
+  subfamília de marketing abre pelos **tipos tirados do nome** (`<motor-tipos>` no `index.html`, testado: `tiposDaFamilia` = o nome
+  até a 1ª palavra com número, "PARA" = "P/", jogos/kits juntos, tipo pequeno que só continua outro entra nele, menos de 3 = "Outras",
+  o começo comum - "BROCA", "SERRA COPO" - sai do rótulo; cache `TIPOS_CACHE` pela referência do `DB.products`). Brocas: 270 produtos
+  em 13 tipos (aço rápido 121, concreto 37, SDS Plus 29…). Dentro do tipo, **chips de medida** (`faixasDeMedida`: até 8 medidas uma
+  por chip, mais = até 6 faixas; o diâmetro antes do "x"; polegada num chip só) e "Marcar todos" (só quando a lista cabe na
+  seleção). A seleção do Catálogo vai até **100** (`CATALOGO_SEL_MAX`; o card continua com 24) e a barra ganha **"Tablet (N)"**
+  (`mostrarSelecaoNoTablet`): o laptop mostra "Seleção pra você" em seções por tipo/família (`grupo` de cada produto). Colheres
+  continuam com as subfamílias da planilha. Ficou de fora: o cliente escolher o tipo na tela grande.
 - **Celular como leitor do levantamento no tablet** (10/2026, 2ª ideia, opção **"cada leitura soma 1"** escolhida nos
   mockups). No tablet/laptop, aba Levantamento › "Usar o celular como leitor" (botão só em tela de 700 px ou mais)
   cria uma sala no modo `'leitor'` e mostra o QR; o celular conecta pelo mesmo "Conectar tablet" e abre a tela de
