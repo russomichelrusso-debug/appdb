@@ -37290,6 +37290,13 @@
       // nisso. Por isso roda em paralelo, sem segurar a tela de carregamento nem
       // o resto do boot (ver chamada em init(), sem await).
       async function carregarCatalogoEExtras() {
+        // Campanhas, descontos por classificatório e previsão de estoque não dependem do catálogo:
+        // pedidos já, junto com ele (antes eram um atrás do outro depois do catálogo - com o Render
+        // lento, cada um somava uma ida e volta; lote 3 da auditoria de performance). Cada um já
+        // tem a própria reserva quando falha; null = falhou mesmo, fica o que estava.
+        const promoRulesP = loadActivePromoRules().catch(() => null);
+        const classiRulesP = loadActiveClassiDiscountRules().catch(() => null);
+        const previsaoP = loadActivePrevisao().catch(() => null);
         try {
           // Promocionais pela cópia do aparelho, sem esperar o servidor (apiFetch não tem prazo: com o
           // Render dormindo ou sinal fraco o app ficaria sem produto nenhum); a lista do servidor entra
@@ -37304,11 +37311,14 @@
         } catch (e) {
           console.warn('Não foi possível carregar o catálogo de produtos:', e);
         }
-        try { state.promoRules = await loadActivePromoRules(); } catch (e) { }
+        const promoRules = await promoRulesP;
+        if (promoRules) state.promoRules = promoRules;
         if (prodTabSelected) renderProdutoOferta(prodTabSelected); // ficha aberta antes das campanhas chegarem
         else atualizarProdutosInicio();
-        try { state.classiDiscountRules = await loadActiveClassiDiscountRules(); } catch (e) { }
-        try { PREVISAO_MAP = await loadActivePrevisao(); } catch (e) { }
+        const classiRules = await classiRulesP;
+        if (classiRules) state.classiDiscountRules = classiRules;
+        const previsao = await previsaoP;
+        if (previsao) PREVISAO_MAP = previsao;
         syncClientesLocaisComInsistenciaNoInicio(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
         // corrige a busca/carrinho depois que o catálogo terminar de chegar, caso o
         // vendedor já tenha aberto Preços ou mexido no carrinho antes disso - inclui
