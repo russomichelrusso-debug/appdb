@@ -4821,7 +4821,7 @@
 
     .lcFontes {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
       gap: 8px;
       margin-bottom: 14px;
     }
@@ -4866,6 +4866,98 @@
       color: var(--ink);
       background: var(--white);
       resize: vertical;
+    }
+
+    .lcFalas {
+      margin: 0 0 8px;
+      padding: 10px 12px 10px 34px;
+      border-radius: var(--r-md);
+      background: var(--white);
+      font-size: 15px;
+      line-height: 1.45;
+    }
+
+    ol.lcFalas:empty {
+      display: none;
+    }
+
+    .lcFalas li + li {
+      margin-top: 4px;
+    }
+
+    .lcParcial {
+      padding-left: 12px;
+      color: var(--gray);
+    }
+
+    #lcParcial.hidden {
+      display: none;
+    }
+
+    .lcFalaStatus,
+    .lcFalaMsg {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 4px 0 10px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--gray);
+    }
+
+    .lcFalaMsg {
+      color: var(--danger);
+    }
+
+    .lcFalaStatus span {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--gray);
+    }
+
+    .lcFalaStatus.ouvindo {
+      color: var(--success);
+    }
+
+    .lcFalaStatus.ouvindo span {
+      background: var(--red);
+      animation: lcPulsa 1.2s ease-in-out infinite;
+    }
+
+    @keyframes lcPulsa {
+      50% {
+        opacity: .35;
+      }
+    }
+
+    .lcRefalar {
+      position: relative;
+      flex: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      margin-left: 6px;
+      border: 1px solid var(--hairline);
+      border-radius: 50%;
+      background: var(--white);
+      color: var(--ink);
+      vertical-align: middle;
+      cursor: pointer;
+    }
+
+    .lcRefalar::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+    }
+
+    .lcRefalar.ouvindo {
+      border-color: var(--red);
+      background: var(--red);
+      color: #fff;
     }
 
     .lcLendo {
@@ -15769,13 +15861,56 @@
         let campo = null;
         // sem as palavras do campo, mas com a vírgula da pausa (separa medida de quantidade)
         const resto = normalize(fala || '').replace(/\b(pedido|pedir|estoque)\b/g, (m) => { campo = m === 'estoque' ? 'qty' : 'ped'; return ' '; });
+        const item = interpretarLinhaLista(textoDaFalaLista(resto, porCodigo));
+        return item ? { item: { ...item, texto: String(fala || '').trim() }, campo } : null;
+      }
+      // fala (já sem acento) -> texto de linha da lista: código falado, número por extenso em dígito, "com 3" = qtd 3
+      function textoDaFalaLista(resto, porCodigo) {
         const cod = porCodigo ? leiturasDeCodigoDaFala(resto).find(l => porCodigo(l.codigo)) : null;
-        const linha = (cod ? [numerosFaladosParaDigitos(cod.antes), cod.codigo, numerosFaladosParaDigitos(cod.depois)].join(' ')
+        return (cod ? [numerosFaladosParaDigitos(cod.antes), cod.codigo, numerosFaladosParaDigitos(cod.depois)].join(' ')
           : numerosFaladosParaDigitos(resto)).replace(/\bcom (?=\d)/g, 'qtd ')
           // "dezoito por trinta" é a medida 18x30 (vídeo do usuário, 10/2026: o 30 virava a quantidade)
           .replace(/(\d) (?:por|vezes) (?=\d)/g, '$1x').replace(/\s+/g, ' ').trim();
-        const item = interpretarLinhaLista(linha);
-        return item ? { item: { ...item, texto: String(fala || '').trim() }, campo } : null;
+      }
+      // Lista falada no Pedido (11/2026, opção "C" dos mockups "Cortag · Lista de itens falada"): quem dita o
+      // pedido emenda os itens ("dez colher de pedreiro oito polegadas cinco desempenadeira dezoito por trinta").
+      // Corta antes de cada número inteiro que puxa um nome ("5 desempenadeira") ou uma unidade seguida do produto
+      // ("2 caixas de disco"); o número antes de medida ("8 pol"), de "dentes"/"pontas" ou depois de "x"/"qtd" fica.
+      const NAO_CORTA_FALA = new Set(['dentes', 'dente', 'pontas', 'ponta', 'furos', 'furo', 'velocidades', 'lados', 'faces', 'cores', 'vias', 'polos']);
+      function pedacosDaFalaLista(linha) {
+        const tok = String(linha || '').split(' ').filter(Boolean);
+        const cortes = [];
+        for (let i = 1; i < tok.length - 1; i++) {
+          if (!/^\d{1,4}$/.test(tok[i]) || tok[i - 1] === 'x' || PALAVRAS_QTD_LISTA.has(tok[i - 1])) continue;
+          const prox = tok[i + 1];
+          const nome = /^[a-z]{3,}$/.test(prox) && !MEDIDAS_LISTA.has(prox) && !UNIDADES_LISTA[prox] && !PALAVRAS_LIGACAO.has(prox) && !NAO_CORTA_FALA.has(prox);
+          const unidadeEProduto = UNIDADES_LISTA[prox] && /^[a-z]{2,}$/.test(tok[i + 2] || '');
+          if (nome || unidadeEProduto) cortes.push(i);
+        }
+        if (!cortes.length) return [tok.join(' ')];
+        const pedacos = [];
+        let de = 0;
+        for (const c of [...cortes, tok.length]) {
+          const p = tok.slice(de, c).join(' ').replace(/\s+(e|mais|tambem)$/, '').trim();
+          if (p) pedacos.push(p);
+          de = c;
+        }
+        return pedacos;
+      }
+      // uma fala -> os itens dela. Inteira primeiro; sem produto certo, cortada (vale só se todo pedaço acha
+      // algum produto). Sem jeito, um item só, marcado "emendada" quando tinha onde cortar: o app manda só
+      // essa fala pra IA separar, com sinal.
+      function itensDaFalaLista(fala, ctx) {
+        const linha = textoDaFalaLista(normalize(fala || ''), ctx && ctx.porCodigo);
+        const inteiro = interpretarLinhaLista(linha);
+        if (!inteiro) return [];
+        const base = { ...inteiro, texto: String(fala || '').trim() };
+        if (produtoDaLinhaLista(base, ctx).estado === 'pronto') return [base];
+        const pedacos = pedacosDaFalaLista(linha);
+        if (pedacos.length < 2) return [base];
+        const itens = pedacos.map(p => interpretarLinhaLista(p));
+        if (itens.every(it => it && produtoDaLinhaLista(it, ctx).estado !== 'nao')) return itens;
+        return [{ ...base, emendada: true }];
       }
       // Quanto soma no levantamento: no estoque é o que foi contado (caixa = embalagem inteira, sem arredondar);
       // no pedido, como na lista do cliente (múltiplo da embalagem)
@@ -34434,6 +34569,7 @@
       function fecharListaCliente() {
         if (lc && lc.fase === 'adicionado' && lc.feitos && lc.feitos.length) aprenderFotoDaEtiqueta(lc.linhas); // saiu sem desfazer: confirmado
         if (lc && lc.abortar) lc.abortar.abort();
+        pararFalaLista();
         pararOutrosNaFoto();
         lcGeracao++;
         lc = null;
@@ -34628,6 +34764,183 @@
           : l.campo ? quantidadeDaFalaLev(l.item, p, l.campo, medida) : quantidadeDaLinhaLista(l.item, p, medida);
         l.cod = p.c; l.qtd = q.qtd; l.ajuste = q.ajuste; l.fora = false; l.buscando = false;
       }
+      // ---- Lista falada (11/2026, opções recomendadas dos mockups "Cortag · Lista de itens falada") ----
+      // A: tocar, falar a lista inteira e "Pronto" (escuta contínua que religa sozinha, cada pausa = uma linha).
+      // C: o aparelho separa os itens (itensDaFalaLista, <motor-lista>) e só a fala que ele não separou vai pra
+      // IA (/api/assistente/itens-da-fala), com sinal. A: a mesma conferência, com o "Ouvi:" e o microfone pra
+      // falar de novo só aquela linha. Nada vai pro orçamento sem a conferência.
+      const FALA_LISTA_JUNTA_MS = 8000; // pedaço da mesma frase que o Chrome do Android entrega como final
+      function abrirFalaLista() {
+        if (!SpeechRecognitionCtor) { showToast('Este navegador não reconhece voz — cole o texto ou dite pelo teclado', 'erro'); return; }
+        if (!window.isSecureContext) { showToast('A voz só funciona com o app hospedado em HTTPS', 'erro'); return; }
+        lc = { ...lc, fase: 'falando', falas: [], fala: { ativo: true, rec: null, parcial: '', msg: '', inicio: Date.now() } };
+        renderListaCliente();
+        falaListaIniciar();
+      }
+      function falaListaIniciar() {
+        const f = lc && lc.fala;
+        if (!f || f.rec || document.hidden || lc.fase !== 'falando') return;
+        let rec;
+        try { rec = new SpeechRecognitionCtor(); } catch (e) { f.ativo = false; f.msg = 'Não foi possível ligar o microfone'; renderFalaLista(); return; }
+        rec.lang = 'pt-BR';
+        rec.continuous = true;
+        rec.interimResults = true;
+        rec.maxAlternatives = 3;
+        const valendo = () => lc && lc.fala === f && f.rec === rec;
+        rec.onresult = (e) => {
+          if (!valendo()) return;
+          let parcial = '', teveFinal = false;
+          for (let i = e.resultIndex; i < e.results.length; i++) {
+            const r = e.results[i];
+            if (r.isFinal) { teveFinal = true; receberFalaLista(Array.from(r).map(a => a.transcript).filter(Boolean)); }
+            else parcial += r[0].transcript;
+          }
+          f.parcial = parcial.trim();
+          f.msg = '';
+          if (teveFinal) renderFalaLista(); else renderParcialFalaLista();
+        };
+        rec.onerror = (e) => {
+          if (!valendo()) return;
+          if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { f.ativo = false; f.msg = 'Permissão de microfone negada — libere nas configurações do navegador'; }
+          else if (e.error === 'network') { f.ativo = false; f.msg = 'Sem internet: a voz precisa de sinal. Cole o texto ou busque um por um.'; }
+          else if (e.error === 'audio-capture') { f.ativo = false; f.msg = 'Nenhum microfone encontrado'; }
+          renderFalaLista();
+        };
+        rec.onend = () => {
+          if (!valendo()) return;
+          f.rec = null;
+          f.parcial = '';
+          // o Android para sozinho depois de um silêncio: com a escuta ligada, liga de novo
+          if (f.ativo && !document.hidden) setTimeout(() => { if (lc && lc.fala === f && f.ativo) falaListaIniciar(); }, 250);
+          renderFalaLista();
+        };
+        f.rec = rec;
+        try { rec.start(); f.falhas = 0; } catch (e) {
+          f.rec = null;
+          f.falhas = (f.falhas || 0) + 1;
+          if (f.falhas >= 3) { f.ativo = false; f.msg = 'Não foi possível ligar o microfone — toque em Continuar'; renderFalaLista(); }
+          else setTimeout(() => { if (lc && lc.fala === f && f.ativo) falaListaIniciar(); }, 700);
+        }
+      }
+      function pararFalaLista() {
+        const f = lc && lc.fala;
+        if (!f) return;
+        f.ativo = false;
+        if (f.rec) { try { f.rec.abort(); } catch (e) { } f.rec = null; }
+        f.parcial = '';
+        if (lc.refalar) { try { lc.refalar.rec.abort(); } catch (e) { } lc.refalar = null; }
+      }
+      // a mesma frase chega em pedaços ("dez colher", "dez colher de pedreiro"): fica a mais completa
+      function receberFalaLista(alts) {
+        const chave = palavrasDaFala(alts[0]).join(' ');
+        if (!chave || !lc || !lc.falas) return;
+        const ult = lc.falas[lc.falas.length - 1], agora = Date.now();
+        if (ult && agora - ult.em < FALA_LISTA_JUNTA_MS) {
+          if (mesmaFalaOuContinua(chave, ult.chave)) { Object.assign(ult, { alts, chave, em: agora }); return; }
+          if (mesmaFalaOuContinua(ult.chave, chave)) return; // pedaço velho chegando depois da frase inteira
+        }
+        lc.falas.push({ alts, chave, em: agora });
+      }
+      function renderParcialFalaLista() {
+        const el = document.getElementById('lcParcial');
+        if (!el || !lc || !lc.fala) return;
+        el.textContent = lc.fala.parcial ? `${lc.falas.length + 1}  ${lc.fala.parcial}…` : '';
+        el.classList.toggle('hidden', !lc.fala.parcial);
+      }
+      function renderFalaLista() { if (lc && lc.fase === 'falando') renderListaCliente(); }
+      // uma fala -> itens: a 1ª leitura do reconhecimento decide; as outras só pelo código do catálogo
+      function itensDeUmaFala(alts, ctx) {
+        let primeira = null;
+        for (const [i, a] of alts.slice(0, 3).entries()) {
+          const its = itensDaFalaLista(a, ctx);
+          if (!its.length) continue;
+          if (!primeira) primeira = its;
+          const certos = its.every(it => produtoDaLinhaLista(it, ctx).estado === 'pronto');
+          if (certos && (i === 0 || its.every(it => (it.codigos || []).some(c => findByExactCode(c))))) return its;
+        }
+        return primeira || [];
+      }
+      async function falasParaConferir() {
+        if (!lc || !lc.falas) return;
+        // a última frase ainda sem final (tocou em Pronto falando): entra como está
+        const parcial = lc.fala && lc.fala.parcial;
+        if (parcial) receberFalaLista([parcial]);
+        pararFalaLista();
+        if (!lc.falas.length) { showToast('Nada foi ouvido ainda — fale um item e pare um instante.', 'erro'); renderListaCliente(); return; }
+        const g = lcGeracao;
+        const ctx = { comprados: lcComprados(), porCodigo: findByExactCode };
+        let itens = lc.falas.flatMap(f => itensDeUmaFala(f.alts, ctx));
+        const emendadas = itens.filter(it => it.emendada).slice(0, 10);
+        if (emendadas.length && navigator.onLine) {
+          lc = { ...lc, fase: 'lendo', msg: 'Separando os itens emendados…', sub: 'A 1ª vez do dia pode levar até ~40 s (o servidor acorda).' };
+          renderListaCliente();
+          try {
+            const r = await apiFetch('/api/assistente/itens-da-fala', { method: 'POST', body: JSON.stringify({ falas: emendadas.map(it => it.texto) }) });
+            if (lcVelha(g)) return;
+            const daIa = new Map();
+            for (const it of (r && r.itens) || []) {
+              const l = linhaDaImagemLista(it);
+              if (l) l.daIa = true; // a conferência mostra "Pela IA:" (o texto é o da IA, não o ouvido)
+              if (l && emendadas[it.fala]) daIa.set(emendadas[it.fala], [...(daIa.get(emendadas[it.fala]) || []), l]);
+            }
+            // a fala que a IA separou dá lugar aos itens dela; a que não separou fica como estava
+            itens = itens.flatMap(it => daIa.get(it) || [it]);
+          } catch (e) {
+            if (lcVelha(g)) return;
+            showToast('Não deu pra separar uma fala emendada agora — ela fica pra você buscar.', 'erro');
+          }
+        }
+        if (lcVelha(g)) return;
+        await conferirItensDaLista(itens, 'fala', { rotulo: `${lc.falas.length} fala${lc.falas.length === 1 ? '' : 's'} ouvida${lc.falas.length === 1 ? '' : 's'}` });
+      }
+      // conferência: falar de novo só uma linha (uma escuta curta; o resultado troca a linha)
+      function refalarLinhaLista(i) {
+        if (!lc || !lc.linhas || !lc.linhas[i] || !SpeechRecognitionCtor) return;
+        if (lc.refalar) { try { lc.refalar.rec.abort(); } catch (e) { } lc.refalar = null; renderListaCliente(); return; }
+        let rec;
+        try { rec = new SpeechRecognitionCtor(); } catch (e) { showToast('Não foi possível ligar o microfone', 'erro'); return; }
+        rec.lang = 'pt-BR';
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.maxAlternatives = 3;
+        const alvo = lc.linhas[i], g = lcGeracao;
+        const ref = { i, rec };
+        lc.refalar = ref;
+        rec.onresult = (e) => {
+          if (lcVelha(g) || lc.refalar !== ref) return;
+          const alts = Array.from(e.results[0] || []).map(a => a.transcript).filter(Boolean);
+          const ctx = { comprados: lc.comprados || lcComprados(), porCodigo: findByExactCode };
+          const its = itensDeUmaFala(alts, ctx);
+          const k = lc.linhas.indexOf(alvo);
+          if (!its.length || k < 0) { showToast('Não entendi — fale o produto e a quantidade', 'erro'); return; }
+          // pode virar mais de um item (falou dois de novo): entram no lugar da linha
+          const novas = its.map(item => {
+            const r = produtoDaLinhaLista(item, ctx);
+            const l = { item, estado: r.estado, opcoes: r.opcoes, maisOpcoes: r.maisOpcoes || 0, medida: r.medida, jaCompra: r.jaCompra,
+              sugeridos: new Set([...(r.produto ? [r.produto.c] : []), ...(r.opcoes || []).map(p => p.c)]),
+              cod: null, qtd: 0, ajuste: null, fora: false, buscando: r.estado === 'nao', busca: '', campo: null, seguro: !!r.seguro };
+            if (r.produto) lcEscolher(l, r.produto);
+            return l;
+          });
+          lc.linhas.splice(k, 1, ...novas);
+        };
+        rec.onerror = (e) => {
+          if (lcVelha(g) || lc.refalar !== ref) return;
+          if (e.error === 'network') showToast('Sem internet: a voz precisa de sinal', 'erro');
+          else if (e.error === 'not-allowed' || e.error === 'service-not-allowed') showToast('Permissão de microfone negada', 'erro');
+        };
+        rec.onend = () => { if (lcVelha(g) || lc.refalar !== ref) return; lc.refalar = null; renderListaCliente(); };
+        try { rec.start(); } catch (e) { lc.refalar = null; showToast('Não foi possível ligar o microfone', 'erro'); return; }
+        renderListaCliente();
+      }
+      // "Ouvi:" e o microfone de falar de novo, nas linhas da lista falada
+      const ouviDaLinha = (l) => lc && lc.origem === 'fala' ? (l.item.daIa ? 'Pela IA: ' : 'Ouvi: ') : '';
+      function htmlRefalarLinha(i) {
+        if (!lc || lc.origem !== 'fala' || !SpeechRecognitionCtor) return '';
+        const ouvindo = lc.refalar && lc.refalar.i === i;
+        return `<button type="button" class="lcRefalar${ouvindo ? ' ouvindo' : ''}" data-lc-refalar="${i}" aria-label="${ouvindo ? 'Parar de ouvir' : 'Falar esta linha de novo'}">${ouvindo ? '■' : SVG_MIC_LISTA}</button>`;
+      }
+      const SVG_MIC_LISTA = '<svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>';
       function lerTextoDaLista(texto, origem) {
         const itens = linhasDaListaCliente(texto, origem === 'pdf');
         if (!itens.length) { showToast(origem === 'pdf' ? 'Não achei linhas de produto nesse PDF.' : 'Não achei produto nesse texto — uma linha por produto.', 'erro'); return; }
@@ -35601,7 +35914,7 @@
         const rotulos = rotulosDistintosLista(l.opcoes);
         const opcoes = l.opcoes.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${lc.comprados.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
         return `<div class="lcLinha${l.fora ? ' fora' : ''}">
-          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
+          <div class="lcTopoLinha"><span class="lcOriginal">${ouviDaLinha(l)}“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${htmlRefalarLinha(i)}${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
           <div class="lcOpcoes">${opcoes}</div>
           ${l.maisOpcoes ? `<div class="lcNota">+${l.maisOpcoes} parecido${l.maisOpcoes > 1 ? 's' : ''} · use a busca se não for nenhum desses</div>` : ''}
           ${l.cod && l.ajuste ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
@@ -35612,7 +35925,7 @@
       function htmlLinhaNaoAchei(i, l) {
         const p = l.cod ? productByCod(l.cod) : null;
         return `<div class="lcLinha${l.fora ? ' fora' : ''}">
-          <div class="lcTopoLinha"><span class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${p && !l.fora ? htmlStepperLista(i, l) : ''}</div>
+          <div class="lcTopoLinha"><span class="lcOriginal">${ouviDaLinha(l)}“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${htmlRefalarLinha(i)}${p && !l.fora ? htmlStepperLista(i, l) : ''}</div>
           ${p ? `<div class="lcNome">✓ ${escapeHtml(p.n)}</div>` : ''}
           ${l.fora ? '<div class="lcNota">fica de fora</div>' : htmlBuscaLista(i, l)}
           <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${rotuloForaLista(l, 'Deixar de fora')}</button></div>
@@ -35622,7 +35935,7 @@
         const p = productByCod(l.cod);
         return `<div class="lcLinha simples${l.fora ? ' fora' : ''}">
           <div class="lcTopoLinha"><span class="lcNome">${escapeHtml(p ? p.n : l.cod)}${l.jaCompra ? '<em>já compra</em>' : ''}</span>${l.fora ? '' : htmlStepperLista(i, l)}</div>
-          <div class="lcOriginal">“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</div>
+          <div class="lcOriginal">${ouviDaLinha(l)}“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}${htmlRefalarLinha(i)}</div>
           ${l.ajuste && !l.fora ? `<div class="lcAjuste">${escapeHtml(l.ajuste)}</div>` : ''}
           <div class="lcAcoes"><span></span><button type="button" class="lcLink cinza" data-lc-fora="${i}">${rotuloForaLista(l, 'Tirar')}</button></div>
         </div>`;
@@ -35654,11 +35967,12 @@
         if (lc.fase === 'entrada') {
           titulo.textContent = 'Colar lista do cliente';
           sub.textContent = state.levCliente ? state.levCliente.nome : '';
-          corpo.innerHTML = `<p class="lcDica">Texto, foto do orçamento ou PDF, do jeito que o cliente mandou. O app acha cada produto e você confere antes de entrar no orçamento.</p>
+          corpo.innerHTML = `<p class="lcDica">Texto, foto do orçamento, PDF ou falado, do jeito que o cliente mandou. O app acha cada produto e você confere antes de entrar no orçamento.</p>
             <div class="lcFontes">
               <button type="button" class="lcFonte" id="lcColarBtn"><span aria-hidden="true">📋</span>Colar texto</button>
               <button type="button" class="lcFonte" id="lcFotoBtn"><span aria-hidden="true">📷</span>Foto ou print</button>
               <button type="button" class="lcFonte" id="lcPdfBtn"><span aria-hidden="true">📄</span>PDF</button>
+              ${SpeechRecognitionCtor ? '<button type="button" class="lcFonte" id="lcFalarBtn"><span aria-hidden="true">🎤</span>Falar a lista</button>' : ''}
             </div>
             <label class="lcRotulo" for="lcTexto">Mensagem do cliente</label>
             <textarea id="lcTexto" rows="9" placeholder="Ex.:\n- colher de pedreiro 8 · 12\n- desempenadeira lisa 2 cx\n- disco diamantado 110 · 10">${escapeHtml(lc.texto || '')}</textarea>
@@ -35689,6 +36003,26 @@
             ${htmlOutrosNaFoto()}`;
           rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Fechar</button>
             <button type="button" class="btnPrimary" id="lcEtiquetaFotoBtn">Tirar outra foto</button>`;
+          return;
+        }
+        if (lc.fase === 'falando') {
+          const f = lc.fala;
+          titulo.textContent = 'Falar a lista';
+          sub.textContent = state.levCliente ? state.levCliente.nome : '';
+          const ouvindo = !!f.rec;
+          const status = f.msg ? `<p class="lcFalaMsg">${escapeHtml(f.msg)}</p>`
+            : `<p class="lcFalaStatus${ouvindo ? ' ouvindo' : ''}"><span aria-hidden="true"></span>${ouvindo ? 'Ouvindo' : f.ativo ? 'Ligando o microfone…' : 'Pausado'}</p>`;
+          corpo.innerHTML = `<p class="lcDica">Fale um item (produto, medida e quantidade), pare um instante e fale o próximo. Cada pausa vira uma linha; dá pra passar o celular pro cliente ditar.</p>
+            <ol class="lcFalas" aria-live="polite">${lc.falas.map(x => `<li>${escapeHtml(x.alts[0])}</li>`).join('')}</ol>
+            <p class="lcFalas lcParcial${f.parcial ? '' : ' hidden'}" id="lcParcial"></p>
+            ${lc.falas.length || f.parcial ? '' : '<p class="lcNota">Ex.: “dez colher de pedreiro oito polegadas” · “duas caixas de disco porcelanato cento e dez” · “sessenta oito meia três com três”</p>'}
+            ${status}
+            <div class="lcAdicionadoAcoes">
+              <button type="button" class="restoreBtn compacto" id="lcApagarFalaBtn"${lc.falas.length ? '' : ' disabled'}>Apagar a última</button>
+              <button type="button" class="restoreBtn compacto" id="lcEscutaBtn">${f.ativo ? 'Pausar' : 'Continuar'}</button>
+            </div>`;
+          renderParcialFalaLista();
+          rodape.innerHTML = `<button type="button" class="restoreBtn" data-lc-fechar>Cancelar</button><button type="button" class="btnPrimary" id="lcFalasProntoBtn"${lc.falas.length ? '' : ' disabled'}>Pronto · conferir</button>`;
           return;
         }
         if (lc.fase === 'lendo') {
@@ -35731,7 +36065,8 @@
         // conferir
         const praLev = lc.destino === 'lev'; // falas do levantamento por voz ou etiqueta no Levantamento
         const etiqueta = lc.modo === 'etiqueta', falas = praLev && !etiqueta;
-        titulo.textContent = etiqueta ? 'Conferir etiqueta' : praLev ? 'Conferir falas' : 'Conferir lista';
+        const falada = lc.origem === 'fala';
+        titulo.textContent = etiqueta ? 'Conferir etiqueta' : praLev ? 'Conferir falas' : falada ? 'Conferir lista falada' : 'Conferir lista';
         const ls = lc.linhas;
         sub.textContent = lc.rotulo || (etiqueta ? `${ls.length} produto${ls.length === 1 ? '' : 's'} lido${ls.length === 1 ? '' : 's'} na foto${praLev ? ' · soma no estoque' : ''}`
           : `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`);
@@ -35748,7 +36083,7 @@
           ? `<button type="button" class="lcSugerido" id="lcUsarSugeridoBtn"><span>A lista parece ser de <b>${escapeHtml(sug.cliente.nome)}</b> (${escapeHtml(porQue)})</span><em>Usar</em></button>` : '';
         const descartarTodas = falas ? `<div class="lcDescartarTodas"><button type="button" class="lcLink" id="lcDescartarTodasBtn">${ls.length === 1 ? 'Descartar a fala' : `Descartar todas as ${ls.length} falas`}</button></div>` : '';
         corpo.innerHTML = descartarTodas + outroSugerido + secao('escolher', 'Pra escolher', escolher, htmlLinhaEscolher)
-          + secao('nao', 'Não achei', nao, htmlLinhaNaoAchei)
+          + secao('nao', falada ? 'Não virou produto' : 'Não achei', nao, htmlLinhaNaoAchei)
           + secao('ajustada', 'Quantidade ajustada', ajustadas, htmlLinhaPronta)
           + (prontas.length ? `<div class="lcSecao pronta">
               <button type="button" class="lcProntosCab" data-lc-prontos aria-expanded="${lc.prontosAbertos}"><span><b>✓ Prontos · ${prontas.length}</b><small>${escapeHtml(resumoProntas)}</small></span><span aria-hidden="true">${lc.prontosAbertos ? '▴' : '▾'}</span></button>
@@ -35859,6 +36194,14 @@
         document.getElementById('listaGuardadaFaixaLev').addEventListener('click', abrirListasGuardadas);
         initCameraEtiqueta();
         document.getElementById('lcFecharBtn').addEventListener('click', fecharListaClientePerguntando);
+        // lista falada: app em segundo plano solta o microfone; ao voltar, a escuta continua
+        document.addEventListener('visibilitychange', () => {
+          const f = lc && lc.fase === 'falando' && lc.fala;
+          if (!f) return;
+          if (document.hidden) { if (f.rec) { const r = f.rec; f.rec = null; try { r.abort(); } catch (e) { } } }
+          else if (f.ativo) falaListaIniciar();
+          renderListaCliente();
+        });
         document.getElementById('lcParaBtn').addEventListener('click', async () => {
           const g = lcGeracao;
           const modal = document.getElementById('listaClienteModal');
@@ -35890,6 +36233,15 @@
             return;
           }
           if (t.id === 'lcFotoBtn') { fotoInput.click(); return; }
+          if (t.id === 'lcFalarBtn') { abrirFalaLista(); return; }
+          if (t.id === 'lcFalasProntoBtn') { falasParaConferir(); return; }
+          if (t.id === 'lcApagarFalaBtn') { if (lc.falas) lc.falas.pop(); renderListaCliente(); return; }
+          if (t.id === 'lcEscutaBtn' && lc.fala) {
+            if (lc.fala.ativo) pararFalaLista(); else { lc.fala.ativo = true; lc.fala.msg = ''; falaListaIniciar(); }
+            renderListaCliente();
+            return;
+          }
+          if (t.matches('[data-lc-refalar]')) { refalarLinhaLista(Number(t.dataset.lcRefalar)); return; }
           if (t.id === 'lcBaixarReconhecBtn') {
             showToast(`Baixando o reconhecimento por foto (~${RECONHECEDOR_MB} MB) · vale a partir da próxima foto`);
             prepararReconhecedor(true).then(() => renderListaCliente());

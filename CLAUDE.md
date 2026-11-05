@@ -1864,10 +1864,21 @@ Supabase, sem PR — não é mudança de código.
      ("61 421") chegava antes ou depois da fala inteira ("61421 3"), que entrava, e o pedaço ficava em "Pra conferir". Agora,
      até 8 s (`FALA_PEDACO_MS`), o pedaço sem quantidade do mesmo código (ou que é o começo da fala que entrou) sai da lista
      quando o item entra, e não entra nela se chegar depois. Produto diferente sem quantidade continua indo pra conferir.
-  2. **Lista de itens falada**: tocar, falar a lista inteira, conferir. Nova intenção `itens` na rota
-     (`[{termo, quantidade, unidade: "un"|"caixa"}]`, até ~30 itens, números validados, limite de letras maior que os 500 de hoje).
+  2. Feito em 11/2026 (opções recomendadas dos mockups "Cortag · Lista de itens falada": A + C + A): **"🎤 Falar a lista"**, 4ª
+     opção do "Colar lista do cliente" (só com reconhecimento de voz no navegador). Escuta contínua que religa sozinha
+     (`abrirFalaLista`/`falaListaIniciar`, `index.html`), cada pausa = uma linha, pedaço da mesma frase fica no lugar do anterior
+     (`receberFalaLista`, 8 s), "Apagar a última", "Pausar", e "Pronto · conferir" (a frase ainda sem final entra como está). Cada
+     fala vira itens no aparelho (`itensDaFalaLista` no `<motor-lista>`, testado): inteira primeiro; sem produto certo, cortada antes
+     de cada número que puxa um nome ou "N caixas de" (`pedacosDaFalaLista`; "8 pol", "36 dentes", "3 pontas" e depois de "x"/"qtd"
+     não cortam), e o corte só vale se todo pedaço acha algum produto. A fala que não separou vai marcada `emendada` e, com sinal,
+     só ela (até 10) vai pra **`POST /api/assistente/itens-da-fala`** (`routes/assistente.js`, limite das perguntas: 30/5 min; até
+     400 letras por fala): a IA só separa em `{texto, quantidade, unidade, fala}`; falhou ou sem sinal, fica como estava. As outras
+     leituras do reconhecimento só valem pelo código do catálogo (como no "Contar por voz"). Conferência = a mesma da lista do cliente
+     (`origem: 'fala'`), com **"Ouvi: …"** (ou "Pela IA: …") em cada linha, "Não virou produto" no lugar de "Não achei" e um
+     **microfone por linha** que ouve de novo só ela e troca a linha (`refalarLinhaLista`; pode virar mais de um item). Testado com
+     reconhecimento simulado: **conferir num Android e num iPhone de verdade**.
   3. Feito em 10/2026, com foto e PDF (ver "Lista do cliente: texto, foto ou PDF" acima). O texto é lido no aparelho, sem a IA;
-     a lista falada (item 2) pode reaproveitar `linhasDaListaCliente` + a mesma conferência.
+     a lista falada (item 2) usa a mesma conferência.
   Implicações: o Gemini precisa de sinal (sem internet, só a busca local; a lista poderia esperar na fila offline); o Render free
   dorme e a 1ª chamada do dia leva 30–50 s (mostrar "acordando o servidor…"); o plano grátis do Gemini pode usar os dados pra
   treino — mandar só o texto dos produtos ou usar conta paga (LGPD); rota em `routes/` = teste no `run_tests.js` com a chamada

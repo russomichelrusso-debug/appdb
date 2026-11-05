@@ -4608,6 +4608,18 @@ async function main() {
         const rDisco = fDisco && ctxL.produtoDaLinhaLista(fDisco.item, { porCodigo });
         assert(fDisco && fDisco.item.qtd === 2 && rDisco.estado === 'pronto' && rDisco.produto.c === '61010',
           `voz: "cento e dez" é a medida e "dois" a quantidade: ${JSON.stringify(fDisco && fDisco.item)}`);
+        // lista falada no Pedido (11/2026): a fala emendada é cortada antes do número que puxa um nome, e só
+        // vale o corte quando todo pedaço acha produto; "36 dentes" e "8 pol" não cortam
+        const fala = (t) => ctxL.itensDaFalaLista(t, { porCodigo }).map(it => {
+          const r = ctxL.produtoDaLinhaLista(it, { porCodigo });
+          return `${r.produto ? r.produto.c : r.estado}×${it.qtd}${it.unidade ? ' ' + it.unidade : ''}${it.emendada ? ' emendada' : ''}`;
+        }).join(' | ');
+        const fEmend = fala('dez colher de pedreiro oval oito polegadas e duas caixas de disco turbo cento e dez');
+        const fDentes = fala('lâmina de serra madeira trinta e seis dentes cento e dez dois');
+        const fConversa = fala('ô Zé traz o carrinho');
+        const fSemCorte = fala('colher rejunte azul dez cinco desempenadeira xpto');
+        assert(fEmend === '60162×10 | 61010×2 cx' && fDentes === '60879×2' && fConversa === 'nao×null' && /emendada$/.test(fSemCorte),
+          `lista falada: a fala emendada vira um item por produto, "36 dentes" não corta e o que não separa vai marcado pra IA (${fEmend} / ${fDentes} / ${fConversa} / ${fSemCorte})`);
         const fCx = falaLev('pedido batedor argamassa uma caixa');
         const pBat = porCodigo('60876');
         assert(fCx && fCx.campo === 'ped' && fCx.item.qtd === 1 && fCx.item.unidade === 'cx'
@@ -5650,6 +5662,39 @@ async function main() {
       && swTxt.includes("endsWith('/compartilhar')") && swTxt.includes(`form.getAll('${campo.name}')`)
       && /cortag-sw-v(\d+)/.exec(swTxt) && Number(/cortag-sw-v(\d+)/.exec(swTxt)[1]) >= 6,
       `compartilhar do WhatsApp: manifest e sw.js combinam (endereço, campo "${campo.name}", CACHE_VERSION subido)`);
+  }
+
+  {
+    // Lista falada (routes/assistente.js /itens-da-fala): só a fala que o aparelho não separou vem pra cá;
+    // a IA só separa o texto, e cada item volta com o número da fala dele (o resto não passa)
+    const fetchAntes = global.fetch;
+    const chaveAntes = process.env.GEMINI_API_KEY;
+    let enviado = null;
+    global.fetch = async (url, opts) => {
+      if (!String(url).includes('generativelanguage.googleapis.com')) return fetchAntes(url, opts);
+      enviado = JSON.parse(opts.body);
+      const resposta = { itens: [{ fala: 1, texto: 'colher de pedreiro 8 polegadas', quantidade: 10, unidade: null }, { fala: 1, texto: 'desempenadeira 18x30', quantidade: '5' },
+        { fala: 3, texto: 'inventada', quantidade: 1 }, { fala: 'x', texto: 'sem fala' }, { fala: 2, texto: 'R$', quantidade: 2 }] };
+      return new Response(JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(resposta) }] } }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+    try {
+      process.env.GEMINI_API_KEY = 'chave-falsa';
+      let r = await req('POST', '/api/assistente/itens-da-fala', { falas: [] });
+      const r2 = await req('POST', '/api/assistente/itens-da-fala', { falas: ['a'.repeat(401)] });
+      const r3 = await req('POST', '/api/assistente/itens-da-fala', { falas: Array(11).fill('disco') });
+      assert(r.status === 422 && r2.status === 422 && r3.status === 422, `lista falada: sem fala, fala longa ou mais de 10 = 422 (${r.status}, ${r2.status}, ${r3.status})`);
+      r = await req('POST', '/api/assistente/itens-da-fala', { falas: ['dez colher de pedreiro oito polegadas cinco desempenadeira dezoito por trinta', 'disco'] });
+      const it = r.body && r.body.itens;
+      assert(r.status === 200 && Array.isArray(it) && it.length === 2 && it[0].fala === 0 && it[0].quantidade === 10 && it[1].quantidade === 5
+        && it[1].texto === 'desempenadeira 18x30' && enviado && /1: dez colher/.test(enviado.contents[0].parts[0].text) && /2: disco/.test(enviado.contents[0].parts[0].text),
+        `lista falada: a IA separa, só item com fala válida e texto de produto volta: ${JSON.stringify(r.body)}`);
+      delete process.env.GEMINI_API_KEY;
+      r = await req('POST', '/api/assistente/itens-da-fala', { falas: ['disco'] });
+      assert(r.status === 503, `lista falada: sem GEMINI_API_KEY responde 503 (${r.status})`);
+    } finally {
+      global.fetch = fetchAntes;
+      if (chaveAntes === undefined) delete process.env.GEMINI_API_KEY; else process.env.GEMINI_API_KEY = chaveAntes;
+    }
   }
 
   {
