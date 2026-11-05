@@ -197,29 +197,6 @@
     .loginCard .ap-hint { font-size: 12.5px; color: var(--gray); line-height: 1.5; margin: 0 0 18px; }
     .ap-msg.error { background: var(--danger-bg); color: var(--danger); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; text-align: left; }
 
-    /* ---------- topbar ---------- */
-    .topbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 18px 0 14px;
-      flex-wrap: wrap;
-    }
-
-    .backLink {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      color: var(--gray);
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-    .backLink:active { opacity: .6; }
-
-    .topbar h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; flex: 1; min-width: 200px; }
-    .topbar .sub { font-size: 12px; color: var(--gray); margin: 2px 0 0; }
 
     .controlsRow { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
 
@@ -659,8 +636,8 @@
       .abcTopo .abcClasses { grid-column: span 5; gap: 12px; }
       .abcCorpo { grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
       .abcCorpo .abcEsq { grid-column: span 7; gap: 16px; }
-      .abcCorpo .abcLista { grid-column: span 5; position: sticky; top: 12px; }
-      .abcLista .prodTableScroll { max-height: calc(100vh - 230px); }
+      .abcCorpo .abcLista { grid-column: span 5; position: sticky; top: 76px; } /* abaixo da .subBar (64 px) */
+      .abcLista .prodTableScroll { max-height: calc(100vh - 294px); }
       .abcClasse:hover .clAcao { text-decoration: underline; }
       .pareto { height: 240px; }
     }
@@ -682,11 +659,42 @@
     }
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
       /* logo oficial (o mesmo da abertura do app, já no cache do sw.js) */
-    .topoLogo { height: 34px; width: auto; display: block; flex-shrink: 0; }
     .loadingScreen .brandLogo { width: 180px; height: auto; display: block; }
     .loginCard .brandLogo { width: 170px; height: auto; display: block; margin: 0 auto 16px; }
-    /* celular: logo e "← App" numa linha, o título embaixo na largura toda */
-    @media (max-width: 520px) { .topoLogo { height: 28px; } .topoLogo + .backLink { margin-left: auto; } .topbar > .topoLogo ~ div:last-child { flex: 1 1 100% !important; } }
+  
+    /* ---------- Cabeçalho de subpágina e peças do app (11/2026, opção "B" dos mockups "Cortag · Visual
+       das páginas separadas"): a barra escura presa no topo, como a do index.html, com voltar, o nome da
+       página e uma linha que muda (em vez da descrição fixa). O box-shadow + clip-path pinta a faixa na
+       largura toda da janela sem mexer na largura do .wrap (o conteúdo continua alinhado). ---------- */
+    html { scroll-padding-top: 80px; } /* rolar até um elemento não para embaixo da .subBar */
+    .subBar {
+      position: sticky; top: 0; z-index: 30;
+      display: flex; align-items: center; gap: 10px;
+      min-height: 64px; padding: 10px 0; margin-bottom: 12px;
+      background: #1D1D1F; box-shadow: 0 0 0 100vmax #1D1D1F; clip-path: inset(0 -100vmax);
+      color: #FFFFFF;
+    }
+    .subVoltar, .subAcao {
+      width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: none; padding: 0;
+      background: rgba(255, 255, 255, .12); color: #FFFFFF; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    }
+    .subVoltar:active, .subAcao:active { background: rgba(255, 255, 255, .24); }
+    .subVoltar:focus-visible, .subAcao:focus-visible { outline: 3px solid #FFFFFF; outline-offset: 2px; }
+    .subTexto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .subBar h1 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; color: #FFFFFF; }
+    .subBar .sub { margin: 0; font-size: 12px; color: #C7C7CC; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* cards como os do app: raio 16, borda fina, sem sombra; título 16 e dica 13 */
+    .card, .chartCard, .kpi, .kpiExpandPanel { border-radius: var(--r-md); box-shadow: none; border: 0.75px solid var(--hairline); }
+    .card h2, .card h3, .chartCard h2 { font-size: 16px; }
+    .cardHint, .chartCard .head p, .card p.hint { font-size: 13px; }
+    .dashLista.card { border-top: 4px solid var(--corLista); }
+    .segmented { border-radius: 12px; padding: 3px; gap: 3px; }
+    .segmented button { font-size: 14px; padding: 9px 14px; min-height: 44px; border-radius: 10px; }
+    #tabSegPrincipal { display: flex; }
+    #tabSegPrincipal button { flex: 1; }
+    @media (min-width: 700px) { #tabSegPrincipal { display: inline-flex; } #tabSegPrincipal button { flex: none; min-width: 140px; } }
+    .prodFilters select, .prodFilters input[type="text"] { min-height: 44px; font-size: 15px; border-radius: 12px; border-color: transparent; background: var(--fill); padding: 0 12px; }
   </style>
 </head>
 
@@ -713,14 +721,14 @@
   </div>
 
   <div class="wrap hidden" id="dashboardWrap">
-    <div class="topbar">
-      <img class="topoLogo" src="logo-abertura.png" alt="Cortag Revolution Tools">
-      <a class="backLink" href="index.html">← App</a>
-      <div style="flex:1;min-width:200px;">
+    <header class="subBar">
+      <a class="subVoltar" href="index.html" aria-label="Voltar ao app"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
+      <div class="subTexto">
         <h1 id="pageTitle">Dashboard</h1>
-        <p class="sub" id="topSub">Faturamento, metas de classificatório e vendas — visão geral pra ajudar na visita/negociação.</p>
+        <p class="sub" id="topSub">faturamento e metas do mês</p>
       </div>
-    </div>
+      <button type="button" class="subAcao" id="subAtualizar" aria-label="Atualizar" title="Atualizar"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg></button>
+    </header>
 
     <div class="segmented" id="tabSegPrincipal" style="margin-bottom:14px;">
       <button type="button" data-tab="dashboard" class="active">Dashboard</button>
@@ -829,7 +837,7 @@
     <div class="card hidden" id="clientPickerCard" style="margin-bottom:14px;">
       <div id="clientPickerSearch">
         <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver o que ele mais e menos compra (mesma classificação A/B/C, só que sobre o histórico faturado desse cliente).</p>
-        <input type="text" id="clientPickerInput" aria-label="Buscar cliente" placeholder="Cliente: nome, fantasia, CNPJ, código, cidade…" style="font:inherit;font-size:13px;border:1px solid var(--hairline);border-radius:9px;padding:9px 12px;width:100%;background:var(--white);color:var(--ink);">
+        <input type="text" id="clientPickerInput" aria-label="Buscar cliente" placeholder="Cliente: nome, fantasia, CNPJ, código, cidade…" style="font:inherit;font-size:15px;border:none;border-radius:12px;min-height:44px;padding:0 14px;width:100%;box-sizing:border-box;background:var(--fill);color:var(--ink);">
         <div id="clientPickerResults" style="margin-top:8px;"></div>
       </div>
       <div id="clientPickerSelected" class="hidden" style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -837,7 +845,7 @@
           <span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--gray);display:block;">Cliente selecionado</span>
           <span id="clientPickerNome" style="font-size:15px;font-weight:700;"></span>
         </div>
-        <button type="button" id="clientPickerTrocar" class="fileBtnLike" style="border:1px solid var(--hairline);background:var(--white);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;padding:8px 14px;border-radius:9px;cursor:pointer;">Trocar</button>
+        <button type="button" id="clientPickerTrocar" class="fileBtnLike" style="border:none;background:var(--fill);color:var(--ink);font:inherit;font-size:14px;font-weight:600;min-height:44px;padding:0 16px;border-radius:10px;cursor:pointer;">Trocar</button>
       </div>
     </div>
 
@@ -1142,8 +1150,6 @@
         categoriaCardHint: 'Toque numa categoria pra filtrar a lista de produtos ao lado.',
         itemCardTitle: 'Produtos',
         itemCardHint: 'Todas as classes ficam disponíveis aqui — use os filtros pra achar o que precisa pra planejar venda ou recomendar ao cliente.',
-        subFaturamento: 'Classificação por faturamento oficial (relatório de Faturamento) · todos os vendedores',
-        subQuantidade: 'Classificação por quantidade vendida (relatório oficial de Faturamento) · todos os vendedores',
         endpoint: () => '/api/produtos-abc-geral',
       },
       porCliente: {
@@ -1153,8 +1159,6 @@
         categoriaCardHint: 'Toque numa categoria pra filtrar a lista de produtos ao lado.',
         itemCardTitle: 'Produtos',
         itemCardHint: 'Do que ele mais compra (Classe A) até o que quase não compra (Classe C) — use pra saber o que oferecer numa visita ou o que já não faz sentido insistir.',
-        subFaturamento: 'Produtos que esse cliente mais e menos compra, por faturamento oficial (relatório de Faturamento)',
-        subQuantidade: 'Produtos que esse cliente mais e menos compra, por quantidade comprada (relatório oficial de Faturamento)',
         endpoint: () => `/api/clientes/${state.clienteId}/produtos-abc`,
       },
     };
@@ -1171,6 +1175,13 @@
     // Aplica os textos do modo atual (Produtos/Por cliente) nos elementos
     // fixos da tela - chamado ao trocar de modo ou de cliente, antes de
     // recarregar os dados.
+    // Linha embaixo do título no cabeçalho: de quem, de quando e por quê (curta, cabe numa linha).
+    function linhaSubCurva() {
+      const quem = state.modo === 'porCliente' ? (state.clienteNome || 'escolha um cliente') : 'toda a carteira';
+      const quando = state.dias ? `últimos ${state.dias} dias` : 'todo o período';
+      const porque = state.campo === 'faturamento_total' ? 'por valor' : 'por quantidade';
+      return `${quem} · ${quando} · ${porque}`;
+    }
     function aplicarTextosModo() {
       const m = MODOS[state.modo];
       document.getElementById('pageTitle').textContent = m.titulo;
@@ -1182,10 +1193,7 @@
       document.getElementById('itemCardTitle').textContent = m.itemCardTitle;
       document.getElementById('itemCardHint').textContent = m.itemCardHint;
       document.getElementById('produtoBusca').placeholder = 'Buscar por nome ou código…';
-      const subBase = state.campo === 'faturamento_total' ? m.subFaturamento : m.subQuantidade;
-      document.getElementById('topSub').textContent = state.modo === 'porCliente' && state.clienteNome
-        ? subBase.replace('esse cliente', state.clienteNome)
-        : subBase;
+      document.getElementById('topSub').textContent = linhaSubCurva();
       document.getElementById('clientPickerCard').classList.toggle('hidden', state.modo !== 'porCliente');
     }
 
@@ -1268,12 +1276,16 @@
         }, 250);
       });
       document.getElementById('clientPickerTrocar').addEventListener('click', esqueceCliente);
+      document.getElementById('subAtualizar').addEventListener('click', () => {
+        if (document.body.classList.contains('abaDash')) carregarDashboardPrincipal(); else carregarDados();
+      });
       document.querySelectorAll('#periodoSeg button').forEach(btn => {
         btn.addEventListener('click', () => {
           if (btn.classList.contains('active')) return;
           document.querySelectorAll('#periodoSeg button').forEach(b => b.classList.remove('active'));
           btn.classList.add('active');
           state.dias = btn.dataset.dias ? Number(btn.dataset.dias) : null;
+          document.getElementById('topSub').textContent = linhaSubCurva();
           carregarDados();
         });
       });
@@ -1346,7 +1358,7 @@
       document.body.classList.toggle('abaAbc', nome === 'curvaAbc');
       if (nome === 'dashboard') {
         document.getElementById('pageTitle').textContent = 'Dashboard';
-        document.getElementById('topSub').textContent = 'Faturamento, metas de classificatório e vendas — visão geral pra ajudar na visita/negociação.';
+        document.getElementById('topSub').textContent = subDashboard;
         if (!dashboardPrincipalCarregado) { dashboardPrincipalCarregado = true; carregarDashboardPrincipal(); }
       } else {
         aplicarTextosModo();
@@ -1890,6 +1902,8 @@
       // O relatório do ERP chega de madrugada sem os pedidos da véspera; o painel
       // do Salesforce é ao vivo - sem a data, a diferença parecia erro de conta.
       const entradaAte = String(resumo.entradaAte || '').slice(0, 10);
+      subDashboard = entradaAte ? `pedidos do ERP até ${entradaAte.split('-').reverse().slice(0, 2).join('/')}` : 'faturamento e metas do mês';
+      if (document.body.classList.contains('abaDash')) document.getElementById('topSub').textContent = subDashboard;
       const entradaAteTxt = entradaAte ? `<div class="heroAte">pedidos do ERP até ${entradaAte.split('-').reverse().slice(0, 2).join('/')} · o Salesforce é ao vivo</div>` : '';
       const hero = document.getElementById('dashHero');
       hero.dataset.kpiTipo = 'entradaPedidos';
@@ -2072,7 +2086,14 @@
         </div>`).join('');
     }
 
+    let subDashboard = 'faturamento e metas do mês';
+    let dashCarregando = false; // o "Atualizar" tocado várias vezes não dispara a carga de novo (rotas pesadas, 40/min)
     async function carregarDashboardPrincipal() {
+      if (dashCarregando) return;
+      dashCarregando = true;
+      try { await carregarDashboardPrincipalAgora(); } finally { dashCarregando = false; }
+    }
+    async function carregarDashboardPrincipalAgora() {
       const hero = document.getElementById('dashHero');
       hero.innerHTML = '<div class="chartEmpty">Carregando…</div>';
       try {

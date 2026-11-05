@@ -194,29 +194,6 @@
     .ap-msg.error { background: var(--danger-bg); color: var(--danger); border-radius: 10px; padding: 10px 12px; font-size: 12.5px; margin-bottom: 14px; text-align: left; }
     .ap-msg.error.inline { text-align: center; }
 
-    /* ---------- topbar ---------- */
-    .topbar {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: 18px 0 14px;
-      flex-wrap: wrap;
-    }
-
-    .backLink {
-      display: inline-flex;
-      align-items: center;
-      gap: 5px;
-      color: var(--gray);
-      text-decoration: none;
-      font-size: 13px;
-      font-weight: 600;
-      flex-shrink: 0;
-    }
-    .backLink:active { opacity: .6; }
-
-    .topbar h1 { font-size: 20px; margin: 0; letter-spacing: -.01em; flex: 1; min-width: 200px; }
-    .topbar .sub { font-size: 12px; color: var(--gray); margin: 2px 0 0; }
 
     .card { background: var(--white); border-radius: var(--r-lg); box-shadow: var(--shadow-1); padding: 15px 17px; margin-bottom: 14px; }
     .card h3 { font-size: 13.5px; margin: 0 0 4px; }
@@ -237,12 +214,14 @@
 
     .fichaHead { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
     .fichaHead h2 { font-size: 15px; margin: 0; }
+    /* mesmo botão secundário do app (.fileBtn): fundo cinza, 44 px de altura */
     .fileBtnLike {
-      border: 1px solid var(--hairline); background: var(--white); color: var(--ink); font: inherit;
-      font-size: 12.5px; font-weight: 600; padding: 8px 14px; border-radius: 9px; cursor: pointer; white-space: nowrap;
+      border: none; background: var(--fill); color: var(--ink); font: inherit;
+      font-size: 14px; font-weight: 600; min-height: 44px; padding: 0 16px; border-radius: var(--r-sm); cursor: pointer; white-space: nowrap;
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
     }
     .fileBtnLike:active { opacity: .7; }
-    a.fileBtnLike { display: inline-block; text-decoration: none; }
+    a.fileBtnLike { text-decoration: none; }
     .fichaHeadAcoes { display: flex; gap: 8px; flex-wrap: wrap; }
 
     /* Ficha em cartões por assunto (10/2026, opção "A" dos mockups): cartão do cliente no topo
@@ -320,7 +299,7 @@
       .fichaGrid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
       #clientPickerCard { max-width: 640px; }
       .fichaGrid #fichaHost { grid-column: 1; grid-row: 1; min-width: 0; }
-      .fichaGrid #contatosHost { grid-column: 2; grid-row: 1; position: sticky; top: 12px; }
+      .fichaGrid #contatosHost { grid-column: 2; grid-row: 1; position: sticky; top: 76px; } /* abaixo da .subBar */
       .fichaGrid #contatosHost .card { margin-bottom: 0; }
       .topoNome { font-size: 34px; }
     }
@@ -349,11 +328,37 @@
     .copiarTudoBtn { width: 100%; min-height: 42px; margin-top: 10px; border: none; border-radius: 10px; background: var(--red); color: #fff; font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
     .copiarTudoBtn:disabled { opacity: .5; cursor: default; }
       /* logo oficial (o mesmo da abertura do app, já no cache do sw.js) */
-    .topoLogo { height: 34px; width: auto; display: block; flex-shrink: 0; }
     .loadingScreen .brandLogo { width: 180px; height: auto; display: block; }
     .loginCard .brandLogo { width: 170px; height: auto; display: block; margin: 0 auto 16px; }
-    /* celular: logo e "← App" numa linha, o título embaixo na largura toda */
-    @media (max-width: 520px) { .topoLogo { height: 28px; } .topoLogo + .backLink { margin-left: auto; } .topbar > .topoLogo ~ div:last-child { flex: 1 1 100% !important; } }
+  
+    /* ---------- Cabeçalho de subpágina e peças do app (11/2026, opção "B" dos mockups "Cortag · Visual
+       das páginas separadas"): a barra escura presa no topo, como a do index.html, com voltar, o nome da
+       página e uma linha que muda (em vez da descrição fixa). O box-shadow + clip-path pinta a faixa na
+       largura toda da janela sem mexer na largura do .wrap (o conteúdo continua alinhado). ---------- */
+    html { scroll-padding-top: 80px; } /* rolar até um elemento não para embaixo da .subBar */
+    .subBar {
+      position: sticky; top: 0; z-index: 30;
+      display: flex; align-items: center; gap: 10px;
+      min-height: 64px; padding: 10px 0; margin-bottom: 12px;
+      background: #1D1D1F; box-shadow: 0 0 0 100vmax #1D1D1F; clip-path: inset(0 -100vmax);
+      color: #FFFFFF;
+    }
+    .subVoltar, .subAcao {
+      width: 44px; height: 44px; flex-shrink: 0; border-radius: 50%; border: none; padding: 0;
+      background: rgba(255, 255, 255, .12); color: #FFFFFF; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center; text-decoration: none;
+    }
+    .subVoltar:active, .subAcao:active { background: rgba(255, 255, 255, .24); }
+    .subVoltar:focus-visible, .subAcao:focus-visible { outline: 3px solid #FFFFFF; outline-offset: 2px; }
+    .subTexto { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+    .subBar h1 { margin: 0; font-size: 17px; font-weight: 700; line-height: 1.25; color: #FFFFFF; }
+    .subBar .sub { margin: 0; font-size: 12px; color: #C7C7CC; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    /* cards como os do app: raio 16, borda fina, sem sombra; título 16 e dica 13 */
+    .card, .chartCard, .kpi, .kpiExpandPanel { border-radius: var(--r-md); box-shadow: none; border: 0.75px solid var(--hairline); }
+    .card h2, .card h3, .chartCard h2 { font-size: 16px; }
+    .card .cartaoTit { font-size: 11.5px; } /* rótulo pequeno dos cartões da ficha continua rótulo */
+    .cardHint, .chartCard .head p, .card p.hint { font-size: 13px; }
+    #clientPickerInput { min-height: 44px; font-size: 15px; border-radius: 12px; border-color: transparent; background: var(--fill); padding: 0 14px; box-sizing: border-box; }
   </style>
 </head>
 
@@ -376,14 +381,14 @@
   </div>
 
   <div class="wrap hidden" id="pageWrap">
-    <div class="topbar">
-      <img class="topoLogo" src="logo-abertura.png" alt="Cortag Revolution Tools">
-      <a class="backLink" href="index.html">← App</a>
-      <div style="flex:1;min-width:200px;">
-        <h1>Ficha Cadastral do Cliente</h1>
-        <p class="sub">Dados de CNPJ direto da Receita Federal (via radar-cnpj.com), guardados aos poucos conforme você consulta cada cliente.</p>
+    <header class="subBar">
+      <a class="subVoltar" href="index.html" aria-label="Voltar ao app"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></a>
+      <div class="subTexto">
+        <h1>Ficha cadastral</h1>
+        <p class="sub" id="topSub">escolha um cliente</p>
       </div>
-    </div>
+      <button type="button" class="subAcao hidden" id="subTrocar" aria-label="Trocar cliente" title="Trocar cliente"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 7h11l-3-3"/><path d="M17 17H6l3 3"/></svg></button>
+    </header>
 
     <div class="card" id="clientPickerCard">
       <p class="cardHint" style="margin-top:0;">Escolha o cliente pra ver a ficha cadastral dele.</p>
@@ -884,6 +889,8 @@
       renderTopo();
       carregarContatos();
       document.getElementById('clientPickerNome').textContent = nome;
+      document.getElementById('topSub').textContent = nome || 'cliente';
+      document.getElementById('subTrocar').classList.remove('hidden');
       document.getElementById('clientPickerSelected').classList.remove('hidden');
       document.getElementById('clientPickerSearch').classList.add('hidden');
       document.getElementById('clientPickerResults').innerHTML = '';
@@ -903,6 +910,8 @@
       renderTopo();
       document.getElementById('clientPickerSelected').classList.add('hidden');
       document.getElementById('clientPickerSearch').classList.remove('hidden');
+      document.getElementById('topSub').textContent = 'escolha um cliente';
+      document.getElementById('subTrocar').classList.add('hidden');
       document.getElementById('fichaHost').innerHTML = '';
     }
 
@@ -927,6 +936,7 @@
         }, 250);
       });
       document.getElementById('clientPickerTrocar').addEventListener('click', esqueceCliente);
+      document.getElementById('subTrocar').addEventListener('click', () => { esqueceCliente(); document.getElementById('clientPickerInput').focus(); });
       document.getElementById('fichaHost').innerHTML = '<div class="lev-empty">Selecione um cliente acima pra ver a ficha cadastral dele.</div>';
       // Atalho vindo do app principal (botão "Ficha cadastral" na barra do
       // cliente, ou o ícone do topo com cliente selecionado): abre direto na
