@@ -2,6 +2,7 @@ const express = require('express');
 const { esquecerCatalogo } = require('./lib/descontinuado');
 const { lerComCache, esquecerTabela } = require('./lib/cacheTabela');
 const { comSubfamilia } = require('./lib/subfamilias');
+const { semOcultos } = require('./lib/produtosOcultos');
 const router = express.Router();
 const XLSX = require('@e965/xlsx');
 const { pool, registrarImportacao } = require('../db');
@@ -320,7 +321,8 @@ router.get('/', async (req, res) => {
       canais: CANAIS,
       // subfamília de marketing (routes/lib/subfamilias.js) por cima da linha do
       // cache, sem mexer nela
-      produtos: comSubfamilia(rows),
+      // sem os produtos ocultos (routes/lib/produtosOcultos.js)
+      produtos: comSubfamilia(semOcultos(rows)),
     });
   } catch (e) {
     console.error(e);

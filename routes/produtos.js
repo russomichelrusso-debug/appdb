@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
+const { CODIGOS_OCULTOS } = require('./lib/produtosOcultos');
 
 const CODIGO_SKU_REGEX = /^[A-Za-z0-9._-]{1,30}$/;
 
@@ -16,9 +17,13 @@ router.get('/contagem', async (req, res) => {
     const result = await pool.query(
       `/* produtos:contagem */
        SELECT (SELECT COUNT(*) FROM produtos) AS total,
-              (SELECT COUNT(*) FROM catalogo_precos) AS catalogo,
+              (SELECT COUNT(*) FROM catalogo_precos WHERE NOT (codigo_sku = ANY($1::text[]))) AS catalogo,
               (SELECT COUNT(*) FROM catalogo_precos c
-                WHERE NOT EXISTS (SELECT 1 FROM produtos p WHERE p.codigo_sku = c.codigo_sku)) AS fora_do_cadastro`
+                WHERE NOT (c.codigo_sku = ANY($1::text[]))
+                  AND NOT EXISTS (SELECT 1 FROM produtos p WHERE p.codigo_sku = c.codigo_sku)) AS fora_do_cadastro`,
+      // os ocultos não vão pro aparelho: sem tirar daqui, o Painel acusaria
+      // catálogo desatualizado e reenviaria tudo a cada abertura
+      [[...CODIGOS_OCULTOS]]
     );
     const r = result.rows[0] || {};
     res.json({ total: Number(r.total || 0), catalogo: Number(r.catalogo || 0), fora_do_cadastro: Number(r.fora_do_cadastro || 0) });

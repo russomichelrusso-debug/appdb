@@ -202,8 +202,10 @@ async function query(sql, params = []) {
   }
   if (s.includes('/* PRODUTOS:CONTAGEM */')) {
     const noCadastro = new Set(produtos.map(p => String(p.codigo_sku)));
-    return { rows: [{ total: produtos.length, catalogo: catalogoPrecos.length,
-      fora_do_cadastro: catalogoPrecos.filter(c => !noCadastro.has(String(c.codigo_sku))).length }] };
+    const ocultos = new Set((params && params[0]) || []);
+    const visiveis = catalogoPrecos.filter(c => !ocultos.has(String(c.codigo_sku)));
+    return { rows: [{ total: produtos.length, catalogo: visiveis.length,
+      fora_do_cadastro: visiveis.filter(c => !noCadastro.has(String(c.codigo_sku))).length }] };
   }
 
   if (s.startsWith('BEGIN') || s.startsWith('COMMIT') || s.startsWith('ROLLBACK')) return { rows: [] };
