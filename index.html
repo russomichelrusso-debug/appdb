@@ -11316,6 +11316,63 @@
       display: none;
     }
 
+    /* trocar de câmera (grande angular × principal, que foca melhor de perto) ao lado do ✕ */
+    .etqTopoBtns {
+      display: flex;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .etqTrocarCam.hidden {
+      display: none;
+    }
+
+    /* zoom 1x/2x: o da câmera quando o celular deixa, senão digital (vídeo ampliado e foto recortada) */
+    .etqZoom {
+      align-self: center;
+      display: flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 22px;
+      background: rgba(0, 0, 0, .6);
+    }
+
+    .etqZoom button {
+      min-width: 44px;
+      min-height: 38px;
+      border: none;
+      border-radius: 19px;
+      background: transparent;
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .etqZoom button.active {
+      background: #FFFFFF;
+      color: #1D1D1F;
+    }
+
+    .etqCam video.zoomDigital {
+      transform: scale(2);
+    }
+
+    .etqCam .leitorStatus {
+      display: block;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .etqCam .leitorStatus::before {
+      display: inline-block;
+      margin-right: 6px;
+      vertical-align: 1px;
+    }
+
     .leitorTopo {
       display: flex;
       align-items: center;
@@ -13429,14 +13486,23 @@
       <video id="etqVideo" playsinline muted></video>
       <div class="leitorTopo">
         <span class="leitorStatus" id="etqStatus" role="status"></span>
-        <button type="button" class="leitorFechar" id="etqFecharBtn" aria-label="Concluir as fotos de etiqueta">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-        </button>
+        <div class="etqTopoBtns">
+          <button type="button" class="leitorFechar etqTrocarCam hidden" id="etqTrocarCamBtn" aria-label="Trocar câmera" title="Trocar câmera">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 7h-3l-2-3H9L7 7H4a1 1 0 00-1 1v11a1 1 0 001 1h16a1 1 0 001-1V8a1 1 0 00-1-1z" /><path d="M9 13.5a3 3 0 015.2-2" /><path d="M15 10v2h-2" /><path d="M15 13.5a3 3 0 01-5.2 2" /><path d="M9 17v-2h2" /></svg>
+          </button>
+          <button type="button" class="leitorFechar" id="etqFecharBtn" aria-label="Concluir as fotos de etiqueta">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
       </div>
       <div class="etqAviso hidden" id="etqAviso" role="status"></div>
       <div class="leitorMira etqMira" aria-hidden="true"><div></div></div>
       <div class="leitorMsg" id="etqMsg" role="status"></div>
       <div class="etqFichas" id="etqFichas" aria-label="Fotos tiradas"></div>
+      <div class="etqZoom" id="etqZoom" role="radiogroup" aria-label="Zoom da câmera">
+        <button type="button" role="radio" data-etq-zoom="1" aria-checked="true" class="active">1x</button>
+        <button type="button" role="radio" data-etq-zoom="2" aria-checked="false">2x</button>
+      </div>
       <div class="etqAcoes">
         <button type="button" class="etqLado" id="etqDesfazerBtn" disabled>Desfazer</button>
         <button type="button" class="etqDisparo" id="etqDisparoBtn" aria-label="Tirar foto"></button>
@@ -35244,6 +35310,63 @@
       const ETQ_TENTAR_DEPOIS = new Set([429, 502, 503, 504]); // limite de fotos, IA fora do ar: guarda e lê depois
       const ETQ_FOTO_LADO = 2560;
       const etqVelha = (g) => g !== etqGeracao || !etq;
+      // Trocar de câmera (11/2026, relato do usuário: a grande angular que o celular escolhe não foca de perto).
+      // Só as traseiras (a frontal não serve pra etiqueta); a escolhida fica no aparelho pra próxima vez.
+      const ETQ_CAMERA_CHAVE = 'cortagEtqCamera_v1';
+      let etqCameras = [];
+      // Zoom 1x/2x (11/2026, pedido do usuário): pela câmera (applyConstraints zoom, Chrome do Android; numa câmera
+      // com várias lentes costuma passar pra lente melhor) ou, sem isso, digital: o vídeo ampliado e a foto recortada no
+      // meio. Serve pra fotografar de mais longe, onde a câmera foca. A escolha fica no aparelho.
+      const ETQ_ZOOM_CHAVE = 'cortagEtqZoom_v1';
+      const etqZoomSalvo = () => { try { return localStorage.getItem(ETQ_ZOOM_CHAVE) === '2' ? 2 : 1; } catch (e) { return 1; } };
+      async function aplicarZoomEtiqueta(nivel, guardar) {
+        if (!etq) return;
+        const video = document.getElementById('etqVideo');
+        const track = etq.stream && etq.stream.getVideoTracks()[0];
+        let caps = null;
+        try { caps = track && track.getCapabilities && track.getCapabilities().zoom; } catch (e) { }
+        etq.zoomDigital = false;
+        if (caps && caps.max >= 1.5) {
+          const v = nivel === 2 ? Math.min(2, caps.max) : (caps.min || 1);
+          try { await track.applyConstraints({ advanced: [{ zoom: v }] }); }
+          catch (e) { etq.zoomDigital = nivel === 2; }
+        } else etq.zoomDigital = nivel === 2;
+        video.classList.toggle('zoomDigital', etq.zoomDigital);
+        etq.zoom = nivel;
+        document.querySelectorAll('#etqZoom [data-etq-zoom]').forEach(b => {
+          const on = Number(b.dataset.etqZoom) === nivel;
+          b.classList.toggle('active', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+        if (guardar) try { localStorage.setItem(ETQ_ZOOM_CHAVE, String(nivel)); } catch (e) { }
+      }
+      const etqCameraSalva = () => { try { return localStorage.getItem(ETQ_CAMERA_CHAVE) || ''; } catch (e) { return ''; } };
+      function cameraFrontal(d) {
+        try { const fm = d.getCapabilities && d.getCapabilities().facingMode; if (fm && fm.length) return fm.includes('user') && !fm.includes('environment'); } catch (e) { }
+        return /front|frontal|user|selfie|facetime/i.test(d.label || '');
+      }
+      async function listarCamerasEtiqueta() {
+        try {
+          const todas = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput' && d.deviceId);
+          etqCameras = todas.filter(d => !cameraFrontal(d));
+        } catch (e) { etqCameras = []; }
+        const btn = document.getElementById('etqTrocarCamBtn');
+        if (btn) btn.classList.toggle('hidden', etqCameras.length < 2);
+      }
+      async function trocarCameraEtiqueta() {
+        if (!etq || etqCameras.length < 2) return;
+        const btn = document.getElementById('etqTrocarCamBtn');
+        const atual = etqCameras.findIndex(d => d.deviceId === etq.cameraId);
+        const prox = etqCameras[(atual + 1) % etqCameras.length];
+        btn.disabled = true;
+        desligarCameraEtiqueta(); // muito Android não abre duas câmeras ao mesmo tempo
+        const ok = await ligarCameraEtiqueta(prox.deviceId);
+        btn.disabled = false;
+        if (!etq) return;
+        if (!ok) { document.getElementById('etqMsg').textContent = 'Essa câmera não abriu — toque de novo pra tentar a próxima'; return; }
+        try { localStorage.setItem(ETQ_CAMERA_CHAVE, etq.cameraId || prox.deviceId); } catch (e) { }
+        const i = etqCameras.findIndex(d => d.deviceId === (etq.cameraId || prox.deviceId));
+        document.getElementById('etqMsg').textContent = `Câmera ${i + 1} de ${etqCameras.length} · enquadre a etiqueta e toque no botão`;
+      }
       async function abrirCameraEtiqueta(destino) {
         etqGeracao++;
         etq = { destino: destino || null, fila: [], n: 0, processando: false, encerrando: false, stream: null, folha: null };
@@ -35259,19 +35382,32 @@
           showToast('A câmera não abriu dentro do app — toque em "Tirar foto" pra usar a do celular.', 'erro');
         }
       }
-      async function ligarCameraEtiqueta() {
+      async function ligarCameraEtiqueta(deviceId) {
         const g = etqGeracao, cg = ++etqCamGeracao;
         const video = document.getElementById('etqVideo');
         document.getElementById('etqMsg').textContent = 'Abrindo a câmera…';
+        const tamanho = { width: { ideal: ETQ_FOTO_LADO }, height: { ideal: 1440 } };
+        const escolhida = deviceId || etqCameraSalva();
         try {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: ETQ_FOTO_LADO }, height: { ideal: 1440 } } });
+          let stream = null;
+          if (escolhida) {
+            try { stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: escolhida }, ...tamanho } }); }
+            catch (e) {
+              if (deviceId) throw e;
+              try { localStorage.removeItem(ETQ_CAMERA_CHAVE); } catch (e2) { } // a guardada sumiu (outro aparelho, atualização)
+            }
+          }
+          if (!stream) stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, ...tamanho } });
           // fechou, foi pro segundo plano ou pediu de novo enquanto abria: esta não fica ligada
           if (etqVelha(g) || cg !== etqCamGeracao || document.hidden) { stream.getTracks().forEach(t => t.stop()); return true; }
           if (etq.stream) etq.stream.getTracks().forEach(t => t.stop());
           etq.stream = stream;
+          try { etq.cameraId = stream.getVideoTracks()[0].getSettings().deviceId || ''; } catch (e) { etq.cameraId = ''; }
           video.srcObject = stream;
           try { await video.play(); } catch (e) { }
           document.getElementById('etqMsg').textContent = 'Enquadre a etiqueta e toque no botão';
+          aplicarZoomEtiqueta(etqZoomSalvo(), false);
+          if (!etqCameras.length) listarCamerasEtiqueta(); // depois da permissão: aí o navegador diz quais câmeras há
           return true;
         } catch (e) { return false; }
       }
@@ -35295,8 +35431,10 @@
         const video = document.getElementById('etqVideo');
         if (!etq.stream || video.readyState < 2 || !video.videoWidth) { document.getElementById('etqMsg').textContent = 'A câmera ainda está abrindo…'; return; }
         const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const z = etq.zoomDigital ? 2 : 1; // zoom digital: só o meio do quadro, como aparece na tela
+        canvas.width = Math.round(vw / z); canvas.height = Math.round(vh / z);
+        canvas.getContext('2d').drawImage(video, (vw - canvas.width) / 2, (vh - canvas.height) / 2, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
         if (!blob || !etq) return;
         const cam = document.getElementById('etqCam');
@@ -35546,6 +35684,11 @@
       }
       function initCameraEtiqueta() {
         document.getElementById('etqDisparoBtn').addEventListener('click', fotografarEtiqueta);
+        document.getElementById('etqTrocarCamBtn').addEventListener('click', trocarCameraEtiqueta);
+        document.getElementById('etqZoom').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-etq-zoom]');
+          if (b) aplicarZoomEtiqueta(Number(b.dataset.etqZoom), true);
+        });
         document.getElementById('etqProntoBtn').addEventListener('click', () => concluirCameraEtiqueta());
         document.getElementById('etqFecharBtn').addEventListener('click', () => concluirCameraEtiqueta(true)); // tocado durante o "Lendo N…": fecha já
         document.getElementById('etqDesfazerBtn').addEventListener('click', () => {
