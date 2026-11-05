@@ -11327,6 +11327,38 @@
       display: none;
     }
 
+    /* zoom 1x/2x: o da câmera quando o celular deixa, senão digital (vídeo ampliado e foto recortada) */
+    .etqZoom {
+      align-self: center;
+      display: flex;
+      gap: 4px;
+      padding: 3px;
+      border-radius: 22px;
+      background: rgba(0, 0, 0, .6);
+    }
+
+    .etqZoom button {
+      min-width: 44px;
+      min-height: 38px;
+      border: none;
+      border-radius: 19px;
+      background: transparent;
+      color: #FFFFFF;
+      font: inherit;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .etqZoom button.active {
+      background: #FFFFFF;
+      color: #1D1D1F;
+    }
+
+    .etqCam video.zoomDigital {
+      transform: scale(2);
+    }
+
     .etqCam .leitorStatus {
       display: block;
       min-width: 0;
@@ -13467,6 +13499,10 @@
       <div class="leitorMira etqMira" aria-hidden="true"><div></div></div>
       <div class="leitorMsg" id="etqMsg" role="status"></div>
       <div class="etqFichas" id="etqFichas" aria-label="Fotos tiradas"></div>
+      <div class="etqZoom" id="etqZoom" role="radiogroup" aria-label="Zoom da câmera">
+        <button type="button" role="radio" data-etq-zoom="1" aria-checked="true" class="active">1x</button>
+        <button type="button" role="radio" data-etq-zoom="2" aria-checked="false">2x</button>
+      </div>
       <div class="etqAcoes">
         <button type="button" class="etqLado" id="etqDesfazerBtn" disabled>Desfazer</button>
         <button type="button" class="etqDisparo" id="etqDisparoBtn" aria-label="Tirar foto"></button>
@@ -35278,6 +35314,31 @@
       // Só as traseiras (a frontal não serve pra etiqueta); a escolhida fica no aparelho pra próxima vez.
       const ETQ_CAMERA_CHAVE = 'cortagEtqCamera_v1';
       let etqCameras = [];
+      // Zoom 1x/2x (11/2026, pedido do usuário): pela câmera (applyConstraints zoom, Chrome do Android; numa câmera
+      // com várias lentes costuma passar pra lente melhor) ou, sem isso, digital: o vídeo ampliado e a foto recortada no
+      // meio. Serve pra fotografar de mais longe, onde a câmera foca. A escolha fica no aparelho.
+      const ETQ_ZOOM_CHAVE = 'cortagEtqZoom_v1';
+      const etqZoomSalvo = () => { try { return localStorage.getItem(ETQ_ZOOM_CHAVE) === '2' ? 2 : 1; } catch (e) { return 1; } };
+      async function aplicarZoomEtiqueta(nivel, guardar) {
+        if (!etq) return;
+        const video = document.getElementById('etqVideo');
+        const track = etq.stream && etq.stream.getVideoTracks()[0];
+        let caps = null;
+        try { caps = track && track.getCapabilities && track.getCapabilities().zoom; } catch (e) { }
+        etq.zoomDigital = false;
+        if (caps && caps.max >= 1.5) {
+          const v = nivel === 2 ? Math.min(2, caps.max) : (caps.min || 1);
+          try { await track.applyConstraints({ advanced: [{ zoom: v }] }); }
+          catch (e) { etq.zoomDigital = nivel === 2; }
+        } else etq.zoomDigital = nivel === 2;
+        video.classList.toggle('zoomDigital', etq.zoomDigital);
+        etq.zoom = nivel;
+        document.querySelectorAll('#etqZoom [data-etq-zoom]').forEach(b => {
+          const on = Number(b.dataset.etqZoom) === nivel;
+          b.classList.toggle('active', on); b.setAttribute('aria-checked', on ? 'true' : 'false');
+        });
+        if (guardar) try { localStorage.setItem(ETQ_ZOOM_CHAVE, String(nivel)); } catch (e) { }
+      }
       const etqCameraSalva = () => { try { return localStorage.getItem(ETQ_CAMERA_CHAVE) || ''; } catch (e) { return ''; } };
       function cameraFrontal(d) {
         try { const fm = d.getCapabilities && d.getCapabilities().facingMode; if (fm && fm.length) return fm.includes('user') && !fm.includes('environment'); } catch (e) { }
@@ -35345,6 +35406,7 @@
           video.srcObject = stream;
           try { await video.play(); } catch (e) { }
           document.getElementById('etqMsg').textContent = 'Enquadre a etiqueta e toque no botão';
+          aplicarZoomEtiqueta(etqZoomSalvo(), false);
           if (!etqCameras.length) listarCamerasEtiqueta(); // depois da permissão: aí o navegador diz quais câmeras há
           return true;
         } catch (e) { return false; }
@@ -35369,8 +35431,10 @@
         const video = document.getElementById('etqVideo');
         if (!etq.stream || video.readyState < 2 || !video.videoWidth) { document.getElementById('etqMsg').textContent = 'A câmera ainda está abrindo…'; return; }
         const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+        const vw = video.videoWidth, vh = video.videoHeight;
+        const z = etq.zoomDigital ? 2 : 1; // zoom digital: só o meio do quadro, como aparece na tela
+        canvas.width = Math.round(vw / z); canvas.height = Math.round(vh / z);
+        canvas.getContext('2d').drawImage(video, (vw - canvas.width) / 2, (vh - canvas.height) / 2, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
         const blob = await new Promise(ok => canvas.toBlob(ok, 'image/jpeg', 0.9));
         if (!blob || !etq) return;
         const cam = document.getElementById('etqCam');
@@ -35621,6 +35685,10 @@
       function initCameraEtiqueta() {
         document.getElementById('etqDisparoBtn').addEventListener('click', fotografarEtiqueta);
         document.getElementById('etqTrocarCamBtn').addEventListener('click', trocarCameraEtiqueta);
+        document.getElementById('etqZoom').addEventListener('click', (e) => {
+          const b = e.target.closest('[data-etq-zoom]');
+          if (b) aplicarZoomEtiqueta(Number(b.dataset.etqZoom), true);
+        });
         document.getElementById('etqProntoBtn').addEventListener('click', () => concluirCameraEtiqueta());
         document.getElementById('etqFecharBtn').addEventListener('click', () => concluirCameraEtiqueta(true)); // tocado durante o "Lendo N…": fecha já
         document.getElementById('etqDesfazerBtn').addEventListener('click', () => {

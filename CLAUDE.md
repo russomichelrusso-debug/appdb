@@ -1680,7 +1680,9 @@ Supabase, sem PR — não é mudança de código.
     li". Sinal que volta com a câmera aberta põe as que esperavam de novo na fila; app em segundo plano solta a câmera; logout
     fecha. Sem câmera no app (sem permissão, navegador sem `getUserMedia`): o "Tirar foto" do PR 1, com aviso. Testado no app
     **Trocar câmera** (11/2026, relato do usuário: a grande angular não foca de perto): botão ao lado do ✕ (`trocarCameraEtiqueta`),
-    só com 2+ câmeras traseiras (a frontal fica fora); a escolhida fica em `cortagEtqCamera_v1` e abre na próxima vez. Testado no app
+    só com 2+ câmeras traseiras (a frontal fica fora); a escolhida fica em `cortagEtqCamera_v1` e abre na próxima vez. **Zoom 1x/2x**
+    acima do disparo (`aplicarZoomEtiqueta`): o da câmera (`applyConstraints` zoom) quando o celular deixa, senão digital (vídeo
+    ampliado, foto recortada no meio: 2560 → 1280 px), pra fotografar de mais longe, onde foca; fica em `cortagEtqZoom_v1`. Testado no app
     local (Chromium com câmera falsa, IA simulada): certa/dúvida/ilegível, escolher na folha, Desfazer, sem internet e o Pedido;
     Leitura com prazo de 60 s; 429/5xx ou falha de rede deixam a foto esperando (não "não li"); ✕ durante o "Pronto" fecha
     já e guarda as que estavam lendo. **não testado num celular de verdade** (foco e nitidez do quadro do vídeo × a foto da câmera do celular).
