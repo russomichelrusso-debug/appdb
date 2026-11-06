@@ -5875,6 +5875,40 @@ async function main() {
           global.fetch = fetchReserva;
           if (reservaAntes === undefined) delete process.env.GEMINI_MODEL_RESERVA; else process.env.GEMINI_MODEL_RESERVA = reservaAntes;
           assert(r.status === 502, `etiqueta: principal lento com a reserva desligada = 502 (${r.status})`);
+          // raciocínio mínimo nos Gemini 3+ flash (06/11/2026: 3.5-flash-lite em produção, 6 a 10 s por foto); modelo que
+          // recusa o parâmetro é chamado de novo sem ele e fica marcado; principal aposentado (404) tenta a reserva
+          const modeloAntes = process.env.GEMINI_MODEL;
+          const corpos = [];
+          global.fetch = async (url, opts) => {
+            if (!String(url).includes('generativelanguage.googleapis.com')) return fetchMock(url, opts);
+            const m = String(url).match(/models\/([^:]+):/)[1];
+            const tc = JSON.parse(opts.body).generationConfig.thinkingConfig || null;
+            corpos.push(m + ' ' + JSON.stringify(tc));
+            if (m === 'gemini-9-flash-teste' && tc) return new Response('{"error":{"message":"Invalid JSON payload received. Unknown name \\"thinkingLevel\\" at generation_config.thinking_config"}}', { status: 400 });
+            if (m === 'modelo-aposentado') return new Response('{"error":{"message":"no longer available"}}', { status: 404 });
+            return fetchMock(url, opts);
+          };
+          try {
+            process.env.GEMINI_MODEL = 'gemini-3.5-flash-lite';
+            r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+            assert(r.status === 200 && corpos.join('|') === 'gemini-3.5-flash-lite {"thinkingLevel":"minimal"}',
+              `Gemini 3.5 flash-lite: pede raciocínio mínimo (${r.status}, ${corpos.join('|')})`);
+            process.env.GEMINI_MODEL = 'gemini-9-flash-teste'; corpos.length = 0;
+            r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+            const r2 = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+            assert(r.status === 200 && r2.status === 200
+              && corpos.join('|') === 'gemini-9-flash-teste {"thinkingLevel":"minimal"}|gemini-9-flash-teste null|gemini-9-flash-teste null',
+              `modelo que recusa o raciocínio mínimo: chamado de novo sem ele, e as próximas já vão sem (${r.status}, ${r2.status}, ${corpos.join('|')})`);
+            process.env.GEMINI_MODEL = 'gemini-2.5-flash'; corpos.length = 0;
+            r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
+            assert(r.status === 200 && corpos.join('|') === 'gemini-2.5-flash {"thinkingBudget":0}', `Gemini 2.5 flash continua com thinkingBudget 0 (${corpos.join('|')})`);
+            process.env.GEMINI_MODEL = 'modelo-aposentado'; corpos.length = 0;
+            r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+            assert(r.status === 200 && corpos.length === 2 && /^gemini-3\.5-flash /.test(corpos[1]),
+              `etiqueta: principal aposentado (404) lê pela reserva (${r.status}, ${corpos.join('|')})`);
+          } finally {
+            if (modeloAntes === undefined) delete process.env.GEMINI_MODEL; else process.env.GEMINI_MODEL = modeloAntes;
+          }
         } finally {
           global.fetch = fetchMock;
           if (prazoAntes === undefined) delete process.env.GEMINI_ETIQUETA_PRAZO_MS; else process.env.GEMINI_ETIQUETA_PRAZO_MS = prazoAntes;

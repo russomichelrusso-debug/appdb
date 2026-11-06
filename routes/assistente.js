@@ -19,11 +19,26 @@ const interpretarLimiter = rateLimit({
 // NUNCA responde o preço/ficha/dado em si - só entende a pergunta. O dado
 // real vem sempre do banco do próprio app, pra nunca arriscar inventar um
 // preço ou informação errada.
+// Raciocínio ("thinking") do modelo: o app só pede leitura/classificação, e raciocinar deixava a resposta lenta.
+// 2.5 flash: thinkingBudget 0 desliga. Gemini 3+ flash/flash-lite (em produção o GEMINI_MODEL é o 3.5-flash-lite,
+// 06/11/2026: fotos de etiqueta de 6 a 10 s): thinkingLevel 'minimal'. Os pro e os antigos não aceitam desligar.
+// Modelo que recusar o parâmetro (400 falando de "thinking") é chamado de novo sem ele, na hora, e fica marcado
+// até o servidor reiniciar: no pior caso fica como antes, nunca vira erro.
+const SEM_CONFIG_RACIOCINIO = new Set();
+function configDeRaciocinio(modelo) {
+  const m = String(modelo || '').toLowerCase();
+  if (SEM_CONFIG_RACIOCINIO.has(m) || /-pro(\b|-)/.test(m)) return null;
+  if (/2\.5-flash/.test(m)) return { thinkingBudget: 0 };
+  if (/flash/.test(m) && !/(^|-)(1\.|2\.0)/.test(m)) return { thinkingLevel: 'minimal' };
+  return null;
+}
+
 // Chama o Gemini uma vez; se vier 503 (sobrecarga temporária do lado do
 // Google), tenta de novo automaticamente antes de desistir - poupa o
 // vendedor de precisar apertar o botão de novo por um problema que passa
 // sozinho na maioria das vezes.
 async function chamarGemini(partes, apiKey, modelo, tentativasRestantes = 2, prazoMs = 8000) {
+  const raciocinio = configDeRaciocinio(modelo);
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
     {
@@ -33,12 +48,20 @@ async function chamarGemini(partes, apiKey, modelo, tentativasRestantes = 2, pra
       headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({
         contents: [{ parts: typeof partes === 'string' ? [{ text: partes }] : partes }],
-        // só ler/classificar: sem "raciocínio" do 2.5 flash (deixava a resposta lenta); o pro e os antigos não aceitam desligar
-        generationConfig: { temperature: 0.1, responseMimeType: 'application/json', ...(/2\.5-flash/.test(modelo) ? { thinkingConfig: { thinkingBudget: 0 } } : {}) },
+        generationConfig: { temperature: 0.1, responseMimeType: 'application/json', ...(raciocinio ? { thinkingConfig: raciocinio } : {}) },
       }),
       signal: AbortSignal.timeout(prazoMs),
     }
   );
+  if (resp.status === 400 && raciocinio) {
+    const texto = await resp.text().catch(() => '');
+    if (/thinking/i.test(texto)) {
+      SEM_CONFIG_RACIOCINIO.add(String(modelo).toLowerCase());
+      console.warn(`Gemini: ${modelo} não aceita ${JSON.stringify(raciocinio)}; chamando sem ele.`);
+      return chamarGemini(partes, apiKey, modelo, tentativasRestantes, prazoMs);
+    }
+    return new Response(texto, { status: 400, headers: resp.headers });
+  }
   if (resp.status === 503 && tentativasRestantes > 0) {
     await new Promise((r) => setTimeout(r, 1200));
     return chamarGemini(partes, apiKey, modelo, tentativasRestantes - 1, prazoMs);
@@ -55,7 +78,8 @@ const modeloGemini = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 // toda leitura em dúvida). A foto da lista do cliente (até 3 páginas) continua com o prazo longo e sem reserva.
 const ETIQUETA_PRAZO_MS = () => Number(process.env.GEMINI_ETIQUETA_PRAZO_MS) || 12000;
 const ETIQUETA_RESERVA_PRAZO_MS = 20000;
-const STATUS_TENTA_RESERVA = new Set([429, 500, 502, 503, 504]);
+// 404 = principal aposentado pelo Google ("no longer available"): a reserva ainda pode ler a foto
+const STATUS_TENTA_RESERVA = new Set([404, 429, 500, 502, 503, 504]);
 // Padrão trocado em 11/2026: o 2.5-flash-lite responde 404 "no longer available to new users" pra esta chave (log de
 // 06/11: as 2 fotos que caíram na reserva voltaram 500, "não li", quando sem a reserva teriam esperado e tentado de novo).
 const modeloReserva = () => process.env.GEMINI_MODEL_RESERVA || 'gemini-3.5-flash';
@@ -80,7 +104,8 @@ async function lerImagemNoGemini(partes, apiKey, etiqueta) {
   try {
     const resp = await chamarGemini(partes, apiKey, modelo, 0, ETIQUETA_PRAZO_MS());
     if (resp.ok || !comReserva || !STATUS_TENTA_RESERVA.has(resp.status)) return { resp, modelo };
-    console.warn(`Etiqueta: ${modelo} respondeu ${resp.status}; tentando ${reserva}.`);
+    if (resp.status === 404) console.error(`Etiqueta: ${modelo} respondeu 404 (modelo aposentado?) - confira GEMINI_MODEL no Render; lendo pela reserva ${reserva}.`);
+    else console.warn(`Etiqueta: ${modelo} respondeu ${resp.status}; tentando ${reserva}.`);
     try { await resp.body?.cancel(); } catch (e) { }
     const status = resp.status;
     falhaPrincipal = () => ({ resp: new Response('{}', { status }), modelo });
