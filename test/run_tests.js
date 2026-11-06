@@ -5806,25 +5806,34 @@ async function main() {
         };
         try {
           r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
-          assert(r.status === 200 && r.body.itens.length === 4 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash-lite"]',
+          assert(r.status === 200 && r.body.itens.length === 4 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-3.5-flash"]',
             `etiqueta: 503 do modelo principal tenta logo o de reserva, sem a 2ª tentativa no mesmo (${JSON.stringify(chamados)})`);
           principal = 'lento'; chamados.length = 0; process.env.GEMINI_ETIQUETA_PRAZO_MS = '30';
           r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
-          assert(r.status === 200 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash-lite"]',
+          assert(r.status === 200 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-3.5-flash"]',
             `etiqueta: modelo principal passou do prazo, lê pelo de reserva (${r.status}, ${JSON.stringify(chamados)})`);
           principal = 'sobrecarga'; chamados.length = 0;
           r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
           assert(r.status === 502 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash"]',
             `foto da lista do cliente: sem reserva, continua com uma 2ª tentativa no mesmo modelo (${r.status}, ${JSON.stringify(chamados)})`);
-          // reserva mal configurada (modelo que não existe): 500, o app mostra "não li" em vez de guardar a foto pra sempre
+          // reserva que não existe pra chave (06/11/2026: 2.5-flash-lite = 404): a foto fica com a falha do principal (502, o app
+          // guarda e tenta de novo), não com o 500 de "não li"; e a reserva sai de cena por 6 h (2ª foto nem tenta ela)
           const reservaAntes = process.env.GEMINI_MODEL_RESERVA;
           process.env.GEMINI_MODEL_RESERVA = 'modelo-que-nao-existe';
           const fetchReserva = global.fetch;
           global.fetch = async (url, opts) => String(url).includes('modelo-que-nao-existe') ? new Response('{}', { status: 404 }) : fetchReserva(url, opts);
+          chamados.length = 0;
+          r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+          const r2 = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+          assert(r.status === 502 && /sobrecarregado/.test(r.body.erro) && r2.status === 502
+            && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash"]',
+            `etiqueta: reserva que não existe = 502 do principal e reserva desligada (${r.status}, ${r2.status}, ${JSON.stringify(chamados)})`);
+          // principal lento + reserva fora: 502 "demorou demais", que o app também guarda pra tentar de novo
+          principal = 'lento';
           r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
           global.fetch = fetchReserva;
           if (reservaAntes === undefined) delete process.env.GEMINI_MODEL_RESERVA; else process.env.GEMINI_MODEL_RESERVA = reservaAntes;
-          assert(r.status === 500 && /modelo-que-nao-existe/.test(r.body.erro), `etiqueta: modelo de reserva que não existe = 500 com a mensagem (${r.status}, ${r.body.erro})`);
+          assert(r.status === 502, `etiqueta: principal lento com a reserva desligada = 502 (${r.status})`);
         } finally {
           global.fetch = fetchMock;
           if (prazoAntes === undefined) delete process.env.GEMINI_ETIQUETA_PRAZO_MS; else process.env.GEMINI_ETIQUETA_PRAZO_MS = prazoAntes;

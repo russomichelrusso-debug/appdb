@@ -56,26 +56,53 @@ const modeloGemini = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const ETIQUETA_PRAZO_MS = () => Number(process.env.GEMINI_ETIQUETA_PRAZO_MS) || 12000;
 const ETIQUETA_RESERVA_PRAZO_MS = 20000;
 const STATUS_TENTA_RESERVA = new Set([429, 500, 502, 503, 504]);
-const modeloReserva = () => process.env.GEMINI_MODEL_RESERVA || 'gemini-2.5-flash-lite';
+// Padrão trocado em 11/2026: o 2.5-flash-lite responde 404 "no longer available to new users" pra esta chave (log de
+// 06/11: as 2 fotos que caíram na reserva voltaram 500, "não li", quando sem a reserva teriam esperado e tentado de novo).
+const modeloReserva = () => process.env.GEMINI_MODEL_RESERVA || 'gemini-3.5-flash';
+// Reserva que respondeu erro de configuração (modelo que não existe, chave sem acesso a ele) fica de lado por 6 h: a foto
+// fica com a falha do principal (502, o app guarda e tenta de novo), nunca com o 500 de "não li" causado pela reserva.
+const RESERVA_QUEBRADA_MS = 6 * 60 * 60 * 1000;
+const reservaQuebrada = new Map(); // modelo -> até quando
+const STATUS_CONFIGURACAO = new Set([401, 403, 404]); // 400 pode ser da própria foto: não desliga a reserva pras outras
+function reservaDisponivel(reserva, modelo) {
+  if (reserva === modelo) return false;
+  const ate = reservaQuebrada.get(reserva);
+  if (ate && ate > Date.now()) return false;
+  if (ate) reservaQuebrada.delete(reserva);
+  return true;
+}
 async function lerImagemNoGemini(partes, apiKey, etiqueta) {
   const modelo = modeloGemini();
   if (!etiqueta) return { resp: await chamarGemini(partes, apiKey, modelo, 1, 45000), modelo };
   const reserva = modeloReserva();
+  const comReserva = reservaDisponivel(reserva, modelo);
+  let falhaPrincipal; // () => o que a rota receberia sem a reserva
   try {
     const resp = await chamarGemini(partes, apiKey, modelo, 0, ETIQUETA_PRAZO_MS());
-    if (resp.ok || reserva === modelo || !STATUS_TENTA_RESERVA.has(resp.status)) return { resp, modelo };
+    if (resp.ok || !comReserva || !STATUS_TENTA_RESERVA.has(resp.status)) return { resp, modelo };
     console.warn(`Etiqueta: ${modelo} respondeu ${resp.status}; tentando ${reserva}.`);
     try { await resp.body?.cancel(); } catch (e) { }
+    const status = resp.status;
+    falhaPrincipal = () => ({ resp: new Response('{}', { status }), modelo });
   } catch (e) {
-    if (e.name !== 'TimeoutError' || reserva === modelo) throw e;
+    if (e.name !== 'TimeoutError' || !comReserva) throw e;
     console.warn(`Etiqueta: ${modelo} passou de ${ETIQUETA_PRAZO_MS() / 1000} s; tentando ${reserva}.`);
+    falhaPrincipal = () => { throw e; };
   }
+  let resp;
   try {
-    return { resp: await chamarGemini(partes, apiKey, reserva, 0, ETIQUETA_RESERVA_PRAZO_MS), modelo: reserva };
+    resp = await chamarGemini(partes, apiKey, reserva, 0, ETIQUETA_RESERVA_PRAZO_MS);
   } catch (e) {
-    e.message = `${reserva} (reserva, depois de ${modelo}): ${e.message}`;
-    throw e;
+    console.error(`Etiqueta: ${reserva} (reserva, depois de ${modelo}) falhou: ${e.message}`);
+    return falhaPrincipal();
   }
+  if (resp.ok) return { resp, modelo: reserva };
+  console.error(`Etiqueta: ${reserva} (reserva) respondeu ${resp.status}:`, (await resp.text().catch(() => '')).slice(0, 300));
+  if (STATUS_CONFIGURACAO.has(resp.status)) {
+    reservaQuebrada.set(reserva, Date.now() + RESERVA_QUEBRADA_MS);
+    console.error(`Etiqueta: reserva ${reserva} desligada por 6 h - confira GEMINI_MODEL_RESERVA no Render.`);
+  }
+  return falhaPrincipal();
 }
 
 function mensagemErroGemini(status, modelo) {
@@ -269,8 +296,8 @@ Responda SOMENTE com um JSON válido neste formato:
     const { resp, modelo } = await lerImagemNoGemini(partes, apiKey, etiqueta);
     if (!resp.ok) {
       console.error('Erro do Gemini (imagem):', modelo, resp.status, (await resp.text()).slice(0, 500));
-      // 400/401/403/404 = configuração (chave, GEMINI_MODEL/GEMINI_MODEL_RESERVA): 500, que o app mostra como "não li" com a
-      // mensagem; 502 ele guarda a foto e tenta de novo depois - pra sempre, num modelo que não existe
+      // 400/401/403/404 = configuração (chave, GEMINI_MODEL; a reserva com erro desses nunca chega aqui, volta a falha do
+      // principal): 500, que o app mostra como "não li" com a mensagem; 502 ele guarda a foto e tenta de novo depois
       return res.status([400, 401, 403, 404].includes(resp.status) ? 500 : 502).json({ erro: mensagemErroGemini(resp.status, modelo) });
     }
     const data = await resp.json();

@@ -81,7 +81,7 @@ Variáveis de ambiente:
 | `PG_CONEXAO_OCIOSA_MS` | Não | Quanto tempo (ms) uma conexão parada com o banco fica aberta no pool antes de fechar. Padrão 600000 (10 min); abrir conexão nova até o Supabase custa ~1 s. |
 | `GEMINI_API_KEY` | Sim (para `/api/assistente`) | Chave da API Gemini: assistente de voz e leitura da foto da lista/orçamento do cliente (`/api/assistente/itens-da-imagem`). |
 | `GEMINI_MODEL` | Não | Modelo Gemini usado. Padrão `gemini-2.5-flash`. |
-| `GEMINI_MODEL_RESERVA` | Não | Modelo que a leitura de etiqueta tenta quando o principal passa do prazo ou responde sobrecarga/limite. Padrão `gemini-2.5-flash-lite`. |
+| `GEMINI_MODEL_RESERVA` | Não | Modelo que a leitura de etiqueta tenta quando o principal passa do prazo ou responde sobrecarga/limite. Padrão `gemini-3.5-flash` (o `gemini-2.5-flash-lite` não está mais disponível pra chaves novas). Reserva que responde erro de configuração fica desligada por 6 h e a foto volta com a falha do principal (o app tenta de novo). |
 | `GEMINI_ETIQUETA_PRAZO_MS` | Não | Quanto a leitura de etiqueta espera o modelo principal antes de tentar o de reserva. Padrão 12000. |
 | `IMPORTACAO_EMAIL_CHAVE` | Não (para a importação por e-mail) | Chave secreta (≥ 32 caracteres, `openssl rand -hex 32`) que o script do Gmail manda no cabeçalho `X-Chave-Importacao`. Sem ela, `POST /api/importacao-email/arquivo` fica fechado. Ver `docs/IMPORTACAO-EMAIL.md`. |
 | `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Não (para avisos no celular) | Chave Web Push dos avisos de importação (gerar com `npx web-push generate-vapid-keys`; `VAPID_SUBJECT` = `mailto:` ou URL https). Sem elas, as novidades aparecem só no app. Trocar a chave invalida as inscrições: cada vendedor ativa de novo. |
