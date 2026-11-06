@@ -2188,7 +2188,7 @@ async function query(sql, params = []) {
     const u = usuarios.find(us => us.id === sessao.usuario_id);
     // "AND u.ativo": usuário desativado pelo admin não passa (middleware/auth.js, /auth/me)
     if (u && s.includes('AND U.ATIVO') && u.ativo === false) return { rows: [] };
-    return { rows: u ? [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, telefone: u.telefone ?? null }] : [] };
+    return { rows: u ? [{ id: u.id, nome: u.nome, email: u.email, is_admin: u.is_admin, telefone: u.telefone ?? null, expira_em: new Date(sessao.expira_em) }] : [] };
   }
   if (s.includes('DELETE FROM SESSOES WHERE USUARIO_ID')) {
     const antes = sessoes.length;

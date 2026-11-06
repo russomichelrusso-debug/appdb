@@ -5586,6 +5586,35 @@ async function main() {
     res = await req('POST', '/api/auth/logout');
     assert(res.status === 200, `logout sem token não quebra: ${res.status}`);
 
+    // sessão em memória (middleware/auth.js, 11/2026): a 2ª requisição não consulta o banco; logout e desativar valem na hora
+    {
+      const consultasDeSessao = () => mockDb.__queryLog.filter(q => /FROM sessoes s/i.test(q.sql) && /JOIN usuarios u/i.test(q.sql)).length;
+      const tokC = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tokC), vend.id, '90']);
+      authToken = tokC;
+      const n0 = consultasDeSessao();
+      const a = await req('GET', '/api/levantamentos/rascunho');
+      const n1 = consultasDeSessao();
+      const b = await req('GET', '/api/levantamentos/rascunho');
+      const n2 = consultasDeSessao();
+      assert(a.status === 404 && b.status === 404 && n1 === n0 + 1 && n2 === n1,
+        `sessão em memória: a 2ª requisição não consulta o banco pra conferir o login (${n0}, ${n1}, ${n2})`);
+      res = await req('POST', '/api/auth/logout');
+      const depoisLogout = await req('GET', '/api/levantamentos/rascunho');
+      assert(depoisLogout.status === 401, `sessão em memória: logout vale na hora (${depoisLogout.status})`);
+      const tokD = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tokD), vend.id, '90']);
+      authToken = tokD;
+      await req('GET', '/api/levantamentos/rascunho');
+      authToken = admin.tok;
+      res = await req('PATCH', `/api/auth/usuarios/${vend.id}`, { ativo: false });
+      authToken = tokD;
+      const desativado = await req('GET', '/api/levantamentos/rascunho');
+      authToken = admin.tok;
+      await req('PATCH', `/api/auth/usuarios/${vend.id}`, { ativo: true });
+      assert(res.status === 200 && desativado.status === 401, `sessão em memória: usuário desativado perde o acesso na hora (${res.status}, ${desativado.status})`);
+    }
+
     authToken = tokenAntes;
   }
 

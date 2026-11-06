@@ -158,6 +158,12 @@ Pegadinhas de ambiente:
   (`instrumentarBanco`, ligado no `db.js`: AsyncLocalStorage por requisição, mede cada `client.query` e `pool.connect`): "banco 14
   consultas 9800 ms" (somadas: em paralelo passam do total), "espera conexão 820 ms" (≥ 50 ms: fila do pool + abrir conexão) e
   "conexão nova". Rota lenta com muitas consultas = juntar consultas (como o lote 6); com poucas e muita espera = pool/conexão.
+  **Log de 06/11/2026 com essa linha:** cada consulta custa **~180 ms** (não ~1 s, como se achava: o resto era espera de
+  conexão). Na abertura do app ~20 requisições juntas disputavam as 10 conexões do pool (espera de 1,3 a 5,9 s; o usuário subiu
+  `PG_POOL_MAX` pra 15 no Render). Toda requisição gastava 1 consulta só pra conferir o login: agora a sessão conferida fica em
+  memória por até 60 s (`requireAuth`, `middleware/auth.js`; `SESSAO_CACHE_MS`, 0 desliga). Logout, desativar, excluir e trocar o
+  nome limpam na hora (`esquecerSessao`/`esquecerSessoesDoUsuario`); sessão apagada direto por SQL vale até 60 s. Rota nova que
+  mude o usuário ou apague sessão chama a limpeza. Na v2 (várias instâncias) a limpeza não chega nas outras.
 - **Itens do pedido e do levantamento gravados de uma vez** (11/2026, lote 6 da auditoria; log `[lenta]`: levantamento salvo em
   38 s, pedido em 8–14 s): cada consulta custa ~1 s de ida e volta Render (Oregon) ↔ Supabase (São Paulo), e eram ~2 por item
   (achar o produto + INSERT). Agora `acharOuCriarProdutosPorSku` (`routes/lib/produtoPorSku.js`) acha todos os códigos num SELECT
