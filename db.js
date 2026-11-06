@@ -45,6 +45,9 @@ const pool = new Pool({
 // conexões ociosas de vez em quando) derruba o processo inteiro - o `pg`
 // emite um evento 'error' no Pool, e sem ninguém ouvindo esse evento o
 // Node trata como exceção não tratada e mata o servidor.
+// [lenta] com o tempo de banco de cada requisição (middleware/requisicaoLenta.js)
+require('./middleware/requisicaoLenta').instrumentarBanco(pool, require('pg').Client);
+
 pool.on('error', (err) => {
   console.error('Erro inesperado numa conexão ociosa do pool:', err);
 });
