@@ -129,7 +129,7 @@ Pegadinhas de ambiente:
   `GET /api/catalogo-precos` levava a hora do pedido (`generatedAt`) no corpo, o ETag do Express mudava a cada abertura e o celular
   baixava os ~1,25 MB toda vez. Agora o JSON é montado uma vez por versão do cache (`respostaDoCatalogo`, ETag do conteúdo,
   `Cache-Control: private, no-cache`) e o navegador recebe 304 sem corpo (conferido no Chromium: manda `If-None-Match` sozinho, o
-  `fetch` do app vê 200 com o corpo do cache dele). Rota de leitura grande nova: corpo sem hora/contador que mude a cada pedido.
+  `fetch` do app vê 200 com o corpo do cache dele). Rota de leitura grande nova: corpo sem hora/contador que mude a cada pedido. Desde 11/2026 as respostas de texto saem com **gzip** (`compression` logo depois do `[lenta]` no `server.js`; JSON ~3-8x menor, foto e 304 sem mudança, abaixo de 1 KB vai como está).
 - **Catálogo de preços guardado no aparelho** (11/2026, lote 1 da auditoria de performance): até então o catálogo do servidor
   nunca ficava no aparelho (`saveActiveDB` não era chamado). Aberto sem internet o app ficava com **0 produtos** e o `applyDB`
   ainda **apagava o orçamento guardado** (filtra o carrinho pelos produtos do catálogo); o EAN/DUN-14 também só vinha da rede.

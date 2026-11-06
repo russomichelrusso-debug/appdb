@@ -3375,6 +3375,21 @@ async function main() {
     const e2 = await req('GET', '/api/codigos-produto');
     assert(e1.status === 200 && res.status === 200 && e2.body.valor.CAT05?.ean === '7890000000001' && !e1.body.valor.CAT05,
       `códigos de produto: leitura em cache e importação aparecendo na hora: ${JSON.stringify(e2.body)}`);
+    // gzip (server.js, compression): com Accept-Encoding o JSON grande vai comprimido, o ETag é o mesmo e o 304 continua
+    {
+      const cat = mockDb.__getCatalogoPrecos();
+      const antes = cat.length;
+      for (let i = 0; i < 40; i++) cat.push({ codigo_sku: 'GZ' + i, nome: 'PRODUTO PRA TESTAR A COMPRESSAO ' + i });
+      mockDb.__fixarVersaoTabelas(11);
+      const g = await req('GET', '/api/catalogo-precos', null, { 'Accept-Encoding': 'gzip' });
+      const g304 = await req('GET', '/api/catalogo-precos', null, { 'Accept-Encoding': 'gzip', 'If-None-Match': g.headers.etag });
+      const semGzip = await req('GET', '/api/catalogo-precos');
+      cat.splice(antes);
+      assert(g.status === 200 && g.headers['content-encoding'] === 'gzip' && g304.status === 304
+        && semGzip.headers['content-encoding'] === undefined && semGzip.body && semGzip.body.produtos.length === antes + 40
+        && semGzip.headers.etag === g.headers.etag,
+        `gzip: catálogo comprimido pra quem aceita, mesmo ETag e 304 (${g.headers['content-encoding']}, ${g304.status}, ${semGzip.headers['content-encoding']})`);
+    }
     mockDb.__fixarVersaoTabelas(null);
   }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);

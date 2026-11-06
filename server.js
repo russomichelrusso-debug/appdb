@@ -8,6 +8,7 @@ const { pool, runMigrations } = require('./db');
 const { requireAuth } = require('./middleware/auth');
 const { limiteRotasPesadas } = require('./middleware/limiteRotasPesadas');
 const { registrarRequisicoesLentas } = require('./middleware/requisicaoLenta');
+const compression = require('compression');
 
 const authRoutes = require('./routes/auth');
 const clientesRoutes = require('./routes/clientes');
@@ -44,6 +45,11 @@ app.set('trust proxy', 1);
 // Primeiro de tudo: mede a requisição inteira, inclusive CORS, login e leitura do corpo
 // (uma linha no log pra cada uma que passa de 1 s - middleware/requisicaoLenta.js).
 app.use(registrarRequisicoesLentas());
+
+// gzip nas respostas de texto (11/2026): o catálogo de preços (~1,25 MB), as fichas técnicas, o conteúdo do site e o
+// /sync iam sem compressão do Render pro celular. JSON comprime ~8x; o 304 (catálogo igual) continua sem corpo, foto
+// (image/jpeg) não é comprimida (o filtro padrão só pega tipo compressível) e resposta abaixo de 1 KB vai como está.
+app.use(compression());
 
 // CORS simples, sem depender de pacote externo - o app é um PWA hospedado em
 // outro domínio (GitHub Pages), então precisa liberar chamadas cross-origin.
