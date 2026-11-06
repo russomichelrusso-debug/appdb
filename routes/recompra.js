@@ -19,7 +19,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { codigoBase } = require('./lib/skuNormalizacao');
 const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
-const { nomesDosProdutos } = require('./lib/cacheTabela');
+const { nomesDosProdutos, lerComCache } = require('./lib/cacheTabela');
 const { estaDescontinuado, catalogoOuNada } = require('./lib/descontinuado');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
@@ -42,15 +42,15 @@ router.get('/', async (req, res) => {
     const hoje = hojeBrasil();
     const [clientes, oficial, app, produtos, adiamentos, dadosAte] = await Promise.all([
       pool.query('/* recompra:clientes */ SELECT id, nome, documento, codigo_oficial, classificatorio_tipo FROM clientes'),
-      pool.query(
+      lerComCache('recompra:oficial', ['pedidos_oficiais_itens'],
         `/* recompra:oficial */
          SELECT cliente_codigo_oficial, codigo_sku, quantidade,
                 COALESCE(data_implantacao, data_faturamento)::text AS data, data_faturamento::text AS data_faturamento
          FROM pedidos_oficiais_itens
          WHERE COALESCE(data_implantacao, data_faturamento) > $1::date - $2::int
            AND length(nr_pedido) <= 6`,
-        [hoje, JANELA_DIAS]),
-      pool.query(
+        [hoje, JANELA_DIAS]).then(rows => ({ rows })),
+      lerComCache('recompra:app', ['pedidos', 'pedido_itens', 'produtos'],
         `/* recompra:app */
          SELECT ped.cliente_id, p.codigo_sku, pi.quantidade, ${sqlDiaDoPedido()}::text AS data
          FROM pedidos ped
@@ -58,10 +58,10 @@ router.get('/', async (req, res) => {
          JOIN produtos p ON p.id = pi.produto_id
          WHERE ped.cliente_id IS NOT NULL AND ${sqlDiaDoPedido()} > $1::date - $2::int
            AND ${SQL_PEDIDO_APP_VALIDO}`,
-        [hoje, JANELA_DIAS]),
+        [hoje, JANELA_DIAS]).then(rows => ({ rows })),
       nomesDosProdutos(),
       pool.query('/* recompra:adiamentos */ SELECT cliente_id, ate::text AS ate FROM recompra_adiamentos WHERE ate >= $1::date', [hoje]),
-      pool.query('/* recompra:dados-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens'),
+      lerComCache('recompra:dados-ate', 'pedidos_oficiais_itens', '/* recompra:dados-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens').then(rows => ({ rows })),
     ]);
 
     const nomePorCodigo = new Map(produtos.rows.map(p => [String(p.codigo_sku), p.nome]));

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
+const { esquecerTabela } = require('./lib/cacheTabela');
 const { acharOuCriarCliente } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlDiaDoPedido } = require('./lib/comprasApp');
@@ -168,6 +169,7 @@ router.post('/', async (req, res) => {
           [contextoParaGravar(contexto), horaDoPedidoDoApp(req.body.alterado_em, req.body.enviado_em), vendedorId, versao, mesmo.id]
         );
         await client.query('COMMIT');
+        esquecerTabela('pedidos'); esquecerTabela('pedido_itens');
         console.log(`Pedido #${mesmo.id} ALTERADO pelo mesmo envio (alterado antes de o 1º envio chegar), ${itens.length} item(ns).`);
         return res.status(200).json({ ...resposta, atualizado: true });
       }
@@ -252,6 +254,7 @@ router.post('/', async (req, res) => {
     await inserirItensDoPedido(client, pedidoId, itens, produtoIds);
 
     await client.query('COMMIT');
+    esquecerTabela('pedidos'); esquecerTabela('pedido_itens');
     console.log(`Pedido #${pedidoId} ${atualizado ? 'ATUALIZADO (versão mais nova do PDF)' : 'gravado'} (cliente ${clienteId}, ${itens.length} item(ns))${numero_cotacao ? ` [cotação ${numero_cotacao}]` : ''}.`);
     res.status(201).json({ pedido_id: pedidoId, cliente_id: clienteId, data_pedido: dataPedidoFinal, atualizado });
   } catch (e) {
@@ -415,6 +418,7 @@ router.patch('/:id', async (req, res) => {
     );
 
     await client.query('COMMIT');
+    esquecerTabela('pedidos'); esquecerTabela('pedido_itens');
     const pedido = upd.rows[0];
     console.log(`Pedido #${pedido.id} EDITADO no app (cliente ${pedido.cliente_id}, ${itens.length} item(ns)).`);
     res.json({ pedido_id: pedido.id, cliente_id: pedido.cliente_id, data_pedido: pedido.data_pedido, atualizado_em: pedido.atualizado_em, atualizado: true });
@@ -495,6 +499,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ erro: 'Pedido não encontrado.' });
     }
     await client.query('COMMIT');
+    esquecerTabela('pedidos'); esquecerTabela('pedido_itens');
     console.log(`Pedido #${req.params.id} excluído por ${req.usuario?.email}.`);
     res.json({ ok: true });
   } catch (e) {

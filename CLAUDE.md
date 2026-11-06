@@ -171,6 +171,16 @@ Pegadinhas de ambiente:
   levantamento, POST de pedido e `trocarItensDoPedido`). Rota nova que grave vários itens: o mesmo padrão, nunca um INSERT por item
   num laço. O PR #366 (conexão ociosa de 10 min) **não** baixou o piso de ~1 s das rotas simples: a demora é por consulta, não por
   conexão aberta.
+- **Leituras pesadas de pedidos em cache** (11/2026, lote 7 da auditoria; `pg_stat_statements` de 06/11): as consultas que varrem
+  `pedidos_oficiais_itens` (52 mil linhas) a cada abertura da aba Clientes levam ~20 ms sozinhas, mas na abertura do app, com ~20
+  requisições juntas no banco pequeno do Supabase, a média era 450 ms (`reativacao:ultima-oficial`, até 1,5 s), 330 ms
+  (`visitas:fat-12m`) e 280 ms (`reativacao:fat-ultimo-ano`). Agora última compra (ERP e app, `routes/lib/ultimasCompras.js`, a mesma
+  pro Para reativar e Visitas), faturado de 12 meses/último ano, placar Recuperados e os pedidos da Recompra saem do `lerComCache`,
+  que aceita **várias tabelas** (a do `NOT EXISTS` do `sqlFaturadoDeFato`, `titulos_avista_pendentes`, também conta) e **params**
+  (o dia de hoje entra na versão), e confere a versão de todas as tabelas numa consulta só, dividida entre as leituras que chegam
+  juntas. Pedido salvo/alterado/excluído, importação do relatório oficial, limpeza da carteira, contas do Salesforce e mesclar/
+  excluir cliente chamam `esquecerTabela`. Consulta nova em cache: listar **toda** tabela que ela lê e passar como param o que
+  depende do dia; a rota não altera as linhas devolvidas (são compartilhadas).
 - **Busca do Pedido desenhada em partes** (11/2026, lote 4 da auditoria): busca **nova** com mais de 8 resultados desenha os 8
   primeiros cards na hora e o resto de 12 em 12 nos quadros seguintes (`desenharRestoDosResultados`, `geracaoResultados` cancela o
   que sobrou quando outra busca redesenha; os botões dos cards novos são ligados num `div` à parte antes de entrar na lista, pra não

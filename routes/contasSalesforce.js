@@ -13,6 +13,7 @@
 //    da importação.
 // A foto (contas_salesforce) é trocada inteira a cada importação.
 const { pool, registrarImportacao } = require('../db');
+const { esquecerTabela } = require('./lib/cacheTabela');
 const { limparNomeCliente } = require('../clientMatcher');
 const { classificatorioDaPolitica } = require('./lib/politicaComercial');
 const { proprietarioPrincipal } = require('./lib/contasSalesforce');
@@ -227,6 +228,7 @@ async function importarContasSalesforce(dados, usuario) {
        ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
       [CHAVE_RELATORIO, JSON.stringify(resumo)]);
     await client.query('COMMIT');
+    esquecerTabela('reativacao_alvos'); esquecerTabela('clientes');
 
     const foraDoApp = contas.filter(c => !c.clienteId).length;
     console.log(`Contas do Salesforce importadas: ${contas.length} conta(s), ${criados} cliente(s) criado(s), ${resumo.deOutroVendedor} de outro vendedor, por ${usuario ? usuario.email : '?'}.`);

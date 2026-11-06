@@ -14,10 +14,12 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO } = require('./lib/comprasApp');
+const { FUSO } = require('./lib/comprasApp');
 const { diaISO, somarDias } = require('./lib/ritmoCompra');
 const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
+const { lerComCache } = require('./lib/cacheTabela');
+const { ultimaEntradaOficial, ultimoPedidoApp } = require('./lib/ultimasCompras');
 
 const JANELA_DIAS = 60;
 const COMPRA_DIAS = 365;
@@ -40,20 +42,15 @@ router.get('/', async (req, res) => {
                 count(DISTINCT (data_visita AT TIME ZONE '${FUSO}')::date)::int AS total
          FROM levantamentos WHERE usuario_id = $1 AND cliente_id IS NOT NULL GROUP BY 1`,
         [req.usuario.id]),
-      pool.query(
-        `/* visitas:ultima-oficial */
-         SELECT cliente_codigo_oficial AS codigo, max(COALESCE(data_implantacao, data_faturamento))::text AS ultima
-         FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6 GROUP BY 1`),
-      pool.query(
-        `/* visitas:ultima-app */
-         SELECT ped.cliente_id, max(${sqlDiaDoPedido()})::text AS ultima
-         FROM pedidos ped WHERE ped.cliente_id IS NOT NULL AND ${SQL_PEDIDO_APP_VALIDO} GROUP BY 1`),
-      pool.query(
+      ultimaEntradaOficial(),
+      ultimoPedidoApp(),
+      // só muda com importação (ou na virada do dia): do cache até a tabela mudar
+      lerComCache('visitas:fat-12m', ['pedidos_oficiais_itens', 'titulos_avista_pendentes'],
         `/* visitas:fat-12m */
          SELECT poi.cliente_codigo_oficial AS codigo, sum(poi.valor) AS total
          FROM pedidos_oficiais_itens poi
-         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento > ${SQL_HOJE_BR} - ${COMPRA_DIAS}
-         GROUP BY 1`),
+         WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento > $1::date - ${COMPRA_DIAS}
+         GROUP BY 1`, [hoje]).then(rows => ({ rows })),
     ]);
 
     const visitaPorCliente = new Map(visitas.rows.map(v => [String(v.cliente_id), v]));

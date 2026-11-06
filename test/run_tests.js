@@ -3390,6 +3390,31 @@ async function main() {
         && semGzip.headers.etag === g.headers.etag,
         `gzip: catálogo comprimido pra quem aceita, mesmo ETag e 304 (${g.headers['content-encoding']}, ${g304.status}, ${semGzip.headers['content-encoding']})`);
     }
+    // lote 7 da auditoria: leituras pesadas de pedidos (Para reativar, Visitas, Recompra) com cache; as
+    // leituras que chegam juntas dividem uma conferência de versão; tabela de qualquer da lista ou
+    // parâmetro (o dia) diferente = lê de novo
+    {
+      const { lerComCache, esquecerTabela } = require('../routes/lib/cacheTabela');
+      const { ultimaEntradaOficial } = require('../routes/lib/ultimasCompras');
+      const SQL_U = '/* ultimas:oficial */ SELECT 1';
+      mockDb.__fixarVersaoTabelas(12);
+      const vAntes = leituras(/CACHE-TABELA:VERSAO/), uAntes = leituras(/ultimas:oficial/);
+      await Promise.all([ultimaEntradaOficial(), ultimaEntradaOficial(), lerComCache('teste:multi', ['pedidos_oficiais_itens', 'titulos_avista_pendentes'], SQL_U, ['2026-11-06'])]);
+      const vJuntas = leituras(/CACHE-TABELA:VERSAO/) - vAntes;
+      const uJuntas = leituras(/ultimas:oficial/) - uAntes;
+      await ultimaEntradaOficial();
+      await lerComCache('teste:multi', ['pedidos_oficiais_itens', 'titulos_avista_pendentes'], SQL_U, ['2026-11-06']);
+      const uCache = leituras(/ultimas:oficial/) - uAntes;
+      esquecerTabela('titulos_avista_pendentes');
+      await lerComCache('teste:multi', ['pedidos_oficiais_itens', 'titulos_avista_pendentes'], SQL_U, ['2026-11-06']);
+      await lerComCache('teste:multi', ['pedidos_oficiais_itens', 'titulos_avista_pendentes'], SQL_U, ['2026-11-07']);
+      await ultimaEntradaOficial();
+      const uFim = leituras(/ultimas:oficial/) - uAntes;
+      const semVersao = await lerComCache('teste:sem-versao', 'tabela_que_nao_existe', SQL_U);
+      const uSem = leituras(/ultimas:oficial/) - uAntes;
+      assert(vJuntas === 1 && uJuntas <= 3 && uCache === uJuntas && uFim === uJuntas + 2 && uSem === uFim + 1 && Array.isArray(semVersao),
+        `cache de tabela: 1 conferência pras leituras juntas, 2ª leitura do cache, tabela da lista esquecida ou dia novo relê, a outra chave continua (${vJuntas}, ${uJuntas}, ${uCache}, ${uFim}, ${uSem})`);
+    }
     mockDb.__fixarVersaoTabelas(null);
   }
   res = await enviarArquivo('Repres-21.xlsx', xlsQualquer);
