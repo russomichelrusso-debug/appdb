@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { generateToken, hashToken, verificarGoogleIdToken } = require('../auth-utils');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, esquecerSessao, esquecerSessoesDoUsuario } = require('../middleware/auth');
 const { validarIdInteiro } = require('../middleware/validarId');
 
 router.param('id', validarIdInteiro);
@@ -130,7 +130,11 @@ router.get('/me', async (req, res) => {
 router.post('/logout', async (req, res) => {
   const token = (req.header('Authorization') || '').replace('Bearer ', '');
   try {
-    if (token) await pool.query('DELETE FROM sessoes WHERE token = $1', [hashToken(token)]);
+    if (token) {
+      esquecerSessao(hashToken(token));
+      await pool.query('DELETE FROM sessoes WHERE token = $1', [hashToken(token)]);
+      esquecerSessao(hashToken(token)); // de novo: requisição que conferiu entre os dois não fica guardada
+    }
     res.json({ ok: true });
   } catch (e) {
     console.error(e);
@@ -188,6 +192,7 @@ router.put('/usuarios/:id/nome', requireAuth, async (req, res) => {
       [id, nome]
     );
     if (result.rows.length === 0) return res.status(404).json({ erro: 'Usuário não encontrado.' });
+    esquecerSessoesDoUsuario(id);
     console.log(`Nome do usuário ${result.rows[0].email} trocado por ${req.usuario.email}.`);
     res.json(result.rows[0]);
   } catch (e) {
@@ -267,6 +272,7 @@ router.patch('/usuarios/:id', requireAuth, async (req, res) => {
       await client.query('DELETE FROM push_inscricoes WHERE usuario_id = $1', [id]);
     }
     await client.query('COMMIT');
+    esquecerSessoesDoUsuario(id);
     console.log(`Usuário ${ativo ? 'reativado' : 'desativado'}: ${result.rows[0].email} por ${req.usuario.email}`);
     res.json(result.rows[0]);
   } catch (e) {
@@ -313,6 +319,7 @@ router.delete('/usuarios/:id', requireAuth, async (req, res) => {
     }
     const result = await client.query('DELETE FROM usuarios WHERE id = $1 RETURNING nome, email', [id]);
     await client.query('COMMIT');
+    esquecerSessoesDoUsuario(id);
     console.log(`Usuário excluído: ${result.rows[0].email} por ${req.usuario.email}`);
     res.json({ ok: true });
   } catch (e) {
