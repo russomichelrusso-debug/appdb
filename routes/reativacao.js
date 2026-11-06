@@ -27,6 +27,11 @@ const { avisarImportacao } = require('./lib/novidades');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { importarContasSalesforce, CHAVE_RELATORIO: CHAVE_CONTAS_SF } = require('./contasSalesforce');
 const { primeiroTelefone } = require('./lib/contasSalesforce');
+const { lerComCache } = require('./lib/cacheTabela');
+const { ultimaEntradaOficial, ultimoPedidoApp } = require('./lib/ultimasCompras');
+
+// Leitura que só muda com importação/pedido: do cache até as tabelas mudarem.
+const comCache = async (chave, tabelas, sql, params) => ({ rows: await lerComCache(chave, tabelas, sql, params) });
 
 router.param('id', validarIdInteiro);
 
@@ -209,17 +214,11 @@ router.get('/', async (req, res) => {
         `/* reativacao:foto */
          SELECT codigo_oficial, cliente_id, to_char(mes_ultima_compra, 'YYYY-MM') AS mes, fat_12m, grupo, telefone, cidade, uf
          FROM clientes_sem_compra WHERE cliente_id IS NOT NULL`),
-      pool.query(
-        `/* reativacao:ultima-oficial */
-         SELECT cliente_codigo_oficial AS codigo, max(COALESCE(data_implantacao, data_faturamento))::text AS ultima
-         FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6 GROUP BY 1`),
-      pool.query(
-        `/* reativacao:ultima-app */
-         SELECT ped.cliente_id, max(${sqlDiaDoPedido()})::text AS ultima
-         FROM pedidos ped WHERE ped.cliente_id IS NOT NULL AND ${SQL_PEDIDO_APP_VALIDO} GROUP BY 1`),
+      ultimaEntradaOficial(),
+      ultimoPedidoApp(),
       // pra quem está fora do relatório (mais de 12 meses): quanto comprou no
       // último ano em que comprou - o "comprava R$ X/ano" da lista
-      pool.query(
+      comCache('reativacao:fat-ultimo-ano', ['pedidos_oficiais_itens', 'titulos_avista_pendentes'],
         `/* reativacao:fat-ultimo-ano */
          WITH u AS (
            SELECT cliente_codigo_oficial AS codigo, max(data_faturamento) AS ultima
@@ -240,7 +239,7 @@ router.get('/', async (req, res) => {
       // placar "Recuperados": inativo no Salesforce que pediu a partir do dia em
       // que entrou na lista (entrada do pedido sem a série de 7 dígitos, ou
       // pedido do app); valor = o que entrou no ERP depois desse dia
-      pool.query(
+      comCache('reativacao:recuperados', ['reativacao_alvos', 'clientes', 'pedidos_oficiais_itens', 'pedidos'],
         `/* reativacao:recuperados */
          SELECT a.cliente_id, c.nome, a.desde::text AS desde, a.proprietario,
                 (SELECT min(COALESCE(p.data_implantacao, p.data_faturamento)) FROM pedidos_oficiais_itens p

@@ -51,6 +51,10 @@ let fichasTecnicas = {}; // codigo_sku -> { nome, descricao, foto, specs } (rout
 // padrão muda a cada consulta - o cache nunca acerta e os outros testes podem
 // mexer nos arrays direto. __fixarVersaoTabelas(n) fixa (teste do próprio cache).
 let versaoTabelas = null;
+// Tabelas lidas com cache (lerComCache): tabela fora da lista = sem versão, lê direto.
+const TABELAS_COM_CACHE = ['catalogo_precos', 'produtos', 'fichas_tecnicas', 'fichas_site', 'codigos_produto',
+  'produto_vetores', 'pedidos_oficiais_itens', 'titulos_avista_pendentes', 'pedidos', 'pedido_itens',
+  'reativacao_alvos', 'clientes'];
 let versaoTabelasContador = 0;
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -183,7 +187,8 @@ async function query(sql, params = []) {
   const s = sql.replace(/\s+/g, ' ').toUpperCase();
   if (s.includes('HEALTH:BANCO')) return { rows: [{ '?column?': 1 }], rowCount: 1 };
   if (s.includes('/* CACHE-TABELA:VERSAO */')) {
-    return { rows: [{ versao: String(versaoTabelas ?? ++versaoTabelasContador) }] };
+    const versao = String(versaoTabelas ?? ++versaoTabelasContador);
+    return { rows: TABELAS_COM_CACHE.map(relname => ({ relname, versao })) };
   }
   // GET /api/clientes/:id/mensal (routes/relatorios.js): faturado de fato do
   // cliente por mês da nota, os 12 meses até o atual (dia de Brasília), mês vazio = 0
@@ -858,7 +863,7 @@ async function query(sql, params = []) {
     }
     return { rows: [...por.values()].map(v => ({ cliente_id: v.cliente_id, ultima: [...v.dias].sort().pop(), total: v.dias.size })) };
   }
-  if (s.includes('/* VISITAS:ULTIMA-OFICIAL */')) {
+  if (s.includes('/* ULTIMAS:OFICIAL */')) {
     const ultima = new Map();
     for (const it of pedidosOficiaisItens.filter(i => String(i.nr_pedido).length <= 6)) {
       const d = String(it.data_implantacao || it.data_faturamento || '').slice(0, 10);
@@ -866,7 +871,7 @@ async function query(sql, params = []) {
     }
     return { rows: [...ultima].map(([codigo, u]) => ({ codigo, ultima: u })) };
   }
-  if (s.includes('/* VISITAS:ULTIMA-APP */')) {
+  if (s.includes('/* ULTIMAS:APP */')) {
     const ultima = new Map();
     for (const ped of pedidos.filter(p => p.cliente_id != null && p.origem !== 'faturamento')) {
       const d = diaDoPedidoBr(ped.data_pedido);
@@ -1004,22 +1009,6 @@ async function query(sql, params = []) {
   }
   if (s.includes('/* REATIVACAO:FOTO */')) {
     return { rows: clientesSemCompra.filter(l => l.cliente_id != null).map(l => ({ ...l, mes: String(l.mes_ultima_compra).slice(0, 7) })) };
-  }
-  if (s.includes('/* REATIVACAO:ULTIMA-OFICIAL */')) {
-    const ultima = new Map();
-    for (const it of pedidosOficiaisItens.filter(i => String(i.nr_pedido).length <= 6)) {
-      const d = String(it.data_implantacao || it.data_faturamento || '').slice(0, 10);
-      if (d && (!ultima.has(it.cliente_codigo_oficial) || d > ultima.get(it.cliente_codigo_oficial))) ultima.set(it.cliente_codigo_oficial, d);
-    }
-    return { rows: [...ultima].map(([codigo, u]) => ({ codigo, ultima: u })) };
-  }
-  if (s.includes('/* REATIVACAO:ULTIMA-APP */')) {
-    const ultima = new Map();
-    for (const ped of pedidos.filter(p => p.cliente_id != null && p.origem !== 'faturamento')) {
-      const d = diaDoPedidoBr(ped.data_pedido);
-      if (!ultima.has(ped.cliente_id) || d > ultima.get(ped.cliente_id)) ultima.set(ped.cliente_id, d);
-    }
-    return { rows: [...ultima].map(([cliente_id, u]) => ({ cliente_id, ultima: u })) };
   }
   if (s.includes('/* REATIVACAO:FAT-ULTIMO-ANO */')) {
     const fat = pedidosOficiaisItens.filter(it => faturadoDeFato(it) && it.data_faturamento);

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
-const { nomesDosProdutos } = require('./lib/cacheTabela');
+const { nomesDosProdutos, esquecerTabela } = require('./lib/cacheTabela');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { codigoBase } = require('./lib/skuNormalizacao');
@@ -91,6 +91,7 @@ router.post('/carteira-antiga/limpar', async (req, res) => {
          AND nr_pedido NOT IN (SELECT nr_pedido FROM pedidos_oficiais_itens WHERE status = 'carteira')`
     );
     await client.query('COMMIT');
+    esquecerTabela('pedidos_oficiais_itens');
     console.log(`Carteira antiga limpa: ${excluidos.rowCount} item(ns) excluído(s) (>${CARTEIRA_ANTIGA_DIAS} dias em carteira), ${atualizados.rowCount} linha(s) atualizada(s) de Atendido Parcial pra Total, por ${req.usuario?.email}.`);
     res.json({ excluidos: excluidos.rowCount, atualizados: atualizados.rowCount });
   } catch (e) {
@@ -122,6 +123,7 @@ router.post('/tudo/limpar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode apagar o relatório oficial.' });
   try {
     const result = await pool.query('DELETE FROM pedidos_oficiais_itens');
+    esquecerTabela('pedidos_oficiais_itens');
     // sem relatório nenhum, o próximo importado não pode sair "antigo"
     await pool.query('/* relatorio-oficial:zerar-data */ DELETE FROM configuracoes WHERE chave = $1', [CHAVE_RELATORIO_MAIS_NOVO]);
     console.log(`Relatório oficial de faturamento apagado por completo: ${result.rowCount} linha(s) excluída(s), por ${req.usuario?.email}.`);
@@ -822,6 +824,7 @@ async function importarRelatorioOficial(body, usuario) {
     }
 
     await client.query('COMMIT');
+    esquecerTabela('pedidos_oficiais_itens'); esquecerTabela('titulos_avista_pendentes');
     if (relatorioAntigo) console.log(`Pedidos oficiais: relatório de ${dataArquivo} mais antigo que o já importado (${dataMaisNova}) - só as linhas faturadas; ${carteiraIgnorada} linha(s) de carteira e as listas à vista ignoradas.`);
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${usuario?.email}.`);
     await registrarImportacao(usuario?.id, 'pedidos-oficiais/importar', itens.length);
