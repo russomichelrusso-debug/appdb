@@ -48,6 +48,36 @@ async function chamarGemini(partes, apiKey, modelo, tentativasRestantes = 2, pra
 
 const modeloGemini = () => process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 
+// "📷 Pela etiqueta" com o Gemini sobrecarregado (log [lenta] de 05/11/2026: das 43 fotos de uma sessão, 24 em até
+// 3,5 s, 5 entre 20 e 40 s e 3 falhas - 2 nos 45 s de prazo e 1 "This model is currently experiencing high demand"):
+// a etiqueta espera o modelo principal só até ETIQUETA_PRAZO_MS; passou disso, ou ele respondeu sobrecarga/limite,
+// tenta uma vez o modelo de reserva (mais leve e rápido; o que ele ler mal cai em "Pra conferir" no app, como
+// toda leitura em dúvida). A foto da lista do cliente (até 3 páginas) continua com o prazo longo e sem reserva.
+const ETIQUETA_PRAZO_MS = () => Number(process.env.GEMINI_ETIQUETA_PRAZO_MS) || 12000;
+const ETIQUETA_RESERVA_PRAZO_MS = 20000;
+const STATUS_TENTA_RESERVA = new Set([429, 500, 502, 503, 504]);
+const modeloReserva = () => process.env.GEMINI_MODEL_RESERVA || 'gemini-2.5-flash-lite';
+async function lerImagemNoGemini(partes, apiKey, etiqueta) {
+  const modelo = modeloGemini();
+  if (!etiqueta) return { resp: await chamarGemini(partes, apiKey, modelo, 1, 45000), modelo };
+  const reserva = modeloReserva();
+  try {
+    const resp = await chamarGemini(partes, apiKey, modelo, 0, ETIQUETA_PRAZO_MS());
+    if (resp.ok || reserva === modelo || !STATUS_TENTA_RESERVA.has(resp.status)) return { resp, modelo };
+    console.warn(`Etiqueta: ${modelo} respondeu ${resp.status}; tentando ${reserva}.`);
+    try { await resp.body?.cancel(); } catch (e) { }
+  } catch (e) {
+    if (e.name !== 'TimeoutError' || reserva === modelo) throw e;
+    console.warn(`Etiqueta: ${modelo} passou de ${ETIQUETA_PRAZO_MS() / 1000} s; tentando ${reserva}.`);
+  }
+  try {
+    return { resp: await chamarGemini(partes, apiKey, reserva, 0, ETIQUETA_RESERVA_PRAZO_MS), modelo: reserva };
+  } catch (e) {
+    e.message = `${reserva} (reserva, depois de ${modelo}): ${e.message}`;
+    throw e;
+  }
+}
+
 function mensagemErroGemini(status, modelo) {
   if (status === 401 || status === 403) {
     return 'A chave do Gemini (GEMINI_API_KEY) foi rejeitada — confira se foi copiada certinho, sem espaço extra, ou gere uma chave nova em aistudio.google.com.';
@@ -213,7 +243,6 @@ router.post('/itens-da-imagem', limiteDaImagem, async (req, res) => {
   }
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return res.status(503).json({ erro: 'Leitura de foto não configurada — falta GEMINI_API_KEY no servidor.' });
-  const modelo = modeloGemini();
   // "📷 Pela etiqueta" (Pedido e Levantamento, 11/2026): foto da EMBALAGEM de um produto na loja.
   // A IA só lê a etiqueta; o produto sai da busca do app e passa pela mesma conferência da lista.
   const etiqueta = req.body.modo === 'etiqueta';
@@ -237,10 +266,12 @@ Responda SOMENTE com um JSON válido neste formato:
 {"itens": [{"texto": "colher de pedreiro 8 cabo madeira", "quantidade": 12, "unidade": "un"}], "cnpj": null}`;
   const partes = [{ text: prompt }, ...imagens.map(im => ({ inline_data: { mime_type: im.tipo, data: im.dados } }))];
   try {
-    const resp = await chamarGemini(partes, apiKey, modelo, 1, 45000);
+    const { resp, modelo } = await lerImagemNoGemini(partes, apiKey, etiqueta);
     if (!resp.ok) {
-      console.error('Erro do Gemini (imagem):', resp.status, (await resp.text()).slice(0, 500));
-      return res.status(502).json({ erro: mensagemErroGemini(resp.status, modelo) });
+      console.error('Erro do Gemini (imagem):', modelo, resp.status, (await resp.text()).slice(0, 500));
+      // 400/401/403/404 = configuração (chave, GEMINI_MODEL/GEMINI_MODEL_RESERVA): 500, que o app mostra como "não li" com a
+      // mensagem; 502 ele guarda a foto e tenta de novo depois - pra sempre, num modelo que não existe
+      return res.status([400, 401, 403, 404].includes(resp.status) ? 500 : 502).json({ erro: mensagemErroGemini(resp.status, modelo) });
     }
     const data = await resp.json();
     const textoResposta = data.candidates?.[0]?.content?.parts?.[0]?.text;
