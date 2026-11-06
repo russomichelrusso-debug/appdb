@@ -103,27 +103,38 @@ router.post('/catalogo', async (req, res) => {
   }
 });
 
+// Fotos de etiqueta confirmadas viram referência "da loja" do código. Várias de uma vez ({ fotos: [{ c, v }] },
+// o "Pronto" da câmera da etiqueta, 11/2026): antes era uma requisição por foto, todas ao mesmo tempo (30 no
+// log de 05/11/2026, ~2,2 s cada, disputando as conexões do banco). { c, v } sozinho continua valendo (app
+// antigo, envio ainda na fila offline).
+const LOJA_POR_ENVIO = 40;
 router.post('/loja', lojaLimiter, async (req, res) => {
-  const { modelo, c, v } = req.body || {};
-  if (modelo !== MODELO_VETOR) return res.status(422).json({ erro: 'Modelo de reconhecimento diferente do servidor — atualize o app.' });
-  const buf = vetorValido(v);
-  const sku = String(c || '');
-  if (!buf || !CODIGO_SKU_REGEX.test(sku)) return res.status(422).json({ erro: 'Foto de etiqueta inválida.' });
+  const corpo = req.body || {};
+  if (corpo.modelo !== MODELO_VETOR) return res.status(422).json({ erro: 'Modelo de reconhecimento diferente do servidor — atualize o app.' });
+  const entrada = Array.isArray(corpo.fotos) ? corpo.fotos : [{ c: corpo.c, v: corpo.v }];
+  if (!entrada.length || entrada.length > LOJA_POR_ENVIO) return res.status(422).json({ erro: 'Foto de etiqueta inválida.' });
+  // uma inválida não derruba as outras: a fila offline tira o envio recusado (422) sem avisar, e perderia o lote
+  const fotos = entrada.map(f => ({ sku: String((f && f.c) || ''), buf: vetorValido(f && f.v) })).filter(f => f.buf && CODIGO_SKU_REGEX.test(f.sku));
+  if (!fotos.length) return res.status(422).json({ erro: 'Foto de etiqueta inválida.' });
+  const skus = fotos.map(f => f.sku);
   try {
-    // só grava código que está no catálogo (uma ida ao banco: Render em Oregon, Supabase em São Paulo)
+    // só grava código que está no catálogo; na ordem do envio (a mais recente fica com o id maior)
     const ins = await pool.query(
       `/* VETORES:LOJA */ INSERT INTO produto_vetores (codigo_sku, origem, modelo, vetor, criado_por)
-       SELECT $1, 'loja', $2, $3, $4
-       WHERE EXISTS (SELECT 1 FROM catalogo_precos WHERE codigo_sku = $1) OR EXISTS (SELECT 1 FROM produtos WHERE codigo_sku = $1)`,
-      [sku, MODELO_VETOR, buf, req.usuario ? req.usuario.id : null]);
+       SELECT f.c, 'loja', $2, f.v, $3 FROM UNNEST($1::text[], $4::bytea[]) WITH ORDINALITY AS f(c, v, n)
+       WHERE EXISTS (SELECT 1 FROM catalogo_precos WHERE codigo_sku = f.c) OR EXISTS (SELECT 1 FROM produtos WHERE codigo_sku = f.c)
+       ORDER BY f.n`,
+      [skus, MODELO_VETOR, req.usuario ? req.usuario.id : null, fotos.map(f => f.buf)]);
     if (!ins.rowCount) return res.status(422).json({ erro: 'Produto não está no catálogo.' });
     // só as mais recentes de cada código (o índice que todo aparelho baixa não cresce sem fim)
     await pool.query(
-      `/* VETORES:LOJA_LIMITE */ DELETE FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = $1 AND modelo = $2
-       AND id NOT IN (SELECT id FROM produto_vetores WHERE origem = 'loja' AND codigo_sku = $1 AND modelo = $2 ORDER BY id DESC LIMIT $3)`,
-      [sku, MODELO_VETOR, LOJA_POR_CODIGO]);
+      `/* VETORES:LOJA_LIMITE */ DELETE FROM produto_vetores WHERE id IN (
+         SELECT id FROM (SELECT id, row_number() OVER (PARTITION BY codigo_sku ORDER BY id DESC) AS ordem
+           FROM produto_vetores WHERE origem = 'loja' AND modelo = $2 AND codigo_sku = ANY($1::text[])) x
+         WHERE ordem > $3)`,
+      [[...new Set(skus)], MODELO_VETOR, LOJA_POR_CODIGO]);
     esquecerTabela('produto_vetores');
-    res.json({ ok: true });
+    res.json({ ok: true, gravadas: ins.rowCount, fora_do_catalogo: fotos.length - ins.rowCount, invalidas: entrada.length - fotos.length });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao guardar a foto da etiqueta.' });

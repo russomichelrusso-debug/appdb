@@ -36010,7 +36010,8 @@
         const vivas = fila.filter(f => f.estado !== 'desfeita' && f.estado !== 'tirada');
         fecharTelaCameraEtiqueta();
         // confirmada (não desfeita) com o vetor da foto: vira referência "da loja" do código, como no PR 1
-        for (const f of vivas) if (f.estado === 'pronta' && f.vetor && f.feito && f.sugeridos && f.sugeridos.has(f.feito.cod) && f.itens && f.itens.length === 1) ensinarFotoDaEtiqueta(f.feito.cod, f.vetor);
+        ensinarFotosDaEtiqueta(vivas.filter(f => f.estado === 'pronta' && f.vetor && f.feito && f.sugeridos && f.sugeridos.has(f.feito.cod) && f.itens && f.itens.length === 1)
+          .map(f => ({ c: f.feito.cod, q: f.vetor })));
         const prontas = vivas.filter(f => f.estado === 'pronta').length;
         const esperando = vivas.filter(f => f.estado === 'esperando');
         if (esperando.length) guardarFotosDeEtiqueta(esperando, destino);
@@ -36039,10 +36040,18 @@
         conferirItensDaLista(itens, 'foto', { pistas: { cnpjs: [] }, rotulo: partes.join(' · ') });
         if (!lev) renderResults();
       }
-      function ensinarFotoDaEtiqueta(c, q) {
-        if (indiceFotos && indiceFotos._itens) indiceFotos._itens.push({ c, v: vetorNormalizado(q) });
-        apiFetch('/api/produto-vetores/loja', { method: 'POST', body: JSON.stringify({ modelo: MODELO_VETOR, c, v: base64DeVetor(q) }) },
-          { tipo: 'vetor-foto', descricao: 'Foto de etiqueta (reconhecimento por foto)' }).catch(() => { });
+      // todas as confirmadas num envio só, de 40 em 40 (antes uma requisição por foto, todas ao mesmo tempo:
+      // 30 no log de 05/11/2026, ~2,2 s cada, disputando as conexões do banco)
+      const FOTOS_LOJA_POR_ENVIO = 40;
+      function ensinarFotosDaEtiqueta(lista) {
+        for (const { c, q } of lista) if (indiceFotos && indiceFotos._itens) indiceFotos._itens.push({ c, v: vetorNormalizado(q) });
+        for (let i = 0; i < lista.length; i += FOTOS_LOJA_POR_ENVIO) {
+          const fotos = lista.slice(i, i + FOTOS_LOJA_POR_ENVIO).map(({ c, q }) => ({ c, v: base64DeVetor(q) }));
+          // uma só no formato antigo ({ c, v }): o servidor ainda sem o envio em lote (deploy em andamento) aceita
+          const corpo = fotos.length === 1 ? { modelo: MODELO_VETOR, ...fotos[0] } : { modelo: MODELO_VETOR, fotos };
+          apiFetch('/api/produto-vetores/loja', { method: 'POST', body: JSON.stringify(corpo) },
+            { tipo: 'vetor-foto', descricao: `${fotos.length === 1 ? 'Foto' : fotos.length + ' fotos'} de etiqueta (reconhecimento por foto)` }).catch(() => { });
+        }
       }
       // sem internet na loja: a foto fica no aparelho (o mesmo lugar da lista do cliente) e é lida quando o sinal voltar
       async function guardarFotosDeEtiqueta(fotos, destino) {

@@ -5789,6 +5789,47 @@ async function main() {
       assert(r.status === 200 && r.body.itens.length === 4 && r.body.cnpj === null
         && /EMBALAGEM/.test(enviado.contents[0].parts[0].text) && /código Cortag de 5 dígitos/.test(enviado.contents[0].parts[0].text),
         `foto pela etiqueta: pede ao Gemini a leitura da embalagem e não devolve CNPJ: ${JSON.stringify(r.body)}`);
+      // etiqueta com o modelo principal sobrecarregado (503) ou lento: tenta o de reserva, mais leve
+      {
+        const fetchMock = global.fetch, prazoAntes = process.env.GEMINI_ETIQUETA_PRAZO_MS;
+        const chamados = [];
+        let principal = 'sobrecarga';
+        global.fetch = async (url, opts) => {
+          if (!String(url).includes('generativelanguage.googleapis.com')) return fetchMock(url, opts);
+          const m = String(url).match(/models\/([^:]+):/)[1];
+          chamados.push(m);
+          if (m === 'gemini-2.5-flash' && principal === 'sobrecarga') return new Response('{"error":{"code":503}}', { status: 503 });
+          if (m === 'gemini-2.5-flash' && principal === 'lento') {
+            return new Promise((ok, falha) => opts.signal.addEventListener('abort', () => falha(opts.signal.reason)));
+          }
+          return fetchMock(url, opts);
+        };
+        try {
+          r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+          assert(r.status === 200 && r.body.itens.length === 4 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash-lite"]',
+            `etiqueta: 503 do modelo principal tenta logo o de reserva, sem a 2ª tentativa no mesmo (${JSON.stringify(chamados)})`);
+          principal = 'lento'; chamados.length = 0; process.env.GEMINI_ETIQUETA_PRAZO_MS = '30';
+          r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+          assert(r.status === 200 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash-lite"]',
+            `etiqueta: modelo principal passou do prazo, lê pelo de reserva (${r.status}, ${JSON.stringify(chamados)})`);
+          principal = 'sobrecarga'; chamados.length = 0;
+          r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
+          assert(r.status === 502 && JSON.stringify(chamados) === '["gemini-2.5-flash","gemini-2.5-flash"]',
+            `foto da lista do cliente: sem reserva, continua com uma 2ª tentativa no mesmo modelo (${r.status}, ${JSON.stringify(chamados)})`);
+          // reserva mal configurada (modelo que não existe): 500, o app mostra "não li" em vez de guardar a foto pra sempre
+          const reservaAntes = process.env.GEMINI_MODEL_RESERVA;
+          process.env.GEMINI_MODEL_RESERVA = 'modelo-que-nao-existe';
+          const fetchReserva = global.fetch;
+          global.fetch = async (url, opts) => String(url).includes('modelo-que-nao-existe') ? new Response('{}', { status: 404 }) : fetchReserva(url, opts);
+          r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img], modo: 'etiqueta' });
+          global.fetch = fetchReserva;
+          if (reservaAntes === undefined) delete process.env.GEMINI_MODEL_RESERVA; else process.env.GEMINI_MODEL_RESERVA = reservaAntes;
+          assert(r.status === 500 && /modelo-que-nao-existe/.test(r.body.erro), `etiqueta: modelo de reserva que não existe = 500 com a mensagem (${r.status}, ${r.body.erro})`);
+        } finally {
+          global.fetch = fetchMock;
+          if (prazoAntes === undefined) delete process.env.GEMINI_ETIQUETA_PRAZO_MS; else process.env.GEMINI_ETIQUETA_PRAZO_MS = prazoAntes;
+        }
+      }
       const semLogin = authToken; authToken = '';
       r = await req('POST', '/api/assistente/itens-da-imagem', { imagens: [img] });
       authToken = semLogin;
@@ -5847,6 +5888,23 @@ async function main() {
     assert(rd.status === 200 && rd.body.vetores.length === 1 && rd.body.vetores[0].o === 'loja' && Buffer.from(rd.body.vetores[0].v, 'base64')[0] === 99
       && rd.body.vetores[0].id > 0 && rdRuim.status === 422 && Array.isArray(rd.body.ids) && rd.body.ids.length === mockDb.__getProdutoVetores().length,
       `vetores: ?desde= devolve só o que mudou (${rd.body.vetores && rd.body.vetores.length}), desde inválido = 422`);
+    // várias fotos num envio só (o "Pronto" da câmera da etiqueta): grava as do catálogo, na ordem, e ainda
+    // guarda só as 8 mais recentes de cada código; mais de 40 ou uma inválida = 422 sem gravar nada
+    {
+      r = await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, fotos: [{ c: 'VT1', v: vet(41) }, { c: 'NAOEXISTE', v: vet(42) }, { c: 'VT1', v: vet(43) }] });
+      const vt1 = mockDb.__getProdutoVetores().filter(v => v.codigo_sku === 'VT1' && v.origem === 'loja').sort((a, b) => b.id - a.id);
+      assert(r.status === 200 && r.body.gravadas === 2 && r.body.fora_do_catalogo === 1 && vt1.length === 8 && vt1[0].vetor[0] === 43 && vt1[1].vetor[0] === 41,
+        `vetores: várias fotos da loja num envio, na ordem, ainda 8 por código (${JSON.stringify(r.body)}, VT1 ${vt1.length})`);
+      const antes = mockDb.__getProdutoVetores().length;
+      const rMuitas = await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, fotos: Array.from({ length: 41 }, () => ({ c: 'VT1', v: vet(1) })) });
+      const rTodasRuins = await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, fotos: [{ c: 'VT1', v: 'curto' }, { c: 'a b', v: vet(1) }] });
+      assert(rMuitas.status === 422 && rTodasRuins.status === 422 && mockDb.__getProdutoVetores().length === antes,
+        `vetores: mais de 40 fotos ou nenhuma válida no envio = 422 sem gravar (${rMuitas.status}, ${rTodasRuins.status})`);
+      // uma inválida não derruba as outras (a fila offline tira o envio recusado sem avisar)
+      const rRuim = await req('POST', '/api/produto-vetores/loja', { modelo: MODELO_VETOR, fotos: [{ c: 'VT1', v: vet(44) }, { c: 'VT2', v: 'curto' }] });
+      assert(rRuim.status === 200 && rRuim.body.gravadas === 1 && rRuim.body.invalidas === 1,
+        `vetores: foto inválida no meio do envio fica de fora e as outras são gravadas (${JSON.stringify(rRuim.body)})`);
+    }
     delete mockDb.__getProdutoFotos().VT2;
     await req('POST', '/api/produto-vetores/catalogo', { modelo: MODELO_VETOR, vetores: [{ c: 'VT1', f: 333, v: vet(6) }] });
     assert(!mockDb.__getProdutoVetores().some(v => v.codigo_sku === 'VT2'), 'vetores: foto que saiu do produto tira o vetor do índice');

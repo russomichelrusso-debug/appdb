@@ -795,16 +795,23 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('/* VETORES:LOJA */')) {
-    const [c, modelo, vetor, por] = params;
-    if (!catalogoPrecos.some(p => p.codigo_sku === c) && !produtos.some(p => p.codigo_sku === c)) return { rows: [], rowCount: 0 };
-    produtoVetores.push({ id: nextVetorId++, codigo_sku: c, origem: 'loja', modelo, vetor, foto_versao: null, criado_por: por, atualizado_em: Date.now() });
-    return { rows: [], rowCount: 1 };
+    const [skus, modelo, por, vetores] = params;
+    let n = 0;
+    skus.forEach((c, i) => {
+      if (!catalogoPrecos.some(p => p.codigo_sku === c) && !produtos.some(p => p.codigo_sku === c)) return;
+      produtoVetores.push({ id: nextVetorId++, codigo_sku: c, origem: 'loja', modelo, vetor: vetores[i], foto_versao: null, criado_por: por, atualizado_em: Date.now() });
+      n++;
+    });
+    return { rows: [], rowCount: n };
   }
   if (s.includes('/* VETORES:LOJA_LIMITE */')) {
-    const limite = params[2];
-    const daLoja = produtoVetores.filter(v => v.origem === 'loja' && v.codigo_sku === params[0] && v.modelo === params[1]).sort((a, b) => b.id - a.id);
-    const fica = new Set(daLoja.slice(0, limite).map(v => v.id));
-    produtoVetores = produtoVetores.filter(v => !(v.origem === 'loja' && v.codigo_sku === params[0] && v.modelo === params[1]) || fica.has(v.id));
+    const [skus, modelo, limite] = params;
+    const fica = new Set();
+    for (const c of skus) {
+      produtoVetores.filter(v => v.origem === 'loja' && v.codigo_sku === c && v.modelo === modelo).sort((a, b) => b.id - a.id)
+        .slice(0, limite).forEach(v => fica.add(v.id));
+    }
+    produtoVetores = produtoVetores.filter(v => !(v.origem === 'loja' && skus.includes(v.codigo_sku) && v.modelo === modelo) || fica.has(v.id));
     return { rows: [] };
   }
   // fichas_site - routes/fichasTecnicas.js (/site)
