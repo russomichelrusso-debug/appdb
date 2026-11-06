@@ -5656,6 +5656,39 @@ async function main() {
       && !linhas.join(' ').includes('12345678000199') && !linhas.join(' ').includes('@')
       && rotaParaLog('/api/produtos/60863/clientes') === '/api/produtos/:id/clientes',
       `requisição lenta: só as que passam do limite, sem dado do endereço, sem a espera da tela do cliente: ${JSON.stringify(linhas)}`);
+
+    // tempo de banco na linha (instrumentarBanco): consultas e espera de conexão da própria requisição, nunca as de
+    // fora dela; a conexão entregue pela fila do pool (callback vindo de outro contexto) conta pra quem pediu
+    {
+      const { instrumentarBanco } = require('../middleware/requisicaoLenta');
+      class ClienteFalso { query(sql, cb) {
+        const p = new Promise(ok => setTimeout(() => ok({ rows: [] }), 15));
+        if (typeof cb === 'function') { p.then(r => cb(null, r)); return undefined; }
+        return p;
+      } }
+      const conexoes = [new ClienteFalso()];
+      const fila = [];
+      const poolFalso = {
+        connect(cb) {
+          const entregar = (f) => setTimeout(() => f(null, conexoes[0]), 25);
+          if (cb) { fila.push(cb); setImmediate(() => entregar(fila.shift())); return undefined; }
+          return new Promise((ok) => entregar((e, c) => ok(c)));
+        },
+        query(sql) { return new Promise((ok) => this.connect((e, c) => c.query(sql, (e2, r) => ok(r)))); },
+      };
+      instrumentarBanco(poolFalso, ClienteFalso);
+      const linhasBd = [];
+      const mwBd = registrarRequisicoesLentas({ limiteMs: 1, log: l => linhasBd.push(l), tempoNoAr: () => 3600 });
+      const rodarBd = (fn) => new Promise(ok => {
+        const resF = new EventEmitter(); resF.statusCode = 200; resF.writableFinished = false;
+        mwBd({ method: 'GET', originalUrl: '/api/x' }, resF, async () => { await fn(); resF.writableFinished = true; resF.emit('finish'); ok(); });
+      });
+      await rodarBd(async () => { await poolFalso.query('A'); const c = await poolFalso.connect(); await c.query('B'); await c.query('C'); });
+      await poolFalso.query('fora');
+      await rodarBd(async () => { await new Promise(r => setTimeout(r, 5)); });
+      assert(linhasBd.length === 2 && /200 banco 3 consultas \d+ ms (espera conexão \d+ ms )?conexão nova$/.test(linhasBd[0]) && /\/api\/x 200$/.test(linhasBd[1]),
+        `requisição lenta: tempo de banco só da própria requisição (${JSON.stringify(linhasBd)})`);
+    }
   }
 
   {

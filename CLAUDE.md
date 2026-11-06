@@ -150,7 +150,10 @@ Pegadinhas de ambiente:
   de `LOG_REQUISICAO_LENTA_MS` (padrão 1000, 0 desliga). Endereço sem query e com todo trecho com número ou "@" trocado por `:id`
   (log sem CNPJ/código/e-mail); "acordou há N s" = servidor no ar há menos de 60 s (Render grátis acordando); "cancelada pelo
   aparelho" = a conexão caiu antes da resposta. A espera longa da tela do cliente (`GET /api/segunda-tela/salas/:id`) fica fora.
-  Pra achar o que demora: Render › Logs, filtrar por `[lenta]`.
+  Pra achar o que demora: Render › Logs, filtrar por `[lenta]`. Desde 11/2026 a linha diz também quanto foi banco
+  (`instrumentarBanco`, ligado no `db.js`: AsyncLocalStorage por requisição, mede cada `client.query` e `pool.connect`): "banco 14
+  consultas 9800 ms" (somadas: em paralelo passam do total), "espera conexão 820 ms" (≥ 50 ms: fila do pool + abrir conexão) e
+  "conexão nova". Rota lenta com muitas consultas = juntar consultas (como o lote 6); com poucas e muita espera = pool/conexão.
 - **Itens do pedido e do levantamento gravados de uma vez** (11/2026, lote 6 da auditoria; log `[lenta]`: levantamento salvo em
   38 s, pedido em 8–14 s): cada consulta custa ~1 s de ida e volta Render (Oregon) ↔ Supabase (São Paulo), e eram ~2 por item
   (achar o produto + INSERT). Agora `acharOuCriarProdutosPorSku` (`routes/lib/produtoPorSku.js`) acha todos os códigos num SELECT
