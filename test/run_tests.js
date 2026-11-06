@@ -3326,10 +3326,18 @@ async function main() {
     assert(c1.status === 200 && c2.status === 200 && c1.body.produtos.length === 1 && leituras(LE_CATALOGO) === n1
       && JSON.stringify(c2.body.produtos) === JSON.stringify(c1.body.produtos),
       `catálogo de preços: 2ª leitura com a tabela parada sai do cache, sem ir ao banco (${leituras(LE_CATALOGO)} leituras)`);
+    // lote 2 da auditoria: ETag estável enquanto o catálogo não muda; o aparelho que já tem a versão recebe 304 sem corpo
+    const c304 = await req('GET', '/api/catalogo-precos', null, { 'If-None-Match': c1.headers.etag });
+    assert(c1.headers.etag && c2.headers.etag === c1.headers.etag && c304.status === 304 && c304.body === null
+      && /no-cache/.test(c1.headers['cache-control'] || ''),
+      `catálogo de preços: mesmo ETag com a tabela parada e 304 pro aparelho que já tem (${c1.headers.etag}, ${c2.headers.etag}, ${c304.status})`);
     // mudança feita fora do app (SQL direto no Supabase) muda a versão: lê de novo
     mockDb.__getCatalogoPrecos().push({ codigo_sku: 'CAT99', nome: 'NOVO POR SQL' });
     mockDb.__fixarVersaoTabelas(2);
     const c3 = await req('GET', '/api/catalogo-precos');
+    const c3b = await req('GET', '/api/catalogo-precos', null, { 'If-None-Match': c1.headers.etag });
+    assert(c3.headers.etag !== c1.headers.etag && c3b.status === 200 && c3b.body.produtos.length === 2,
+      `catálogo de preços: catálogo mudou = ETag novo e o aparelho com a versão velha recebe o corpo inteiro (${c3b.status})`);
     assert(c3.status === 200 && c3.body.produtos.length === 2 && leituras(LE_CATALOGO) === n1 + 1,
       `catálogo de preços: versão da tabela mudou, lê do banco de novo: ${JSON.stringify(c3.body.produtos)}`);
     // importação esquece o cache na hora (os contadores do Postgres chegam com atraso)

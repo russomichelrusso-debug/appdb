@@ -125,7 +125,11 @@ Pegadinhas de ambiente:
   Render conta. Leitura de tabela inteira que todo aparelho faz ao abrir (catálogo de preços ~1,25 MB, fichas, códigos,
   nomes dos produtos) passa por `routes/lib/cacheTabela.js` (`lerComCache`), que só relê quando os contadores de
   `pg_stat_user_tables` mudam; importação chama `esquecerTabela` (os contadores chegam com ~1 s de atraso). Leitura
-  grande nova repetida a cada abertura do app: usar o mesmo cache.
+  grande nova repetida a cada abertura do app: usar o mesmo cache. **Do Render pro celular** (lote 2 da auditoria, 11/2026): o
+  `GET /api/catalogo-precos` levava a hora do pedido (`generatedAt`) no corpo, o ETag do Express mudava a cada abertura e o celular
+  baixava os ~1,25 MB toda vez. Agora o JSON é montado uma vez por versão do cache (`respostaDoCatalogo`, ETag do conteúdo,
+  `Cache-Control: private, no-cache`) e o navegador recebe 304 sem corpo (conferido no Chromium: manda `If-None-Match` sozinho, o
+  `fetch` do app vê 200 com o corpo do cache dele). Rota de leitura grande nova: corpo sem hora/contador que mude a cada pedido.
 - **Catálogo de preços guardado no aparelho** (11/2026, lote 1 da auditoria de performance): até então o catálogo do servidor
   nunca ficava no aparelho (`saveActiveDB` não era chamado). Aberto sem internet o app ficava com **0 produtos** e o `applyDB`
   ainda **apagava o orçamento guardado** (filtra o carrinho pelos produtos do catálogo); o EAN/DUN-14 também só vinha da rede.

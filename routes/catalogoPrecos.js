@@ -309,13 +309,17 @@ async function importarCatalogoPrecos(buffer, usuario, opcoes = {}) {
 // Devolve o catálogo completo, no formato que o app usa como "fonte
 // automática" (substitui o precos.json estático do GitHub Pages - agora
 // todo aparelho busca direto do servidor).
-router.get('/', async (req, res) => {
-  try {
-    // do cache enquanto a tabela não mudar (routes/lib/cacheTabela.js: ~1,25 MB
-    // por leitura era o maior gasto de egress do Supabase)
-    const rows = await lerComCache('catalogo_precos', 'catalogo_precos',
-      'SELECT codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto FROM catalogo_precos ORDER BY codigo_sku');
-    res.json({
+// Resposta pronta por versão da tabela (lote 2 da auditoria, 11/2026): até aqui o corpo levava a hora do pedido
+// (generatedAt), o ETag mudava a cada abertura e o celular baixava os ~1,25 MB toda vez, mesmo com o catálogo igual.
+// Agora o JSON é montado uma vez por leitura do cache (lerComCache devolve as mesmas linhas enquanto a tabela não
+// muda), com ETag do conteúdo; o navegador manda If-None-Match sozinho e recebe 304 sem corpo. generatedAt = quando
+// essa versão foi montada (o app não usa).
+const crypto = require('crypto');
+const respostaPronta = new WeakMap(); // linhas do cache -> { corpo, etag }
+function respostaDoCatalogo(rows) {
+  let r = respostaPronta.get(rows);
+  if (!r) {
+    const corpo = JSON.stringify({
       version: 'Catálogo do servidor',
       generatedAt: new Date().toISOString(),
       canais: CANAIS,
@@ -324,6 +328,24 @@ router.get('/', async (req, res) => {
       // sem os produtos ocultos (routes/lib/produtosOcultos.js)
       produtos: comSubfamilia(semOcultos(rows)),
     });
+    const conteudo = corpo.replace(/"generatedAt":"[^"]*",/, '');
+    r = { corpo, etag: 'W/"cat-' + crypto.createHash('sha1').update(conteudo).digest('base64url') + '"' };
+    respostaPronta.set(rows, r);
+  }
+  return r;
+}
+
+router.get('/', async (req, res) => {
+  try {
+    // do cache enquanto a tabela não mudar (routes/lib/cacheTabela.js: ~1,25 MB
+    // por leitura era o maior gasto de egress do Supabase)
+    const rows = await lerComCache('catalogo_precos', 'catalogo_precos',
+      'SELECT codigo_sku, nome, emb, ncm, ipi, familia, preco_fixo, canais_fx, precos, precos_sem_imposto FROM catalogo_precos ORDER BY codigo_sku');
+    const { corpo, etag } = respostaDoCatalogo(rows);
+    // no-cache = o navegador guarda, mas pergunta toda vez (If-None-Match); o res.send responde 304 quando bate
+    res.set('Cache-Control', 'private, no-cache');
+    res.set('ETag', etag);
+    res.type('json').send(corpo);
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar catálogo.' });
