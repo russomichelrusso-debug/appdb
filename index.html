@@ -6610,6 +6610,7 @@
     #classiTargetProdWrap.hidden,
     #classiTargetSkuListWrap.hidden,
     #clienteClassificatorioCard.hidden,
+    #clienteLancamentosCard.hidden,
     #clienteGrupoLista.hidden,
     #loginSubmitBtn.hidden {
       display: none;
@@ -12256,7 +12257,26 @@
       margin-top: 3px;
     }
 
+    /* Lançamento 2025/2026 (relatório do gerente) */
+    .lancbadge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--success);
+      background: var(--success-bg);
+      padding: 3px 8px;
+      border-radius: 20px;
+      margin: 3px 0 6px;
+    }
+    .lancLista { list-style: none; margin: 8px 0 0; padding: 0; }
+    .lancLista li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--hairline); }
+    .lancLista li:first-child { border-top: 0; }
+    .lancLista .lancNome { flex: 1; min-width: 0; font-size: 13px; }
+    .lancLista .lancNome small { display: block; color: var(--gray); font-size: 12px; }
+    .lancLista .lancMais { min-width: 44px; min-height: 44px; }
+
     .tSelos .fixedbadge,
+    .tSelos .lancbadge,
     .tSelos .editedbadge,
     .tSelos .previsaoBadge {
       display: inline-block;
@@ -13375,6 +13395,9 @@
         </div>
         <div class="ap-card hidden" id="clienteClassificatorioCard" style="margin:0 16px 12px;">
           <div id="clienteClassificatorioContent"></div>
+        </div>
+        <div class="ap-card hidden" id="clienteLancamentosCard" style="margin:0 16px 12px;">
+          <div id="clienteLancamentosContent"></div>
         </div>
         </div>
         <div class="cliDetMeio">
@@ -16231,6 +16254,36 @@
       // produto mostrando foto/dado de outro por erro de mapeamento). Agora
       // é só um link reto pro site oficial, sempre atualizado por eles
       // mesmos - mesmo mecanismo de VIDEOS_MAP, chave "produtos_link_site".
+      // Lançamentos 2025/2026 (relatório do gerente, aba "Lançamentos";
+      // `configuracoes.lancamentos`): código -> { ano, pdvs }. Cópia no aparelho
+      // pra o selo aparecer sem internet. Promocional P/P1/P2 = o código base.
+      const LANCAMENTOS_LS_KEY = 'cortagLancamentos_v1';
+      let LANCAMENTOS_MAP = new Map();
+      function aplicarLancamentos(valor) {
+        const itens = valor && Array.isArray(valor.itens) ? valor.itens : [];
+        LANCAMENTOS_MAP = new Map(itens.map(l => [String(l.codigo), { ano: l.ano, pdvs: Number(l.pdvs) || 0 }]));
+      }
+      try { aplicarLancamentos(JSON.parse(localStorage.getItem(LANCAMENTOS_LS_KEY))); } catch (e) { }
+      async function loadLancamentos() {
+        try {
+          const result = await apiFetch('/api/configuracoes/lancamentos');
+          if (!result || !result.valor) return;
+          aplicarLancamentos(result.valor);
+          try { localStorage.setItem(LANCAMENTOS_LS_KEY, JSON.stringify(result.valor)); } catch (e) { }
+          renderResults(); // o selo aparece nos cards já desenhados
+        } catch (e) { /* ainda não importado, ou sem rede: fica com a cópia */ }
+      }
+      function lancamentoDoProduto(p) {
+        if (!p || !LANCAMENTOS_MAP.size) return null;
+        const cod = String(p.c || '');
+        return LANCAMENTOS_MAP.get(cod) || LANCAMENTOS_MAP.get(cod.replace(/^P[12]?(?=\d)/, '')) || null;
+      }
+      function htmlSeloLancamento(p) {
+        const l = lancamentoDoProduto(p);
+        if (!l) return '';
+        const titulo = l.pdvs > 0 ? `Já vende em ${l.pdvs} loja${l.pdvs === 1 ? '' : 's'} da região` : 'Lançamento';
+        return `<span class="lancbadge" title="${escapeHtml(titulo)}">Lançamento${l.ano ? ` ${escapeHtml(String(l.ano))}` : ''}</span>`;
+      }
       let SITE_LINK_MAP = {};
       async function loadProdutosLinkSite() {
         try {
@@ -16649,6 +16702,7 @@
         return `<div class="card${classeCampanhaDoCard(campanhas)}">
     ${htmlFitaCampanha(p, campanhas)}
     <span class="catbadge">${escapeHtml(rotuloFamilia)}</span>
+    ${htmlSeloLancamento(p)}
     ${isPrecoFixoParaCanal(p) ? '<span class="fixedbadge">Preço fixo</span>' : ''}
     ${edited ? '<span class="editedbadge">Preço editado</span>' : ''}
     ${qtyDisc > 0 ? `<span class="editedbadge">-${qtyDisc}%</span>` : ''}
@@ -16703,6 +16757,7 @@
         const campanhas = campanhasDoCard(p);
         const cod = escapeHtml(p.c);
         const selos = (campanhas.length ? htmlSeloCampanhaTabela(p, campanhas) : '')
+          + htmlSeloLancamento(p)
           + (fixo ? '<span class="fixedbadge">Preço fixo</span>' : '')
           + (edited ? '<span class="editedbadge">Preço editado</span>' : '')
           + renderPrevisaoBadge(p.c);
@@ -30126,9 +30181,74 @@
         document.getElementById('clienteFichaDataFim').value = '';
         loadClienteFichaResumo();
         loadClienteClassificatorioStatus();
+        loadClienteLancamentos();
         clienteTabView = 'pedidosoficiais';
         document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.v === 'pedidosoficiais'));
         loadClienteDetailView();
+      }
+      // "Lançamentos que ele ainda não compra" na ficha do cliente (GET
+      // /api/clientes/:id/lancamentos: a lista do relatório do gerente menos o
+      // que ele já comprou em qualquer época). Em mais lojas da região
+      // primeiro; "+" põe 1 embalagem no orçamento (sem trocar o cliente dele).
+      const LANC_FICHA_MOSTRAR = 6;
+      let lancFichaVerTodos = false;
+      let lancFichaReq = 0;
+      // última lista de cada cliente (até 60), pra ficha mostrar sem internet
+      const LANC_CLIENTE_LS_KEY = 'cortagLancCliente_v1';
+      function lerLancCliente() {
+        try { return JSON.parse(localStorage.getItem(LANC_CLIENTE_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function guardarLancCliente(id, r) {
+        try {
+          const todos = lerLancCliente();
+          delete todos[id];
+          todos[id] = r;
+          const ids = Object.keys(todos);
+          for (const velho of ids.slice(0, Math.max(0, ids.length - 60))) delete todos[velho];
+          localStorage.setItem(LANC_CLIENTE_LS_KEY, JSON.stringify(todos));
+        } catch (e) { }
+      }
+      async function loadClienteLancamentos() {
+        const card = document.getElementById('clienteLancamentosCard');
+        const el = document.getElementById('clienteLancamentosContent');
+        const cliente = clienteTabSelected;
+        card.classList.add('hidden');
+        lancFichaVerTodos = false;
+        if (!cliente) return;
+        // resposta de outro cliente (abriu outro enquanto esperava) é descartada;
+        // pelo id: a abertura troca o objeto do mesmo cliente por um mais completo
+        const req = ++lancFichaReq;
+        const id = String(cliente.id);
+        let r;
+        try {
+          r = await apiFetch(`/api/clientes/${cliente.id}/lancamentos`);
+          if (r && Array.isArray(r.itens)) guardarLancCliente(id, r);
+        } catch (e) { r = lerLancCliente()[id]; } // sem internet: a última lista dele
+        if (req !== lancFichaReq || !clienteTabSelected || String(clienteTabSelected.id) !== id || !r || !Array.isArray(r.itens)) return;
+        // o catálogo pode ainda não ter chegado (ficha aberta por link): nome da rota
+        const itens = r.itens;
+        const nomeDe = (l) => (productByCod(l.codigo) || {}).n || l.nome || `Cód. ${l.codigo}`;
+        if (!itens.length && !r.jaCompra) return;
+        const desenhar = () => {
+          const mostrar = lancFichaVerTodos ? itens : itens.slice(0, LANC_FICHA_MOSTRAR);
+          el.innerHTML = `<div class="hist-clientLabel">Lançamentos que ele ainda não compra</div>
+            <div style="font-size:13px;margin-top:4px;color:var(--gray);">${itens.length ? `${itens.length} de ${r.total}` : `Já compra todos os ${r.total}`} · em mais lojas da região primeiro</div>`
+            + (mostrar.length ? `<ul class="lancLista">${mostrar.map(l => {
+              const nome = nomeDe(l);
+              return `<li><div class="lancNome">${escapeHtml(nome)}<small>Cód. ${escapeHtml(l.codigo)}${l.ano ? ` · lançamento ${escapeHtml(String(l.ano))}` : ''}${l.pdvs > 0 ? ` · já vende em ${l.pdvs} loja${l.pdvs === 1 ? '' : 's'}` : ''}</small></div>
+                <button type="button" class="restoreBtn compacto lancMais" data-lanc-add="${escapeHtml(l.codigo)}" aria-label="Pôr ${escapeHtml(nome)} no orçamento">+</button></li>`;
+            }).join('')}</ul>` : '')
+            + (!lancFichaVerTodos && itens.length > mostrar.length ? `<button type="button" class="recompraMais" id="lancFichaMais">Ver mais ${itens.length - mostrar.length}</button>` : '');
+          el.querySelectorAll('[data-lanc-add]').forEach(b => b.addEventListener('click', () => {
+            const p = productByCod(b.dataset.lancAdd);
+            if (!p) { showToast('O catálogo ainda está carregando. Tente de novo em instantes.', 'erro'); return; }
+            addToCart(p.c, undefined, true); // um aviso só (o de addToCart é genérico)
+            showToast(`${p.n} no orçamento`);
+          }));
+          document.getElementById('lancFichaMais')?.addEventListener('click', () => { lancFichaVerTodos = true; desenhar(); });
+        };
+        desenhar();
+        card.classList.remove('hidden');
       }
       function closeClienteDetail() {
         abrirClienteReq++;
@@ -32536,6 +32656,7 @@
                 ${of.regra ? `<div class="campItemDe">${brl(of.de)}</div>` : ''}
                 <div class="campItemPor">${of.por > 0 ? brl(of.por) : '—'}</div>
                 ${renderPrevisaoBadge(p.c)}
+                ${htmlSeloLancamento(p)}
               </div>
             </button>
             ${of.regra ? `<span class="campItemOff${of.blackFriday ? ' bf' : ''}">-${of.pct}%</span>` : ''}
@@ -37761,6 +37882,7 @@
           loadFichasTecnicas(); // sem await de propósito - roda em segundo plano, não atrasa a abertura do app
           loadProdutosVideos(); // idem
           loadProdutosLinkSite(); // idem
+          loadLancamentos(); // idem
           carregarFotosProduto(); // idem - lista de fotos dos produtos (card de oferta)
           loadTransportadorasRastreio().then(renderTransportadorasLista); // idem
           tentarReconectarGoogleDriveEmSegundoPlano(); // idem - deixa o token do Drive pronto antes de precisar dele

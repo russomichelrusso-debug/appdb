@@ -438,8 +438,9 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
     produto; senão aviso "Campanha … não aplicada" no orçamento), alvo **"Pedido todo"** + `selfMetric:
     "skus"` (itens diferentes — "Mais Cortag + Desconto"), `excluirCodigos`/`excluirFamilias`/
     `excluirOutraCampanha` (contam na quantidade, não ganham o desconto) e `exigeItens` (% mínimo dos
-    itens em lançamentos/família foco). **O catálogo não diz o que é lançamento 2026/família foco** (o
-    "Produtos foco" do Painel é só do gráfico do Dashboard): a lista é digitada na própria regra. Motor
+    itens em lançamentos/família foco). **O catálogo não dizia o que é lançamento 2026/família foco** (o
+    "Produtos foco" do Painel é só do gráfico do Dashboard): a lista é digitada na própria regra (desde 11/2026 existe
+    `configuracoes.lancamentos`, do relatório do gerente, ainda não ligada às regras). Motor
     puro entre `<motor-campanhas>` no `index.html` (`avaliarCampanhas`), rodado isolado pelo teste; o
     servidor grava `promocoes` sem validar campo. Preço Fixo continua sem bônus (`bonusDaCampanhaNoItem`).
     **Black Friday 10/2026, cortadores "15% de desconto no preço fixo, não acumulativo"** (decisão do usuário:
@@ -1846,9 +1847,16 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   `routes/lib/campanhaCortadores.js`; em 09/11/2026: 59 clientes da lista, R$ 196 mil em 2025), com "comprou R$ X de cortador em
   2025"; o **Para reativar** mostra "objetivo 2026: faltam R$ X" do grupo do cliente (`objetivoAnoDoCliente`, pelos `ids` de cada
   grupo na rota do objetivo do ano; a linha de Rede já somada no grupo fica de lado) e, em cada faixa, quem tem mais objetivo em jogo
-  vem primeiro. Próximos passos do plano, nesta ordem: **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), **lançamentos** (aba 9: 249 SKUs,
-  todos na Lista de Preços; selo, "lançamentos que ele não compra" e a lista das campanhas) e "famílias que ele comprava e parou" na
-  ficha.
+  vem primeiro.
+  **Lançamentos** (PR 4, 11/2026): a importação do relatório do gerente lê também a aba "Lançamentos 2025 - 2026" (código, ano,
+  "Qtd PDVs" = lojas da região que já venderam) e grava `configuracoes.lancamentos` `{ano, itens: [{codigo, ano, pdvs,
+  faturamento}]}` (249 em 09/11/2026, gravado direto no banco). **O catálogo agora sabe o que é lançamento**: selo "Lançamento 2026"
+  no card da busca, na tabela do laptop e na grade do Catálogo (`htmlSeloLancamento`, `LANCAMENTOS_MAP` com cópia
+  `cortagLancamentos_v1`, promocional = base); na ficha do cliente (aba Clientes), cartão **"Lançamentos que ele ainda não compra"**
+  (`GET /api/clientes/:id/lancamentos`, `routes/relatorios.js`: a lista menos o que ele comprou em qualquer época, ERP em qualquer
+  status ou pedido do app, sem os que saíram da Lista de Preços; em mais lojas primeiro), com "já vende em N lojas" e "+" que põe 1
+  embalagem no orçamento (última lista de cada cliente em `cortagLancCliente_v1`, vale sem internet). Ainda não usado pelas campanhas (`exigeItens` continua digitado na regra) nem pela proposta.
+  Próximos passos do plano, nesta ordem: **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), lançamentos nas campanhas (`exigeItens`) e na proposta, e "famílias que ele comprava e parou" na ficha.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do

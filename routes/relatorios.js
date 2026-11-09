@@ -562,6 +562,54 @@ router.get('/clientes/:id/mensal', async (req, res) => {
 // compra mais recente - vira a quantidade sugerida pro pedido.
 const COMPRADOS_RECENTES_DIAS = 365;
 const COMPRADOS_RECENTES_LIMITE = 60;
+// Lançamentos que o cliente ainda não compra (ficha do cliente, aba Clientes):
+// a lista do relatório do gerente (`configuracoes.lancamentos`, aba
+// "Lançamentos 2025 - 2026") menos o que ele já comprou em qualquer época -
+// ERP (faturado ou em carteira) ou pedido do app, promocional P/P1/P2 = base.
+// Só o que está na Lista de Preços. Ordem: em mais lojas da região primeiro
+// (o "já vende em 62 lojas" convence), depois o mais novo.
+router.get('/clientes/:id/lancamentos', async (req, res) => {
+  try {
+    const [cfg, cli] = await Promise.all([
+      pool.query('SELECT valor FROM configuracoes WHERE chave = $1', ['lancamentos']),
+      pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]),
+    ]);
+    if (!cli.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const itens = (cfg.rows[0] && cfg.rows[0].valor && Array.isArray(cfg.rows[0].valor.itens)) ? cfg.rows[0].valor.itens : [];
+    if (!itens.length) return res.json({ itens: [], total: 0 });
+    const codigos = itens.map(l => String(l.codigo));
+    const codigoOficial = cli.rows[0].codigo_oficial;
+    const [comprados, cat, nomes] = await Promise.all([
+      pool.query(
+        `/* lancamentos:comprados */
+         SELECT DISTINCT regexp_replace(codigo_sku, '^P[12]?', '') AS codigo
+         FROM pedidos_oficiais_itens
+         WHERE $1 <> '' AND cliente_codigo_oficial = $1 AND regexp_replace(codigo_sku, '^P[12]?', '') = ANY($3::text[])
+         UNION
+         SELECT DISTINCT regexp_replace(p.codigo_sku, '^P[12]?', '')
+         FROM pedidos ped
+         JOIN pedido_itens pi ON pi.pedido_id = ped.id
+         JOIN produtos p ON p.id = pi.produto_id
+         WHERE ped.cliente_id = $2 AND ${SQL_PEDIDO_APP_VALIDO} AND regexp_replace(p.codigo_sku, '^P[12]?', '') = ANY($3::text[])`,
+        [codigoOficial || '', req.params.id, codigos]),
+      catalogoOuNada(pool),
+      nomesDosProdutos(),
+    ]);
+    const jaComprou = new Set(comprados.rows.map(r => String(r.codigo)));
+    const nomePorCodigo = new Map(nomes.rows.map(p => [String(p.codigo_sku), p.nome]));
+    // fora da Lista de Preços não conta em nada (nem no total)
+    const ativos = itens.filter(l => !(cat && estaDescontinuado(l.codigo, cat.codigos)));
+    const lista = ativos
+      .filter(l => !jaComprou.has(String(l.codigo)))
+      .map(l => ({ codigo: String(l.codigo), nome: nomePorCodigo.get(String(l.codigo)) || null, ano: l.ano, pdvs: Number(l.pdvs) || 0 }))
+      .sort((a, b) => b.pdvs - a.pdvs || (b.ano || 0) - (a.ano || 0) || a.codigo.localeCompare(b.codigo));
+    res.json({ itens: lista, total: ativos.length, jaCompra: ativos.length - lista.length });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar os lançamentos do cliente.' });
+  }
+});
+
 router.get('/clientes/:id/comprados-recentes', async (req, res) => {
   try {
     const cliente = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]);
