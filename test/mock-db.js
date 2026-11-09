@@ -186,6 +186,28 @@ async function query(sql, params = []) {
   // igual independente de indentação/quebra de linha.
   const s = sql.replace(/\s+/g, ' ').toUpperCase();
   if (s.includes('HEALTH:BANCO')) return { rows: [{ '?column?': 1 }], rowCount: 1 };
+  // bloco "Objetivo do ano": uma linha por (chave, loja) - grupo pelo
+  // matriz_grupo (Rede inclusive) ou "#<id>" (routes/clientesClassificatorio.js)
+  if (s.includes('/* OBJETIVOS-ANO */')) {
+    const [chaves, ini, fim, hoje] = params;
+    const anoIni = `${String(hoje).slice(0, 4)}-01-01`;
+    const pares = [];
+    for (const c of clientes) {
+      if (c.matriz_grupo && chaves.includes(c.matriz_grupo)) pares.push([c.matriz_grupo, c]);
+      if (chaves.includes(`#${c.id}`)) pares.push([`#${c.id}`, c]);
+    }
+    return { rows: pares.map(([chave, c]) => {
+      const itens = pedidosOficiaisItens.filter(it => c.codigo_oficial && it.cliente_codigo_oficial === c.codigo_oficial);
+      const porPedido = new Map();
+      for (const it of itens) if (String(it.nr_pedido).length <= 6) porPedido.set(it.nr_pedido, (porPedido.get(it.nr_pedido) || 0) + Number(it.valor || 0));
+      return {
+        chave, cliente_id: c.id, nome: c.nome, cidade: c.cidade || null,
+        faturado: itens.filter(it => faturadoDeFato(it) && String(it.data_faturamento || '') >= anoIni).reduce((s2, it) => s2 + Number(it.valor || 0), 0),
+        entrada_tri: ini ? itens.filter(it => it.data_implantacao && it.data_implantacao >= ini && it.data_implantacao <= fim).reduce((s2, it) => s2 + Number(it.valor || 0), 0) : 0,
+        maior_pedido: porPedido.size ? Math.max(...porPedido.values()) : null,
+      };
+    }) };
+  }
   if (s.includes('/* CACHE-TABELA:VERSAO */')) {
     const versao = String(versaoTabelas ?? ++versaoTabelasContador);
     return { rows: TABELAS_COM_CACHE.map(relname => ({ relname, versao })) };

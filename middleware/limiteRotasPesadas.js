@@ -25,6 +25,7 @@ const ROTAS_CARTEIRA = [
   /^\/api\/dashboard\/resumo$/,
   /^\/api\/produtos-abc-geral$/,
   /^\/api\/clientes\/classificatorio\/alertas$/,
+  /^\/api\/clientes\/classificatorio\/objetivos-ano$/,
   /^\/api\/clientes\/sync$/,
   /^\/api\/recompra$/,
   /^\/api\/visitas$/,

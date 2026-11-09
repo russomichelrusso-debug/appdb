@@ -1081,6 +1081,25 @@ async function main() {
       `relatório do gerente: Rede tem objetivo da própria loja: ${JSON.stringify({ oa: res.body.objetivoAnual, q4: res.body.objetivoTrimestral })}`);
     res = await req('GET', '/api/clientes/9084/classificatorio/status');
     assert(res.body.objetivoAnual == null, 'relatório do gerente: mesmo nome noutra cidade não leva o objetivo');
+    // lista do bloco "Objetivo do ano": quem falta mais primeiro, grupo somado.
+    // Sessão própria: a rota conta no limite de 40/min da carteira, que a suíte usa
+    {
+      const u = await mockDb.pool.query('INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, false) RETURNING id',
+        ['Vendedor Objetivo', 'vendedor.objetivo@example.com', 'sub-vendedor-objetivo']);
+      const tok = generateToken();
+      await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tok), u.rows[0].id, '90']);
+      const antes = authToken;
+      authToken = tok;
+      res = await req('GET', '/api/clientes/classificatorio/objetivos-ano');
+      authToken = antes;
+    }
+    const gA = (res.body.grupos || []).find(g => g.chave === 'GRUPO A');
+    assert(
+      res.status === 200 && res.body.ano === anoG && gA && gA.lojas === 2 && gA.objetivo === 42000 && gA.faturado === 7000 && gA.falta === 35000
+        && gA.cliente_id === 9082 && gA.maior_pedido === 7000 && gA.trimestre && gA.trimestre.objetivo === 6500
+        && res.body.grupos.every((g, i, l) => i === 0 || l[i - 1].falta >= g.falta),
+      `objetivo do ano: lista por grupo (loja que mais faturou abre, maior pedido, trimestre, ordem): ${JSON.stringify(res.body).slice(0, 600)}`
+    );
   }
 
   // 15c) Planilha Classificatório do ERP com data (nome do arquivo): troca a
