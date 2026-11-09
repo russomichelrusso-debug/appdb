@@ -1090,6 +1090,25 @@ async function main() {
       `relatório do gerente: Rede tem objetivo da própria loja: ${JSON.stringify({ oa: res.body.objetivoAnual, q4: res.body.objetivoTrimestral })}`);
     res = await req('GET', '/api/clientes/9084/classificatorio/status');
     assert(res.body.objetivoAnual == null, 'relatório do gerente: mesmo nome noutra cidade não leva o objetivo');
+    // famílias que ele comprava no ano passado e parou: a do 98771 parou; a do
+    // 98772 ele comprou de novo neste ano (em carteira), então não aparece
+    const seedFamilias = {
+      catalogoPrecos: [
+        { codigo_sku: '98771', nome: 'CORTADOR FAMILIA TESTE', emb: 1, ipi: 0, familia: '91 - FAMILIA PARADA', precos_sem_imposto: {} },
+        { codigo_sku: '98772', nome: 'DISCO FAMILIA TESTE', emb: 1, ipi: 0, familia: '92 - FAMILIA ATIVA', precos_sem_imposto: {} },
+      ],
+      pedidosOficiaisItens: [
+        { nr_pedido: 'FP1', codigo_sku: 'P98771', cliente_codigo_oficial: '99080', quantidade: 2, valor: 900, data_faturamento: `${anoG - 1}-05-10`, data_implantacao: `${anoG - 1}-05-01`, status: 'faturado', nota_fiscal: 'NFFP1' },
+        { nr_pedido: 'FP2', codigo_sku: '98772', cliente_codigo_oficial: '99080', quantidade: 1, valor: 300, data_faturamento: `${anoG - 1}-06-10`, data_implantacao: `${anoG - 1}-06-01`, status: 'faturado', nota_fiscal: 'NFFP2' },
+        { nr_pedido: 'FP3', codigo_sku: '98772', cliente_codigo_oficial: '99080', quantidade: 1, valor: 300, data_faturamento: null, data_implantacao: `${anoG}-03-01`, status: 'carteira' },
+      ],
+    };
+    mockDb.__seed(seedFamilias);
+    res = await req('GET', '/api/clientes/9080/familias-paradas');
+    mockDb.__desfazerSeed(seedFamilias);
+    assert(res.status === 200 && res.body.familias.length === 1 && res.body.familias[0].familia === '91 - FAMILIA PARADA'
+      && res.body.familias[0].valor === 900 && res.body.familias[0].ano === anoG - 1 && res.body.familias[0].produtos[0].codigo === '98771',
+      `famílias paradas: a do ano passado sem pedido neste ano (promocional = base); a recomprada em carteira some: ${JSON.stringify(res.body)}`);
     // Fechamento no Dashboard: objetivo mensal do gerente × faturado de fato do mês
     {
       const { montarFechamento } = require('../routes/relatorios');

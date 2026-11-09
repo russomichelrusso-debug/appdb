@@ -38,7 +38,7 @@ const ROTAS_CARTEIRA = [
   /^\/api\/produto-vetores$/, // índice do reconhecimento por foto (~1 MB inteiro)
 ];
 const ROTAS_CLIENTE = [
-  /^\/api\/clientes\/[^/]+\/(historico|rotatividade|recuperar|sugestoes-recompra|comprados-recentes|produtos-abc|levantamentos|mensal|lancamentos)$/,
+  /^\/api\/clientes\/[^/]+\/(historico|rotatividade|recuperar|sugestoes-recompra|comprados-recentes|produtos-abc|levantamentos|mensal|lancamentos|familias-paradas)$/,
   /^\/api\/clientes\/[^/]+\/classificatorio\/(status|grupo)$/,
   /^\/api\/clientes\/[^/]+\/consumo-estimado\/[^/]+$/,
   /^\/api\/pedidos-oficiais\/\d+(\/resumo)?$/,

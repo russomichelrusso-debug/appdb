@@ -562,6 +562,73 @@ router.get('/clientes/:id/mensal', async (req, res) => {
 // compra mais recente - vira a quantidade sugerida pro pedido.
 const COMPRADOS_RECENTES_DIAS = 365;
 const COMPRADOS_RECENTES_LIMITE = 60;
+// Famílias que o cliente comprava e parou (ficha do cliente, aba Clientes):
+// família da Lista de Preços com faturado de fato no ano passado e nenhum
+// pedido neste ano - no ERP (faturado ou em carteira, pela implantação) nem no
+// app. O valor do ano passado é só o do ERP (o pedido do app já faturado não
+// conta de novo); promocional P/P1/P2 = o código base. Junto, os produtos que
+// ele mais comprava na família e ainda estão na Lista de Preços.
+router.get('/clientes/:id/familias-paradas', async (req, res) => {
+  try {
+    const cli = await pool.query('SELECT codigo_oficial FROM clientes WHERE id = $1', [req.params.id]);
+    if (!cli.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado.' });
+    const codigoOficial = cli.rows[0].codigo_oficial || '';
+    if (!codigoOficial) return res.json({ familias: [] });
+    const [linhas, nomes] = await Promise.all([
+      pool.query(
+        `/* familias-paradas */
+         WITH fam AS (
+           SELECT codigo_sku, familia FROM catalogo_precos WHERE COALESCE(familia, '') <> ''
+         ),
+         ant AS (
+           SELECT regexp_replace(p.codigo_sku, '^P[12]?', '') AS cod, SUM(p.valor) AS valor, SUM(p.quantidade) AS quantidade,
+                  MAX(p.data_faturamento)::text AS ultima
+           FROM pedidos_oficiais_itens p
+           WHERE p.cliente_codigo_oficial = $1 AND ${sqlFaturadoDeFato('p')}
+             AND p.data_faturamento >= date_trunc('year', ${SQL_HOJE_BR}) - INTERVAL '1 year'
+             AND p.data_faturamento < date_trunc('year', ${SQL_HOJE_BR})
+           GROUP BY 1
+         ),
+         atual AS (
+           SELECT regexp_replace(p.codigo_sku, '^P[12]?', '') AS cod
+           FROM pedidos_oficiais_itens p
+           WHERE p.cliente_codigo_oficial = $1 AND length(p.nr_pedido) <= 6
+             AND (p.data_faturamento >= date_trunc('year', ${SQL_HOJE_BR}) OR p.data_implantacao >= date_trunc('year', ${SQL_HOJE_BR}))
+           UNION
+           SELECT regexp_replace(pr.codigo_sku, '^P[12]?', '')
+           FROM pedidos ped
+           JOIN pedido_itens pi ON pi.pedido_id = ped.id
+           JOIN produtos pr ON pr.id = pi.produto_id
+           WHERE ped.cliente_id = $2 AND ${SQL_PEDIDO_APP_VALIDO} AND ${sqlDiaDoPedido('ped')} >= date_trunc('year', ${SQL_HOJE_BR})
+         ),
+         familias_atuais AS (SELECT DISTINCT fam.familia FROM atual JOIN fam ON fam.codigo_sku = atual.cod)
+         SELECT fam.familia, ant.cod, ant.valor, ant.quantidade, ant.ultima,
+                EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int - 1 AS ano
+         FROM ant JOIN fam ON fam.codigo_sku = ant.cod
+         WHERE fam.familia NOT IN (SELECT familia FROM familias_atuais)`,
+        [codigoOficial, req.params.id]),
+      nomesDosProdutos(),
+    ]);
+    const nomePorCodigo = new Map(nomes.rows.map(p => [String(p.codigo_sku), p.nome]));
+    const porFamilia = new Map();
+    for (const l of linhas.rows) {
+      const f = porFamilia.get(l.familia) || { familia: l.familia, ano: l.ano, valor: 0, ultima: null, produtos: [] };
+      f.valor += Number(l.valor) || 0;
+      if (l.ultima && (!f.ultima || l.ultima > f.ultima)) f.ultima = String(l.ultima).slice(0, 10);
+      f.produtos.push({ codigo: String(l.cod), nome: nomePorCodigo.get(String(l.cod)) || null, valor: Math.round((Number(l.valor) || 0) * 100) / 100, quantidade: Number(l.quantidade) || 0 });
+      porFamilia.set(l.familia, f);
+    }
+    const familias = [...porFamilia.values()]
+      .filter(f => f.valor > 0)
+      .map(f => ({ ...f, valor: Math.round(f.valor * 100) / 100, produtos: f.produtos.sort((a, b) => b.valor - a.valor).slice(0, 3) }))
+      .sort((a, b) => b.valor - a.valor);
+    res.json({ familias });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao buscar as famílias que o cliente parou de comprar.' });
+  }
+});
+
 // Lançamentos que o cliente ainda não compra (ficha do cliente, aba Clientes):
 // a lista do relatório do gerente (`configuracoes.lancamentos`, aba
 // "Lançamentos 2025 - 2026") menos o que ele já comprou em qualquer época -

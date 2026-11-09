@@ -1863,8 +1863,17 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   (faltam, por dia útil até o fim do mês), do mês atual a dezembro (faltam, por dia útil até 31/12) e o ano inteiro só como
   informação. Dias úteis = segunda a sexta sem os feriados nacionais de data fixa (`diasUteisEntre`), contando de hoje. Conferido
   em 09/11/2026: o faturado do app bate com a tabela mensal do gerente a menos de ~R$ 10 mil por mês.
-  Próximos passos do plano, nesta ordem: "famílias que ele comprava e parou" na ficha, "Montar mix inicial" com as referências do
-  cliente, e lançamentos nas campanhas (`exigeItens`) e na proposta.
+  **Famílias que ele comprava e parou** (PR 6, 11/2026): cartão na ficha do cliente (aba Clientes), abaixo dos Lançamentos
+  (`loadClienteFamiliasParadas`, `index.html`; `GET /api/clientes/:id/familias-paradas`, `routes/relatorios.js`): famílias da Lista
+  de Preços (`catalogo_precos.familia`) com **faturado de fato no ano passado** (ERP; o app só existe desde 05/2026) e **nenhum pedido
+  neste ano** (ERP em qualquer status, carteira inclusive, sem a série de 7 dígitos, ou pedido do app válido, por `sqlDiaDoPedido`),
+  promocional P/P1/P2 = base; a cópia guardada só vale no mesmo ano.
+  Por CNPJ (código do ERP do cliente; sem código = vazio). Quem comprava mais primeiro, com a última compra e até 3 produtos de cada
+  (o que mais faturou) com "+" que põe 1 embalagem no orçamento; produto fora da Lista de Preços não entra (família vem do catálogo).
+  Última lista de cada cliente em `cortagFamParadasCliente_v1` (vale sem internet). Em 09/11/2026: 241 clientes, 889 famílias, R$ 1,02 mi
+  em 2025 (Nivelamento pacote 231 mil, Cortadores 178 mil, Corte diamantado 120 mil).
+  Próximos passos do plano, nesta ordem: "Montar mix inicial" com as referências do cliente, e lançamentos nas campanhas
+  (`exigeItens`) e na proposta.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do
