@@ -128,6 +128,7 @@ function desfazerSeed(partial) {
   clientes = fora(clientes, partial.clientes);
   pedidosOficiaisItens = fora(pedidosOficiaisItens, partial.pedidosOficiaisItens);
   contasSalesforce = fora(contasSalesforce, partial.contasSalesforce);
+  catalogoPrecos = fora(catalogoPrecos, partial.catalogoPrecos);
 }
 
 // Reproduz sqlChaveEndereco (routes/lib/geocodificacao.js)
@@ -2447,6 +2448,37 @@ async function query(sql, params = []) {
   // várias chaves numa consulta (objetivos trimestral + anual do status)
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE = ANY(')) {
     return { rows: params[0].filter(k => configuracoes[k]).map(k => ({ chave: k, valor: configuracoes[k].valor, atualizado_em: configuracoes[k].atualizado_em })) };
+  }
+  // famílias que o cliente comprava (ano passado, faturado de fato) e parou
+  // (nenhum pedido neste ano: ERP faturado/carteira ou app) - routes/relatorios.js
+  if (s.includes('/* FAMILIAS-PARADAS */')) {
+    const [cod, clienteId] = params;
+    const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const ano = Number(hojeBr.slice(0, 4));
+    const base = (c) => String(c).replace(/^P[12]?/, '');
+    const familiaDe = new Map(catalogoPrecos.filter(c => c.familia).map(c => [String(c.codigo_sku), c.familia]));
+    const ant = new Map();
+    const atuais = new Set();
+    for (const it of pedidosOficiaisItens.filter(x => cod && x.cliente_codigo_oficial === cod)) {
+      const c = base(it.codigo_sku);
+      const fat = String(it.data_faturamento || '').slice(0, 10), imp = String(it.data_implantacao || '').slice(0, 10);
+      if (familiaDe.has(c) && String(it.nr_pedido).length <= 6 && (fat.slice(0, 4) >= String(ano) || imp.slice(0, 4) >= String(ano))) atuais.add(familiaDe.get(c));
+      if (faturadoDeFato(it) && fat.slice(0, 4) === String(ano - 1)) {
+        const a = ant.get(c) || { cod: c, valor: 0, quantidade: 0, ultima: '' };
+        a.valor += Number(it.valor) || 0; a.quantidade += Number(it.quantidade) || 0;
+        if (fat > a.ultima) a.ultima = fat;
+        ant.set(c, a);
+      }
+    }
+    for (const ped of pedidos.filter(x => Number(x.cliente_id) === Number(clienteId) && x.origem !== 'faturamento')) {
+      if (String(ped.data_pedido || '').slice(0, 4) < String(ano)) continue;
+      for (const pi of pedidoItens.filter(x => x.pedido_id === ped.id)) {
+        const prod = produtos.find(x => x.id === pi.produto_id);
+        if (prod && familiaDe.has(base(prod.codigo_sku))) atuais.add(familiaDe.get(base(prod.codigo_sku)));
+      }
+    }
+    return { rows: [...ant.values()].filter(a => familiaDe.has(a.cod) && !atuais.has(familiaDe.get(a.cod)))
+      .map(a => ({ familia: familiaDe.get(a.cod), cod: a.cod, valor: a.valor, quantidade: a.quantidade, ultima: a.ultima, ano: ano - 1 })) };
   }
   // Dashboard: faturado de fato de cada mês do ano corrente (cartão Fechamento)
   if (s.includes('/* DASHBOARD:FATURADO-ANO */')) {

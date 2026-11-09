@@ -6611,6 +6611,7 @@
     #classiTargetSkuListWrap.hidden,
     #clienteClassificatorioCard.hidden,
     #clienteLancamentosCard.hidden,
+    #clienteFamParadasCard.hidden,
     #clienteGrupoLista.hidden,
     #loginSubmitBtn.hidden {
       display: none;
@@ -12274,6 +12275,10 @@
     .lancLista .lancNome { flex: 1; min-width: 0; font-size: 13px; }
     .lancLista .lancNome small { display: block; color: var(--gray); font-size: 12px; }
     .lancLista .lancMais { min-width: 44px; min-height: 44px; }
+    .fampFamilia { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--hairline); }
+    .fampFamilia .fampTopo { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+    .fampFamilia > small { display: block; color: var(--gray); font-size: 12px; }
+    .fampFamilia .lancLista { margin-top: 4px; }
 
     .tSelos .fixedbadge,
     .tSelos .lancbadge,
@@ -13398,6 +13403,9 @@
         </div>
         <div class="ap-card hidden" id="clienteLancamentosCard" style="margin:0 16px 12px;">
           <div id="clienteLancamentosContent"></div>
+        </div>
+        <div class="ap-card hidden" id="clienteFamParadasCard" style="margin:0 16px 12px;">
+          <div id="clienteFamParadasContent"></div>
         </div>
         </div>
         <div class="cliDetMeio">
@@ -30182,6 +30190,7 @@
         loadClienteFichaResumo();
         loadClienteClassificatorioStatus();
         loadClienteLancamentos();
+        loadClienteFamiliasParadas();
         clienteTabView = 'pedidosoficiais';
         document.getElementById('clienteViewSeg').querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.v === 'pedidosoficiais'));
         loadClienteDetailView();
@@ -30246,6 +30255,74 @@
             showToast(`${p.n} no orçamento`);
           }));
           document.getElementById('lancFichaMais')?.addEventListener('click', () => { lancFichaVerTodos = true; desenhar(); });
+        };
+        desenhar();
+        card.classList.remove('hidden');
+      }
+      // "Famílias que ele comprava e parou" na ficha do cliente (GET
+      // /api/clientes/:id/familias-paradas: famílias da Lista de Preços com
+      // faturado de fato no ano passado e nenhum pedido neste ano - ERP em
+      // qualquer status ou app). Quem comprava mais primeiro; até 3 produtos de
+      // cada, com "+" que põe 1 embalagem no orçamento.
+      const FAMP_FICHA_MOSTRAR = 4;
+      let fampFichaVerTodos = false;
+      let fampFichaReq = 0;
+      const FAMP_CLIENTE_LS_KEY = 'cortagFamParadasCliente_v1';
+      function lerFamParadasCliente() {
+        try { return JSON.parse(localStorage.getItem(FAMP_CLIENTE_LS_KEY)) || {}; } catch (e) { return {}; }
+      }
+      function guardarFamParadasCliente(id, r) {
+        try {
+          const todos = lerFamParadasCliente();
+          delete todos[id];
+          todos[id] = r;
+          const ids = Object.keys(todos);
+          for (const velho of ids.slice(0, Math.max(0, ids.length - 60))) delete todos[velho];
+          localStorage.setItem(FAMP_CLIENTE_LS_KEY, JSON.stringify(todos));
+        } catch (e) { }
+      }
+      async function loadClienteFamiliasParadas() {
+        const card = document.getElementById('clienteFamParadasCard');
+        const el = document.getElementById('clienteFamParadasContent');
+        const cliente = clienteTabSelected;
+        card.classList.add('hidden');
+        fampFichaVerTodos = false;
+        if (!cliente) return;
+        const req = ++fampFichaReq;
+        const id = String(cliente.id);
+        let r;
+        try {
+          r = await apiFetch(`/api/clientes/${cliente.id}/familias-paradas`);
+          if (r && Array.isArray(r.familias)) guardarFamParadasCliente(id, r);
+        } catch (e) {
+          // sem internet: a última lista dele, só se for deste ano (a de 2026 aberta em 2027 diria "nada em 2026")
+          r = lerFamParadasCliente()[id];
+          const anoHoje = Number(String(hojeBrasiliaISO()).slice(0, 4));
+          if (r && Array.isArray(r.familias) && r.familias.length && Number(r.familias[0].ano) + 1 !== anoHoje) r = null;
+        }
+        if (req !== fampFichaReq || !clienteTabSelected || String(clienteTabSelected.id) !== id || !r || !Array.isArray(r.familias) || !r.familias.length) return;
+        const fams = r.familias;
+        const total = fams.reduce((s, f) => s + (Number(f.valor) || 0), 0);
+        const nomeDe = (l) => (productByCod(l.codigo) || {}).n || l.nome || `Cód. ${l.codigo}`;
+        const desenhar = () => {
+          const mostrar = fampFichaVerTodos ? fams : fams.slice(0, FAMP_FICHA_MOSTRAR);
+          el.innerHTML = `<div class="hist-clientLabel">Famílias que ele comprava e parou</div>
+            <div style="font-size:13px;margin-top:4px;color:var(--gray);">${fams.length} família${fams.length === 1 ? '' : 's'} · ${escapeHtml(brl(total))} em ${escapeHtml(String(fams[0].ano))}, nada em ${escapeHtml(String(fams[0].ano + 1))}</div>`
+            + mostrar.map(f => `<div class="fampFamilia"><div class="fampTopo"><b>${escapeHtml(nomeDaFamilia(f.familia))}</b><span>${escapeHtml(brl(Number(f.valor) || 0))}</span></div>
+              ${f.ultima ? `<small>última compra ${escapeHtml(formatDateBr(f.ultima))}</small>` : ''}
+              <ul class="lancLista">${(f.produtos || []).map(l => {
+                const nome = nomeDe(l);
+                return `<li><div class="lancNome">${escapeHtml(nome)}<small>Cód. ${escapeHtml(l.codigo)} · ${escapeHtml(brl(Number(l.valor) || 0))}${l.quantidade > 0 ? ` · ${escapeHtml(String(l.quantidade))} un.` : ''} em ${escapeHtml(String(f.ano))}</small></div>
+                  <button type="button" class="restoreBtn compacto lancMais" data-famp-add="${escapeHtml(l.codigo)}" aria-label="Pôr ${escapeHtml(nome)} no orçamento">+</button></li>`;
+              }).join('')}</ul></div>`).join('')
+            + (!fampFichaVerTodos && fams.length > mostrar.length ? `<button type="button" class="recompraMais" id="fampFichaMais">Ver mais ${fams.length - mostrar.length}</button>` : '');
+          el.querySelectorAll('[data-famp-add]').forEach(b => b.addEventListener('click', () => {
+            const p = productByCod(b.dataset.fampAdd);
+            if (!p) { showToast('Esse produto não está no catálogo do aparelho (saiu da Lista de Preços ou o catálogo ainda está carregando).', 'erro'); return; }
+            addToCart(p.c, undefined, true);
+            showToast(`${p.n} no orçamento`);
+          }));
+          document.getElementById('fampFichaMais')?.addEventListener('click', () => { fampFichaVerTodos = true; desenhar(); });
         };
         desenhar();
         card.classList.remove('hidden');
