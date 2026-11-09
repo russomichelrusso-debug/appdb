@@ -285,6 +285,12 @@ branch de trabalho já teve um PR mergeado, recriá-la de `origin/main` antes da
 Correções pontuais de **dado** (ex.: EAN trocado entre dois SKUs) são feitas direto via SQL no
 Supabase, sem PR — não é mudança de código.
 
+**Planilha com dado de cliente nunca entra no repositório** (ele é **público**): entra pelo Painel do app
+(Importar), ou é passada ao Claude pelo Google Drive. Em 08/11/2026 a planilha do gerente foi enviada pelo
+site do GitHub pra `test/` e ficou 4 min no `main`: o histórico foi reescrito (force push pro PR #377) e o
+GitHub Support foi acionado pra apagar o commit da memória. O `.gitignore` recusa `*.xlsx`/`*.xls`/`*.csv`
+no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
+
 ## O que já foi feito
 
 - **Revisão de segurança completa** (`docs/PLANO-REVISAO-SEGURANCA.md`, 13 achados de segurança +
@@ -1805,6 +1811,31 @@ Supabase, sem PR — não é mudança de código.
   toque; o celular solta sozinho ao trocar de app/bloquear e pode recusar com economia de bateria. ⚙ › "Deixar a tela apagar
   sozinha" desliga (`cortagTelaAcesa_v1` = '0'). Navegador sem o recurso (iPhone antes do iOS 16.4) só vê o aviso. A
   `tela-cliente.html` já fazia o mesmo.
+
+- **Relatório do gerente: objetivo do ano e do trimestre por cliente** (11/2026, PR 1 do plano "Fechamento 2026"). O gerente de
+  vendas (Vilmar, vilmar.junior@cortag.com) mandou em 06/11/2026 a planilha "Análise de Resultados e Oportunidades" (10 abas:
+  objetivo por canal e mês, faturamento × 2025, sem compras, meses sem compra, inativos do Salesforce, Meta Q4 por matriz e por
+  cliente, Faturamento × Objetivo 2026, lançamentos, família). Painel › Importar reconhece pelas abas ("META Q4 Clientes" +
+  "Faturamento - Objetivo 2026"; `lerRelatorioGerente`, `importadores.js`; colunas pelo título) → `POST
+  /api/clientes/classificatorio/relatorio-gerente/importar` (só admin; contas em `routes/lib/objetivosGerente.js`). Grava, trocando
+  por inteiro: **`objetivos_trimestrais`** (mesmo formato do importador antigo) e **`objetivos_anuais`** `{ano, objetivos, mensal}`.
+  Chave (`chaveDoGrupo`): `matriz_grupo` pra quem tem grupo e não é Rede (soma as lojas do grupo); **`#<id>` pra Rede e pra cliente
+  sem grupo** - filiais de mesmo nome sem grupo (as duas GRACIOSA) ficavam com os objetivos somados contra o faturado de uma loja só
+  (achado do `revisor-cortag`); loja Rede dentro de grupo com lojas não-Rede entra também no grupo. O status procura `#<id>`,
+  depois o grupo e por fim o `matriz_grupo || nome` do importador antigo (`chavesDoStatus`). O importador antigo pulava as redes.
+  A aba anual **não tem código**: o cliente é achado pelo código cruzando nome cortado em 30 letras + cidade com as abas "Meses sem
+  compras"/"META Q4 Clientes", e senão pelo nome inteiro desempatado pela cidade; nome repetido que a cidade não desempata vai pra
+  "sem cliente", não chuta (na planilha de 06/11: 270 de 270 pelo código; 272 de 272 do Q4). **Importado em produção em 09/11/2026**
+  direto no banco (a cópia da planilha que o usuário passou; o objetivo de jul-set ficou em `objetivos_trimestrais_backup_2026q3`;
+  enquanto o PR não sobe, as lojas sem grupo também têm a chave pelo nome, que o servidor antigo lê). Decisões do usuário: objetivo do ano **por grupo** (matriz), **todos os vendedores veem**, só pelo **Painel** por
+  enquanto (não pelo e-mail). O status do cliente devolve `objetivoAnual` {ano, objetivo, faturado, falta} contra o
+  `faturamentoAnoCorrente` (faturado de fato no ano, grupo; Rede = a loja) - **ao vivo**, não o faturado da planilha. Card do
+  Pedido/Levantamento: linha "Objetivo 2026 · 3% · faltam R$ 157,7 mil" (`linhaObjetivoAnual`); ficha: quadro "Objetivo 2026".
+  O objetivo mensal da região é guardado pro Dashboard (PR 3). Próximos passos do plano, nesta ordem: **bloco "🎯 Objetivo do ano"**
+  na aba Clientes (quem falta mais primeiro; 29 clientes = metade da diferença de R$ 2,49 mi) com proposta pra cobrir (teto pelo
+  maior pedido do cliente), **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), **lançamentos** (aba 9: 249 SKUs,
+  todos na Lista de Preços; selo, "lançamentos que ele não compra" e a lista das campanhas) e **recuperação** (Para reativar pelo
+  objetivo; "comprava cortador e parou" - a família caiu 37%).
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do

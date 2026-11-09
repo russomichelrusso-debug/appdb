@@ -3,3 +3,10 @@ node_modules/
 
 # Saída de ferramentas de relatório (não publicar no GitHub Pages)
 brag-output*/
+
+# Planilhas com dado de cliente (CNPJ, faturamento) nunca vão pro repositório,
+# que é público: entram pelo Painel do app. Os testes montam as planilhas
+# em memória (test/run_tests.js). O produtos_sem_ean13.csv já versionado continua.
+*.xlsx
+*.xls
+*.csv

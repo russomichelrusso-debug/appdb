@@ -973,6 +973,116 @@ async function main() {
     'cliente Rede pulado no import não recebe objetivo trimestral (faltaPObjetivo ausente)'
   );
 
+  // 15b2) Relatório do gerente ("Análise de Resultados e Oportunidades"):
+  // leitura (importadores.js), casamento com os clientes
+  // (routes/lib/objetivosGerente.js) e rota de importação + status.
+  {
+    const XLSXg = require('@e965/xlsx');
+    const Imp = require('../importadores');
+    const { planejarObjetivosGerente } = require('../routes/lib/objetivosGerente');
+    const anoG = anoFechado + 1;
+    const wbG = XLSXg.utils.book_new();
+    const abaG = (nome, linhas) => XLSXg.utils.book_append_sheet(wbG, XLSXg.utils.aoa_to_sheet(linhas), nome);
+    abaG(`Objetivo ${anoG} e Canal `, [
+      [`OBJETIVO POR CANAL`], ['Canal', 'Classificatorio', 'Valor Objetivo'], ['Varejo', '', 100],
+      [`OBJETIVO ${anoG}`], ['', '', 'Ano'],
+      ['Representante', 'Mês', 'Valor Objetivo', 'Faturamento'],
+      ['RUSSO', 'Janeiro', 510092.72, 391078.79], ['RUSSO', 'Março', 532063.21, 1], ['Total Geral', '', 1, 1],
+    ]);
+    abaG('Meses sem compras', [
+      ['Listagem de Clientes'], ['Data: 02/11/2026'],
+      ['Matriz', 'Cod', 'Razao Social', 'Grupo Cliente', 'Meses sem Compra', 'Cidade'],
+      ['X', '99080', 'NOME CORTADO NO RELATORIO DO E', 'Varejo', 1, 'Maringa'],
+    ]);
+    abaG('Meta Q4 Matriz', [['Matriz', 'Representante', 'Objetivo Matriz'], ['X', 'Y', 1]]);
+    abaG('META Q4 Clientes', [
+      ['Cód Cliente', 'Razão Social', 'CNPJ', 'Matriz', 'Cidade', 'Objetivo', 'Entradas'],
+      ['99081', 'LOJA GRUPO A', '', 'GRUPO A', 'Umuarama', 4000, 1000],
+      ['99082', 'LOJA GRUPO A FILIAL', '', 'GRUPO A', 'Umuarama', 2500, null],
+      ['99083', 'LOJA DA REDE', '', 'REDE X', 'Cianorte', 1500, null],
+      ['', 'Total', '', '', '', 8000, null],
+    ]);
+    abaG(`Faturamento - Objetivo ${anoG}`, [
+      ['', '', 'Ano'], ['', '', anoG],
+      ['Cidade', 'Razão Social', 'Valor Objetivo', 'Faturamento', 'Diferença'],
+      ['Maringa', 'NOME CORTADO NO RELATORIO DO ERP LTDA', 20000, 5000, -15000],
+      ['Umuarama', 'LOJA GRUPO A', 30000, 1, 1],
+      ['Umuarama', 'Loja Grupo A Filial', 12000, 1, 1],
+      ['Cianorte', 'LOJA DA REDE', 9000, 1, 1],
+      ['Lugar Nenhum', 'CLIENTE QUE NAO EXISTE', 777, 0, 0],
+      ['Total Geral', '', 71777, 0, 0],
+    ]);
+    const bufG = XLSXg.write(wbG, { type: 'buffer', bookType: 'xlsx' });
+    assert(Imp.detectarTipoPlanilha(XLSXg, bufG) === 'gerente', `relatório do gerente: reconhecido pelas abas (${Imp.detectarTipoPlanilha(XLSXg, bufG)})`);
+    const lido = Imp.lerRelatorioGerente(XLSXg, bufG);
+    assert(
+      lido.ano === anoG && lido.trimestre === 4 && lido.periodo.inicio === `${anoG}-10-01` && lido.periodo.fim === `${anoG}-12-31`
+        && lido.q4.length === 3 && lido.anual.length === 5 && lido.mensal.length === 2 && lido.mensal[1].mes === 3
+        && lido.codigosPorNome.some(x => x.codigo === '99080'),
+      `relatório do gerente: leitura (ano, Q4, anual sem total, meses com acento): ${JSON.stringify({ ano: lido.ano, periodo: lido.periodo, q4: lido.q4.length, anual: lido.anual.length, mensal: lido.mensal })}`
+    );
+
+    mockDb.__seed({
+      clientes: [
+        { id: 9080, nome: 'OUTRO NOME NO CADASTRO', codigo_oficial: '99080', classificatorio_tipo: 'Varejo Premium', matriz_grupo: null, cidade: 'Maringa' },
+        { id: 9081, nome: 'LOJA GRUPO A', codigo_oficial: '99081', classificatorio_tipo: 'Varejo Master', matriz_grupo: 'GRUPO A', cidade: 'Umuarama' },
+        { id: 9082, nome: 'LOJA GRUPO A FILIAL', codigo_oficial: '99082', classificatorio_tipo: 'Varejo Master', matriz_grupo: 'GRUPO A', cidade: 'Umuarama' },
+        { id: 9083, nome: 'LOJA DA REDE', codigo_oficial: '99083', classificatorio_tipo: 'Rede', matriz_grupo: 'REDE X', cidade: 'Cianorte' },
+        // mesmo nome noutra cidade: não pode levar o objetivo da de Umuarama
+        { id: 9084, nome: 'LOJA GRUPO A', codigo_oficial: '99084', classificatorio_tipo: 'Varejo Master', matriz_grupo: null, cidade: 'Londrina' },
+      ],
+      pedidosOficiaisItens: [
+        { nr_pedido: 'PG1', codigo_sku: '60863', cliente_codigo_oficial: '99082', quantidade: 1, valor: 7000, data_faturamento: `${anoG}-02-10`, data_implantacao: `${anoG}-02-05`, status: 'faturado', nota_fiscal: 'NFG1' },
+      ],
+    });
+    const plano = planejarObjetivosGerente({
+      clientes: [
+        { id: 1, nome: 'A', codigo_oficial: '1', matriz_grupo: null, classificatorio_tipo: 'Varejo', cidade: 'X' },
+        { id: 2, nome: 'B LTDA.', codigo_oficial: '2', matriz_grupo: 'G', classificatorio_tipo: 'Varejo', cidade: 'Y' },
+        { id: 3, nome: 'B LTDA', codigo_oficial: '3', matriz_grupo: null, classificatorio_tipo: 'Varejo', cidade: 'Z' },
+        // loja Rede dentro de um grupo com loja que não é Rede: entra na loja e no grupo
+        { id: 4, nome: 'C REDE', codigo_oficial: '4', matriz_grupo: 'G', classificatorio_tipo: 'Rede', cidade: 'Y' },
+        // filiais com o mesmo nome, sem grupo, em cidades que a planilha não diz
+        { id: 5, nome: 'FILIAL IGUAL', codigo_oficial: '5', matriz_grupo: null, classificatorio_tipo: 'Varejo', cidade: 'P' },
+        { id: 6, nome: 'FILIAL IGUAL', codigo_oficial: '6', matriz_grupo: null, classificatorio_tipo: 'Varejo', cidade: 'Q' },
+      ],
+      q4: [{ codigo: '1', objetivo: 10 }, { codigo: '9', objetivo: 5 }, { codigo: '5', objetivo: 7 }, { codigo: '6', objetivo: 3 }, { codigo: '4', objetivo: 20 }, { codigo: '2', objetivo: 1 }],
+      anual: [{ razao: 'B Ltda', cidade: 'Z', objetivo: 100 }, { razao: 'Nome Diferente', cidade: 'X', objetivo: 50 }, { razao: 'Sumiu', cidade: 'W', objetivo: 1 },
+        { razao: 'FILIAL IGUAL', cidade: 'R', objetivo: 40 }],
+      codigosPorNome: [{ razao: 'NOME DIFERENTE', cidade: 'x', codigo: '1' }],
+    });
+    assert(
+      plano.objetivosQ4['#1'] === 10 && plano.q4Stats.semCliente[0] === '9'
+        && plano.objetivosQ4['#5'] === 7 && plano.objetivosQ4['#6'] === 3 && plano.objetivosQ4['FILIAL IGUAL'] == null
+        && plano.objetivosQ4['#4'] === 20 && plano.objetivosQ4.G === 21
+        && plano.objetivosAnuais['#3'] === 100 && plano.objetivosAnuais['#1'] === 50 && plano.objetivosAnuais.G == null
+        && plano.anualStats.peloCodigo === 1 && plano.anualStats.peloNome === 1 && plano.anualStats.ambiguos === 1 && plano.anualStats.naoAchados.length === 2,
+      `relatório do gerente: casamento (código, nome+cidade, filiais iguais sem grupo, Rede no grupo, nome repetido sem chutar): ${JSON.stringify(plano)}`
+    );
+
+    res = await req('POST', '/api/clientes/classificatorio/relatorio-gerente/importar', { ...lido, anual: [] });
+    assert(res.status === 400, 'relatório do gerente: sem objetivo anual = 400');
+    res = await req('POST', '/api/clientes/classificatorio/relatorio-gerente/importar', lido);
+    assert(
+      res.status === 200 && res.body.anual.grupos === 3 && res.body.anual.naoAchados.length === 1 && res.body.q4.grupos === 2 && res.body.q4.rede === 1 && res.body.meses === 2,
+      `relatório do gerente: importação (grupo somado, rede pela loja, linha sem cliente): ${JSON.stringify(res.body)}`
+    );
+    res = await req('GET', '/api/clientes/9081/classificatorio/status');
+    const oa = res.body.objetivoAnual;
+    assert(
+      res.status === 200 && oa && oa.ano === anoG && oa.objetivo === 42000 && oa.falta === Math.round((42000 - oa.faturado) * 100) / 100
+        && res.body.objetivoTrimestral === 6500,
+      `relatório do gerente: status do grupo (anual 30.000 + 12.000, Q4 4.000 + 2.500): ${JSON.stringify({ oa, q4: res.body.objetivoTrimestral })}`
+    );
+    res = await req('GET', '/api/clientes/9080/classificatorio/status');
+    assert(res.body.objetivoAnual && res.body.objetivoAnual.objetivo === 20000, `relatório do gerente: cliente achado pelo código (nome diferente no cadastro): ${JSON.stringify(res.body.objetivoAnual)}`);
+    res = await req('GET', '/api/clientes/9083/classificatorio/status');
+    assert(res.body.objetivoAnual && res.body.objetivoAnual.objetivo === 9000 && res.body.objetivoTrimestral === 1500,
+      `relatório do gerente: Rede tem objetivo da própria loja: ${JSON.stringify({ oa: res.body.objetivoAnual, q4: res.body.objetivoTrimestral })}`);
+    res = await req('GET', '/api/clientes/9084/classificatorio/status');
+    assert(res.body.objetivoAnual == null, 'relatório do gerente: mesmo nome noutra cidade não leva o objetivo');
+  }
+
   // 15c) Planilha Classificatório do ERP com data (nome do arquivo): troca a
   // faixa parada do cliente (antes só preenchia quem não tinha nenhuma - 22
   // clientes ficaram com a faixa errada por isso) e grava a foto financeira

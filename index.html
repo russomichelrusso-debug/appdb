@@ -18830,14 +18830,33 @@
         if (ld.situacao === 'meta') Object.assign(s, { faltaPraMeta: ld.falta });
         return s;
       }
+      // Objetivo do ANO (relatório do gerente, importado no Painel): uma linha
+      // "Objetivo 2026 · 62% / faltam R$ 12,4 mil", contra o faturado no ano
+      // do grupo (Rede: só a loja). Vem embaixo da linha principal do card.
+      function linhaObjetivoAnual(status) {
+        const oa = status && status.objetivoAnual;
+        if (!oa || !(oa.objetivo > 0)) return '';
+        const bateu = !(oa.falta > 0);
+        const pct = Math.round(Math.max(0, Math.min(100, (Number(oa.faturado) || 0) / oa.objetivo * 100)));
+        const grupo = !status.ehRede && status.matrizGrupo ? ' do grupo' : '';
+        return `<div class="clienteObjetivo" style="margin-top:8px;" title="Objetivo ${oa.ano}${grupo}: ${brl(oa.objetivo)} · faturado ${brl(oa.faturado)}">
+            <span>Objetivo ${oa.ano}${grupo} · ${pct}%</span>
+            ${bateu ? '<b class="ok">✓ atingido</b>' : `<b>faltam ${brlCurto(oa.falta)}</b>`}
+          </div>`;
+      }
       function renderBarraProgressoCompacta(statusOriginal) {
         if (!statusOriginal || !statusOriginal.classificado) return '';
         const status = statusComFaixaOficialErp(statusOriginal);
+        const anual = linhaObjetivoAnual(status);
         if (status.ehRede) {
           // Rede não tem faixa/meta - mostra só o acumulado do PRÓPRIO
           // cliente (a API já devolve individual pra Rede, sem somar com o
           // resto da rede/cooperativa), sem barra de progresso nem ritmo.
-          return `<div style="font-size:11px;margin-top:3px;color:var(--gray);">Acumulado ${status.anoCorrente || ''} (individual): <b>${brl(status.faturamentoAnoCorrente)}</b></div>`;
+          // O objetivo do trimestre e do ano (relatório do gerente) é da loja.
+          const q = status.faltaPObjetivo != null
+            ? `<div class="clienteObjetivo"><span>Objetivo do trimestre</span>${status.faltaPObjetivo <= 0 ? '<b class="ok">✓ atingido</b>' : `<b>faltam ${brlCurto(status.faltaPObjetivo)}</b>`}</div>`
+            : '';
+          return `${q}${anual}<div style="font-size:11px;margin-top:3px;color:var(--gray);">Acumulado ${status.anoCorrente || ''} (individual): <b>${brl(status.faturamentoAnoCorrente)}</b></div>`;
         }
         const partes = [];
         // Objetivo do trimestre (oficial, importado do ERP) - vem primeiro,
@@ -18862,6 +18881,7 @@
           if (bateuObjetivo || pct != null) {
             partes.push(`<div class="clienteBarra"><i class="${bateuObjetivo ? 'ok' : ''}" style="width:${bateuObjetivo ? 100 : pct}%"></i></div>`);
           }
+          if (anual) partes.push(anual);
           // risco de cair de faixa continua aparecendo junto do objetivo
           if (status.emRiscoDeQueda) {
             partes.push(`<div style="font-size:12px;margin-top:6px;color:var(--danger);font-weight:600;">⚠️ Faltam ${brl(status.faltaPraManter)} pra não cair${status.faixaAnterior ? ` pra ${escapeHtml(NOME_CURTO_FAIXA[status.faixaAnterior] || status.faixaAnterior)}` : ''}</div>`);
@@ -18904,6 +18924,7 @@
           const pct = Math.max(0, Math.min(100, (((status.faturamentoFaixa ?? status.faturamentoAnoCorrente) - status.faixaMin) / (status.faixaMax - status.faixaMin)) * 100));
           partes.push(`<div class="clienteBarra"><i class="${status.emRiscoDeQueda ? 'risco' : (classeValor === 'ok' ? 'ok' : '')}" style="width:${pct}%"></i></div>`);
         }
+        if (anual) partes.push(anual);
         // Ritmo trimestral - pedido do usuário pra aparecer pra TODOS os
         // clientes, não só os em risco: quem está atrasado já é coberto
         // pela mensagem de risco de queda acima (não duplica aqui); quem
@@ -23219,6 +23240,19 @@
           + `${r.semCliente ? ` · ${r.semCliente} cliente(s) ainda fora do app` : ''}.`;
       }
 
+      // Relatório do gerente ("Análise de Resultados e Oportunidades"): leitura
+      // em importadores.js, contas em routes/lib/objetivosGerente.js. Grava o
+      // objetivo do trimestre (por grupo, no lugar do importado antes) e o do
+      // ano, que aparecem no card e na ficha do cliente.
+      async function importarRelatorioGerente(file) {
+        const dados = CortagImportadores.lerRelatorioGerente(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
+        const r = await apiFetch('/api/clientes/classificatorio/relatorio-gerente/importar', { method: 'POST', body: JSON.stringify(dados) });
+        const semCliente = r.anual.naoAchados.length;
+        return `Objetivo ${r.ano}: ${r.anual.grupos} cliente(s)/grupo(s)`
+          + (r.q4 ? ` · objetivo do trimestre (${formatDateBr(r.q4.periodo.inicio).slice(0, 5)} a ${formatDateBr(r.q4.periodo.fim).slice(0, 5)}): ${r.q4.grupos}` : '')
+          + (semCliente ? ` · ${semCliente} linha(s) sem cliente no app${r.anual.ambiguos ? ` (${r.anual.ambiguos} com nome repetido em lojas diferentes)` : ''}: ${r.anual.naoAchados.slice(0, 5).join(', ')}${semCliente > 5 ? '…' : ''}` : '')
+          + '.';
+      }
       async function apiImportarObjetivosTrimestrais(periodoInicio, periodoFim, itens) {
         return apiFetch('/api/clientes/classificatorio/objetivos-trimestrais/importar', {
           method: 'POST',
@@ -24226,7 +24260,23 @@
               </div>
               <div style="font-size:12px;margin-top:4px;color:var(--gray);">Entrada no trimestre: ${brl(status.entradaTrimestral)} de ${brl(status.objetivoTrimestral)}</div>
             </div>`);
-        } else if (status.objetivoEncerrado) {
+        }
+        // Objetivo do ANO (relatório do gerente): faturado no ano × objetivo.
+        if (status.objetivoAnual && status.objetivoAnual.objetivo > 0) {
+          const oa = status.objetivoAnual;
+          const bateu = !(oa.falta > 0);
+          const pct = Math.round(Math.max(0, Math.min(100, (Number(oa.faturado) || 0) / oa.objetivo * 100)));
+          partes.push(`
+            <div style="margin-top:10px;padding:12px;border-radius:8px;background:var(--fill);">
+              <div style="font-size:12px;color:var(--gray);font-weight:700;text-transform:uppercase;letter-spacing:.02em;">Objetivo ${oa.ano}${status.ehRede ? '' : sufixoGrupo}</div>
+              <div style="font-size:15px;margin-top:4px;font-weight:700;${bateu ? 'color:var(--success);' : ''}">
+                ${bateu ? `✓ Objetivo do ano batido (${brl(oa.objetivo)})` : `Faltam ${brl(oa.falta)} pro objetivo do ano`}
+              </div>
+              <div class="clienteBarra" style="margin-top:6px;"><i class="${bateu ? 'ok' : ''}" style="width:${pct}%"></i></div>
+              <div style="font-size:12px;margin-top:4px;color:var(--gray);">Faturado em ${oa.ano}: ${brl(oa.faturado)} de ${brl(oa.objetivo)} (${pct}%)</div>
+            </div>`);
+        }
+        if (!temObjetivo && status.objetivoEncerrado) {
           // Objetivo importado é de um trimestre que já acabou (os do trimestre
           // novo ainda não foram importados): só o resultado, sem "faltam".
           const enc = status.objetivoEncerrado;
@@ -25395,6 +25445,7 @@
       const TIPOS_IMPORTACAO = {
         precos: { rotulo: 'Planilha de preços', importar: (f) => importarPlanilhaPrecos(f) },
         relatorio: { rotulo: 'Relatório oficial (Carteira/Faturamento)', importar: (f) => importarRelatorioOficial(f) },
+        gerente: { rotulo: 'Relatório do gerente (objetivos do ano e do trimestre)', importar: (f) => importarRelatorioGerente(f) },
         objetivos: { rotulo: 'Objetivo trimestral', importar: (f, extra) => importarObjetivosTrimestrais(f, extra), pedePeriodo: true },
         classificatorio: { rotulo: 'Classificatório do ERP', importar: (f) => importarClassificatorioErp(f) },
         semcompra: { rotulo: 'Clientes sem compra (ERP)', importar: (f) => importarClientesSemCompraArquivo(f) },

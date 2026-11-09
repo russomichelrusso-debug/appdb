@@ -777,10 +777,125 @@
     return mapa;
   }
 
+  // ---- Relatório do gerente: "Análise de Resultados e Oportunidades" ----
+  // Planilha que o gerente de vendas manda por e-mail (a de 06/11/2026 veio
+  // como "Russo Representações.xlsx", 10 abas). Daqui saem três coisas:
+  //   - "META Q4 Clientes": objetivo do trimestre por cliente, pelo código do ERP;
+  //   - "Faturamento - Objetivo 2026": objetivo do ANO por cliente - essa aba
+  //     não tem código, só Cidade + Razão Social (o servidor acha o cliente);
+  //   - "Objetivo 2026 e Canal": objetivo de cada mês da região (2º quadro).
+  // As abas "Meses sem compras" e "META Q4 Clientes" trazem código + razão
+  // social (cortada em 30 letras) + cidade: vão em `codigosPorNome` pra o
+  // servidor achar pelo código o cliente da aba anual cujo nome no app é
+  // diferente ("RIO DEPOSITO..." da planilha é outro nome no cadastro).
+  // As colunas são achadas pelo título, nunca pela posição.
+  const MESES_PT = ['JANEIRO', 'FEVEREIRO', 'MARCO', 'ABRIL', 'MAIO', 'JUNHO', 'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO'];
+  // prefixo: texto do começo do nome da aba, ou RegExp (nome normalizado)
+  function abaDoGerente(wb, prefixo) {
+    return wb.SheetNames.find(n => {
+      const nome = normalizarRotuloImport(n);
+      return prefixo instanceof RegExp ? prefixo.test(nome) : nome.startsWith(prefixo);
+    }) || null;
+  }
+  // "META Q4 Clientes" (a "Meta Q4 Matriz" é outra: objetivo somado por matriz)
+  const RE_ABA_META_CLIENTES = /^META Q[1-4] CLIENTE/;
+  function ehRelatorioGerente(wb) {
+    return !!(abaDoGerente(wb, RE_ABA_META_CLIENTES) && abaDoGerente(wb, 'FATURAMENTO - OBJETIVO'));
+  }
+  // Primeira linha que tem todos os títulos pedidos; devolve { linha, col }
+  // com a posição de cada título (o primeiro que aparece).
+  function acharCabecalho(linhas, titulos) {
+    for (let i = 0; i < Math.min(linhas.length, 30); i++) {
+      const rotulos = (linhas[i] || []).map(normalizarRotuloImport);
+      if (titulos.every(t => rotulos.includes(t))) {
+        const col = {};
+        titulos.forEach(t => { col[t] = rotulos.indexOf(t); });
+        return { linha: i, col, rotulos };
+      }
+    }
+    return null;
+  }
+  function lerRelatorioGerente(XLSX, dados) {
+    const wb = XLSX.read(dados, { type: 'array' });
+    if (!ehRelatorioGerente(wb)) throw new Error('Não é o relatório do gerente: faltam as abas "META Q4 Clientes" e "Faturamento - Objetivo".');
+    const linhasDa = (nome) => XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, defval: null, raw: true });
+    const texto = (v) => String(v ?? '').trim();
+
+    // Objetivo do ano por cliente
+    const nomeAnual = abaDoGerente(wb, 'FATURAMENTO - OBJETIVO');
+    const ano = Number((normalizarRotuloImport(nomeAnual).match(/20\d\d/) || [])[0]) || null;
+    if (!ano) throw new Error(`Não achei o ano no nome da aba "${nomeAnual}".`);
+    const linhasAnual = linhasDa(nomeAnual);
+    const cabA = acharCabecalho(linhasAnual, ['CIDADE', 'RAZAO SOCIAL', 'VALOR OBJETIVO']);
+    if (!cabA) throw new Error(`Aba "${nomeAnual}": faltam as colunas Cidade, Razão Social e Valor Objetivo.`);
+    const colFatA = cabA.rotulos.indexOf('FATURAMENTO');
+    const anual = [];
+    for (const r of linhasAnual.slice(cabA.linha + 1)) {
+      const razao = texto(r[cabA.col['RAZAO SOCIAL']]);
+      const cidade = texto(r[cabA.col.CIDADE]);
+      if (!razao || /^TOTAL/i.test(cidade) || /^TOTAL/i.test(razao)) continue;
+      const objetivo = valorParaNumero(r[cabA.col['VALOR OBJETIVO']]);
+      if (objetivo == null || !(objetivo > 0)) continue;
+      anual.push({ razao, cidade, objetivo, faturamento: colFatA >= 0 ? valorParaNumero(r[colFatA]) : null });
+    }
+    if (!anual.length) throw new Error(`Aba "${nomeAnual}": nenhuma linha com objetivo.`);
+
+    // Objetivo do trimestre por cliente
+    const nomeQ = abaDoGerente(wb, RE_ABA_META_CLIENTES);
+    const trimestre = Number((normalizarRotuloImport(nomeQ).match(/Q([1-4])/) || [])[1]);
+    const linhasQ = linhasDa(nomeQ);
+    const cabQ = acharCabecalho(linhasQ, ['COD CLIENTE', 'RAZAO SOCIAL', 'CIDADE', 'OBJETIVO']);
+    if (!cabQ) throw new Error(`Aba "${nomeQ}": faltam as colunas Cód Cliente, Razão Social, Cidade e Objetivo.`);
+    const q4 = [];
+    const codigosPorNome = [];
+    for (const r of linhasQ.slice(cabQ.linha + 1)) {
+      const codigo = texto(r[cabQ.col['COD CLIENTE']]);
+      if (!/^\d+$/.test(codigo)) continue;
+      const objetivo = valorParaNumero(r[cabQ.col.OBJETIVO]);
+      if (objetivo != null && objetivo > 0) q4.push({ codigo, objetivo });
+      codigosPorNome.push({ razao: texto(r[cabQ.col['RAZAO SOCIAL']]), cidade: texto(r[cabQ.col.CIDADE]), codigo });
+    }
+    const mesIni = (trimestre - 1) * 3 + 1;
+    const fimDoMes = new Date(Date.UTC(ano, mesIni + 2, 0)).getUTCDate();
+    const periodo = trimestre ? {
+      inicio: `${ano}-${String(mesIni).padStart(2, '0')}-01`,
+      fim: `${ano}-${String(mesIni + 2).padStart(2, '0')}-${fimDoMes}`,
+    } : null;
+
+    // "Meses sem compras": mais código + nome + cidade (é a carteira toda)
+    const nomeMeses = abaDoGerente(wb, 'MESES SEM COMPRA');
+    if (nomeMeses) {
+      const linhasM = linhasDa(nomeMeses);
+      const cabM = acharCabecalho(linhasM, ['COD', 'RAZAO SOCIAL', 'CIDADE']);
+      if (cabM) {
+        for (const r of linhasM.slice(cabM.linha + 1)) {
+          const codigo = texto(r[cabM.col.COD]);
+          if (/^\d+$/.test(codigo)) codigosPorNome.push({ razao: texto(r[cabM.col['RAZAO SOCIAL']]), cidade: texto(r[cabM.col.CIDADE]), codigo });
+        }
+      }
+    }
+
+    // Objetivo de cada mês da região (2º quadro da aba "Objetivo 2026 e Canal")
+    const mensal = [];
+    const nomeCanal = abaDoGerente(wb, 'OBJETIVO ' + ano);
+    if (nomeCanal) {
+      const linhasC = linhasDa(nomeCanal);
+      const cabC = acharCabecalho(linhasC, ['MES', 'VALOR OBJETIVO']);
+      if (cabC) {
+        for (const r of linhasC.slice(cabC.linha + 1)) {
+          const mes = MESES_PT.indexOf(normalizarRotuloImport(r[cabC.col.MES])) + 1;
+          const objetivo = valorParaNumero(r[cabC.col['VALOR OBJETIVO']]);
+          if (mes && objetivo != null) mensal.push({ mes, objetivo });
+        }
+      }
+    }
+    return { ano, trimestre: trimestre || null, periodo, q4, anual, mensal, codigosPorNome };
+  }
+
   // ---- Reconhecimento do tipo de planilha ----
   // Pelas abas e colunas (as mesmas marcas que cada leitor exige), do mais
   // específico pro mais genérico. Devolve 'precos' | 'relatorio' |
-  // 'semcompra' | 'contasSalesforce' | 'inadimplencia' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
+  // 'gerente' | 'semcompra' | 'contasSalesforce' | 'inadimplencia' | 'objetivos' | 'classificatorio' | 'previsao' | 'videos' | 'linkSite' | null.
   function normalizarRotuloImport(v) {
     return String(v ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toUpperCase();
   }
@@ -789,6 +904,8 @@
     // cabeçalho, e não pesa com a planilha de preços (milhares de linhas).
     const wb = XLSX.read(dados, { type: 'array', sheetRows: 12 });
     const abas = wb.SheetNames.map(normalizarRotuloImport);
+    // antes do relatório oficial: tem uma aba "Faturamento Janeiro a Outubro"
+    if (ehRelatorioGerente(wb)) return 'gerente';
     if (abas.includes('PRECIFICACAO') && abas.includes('TRIBUTACAO')) return 'precos';
     if (abas.includes('CARTEIRA') || abas.includes('FATURAMENTO') || wb.SheetNames.some(n => ehAbaAguardandoPagamento(n) || ehAbaTitulosAvista(n))) return 'relatorio';
 
@@ -814,7 +931,7 @@
 
   return {
     detectarTipoPlanilha, lerRelatorioOficial, lerClassificatorio, lerPrevisao, dataRelatorioClassificatorio,
-    lerClientesSemCompra, mesAnoISO, lerInadimplencia, lerContasSalesforce,
+    lerClientesSemCompra, mesAnoISO, lerInadimplencia, lerContasSalesforce, lerRelatorioGerente,
     interpretarClassificatorio, paraDataISO, valorParaNumero, normalizarNrPedido,
   };
 });
