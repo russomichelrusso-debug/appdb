@@ -2421,6 +2421,17 @@ async function query(sql, params = []) {
     }
     return { rows: [{ com_gps: String(comGps), pelo_endereco: String(peloEndereco), pelo_numero: String(peloNumero), com_endereco_sem_gps: String(comEndereco), nao_encontrados: String(naoEncontrados) }] };
   }
+  // várias chaves numa consulta (objetivos trimestral + anual do status)
+  if (s.includes('FROM CONFIGURACOES WHERE CHAVE = ANY(')) {
+    return { rows: params[0].filter(k => configuracoes[k]).map(k => ({ chave: k, valor: configuracoes[k].valor, atualizado_em: configuracoes[k].atualizado_em })) };
+  }
+  // relatório do gerente: clientes com a cidade (ERP ou ficha de CNPJ)
+  if (s.includes('/* GERENTE:CLIENTES */')) {
+    return { rows: clientes.map(c => ({
+      id: c.id, nome: c.nome, codigo_oficial: c.codigo_oficial || null, matriz_grupo: c.matriz_grupo || null,
+      classificatorio_tipo: c.classificatorio_tipo || null, cidade: c.cidade || null,
+    })) };
+  }
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE')) {
     const registro = configuracoes[params[0]];
     return { rows: registro ? [{ valor: registro.valor, atualizado_em: registro.atualizado_em }] : [] };

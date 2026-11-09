@@ -7,6 +7,7 @@ const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 const { SQL_HOJE_BR, SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido } = require('./lib/comprasApp');
 const { avisarImportacao, quantos } = require('./lib/novidades');
 const { clientesDeOutroVendedor, clientesInativosNoSalesforce } = require('./lib/contasSalesforce');
+const { planejarObjetivosGerente, chavesDoStatus } = require('./lib/objetivosGerente');
 
 router.param('id', validarIdInteiro);
 
@@ -491,11 +492,22 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     let entradaTrimestral = null;
     let faltaPObjetivo = null;
     let objetivoEncerrado = null;
-    const objetivosConfigResult = await pool.query('SELECT valor FROM configuracoes WHERE chave = $1', ['objetivos_trimestrais']);
-    const objetivosConfig = objetivosConfigResult.rows[0]?.valor;
+    // trimestral e anual numa consulta só (cada consulta custa ~180 ms)
+    const objetivosConfigResult = await pool.query(
+      'SELECT chave, valor FROM configuracoes WHERE chave = ANY($1::text[])',
+      [['objetivos_trimestrais', 'objetivos_anuais']]
+    );
+    const configDe = (chave) => objetivosConfigResult.rows.find(r => r.chave === chave)?.valor;
+    const objetivosConfig = configDe('objetivos_trimestrais');
+    // chaves: a do relatório do gerente (grupo, ou "#<id>" da loja) e a do
+    // importador antigo (matriz_grupo || nome) - vale a primeira que existir
+    const chavesObjetivo = chavesDoStatus(cliente);
+    const objetivoDaChave = (mapa) => {
+      const k = chavesObjetivo.find(c => mapa && mapa[c] != null);
+      return k == null ? null : mapa[k];
+    };
     if (objetivosConfig && objetivosConfig.periodoInicio && objetivosConfig.periodoFim) {
-      const chaveGrupo = cliente.matriz_grupo || cliente.nome;
-      const objetivo = objetivosConfig.objetivos?.[chaveGrupo];
+      const objetivo = objetivoDaChave(objetivosConfig.objetivos);
       if (objetivo != null) {
         const valorObjetivo = Number(objetivo);
         const entrada = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
@@ -514,6 +526,23 @@ router.get('/:id/classificatorio/status', async (req, res) => {
           faltaPObjetivo = falta;
         }
       }
+    }
+
+    // Objetivo do ANO do grupo (relatório do gerente, aba "Faturamento -
+    // Objetivo"): comparado com o faturado de fato no ano, o mesmo acumulado
+    // da faixa (grupo; Rede = só a loja). Só vale no ano dele.
+    let objetivoAnual = null;
+    const anuaisConfig = configDe('objetivos_anuais');
+    const objetivoAnoValor = anuaisConfig && Number(anuaisConfig.ano) === anoPeriodo + 1 ? objetivoDaChave(anuaisConfig.objetivos) : null;
+    if (objetivoAnoValor != null) {
+      const valor = Number(objetivoAnoValor);
+      objetivoAnual = {
+        ano: Number(anuaisConfig.ano),
+        objetivo: valor,
+        faturado: faturamentoAnoCorrente,
+        falta: Math.max(0, Math.round((valor - faturamentoAnoCorrente) * 100) / 100),
+        importadoEm: anuaisConfig.importadoEm || null,
+      };
     }
 
     // Foto oficial do ERP (planilha Classificatório) - os mesmos números da
@@ -661,6 +690,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       entradaTrimestral,
       objetivoEncerrado,
       faltaPObjetivo,
+      objetivoAnual,
     });
   } catch (e) {
     console.error(e);
@@ -1054,6 +1084,83 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao importar objetivos trimestrais.' });
+  }
+});
+
+// Relatório do gerente ("Análise de Resultados e Oportunidades", lido por
+// lerRelatorioGerente em importadores.js) - só admin, pelo Painel. Recebe
+// { ano, periodo: {inicio, fim}, q4: [{codigo, objetivo}], anual: [{razao,
+// cidade, objetivo}], mensal: [{mes, objetivo}], codigosPorNome }.
+// Grava, trocando por inteiro (a planilha vem completa):
+// - `objetivos_trimestrais` (mesmo formato do importador antigo, por grupo -
+//   o card já mostra "faltam R$ X pro objetivo do trimestre");
+// - `objetivos_anuais` { ano, importadoEm, objetivos: {grupo: R$}, mensal }.
+// Contas em routes/lib/objetivosGerente.js.
+router.post('/classificatorio/relatorio-gerente/importar', async (req, res) => {
+  if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar o relatório do gerente.' });
+  const { ano, periodo, q4, anual, mensal, codigosPorNome } = req.body || {};
+  const anoN = Number(ano);
+  if (!Number.isInteger(anoN) || anoN < 2020 || anoN > 2100) return res.status(400).json({ erro: 'Ano do relatório inválido.' });
+  if (!Array.isArray(anual) || !anual.length) return res.status(400).json({ erro: 'Nenhum objetivo anual no relatório.' });
+  const RE_DIA = /^\d{4}-\d{2}-\d{2}$/;
+  const temQ4 = Array.isArray(q4) && q4.length && periodo && RE_DIA.test(periodo.inicio) && RE_DIA.test(periodo.fim);
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+  try {
+    const { rows: clientes } = await pool.query(
+      `/* gerente:clientes */
+       SELECT c.id, c.nome, c.codigo_oficial, c.matriz_grupo, c.classificatorio_tipo,
+              COALESCE(e.cidade, f.municipio) AS cidade
+       FROM clientes c
+       LEFT JOIN cliente_classificatorio_erp e ON e.cliente_id = c.id
+       LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id`
+    );
+    const plano = planejarObjetivosGerente({
+      clientes,
+      q4: temQ4 ? q4.filter(it => it && num(it.objetivo) > 0).map(it => ({ codigo: String(it.codigo), objetivo: num(it.objetivo) })) : [],
+      anual: anual.filter(it => it && num(it.objetivo) > 0).map(it => ({ razao: String(it.razao || ''), cidade: String(it.cidade || ''), objetivo: num(it.objetivo) })),
+      codigosPorNome: Array.isArray(codigosPorNome) ? codigosPorNome.filter(Boolean) : [],
+    });
+    const mensalLimpo = (Array.isArray(mensal) ? mensal : [])
+      .filter(m => m && Number.isInteger(Number(m.mes)) && m.mes >= 1 && m.mes <= 12 && num(m.objetivo) != null)
+      .map(m => ({ mes: Number(m.mes), objetivo: num(m.objetivo) }));
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const gravar = (chave, valor) => client.query(
+        `INSERT INTO configuracoes (chave, valor, atualizado_em) VALUES ($1, $2, now())
+         ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
+        [chave, JSON.stringify(valor)]
+      );
+      if (temQ4 && Object.keys(plano.objetivosQ4).length) {
+        await gravar('objetivos_trimestrais', {
+          periodoInicio: periodo.inicio, periodoFim: periodo.fim, objetivos: plano.objetivosQ4, fonte: 'relatorio-gerente',
+        });
+      }
+      await gravar('objetivos_anuais', {
+        ano: anoN, importadoEm: new Date().toISOString(), objetivos: plano.objetivosAnuais, mensal: mensalLimpo,
+      });
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => { });
+      throw e;
+    } finally {
+      client.release();
+    }
+
+    const q4Grupos = Object.keys(plano.objetivosQ4).length;
+    const anuaisGrupos = Object.keys(plano.objetivosAnuais).length;
+    console.log(`Relatório do gerente (${anoN}) importado por ${req.usuario?.email}: Q4 ${q4Grupos} grupo(s), anual ${anuaisGrupos} grupo(s), ${plano.anualStats.naoAchados.length} linha(s) sem cliente.`);
+    await avisarImportacao('objetivos-trimestrais', `Objetivos ${anoN} e do trimestre`);
+    res.json({
+      ano: anoN,
+      q4: temQ4 ? { ...plano.q4Stats, grupos: q4Grupos, periodo } : null,
+      anual: { ...plano.anualStats, grupos: anuaisGrupos },
+      meses: mensalLimpo.length,
+    });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao importar o relatório do gerente.' });
   }
 });
 
