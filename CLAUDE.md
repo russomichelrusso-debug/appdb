@@ -1856,7 +1856,15 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   (`GET /api/clientes/:id/lancamentos`, `routes/relatorios.js`: a lista menos o que ele comprou em qualquer época, ERP em qualquer
   status ou pedido do app, sem os que saíram da Lista de Preços; em mais lojas primeiro), com "já vende em N lojas" e "+" que põe 1
   embalagem no orçamento (última lista de cada cliente em `cortagLancCliente_v1`, vale sem internet). Ainda não usado pelas campanhas (`exigeItens` continua digitado na regra) nem pela proposta.
-  Próximos passos do plano, nesta ordem: **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), lançamentos nas campanhas (`exigeItens`) e na proposta, e "famílias que ele comprava e parou" na ficha.
+  **Fechamento no Dashboard** (PR 5, 11/2026): cartão "Fechamento 2026" logo abaixo do cartão vermelho (`renderFechamento`,
+  `curva-abc.html`; `fechamento` no `GET /api/dashboard/resumo` = `montarFechamento`, `routes/relatorios.js`: objetivo de cada mês
+  do relatório do gerente × **faturado de fato** do mês). O objetivo do gerente é de **faturamento**; o cartão vermelho de cima
+  continua sendo a **entrada de pedidos** com o objetivo digitado à mão (`meta_mensal_faturamento`). Três blocos: o mês atual
+  (faltam, por dia útil até o fim do mês), do mês atual a dezembro (faltam, por dia útil até 31/12) e o ano inteiro só como
+  informação. Dias úteis = segunda a sexta sem os feriados nacionais de data fixa (`diasUteisEntre`), contando de hoje. Conferido
+  em 09/11/2026: o faturado do app bate com a tabela mensal do gerente a menos de ~R$ 10 mil por mês.
+  Próximos passos do plano, nesta ordem: "famílias que ele comprava e parou" na ficha, "Montar mix inicial" com as referências do
+  cliente, e lançamentos nas campanhas (`exigeItens`) e na proposta.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do
