@@ -2448,6 +2448,21 @@ async function query(sql, params = []) {
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE = ANY(')) {
     return { rows: params[0].filter(k => configuracoes[k]).map(k => ({ chave: k, valor: configuracoes[k].valor, atualizado_em: configuracoes[k].atualizado_em })) };
   }
+  // Dashboard: faturado de fato de cada mês do ano corrente (cartão Fechamento)
+  if (s.includes('/* DASHBOARD:FATURADO-ANO */')) {
+    const ano = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 4);
+    const porMes = new Map();
+    for (const it of pedidosOficiaisItens) {
+      const d = String(it.data_faturamento || '').slice(0, 10);
+      if (!faturadoDeFato(it) || d.slice(0, 4) !== ano) continue;
+      const mes = Number(d.slice(5, 7));
+      const atual = porMes.get(mes) || { mes, faturado: 0, ate: d };
+      atual.faturado += Number(it.valor) || 0;
+      if (d > atual.ate) atual.ate = d;
+      porMes.set(mes, atual);
+    }
+    return { rows: [...porMes.values()].sort((a, b) => a.mes - b.mes) };
+  }
   // lançamentos que o cliente já comprou (ERP em qualquer status + app), P = base
   if (s.includes('/* LANCAMENTOS:COMPRADOS */')) {
     const [cod, clienteId, codigos] = params;

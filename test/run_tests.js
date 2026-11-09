@@ -1090,6 +1090,17 @@ async function main() {
       `relatório do gerente: Rede tem objetivo da própria loja: ${JSON.stringify({ oa: res.body.objetivoAnual, q4: res.body.objetivoTrimestral })}`);
     res = await req('GET', '/api/clientes/9084/classificatorio/status');
     assert(res.body.objetivoAnual == null, 'relatório do gerente: mesmo nome noutra cidade não leva o objetivo');
+    // Fechamento no Dashboard: objetivo mensal do gerente × faturado de fato do mês
+    {
+      const { montarFechamento } = require('../routes/relatorios');
+      const f = montarFechamento([{ mes: 1, faturado: '100.5', ate: '2026-01-31' }, { mes: 11, faturado: 78042.234, ate: '2026-11-06' }],
+        { ano: 2026, mensal: [{ mes: 1, objetivo: 200 }, { mes: 11, objetivo: 608008.48 }] }, '2026-11-09');
+      assert(f && f.ano === 2026 && f.meses.length === 12 && f.meses[0].faturado === 100.5 && f.meses[10].objetivo === 608008.48
+        && f.meses[10].faturado === 78042.23 && f.meses[11].objetivo === null && f.faturadoAte === '2026-11-06' && f.hoje === '2026-11-09'
+        && montarFechamento([], { ano: 2025, mensal: [{ mes: 1, objetivo: 1 }] }, '2026-11-09') === null
+        && montarFechamento([], null, '2026-11-09') === null,
+        `dashboard: fechamento do ano (objetivo do gerente × faturado por mês; outro ano = nada): ${JSON.stringify(f)}`);
+    }
     // lançamentos que o cliente ainda não compra: o que ele comprou (pelo
     // promocional, P60863 = 60863) sai; em mais lojas primeiro
     mockDb.__seed({ pedidosOficiaisItens: [

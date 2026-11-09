@@ -935,6 +935,23 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
   GROUP BY poi.nr_pedido, poi.cliente_codigo_oficial
   ORDER BY data_implantacao DESC, valor DESC NULLS LAST`;
 
+// Cartão "Fechamento" do Dashboard: objetivo de cada mês do ano (relatório do
+// gerente) × faturado de fato. Só com objetivo importado pro ano de hoje.
+function montarFechamento(linhasFat, objetivosAnuais, hojeBr) {
+  const ano = Number(String(hojeBr).slice(0, 4));
+  if (!objetivosAnuais || Number(objetivosAnuais.ano) !== ano || !Array.isArray(objetivosAnuais.mensal) || !objetivosAnuais.mensal.length) return null;
+  const fatPorMes = new Map(linhasFat.map(r => [Number(r.mes), Number(r.faturado) || 0]));
+  const meses = [];
+  for (let mes = 1; mes <= 12; mes++) {
+    const o = objetivosAnuais.mensal.find(m => Number(m.mes) === mes);
+    meses.push({ mes, objetivo: o ? Math.round(Number(o.objetivo) * 100) / 100 : null, faturado: Math.round((fatPorMes.get(mes) || 0) * 100) / 100 });
+  }
+  const ate = linhasFat.map(r => String(r.ate || '').slice(0, 10)).filter(Boolean).sort().pop() || null;
+  // hoje (dia de Brasília) vai junto: o app conta o mês e os dias úteis por ele,
+  // não pelo relógio do aparelho
+  return { ano, hoje: hojeBr, meses, faturadoAte: ate };
+}
+
 // Resumo do Dashboard principal (curva-abc.html, aba "Dashboard"): entrada de
 // pedidos mensal (12 meses, regra acima), faturamento semanal (10 semanas) e
 // trimestral (8 trimestres), + top 5 clientes por faturamento (12 meses) -
@@ -947,7 +964,7 @@ const SQL_ENTRADA_PEDIDOS_DO_MES = `
 router.get('/dashboard/resumo', async (req, res) => {
   try {
     const outrosVendedores = await clientesDeOutroVendedor();
-    const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente, contasSf, entradaAte] = await Promise.all([
+    const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente, contasSf, entradaAte, fatAno, objAno] = await Promise.all([
       pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
       pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
       pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
@@ -982,6 +999,18 @@ router.get('/dashboard/resumo', async (req, res) => {
          FROM contas_salesforce`
       ),
       pool.query(`/* dashboard:entrada-ate */ SELECT MAX(data_implantacao)::text AS dia FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6`),
+      // Fechamento do ano (cartão "Fechamento"): faturado de fato de cada mês do
+      // ano corrente, contra o objetivo mensal do relatório do gerente
+      // (configuracoes.objetivos_anuais.mensal - o objetivo é de faturamento)
+      pool.query(
+        `/* dashboard:faturado-ano */
+         SELECT EXTRACT(MONTH FROM data_faturamento)::int AS mes, SUM(valor) AS faturado, MAX(data_faturamento)::text AS ate
+         FROM pedidos_oficiais_itens
+         WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= date_trunc('year', ${SQL_HOJE_BRASIL})
+         GROUP BY 1 ORDER BY 1`
+      ),
+      // só ano e meses: o mapa de objetivos por grupo (~270) não vai pro resumo
+      pool.query("SELECT jsonb_build_object('ano', valor->'ano', 'mensal', valor->'mensal') AS valor FROM configuracoes WHERE chave = $1", ['objetivos_anuais']),
     ]);
 
     // Régua do painel do Salesforce (conferida em 22/10/2026: app 300 × SF 290
@@ -1061,6 +1090,7 @@ router.get('/dashboard/resumo', async (req, res) => {
       // último dia de implantação importado: o painel do Salesforce é ao vivo, o
       // relatório do ERP chega de madrugada sem os pedidos da véspera
       entradaAte: (entradaAte.rows[0] && entradaAte.rows[0].dia) || null,
+      fechamento: montarFechamento(fatAno.rows, objAno.rows[0] && objAno.rows[0].valor, hojeBr),
       contasSemComprar: {
         de3a5Meses: clientesDe3a5Meses.length,
         de6a8Meses: clientesDe6a8Meses.length,
@@ -1075,3 +1105,4 @@ router.get('/dashboard/resumo', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.montarFechamento = montarFechamento;

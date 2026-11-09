@@ -448,6 +448,19 @@
     .atItem[data-cor="success"] .atNum { color: var(--success); }
     .atItem[data-cor="warning"] .atNum { color: var(--warning); }
     .dashMensal .head .segmented { flex-shrink: 0; }
+    /* Fechamento do ano (objetivo do gerente) */
+    .fechBlocos { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; margin-top: 6px; }
+    @media (min-width: 700px) { .fechBlocos { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+    .fechBloco { border: 1px solid var(--hairline); border-radius: 12px; padding: 12px 14px; }
+    .fechBloco .fechTit { font-size: 12px; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: .02em; }
+    .fechBloco .fechValor { font-size: 22px; font-weight: 800; margin-top: 4px; }
+    .fechBloco .fechValor.falta { color: var(--red-texto, var(--red)); }
+    .fechBloco .fechValor.ok { color: var(--success, #1a7f37); }
+    .fechBloco .fechSub { font-size: 12.5px; color: var(--gray); margin-top: 4px; line-height: 1.4; }
+    .fechBloco .fechSub b { color: var(--ink); }
+    .fechBloco.info .fechValor { font-size: 18px; color: var(--ink); }
+    .fechBarra { height: 6px; border-radius: 3px; background: var(--hairline); margin-top: 8px; overflow: hidden; }
+    .fechBarra i { display: block; height: 100%; background: var(--red); }
     .dashMensal .legend { margin: 2px 0 8px; }
     .legend .tr { width: 14px; border-top: 2px dashed var(--ink); display: inline-block; }
     .legend .md { width: 14px; border-top: 2px dotted var(--blue); display: inline-block; }
@@ -748,6 +761,9 @@
         </div>
       </div>
       <div class="kpiExpandPanel hidden" id="kpiExpandPanel"></div>
+      <!-- Fechamento do ano: objetivo de faturamento do gerente (relatório do
+           gerente, importado no Painel) × faturado de fato, por mês -->
+      <div class="chartCard dashFechamento hidden" id="dashFechamento"></div>
 
       <div class="dashGrid">
         <div class="chartCard dashMensal">
@@ -2040,6 +2056,73 @@
       } else destTri.innerHTML = '';
     }
 
+    // Dias úteis de 'de' até 'ate' (Date, inclusive): segunda a sexta, sem os
+    // feriados nacionais de data fixa. Conta a partir de hoje (o faturamento do
+    // relatório vai até a véspera).
+    const FERIADOS_NACIONAIS = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'];
+    function diasUteisEntre(de, ate) {
+      let n = 0;
+      for (const d = new Date(de.getFullYear(), de.getMonth(), de.getDate()); d <= ate; d.setDate(d.getDate() + 1)) {
+        const dia = d.getDay();
+        const mmdd = `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        if (dia !== 0 && dia !== 6 && !FERIADOS_NACIONAIS.includes(mmdd)) n++;
+      }
+      return n;
+    }
+    // Cartão "Fechamento": mês atual, o que resta do ano (mês atual até
+    // dezembro) e o ano inteiro - este só como informação. O objetivo é de
+    // FATURAMENTO (o cartão vermelho de cima é a entrada de pedidos).
+    function renderFechamento(f) {
+      const el = document.getElementById('dashFechamento');
+      if (!el) return;
+      // dia de hoje do servidor (Brasília): no laptop em outro fuso, às 21h do
+      // dia 31 o relógio do aparelho já estava no mês seguinte
+      const hojeTxt = f && /^\d{4}-\d{2}-\d{2}$/.test(String(f.hoje || '')) ? String(f.hoje) : null;
+      const hoje = hojeTxt ? new Date(Number(hojeTxt.slice(0, 4)), Number(hojeTxt.slice(5, 7)) - 1, Number(hojeTxt.slice(8, 10))) : new Date();
+      if (!f || !Array.isArray(f.meses) || Number(f.ano) !== hoje.getFullYear()) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+      const mesAtual = hoje.getMonth() + 1;
+      const nomeMes = (m) => new Date(f.ano, m - 1, 1).toLocaleDateString('pt-BR', { month: 'long' });
+      const dinheiro = (v) => escapeHtml(formatCompact(v, true));
+      const doMes = f.meses.find(m => m.mes === mesAtual) || { objetivo: null, faturado: 0 };
+      const restantes = f.meses.filter(m => m.mes >= mesAtual);
+      const objRestante = restantes.reduce((t, m) => t + (Number(m.objetivo) || 0), 0);
+      const fatRestante = restantes.reduce((t, m) => t + (Number(m.faturado) || 0), 0);
+      const objAno = f.meses.reduce((t, m) => t + (Number(m.objetivo) || 0), 0);
+      const fatAno = f.meses.reduce((t, m) => t + (Number(m.faturado) || 0), 0);
+      const fimMes = new Date(f.ano, mesAtual, 0);
+      const uteisMes = diasUteisEntre(hoje, fimMes);
+      const uteisAno = diasUteisEntre(hoje, new Date(f.ano, 11, 31));
+      const pct = (v, o) => (o > 0 ? Math.round(v / o * 100) : 0);
+      const bloco = (titulo, objetivo, faturado, uteis, extra) => {
+        if (!(objetivo > 0)) return '';
+        const falta = Math.max(0, objetivo - faturado);
+        const p = pct(faturado, objetivo);
+        return `<div class="fechBloco">
+          <div class="fechTit">${escapeHtml(titulo)}</div>
+          <div class="fechValor ${falta > 0 ? 'falta' : 'ok'}">${falta > 0 ? `faltam ${dinheiro(falta)}` : 'objetivo batido'}</div>
+          <div class="fechSub">faturado <b>${dinheiro(faturado)}</b> de ${dinheiro(objetivo)} (${p}%)${extra || ''}</div>
+          ${falta > 0 && uteis > 0 ? `<div class="fechSub"><b>${dinheiro(falta / uteis)} por dia útil</b> · ${uteis} ${uteis === 1 ? 'dia útil' : 'dias úteis'}</div>` : ''}
+          <div class="fechBarra"><i style="width:${Math.min(100, p)}%"></i></div>
+        </div>`;
+      };
+      const nomesRestantes = restantes.map(m => nomeMes(m.mes));
+      const tituloRestante = nomesRestantes.length > 2 ? `${nomesRestantes[0]} a ${nomesRestantes[nomesRestantes.length - 1]}` : nomesRestantes.join(' e ');
+      const ate = f.faturadoAte ? String(f.faturadoAte).slice(0, 10).split('-').reverse().slice(0, 2).join('/') : '';
+      const blocos = bloco(nomeMes(mesAtual), Number(doMes.objetivo) || 0, Number(doMes.faturado) || 0, uteisMes)
+        + (restantes.length > 1 ? bloco(`${tituloRestante} · até 31/12`, objRestante, fatRestante, uteisAno) : '')
+        + (objAno > 0 ? `<div class="fechBloco info">
+            <div class="fechTit">Ano de ${f.ano}</div>
+            <div class="fechValor">${dinheiro(fatAno)} de ${dinheiro(objAno)}</div>
+            <div class="fechSub">${pct(fatAno, objAno)}% do objetivo do ano · ${fatAno >= objAno ? 'batido' : `faltam ${dinheiro(objAno - fatAno)}`}</div>
+            <div class="fechBarra"><i style="width:${Math.min(100, pct(fatAno, objAno))}%"></i></div>
+          </div>` : '');
+      if (!blocos) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+      el.innerHTML = `<div class="head"><div><h2>Fechamento ${f.ano}</h2>
+          <p>objetivo de faturamento do gerente × faturado${ate ? ` até ${escapeHtml(ate)}` : ''} · dias úteis sem feriados nacionais</p></div></div>
+        <div class="fechBlocos">${blocos}</div>`;
+      el.classList.remove('hidden');
+    }
+
     async function carregarMetaMensal() {
       try {
         const result = await apiFetch('/api/configuracoes/meta_mensal_faturamento');
@@ -2106,6 +2189,7 @@
           apiFetch('/api/configuracoes/produtos_foco_categorias').catch(() => ({ valor: [] })),
         ]);
         renderKpisPrincipal(resumo, alertas, metaMensal);
+        renderFechamento(resumo.fechamento);
         dashMensal = { ...dashMensal, resumo, meta: metaMensal };
         renderMensal();
         renderSemanaTrimestre(resumo);
