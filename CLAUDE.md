@@ -1831,9 +1831,16 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   enquanto (não pelo e-mail). O status do cliente devolve `objetivoAnual` {ano, objetivo, faturado, falta} contra o
   `faturamentoAnoCorrente` (faturado de fato no ano, grupo; Rede = a loja) - **ao vivo**, não o faturado da planilha. Card do
   Pedido/Levantamento: linha "Objetivo 2026 · 3% · faltam R$ 157,7 mil" (`linhaObjetivoAnual`); ficha: quadro "Objetivo 2026".
-  O objetivo mensal da região é guardado pro Dashboard (PR 3). Próximos passos do plano, nesta ordem: **bloco "🎯 Objetivo do ano"**
-  na aba Clientes (quem falta mais primeiro; 29 clientes = metade da diferença de R$ 2,49 mi) com proposta pra cobrir (teto pelo
-  maior pedido do cliente), **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), **lançamentos** (aba 9: 249 SKUs,
+  O objetivo mensal da região é guardado pro Dashboard (PR 3).
+  **Bloco "🎯 Objetivo 2026"** (PR 2, 11/2026): primeiro de "Pra vender hoje" na aba Clientes (`renderObjetivoAno`/
+  `carregarObjetivoAno`, cópia `cortagObjetivoAno_v1`, vale sem internet; `GET /api/clientes/classificatorio/objetivos-ano`, com
+  `lerComCache` e no limite da carteira). Por grupo, a mesma régua do status (grupo = lojas do `matriz_grupo`, Rede inclusive;
+  `#<id>` = a loja): faturado de fato no ano, entrada no trimestre do objetivo importado e o maior pedido dos 12 meses (implantação,
+  sem a série de 7 dígitos). Quem falta mais primeiro, "os N primeiros fazem metade do que falta", a loja que mais faturou abre o
+  grupo. **"Montar proposta"** = `montarPropostaFaixa` com o valor **limitado ao maior pedido do cliente** (sem pedido em 12 meses,
+  R$ 5 mil; `alvoPropostaObjetivo`): "faltam R$ 196 mil" não vira orçamento de R$ 196 mil. Em 09/11/2026: 189 de 242 grupos abaixo,
+  faltando R$ 2,30 mi; o app soma R$ 4,80 mi faturados no ano × R$ 5,03 mi da planilha (o app tira à vista pendente e o relatório
+  oficial importado vai até a véspera). Próximos passos do plano, nesta ordem: **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), **lançamentos** (aba 9: 249 SKUs,
   todos na Lista de Preços; selo, "lançamentos que ele não compra" e a lista das campanhas) e **recuperação** (Para reativar pelo
   objetivo; "comprava cortador e parou" - a família caiu 37%).
 

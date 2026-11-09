@@ -8,6 +8,7 @@ const { SQL_HOJE_BR, SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido } = require('./lib/co
 const { avisarImportacao, quantos } = require('./lib/novidades');
 const { clientesDeOutroVendedor, clientesInativosNoSalesforce } = require('./lib/contasSalesforce');
 const { planejarObjetivosGerente, chavesDoStatus } = require('./lib/objetivosGerente');
+const { lerComCache } = require('./lib/cacheTabela');
 
 router.param('id', validarIdInteiro);
 
@@ -749,6 +750,110 @@ router.get('/:id/classificatorio/grupo', async (req, res) => {
 
 // Alertas agregados - também aberto pra qualquer usuário logado (uso
 // diário, não coisa de admin). Separa clientes classificados em 3 grupos.
+// Objetivo do ano por grupo (bloco "🎯 Objetivo do ano" da aba Clientes):
+// a mesma conta do status de cada cliente, pra todos os grupos que têm
+// objetivo importado (relatório do gerente, `objetivos_anuais`) numa leitura
+// só. Grupo = as lojas com o mesmo matriz_grupo (Rede inclusive, como a soma
+// do status); "#<id>" = a loja sozinha. Vai junto, por grupo: a entrada no
+// trimestre do objetivo importado (`objetivos_trimestrais`) e o maior pedido
+// dos últimos 12 meses (o app limita a proposta a ele - "faltam R$ 196 mil"
+// não vira um orçamento de R$ 196 mil). Sem objetivo do ano = lista vazia.
+router.get('/classificatorio/objetivos-ano', async (req, res) => {
+  try {
+    const cfg = await pool.query(
+      'SELECT chave, valor FROM configuracoes WHERE chave = ANY($1::text[])',
+      [['objetivos_anuais', 'objetivos_trimestrais']]
+    );
+    const anual = cfg.rows.find(r => r.chave === 'objetivos_anuais')?.valor;
+    const trimestral = cfg.rows.find(r => r.chave === 'objetivos_trimestrais')?.valor;
+    const hoje = hojeBrasil();
+    if (!anual || Number(anual.ano) !== Number(hoje.slice(0, 4)) || !anual.objetivos) {
+      return res.json({ ano: Number(hoje.slice(0, 4)), grupos: [] });
+    }
+    const chaves = Object.keys(anual.objetivos).sort();
+    const triVale = trimestral && trimestral.periodoInicio && trimestral.periodoFim
+      && String(trimestral.periodoFim).slice(0, 10) >= hoje;
+    const triIni = triVale ? String(trimestral.periodoInicio).slice(0, 10) : null;
+    const triFim = triVale ? String(trimestral.periodoFim).slice(0, 10) : null;
+    const rows = await lerComCache('objetivos-ano',
+      ['pedidos_oficiais_itens', 'titulos_avista_pendentes', 'clientes', 'cliente_classificatorio_erp', 'cliente_cnpj_ficha'],
+      `/* objetivos-ano */
+       WITH pares AS (
+         SELECT c.matriz_grupo AS chave, c.id FROM clientes c WHERE c.matriz_grupo = ANY($1::text[])
+         UNION
+         SELECT '#' || c.id, c.id FROM clientes c WHERE ('#' || c.id) = ANY($1::text[])
+       ),
+       pedidos12 AS (
+         SELECT cliente_codigo_oficial, nr_pedido, SUM(valor) AS total
+         FROM pedidos_oficiais_itens
+         WHERE data_implantacao > $4::date - INTERVAL '12 months' AND length(nr_pedido) <= 6
+         GROUP BY 1, 2
+       )
+       SELECT p.chave, c.id AS cliente_id, c.nome, c.classificatorio_tipo, c.matriz_grupo,
+              COALESCE((SELECT e.cidade FROM cliente_classificatorio_erp e WHERE e.cliente_id = c.id LIMIT 1),
+                       (SELECT f.municipio FROM cliente_cnpj_ficha f WHERE f.cliente_id = c.id LIMIT 1)) AS cidade,
+              (SELECT COALESCE(SUM(poi.valor), 0) FROM pedidos_oficiais_itens poi
+                WHERE poi.cliente_codigo_oficial = c.codigo_oficial AND ${sqlFaturadoDeFato('poi')}
+                  AND poi.data_faturamento >= date_trunc('year', $4::date)) AS faturado,
+              (SELECT COALESCE(SUM(poi.valor), 0) FROM pedidos_oficiais_itens poi
+                WHERE poi.cliente_codigo_oficial = c.codigo_oficial
+                  AND poi.data_implantacao >= $2::date AND poi.data_implantacao <= $3::date) AS entrada_tri,
+              (SELECT MAX(t.total) FROM pedidos12 t WHERE t.cliente_codigo_oficial = c.codigo_oficial) AS maior_pedido
+       FROM pares p JOIN clientes c ON c.id = p.id`,
+      [chaves, triIni, triFim, hoje]
+    );
+    const porChave = new Map();
+    for (const r of rows) {
+      if (!porChave.has(r.chave)) porChave.set(r.chave, []);
+      porChave.get(r.chave).push(r);
+    }
+    const num = (v) => Number(v) || 0;
+    const r2 = (v) => Math.round(v * 100) / 100;
+    const grupos = [];
+    for (const chave of chaves) {
+      const lojas = porChave.get(chave);
+      if (!lojas || !lojas.length) continue;
+      const objetivo = num(anual.objetivos[chave]);
+      const faturado = lojas.reduce((s, l) => s + num(l.faturado), 0);
+      // a loja que mais faturou no ano abre o grupo (empate: menor id); num
+      // grupo com lojas que não são Rede, nunca a Rede (a ficha dela mostra o
+      // objetivo só dela, não o do grupo da linha tocada)
+      const ehRedeLoja = (l) => l.classificatorio_tipo === 'Rede';
+      const candidatas = !chave.startsWith('#') && lojas.some(l => !ehRedeLoja(l)) ? lojas.filter(l => !ehRedeLoja(l)) : lojas;
+      const principal = candidatas.slice().sort((a, b) => num(b.faturado) - num(a.faturado) || a.cliente_id - b.cliente_id)[0];
+      // trimestre: a chave do relatório do gerente e, pra loja sem grupo, a do
+      // importador antigo (o nome) - a mesma ordem do status (chavesDoStatus)
+      const objsTri = triVale && trimestral.objetivos ? trimestral.objetivos : {};
+      const objTri = objsTri[chave] != null ? objsTri[chave]
+        : (chave.startsWith('#') && !principal.matriz_grupo && !ehRedeLoja(principal) ? objsTri[principal.nome] ?? null : null);
+      // loja Rede cujo grupo também está na lista: o objetivo dela já está
+      // somado no do grupo - o app não conta a linha dela de novo no total
+      const dentroDe = chave.startsWith('#') && ehRedeLoja(principal) && principal.matriz_grupo && anual.objetivos[principal.matriz_grupo] != null
+        ? principal.matriz_grupo : null;
+      const entrada = lojas.reduce((s, l) => s + num(l.entrada_tri), 0);
+      grupos.push({
+        chave,
+        grupo: chave.startsWith('#') ? null : chave,
+        cliente_id: principal.cliente_id,
+        nome: principal.nome,
+        cidade: principal.cidade || null,
+        lojas: lojas.length,
+        objetivo,
+        faturado: r2(faturado),
+        falta: r2(Math.max(0, objetivo - faturado)),
+        trimestre: objTri != null ? { objetivo: num(objTri), entrada: r2(entrada), falta: r2(Math.max(0, num(objTri) - entrada)) } : null,
+        maior_pedido: r2(Math.max(0, ...lojas.map(l => num(l.maior_pedido)))),
+        dentro_de: dentroDe,
+      });
+    }
+    grupos.sort((a, b) => b.falta - a.falta || a.nome.localeCompare(b.nome));
+    res.json({ ano: Number(anual.ano), hoje, importadoEm: anual.importadoEm || null, trimestre: triVale ? { inicio: triIni, fim: triFim } : null, grupos });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ erro: 'Erro ao calcular os objetivos do ano.' });
+  }
+});
+
 router.get('/classificatorio/alertas', async (req, res) => {
   try {
     const [result, clientesResult, anoResult, trimResult, erpResult] = await Promise.all([

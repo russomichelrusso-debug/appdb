@@ -13315,6 +13315,7 @@
         </div>
         <div class="clientesGrupo">
           <div class="clientesSecao">Pra vender hoje</div>
+          <div class="recompra hidden" id="objetivoAnoWrap"></div>
           <div class="recompra hidden" id="recompraWrap"></div>
           <div class="recompra hidden" id="reativarWrap"></div>
           <div class="recompra hidden" id="classifAlertasWrap"></div>
@@ -20143,7 +20144,7 @@
           // "Recompra da semana" ficava escondido nesse caminho
           // contexto (canal/estado/prazo) pode ter mudado na aba Pedido: a ficha e o card têm de bater
           if (tab === 'produtos') { if (prodTabSelected) renderProdutoOferta(prodTabSelected); else atualizarProdutosInicio(); }
-          if (tab === 'clientes') { renderClientesRecentes(); carregarRecompra(false); renderCortadores(); renderPerto(); carregarReativar(false); renderCancelamentos(); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
+          if (tab === 'clientes') { renderClientesRecentes(); carregarObjetivoAno(false); carregarRecompra(false); renderCortadores(); renderPerto(); carregarReativar(false); renderCancelamentos(); carregarInadimplencia(false); carregarClassifAlertas(false); carregarVisitas(false); renderRota(); }
         }
         Object.keys(buttons).forEach(k => buttons[k].addEventListener('click', () => activate(k)));
         activateMainTab = activate;
@@ -23247,6 +23248,7 @@
       async function importarRelatorioGerente(file) {
         const dados = CortagImportadores.lerRelatorioGerente(await loadSheetJs(), await lerArquivoComoArrayBuffer(file));
         const r = await apiFetch('/api/clientes/classificatorio/relatorio-gerente/importar', { method: 'POST', body: JSON.stringify(dados) });
+        carregarObjetivoAno(true);
         const semCliente = r.anual.naoAchados.length;
         return `Objetivo ${r.ano}: ${r.anual.grupos} cliente(s)/grupo(s)`
           + (r.q4 ? ` · objetivo do trimestre (${formatDateBr(r.q4.periodo.inicio).slice(0, 5)} a ${formatDateBr(r.q4.periodo.fim).slice(0, 5)}): ${r.q4.grupos}` : '')
@@ -27499,6 +27501,7 @@
         classificatorio: '<path d="M22 17l-8.5-8.5-5 5L2 7"/><path d="M16 17h6v-6"/>',
         rota: '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/>',
         visita: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/><path d="M9 16l2 2 4-4"/>',
+        alvo: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5"/>',
         cortador: '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12"/>',
         cancelamento: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
       };
@@ -27515,12 +27518,13 @@
       // Abrir um bloco fecha os outros (com Recompra e Para reativar abertos
       // juntos a aba virava uma rolagem sem fim). Cada um lembra o seu estado.
       function alternarBlocoCliente(chave) {
-        const chaves = [RECOMPRA_ABERTO_LS_KEY, CANC_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY, CORTADORES_ABERTO_LS_KEY];
+        const chaves = [OBJ_ANO_ABERTO_LS_KEY, RECOMPRA_ABERTO_LS_KEY, CANC_ABERTO_LS_KEY, INAD_ABERTO_LS_KEY, REATIVAR_ABERTO_LS_KEY, CLASSIF_ABERTO_LS_KEY, PERTO_ABERTO_LS_KEY, VISITAS_ABERTO_LS_KEY, ROTA_ABERTO_LS_KEY, CORTADORES_ABERTO_LS_KEY];
         let aberta = false;
         try { aberta = localStorage.getItem(chave) === '1'; } catch (e) { }
         for (const k of chaves) {
           try { localStorage.setItem(k, !aberta && k === chave ? '1' : '0'); } catch (e) { }
         }
+        renderObjetivoAno();
         renderRecompra();
         renderCancelamentos();
         renderInadimplencia();
@@ -29186,6 +29190,107 @@
         el.innerHTML = `💰 ${escapeHtml(brl(c.total))} em atraso · ${escapeHtml(textoAtrasoInad(c))}`
           + `${c.cobranca_terceirizada ? ' · cobrança terceirizada' : ''}<br><small style="font-weight:400;">${escapeHtml(inadPosicao())}</small>`;
       }
+      // ---- Objetivo do ano (aba Clientes, Pra vender hoje) ----
+      // Objetivo de cada grupo no ano (relatório do gerente, importado no Painel)
+      // contra o faturado de fato ao vivo - GET /api/clientes/classificatorio/
+      // objetivos-ano. Quem falta mais primeiro; a dica diz quantos fazem metade
+      // do que falta. "Montar proposta" é a mesma da régua da faixa
+      // (montarPropostaFaixa), com o valor limitado ao maior pedido do cliente
+      // nos últimos 12 meses (sem pedido, R$ 5 mil): "faltam R$ 196 mil" não
+      // vira um orçamento de R$ 196 mil. Cópia no aparelho (vale sem internet).
+      const OBJ_ANO_LS_KEY = 'cortagObjetivoAno_v1';
+      const OBJ_ANO_ABERTO_LS_KEY = 'cortagObjetivoAnoAberto_v1';
+      const OBJ_ANO_ATUALIZAR_MS = 30 * 60000;
+      const OBJ_ANO_POR_PAGINA = 15;
+      const OBJ_ANO_PROPOSTA_SEM_PEDIDO = 5000;
+      let objAnoDados = null;
+      let objAnoCarregando = false;
+      let objAnoVerTodos = false;
+      function objetivoAnoAberto() {
+        try { return localStorage.getItem(OBJ_ANO_ABERTO_LS_KEY) === '1'; } catch (e) { return false; }
+      }
+      // valor da proposta: o que falta, até o maior pedido dele, em centenas
+      function alvoPropostaObjetivo(g) {
+        const teto = g.maior_pedido > 0 ? g.maior_pedido : OBJ_ANO_PROPOSTA_SEM_PEDIDO;
+        return Math.max(100, Math.ceil(Math.min(g.falta, teto) / 100) * 100);
+      }
+      function renderObjetivoAno() {
+        const el = document.getElementById('objetivoAnoWrap');
+        if (!el) return;
+        const grupos = (objAnoDados && Array.isArray(objAnoDados.grupos)) ? objAnoDados.grupos : [];
+        el.classList.toggle('hidden', !!clienteTabSelected || !grupos.length);
+        if (!grupos.length) { el.innerHTML = ''; return; }
+        const abaixo = grupos.filter(g => g.falta > 0);
+        // loja Rede já somada no grupo dela (dentro_de): aparece na lista, mas
+        // não entra de novo no total, na contagem nem na "metade"
+        const contaveis = abaixo.filter(g => !g.dentro_de);
+        const totalFalta = contaveis.reduce((s, g) => s + g.falta, 0);
+        const aberta = objetivoAnoAberto();
+        el.dataset.cor = contaveis.length ? 'vermelho' : 'cinza';
+        let corpo = '';
+        if (aberta) {
+          // quantos (do topo) fazem metade do que falta
+          let soma = 0, metade = 0;
+          for (const g of contaveis) { soma += g.falta; metade++; if (soma >= totalFalta / 2) break; }
+          const mostrar = objAnoVerTodos ? abaixo : abaixo.slice(0, OBJ_ANO_POR_PAGINA);
+          const resto = abaixo.length - mostrar.length;
+          const batidos = grupos.length - abaixo.length;
+          corpo = `<p class="recompraHint">Objetivo ${objAnoDados.ano} de cada cliente (relatório do gerente) contra o faturado no ano.`
+            + `${contaveis.length > 2 ? (metade === 1 ? ' O <b>primeiro</b> sozinho faz metade do que falta.' : ` Os <b>${metade}</b> primeiros fazem metade do que falta.`) : ''}`
+            + `${batidos ? ` ${batidos} já ${batidos === 1 ? 'bateu' : 'bateram'}.` : ''}`
+            + ` A proposta vai até o maior pedido do cliente nos últimos 12 meses.</p>`
+            + mostrar.map(g => {
+              const pct = g.objetivo > 0 ? Math.round(Math.min(100, (g.faturado / g.objetivo) * 100)) : 0;
+              const meta = fantasiaNaMeta(g, g.cliente_id);
+              if (g.cidade) meta.push(escapeHtml(nomeCidade(g.cidade)));
+              meta.push(`faturou ${escapeHtml(brlCurto(g.faturado))} de ${escapeHtml(brlCurto(g.objetivo))} (${pct}%)`);
+              if (g.trimestre) meta.push(g.trimestre.falta > 0 ? `trimestre: faltam ${escapeHtml(brlCurto(g.trimestre.falta))}` : 'trimestre ✓');
+              const alvo = alvoPropostaObjetivo(g);
+              return `<div class="recompraItem">
+                <button type="button" class="recompraNome" data-obj-abrir="${escapeHtml(String(g.cliente_id))}"><span>${escapeHtml(g.nome)}</span>${g.lojas > 1 ? `<span class="recompraSelo">grupo · ${g.lojas} lojas</span>` : ''}${g.dentro_de ? '<span class="recompraSelo">rede · já no grupo</span>' : ''}</button>
+                <div class="recompraMeta"><b style="color:var(--danger);">faltam ${escapeHtml(brlCurto(g.falta))}</b> · ${meta.join(' · ')}</div>
+                <div class="recompraAcoes">
+                  <button type="button" class="recompraBtn recompraBtn--principal" data-obj-proposta="${escapeHtml(g.chave)}" data-alvo="${alvo}">Montar proposta · ${escapeHtml(brlCurto(alvo))}</button>
+                </div>
+              </div>`;
+            }).join('')
+            + (resto > 0 ? `<button type="button" class="recompraMais" id="objetivoAnoMais">Ver mais ${resto}</button>` : '')
+            + (abaixo.length ? '' : `<div class="lev-empty">Todos os clientes já bateram o objetivo de ${objAnoDados.ano}.</div>`);
+        }
+        el.innerHTML = cabecalhoBloco({
+          id: 'objetivoAnoToggle', aberta, icone: 'alvo', titulo: `Objetivo ${objAnoDados.ano}`,
+          resumo: escapeHtml(contaveis.length ? `faltam ${brlCurto(totalFalta)} no ano` : 'todos bateram'),
+          numero: contaveis.length || null, rotulo: 'abaixo',
+        }) + corpo;
+        document.getElementById('objetivoAnoToggle').addEventListener('click', () => alternarBlocoCliente(OBJ_ANO_ABERTO_LS_KEY));
+        document.getElementById('objetivoAnoMais')?.addEventListener('click', () => { objAnoVerTodos = true; renderObjetivoAno(); });
+        el.querySelectorAll('[data-obj-abrir]').forEach(b => b.addEventListener('click', () => abrirClienteDaRecompra({ cliente_id: b.dataset.objAbrir })));
+        const porChave = new Map(grupos.map(g => [g.chave, g]));
+        el.querySelectorAll('[data-obj-proposta]').forEach(b => b.addEventListener('click', () => {
+          const g = porChave.get(b.dataset.objProposta);
+          if (!g) return;
+          const cliente = loadClientesLocais().find(c => String(c.id) === String(g.cliente_id)) || { id: g.cliente_id, nome: g.nome };
+          montarPropostaFaixa(cliente, Number(b.dataset.alvo), `pro objetivo ${objAnoDados.ano}`);
+        }));
+      }
+      async function carregarObjetivoAno(forcar) {
+        if (!objAnoDados) {
+          try { objAnoDados = JSON.parse(localStorage.getItem(OBJ_ANO_LS_KEY)) || null; } catch (e) { objAnoDados = null; }
+          renderObjetivoAno();
+        }
+        if (objAnoCarregando) return;
+        if (!forcar && objAnoDados && Date.now() - (objAnoDados.carregadoEm || 0) < OBJ_ANO_ATUALIZAR_MS) return;
+        objAnoCarregando = true;
+        try {
+          const r = await apiFetch('/api/clientes/classificatorio/objetivos-ano');
+          if (r && Array.isArray(r.grupos)) {
+            objAnoDados = { ...r, carregadoEm: Date.now() };
+            try { localStorage.setItem(OBJ_ANO_LS_KEY, JSON.stringify(objAnoDados)); } catch (e) { }
+          }
+        } catch (e) { /* sem internet: fica com a lista guardada */ }
+        objAnoCarregando = false;
+        renderObjetivoAno();
+      }
       // ---- Cortadores 5% (aba Clientes, Pra vender hoje) ----
       // Clientes da campanha dos cortadores manuais com o desconto valendo hoje
       // (descontoCortadoresDoCliente, cópia do /sync: funciona sem internet).
@@ -29997,6 +30102,7 @@
         document.getElementById('clienteTabDetail').classList.add('hidden');
         document.getElementById('clienteTabListWrap').classList.remove('hidden');
         renderClientesRecentes();
+        renderObjetivoAno();
         renderRecompra();
         renderPerto();
         renderRota();
