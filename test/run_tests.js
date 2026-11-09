@@ -1098,7 +1098,7 @@ async function main() {
     const gA = (res.body.grupos || []).find(g => g.chave === 'GRUPO A');
     assert(
       res.status === 200 && res.body.ano === anoG && gA && gA.lojas === 2 && gA.objetivo === 42000 && gA.faturado === 7000 && gA.falta === 35000
-        && gA.cliente_id === 9082 && gA.maior_pedido === 7000 && gA.trimestre && gA.trimestre.objetivo === 6500
+        && gA.cliente_id === 9082 && gA.maior_pedido === 7000 && gA.ids.slice().sort().join() === '9081,9082' && gA.trimestre && gA.trimestre.objetivo === 6500
         && res.body.grupos.every((g, i, l) => i === 0 || l[i - 1].falta >= g.falta)
         // Rede dentro de grupo: a linha dela diz o grupo (o app não soma de novo) e o grupo abre pela loja que não é Rede
         && (res.body.grupos.find(g => g.chave === '#9083') || {}).dentro_de === 'REDE X'
@@ -5262,6 +5262,7 @@ async function main() {
       consultas.push(sql);
       if (/AS hoje/.test(sql)) return { rows: [{ hoje: '2026-10-22' }] };
       if (/min\(dia\)/.test(sql)) return { rows: [{ cod: '13556', primeira: '2026-10-08' }, { cod: '222171', primeira: '2026-09-24' }] };
+      if (/cortadores_ano_anterior/.test(sql)) return { rows: [{ cod: '288056', cortadores_ano_anterior: '890.004' }] };
       return { rows: [{ cod: '13556', valor: '1234.567' }] };
     } };
     cc.esquecerCacheCortadores();
@@ -5269,7 +5270,8 @@ async function main() {
     const m2 = await cc.clientesComDescontoCortadores(poolFalso);
     cc.esquecerCacheCortadores();
     const a = m.get('13556'), semCompra = m.get('288056');
-    assert(m === m2 && consultas.length === 3 && m.size === 242 && !m.has('222171')
+    assert(m === m2 && consultas.length === 4 && m.size === 242 && !m.has('222171')
+      && semCompra && semCompra.cortadoresAnoAnterior === 890 && a && a.cortadoresAnoAnterior === 0
       && a && a.ate === '2026-10-31' && a.primeira === '2026-10-08' && a.valor12m === 1234.57
       && semCompra && semCompra.ate === '2026-11-30' && semCompra.primeira === null && semCompra.valor12m === 0
       && consultas.some(q => /sqlFaturadoDeFato|status = 'faturado'/.test(q)) && consultas.some(q => /origem IS DISTINCT FROM 'faturamento'/.test(q)),
