@@ -71,7 +71,7 @@ router.get('/', async (req, res) => {
 // latitude_aprox/longitude_aprox/localizacao_nivel: posição aproximada pelo
 // endereço da ficha (routes/lib/geocodificacao.js), só enquanto a ficha tiver
 // o mesmo endereço consultado - "Clientes perto de mim" usa quando não há GPS.
-// desconto_cortadores ({ate, primeira, valor12m}): cliente com o desconto extra
+// desconto_cortadores ({ate, primeira, valor12m, cortadoresAnoAnterior}): cliente com o desconto extra
 // da campanha de cortadores manuais valendo (routes/lib/campanhaCortadores.js).
 router.get('/sync', async (req, res) => {
   try {

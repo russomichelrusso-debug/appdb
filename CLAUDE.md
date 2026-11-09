@@ -1840,9 +1840,15 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   grupo. **"Montar proposta"** = `montarPropostaFaixa` com o valor **limitado ao maior pedido do cliente** (sem pedido em 12 meses,
   R$ 5 mil; `alvoPropostaObjetivo`): "faltam R$ 196 mil" não vira orçamento de R$ 196 mil. Em 09/11/2026: 189 de 242 grupos abaixo,
   faltando R$ 2,30 mi; o app soma R$ 4,80 mi faturados no ano × R$ 5,03 mi da planilha (o app tira à vista pendente e o relatório
-  oficial importado vai até a véspera). Próximos passos do plano, nesta ordem: **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), **lançamentos** (aba 9: 249 SKUs,
-  todos na Lista de Preços; selo, "lançamentos que ele não compra" e a lista das campanhas) e **recuperação** (Para reativar pelo
-  objetivo; "comprava cortador e parou" - a família caiu 37%).
+  oficial importado vai até a véspera).
+  **Recuperação** (PR 3, 11/2026): o bloco "Cortadores 5% · 1ª compra" põe primeiro quem **comprou cortador manual no ano passado e
+  parou** (`cortadoresAnoAnterior` no `desconto_cortadores` do `/sync`, faturado de fato da família no ano anterior,
+  `routes/lib/campanhaCortadores.js`; em 09/11/2026: 59 clientes da lista, R$ 196 mil em 2025), com "comprou R$ X de cortador em
+  2025"; o **Para reativar** mostra "objetivo 2026: faltam R$ X" do grupo do cliente (`objetivoAnoDoCliente`, pelos `ids` de cada
+  grupo na rota do objetivo do ano; a linha de Rede já somada no grupo fica de lado) e, em cada faixa, quem tem mais objetivo em jogo
+  vem primeiro. Próximos passos do plano, nesta ordem: **fechamento no Dashboard** (quanto vender por dia útil em nov/dez), **lançamentos** (aba 9: 249 SKUs,
+  todos na Lista de Preços; selo, "lançamentos que ele não compra" e a lista das campanhas) e "famílias que ele comprava e parou" na
+  ficha.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do

@@ -844,6 +844,7 @@ router.get('/classificatorio/objetivos-ano', async (req, res) => {
         trimestre: objTri != null ? { objetivo: num(objTri), entrada: r2(entrada), falta: r2(Math.max(0, num(objTri) - entrada)) } : null,
         maior_pedido: r2(Math.max(0, ...lojas.map(l => num(l.maior_pedido)))),
         dentro_de: dentroDe,
+        ids: lojas.map(l => l.cliente_id),
       });
     }
     grupos.sort((a, b) => b.falta - a.falta || a.nome.localeCompare(b.nome));

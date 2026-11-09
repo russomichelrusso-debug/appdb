@@ -64,7 +64,7 @@ function validoAteDoCliente(primeira, hoje) {
   return hoje <= ate ? ate : null;
 }
 
-// Map codigo_oficial -> { ate, primeira, valor12m } dos clientes da lista que
+// Map codigo_oficial -> { ate, primeira, valor12m, cortadoresAnoAnterior } dos clientes da lista que
 // ainda têm o desconto hoje (dia de Brasília). valor12m (faturado de fato em
 // 12 meses) ordena a lista da aba Clientes: quem comprava mais primeiro.
 // Guardado CACHE_MS na memória: todo aparelho chama o /sync ao abrir o app.
@@ -84,7 +84,7 @@ async function calcular(pool) {
   if (!hoje || hoje < CAMPANHA.inicio || hoje > CAMPANHA.fim) return new Map();
   const codigos = [...CODIGOS];
   const familia = `%${CAMPANHA.familia}%`;
-  const [compras, valores] = await Promise.all([
+  const [compras, valores, anoAnterior] = await Promise.all([
     pool.query(
       `WITH cm AS (SELECT codigo_sku FROM catalogo_precos WHERE familia ILIKE $3),
        dias AS (
@@ -114,14 +114,33 @@ async function calcular(pool) {
        GROUP BY 1`,
       [codigos]
     ),
+    // cortador manual faturado no ano passado: quem comprava e parou vem primeiro
+    // no bloco da aba Clientes (a família caiu 37% em 2026 no relatório do gerente)
+    pool.query(
+      `SELECT p.cliente_codigo_oficial AS cod, sum(p.valor) AS cortadores_ano_anterior
+       FROM pedidos_oficiais_itens p
+       WHERE p.cliente_codigo_oficial = ANY($1::text[]) AND ${sqlFaturadoDeFato('p')}
+         AND p.data_faturamento >= date_trunc('year', ${SQL_HOJE_BR}) - INTERVAL '1 year'
+         AND p.data_faturamento < date_trunc('year', ${SQL_HOJE_BR})
+         AND regexp_replace(p.codigo_sku, '^P[12]?', '') IN (SELECT codigo_sku FROM catalogo_precos WHERE familia ILIKE $2)
+       GROUP BY 1`,
+      [codigos, familia]
+    ),
   ]);
+  const anoAnteriorPorCod = new Map(anoAnterior.rows.map(r => [String(r.cod), Number(r.cortadores_ano_anterior) || 0]));
   const primeiraPorCod = new Map(compras.rows.map(r => [String(r.cod), String(r.primeira).slice(0, 10)]));
   const valorPorCod = new Map(valores.rows.map(r => [String(r.cod), Number(r.valor) || 0]));
   const res = new Map();
   for (const cod of codigos) {
     const primeira = primeiraPorCod.get(cod) || null;
     const ate = validoAteDoCliente(primeira, hoje);
-    if (ate) res.set(cod, { ate, primeira, valor12m: Math.round((valorPorCod.get(cod) || 0) * 100) / 100 });
+    if (ate) {
+      res.set(cod, {
+        ate, primeira,
+        valor12m: Math.round((valorPorCod.get(cod) || 0) * 100) / 100,
+        cortadoresAnoAnterior: Math.round((anoAnteriorPorCod.get(cod) || 0) * 100) / 100,
+      });
+    }
   }
   return res;
 }
