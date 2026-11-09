@@ -29221,19 +29221,22 @@
         el.classList.toggle('hidden', !!clienteTabSelected || !grupos.length);
         if (!grupos.length) { el.innerHTML = ''; return; }
         const abaixo = grupos.filter(g => g.falta > 0);
-        const totalFalta = abaixo.reduce((s, g) => s + g.falta, 0);
+        // loja Rede já somada no grupo dela (dentro_de): aparece na lista, mas
+        // não entra de novo no total, na contagem nem na "metade"
+        const contaveis = abaixo.filter(g => !g.dentro_de);
+        const totalFalta = contaveis.reduce((s, g) => s + g.falta, 0);
         const aberta = objetivoAnoAberto();
-        el.dataset.cor = abaixo.length ? 'vermelho' : 'cinza';
+        el.dataset.cor = contaveis.length ? 'vermelho' : 'cinza';
         let corpo = '';
         if (aberta) {
           // quantos (do topo) fazem metade do que falta
           let soma = 0, metade = 0;
-          for (const g of abaixo) { soma += g.falta; metade++; if (soma >= totalFalta / 2) break; }
+          for (const g of contaveis) { soma += g.falta; metade++; if (soma >= totalFalta / 2) break; }
           const mostrar = objAnoVerTodos ? abaixo : abaixo.slice(0, OBJ_ANO_POR_PAGINA);
           const resto = abaixo.length - mostrar.length;
           const batidos = grupos.length - abaixo.length;
           corpo = `<p class="recompraHint">Objetivo ${objAnoDados.ano} de cada cliente (relatório do gerente) contra o faturado no ano.`
-            + `${abaixo.length > 2 ? (metade === 1 ? ' O <b>primeiro</b> sozinho faz metade do que falta.' : ` Os <b>${metade}</b> primeiros fazem metade do que falta.`) : ''}`
+            + `${contaveis.length > 2 ? (metade === 1 ? ' O <b>primeiro</b> sozinho faz metade do que falta.' : ` Os <b>${metade}</b> primeiros fazem metade do que falta.`) : ''}`
             + `${batidos ? ` ${batidos} já ${batidos === 1 ? 'bateu' : 'bateram'}.` : ''}`
             + ` A proposta vai até o maior pedido do cliente nos últimos 12 meses.</p>`
             + mostrar.map(g => {
@@ -29244,7 +29247,7 @@
               if (g.trimestre) meta.push(g.trimestre.falta > 0 ? `trimestre: faltam ${escapeHtml(brlCurto(g.trimestre.falta))}` : 'trimestre ✓');
               const alvo = alvoPropostaObjetivo(g);
               return `<div class="recompraItem">
-                <button type="button" class="recompraNome" data-obj-abrir="${escapeHtml(String(g.cliente_id))}"><span>${escapeHtml(g.nome)}</span>${g.lojas > 1 ? `<span class="recompraSelo">grupo · ${g.lojas} lojas</span>` : ''}</button>
+                <button type="button" class="recompraNome" data-obj-abrir="${escapeHtml(String(g.cliente_id))}"><span>${escapeHtml(g.nome)}</span>${g.lojas > 1 ? `<span class="recompraSelo">grupo · ${g.lojas} lojas</span>` : ''}${g.dentro_de ? '<span class="recompraSelo">rede · já no grupo</span>' : ''}</button>
                 <div class="recompraMeta"><b style="color:var(--danger);">faltam ${escapeHtml(brlCurto(g.falta))}</b> · ${meta.join(' · ')}</div>
                 <div class="recompraAcoes">
                   <button type="button" class="recompraBtn recompraBtn--principal" data-obj-proposta="${escapeHtml(g.chave)}" data-alvo="${alvo}">Montar proposta · ${escapeHtml(brlCurto(alvo))}</button>
@@ -29256,8 +29259,8 @@
         }
         el.innerHTML = cabecalhoBloco({
           id: 'objetivoAnoToggle', aberta, icone: 'alvo', titulo: `Objetivo ${objAnoDados.ano}`,
-          resumo: escapeHtml(abaixo.length ? `faltam ${brlCurto(totalFalta)} no ano` : 'todos bateram'),
-          numero: abaixo.length || null, rotulo: 'abaixo',
+          resumo: escapeHtml(contaveis.length ? `faltam ${brlCurto(totalFalta)} no ano` : 'todos bateram'),
+          numero: contaveis.length || null, rotulo: 'abaixo',
         }) + corpo;
         document.getElementById('objetivoAnoToggle').addEventListener('click', () => alternarBlocoCliente(OBJ_ANO_ABERTO_LS_KEY));
         document.getElementById('objetivoAnoMais')?.addEventListener('click', () => { objAnoVerTodos = true; renderObjetivoAno(); });
@@ -30099,6 +30102,7 @@
         document.getElementById('clienteTabDetail').classList.add('hidden');
         document.getElementById('clienteTabListWrap').classList.remove('hidden');
         renderClientesRecentes();
+        renderObjetivoAno();
         renderRecompra();
         renderPerto();
         renderRota();

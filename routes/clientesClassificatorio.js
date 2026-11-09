@@ -789,7 +789,7 @@ router.get('/classificatorio/objetivos-ano', async (req, res) => {
          WHERE data_implantacao > $4::date - INTERVAL '12 months' AND length(nr_pedido) <= 6
          GROUP BY 1, 2
        )
-       SELECT p.chave, c.id AS cliente_id, c.nome,
+       SELECT p.chave, c.id AS cliente_id, c.nome, c.classificatorio_tipo, c.matriz_grupo,
               COALESCE((SELECT e.cidade FROM cliente_classificatorio_erp e WHERE e.cliente_id = c.id LIMIT 1),
                        (SELECT f.municipio FROM cliente_cnpj_ficha f WHERE f.cliente_id = c.id LIMIT 1)) AS cidade,
               (SELECT COALESCE(SUM(poi.valor), 0) FROM pedidos_oficiais_itens poi
@@ -815,9 +815,21 @@ router.get('/classificatorio/objetivos-ano', async (req, res) => {
       if (!lojas || !lojas.length) continue;
       const objetivo = num(anual.objetivos[chave]);
       const faturado = lojas.reduce((s, l) => s + num(l.faturado), 0);
-      // a loja que mais faturou no ano abre o grupo (empate: menor id)
-      const principal = lojas.slice().sort((a, b) => num(b.faturado) - num(a.faturado) || a.cliente_id - b.cliente_id)[0];
-      const objTri = triVale && trimestral.objetivos ? trimestral.objetivos[chave] : null;
+      // a loja que mais faturou no ano abre o grupo (empate: menor id); num
+      // grupo com lojas que não são Rede, nunca a Rede (a ficha dela mostra o
+      // objetivo só dela, não o do grupo da linha tocada)
+      const ehRedeLoja = (l) => l.classificatorio_tipo === 'Rede';
+      const candidatas = !chave.startsWith('#') && lojas.some(l => !ehRedeLoja(l)) ? lojas.filter(l => !ehRedeLoja(l)) : lojas;
+      const principal = candidatas.slice().sort((a, b) => num(b.faturado) - num(a.faturado) || a.cliente_id - b.cliente_id)[0];
+      // trimestre: a chave do relatório do gerente e, pra loja sem grupo, a do
+      // importador antigo (o nome) - a mesma ordem do status (chavesDoStatus)
+      const objsTri = triVale && trimestral.objetivos ? trimestral.objetivos : {};
+      const objTri = objsTri[chave] != null ? objsTri[chave]
+        : (chave.startsWith('#') && !principal.matriz_grupo && !ehRedeLoja(principal) ? objsTri[principal.nome] ?? null : null);
+      // loja Rede cujo grupo também está na lista: o objetivo dela já está
+      // somado no do grupo - o app não conta a linha dela de novo no total
+      const dentroDe = chave.startsWith('#') && ehRedeLoja(principal) && principal.matriz_grupo && anual.objetivos[principal.matriz_grupo] != null
+        ? principal.matriz_grupo : null;
       const entrada = lojas.reduce((s, l) => s + num(l.entrada_tri), 0);
       grupos.push({
         chave,
@@ -831,6 +843,7 @@ router.get('/classificatorio/objetivos-ano', async (req, res) => {
         falta: r2(Math.max(0, objetivo - faturado)),
         trimestre: objTri != null ? { objetivo: num(objTri), entrada: r2(entrada), falta: r2(Math.max(0, num(objTri) - entrada)) } : null,
         maior_pedido: r2(Math.max(0, ...lojas.map(l => num(l.maior_pedido)))),
+        dentro_de: dentroDe,
       });
     }
     grupos.sort((a, b) => b.falta - a.falta || a.nome.localeCompare(b.nome));

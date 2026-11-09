@@ -202,6 +202,7 @@ async function query(sql, params = []) {
       for (const it of itens) if (String(it.nr_pedido).length <= 6) porPedido.set(it.nr_pedido, (porPedido.get(it.nr_pedido) || 0) + Number(it.valor || 0));
       return {
         chave, cliente_id: c.id, nome: c.nome, cidade: c.cidade || null,
+        classificatorio_tipo: c.classificatorio_tipo || null, matriz_grupo: c.matriz_grupo || null,
         faturado: itens.filter(it => faturadoDeFato(it) && String(it.data_faturamento || '') >= anoIni).reduce((s2, it) => s2 + Number(it.valor || 0), 0),
         entrada_tri: ini ? itens.filter(it => it.data_implantacao && it.data_implantacao >= ini && it.data_implantacao <= fim).reduce((s2, it) => s2 + Number(it.valor || 0), 0) : 0,
         maior_pedido: porPedido.size ? Math.max(...porPedido.values()) : null,

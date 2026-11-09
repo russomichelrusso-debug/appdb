@@ -45,7 +45,10 @@ function chavesDoObjetivo(c, gruposComNaoRede) {
 }
 // Chaves que o status procura, na ordem: a do relatório do gerente e a do
 // importador antigo (COALESCE(matriz_grupo, nome) - grava o que já existe).
+// Rede só pela loja: o importador antigo pulava as redes, e o matriz_grupo da
+// loja Rede é o objetivo do grupo inteiro (comparado com o faturado da loja).
 function chavesDoStatus(c) {
+  if (ehRede(c)) return [chaveDoGrupo(c)];
   return [...new Set([chaveDoGrupo(c), c.matriz_grupo || c.nome])];
 }
 const somar = (obj, k, v) => { obj[k] = Math.round(((obj[k] || 0) + Number(v)) * 100) / 100; };

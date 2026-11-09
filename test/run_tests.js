@@ -1028,6 +1028,8 @@ async function main() {
         { id: 9081, nome: 'LOJA GRUPO A', codigo_oficial: '99081', classificatorio_tipo: 'Varejo Master', matriz_grupo: 'GRUPO A', cidade: 'Umuarama' },
         { id: 9082, nome: 'LOJA GRUPO A FILIAL', codigo_oficial: '99082', classificatorio_tipo: 'Varejo Master', matriz_grupo: 'GRUPO A', cidade: 'Umuarama' },
         { id: 9083, nome: 'LOJA DA REDE', codigo_oficial: '99083', classificatorio_tipo: 'Rede', matriz_grupo: 'REDE X', cidade: 'Cianorte' },
+        // loja que não é Rede no grupo da Rede: o objetivo da Rede também soma no grupo
+        { id: 9085, nome: 'LOJA NORMAL DA REDE X', codigo_oficial: '99085', classificatorio_tipo: 'Varejo Master', matriz_grupo: 'REDE X', cidade: 'Cianorte' },
         // mesmo nome noutra cidade: não pode levar o objetivo da de Umuarama
         { id: 9084, nome: 'LOJA GRUPO A', codigo_oficial: '99084', classificatorio_tipo: 'Varejo Master', matriz_grupo: null, cidade: 'Londrina' },
       ],
@@ -1064,7 +1066,7 @@ async function main() {
     assert(res.status === 400, 'relatório do gerente: sem objetivo anual = 400');
     res = await req('POST', '/api/clientes/classificatorio/relatorio-gerente/importar', lido);
     assert(
-      res.status === 200 && res.body.anual.grupos === 3 && res.body.anual.naoAchados.length === 1 && res.body.q4.grupos === 2 && res.body.q4.rede === 1 && res.body.meses === 2,
+      res.status === 200 && res.body.anual.grupos === 4 && res.body.anual.naoAchados.length === 1 && res.body.q4.grupos === 3 && res.body.q4.rede === 1 && res.body.meses === 2,
       `relatório do gerente: importação (grupo somado, rede pela loja, linha sem cliente): ${JSON.stringify(res.body)}`
     );
     res = await req('GET', '/api/clientes/9081/classificatorio/status');
@@ -1097,8 +1099,12 @@ async function main() {
     assert(
       res.status === 200 && res.body.ano === anoG && gA && gA.lojas === 2 && gA.objetivo === 42000 && gA.faturado === 7000 && gA.falta === 35000
         && gA.cliente_id === 9082 && gA.maior_pedido === 7000 && gA.trimestre && gA.trimestre.objetivo === 6500
-        && res.body.grupos.every((g, i, l) => i === 0 || l[i - 1].falta >= g.falta),
-      `objetivo do ano: lista por grupo (loja que mais faturou abre, maior pedido, trimestre, ordem): ${JSON.stringify(res.body).slice(0, 600)}`
+        && res.body.grupos.every((g, i, l) => i === 0 || l[i - 1].falta >= g.falta)
+        // Rede dentro de grupo: a linha dela diz o grupo (o app não soma de novo) e o grupo abre pela loja que não é Rede
+        && (res.body.grupos.find(g => g.chave === '#9083') || {}).dentro_de === 'REDE X'
+        && (res.body.grupos.find(g => g.chave === 'REDE X') || {}).cliente_id === 9085
+        && (res.body.grupos.find(g => g.chave === 'REDE X') || {}).objetivo === 9000,
+      `objetivo do ano: lista por grupo (loja que mais faturou abre, maior pedido, trimestre, ordem, Rede no grupo): ${JSON.stringify((res.body.grupos || []).map(g => [g.chave, g.cliente_id, g.objetivo, g.dentro_de]))}`
     );
   }
 
