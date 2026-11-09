@@ -2448,6 +2448,20 @@ async function query(sql, params = []) {
   if (s.includes('FROM CONFIGURACOES WHERE CHAVE = ANY(')) {
     return { rows: params[0].filter(k => configuracoes[k]).map(k => ({ chave: k, valor: configuracoes[k].valor, atualizado_em: configuracoes[k].atualizado_em })) };
   }
+  // lançamentos que o cliente já comprou (ERP em qualquer status + app), P = base
+  if (s.includes('/* LANCAMENTOS:COMPRADOS */')) {
+    const [cod, clienteId, codigos] = params;
+    const base = (c) => String(c).replace(/^P[12]?/, '');
+    const set = new Set();
+    for (const it of pedidosOficiaisItens) if (cod && it.cliente_codigo_oficial === cod && codigos.includes(base(it.codigo_sku))) set.add(base(it.codigo_sku));
+    for (const ped of pedidos.filter(x => Number(x.cliente_id) === Number(clienteId))) {
+      for (const pi of pedidoItens.filter(x => x.pedido_id === ped.id)) {
+        const prod = produtos.find(x => x.id === pi.produto_id);
+        if (prod && codigos.includes(base(prod.codigo_sku))) set.add(base(prod.codigo_sku));
+      }
+    }
+    return { rows: [...set].map(codigo => ({ codigo })) };
+  }
   // relatório do gerente: clientes com a cidade (ERP ou ficha de CNPJ)
   if (s.includes('/* GERENTE:CLIENTES */')) {
     return { rows: clientes.map(c => ({

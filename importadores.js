@@ -783,7 +783,8 @@
   //   - "META Q4 Clientes": objetivo do trimestre por cliente, pelo código do ERP;
   //   - "Faturamento - Objetivo 2026": objetivo do ANO por cliente - essa aba
   //     não tem código, só Cidade + Razão Social (o servidor acha o cliente);
-  //   - "Objetivo 2026 e Canal": objetivo de cada mês da região (2º quadro).
+  //   - "Objetivo 2026 e Canal": objetivo de cada mês da região (2º quadro);
+  //   - "Lançamentos 2025 - 2026": os lançamentos e em quantas lojas já venderam.
   // As abas "Meses sem compras" e "META Q4 Clientes" trazem código + razão
   // social (cortada em 30 letras) + cidade: vão em `codigosPorNome` pra o
   // servidor achar pelo código o cliente da aba anual cujo nome no app é
@@ -889,7 +890,31 @@
         }
       }
     }
-    return { ano, trimestre: trimestre || null, periodo, q4, anual, mensal, codigosPorNome };
+    // Lançamentos (aba "Lançamentos 2025 - 2026"): código, ano do lançamento e
+    // em quantas lojas da região já vendeu (prova social na ficha do cliente)
+    const lancamentos = [];
+    const nomeLanc = abaDoGerente(wb, 'LANCAMENTOS');
+    if (nomeLanc) {
+      const linhasL = linhasDa(nomeLanc);
+      const cabL = acharCabecalho(linhasL, ['COD. ITEM', 'ANO LANCAMENTO']);
+      if (cabL) {
+        const colPdvs = cabL.rotulos.indexOf('QTD PDVS');
+        const colFat = cabL.rotulos.indexOf('FATURAMENTO');
+        const vistos = new Set();
+        for (const r of linhasL.slice(cabL.linha + 1)) {
+          const codigo = texto(r[cabL.col['COD. ITEM']]);
+          if (!/^\d+$/.test(codigo) || vistos.has(codigo)) continue;
+          vistos.add(codigo);
+          const anoL = Number((texto(r[cabL.col['ANO LANCAMENTO']]).match(/20\d\d/) || [])[0]) || null;
+          lancamentos.push({
+            codigo, ano: anoL,
+            pdvs: colPdvs >= 0 ? (valorParaNumero(r[colPdvs]) || 0) : 0,
+            faturamento: colFat >= 0 ? (valorParaNumero(r[colFat]) || 0) : 0,
+          });
+        }
+      }
+    }
+    return { ano, trimestre: trimestre || null, periodo, q4, anual, mensal, codigosPorNome, lancamentos };
   }
 
   // ---- Reconhecimento do tipo de planilha ----

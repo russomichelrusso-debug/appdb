@@ -1204,7 +1204,7 @@ router.post('/classificatorio/objetivos-trimestrais/importar', async (req, res) 
 // Contas em routes/lib/objetivosGerente.js.
 router.post('/classificatorio/relatorio-gerente/importar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode importar o relatório do gerente.' });
-  const { ano, periodo, q4, anual, mensal, codigosPorNome } = req.body || {};
+  const { ano, periodo, q4, anual, mensal, codigosPorNome, lancamentos } = req.body || {};
   const anoN = Number(ano);
   if (!Number.isInteger(anoN) || anoN < 2020 || anoN > 2100) return res.status(400).json({ erro: 'Ano do relatório inválido.' });
   if (!Array.isArray(anual) || !anual.length) return res.status(400).json({ erro: 'Nenhum objetivo anual no relatório.' });
@@ -1229,6 +1229,16 @@ router.post('/classificatorio/relatorio-gerente/importar', async (req, res) => {
     const mensalLimpo = (Array.isArray(mensal) ? mensal : [])
       .filter(m => m && Number.isInteger(Number(m.mes)) && m.mes >= 1 && m.mes <= 12 && num(m.objetivo) != null)
       .map(m => ({ mes: Number(m.mes), objetivo: num(m.objetivo) }));
+    // lançamentos (aba "Lançamentos 2025 - 2026"): código + ano + lojas que já venderam
+    const vistos = new Set();
+    const lancLimpos = (Array.isArray(lancamentos) ? lancamentos : [])
+      .filter(l => l && /^\d{3,10}$/.test(String(l.codigo || '')) && !vistos.has(String(l.codigo)) && vistos.add(String(l.codigo)))
+      .map(l => ({
+        codigo: String(l.codigo),
+        ano: Number.isInteger(Number(l.ano)) ? Number(l.ano) : null,
+        pdvs: Math.max(0, Math.round(num(l.pdvs) || 0)),
+        faturamento: Math.max(0, num(l.faturamento) || 0),
+      }));
 
     const client = await pool.connect();
     try {
@@ -1242,6 +1252,9 @@ router.post('/classificatorio/relatorio-gerente/importar', async (req, res) => {
         await gravar('objetivos_trimestrais', {
           periodoInicio: periodo.inicio, periodoFim: periodo.fim, objetivos: plano.objetivosQ4, fonte: 'relatorio-gerente',
         });
+      }
+      if (lancLimpos.length) {
+        await gravar('lancamentos', { ano: anoN, importadoEm: new Date().toISOString(), itens: lancLimpos });
       }
       await gravar('objetivos_anuais', {
         ano: anoN, importadoEm: new Date().toISOString(), objetivos: plano.objetivosAnuais, mensal: mensalLimpo,
@@ -1263,6 +1276,7 @@ router.post('/classificatorio/relatorio-gerente/importar', async (req, res) => {
       q4: temQ4 ? { ...plano.q4Stats, grupos: q4Grupos, periodo } : null,
       anual: { ...plano.anualStats, grupos: anuaisGrupos },
       meses: mensalLimpo.length,
+      lancamentos: lancLimpos.length,
     });
   } catch (e) {
     console.error(e);

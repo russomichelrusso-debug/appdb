@@ -1012,13 +1012,20 @@ async function main() {
       ['Lugar Nenhum', 'CLIENTE QUE NAO EXISTE', 777, 0, 0],
       ['Total Geral', '', 71777, 0, 0],
     ]);
+    abaG('Lançamentos 2025 - 2026', [
+      ['VENDAS LANÇAMENTOS 2025 E 2026'], ['', '', '', '', 'Ano'],
+      ['Cod. Item', 'Ano Lançamento', 'Desc. Item', 'Familia MKT', 'Qtd PDVs', 'Faturamento'],
+      ['60863', 'Lançamento - 2025', 'DISCO', '09', 3, 100], ['61362', 'Lançamento - 2026', 'CORTADOR', '01', 61, 4772.95],
+      ['61362', 'Lançamento - 2026', 'repetido', '01', 1, 1], ['Total', '', '', '', 64, 4872.95],
+    ]);
     const bufG = XLSXg.write(wbG, { type: 'buffer', bookType: 'xlsx' });
     assert(Imp.detectarTipoPlanilha(XLSXg, bufG) === 'gerente', `relatório do gerente: reconhecido pelas abas (${Imp.detectarTipoPlanilha(XLSXg, bufG)})`);
     const lido = Imp.lerRelatorioGerente(XLSXg, bufG);
     assert(
       lido.ano === anoG && lido.trimestre === 4 && lido.periodo.inicio === `${anoG}-10-01` && lido.periodo.fim === `${anoG}-12-31`
         && lido.q4.length === 3 && lido.anual.length === 5 && lido.mensal.length === 2 && lido.mensal[1].mes === 3
-        && lido.codigosPorNome.some(x => x.codigo === '99080'),
+        && lido.codigosPorNome.some(x => x.codigo === '99080')
+        && lido.lancamentos.length === 2 && lido.lancamentos[1].ano === 2026 && lido.lancamentos[1].pdvs === 61,
       `relatório do gerente: leitura (ano, Q4, anual sem total, meses com acento): ${JSON.stringify({ ano: lido.ano, periodo: lido.periodo, q4: lido.q4.length, anual: lido.anual.length, mensal: lido.mensal })}`
     );
 
@@ -1066,7 +1073,7 @@ async function main() {
     assert(res.status === 400, 'relatório do gerente: sem objetivo anual = 400');
     res = await req('POST', '/api/clientes/classificatorio/relatorio-gerente/importar', lido);
     assert(
-      res.status === 200 && res.body.anual.grupos === 4 && res.body.anual.naoAchados.length === 1 && res.body.q4.grupos === 3 && res.body.q4.rede === 1 && res.body.meses === 2,
+      res.status === 200 && res.body.anual.grupos === 4 && res.body.anual.naoAchados.length === 1 && res.body.q4.grupos === 3 && res.body.q4.rede === 1 && res.body.meses === 2 && res.body.lancamentos === 2,
       `relatório do gerente: importação (grupo somado, rede pela loja, linha sem cliente): ${JSON.stringify(res.body)}`
     );
     res = await req('GET', '/api/clientes/9081/classificatorio/status');
@@ -1083,6 +1090,17 @@ async function main() {
       `relatório do gerente: Rede tem objetivo da própria loja: ${JSON.stringify({ oa: res.body.objetivoAnual, q4: res.body.objetivoTrimestral })}`);
     res = await req('GET', '/api/clientes/9084/classificatorio/status');
     assert(res.body.objetivoAnual == null, 'relatório do gerente: mesmo nome noutra cidade não leva o objetivo');
+    // lançamentos que o cliente ainda não compra: o que ele comprou (pelo
+    // promocional, P60863 = 60863) sai; em mais lojas primeiro
+    mockDb.__seed({ pedidosOficiaisItens: [
+      { nr_pedido: 'PL1', codigo_sku: 'P60863', cliente_codigo_oficial: '99081', quantidade: 1, valor: 10, data_faturamento: null, data_implantacao: `${anoG}-03-01`, status: 'carteira' },
+    ] });
+    res = await req('GET', '/api/clientes/9081/lancamentos');
+    assert(res.status === 200 && res.body.total === 2 && res.body.jaCompra === 1 && res.body.itens.length === 1 && res.body.itens[0].codigo === '61362' && res.body.itens[0].pdvs === 61,
+      `lançamentos: tira o que o cliente já comprou (promocional = base): ${JSON.stringify(res.body)}`);
+    res = await req('GET', '/api/clientes/9080/lancamentos');
+    assert(res.status === 200 && res.body.itens.map(i => i.codigo).join() === '61362,60863',
+      `lançamentos: em mais lojas primeiro: ${JSON.stringify(res.body)}`);
     // lista do bloco "Objetivo do ano": quem falta mais primeiro, grupo somado.
     // Sessão própria: a rota conta no limite de 40/min da carteira, que a suíte usa
     {
