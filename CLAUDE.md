@@ -1887,7 +1887,10 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   ano). A regra gravada guarda só isso: os códigos saem de `configuracoes.lancamentos` na hora (`regrasComLancamentos` no
   `<motor-campanhas>`, testado; aplicado em `regrasDoOrcamento`, guardado enquanto regras e lista forem as mesmas), então lista nova do
   gerente vale sem editar a campanha. Os códigos digitados continuam somando. Sem a lista importada a caixinha fica desligada.
-  Próximo passo do plano: lançamentos na proposta.
+  **Lançamentos na proposta** (PR 9, 11/2026, último passo do plano): a "Proposta pra não cair"/"Montar proposta" do Objetivo 2026
+  (`montarPropostaFaixa`) põe, depois do que ele parou de comprar e antes dos mais vendidos, até 8 lançamentos que ele ainda não
+  compra (`carregarLancamentosDoCliente`, em mais lojas primeiro, 1 embalagem, sem Preço Fixo nem promocional); o aviso conta
+  quantos lançamentos entraram.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do
@@ -1948,7 +1951,8 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
      "Faltam R$ X" da régua (pra não cair; sem isso, pra próxima faixa), **sem impostos** (mesma conta do mix inicial: preço com o
      classificatório, sem campanha), nesta ordem: itens que vencem na Recompra do cliente (cópia `cortagRecompra_v1`), o que ele
      compra sempre (`comprados-recentes`, mais pedidos primeiro, quantidade da última compra), o que parou de comprar (sugestões,
-     `codigo_sku`, 1 embalagem) e os mais vendidos do canal que ele não compra (`rankingMixInicial`); para ao passar do valor (pode
+     `codigo_sku`, 1 embalagem), os lançamentos que ele não compra (até 8, desde 11/2026) e os mais vendidos do canal que ele não
+     compra (`rankingMixInicial`); para ao passar do valor (pode
      passar um pouco), pula item sem previsão de chegada, pergunta antes de trocar o orçamento e diz no aviso quanto chegou e de
      onde veio cada parte. Duas portas: botão **"Montar proposta pra não cair · R$ X"** embaixo da régua na ficha do cliente (aba
      Clientes) e o botão principal da gaveta do Dashboard ("Proposta pra não cair · R$ X", `index.html?cliente=ID&acao=faixa&alvo=…`;
