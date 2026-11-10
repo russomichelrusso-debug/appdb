@@ -1872,8 +1872,17 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   (o que mais faturou) com "+" que põe 1 embalagem no orçamento; produto fora da Lista de Preços não entra (família vem do catálogo).
   Última lista de cada cliente em `cortagFamParadasCliente_v1` (vale sem internet). Em 09/11/2026: 241 clientes, 889 famílias, R$ 1,02 mi
   em 2025 (Nivelamento pacote 231 mil, Cortadores 178 mil, Corte diamantado 120 mil).
-  Próximos passos do plano, nesta ordem: "Montar mix inicial" com as referências do cliente, e lançamentos nas campanhas
-  (`exigeItens`) e na proposta.
+  **Mix inicial com as referências do cliente** (PR 7, 11/2026, pedido do usuário: "quando selecionado o cliente, o mix usa a
+  referência do cliente como na recuperação"): com cliente no orçamento, o "✨ Montar mix inicial" (`montarMixInicial`,
+  `referenciasDoClienteParaMix`, `index.html`) põe primeiro o que é dele, nesta ordem: o que vence na Recompra (na quantidade dele),
+  as famílias que comprava e parou (o produto que mais faturava de cada; a de cortadores manuais primeiro enquanto vale o 5% da 1ª
+  compra), as 💡 sugestões (parou há mais de 1 ano) e até 8 lançamentos que ele não compra; só depois os mais vendidos do canal (sem
+  o que ele já compra). Fora a Recompra, 1 embalagem de cada; item sem previsão de chegada fica de fora; para no valor digitado (até
+  10% acima). Preço Fixo fica fora nas sugestões e lançamentos (como nos mais vendidos), não na Recompra nem na família parada
+  (os cortadores entram pelo 5% no fixo); da família entra o 1º dos 3 produtos que couber. Trocar de cliente durante a espera
+  cancela; toque duplo não monta dois. O aviso diz quantos vieram de cada lista. Sem cliente, igual a antes. Sem internet vale a última cópia de cada lista
+  (as famílias e os lançamentos saíram da ficha pra `carregarFamiliasParadasDoCliente`/`carregarLancamentosDoCliente`).
+  Próximo passo do plano: lançamentos nas campanhas (`exigeItens`) e na proposta.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do
