@@ -17779,10 +17779,16 @@
 
         return { rows, baseRows, total, totalSemImpostos, avisosCampanha: avisos };
       }
+      // com cliente, o mix começa pelo que é dele (referenciasDoClienteParaMix)
+      function textoBotaoMix() {
+        return state.levCliente ? 'o que ele comprava e parou, recompra, lançamentos e os mais vendidos' : 'os mais vendidos, até o valor que você escolher';
+      }
       function renderCartBar() {
         saveCartLocal(); // toda mutação do carrinho passa por aqui (ver addToCart/removeFromCart/changeQty/renderCart)
         agendarEnvioTelaCliente(); // e a tela do cliente no tablet, se houver
         agendarRenderCartDocado(); // e o orçamento preso à direita, no laptop
+        const mixSub = document.querySelector('#mixInicialBtn span');
+        if (mixSub) mixSub.textContent = textoBotaoMix();
         const bar = document.getElementById('cartBar');
         // Mostra quantos SKUs (produtos diferentes) há no orçamento, não a soma das quantidades.
         const n = state.cart.filter(i => i.qty > 0).length;
@@ -17951,7 +17957,7 @@
         const body = document.getElementById('cartItems');
         if (rows.length === 0) {
           body.innerHTML = `<div class="cart-empty">Nenhum item no orçamento ainda.<br>Busque produtos e toque em "Adicionar".</div>
-            <button type="button" class="mixInicialBtn" data-mix-inicial>✨ Montar mix inicial <span>os mais vendidos, até o valor que você escolher</span></button>
+            <button type="button" class="mixInicialBtn" data-mix-inicial>✨ Montar mix inicial <span>${escapeHtml(textoBotaoMix())}</span></button>
             <button type="button" class="mixInicialBtn" data-colar-lista>📋 Colar lista do cliente <span>texto, foto ou PDF que ele mandou no WhatsApp</span></button>`;
           body.querySelector('[data-mix-inicial]').addEventListener('click', montarMixInicial);
           body.querySelector('[data-colar-lista]').addEventListener('click', abrirListaCliente);
@@ -30217,6 +30223,15 @@
           localStorage.setItem(LANC_CLIENTE_LS_KEY, JSON.stringify(todos));
         } catch (e) { }
       }
+      // a lista do servidor (guardada no aparelho) ou, sem internet, a última dele
+      async function carregarLancamentosDoCliente(cliente) {
+        const id = String(cliente.id);
+        try {
+          const r = await apiFetch(`/api/clientes/${cliente.id}/lancamentos`);
+          if (r && Array.isArray(r.itens)) guardarLancCliente(id, r);
+          return r;
+        } catch (e) { return lerLancCliente()[id] || null; }
+      }
       async function loadClienteLancamentos() {
         const card = document.getElementById('clienteLancamentosCard');
         const el = document.getElementById('clienteLancamentosContent');
@@ -30228,11 +30243,7 @@
         // pelo id: a abertura troca o objeto do mesmo cliente por um mais completo
         const req = ++lancFichaReq;
         const id = String(cliente.id);
-        let r;
-        try {
-          r = await apiFetch(`/api/clientes/${cliente.id}/lancamentos`);
-          if (r && Array.isArray(r.itens)) guardarLancCliente(id, r);
-        } catch (e) { r = lerLancCliente()[id]; } // sem internet: a última lista dele
+        const r = await carregarLancamentosDoCliente(cliente);
         if (req !== lancFichaReq || !clienteTabSelected || String(clienteTabSelected.id) !== id || !r || !Array.isArray(r.itens)) return;
         // o catálogo pode ainda não ter chegado (ficha aberta por link): nome da rota
         const itens = r.itens;
@@ -30281,6 +30292,20 @@
           localStorage.setItem(FAMP_CLIENTE_LS_KEY, JSON.stringify(todos));
         } catch (e) { }
       }
+      async function carregarFamiliasParadasDoCliente(cliente) {
+        const id = String(cliente.id);
+        try {
+          const r = await apiFetch(`/api/clientes/${cliente.id}/familias-paradas`);
+          if (r && Array.isArray(r.familias)) guardarFamParadasCliente(id, r);
+          return r;
+        } catch (e) {
+          // sem internet: a última lista dele, só se for deste ano (a de 2026 aberta em 2027 diria "nada em 2026")
+          const r = lerFamParadasCliente()[id];
+          const anoHoje = Number(String(hojeBrasiliaISO()).slice(0, 4));
+          if (r && Array.isArray(r.familias) && r.familias.length && Number(r.familias[0].ano) + 1 !== anoHoje) return null;
+          return r || null;
+        }
+      }
       async function loadClienteFamiliasParadas() {
         const card = document.getElementById('clienteFamParadasCard');
         const el = document.getElementById('clienteFamParadasContent');
@@ -30290,16 +30315,7 @@
         if (!cliente) return;
         const req = ++fampFichaReq;
         const id = String(cliente.id);
-        let r;
-        try {
-          r = await apiFetch(`/api/clientes/${cliente.id}/familias-paradas`);
-          if (r && Array.isArray(r.familias)) guardarFamParadasCliente(id, r);
-        } catch (e) {
-          // sem internet: a última lista dele, só se for deste ano (a de 2026 aberta em 2027 diria "nada em 2026")
-          r = lerFamParadasCliente()[id];
-          const anoHoje = Number(String(hojeBrasiliaISO()).slice(0, 4));
-          if (r && Array.isArray(r.familias) && r.familias.length && Number(r.familias[0].ano) + 1 !== anoHoje) r = null;
-        }
+        const r = await carregarFamiliasParadasDoCliente(cliente);
         if (req !== fampFichaReq || !clienteTabSelected || String(clienteTabSelected.id) !== id || !r || !Array.isArray(r.familias) || !r.familias.length) return;
         const fams = r.familias;
         const total = fams.reduce((s, f) => s + (Number(f.valor) || 0), 0);
@@ -32094,35 +32110,94 @@
         if (teto != null && total > teto) { state.cart = antes; return null; }
         return total;
       }
+      // Referências do cliente pro mix (11/2026, pedido do usuário: "quando selecionado
+      // o cliente, o mix usa a referência do cliente como na recuperação"), nesta
+      // ordem: o que vence na Recompra dele (na quantidade dele), as famílias que
+      // comprava no ano passado e parou (o produto que mais faturava de cada; a de
+      // cortadores manuais primeiro enquanto vale o 5% da 1ª compra), o que parou de
+      // comprar há mais de 1 ano (💡 sugestões, a última medida) e os lançamentos que
+      // ele ainda não compra (em mais lojas primeiro, até MIX_LANCAMENTOS). Fora a
+      // Recompra, 1 embalagem de cada. Sem internet vale a última cópia de cada lista.
+      const MIX_LANCAMENTOS = 8;
+      async function referenciasDoClienteParaMix(cliente) {
+        let sugestoes = SUGESTOES_CACHE.get(cliente.id);
+        const [fams, lancs, sug] = await Promise.all([
+          carregarFamiliasParadasDoCliente(cliente).catch(() => null),
+          carregarLancamentosDoCliente(cliente).catch(() => null),
+          sugestoes ? sugestoes : apiFetch(`/api/clientes/${cliente.id}/sugestoes-recompra`).catch(() => null),
+        ]);
+        if (!sugestoes && Array.isArray(sug)) { sugestoes = sug; SUGESTOES_CACHE.set(cliente.id, sug); }
+        if (!recompraDados) { try { recompraDados = JSON.parse(localStorage.getItem(RECOMPRA_LS_KEY)) || null; } catch (e) { } }
+        const daRecompra = ((recompraDados && recompraDados.clientes) || []).find(c => String(c.cliente_id) === String(cliente.id));
+        const familias = ((fams && fams.familias) || []).slice();
+        if (descontoCortadoresDoCliente(cliente)) {
+          const i = familias.findIndex(f => /cortadores manuais/.test(textoCampanha(f.familia)));
+          if (i > 0) familias.unshift(familias.splice(i, 1)[0]);
+        }
+        return [
+          ...((daRecompra && daRecompra.itens) || []).map(it => ({ cod: it.codigo_sku, qtd: it.quantidade, de: 'recompra' })),
+          // os até 3 produtos de cada família, na ordem; entra só o 1º que couber (grupo)
+          ...familias.flatMap((f, i) => (f.produtos || []).map(pr => ({ cod: pr.codigo, qtd: 0, de: 'familia', grupo: 'f' + i }))),
+          ...(Array.isArray(sugestoes) ? sugestoes : []).filter(s => s.codigo_sku).map(s => ({ cod: s.codigo_sku, qtd: 0, de: 'parou' })),
+          ...((lancs && lancs.itens) || []).slice(0, MIX_LANCAMENTOS).map(l => ({ cod: l.codigo, qtd: 0, de: 'lancamento' })),
+        ];
+      }
+      let mixInicialMontando = false; // toque duplo com sinal fraco abria duas perguntas e somava dois mix
       async function montarMixInicial() {
+        if (mixInicialMontando) return;
+        mixInicialMontando = true;
+        try { await montarMixInicialAgora(); } finally { mixInicialMontando = false; }
+      }
+      async function montarMixInicialAgora() {
+        const cliente = state.levCliente;
+        // trocou de cliente durante a espera (rede ou pergunta): o mix era do outro
+        const trocou = () => String(state.levCliente?.id ?? '') !== String(cliente?.id ?? '');
         const dados = await carregarMixInicial(true);
-        if (!dados) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
-        if (state.levCliente) await carregarCompradosRecentes(state.levCliente); // o que ele já compra sai do mix
-        const r = rankingMixInicial(dados);
-        if (!r.itens.length) { showToast('Nenhum produto pra montar o mix nesse canal.', 'erro'); return; }
-        const municipio = state.levCliente ? (FICHA_CNPJ_INFO.get(state.levCliente.id) || {}).municipio : null;
+        if (cliente) await carregarCompradosRecentes(cliente); // o que ele já compra sai dos mais vendidos
+        const refs = cliente ? await referenciasDoClienteParaMix(cliente) : [];
+        if (trocou()) return;
+        if (!dados && !refs.length) { showToast('Não deu pra buscar os mais vendidos. Tente de novo com internet.', 'erro'); return; }
+        const r = dados ? rankingMixInicial(dados) : null;
+        if (!refs.length && !r.itens.length) { showToast('Nenhum produto pra montar o mix nesse canal.', 'erro'); return; }
+        const municipio = cliente ? (FICHA_CNPJ_INFO.get(cliente.id) || {}).municipio : null;
         const minimo = pedidoMinimoCif(state.uf, municipio).valor;
-        const txt = await askText(`Mix inicial com os produtos ${origemDoMix(r)}. Uma embalagem de cada, até o valor (sem impostos):`,
-          String(minimo), 'Montar orçamento');
-        if (txt == null) return;
+        const pergunta = refs.length
+          ? `Mix pra ${cliente.nome}: primeiro o que é dele (o que vence na recompra, famílias e produtos que parou de comprar, lançamentos que ainda não compra)${r && r.itens.length ? `, depois os produtos ${origemDoMix(r)}` : ''}. Até o valor (sem impostos):`
+          : `Mix inicial com os produtos ${origemDoMix(r)}. Uma embalagem de cada, até o valor (sem impostos):`;
+        const txt = await askText(pergunta, String(minimo), 'Montar orçamento');
+        if (txt == null || trocou()) return;
         const alvo = Number(String(txt).replace(/[^\d,.-]/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'));
         if (!(alvo > 0)) { showToast('Digite um valor, ex.: 1500', 'erro'); return; }
+        const candidatos = [...refs, ...(r ? r.itens.map(({ p }) => ({ cod: p.c, qtd: 0, de: 'mix' })) : [])];
         // "até o valor": item cuja embalagem passaria mais de 10% do valor fica de
         // fora e o próximo da lista é tentado (embalagem de 24 x R$ 30 no fim estourava)
         const teto = alvo * 1.1;
         let soma = cartTotals().totalSemImpostos, n = 0;
-        for (const { p } of r.itens) {
+        const porOrigem = { recompra: 0, familia: 0, parou: 0, lancamento: 0, mix: 0 };
+        const gruposFeitos = new Set();
+        for (const c of candidatos) {
           if (soma >= alvo) break;
-          if (state.cart.some(i => i.cod === p.c)) continue;
+          if (c.grupo && gruposFeitos.has(c.grupo)) continue;
+          const p = productByCod(String(c.cod));
+          if (!p || p._promocional || state.cart.some(i => i.cod === p.c) || (c.de !== 'mix' && itemSemPrevisaoDeChegada(p.c))) continue;
+          // Preço Fixo fica fora como nos mais vendidos, menos o que ele já comprava
+          // (recompra e família parada: os cortadores manuais entram pelo 5% no fixo)
+          if ((c.de === 'parou' || c.de === 'lancamento') && isPrecoFixoParaCanal(p)) continue;
           if (!(precoUnitarioSemImpostos(p) > 0)) continue;
-          const total = incluirAteOTeto(p, packStep(p), teto);
+          const passo = packStep(p);
+          const qtd = Math.max(1, Math.ceil((Number(c.qtd) || passo) / passo)) * passo;
+          const total = incluirAteOTeto(p, qtd, teto);
           if (total == null) continue;
           soma = total;
           n++;
+          porOrigem[c.de]++;
+          if (c.grupo) gruposFeitos.add(c.grupo);
         }
         renderCartBar();
         if (!n) { showToast('Nenhum produto do mix coube no orçamento.', 'erro'); return; }
-        showToast(`Mix inicial: ${n} produto${n === 1 ? '' : 's'} · ≈ ${brl(soma)} sem impostos${soma < alvo ? ' (acabaram os mais vendidos)' : ''}`, 'longo');
+        const partes = [[porOrigem.recompra, 'da recompra'], [porOrigem.familia, 'de famílias que parou'], [porOrigem.parou, 'que parou de comprar'],
+          [porOrigem.lancamento, `lançamento${porOrigem.lancamento === 1 ? '' : 's'}`], [porOrigem.mix, 'dos mais vendidos']].filter(([k]) => k).map(([k, t]) => `${k} ${t}`);
+        showToast(`Mix ${refs.length ? `pra ${cliente.nome}` : 'inicial'}: ${n} produto${n === 1 ? '' : 's'} · ≈ ${brl(soma)} sem impostos${soma < alvo ? (refs.length ? ' (acabaram os produtos)' : ' (acabaram os mais vendidos)') : ''}${refs.length ? ` · ${partes.join(', ')}` : ''}`, 'longo');
         renderResults();
         openDrawer();
       }
