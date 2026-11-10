@@ -1882,7 +1882,12 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   (os cortadores entram pelo 5% no fixo); da família entra o 1º dos 3 produtos que couber. Trocar de cliente durante a espera
   cancela; toque duplo não monta dois. O aviso diz quantos vieram de cada lista. Sem cliente, igual a antes. Sem internet vale a última cópia de cada lista
   (as famílias e os lançamentos saíram da ficha pra `carregarFamiliasParadasDoCliente`/`carregarLancamentosDoCliente`).
-  Próximo passo do plano: lançamentos nas campanhas (`exigeItens`) e na proposta.
+  **Lançamentos nas campanhas** (PR 8, 11/2026): a exigência "% mínimo dos itens em lançamentos/família foco" da regra do Painel
+  ganhou a caixinha **"Lançamentos do relatório do gerente"** com o ano (todos ou um só; `exigeItens.lancamentos` = `true` ou o
+  ano). A regra gravada guarda só isso: os códigos saem de `configuracoes.lancamentos` na hora (`regrasComLancamentos` no
+  `<motor-campanhas>`, testado; aplicado em `regrasDoOrcamento`, guardado enquanto regras e lista forem as mesmas), então lista nova do
+  gerente vale sem editar a campanha. Os códigos digitados continuam somando. Sem a lista importada a caixinha fica desligada.
+  Próximo passo do plano: lançamentos na proposta.
 
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do

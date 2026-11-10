@@ -5089,7 +5089,7 @@ async function main() {
     const ctxVm = { DB: { categories: [] }, state: { canal: 'VAREJO' }, productByCod: () => null };
     vm.createContext(ctxVm);
     vm.runInContext(ini >= 0 && fim > ini ? html.slice(ini, fim) : '', ctxVm);
-    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem, proximaFaixaCampanha, campanhasDoItem } = ctxVm;
+    const { avaliarCampanhas, bestBonusForProduct, bonusDaCampanhaNoItem, proximaFaixaCampanha, campanhasDoItem, regrasComLancamentos } = ctxVm;
     if (!avaliarCampanhas || !bestBonusForProduct || !bonusDaCampanhaNoItem) {
       assert(false, 'motor de campanhas: trecho <motor-campanhas> não encontrado no index.html');
     } else {
@@ -5248,6 +5248,23 @@ async function main() {
       assert(Object.keys(falta.bonuses).length === 0 && /falta 1 item de lançamento/.test(falta.avisos[0]?.motivo || '')
         && Object.keys(basta.bonuses).length === 1 && basta.avisos.length === 0,
         `campanha: exige 10% dos itens em lançamentos/família foco: ${JSON.stringify(falta.avisos)}`);
+      // 6a) lançamentos do relatório do gerente na exigência (todos os anos ou um só)
+      {
+        const lancs = new Map([['90000', { ano: 2026 }], ['90001', { ano: 2026 }], ['90002', { ano: 2025 }]]);
+        const pelaLista = { ...maisCortag, exigeItens: { pct: 10, codigos: [], familias: [], lancamentos: true } };
+        const so2026 = { ...maisCortag, exigeItens: { pct: 10, codigos: [], familias: [], lancamentos: 2026 } };
+        const [rTodos, r2026] = regrasComLancamentos([pelaLista, so2026, maisCortag], lancs);
+        const iguaisSem = regrasComLancamentos([maisCortag], lancs)[0] === maisCortag;
+        const semLanc2026 = itens(30).filter(r => r.p.c !== '90000' && r.p.c !== '90001');
+        semLanc2026.push(linha('99998', 'Brocas', 1, 10), linha('99997', 'Brocas', 1, 10));
+        const okTodos = avaliar([rTodos], itens(30));
+        const falta2026 = avaliar([r2026], semLanc2026);
+        assert(rTodos.exigeItens.codigos.length === 3 && r2026.exigeItens.codigos.join() === '90000,90001' && iguaisSem
+          && pelaLista.exigeItens.codigos.length === 0
+          && Object.keys(okTodos.bonuses).length === 1 && Object.keys(falta2026.bonuses).length === 0
+          && /lançamento/.test(falta2026.avisos[0]?.motivo || ''),
+          `campanha: exigência pela lista de lançamentos do gerente (todos/ano), regra gravada não muda: ${JSON.stringify({ r2026: r2026.exigeItens, av: falta2026.avisos })}`);
+      }
 
       // 7) Preço Fixo (campanha "já aplicada no preço") não ganha bônus nenhum
       assert(bonusDaCampanhaNoItem(b, discos[0].p, true) === null && bonusDaCampanhaNoItem(b, discos[0].p, false)?.pct === 5

@@ -14553,7 +14553,12 @@
             </label>
             <label for="promoExigePct">Exige no mínimo (% dos itens do alvo) em lançamentos/família foco</label>
             <input type="number" id="promoExigePct" min="0" max="100" step="1" placeholder="sem exigência" inputmode="decimal">
-            <label for="promoExigeCodigos">Códigos dos lançamentos</label>
+            <label class="promoCheckLinha">
+              <input type="checkbox" id="promoExigeLancGerente">
+              <span>Lançamentos do relatório do gerente <small id="promoExigeLancInfo"></small></span>
+            </label>
+            <select id="promoExigeLancAno" aria-label="Ano dos lançamentos" style="margin-bottom:12px;"></select>
+            <label for="promoExigeCodigos">Outros códigos de lançamento</label>
             <input type="text" id="promoExigeCodigos" placeholder="Separe por vírgula">
             <label for="promoExigeFamilias">Categorias foco</label>
             <input type="text" id="promoExigeFamilias" placeholder="Separe por vírgula" style="margin-bottom:0;">
@@ -16279,6 +16284,7 @@
           aplicarLancamentos(result.valor);
           try { localStorage.setItem(LANCAMENTOS_LS_KEY, JSON.stringify(result.valor)); } catch (e) { }
           renderResults(); // o selo aparece nos cards já desenhados
+          if (state.cart.length) renderCart(); // e a exigência de lançamentos das campanhas vale no orçamento
         } catch (e) { /* ainda não importado, ou sem rede: fica com a cópia */ }
       }
       function lancamentoDoProduto(p) {
@@ -17296,6 +17302,7 @@
       //   excluirOutraCampanha: true, // item que já ganha outra campanha não ganha esta
       //   soNoPrecoFixo: true, // desconto SOBRE o preço fixo (só item de Preço Fixo no canal; não soma com nada)
       //   exigeItens: { pct: 10, codigos: [...], familias: [...] }, // % mínimo dos itens do alvo nessa lista
+      //     + lancamentos: true | 2026  // soma a lista do relatório do gerente (todos os anos ou só esse)
       // }
       // A campanha é de um canal: a mesma promoção não vale sozinha nos outros
       // (pedido do usuário, 10/2026 - antes toda regra valia em todos os canais).
@@ -17324,6 +17331,23 @@
         if (lista.includes(c)) return true;
         const promo = /^P[12]?(.+)$/.exec(c);
         return !!(promo && lista.includes(promo[1]));
+      }
+      // A exigência de lançamentos pode usar a lista do relatório do gerente
+      // (`configuracoes.lancamentos`, 11/2026) em vez de códigos digitados:
+      // exigeItens.lancamentos = true (todos os anos) ou o ano. Os códigos da lista
+      // (lancamentos: Map código -> { ano }) entram junto dos digitados; a regra
+      // gravada não muda (lista nova do gerente vale sem editar a campanha).
+      function regrasComLancamentos(rules, lancamentos) {
+        if (!Array.isArray(rules) || !rules.some(r => r && r.exigeItens && r.exigeItens.lancamentos)) return rules;
+        return rules.map(r => {
+          const lanc = r && r.exigeItens && r.exigeItens.lancamentos;
+          if (!lanc) return r;
+          const ano = lanc === true ? null : Number(lanc);
+          const daLista = [];
+          (lancamentos || new Map()).forEach((v, cod) => { if (!ano || Number(v && v.ano) === ano) daLista.push(String(cod)); });
+          const codigos = [...new Set(listaDaRegra(r.exigeItens.codigos).concat(daLista))];
+          return { ...r, exigeItens: { ...r.exigeItens, codigos } };
+        });
       }
       function produtoNaListaDaRegra(p, codigos, familias) {
         if (codigos.length && codigoNaListaDaRegra(p.c, codigos)) return true;
@@ -17626,9 +17650,15 @@
         };
       }
       // Regras de campanha do orçamento: as do Painel + a dos cortadores, se o cliente tem.
+      // guardada enquanto as regras e a lista de lançamentos forem as mesmas (roda a cada card)
+      let regrasComLancMemo = null;
       function regrasDoOrcamento() {
+        const base = state.promoRules;
+        if (regrasComLancMemo?.base !== base || regrasComLancMemo?.lanc !== LANCAMENTOS_MAP) {
+          regrasComLancMemo = { base, lanc: LANCAMENTOS_MAP, regras: regrasComLancamentos(base, LANCAMENTOS_MAP) };
+        }
         const extra = regraCortadoresDoCliente(state.levCliente);
-        return extra ? [...(state.promoRules || []), extra] : state.promoRules;
+        return extra ? [...(regrasComLancMemo.regras || []), extra] : regrasComLancMemo.regras;
       }
 
       // ---- Fita de campanha no card do item (Pedido e Levantamento) ----
@@ -34071,7 +34101,9 @@
         if (r.excluirOutraCampanha) partes.push('Não soma com outra campanha no item');
         if (r.soNoPrecoFixo) partes.push('Desconto sobre o preço fixo');
         if (r.exigeItens && Number(r.exigeItens.pct) > 0) {
-          const lista = listaDaRegra(r.exigeItens.codigos).concat(listaDaRegra(r.exigeItens.familias));
+          const lanc = r.exigeItens.lancamentos;
+          const lista = (lanc ? [`lançamentos do relatório do gerente${lanc === true ? '' : ` de ${lanc}`}`] : [])
+            .concat(listaDaRegra(r.exigeItens.codigos), listaDaRegra(r.exigeItens.familias));
           partes.push(`Exige ${r.exigeItens.pct}% dos itens em: ${lista.join(', ') || '(lista vazia)'}`);
         }
         return partes.join(' · ');
@@ -34114,9 +34146,10 @@
           const r = state.promoRules.find(x => x.id === b.dataset.toggleRule);
           if (!r) return;
           r.active = !r.active;
+          regrasComLancMemo = null; // o mesmo array mudou (a cópia com os lançamentos ficaria com o active antigo)
           renderPromoRulesList(); renderCart();
           try { await salvarPromoRulesServidor(state.promoRules); refreshPromoStatus(); }
-          catch (e) { showToast('Não foi possível salvar no servidor: ' + e.message, 'erro'); r.active = !r.active; renderPromoRulesList(); renderCart(); }
+          catch (e) { showToast('Não foi possível salvar no servidor: ' + e.message, 'erro'); r.active = !r.active; regrasComLancMemo = null; renderPromoRulesList(); renderCart(); }
         }));
         wrap.querySelectorAll('[data-edit-rule]').forEach(b => b.addEventListener('click', () => openPromoRuleForm(b.dataset.editRule)));
         wrap.querySelectorAll('[data-del-rule]').forEach(b => b.addEventListener('click', async () => {
@@ -34332,6 +34365,7 @@
         extra('promoExigePct', exige && Number(exige.pct) > 0 ? exige.pct : '');
         extra('promoExigeCodigos', exige ? listaDaRegra(exige.codigos).join(', ') : '');
         extra('promoExigeFamilias', exige ? listaDaRegra(exige.familias).join(', ') : '');
+        preencherLancamentosDoForm(exige ? exige.lancamentos : null);
         // abre "Mais condições" quando a regra já usa alguma
         document.getElementById('promoExtras').open = !!(rule && condicoesExtrasTexto({ ...rule, classificatorios: [] }));
         document.getElementById('promoFormMsg').innerHTML = '';
@@ -34345,6 +34379,22 @@
         canais.forEach(c => (CLASSI_POR_CANAL[c] || []).forEach(o => (o.tipos || []).forEach(t => { if (!tipos.includes(t)) tipos.push(t); })));
         document.getElementById('promoClassis').innerHTML = tipos.map(t =>
           `<label><input type="checkbox" value="${escapeHtml(t)}"${marcados.has(textoCampanha(t)) ? ' checked' : ''}> ${escapeHtml(t)}</label>`).join('');
+      }
+      // Lista do relatório do gerente na exigência: caixinha + ano (todos ou um só)
+      function preencherLancamentosDoForm(valor) {
+        const anos = [...new Set([...LANCAMENTOS_MAP.values()].map(v => Number(v.ano)).filter(a => a > 0))].sort((a, b) => b - a);
+        const contar = ano => [...LANCAMENTOS_MAP.values()].filter(v => !ano || Number(v.ano) === ano).length;
+        const sel = document.getElementById('promoExigeLancAno');
+        // ano gravado que a lista atual não tem continua no select (salvar sem mexer não vira "todos os anos")
+        const gravado = valor && valor !== true && Number(valor) > 0 ? Number(valor) : null;
+        if (gravado && !anos.includes(gravado)) anos.push(gravado);
+        sel.innerHTML = `<option value="">Todos os anos · ${contar(null)} produtos</option>`
+          + anos.map(a => `<option value="${a}">Só ${a} · ${contar(a)} produtos</option>`).join('');
+        sel.value = gravado ? String(gravado) : '';
+        const caixa = document.getElementById('promoExigeLancGerente');
+        caixa.checked = !!valor;
+        caixa.disabled = !LANCAMENTOS_MAP.size && !valor;
+        document.getElementById('promoExigeLancInfo').textContent = LANCAMENTOS_MAP.size ? '' : '(ainda não importado: Painel › Importar; sem a lista a campanha não vale)';
       }
       function lerPromoClassis() {
         return [...document.querySelectorAll('#promoClassis input:checked')].map(inp => inp.value);
@@ -34389,15 +34439,20 @@
         if (document.getElementById('promoExcluirOutraCampanha').checked) rule.excluirOutraCampanha = true;
         if (document.getElementById('promoSoNoPrecoFixo').checked) rule.soNoPrecoFixo = true;
         const exigePct = parseFloat(val('promoExigePct'));
-        if ((isNaN(exigePct) || exigePct <= 0) && (val('promoExigeCodigos') || val('promoExigeFamilias'))) return 'Informe o % mínimo da exigência de lançamentos/família foco.';
+        const lancGerente = document.getElementById('promoExigeLancGerente').checked;
+        if ((isNaN(exigePct) || exigePct <= 0) && (val('promoExigeCodigos') || val('promoExigeFamilias') || lancGerente)) return 'Informe o % mínimo da exigência de lançamentos/família foco.';
         if (!isNaN(exigePct) && exigePct > 0) {
           if (exigePct > 100) return 'A exigência de lançamentos/família foco vai até 100%.';
           const codigos = listaDaRegra(val('promoExigeCodigos'));
           const familias = listaDaRegra(val('promoExigeFamilias'));
-          if (!codigos.length && !familias.length) return 'Informe os códigos dos lançamentos e/ou as categorias foco da exigência.';
+          if (!codigos.length && !familias.length && !lancGerente) return 'Marque os lançamentos do relatório do gerente, ou informe os códigos e/ou as categorias foco da exigência.';
           if (codigosNaoAchados(codigos).length) return `Código(s) de lançamento não encontrado(s): ${codigosNaoAchados(codigos).join(', ')}`;
           if (familiaNaoAchada(familias)) return `Categoria foco "${familiaNaoAchada(familias)}" não existe no catálogo.`;
           rule.exigeItens = { pct: exigePct, codigos, familias };
+          if (lancGerente) {
+            const ano = Number(document.getElementById('promoExigeLancAno').value);
+            rule.exigeItens.lancamentos = ano > 0 ? ano : true;
+          }
         }
         return null;
       }
@@ -34469,6 +34524,7 @@
 
         if (promoEditingId) {
           const idx = state.promoRules.findIndex(r => r.id === promoEditingId);
+          regrasComLancMemo = null; // regra trocada/incluída no mesmo array
           if (idx >= 0) { rule.active = state.promoRules[idx].active; state.promoRules[idx] = rule; }
         } else {
           state.promoRules.push(rule);
