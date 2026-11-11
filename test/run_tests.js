@@ -6333,6 +6333,53 @@ async function main() {
     assert(r.status === 401, `relatório oficial grande sem login = 401 antes de ler o corpo (${r.status})`);
   }
 
+  // ---- Conferência de sessão: mesma consulta dividida e no máximo N ao mesmo tempo (auditoria 11/2026) ----
+  {
+    const auth = require('../middleware/auth');
+    const tokenAntes = authToken;
+    const eu = await req('GET', '/api/auth/me');
+    const queryDeAntes = mockDb.pool.query;
+    let ativas = 0, pico = 0, feitas = 0, atraso = 400; // 400 ms: as 20 chegam com a 1ª consulta ainda em andamento, mesmo em CI lento
+    mockDb.pool.query = function (sql, params) {
+      if (!/FROM sessoes s/i.test(String(sql)) || !/JOIN usuarios u/i.test(String(sql))) return queryDeAntes.apply(this, arguments);
+      ativas++; feitas++; pico = Math.max(pico, ativas);
+      return new Promise(r => setTimeout(r, atraso)).then(() => queryDeAntes.call(this, sql, params)).finally(() => { ativas--; });
+    };
+    try {
+      const tok = generateToken();
+      await queryDeAntes.call(mockDb.pool, 'INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(tok), eu.body.id, '90']);
+      authToken = tok;
+      let rs = await Promise.all(Array.from({ length: 20 }, (_, i) => req('GET', i % 5 ? '/api/novidades' : '/api/auth/me')));
+      assert(rs.every(r => r.status === 200) && feitas === 1 && rs[0].body.id === eu.body.id && !('expira_em' in rs[0].body),
+        `sessão: 20 requisições juntas com o mesmo token fazem 1 consulta (${feitas}; ${[...new Set(rs.map(r => r.status))]})`);
+      // token qualquer em laço: nunca mais que o máximo ao mesmo tempo, e todos recebem 401 (a fila aguenta)
+      feitas = 0; pico = 0; atraso = 40;
+      const invalidas = async (n) => {
+        const antes = authToken;
+        const ps = [];
+        for (let i = 0; i < n; i++) { authToken = 'token-invalido-' + i + '-' + Date.now(); ps.push(req('GET', '/api/novidades')); }
+        authToken = antes;
+        return Promise.all(ps);
+      };
+      rs = await invalidas(30);
+      assert(rs.every(r => r.status === 401) && feitas === 30 && pico <= auth.SESSAO_CONSULTAS_MAX,
+        `sessão: tokens inválidos em laço rodam no máximo ${auth.SESSAO_CONSULTAS_MAX} consultas ao mesmo tempo (pico ${pico}, ${feitas} feitas)`);
+      // fila cheia: o que passa dela responde 503 sem ir ao banco; a sessão na memória segue respondendo
+      feitas = 0;
+      const total = auth.SESSAO_CONSULTAS_MAX + auth.SESSAO_FILA_MAX + 25;
+      const cheia = invalidas(total);
+      authToken = tok;
+      const valida = await req('GET', '/api/novidades');
+      rs = await cheia;
+      const n503 = rs.filter(r => r.status === 503).length;
+      assert(valida.status === 200 && n503 >= 1 && rs.every(r => r.status === 401 || r.status === 503) && feitas === total - n503,
+        `sessão: fila cheia responde 503 sem consulta e a sessão já conferida continua (${n503} de ${total} com 503, ${feitas} consultas, válida ${valida.status})`);
+    } finally {
+      mockDb.pool.query = queryDeAntes;
+      authToken = tokenAntes;
+    }
+  }
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

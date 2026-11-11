@@ -326,6 +326,11 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
     relatórios de um cliente; 429 com "espera um minuto". Medido no app: abrir o app = 4, aba Clientes = 6,
     Dashboard = 4, abrir um cliente = 3. Rota de leitura pesada nova entra numa das listas (`ROTAS_CARTEIRA`/
     `ROTAS_CLIENTE`); `LIMITE_ROTAS_CARTEIRA_POR_MIN`/`LIMITE_ROTAS_CLIENTE_POR_MIN` no Render ajustam sem deploy.
+  - **Conferência de sessão não ocupa o pool** (11/2026, auditoria): token fora da memória custava 1 consulta por requisição, sem
+    limite — token qualquer em laço ocupava as conexões, e a abertura do app fazia ~20 consultas iguais. Agora requisições com o
+    mesmo token dividem uma consulta (`consultarSessao`, `middleware/auth.js`, também o `/auth/me`) e no máximo 4 rodam ao mesmo
+    tempo (`SESSAO_CONSULTAS_MAX`); fila de 200, cheia = 503 sem ir ao banco. **Limite por IP foi descartado**: atrás do proxy do
+    Render o `req.ip` pode ser o mesmo pra todo mundo (não conferido) e 120 tokens inválidos bloqueariam a equipe inteira.
 - Atalhos de produtividade pro vendedor: botão "Produtos comprados" (pula direto pra Curva ABC já
   filtrada no cliente), botão de adicionar direto ao orçamento a partir da Curva ABC, correção da
   lista de campanhas que sumia no Painel Administrativo (race condition de render antes do dado
