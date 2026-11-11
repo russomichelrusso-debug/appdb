@@ -88,7 +88,9 @@ app.use((req, res, next) => {
 const jsonPadrao = express.json({ limit: '1mb' });
 const jsonGrande = express.json({ limit: '25mb' });
 // e a foto da lista/orçamento que o cliente mandou (routes/assistente.js, até 3 imagens em base64)
-const ROTAS_PAYLOAD_GRANDE = ['/api/catalogo-precos', '/api/fichas-tecnicas', '/api/assistente/itens-da-imagem'];
+// e o relatório oficial importado pelo Painel (o app manda todas as linhas num POST só:
+// relatório de período longo passa de 1 MB; pelo e-mail o mesmo arquivo já entrava)
+const ROTAS_PAYLOAD_GRANDE = ['/api/catalogo-precos', '/api/fichas-tecnicas', '/api/assistente/itens-da-imagem', '/api/pedidos-oficiais/importar'];
 // Importação por e-mail (routes/importacaoEmail.js): arquivo grande, mas sem
 // login - só aceita quem manda a chave certa, conferida ANTES de ler o corpo.
 const ROTA_IMPORTACAO_EMAIL = '/api/importacao-email/arquivo';
@@ -199,8 +201,16 @@ app.use('/api', requireAuth, limiteRotasPesadas, radarCnpjRoutes); // /api/clien
 // (síncrono ou de promise, via express-async-errors) cai aqui em vez de
 // derrubar o servidor - resposta genérica pro cliente, detalhe só no log.
 app.use((err, req, res, next) => {
-  console.error('Erro não tratado:', err);
+  const erroDoCorpo = err && (err.type === 'entity.too.large' || err.type === 'entity.parse.failed');
+  if (!erroDoCorpo) console.error('Erro não tratado:', err);
   if (res.headersSent) return next(err);
+  // Erros do leitor do corpo (express.json) são do pedido, não do servidor: com
+  // 500 o app mostrava "Erro interno" pra um arquivo grande demais.
+  // Importação por e-mail: o script do Gmail só desiste do arquivo com 422 (com 413 ele
+  // tentaria pra sempre e seguraria os relatórios seguintes da fila).
+  if (err && err.type === 'entity.too.large' && req.path.startsWith('/api/importacao-email')) return res.status(422).json({ erro: 'Arquivo grande demais.' });
+  if (err && err.type === 'entity.too.large') return res.status(413).json({ erro: 'Arquivo ou envio grande demais pra essa operação.' });
+  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ erro: 'Pedido inválido.' });
   res.status(500).json({ erro: 'Erro interno do servidor.' });
 });
 
