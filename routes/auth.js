@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { generateToken, hashToken, verificarGoogleIdToken } = require('../auth-utils');
-const { requireAuth, esquecerSessao, esquecerSessoesDoUsuario } = require('../middleware/auth');
+const { requireAuth, esquecerSessao, esquecerSessoesDoUsuario, consultarSessao, responderOcupado } = require('../middleware/auth');
 const { validarIdInteiro } = require('../middleware/validarId');
 
 router.param('id', validarIdInteiro);
@@ -113,15 +113,14 @@ router.get('/me', async (req, res) => {
   const token = (req.header('Authorization') || '').replace('Bearer ', '');
   if (!token) return res.status(401).json({ erro: 'Sem sessão.' });
   try {
-    const result = await pool.query(
-      `SELECT u.id, u.nome, u.email, u.is_admin, u.telefone FROM sessoes s
-       JOIN usuarios u ON u.id = s.usuario_id
-       WHERE s.token = $1 AND s.expira_em > now() AND u.ativo`,
-      [hashToken(token)]
-    );
-    if (result.rows.length === 0) return res.status(401).json({ erro: 'Sessão expirada ou inválida.' });
-    res.json(result.rows[0]);
+    // mesma consulta (e mesma fila) do requireAuth: na abertura do app o /me e as outras
+    // requisições com o mesmo token dividem uma consulta só
+    const linha = await consultarSessao(hashToken(token));
+    if (!linha) return res.status(401).json({ erro: 'Sessão expirada ou inválida.' });
+    const { expira_em, ...usuario } = linha;
+    res.json(usuario);
   } catch (e) {
+    if (e && e.ocupado) return responderOcupado(res);
     console.error(e);
     res.status(500).json({ erro: 'Erro ao verificar sessão.' });
   }
@@ -271,6 +270,7 @@ router.patch('/usuarios/:id', requireAuth, async (req, res) => {
       await client.query('DELETE FROM sessoes WHERE usuario_id = $1', [id]);
       await client.query('DELETE FROM push_inscricoes WHERE usuario_id = $1', [id]);
     }
+    esquecerSessoesDoUsuario(id); // antes também: quem chega durante o COMMIT não herda a consulta de sessão de antes dele
     await client.query('COMMIT');
     esquecerSessoesDoUsuario(id);
     console.log(`Usuário ${ativo ? 'reativado' : 'desativado'}: ${result.rows[0].email} por ${req.usuario.email}`);
@@ -318,6 +318,7 @@ router.delete('/usuarios/:id', requireAuth, async (req, res) => {
       }
     }
     const result = await client.query('DELETE FROM usuarios WHERE id = $1 RETURNING nome, email', [id]);
+    esquecerSessoesDoUsuario(id); // antes também: quem chega durante o COMMIT não herda a consulta de sessão de antes dele
     await client.query('COMMIT');
     esquecerSessoesDoUsuario(id);
     console.log(`Usuário excluído: ${result.rows[0].email} por ${req.usuario.email}`);

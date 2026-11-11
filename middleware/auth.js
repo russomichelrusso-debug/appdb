@@ -24,10 +24,64 @@ const sessoesEmMemoria = new Map(); // hash do token -> { usuario, ate }
 // não grava no cache a foto velha (senão a sessão revogada valia mais 60 s) - achado do revisor-cortag.
 let geracaoRevogacao = 0;
 
-function esquecerSessao(tokenHash) { geracaoRevogacao++; sessoesEmMemoria.delete(tokenHash); }
+// (a consulta em andamento também é esquecida: quem chega depois da revogação faz a sua, não herda a resposta de antes)
+function esquecerSessao(tokenHash) { geracaoRevogacao++; sessoesEmMemoria.delete(tokenHash); consultasDeSessao.delete(tokenHash); }
 function esquecerSessoesDoUsuario(usuarioId) {
   geracaoRevogacao++;
+  consultasDeSessao.clear();
   for (const [chave, v] of sessoesEmMemoria) if (Number(v.usuario.id) === Number(usuarioId)) sessoesEmMemoria.delete(chave);
+}
+
+// Conferir uma sessão que não está na memória custa 1 consulta. Sem limite, quem não tem conta ocupava as conexões
+// do pool mandando token qualquer em laço, e a abertura do app (~20 requisições juntas com a sessão fora da memória)
+// fazia ~20 consultas iguais (auditoria 11/2026). Agora: (1) requisições com o mesmo token esperam a mesma consulta;
+// (2) no máximo SESSAO_CONSULTAS_MAX consultas de sessão rodam ao mesmo tempo (padrão 4), as outras esperam na fila
+// (até 200) e, com a fila cheia, a resposta é 503 sem ir ao banco. Não depende do IP de quem chama (atrás do proxy
+// do Render ele pode ser o mesmo pra todo mundo). Sessão já na memória não passa por aqui.
+const SESSAO_CONSULTAS_MAX = (() => {
+  const n = Number(process.env.SESSAO_CONSULTAS_MAX);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 4;
+})();
+const SESSAO_FILA_MAX = 200;
+const SQL_SESSAO = `SELECT u.id, u.nome, u.email, u.is_admin, u.telefone, s.expira_em FROM sessoes s
+       JOIN usuarios u ON u.id = s.usuario_id
+       WHERE s.token = $1 AND s.expira_em > now() AND u.ativo`;
+const consultasDeSessao = new Map(); // hash do token -> Promise da linha (ou null)
+let consultasAtivas = 0;
+const filaDeConsultas = [];
+function comVagaDeConsulta(fn) {
+  return new Promise((resolve, reject) => {
+    const rodar = () => {
+      consultasAtivas++;
+      Promise.resolve().then(fn).then(resolve, reject).finally(() => { // erro síncrono do fn também devolve a vaga
+        consultasAtivas--;
+        const proxima = filaDeConsultas.shift();
+        if (proxima) proxima();
+      });
+    };
+    if (consultasAtivas < SESSAO_CONSULTAS_MAX) return rodar();
+    if (filaDeConsultas.length >= SESSAO_FILA_MAX) {
+      const e = new Error('Fila de conferência de sessão cheia.');
+      e.ocupado = true;
+      return reject(e);
+    }
+    filaDeConsultas.push(rodar);
+  });
+}
+// Linha da sessão válida (com o usuário) ou null. Erro com .ocupado = fila cheia (responder 503).
+function consultarSessao(hash) {
+  let p = consultasDeSessao.get(hash);
+  if (!p) {
+    p = comVagaDeConsulta(() => pool.query(SQL_SESSAO, [hash]).then(r => r.rows[0] || null));
+    consultasDeSessao.set(hash, p);
+    const limpar = () => { if (consultasDeSessao.get(hash) === p) consultasDeSessao.delete(hash); };
+    p.then(limpar, limpar);
+  }
+  return p;
+}
+function responderOcupado(res) {
+  res.set('Retry-After', '5');
+  return res.status(503).json({ erro: 'Servidor ocupado — tenta de novo em instantes.' });
 }
 
 async function requireAuth(req, res, next) {
@@ -46,14 +100,9 @@ async function requireAuth(req, res, next) {
   if (guardada) sessoesEmMemoria.delete(hash);
   const geracao = geracaoRevogacao;
   try {
-    const result = await pool.query(
-      `SELECT u.id, u.nome, u.email, u.is_admin, s.expira_em FROM sessoes s
-       JOIN usuarios u ON u.id = s.usuario_id
-       WHERE s.token = $1 AND s.expira_em > now() AND u.ativo`,
-      [hash]
-    );
-    if (result.rows.length === 0) return res.status(401).json({ erro: 'Sessão expirada ou inválida — faça login novamente.' });
-    const { expira_em, ...usuario } = result.rows[0];
+    const linha = await consultarSessao(hash);
+    if (!linha) return res.status(401).json({ erro: 'Sessão expirada ou inválida — faça login novamente.' });
+    const { expira_em, telefone, ...usuario } = linha; // o telefone é só do /auth/me (não fica na memória)
     if (SESSAO_CACHE_MS > 0) {
       const expira = new Date(expira_em).getTime();
       const ate = Math.min(agora + SESSAO_CACHE_MS, Number.isFinite(expira) ? expira : agora);
@@ -63,9 +112,10 @@ async function requireAuth(req, res, next) {
     req.usuario = { ...usuario };
     next();
   } catch (e) {
+    if (e && e.ocupado) return responderOcupado(res);
     console.error(e);
     res.status(500).json({ erro: 'Erro ao verificar sessão.' });
   }
 }
 
-module.exports = { requireAuth, esquecerSessao, esquecerSessoesDoUsuario };
+module.exports = { requireAuth, esquecerSessao, esquecerSessoesDoUsuario, consultarSessao, responderOcupado, SESSAO_CONSULTAS_MAX, SESSAO_FILA_MAX };
