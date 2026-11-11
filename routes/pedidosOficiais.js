@@ -827,12 +827,18 @@ async function importarRelatorioOficial(body, usuario) {
     esquecerTabela('pedidos_oficiais_itens'); esquecerTabela('titulos_avista_pendentes');
     if (relatorioAntigo) console.log(`Pedidos oficiais: relatório de ${dataArquivo} mais antigo que o já importado (${dataMaisNova}) - só as linhas faturadas; ${carteiraIgnorada} linha(s) de carteira e as listas à vista ignoradas.`);
     console.log(`Pedidos oficiais: ${itens.length} linha(s) importada(s), ${clientesVinculados} cliente(s) vinculado(s) agora, ${clientesNaoEncontrados.length} não encontrado(s), ${clientesClassificados} classificado(s), ${clientesClassifIgnorados} ignorado(s) (relatório mais antigo que o já registrado), ${carteiraRemovida} linha(s) de carteira sem saldo removida(s) - por ${usuario?.email}.`);
-    await registrarImportacao(usuario?.id, 'pedidos-oficiais/importar', itens.length);
-    if (!relatorioAntigo) {
-      // relatório antigo não traz nada novo pra avisar ("Pedidos até" não muda)
-      const ultimoPedido = await pool.query('/* novidades:pedidos-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens');
-      const pedidosAte = formatarDataBr(ultimoPedido.rows[0] && ultimoPedido.rows[0].ate);
-      await avisarImportacao('relatorio-oficial', pedidosAte ? `Pedidos até ${pedidosAte}` : null);
+    // Daqui pra baixo o relatório JÁ está gravado: falha no rastro ou no aviso não pode
+    // virar "Erro ao importar" (pelo e-mail o arquivo era marcado como falho e reimportado).
+    try {
+      await registrarImportacao(usuario?.id, 'pedidos-oficiais/importar', itens.length);
+      if (!relatorioAntigo) {
+        // relatório antigo não traz nada novo pra avisar ("Pedidos até" não muda)
+        const ultimoPedido = await pool.query('/* novidades:pedidos-ate */ SELECT max(data_implantacao)::text AS ate FROM pedidos_oficiais_itens');
+        const pedidosAte = formatarDataBr(ultimoPedido.rows[0] && ultimoPedido.rows[0].ate);
+        await avisarImportacao('relatorio-oficial', pedidosAte ? `Pedidos até ${pedidosAte}` : null);
+      }
+    } catch (erroAviso) {
+      console.error('Pedidos oficiais: importado, mas o rastro/aviso falhou:', erroAviso);
     }
     return { status: 200, json: { ok: true, itens: itens.length, descartados, clientesVinculados, clientesNaoEncontrados, clientesClassificados, clientesClassifIgnorados,
                pendentesPagamento: pendentes && !relatorioAntigo ? pendentes.length : null, titulosAvista: titulos && !relatorioAntigo ? titulos.length : null,

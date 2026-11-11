@@ -6302,6 +6302,19 @@ async function main() {
     }
   }
 
+  // ---- Corpo grande demais / JSON inválido não é "Erro interno" (auditoria 11/2026) ----
+  {
+    const enchimento = 'x'.repeat(1100 * 1024);
+    let r = await req('PUT', '/api/clientes/1/contatos', { enchimento });
+    assert(r.status === 413 && /grande demais/.test(r.body.erro || ''), `corpo acima de 1 MB em rota comum = 413 com mensagem (${r.status})`);
+    r = await req('POST', '/api/pedidos-oficiais/importar', { itens: [], enchimento });
+    assert(r.status !== 413 && r.status !== 500, `relatório oficial pelo Painel aceita mais de 1 MB (${r.status})`);
+    const tokenAntes = authToken; authToken = null;
+    r = await req('POST', '/api/pedidos-oficiais/importar', { itens: [], enchimento });
+    authToken = tokenAntes;
+    assert(r.status === 401, `relatório oficial grande sem login = 401 antes de ler o corpo (${r.status})`);
+  }
+
   console.log();
   console.log(process.exitCode === 1 ? 'ALGUNS TESTES FALHARAM' : 'TODOS OS TESTES PASSARAM');
   process.exit(process.exitCode || 0);

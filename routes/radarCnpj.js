@@ -283,18 +283,17 @@ async function obterFicha(clienteId, forcarAtualizacao) {
     return { ficha: cache, fonte: 'cache' };
   }
 
+  let dados, completado;
   try {
-    const dados = await buscarFichaNaOrigem(cnpj);
+    dados = await buscarFichaNaOrigem(cnpj);
     // A BrasilAPI (reserva) não tem a lista de devedores contumazes: fica a
     // última conferência do radar, em vez de a ficha voltar a "não conferido".
     const contumazAnterior = cache && cache.dados_brutos && cache.dados_brutos.devedorContumaz;
     if (dados.origem === 'brasilapi' && !dados.devedorContumaz && contumazAnterior) dados.devedorContumaz = contumazAnterior;
     const m = mapearFicha(dados);
-    const completado = await completarFichaMascarada(
+    completado = await completarFichaMascarada(
       clienteId, cnpj, { socios: m.socios, telefone: m.telefone }, cache, dados.origem === 'brasilapi'
     );
-    const salva = await salvarFichaEmCache(clienteId, dados, dados, completado);
-    return { ficha: salva, fonte: 'origem' };
   } catch (erroOrigem) {
     // Sem internet ou origem fora do ar - se já tem algo em cache (mesmo
     // vencido), devolve isso em vez de deixar a tela vazia.
@@ -304,6 +303,17 @@ async function obterFicha(clienteId, forcarAtualizacao) {
     const e = new Error('Não foi possível consultar o CNPJ agora: ' + erroOrigem.message);
     e.status = 502;
     throw e;
+  }
+  // Fora do try da origem: erro do banco ao gravar não é "origem fora do ar" e a
+  // mensagem dele não vai pra tela (sem .status, a rota responde o erro genérico).
+  try {
+    const salva = await salvarFichaEmCache(clienteId, dados, dados, completado);
+    return { ficha: salva, fonte: 'origem' };
+  } catch (erroGravacao) {
+    console.error('Ficha de CNPJ: a origem respondeu, mas a gravação falhou:', erroGravacao);
+    // com ficha guardada a tela continua com ela (como quando a origem falha)
+    if (cache) return { ficha: cache, fonte: 'cache_vencido', aviso: 'Não foi possível gravar a ficha atualizada.' };
+    throw new Error('Falha ao gravar a ficha de CNPJ.'); // sem .status: a rota responde o erro genérico
   }
 }
 
