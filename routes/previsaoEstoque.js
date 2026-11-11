@@ -2,13 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, quantos } = require('./lib/novidades');
+const { lerComCache, esquecerTabela } = require('./lib/cacheTabela');
 
 // Devolve a previsão de todos os produtos - qualquer usuário logado pode
 // ver (todo mundo precisa do aviso de estoque na busca, não só o admin).
 router.get('/', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM previsao_estoque');
-    res.json(result.rows);
+    // todo aparelho pede ao abrir o app: do cache enquanto a tabela não mudar (egress do Supabase)
+    res.json(await lerComCache('previsao_estoque', 'previsao_estoque', 'SELECT * FROM previsao_estoque'));
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao buscar previsão de estoque.' });
@@ -54,6 +55,7 @@ async function importarPrevisaoEstoque(itens, usuario) {
       ]
     );
     await client.query('COMMIT');
+    esquecerTabela('previsao_estoque');
     console.log(`Previsão de estoque importada: ${unicos.length} produto(s), por ${usuario?.email}.`);
     await registrarImportacao(usuario?.id, 'previsao-estoque/importar', unicos.length);
     await avisarImportacao('previsao-estoque', quantos(unicos.length, 'item', 'itens'));

@@ -181,6 +181,12 @@ Pegadinhas de ambiente:
   juntas. Pedido salvo/alterado/excluído, importação do relatório oficial, limpeza da carteira, contas do Salesforce e mesclar/
   excluir cliente chamam `esquecerTabela`. Consulta nova em cache: listar **toda** tabela que ela lê e passar como param o que
   depende do dia; a rota não altera as linhas devolvidas (são compartilhadas).
+- **Dashboard, previsão de estoque e produtos da Curva ABC no cache** (11/2026, auditoria): o `GET /api/dashboard/resumo` abria 11
+  consultas ao mesmo tempo (mais que as conexões do pool); 8 delas só mudam com importação ou na virada do dia e agora saem do
+  `lerComCache` (`serieDoDia`, `routes/relatorios.js`: o `SQL_HOJE_BRASIL` vira `$1::date` com o dia de Brasília calculado no Node,
+  que entra na versão do cache). Num Postgres real: 13 → 4 consultas a partir da 2ª abertura, mesma resposta. Ficam ao vivo o
+  canal/último pedido por cliente (lê pedido do app) e o objetivo do ano. `GET /api/previsao-estoque` (todo aparelho, a cada
+  abertura) e o `SELECT ... FROM produtos` de cada Curva ABC também. Série nova do Dashboard: `serieDoDia` com toda tabela que lê.
 - **Busca do Pedido desenhada em partes** (11/2026, lote 4 da auditoria): busca **nova** com mais de 8 resultados desenha os 8
   primeiros cards na hora e o resto de 12 em 12 nos quadros seguintes (`desenharRestoDosResultados`, `geracaoResultados` cancela o
   que sobrou quando outra busca redesenha; os botões dos cards novos são ligados num `div` à parte antes de entrar na lista, pra não

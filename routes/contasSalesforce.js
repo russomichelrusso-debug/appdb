@@ -228,7 +228,7 @@ async function importarContasSalesforce(dados, usuario) {
        ON CONFLICT (chave) DO UPDATE SET valor = EXCLUDED.valor, atualizado_em = now()`,
       [CHAVE_RELATORIO, JSON.stringify(resumo)]);
     await client.query('COMMIT');
-    esquecerTabela('reativacao_alvos'); esquecerTabela('clientes');
+    esquecerTabela('reativacao_alvos'); esquecerTabela('clientes'); esquecerTabela('contas_salesforce');
 
     const foraDoApp = contas.filter(c => !c.clienteId).length;
     console.log(`Contas do Salesforce importadas: ${contas.length} conta(s), ${criados} cliente(s) criado(s), ${resumo.deOutroVendedor} de outro vendedor, por ${usuario ? usuario.email : '?'}.`);

@@ -1395,9 +1395,14 @@ async function main() {
     const inicioLog = inicioLogDashboard;
     await req('GET', '/api/clientes/9001/classificatorio/status');
     await req('GET', '/api/clientes/classificatorio/alertas');
-    const sqls = mockDb.__queryLog.slice(inicioLog).map(q => q.sql);
-    const comHoje = sqls.filter(q => /date_trunc\('(week|quarter)', data_faturamento\)|GROUP BY c\.id, c\.nome|faturamento_12m|trimestre_atual_idx|date_trunc\('quarter', poi\.data_implantacao\)/.test(q));
-    assert(comHoje.length >= 6 && comHoje.every(q => q.includes("now() AT TIME ZONE 'America/Sao_Paulo'")) && !sqls.some(q => q.includes('CURRENT_DATE')),
+    const consultas = mockDb.__queryLog.slice(inicioLog);
+    const sqls = consultas.map(q => q.sql);
+    const comHoje = consultas.filter(q => /date_trunc\('(week|quarter)', data_faturamento\)|GROUP BY c\.id, c\.nome|faturamento_12m|trimestre_atual_idx|date_trunc\('quarter', poi\.data_implantacao\)/.test(q.sql));
+    // as séries do Dashboard (cache por dia) recebem o dia de Brasília como parâmetro $1::date
+    const hojeBrasilia = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+    const pelaBrasilia = (q) => q.sql.includes("now() AT TIME ZONE 'America/Sao_Paulo'")
+      || (q.sql.includes('$1::date') && q.params && q.params[0] === hojeBrasilia);
+    assert(comHoje.length >= 6 && comHoje.every(pelaBrasilia) && comHoje.some(q => q.sql.includes('$1::date')) && !sqls.some(q => q.includes('CURRENT_DATE')),
       `dashboard e classificatório contam "hoje" pelo dia de Brasília, não pelo CURRENT_DATE (UTC): ${sqls.filter(q => q.includes('CURRENT_DATE')).map(q => q.slice(0, 120)).join(' | ')}`);
   }
 
@@ -6331,6 +6336,55 @@ async function main() {
     r = await req('POST', '/api/pedidos-oficiais/importar', { itens: [], enchimento });
     authToken = tokenAntes;
     assert(r.status === 401, `relatório oficial grande sem login = 401 antes de ler o corpo (${r.status})`);
+  }
+
+  // ---- Dashboard, previsão de estoque e produtos da Curva ABC no cache (auditoria 11/2026) ----
+  {
+    const { esquecerTabela } = require('../routes/lib/cacheTabela');
+    const contar = (re) => mockDb.__queryLog.filter(q => re.test(q.sql)).length;
+    const pesadas = /FROM pedidos_oficiais_itens|FROM contas_salesforce|FROM previsao_estoque$|^SELECT codigo_sku, nome, categoria FROM produtos$/i;
+    // usuário novo: o limite de rotas pesadas (por usuário) já foi gasto pelos testes dele, acima
+    const tokenAntesCache = authToken;
+    const uCache = await mockDb.pool.query(
+      "INSERT INTO usuarios (nome, email, google_sub, is_admin) VALUES ($1, $2, $3, true) RETURNING id",
+      ['Cache Dashboard', 'cache.dashboard@example.com', 'sub-cache-dashboard']);
+    authToken = generateToken();
+    await mockDb.pool.query('INSERT INTO sessoes (token, usuario_id, expira_em) VALUES ($1, $2, $3)', [hashToken(authToken), uCache.rows[0].id, '90']);
+    mockDb.__fixarVersaoTabelas(777001);
+    try {
+      ['pedidos_oficiais_itens', 'previsao_estoque', 'produtos', 'contas_salesforce'].forEach(esquecerTabela);
+      const d1 = await req('GET', '/api/dashboard/resumo');
+      const n1 = contar(pesadas);
+      const d2 = await req('GET', '/api/dashboard/resumo');
+      const n2 = contar(pesadas);
+      // sobram o canal/último pedido por cliente (lê pedidos do app) e as contas de outro vendedor
+      assert(d1.status === 200 && d2.status === 200 && JSON.stringify(d1.body) === JSON.stringify(d2.body) && n2 - n1 <= 3,
+        `dashboard: 2ª abertura vem do cache, com a mesma resposta (${n2 - n1} consultas pesadas a mais)`);
+      mockDb.__fixarVersaoTabelas(777002); // importação mudou as tabelas
+      await req('GET', '/api/dashboard/resumo');
+      assert(contar(pesadas) - n2 >= 8, `dashboard: tabela mudou, lê de novo (${contar(pesadas) - n2})`);
+
+      const p0 = contar(/FROM previsao_estoque$/i);
+      const a = await req('GET', '/api/previsao-estoque');
+      const b = await req('GET', '/api/previsao-estoque');
+      assert(a.status === 200 && JSON.stringify(a.body) === JSON.stringify(b.body) && contar(/FROM previsao_estoque$/i) === p0 + 1,
+        `previsão de estoque: 2ª leitura vem do cache (${contar(/FROM previsao_estoque$/i) - p0})`);
+      const imp = await req('POST', '/api/previsao-estoque/importar', { itens: [{ codigo_sku: 'CACHE-PREV-1', qt_disponivel: 7, previsao: '2099-01-02' }] });
+      const c = await req('GET', '/api/previsao-estoque');
+      assert(imp.status === 200 && c.body.length === 1 && c.body[0].codigo_sku === 'CACHE-PREV-1',
+        `previsão de estoque: importação aparece na hora, mesmo sem a versão da tabela mudar (${JSON.stringify(c.body).slice(0, 120)})`);
+      await req('POST', '/api/previsao-estoque/importar', { itens: a.body.length ? a.body : [{ codigo_sku: 'CACHE-PREV-1', qt_disponivel: 7 }] });
+
+      const q0 = contar(/^SELECT codigo_sku, nome, categoria FROM produtos$/i);
+      const abc1 = await req('GET', '/api/produtos-abc-geral');
+      const abc2 = await req('GET', '/api/produtos-abc-geral');
+      assert(abc1.status === 200 && JSON.stringify(abc1.body) === JSON.stringify(abc2.body) && contar(/^SELECT codigo_sku, nome, categoria FROM produtos$/i) <= q0 + 1,
+        `Curva ABC: o cadastro de produtos é lido uma vez (${contar(/^SELECT codigo_sku, nome, categoria FROM produtos$/i) - q0})`);
+    } finally {
+      authToken = tokenAntesCache;
+      mockDb.__fixarVersaoTabelas(null);
+      ['pedidos_oficiais_itens', 'previsao_estoque', 'produtos', 'contas_salesforce'].forEach(esquecerTabela);
+    }
   }
 
   // ---- Conferência de sessão: mesma consulta dividida e no máximo N ao mesmo tempo (auditoria 11/2026) ----

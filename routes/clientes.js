@@ -525,7 +525,7 @@ router.post('/mesclar', async (req, res) => {
     }
 
     await client.query('COMMIT');
-    esquecerTabela('pedidos'); esquecerTabela('pedido_itens');
+    esquecerTabela('pedidos'); esquecerTabela('pedido_itens'); esquecerTabela('clientes');
     console.log(`Clientes mesclados: "${removerInfo.nome}" (id ${remover_id}) → "${manterInfo.nome}" (id ${manter_id}), por ${req.usuario?.email}. Campos completados: ${camposCompletados.join(', ') || 'nenhum'}.`);
     res.json({ ok: true, manteve: manterInfo.nome, removeu: removerInfo.nome, camposCompletados });
   } catch (e) {
@@ -585,7 +585,7 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ erro: 'Cliente não encontrado.' });
     }
     await client.query('COMMIT');
-    esquecerTabela('pedidos'); esquecerTabela('pedido_itens');
+    esquecerTabela('pedidos'); esquecerTabela('pedido_itens'); esquecerTabela('clientes');
     console.log(`Cliente EXCLUÍDO COM HISTÓRICO: ${result.rows[0].nome} (id ${id}) por ${req.usuario?.email || '?'} (admin)`);
     res.json({ ok: true, historico_apagado: true });
   } catch (e) {

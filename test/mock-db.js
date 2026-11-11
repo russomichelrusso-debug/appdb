@@ -54,7 +54,7 @@ let versaoTabelas = null;
 // Tabelas lidas com cache (lerComCache): tabela fora da lista = sem versão, lê direto.
 const TABELAS_COM_CACHE = ['catalogo_precos', 'produtos', 'fichas_tecnicas', 'fichas_site', 'codigos_produto',
   'produto_vetores', 'pedidos_oficiais_itens', 'titulos_avista_pendentes', 'pedidos', 'pedido_itens',
-  'reativacao_alvos', 'clientes'];
+  'reativacao_alvos', 'clientes', 'previsao_estoque', 'contas_salesforce'];
 let versaoTabelasContador = 0;
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -344,6 +344,7 @@ async function query(sql, params = []) {
     return { rows: [...porTipo.values()].map(l => ({ tipo: l.tipo, nome_arquivo: l.nome_arquivo, status: l.status, erro: l.erro, recebido_em: l.recebido_em, atualizado_em: l.atualizado_em })) };
   }
   // previsão de estoque (routes/previsaoEstoque.js)
+  if (s === 'SELECT * FROM PREVISAO_ESTOQUE') return { rows: previsaoEstoque.map(l => ({ ...l })) };
   if (s.startsWith('DELETE FROM PREVISAO_ESTOQUE')) { previsaoEstoque = []; return { rows: [] }; }
   if (s.includes('INSERT INTO PREVISAO_ESTOQUE')) {
     const [cods, disp, cart, compra, prev, saldo] = params;
