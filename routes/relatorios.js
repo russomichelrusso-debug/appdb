@@ -3,7 +3,7 @@ const router = express.Router();
 const { pool } = require('../db');
 const { SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE, diaDoBanco } = require('./clientesClassificatorio');
 const { mesclarPorCodigoBase, codigoBase } = require('./lib/skuNormalizacao');
-const { nomesDosProdutos } = require('./lib/cacheTabela');
+const { nomesDosProdutos, lerComCache } = require('./lib/cacheTabela');
 const { grupoDoProduto } = require('./lib/agrupamentoProduto');
 const { SQL_PEDIDO_APP_VALIDO, sqlDiaDoPedido, SQL_HOJE_BR, FUSO, indexarDatasOficiais, pedidoAppJaFaturado } = require('./lib/comprasApp');
 const { validarIdInteiro } = require('../middleware/validarId');
@@ -23,7 +23,8 @@ router.param('produtoId', validarIdInteiro);
 // que por acaso tem o código base E a variante na mesma linha de
 // pedido - raro; uma consulta só pra todos os grupos que de fato mesclaram).
 async function reconciliarProdutosPorCodigoBase(linhas, { inicio, fim, clienteCodigo } = {}) {
-  const produtosResult = await pool.query('SELECT codigo_sku, nome, categoria FROM produtos');
+  // do cache enquanto o cadastro não mudar (lido inteiro a cada Curva ABC: egress do Supabase)
+  const produtosResult = { rows: await lerComCache('produtos:nome-categoria', 'produtos', 'SELECT codigo_sku, nome, categoria FROM produtos') };
   const produtosPorCodigo = {};
   for (const p of produtosResult.rows) produtosPorCodigo[p.codigo_sku] = p;
   const mescladas = mesclarPorCodigoBase(linhas, produtosPorCodigo);
@@ -1028,28 +1029,39 @@ function montarFechamento(linhasFat, objetivosAnuais, hojeBr) {
 // `pedidos`, a tabela antiga de cotação do app, tem vendedor_id). Aberto a
 // qualquer usuário logado - é informação de uso diário do vendedor, mesmo
 // padrão de acesso de /produtos-abc-geral e dos alertas de classificatório.
+// As séries do Dashboard só mudam com importação (ou na virada do dia) e eram 11 consultas
+// ao mesmo tempo por abertura, mais que as conexões do pool (auditoria 11/2026). Do cache
+// (lerComCache) enquanto as tabelas não mudarem; o dia de hoje (Brasília) entra como
+// parâmetro no lugar do SQL_HOJE_BRASIL, pra virada do dia ler de novo.
+const POI = 'pedidos_oficiais_itens';
+const POI_FATURADO = [POI, 'titulos_avista_pendentes']; // o NOT EXISTS do sqlFaturadoDeFato
+function serieDoDia(chave, tabelas, sql, hoje) {
+  return lerComCache(chave, tabelas, sql.split(SQL_HOJE_BRASIL).join('$1::date'), [hoje]).then(rows => ({ rows }));
+}
+
 router.get('/dashboard/resumo', async (req, res) => {
   try {
+    const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     const outrosVendedores = await clientesDeOutroVendedor();
     const [mensal, pedidosDoMes, mesAnteriorAteHoje, semanal, trimestral, topClientes, porCliente, contasSf, entradaAte, fatAno, objAno] = await Promise.all([
-      pool.query(SQL_ENTRADA_PEDIDOS_MENSAL),
-      pool.query(SQL_ENTRADA_PEDIDOS_DO_MES),
-      pool.query(SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE),
-      pool.query(
+      serieDoDia('dash:entrada-mensal', POI, SQL_ENTRADA_PEDIDOS_MENSAL, hojeBr),
+      serieDoDia('dash:entrada-do-mes', [POI, 'clientes'], SQL_ENTRADA_PEDIDOS_DO_MES, hojeBr),
+      serieDoDia('dash:entrada-mes-anterior', POI, SQL_ENTRADA_MES_ANTERIOR_ATE_HOJE, hojeBr),
+      serieDoDia('dash:semanal', POI_FATURADO,
         `SELECT date_trunc('week', data_faturamento) AS periodo, SUM(valor) AS faturamento
          FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '10 weeks'
-         GROUP BY 1 ORDER BY 1`
+         GROUP BY 1 ORDER BY 1`, hojeBr
       ),
-      pool.query(
+      serieDoDia('dash:trimestral', POI_FATURADO,
         `SELECT date_trunc('quarter', data_faturamento) AS periodo, SUM(valor) AS faturamento
          FROM pedidos_oficiais_itens WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '24 months'
-         GROUP BY 1 ORDER BY 1`
+         GROUP BY 1 ORDER BY 1`, hojeBr
       ),
-      pool.query(
+      serieDoDia('dash:top-clientes', [...POI_FATURADO, 'clientes'],
         `SELECT c.id, c.nome, SUM(poi.valor) AS faturamento
          FROM pedidos_oficiais_itens poi JOIN clientes c ON c.codigo_oficial = poi.cliente_codigo_oficial
          WHERE ${sqlFaturadoDeFato('poi')} AND poi.data_faturamento >= ${SQL_HOJE_BRASIL} - INTERVAL '12 months'
-         GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`
+         GROUP BY c.id, c.nome ORDER BY faturamento DESC LIMIT 5`, hojeBr
       ),
       // Canal + último pedido de TODOS os clientes (não só os classificados;
       // sem classificatorio_tipo = canal "Varejo"), cada um POR CONTA (sem
@@ -1060,21 +1072,23 @@ router.get('/dashboard/resumo', async (req, res) => {
          JOIN (${SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE} GROUP BY c.id) base ON base.cliente_id = c.id`
       ),
       // Foto do relatório "Todas Contas" do Salesforce (routes/contasSalesforce.js).
-      pool.query(
+      lerComCache('dash:contas-sf', 'contas_salesforce',
         `/* contas-sf:dashboard */ SELECT codigo_oficial, cliente_id, nome, situacao, classificatorio,
            ultima_compra::text AS ultima_compra, data_relatorio::text AS data_relatorio, de_outro_vendedor
          FROM contas_salesforce`
-      ),
-      pool.query(`/* dashboard:entrada-ate */ SELECT MAX(data_implantacao)::text AS dia FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6`),
+      ).then(rows => ({ rows })),
+      lerComCache('dash:entrada-ate', POI,
+        `/* dashboard:entrada-ate */ SELECT MAX(data_implantacao)::text AS dia FROM pedidos_oficiais_itens WHERE length(nr_pedido) <= 6`
+      ).then(rows => ({ rows })),
       // Fechamento do ano (cartão "Fechamento"): faturado de fato de cada mês do
       // ano corrente, contra o objetivo mensal do relatório do gerente
       // (configuracoes.objetivos_anuais.mensal - o objetivo é de faturamento)
-      pool.query(
+      serieDoDia('dash:faturado-ano', POI_FATURADO,
         `/* dashboard:faturado-ano */
          SELECT EXTRACT(MONTH FROM data_faturamento)::int AS mes, SUM(valor) AS faturado, MAX(data_faturamento)::text AS ate
          FROM pedidos_oficiais_itens
          WHERE ${sqlFaturadoDeFato()} AND data_faturamento >= date_trunc('year', ${SQL_HOJE_BRASIL})
-         GROUP BY 1 ORDER BY 1`
+         GROUP BY 1 ORDER BY 1`, hojeBr
       ),
       // só ano e meses: o mapa de objetivos por grupo (~270) não vai pro resumo
       pool.query("SELECT jsonb_build_object('ano', valor->'ano', 'mensal', valor->'mensal') AS valor FROM configuracoes WHERE chave = $1", ['objetivos_anuais']),
@@ -1094,7 +1108,6 @@ router.get('/dashboard/resumo', async (req, res) => {
     //    base e a conta da representação ficam fora das listas: não são de
     //    quem vende (decisão de 10/2026) - por isso pode faltar 1 ou 2 em
     //    relação ao painel.
-    const hojeBr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     const ativoAte = mesesAntes(hojeBr, 6);
     const faixas = [
       { lista: [], de: mesesAntes(hojeBr, FAIXA_3_A_5_MESES[1]), ate: mesesAntes(hojeBr, FAIXA_3_A_5_MESES[0]) },
