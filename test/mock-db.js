@@ -1361,9 +1361,47 @@ async function query(sql, params = []) {
     levantamentos.forEach(l => { if (l.cliente_id == antigoId) l.cliente_id = novoId; });
     return { rows: [] };
   }
+  if (s.includes('/* MESCLAR:VENCIDO-RECOMPRA */')) {
+    const [manter, remover] = params.map(Number);
+    const r = recompraAdiamentos.find(a => Number(a.cliente_id) === remover);
+    if (r) recompraAdiamentos = recompraAdiamentos.filter(a => !(Number(a.cliente_id) === manter && a.ate < r.ate));
+    return { rows: [] };
+  }
+  if (s.includes('/* MESCLAR:VENCIDO-REATIVACAO */')) {
+    const [manter, remover] = params.map(Number);
+    const r = reativacaoAdiamentos.find(a => Number(a.cliente_id) === remover);
+    if (r) reativacaoAdiamentos = reativacaoAdiamentos.filter(m => !(Number(m.cliente_id) === manter && m.tipo !== 'nao_reativar' && (r.tipo === 'nao_reativar' || r.ate > m.ate)));
+    return { rows: [] };
+  }
+  if (s.includes('/* MESCLAR:OCORRENCIAS */')) {
+    ocorrencias.forEach(o => { if (Number(o.cliente_id) === Number(params[1])) o.cliente_id = Number(params[0]); });
+    return { rows: [] };
+  }
+  if (s.includes('/* MESCLAR:RECOMPRA_ADIAMENTOS */') || s.includes('/* MESCLAR:REATIVACAO_ADIAMENTOS */') || s.includes('/* MESCLAR:REATIVACAO_ALVOS */')) {
+    const lista = s.includes('RECOMPRA_ADIAMENTOS') ? recompraAdiamentos : s.includes('REATIVACAO_ALVOS') ? reativacaoAlvos : reativacaoAdiamentos;
+    const [manter, remover] = params.map(Number);
+    if (!lista.some(a => Number(a.cliente_id) === manter)) lista.forEach(a => { if (Number(a.cliente_id) === remover) a.cliente_id = manter; });
+    return { rows: [] };
+  }
+  if (s.includes('/* MESCLAR:CONTATOS */')) {
+    const c = clientes.find(x => Number(x.id) === Number(params[0]));
+    if (c) {
+      const agora = new Date().toISOString();
+      c.whatsapp_comprador = params[1]; c.whatsapp_comprador_nome = params[2]; if (params[3]) c.whatsapp_comprador_em = agora;
+      c.telefone_comercial = params[4]; c.email_comercial = params[5]; c.email_nfe = params[6]; if (params[7]) c.contatos_em = agora;
+      c.nome_arquivo = params[8]; if (params[9]) c.nome_arquivo_em = agora;
+      c.latitude = params[10]; c.longitude = params[11]; c.localizacao_precisao_m = params[12]; c.localizacao_atualizada_em = params[13];
+    }
+    return { rows: [] };
+  }
   if (s.includes('DELETE FROM CLIENTES WHERE ID')) {
     const idRemover = Number(params[0]);
     clientes = clientes.filter(c => Number(c.id) !== idRemover);
+    // ON DELETE CASCADE do schema.sql
+    ocorrencias = ocorrencias.filter(o => Number(o.cliente_id) !== idRemover);
+    recompraAdiamentos = recompraAdiamentos.filter(a => Number(a.cliente_id) !== idRemover);
+    reativacaoAdiamentos = reativacaoAdiamentos.filter(a => Number(a.cliente_id) !== idRemover);
+    reativacaoAlvos = reativacaoAlvos.filter(a => Number(a.cliente_id) !== idRemover);
     return { rows: [] };
   }
   if (s.startsWith('UPDATE CLIENTES SET') && s.includes('DOCUMENTO = $2')) {
