@@ -1892,6 +1892,12 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   compra (`carregarLancamentosDoCliente`, em mais lojas primeiro, 1 embalagem, sem Preço Fixo nem promocional); o aviso conta
   quantos lançamentos entraram.
 
+- **Mesclar clientes não perde mais o que era do duplicado** (11/2026, achado de auditoria): `POST /api/clientes/mesclar` só passava
+  pedidos e levantamentos, e o `ON DELETE CASCADE` apagava a ocorrência aberta no Pós-Vendas, o "Já falei" da Recompra/Para reativar e
+  o alvo do placar Recuperados do removido. Agora eles passam pro mantido (nas tabelas de uma linha por cliente, a do mantido vale) e
+  WhatsApp do comprador, contatos comerciais, nome do arquivo e posição da loja seguem a regra do "completa só o que está vazio" (as
+  datas `_em` sobem pra agora). Tabela nova com `cliente_id ... ON DELETE CASCADE` que guarde decisão do vendedor entra na mescla.
+
 - **Página 404 personalizada** (11/2026, opção "C" escolhida pelo usuário a partir de mockups, canvas "Cortag · Página 404"):
   `404.html` na raiz, que o GitHub Pages mostra sozinho pra qualquer endereço que não existe. Tela vermelha "Essa página saiu do
   nível" (404 torto e um nível de bolha com a bolha fora do centro), o endereço tentado, "Voltar pro app" e "Página anterior" (só

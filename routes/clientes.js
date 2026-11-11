@@ -370,6 +370,9 @@ router.patch('/:id/matriz-grupo', async (req, res) => {
 // usando o valor do cliente removido - nunca sobrescreve um valor que já
 // existe. Classificatório (tipo+desconto+data) é tratado como um pacote só,
 // pra não misturar o tipo de um cliente com o desconto do outro.
+// Desde 11/2026 também passam pro mantido a ocorrência do Pós-Vendas, o "Já falei"
+// (Recompra/Para reativar) e o alvo do placar Recuperados, e os contatos, o nome do
+// arquivo e a posição da loja entram na mesma regra do "só o que está vazio".
 router.post('/mesclar', async (req, res) => {
   if (!req.usuario?.is_admin) return res.status(403).json({ erro: 'Só administrador pode mesclar clientes.' });
   const { manter_id, remover_id, confirmar_codigo_oficial_diferente } = req.body;
@@ -382,8 +385,11 @@ router.post('/mesclar', async (req, res) => {
     await client.query('BEGIN');
     const ambos = await client.query(
       `SELECT id, nome, documento, contato, codigo_oficial, matriz_grupo, classificatorio_pic, classificatorio_vl_acordo,
-              classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em
-       FROM clientes WHERE id = ANY($1::int[])`,
+              classificatorio_tipo, classificatorio_desconto, classificatorio_atualizado_em,
+              whatsapp_comprador, whatsapp_comprador_nome, whatsapp_comprador_em,
+              telefone_comercial, email_comercial, email_nfe, nome_arquivo, nome_arquivo_em,
+              latitude, longitude, localizacao_precisao_m, localizacao_atualizada_em
+       FROM clientes WHERE id = ANY($1::int[]) FOR UPDATE`,
       [[manter_id, remover_id]]
     );
     if (ambos.rows.length !== 2) {
@@ -412,6 +418,30 @@ router.post('/mesclar', async (req, res) => {
 
     await client.query('UPDATE pedidos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
     await client.query('UPDATE levantamentos SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
+    // O que mais é do cliente e sumiria com o DELETE (ON DELETE CASCADE): a ocorrência
+    // aberta no Pós-Vendas, o "Já falei" da Recompra e do Para reativar e o alvo do
+    // placar Recuperados. As três últimas são uma linha por cliente: a do mantido vale.
+    await client.query('/* mesclar:ocorrencias */ UPDATE ocorrencias_pos_venda SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
+    // ...menos quando a do mantido já perdeu pra do removido (as vencidas nunca são apagadas):
+    // "Já falei" que vale até mais tarde, ou "Não reativar" contra um "Já falei".
+    await client.query(
+      `/* mesclar:vencido-recompra */ DELETE FROM recompra_adiamentos
+       WHERE cliente_id = $1 AND ate < (SELECT ate FROM recompra_adiamentos WHERE cliente_id = $2)`,
+      [manter_id, remover_id]
+    );
+    await client.query(
+      `/* mesclar:vencido-reativacao */ DELETE FROM reativacao_adiamentos m USING reativacao_adiamentos r
+       WHERE m.cliente_id = $1 AND r.cliente_id = $2 AND m.tipo <> 'nao_reativar'
+         AND (r.tipo = 'nao_reativar' OR r.ate > m.ate)`,
+      [manter_id, remover_id]
+    );
+    for (const tabela of ['recompra_adiamentos', 'reativacao_adiamentos', 'reativacao_alvos']) {
+      await client.query(
+        `/* mesclar:${tabela} */ UPDATE ${tabela} SET cliente_id = $1
+         WHERE cliente_id = $2 AND NOT EXISTS (SELECT 1 FROM ${tabela} WHERE cliente_id = $1)`,
+        [manter_id, remover_id]
+      );
+    }
     // Apaga o duplicado ANTES de completar os campos do mantido - documento e
     // codigo_oficial têm índice único, então só dá pra copiar o valor do
     // removido depois que a linha dele já não existe mais (senão as duas
@@ -426,7 +456,21 @@ router.post('/mesclar', async (req, res) => {
     const novoPic = manterInfo.classificatorio_pic || removerInfo.classificatorio_pic || false;
     const novoVlAcordo = manterInfo.classificatorio_vl_acordo ?? removerInfo.classificatorio_vl_acordo ?? null;
 
+    // Contatos, nome do arquivo e posição da loja: mesma regra (só o que está vazio).
+    // WhatsApp do comprador (número + nome), nome do arquivo e posição vão em pacote.
+    const vazio = (v) => v == null || v === '';
+    const usaWhats = vazio(manterInfo.whatsapp_comprador) && !vazio(removerInfo.whatsapp_comprador);
+    const usaNomeArquivo = vazio(manterInfo.nome_arquivo) && !vazio(removerInfo.nome_arquivo);
+    const usaPosicao = manterInfo.latitude == null && removerInfo.latitude != null && removerInfo.longitude != null;
+    const contatosDoRemovido = ['telefone_comercial', 'email_comercial', 'email_nfe']
+      .filter(campo => vazio(manterInfo[campo]) && !vazio(removerInfo[campo]));
+    const pega = (usa, campo) => (usa ? removerInfo[campo] : manterInfo[campo]);
+
     const camposCompletados = [];
+    if (usaWhats) camposCompletados.push('WhatsApp do comprador');
+    if (contatosDoRemovido.length) camposCompletados.push('contatos comerciais');
+    if (usaNomeArquivo) camposCompletados.push('nome do arquivo');
+    if (usaPosicao) camposCompletados.push('posição da loja');
     if (!manterInfo.documento && novoDocumento) camposCompletados.push('CNPJ/CPF');
     if (!manterInfo.contato && novoContato) camposCompletados.push('contato');
     if (!manterInfo.codigo_oficial && novoCodigoOficial) camposCompletados.push('código oficial');
@@ -454,6 +498,31 @@ router.post('/mesclar', async (req, res) => {
         usaClassificatorioDoRemovido ? removerInfo.classificatorio_atualizado_em : manterInfo.classificatorio_atualizado_em,
       ]
     );
+
+    if (usaWhats || contatosDoRemovido.length || usaNomeArquivo || usaPosicao) {
+      // as datas (_em) sobem pra agora: no aparelho vale a troca mais nova
+      await client.query(
+        `/* mesclar:contatos */ UPDATE clientes SET
+           whatsapp_comprador = $2, whatsapp_comprador_nome = $3,
+           whatsapp_comprador_em = CASE WHEN $4 THEN now() ELSE whatsapp_comprador_em END,
+           telefone_comercial = $5, email_comercial = $6, email_nfe = $7,
+           contatos_em = CASE WHEN $8 THEN now() ELSE contatos_em END,
+           nome_arquivo = $9, nome_arquivo_em = CASE WHEN $10 THEN now() ELSE nome_arquivo_em END,
+           latitude = $11, longitude = $12, localizacao_precisao_m = $13, localizacao_atualizada_em = $14
+         WHERE id = $1`,
+        [
+          manter_id,
+          pega(usaWhats, 'whatsapp_comprador'), pega(usaWhats, 'whatsapp_comprador_nome'), usaWhats,
+          pega(contatosDoRemovido.includes('telefone_comercial'), 'telefone_comercial'),
+          pega(contatosDoRemovido.includes('email_comercial'), 'email_comercial'),
+          pega(contatosDoRemovido.includes('email_nfe'), 'email_nfe'),
+          contatosDoRemovido.length > 0,
+          pega(usaNomeArquivo, 'nome_arquivo'), usaNomeArquivo,
+          pega(usaPosicao, 'latitude'), pega(usaPosicao, 'longitude'),
+          pega(usaPosicao, 'localizacao_precisao_m'), pega(usaPosicao, 'localizacao_atualizada_em'),
+        ]
+      );
+    }
 
     await client.query('COMMIT');
     esquecerTabela('pedidos'); esquecerTabela('pedido_itens');

@@ -5729,8 +5729,26 @@ async function main() {
     res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99702 });
     assert(res.status === 409 && res.body && res.body.codigoOficialRemover === 'COD99702' && cliente(99702),
       `códigos oficiais diferentes pedem confirmação (409) e não mesclam: ${res.status}`);
+    // o que é do duplicado e sumia com o DELETE (CASCADE) ou não era copiado (auditoria 11/2026)
+    Object.assign(cliente(99702), { whatsapp_comprador: '5544999990000', whatsapp_comprador_nome: 'Marcos', email_comercial: 'compras@exemplo.com',
+      telefone_comercial: '554433330000', nome_arquivo: 'MesclaRemover', latitude: -23.4, longitude: -51.9, localizacao_precisao_m: 20, localizacao_atualizada_em: '2026-10-01T12:00:00Z' });
+    Object.assign(cliente(99701), { telefone_comercial: '554430001111' });
+    mockDb.__getOcorrencias().push({ id: 990001, cliente_id: 99702, nr_pedido: '676001', nota_fiscal: '123', tipo: 'avaria', resumo: 'teste', enviado_em: new Date().toISOString(), resolvida_em: null });
+    mockDb.__getRecompraAdiamentos().push({ cliente_id: 99702, ate: '2099-01-01', usuario_id: null });
+    mockDb.__getRecompraAdiamentos().push({ cliente_id: 99701, ate: '2026-01-01', usuario_id: null }); // vencido: perde pro do duplicado
+    mockDb.__getReativacaoAlvos().push({ cliente_id: 99702, desde: '2026-10-18', proprietario: 'Rodrigo', ultima_compra_antes: null });
+    mockDb.__getReativacaoAlvos().push({ cliente_id: 99701, desde: '2026-10-01', proprietario: 'Marina', ultima_compra_antes: null });
     res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99702, confirmar_codigo_oficial_diferente: true });
     const mantido = cliente(99701);
+    assert(mockDb.__getOcorrencias().some(o => o.id === 990001 && o.cliente_id === 99701)
+      && mockDb.__getRecompraAdiamentos().filter(a => a.cliente_id === 99701).map(a => a.ate).join() === '2099-01-01',
+      'mescla: ocorrência aberta e "Já falei" do duplicado passam pro mantido (o vencido do mantido não segura)');
+    const alvos = mockDb.__getReativacaoAlvos().filter(a => a.cliente_id === 99701 || a.cliente_id === 99702);
+    assert(alvos.length === 1 && alvos[0].desde === '2026-10-01', `mescla: alvo do placar que o mantido já tinha continua valendo: ${JSON.stringify(alvos)}`);
+    assert(mantido.whatsapp_comprador === '5544999990000' && mantido.whatsapp_comprador_nome === 'Marcos' && mantido.email_comercial === 'compras@exemplo.com'
+      && mantido.telefone_comercial === '554430001111' && mantido.nome_arquivo === 'MesclaRemover' && Number(mantido.latitude) === -23.4 && Number(mantido.longitude) === -51.9
+      && ['WhatsApp do comprador', 'contatos comerciais', 'nome do arquivo', 'posição da loja'].every(c => res.body.camposCompletados.includes(c)),
+      `mescla: contatos, nome do arquivo e posição vazios vêm do duplicado, sem trocar o que o mantido já tinha: ${JSON.stringify(mantido)}`);
     assert(res.status === 200 && !cliente(99702), `mescla confirmada remove o duplicado: ${res.status}`);
     assert(mockDb.__getPedidos().find(p => p.id === 99801).cliente_id === 99701 && mockDb.__getLevantamentos().find(l => l.id === 99911).cliente_id === 99701,
       'pedido e levantamento do duplicado passam pro cliente mantido');
