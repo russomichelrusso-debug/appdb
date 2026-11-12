@@ -407,7 +407,10 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // concordar com o "hoje" do banco (SQL_HOJE_BR, dia de Brasília). Cliente Rede usa a
     // variante INDIVIDUAL (sem somar matriz_grupo) - ver comentário na
     // função sqlFaturamentoClassificatorioPorCliente.
-    const fatResult = await pool.query(
+    // As consultas que só dependem do cliente saem juntas (cada uma custa
+    // ~180-250 ms de ida e volta até o Supabase; em série eram 9 e o log
+    // [lenta] de 11/11/2026 mostrava 1-2,3 s por abertura de cliente).
+    const fatP = pool.query(
       `SELECT sub.*, EXTRACT(YEAR FROM ${PERIODO_CLASSIFICATORIO_INICIO_SQL})::int AS ano_fechado,
               EXTRACT(YEAR FROM ${SQL_HOJE_BR})::int AS ano_atual,
               EXTRACT(QUARTER FROM ${SQL_HOJE_BR})::int - 1 AS trimestre_atual_idx,
@@ -415,6 +418,35 @@ router.get('/:id/classificatorio/status', async (req, res) => {
        FROM (${ehRede ? SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE : SQL_FATURAMENTO_CLASSIFICATORIO_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id) sub`,
       [req.params.id]
     );
+    const trimP = pool.query(
+      ehRede
+        ? `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
+           FROM pedidos_oficiais_itens poi
+           JOIN clientes c ON c.id = $1
+           WHERE poi.cliente_codigo_oficial = c.codigo_oficial
+             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
+           GROUP BY 1 ORDER BY 1`
+        : `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
+           FROM pedidos_oficiais_itens poi
+           JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
+           JOIN clientes c ON c.id = $1
+           WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
+             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
+           GROUP BY 1 ORDER BY 1`,
+      [req.params.id]
+    );
+    const cfgP = pool.query(
+      'SELECT chave, valor FROM configuracoes WHERE chave = ANY($1::text[])',
+      [['objetivos_trimestrais', 'objetivos_anuais']]
+    );
+    const erpP = pool.query(
+      `SELECT fat_ano_anterior, fat_acumulado, fat_12m_cliente, fat_12m_matriz, diferenca, gestor, situacao, cidade, uf,
+              data_relatorio::text AS data_relatorio, apurado_ate::text AS apurado_ate,
+              cliente_desde::text AS cliente_desde, ultima_compra::text AS ultima_compra
+       FROM cliente_classificatorio_erp WHERE cliente_id = $1`,
+      [req.params.id]
+    );
+    const [fatResult, trimResult, objetivosConfigResult, erpResult] = await Promise.all([fatP, trimP, cfgP, erpP]);
     const faturamento12m = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_12m) : 0;
     const faturamentoAnoCorrente = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_ano_corrente) : 0;
     const faturamentoMesmoPeriodoAnoAnterior = fatResult.rows[0] ? Number(fatResult.rows[0].faturamento_mesmo_periodo_ano_anterior) : 0;
@@ -438,23 +470,6 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // Realizada" (conta carteira + faturado, reconhecimento por pedido
     // lançado, não por nota fiscal emitida). Ver plano "Meta trimestral
     // oficial" pra validação cliente a cliente contra a planilha oficial.
-    const trimResult = await pool.query(
-      ehRede
-        ? `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
-           FROM pedidos_oficiais_itens poi
-           JOIN clientes c ON c.id = $1
-           WHERE poi.cliente_codigo_oficial = c.codigo_oficial
-             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
-           GROUP BY 1 ORDER BY 1`
-        : `SELECT date_trunc('quarter', poi.data_implantacao) AS trimestre, SUM(poi.valor) AS faturado
-           FROM pedidos_oficiais_itens poi
-           JOIN clientes c2 ON poi.cliente_codigo_oficial = c2.codigo_oficial
-           JOIN clientes c ON c.id = $1
-           WHERE (c2.id = c.id OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo))
-             AND poi.data_implantacao >= date_trunc('quarter', ${SQL_HOJE_BR}) - INTERVAL '9 months'
-           GROUP BY 1 ORDER BY 1`,
-      [req.params.id]
-    );
     // Ritmo medido contra o ANO EM ANDAMENTO (anoAtual/trimestreAtualIdx, vindos
     // do Postgres junto de fatResult) - é o ano que ainda vai ser revisado na
     // próxima janeiro, então é o único que ainda faz sentido "correr atrás".
@@ -494,10 +509,6 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     let faltaPObjetivo = null;
     let objetivoEncerrado = null;
     // trimestral e anual numa consulta só (cada consulta custa ~180 ms)
-    const objetivosConfigResult = await pool.query(
-      'SELECT chave, valor FROM configuracoes WHERE chave = ANY($1::text[])',
-      [['objetivos_trimestrais', 'objetivos_anuais']]
-    );
     const configDe = (chave) => objetivosConfigResult.rows.find(r => r.chave === chave)?.valor;
     const objetivosConfig = configDe('objetivos_trimestrais');
     // chaves: a do relatório do gerente (grupo, ou "#<id>" da loja) e a do
@@ -507,11 +518,45 @@ router.get('/:id/classificatorio/status', async (req, res) => {
       const k = chavesObjetivo.find(c => mapa && mapa[c] != null);
       return k == null ? null : mapa[k];
     };
+    // 2ª rodada, também junta: o que depende da foto do ERP e do objetivo importado.
+    const erpRow = erpResult.rows[0];
+    const temObjetivoTrim = !!(objetivosConfig && objetivosConfig.periodoInicio && objetivosConfig.periodoFim
+      && objetivoDaChave(objetivosConfig.objetivos) != null);
+    const [entradaDoPeriodo, ultimaIndResult, somaResult, concResult] = await Promise.all([
+      temObjetivoTrim ? calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim) : null,
+      erpRow && !ehRede ? pool.query(`${SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id`, [req.params.id]) : null,
+      erpRow && !ehRede && erpRow.fat_12m_matriz != null ? pool.query(
+        `SELECT COALESCE(SUM(e.fat_12m_cliente), 0) AS soma
+         FROM clientes c2
+         JOIN cliente_classificatorio_erp e ON e.cliente_id = c2.id AND e.data_relatorio = $2::date
+         WHERE c2.id = $1 OR ($3::text IS NOT NULL AND c2.matriz_grupo = $3::text)`,
+        [req.params.id, erpRow.data_relatorio, cliente.matriz_grupo]
+      ) : null,
+      erpRow && erpRow.apurado_ate ? pool.query(
+        `SELECT
+           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento > $2::date
+             AND poi.data_faturamento > ${JANELA_12M_SQL}), 0) AS depois_12m,
+           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento >= ($2::date + 1) - INTERVAL '12 months'
+             AND poi.data_faturamento <= ${JANELA_12M_SQL}), 0) AS fora_janela_app,
+           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento > $2::date
+             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}), 0) AS depois_ano,
+           (($2::date + 1) - INTERVAL '12 months')::date::text AS inicio_erp,
+           (${JANELA_12M_SQL})::date::text AS fim_fora_janela_app,
+           (${JANELA_12M_SQL} + INTERVAL '1 day')::date::text AS inicio_app,
+           ${SQL_HOJE_BR}::text AS hoje,
+           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM ${SQL_HOJE_BR}) AS mesmo_ano
+         FROM clientes c
+         JOIN clientes c2 ON c2.id = c.id ${ehRede ? '' : 'OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)'}
+         JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
+         WHERE c.id = $1 AND ${sqlFaturadoDeFato('poi')}`,
+        [req.params.id, erpRow.apurado_ate]
+      ) : null,
+    ]);
     if (objetivosConfig && objetivosConfig.periodoInicio && objetivosConfig.periodoFim) {
       const objetivo = objetivoDaChave(objetivosConfig.objetivos);
       if (objetivo != null) {
         const valorObjetivo = Number(objetivo);
-        const entrada = await calcularEntradaTrimestralPeriodo(pool, cliente, objetivosConfig.periodoInicio, objetivosConfig.periodoFim);
+        const entrada = entradaDoPeriodo;
         const falta = Math.max(0, valorObjetivo - entrada);
         if (String(objetivosConfig.periodoFim).slice(0, 10) < hojeBrasil()) {
           objetivoEncerrado = {
@@ -550,14 +595,6 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // planilha, pro vendedor não precisar abri-la. Convive com os números
     // ao vivo acima (que somam o faturamento importado até hoje).
     // Datas como texto AAAA-MM-DD direto do Postgres (nunca passam por Date - ver CLAUDE.md).
-    const erpResult = await pool.query(
-      `SELECT fat_ano_anterior, fat_acumulado, fat_12m_cliente, fat_12m_matriz, diferenca, gestor, situacao, cidade, uf,
-              data_relatorio::text AS data_relatorio, apurado_ate::text AS apurado_ate,
-              cliente_desde::text AS cliente_desde, ultima_compra::text AS ultima_compra
-       FROM cliente_classificatorio_erp WHERE cliente_id = $1`,
-      [req.params.id]
-    );
-    const erpRow = erpResult.rows[0];
     const dataTxt = diaDoBanco;
     // "Ult.Compra" da planilha é congelada na apuração do ERP (relatório de
     // 02/10 = até 31/08): o card dizia "Última compra 20/08" de quem já tinha
@@ -567,8 +604,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     if (erpRow) {
       if (ehRede) ultimaCompraClienteApp = dataTxt(ultimaCompra);
       else {
-        const r = await pool.query(`${SQL_FATURAMENTO_CLASSIFICATORIO_INDIVIDUAL_POR_CLIENTE} WHERE c.id = $1 GROUP BY c.id`, [req.params.id]);
-        ultimaCompraClienteApp = dataTxt(r.rows[0] && r.rows[0].ultima_compra);
+        ultimaCompraClienteApp = dataTxt(ultimaIndResult.rows[0] && ultimaIndResult.rows[0].ultima_compra);
       }
     }
     // Parte dos 12 meses da matriz que vem de empresas FORA do app (filiais
@@ -579,13 +615,6 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     // pra subir") - o card esconde esse veredito e manda olhar o oficial.
     let fat12mOutrasEmpresas = null;
     if (erpRow && !ehRede && erpRow.fat_12m_matriz != null) {
-      const somaResult = await pool.query(
-        `SELECT COALESCE(SUM(e.fat_12m_cliente), 0) AS soma
-         FROM clientes c2
-         JOIN cliente_classificatorio_erp e ON e.cliente_id = c2.id AND e.data_relatorio = $2::date
-         WHERE c2.id = $1 OR ($3::text IS NOT NULL AND c2.matriz_grupo = $3::text)`,
-        [req.params.id, erpRow.data_relatorio, cliente.matriz_grupo]
-      );
       const fora = Number(erpRow.fat_12m_matriz) - Number(somaResult.rows[0]?.soma || 0);
       if (fora > 1) fat12mOutrasEmpresas = Math.round(fora * 100) / 100;
     }
@@ -599,25 +628,7 @@ router.get('/:id/classificatorio/status', async (req, res) => {
     //   fora do app). Mesmo agrupamento da conta ao vivo (Rede: só o cliente).
     let conciliacao = null;
     if (erpRow && erpRow.apurado_ate) {
-      const r = (await pool.query(
-        `SELECT
-           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento > $2::date
-             AND poi.data_faturamento > ${JANELA_12M_SQL}), 0) AS depois_12m,
-           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento >= ($2::date + 1) - INTERVAL '12 months'
-             AND poi.data_faturamento <= ${JANELA_12M_SQL}), 0) AS fora_janela_app,
-           COALESCE(SUM(poi.valor) FILTER (WHERE poi.data_faturamento > $2::date
-             AND poi.data_faturamento >= ${PERIODO_CLASSIFICATORIO_FIM_SQL}), 0) AS depois_ano,
-           (($2::date + 1) - INTERVAL '12 months')::date::text AS inicio_erp,
-           (${JANELA_12M_SQL})::date::text AS fim_fora_janela_app,
-           (${JANELA_12M_SQL} + INTERVAL '1 day')::date::text AS inicio_app,
-           ${SQL_HOJE_BR}::text AS hoje,
-           EXTRACT(YEAR FROM $2::date) = EXTRACT(YEAR FROM ${SQL_HOJE_BR}) AS mesmo_ano
-         FROM clientes c
-         JOIN clientes c2 ON c2.id = c.id ${ehRede ? '' : 'OR (c.matriz_grupo IS NOT NULL AND c2.matriz_grupo = c.matriz_grupo)'}
-         JOIN pedidos_oficiais_itens poi ON poi.cliente_codigo_oficial = c2.codigo_oficial
-         WHERE c.id = $1 AND ${sqlFaturadoDeFato('poi')}`,
-        [req.params.id, erpRow.apurado_ate]
-      )).rows[0] || {};
+      const r = concResult.rows[0] || {};
       const r2 = v => Math.round((Number(v) || 0) * 100) / 100;
       // Rede: o ERP só tem o 12 meses do próprio cliente comparável (ano
       // anterior/acumulado da planilha são da rede inteira).

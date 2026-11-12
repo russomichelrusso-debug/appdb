@@ -286,19 +286,34 @@ async function receberPedidoAvista(p, recebidoEm) {
 // que o gravado pro mesmo item não passa por cima.
 async function receberCancelamentoSaldo(aviso, recebidoEm, remetente) {
   const dataAviso = aviso.data_aviso || recebidoEm.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-  let novos = 0;
-  for (const it of aviso.itens) {
-    const antes = await pool.query(
-      `/* importacao-email:cancelamento-antes */
-       SELECT to_char(data_aviso, 'YYYY-MM-DD') AS data_aviso FROM avisos_cancelamento_saldo WHERE nr_pedido = $1 AND codigo_sku = $2`,
-      [it.nr_pedido, it.codigo_sku]);
-    const dataAntes = antes.rows.length ? antes.rows[0].data_aviso : null;
-    if (dataAntes && dataAntes > dataAviso) continue; // aviso mais novo já gravado
+  // Tudo em 3 consultas (antes 2 por item + 1 por cliente: e-mail com 40 itens = ~80 idas e
+  // voltas ao banco, e uma queda no meio deixava o aviso gravado pela metade).
+  // Item repetido no mesmo e-mail: vale a última linha (a chave é pedido + código).
+  const porChave = new Map();
+  for (const it of aviso.itens) porChave.set(`${it.nr_pedido}\n${it.codigo_sku}`, it);
+  const unicos = [...porChave.values()];
+  const antes = await pool.query(
+    `/* importacao-email:cancelamento-antes */
+     SELECT a.nr_pedido, a.codigo_sku, to_char(a.data_aviso, 'YYYY-MM-DD') AS data_aviso
+     FROM avisos_cancelamento_saldo a
+     JOIN UNNEST($1::text[], $2::text[]) AS e(nr_pedido, codigo_sku) ON e.nr_pedido = a.nr_pedido AND e.codigo_sku = a.codigo_sku`,
+    [unicos.map(it => it.nr_pedido), unicos.map(it => it.codigo_sku)]);
+  const dataAntes = new Map(antes.rows.map(l => [`${l.nr_pedido}\n${l.codigo_sku}`, l.data_aviso]));
+  // aviso mais novo já gravado: o item fica como está
+  const gravar = unicos.filter(it => { const d = dataAntes.get(`${it.nr_pedido}\n${it.codigo_sku}`); return !(d && d > dataAviso); });
+  // novo = item sem aviso ou com aviso de outro dia (não é reenvio do mesmo e-mail)
+  const novos = gravar.filter(it => dataAntes.get(`${it.nr_pedido}\n${it.codigo_sku}`) !== dataAviso).length;
+  if (gravar.length) {
+    const col = (campo) => gravar.map(it => (it[campo] == null ? null : it[campo]));
     await pool.query(
       `/* importacao-email:cancelamento */
        INSERT INTO avisos_cancelamento_saldo (nr_pedido, codigo_sku, cliente_codigo_oficial, cliente_nome, descricao, ordem_compra,
          motivo, minimo, quantidade, valor, data_aviso, remetente, recebido_em)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::date, $12, $13)
+       SELECT e.nr_pedido, e.codigo_sku, e.cod, e.nome, e.descricao, e.oc, e.motivo, e.minimo, e.quantidade, e.valor,
+              $11::date, $12, $13::timestamptz
+       FROM UNNEST($1::text[], $2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[],
+                   $8::numeric[], $9::numeric[], $10::numeric[])
+            AS e(nr_pedido, codigo_sku, cod, nome, descricao, oc, motivo, minimo, quantidade, valor)
        ON CONFLICT (nr_pedido, codigo_sku) DO UPDATE SET
          cliente_codigo_oficial = COALESCE(EXCLUDED.cliente_codigo_oficial, avisos_cancelamento_saldo.cliente_codigo_oficial),
          cliente_nome = COALESCE(EXCLUDED.cliente_nome, avisos_cancelamento_saldo.cliente_nome),
@@ -306,23 +321,23 @@ async function receberCancelamentoSaldo(aviso, recebidoEm, remetente) {
          quantidade = EXCLUDED.quantidade, valor = EXCLUDED.valor, data_aviso = EXCLUDED.data_aviso, remetente = EXCLUDED.remetente,
          recebido_em = GREATEST(avisos_cancelamento_saldo.recebido_em, EXCLUDED.recebido_em), atualizado_em = now()
        WHERE EXCLUDED.data_aviso >= avisos_cancelamento_saldo.data_aviso`,
-      [it.nr_pedido, it.codigo_sku, it.cliente_codigo_oficial, it.cliente_nome, it.descricao, it.ordem_compra,
-       it.motivo, it.minimo, it.quantidade, it.valor, dataAviso, remetente, recebidoEm.toISOString()]);
-    // novo = item sem aviso ou com aviso de outro dia (não é reenvio do mesmo e-mail)
-    if (dataAntes !== dataAviso) novos++;
+      [col('nr_pedido'), col('codigo_sku'), col('cliente_codigo_oficial'), col('cliente_nome'), col('descricao'), col('ordem_compra'),
+       col('motivo'), col('minimo'), col('quantidade'), col('valor'), dataAviso, remetente, recebidoEm.toISOString()]);
   }
   const pedidos = [...new Set(aviso.itens.map(it => it.nr_pedido))];
   const avisar = novos > 0 && recente(recebidoEm);
   if (avisar) {
     // nome do cliente como está no app (o e-mail corta em 12 letras: "COMBRASILEIR")
     const codigos = [...new Set(aviso.itens.map(it => it.cliente_codigo_oficial).filter(Boolean))];
-    const nomes = new Map();
+    const doApp = codigos.length ? await pool.query(
+      '/* importacao-email:clientes-por-codigo */ SELECT codigo_oficial, nome FROM clientes WHERE codigo_oficial = ANY($1::text[])', [codigos]) : { rows: [] };
+    const nomes = new Map(doApp.rows.map(l => [l.codigo_oficial, l.nome]));
+    // fora do app vale o 1º nome do e-mail daquele código (como o nomeDoCliente): o mesmo cliente não sai duas vezes
     for (const it of aviso.itens) {
-      if (it.cliente_codigo_oficial && !nomes.has(it.cliente_codigo_oficial)) {
-        nomes.set(it.cliente_codigo_oficial, await nomeDoCliente(it.cliente_codigo_oficial, it.cliente_nome));
-      }
+      const cod = it.cliente_codigo_oficial || '';
+      if (!nomes.has(cod)) nomes.set(cod, it.cliente_nome || 'cliente');
     }
-    const lista = [...new Set(aviso.itens.map(it => nomes.get(it.cliente_codigo_oficial) || it.cliente_nome).filter(Boolean))];
+    const lista = [...new Set(aviso.itens.map(it => nomes.get(it.cliente_codigo_oficial || '')))];
     const salvaveis = aviso.itens.some(it => it.minimo);
     const texto = (lista.length > 4 ? lista.slice(0, 4).join(', ') + ` e mais ${lista.length - 4}` : lista.join(', '))
       + (salvaveis ? ' · aumentar a quantidade salva o saldo' : '');
@@ -419,3 +434,4 @@ router.get('/status', requireAuth, async (req, res) => {
 
 module.exports = router;
 module.exports.chaveImportacaoValida = chaveImportacaoValida;
+module.exports.receberCancelamentoSaldo = receberCancelamentoSaldo; // conferência num Postgres real
