@@ -164,6 +164,11 @@ Pegadinhas de ambiente:
   memória por até 60 s (`requireAuth`, `middleware/auth.js`; `SESSAO_CACHE_MS`, 0 desliga). Logout, desativar, excluir e trocar o
   nome limpam na hora (`esquecerSessao`/`esquecerSessoesDoUsuario`); sessão apagada direto por SQL vale até 60 s. Rota nova que
   mude o usuário ou apague sessão chama a limpeza. Na v2 (várias instâncias) a limpeza não chega nas outras.
+  **Log de 11/11/2026** (depois dos lotes acima): o Dashboard sumiu do `[lenta]`; o mais frequente passou a ser
+  `GET /api/clientes/:id/classificatorio/status` (1–2,3 s, 5–9 consultas em série, toda vez que um cliente é aberto). Agora as
+  consultas saem em 3 rodadas com `Promise.all` (cliente; faturamento + trimestres + objetivos + foto do ERP; entrada do objetivo +
+  última compra do CNPJ + soma da matriz + conciliação): mesma resposta conferida num Postgres real, 1,4 s → 0,57 s com 200 ms por
+  consulta. Cada abertura usa até 4 conexões ao mesmo tempo. Rota nova com várias consultas independentes: juntar assim.
 - **Itens do pedido e do levantamento gravados de uma vez** (11/2026, lote 6 da auditoria; log `[lenta]`: levantamento salvo em
   38 s, pedido em 8–14 s): cada consulta custa ~1 s de ida e volta Render (Oregon) ↔ Supabase (São Paulo), e eram ~2 por item
   (achar o produto + INSERT). Agora `acharOuCriarProdutosPorSku` (`routes/lib/produtoPorSku.js`) acha todos os códigos num SELECT
@@ -716,6 +721,8 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   à vista): só lista, "aumentar não evita". Faixa laranja no Pedido/Levantamento pelo `/sync` (`cancelamentos`),
   tocar abre os pedidos do cliente. Um push por e-mail ("Saldo de N pedidos vai ser cancelado"); o mesmo
   aviso reenviado (já veio 3 vezes em 1 min) não avisa de novo; respostas (RES:/Re:/Fwd:) ficam de fora.
+  Desde 11/2026 (auditoria) o aviso é gravado em lote (`receberCancelamentoSaldo`: 1 SELECT + 1 `INSERT ... FROM UNNEST` + 1 consulta
+  dos nomes; eram 2 por item + 1 por cliente, e uma queda no meio gravava pela metade); item repetido no e-mail = vale a última linha.
   **O script do Gmail precisa ser colado de novo** no Apps Script. O 1º aviso real (13/10/2026) chegou 30 s depois do
   merge, o servidor ainda velho respondeu "E-mail não reconhecido" (422) e o script marcou "Falhou" pra sempre (gravado
   via SQL a partir do e-mail): agora e-mail não reconhecido em `/mensagem` responde **503** e o script tenta de novo por ~1 h.

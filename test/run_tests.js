@@ -3795,6 +3795,24 @@ async function main() {
     assert(res.status === 200 && res.body.resultado.novos === 0 && res.body.resultado.avisado === false
       && mockDb.__getNovidades().filter(n => n.tipo === 'cancelamento-saldo').length === avisosCancAntes + 1,
       `e-mail Cortag: o mesmo aviso de cancelamento reenviado não gera outro push: ${JSON.stringify(res.body)}`);
+    // aviso mais velho chegando depois (outro e-mail, de ontem): não passa por cima nem avisa
+    {
+      const ontem = new Date(Date.parse(hojeBr + 'T12:00:00Z') - 86400000).toISOString().slice(0, 10);
+      const [oA, oM, oD] = ontem.split('-');
+      const antes = JSON.stringify(mockDb.__getAvisosCancelamento());
+      res = await enviarMensagem(`Cancelamento saldo em carteira ${oD}.${oM}.${oA}`, 'texto puro', { ...deThamiris, mensagemId: 'canc-velho' });
+      assert(res.status === 200 && res.body.resultado.novos === 0 && res.body.resultado.avisado === false
+        && JSON.stringify(mockDb.__getAvisosCancelamento()) === antes
+        && mockDb.__getNovidades().filter(n => n.tipo === 'cancelamento-saldo').length === avisosCancAntes + 1,
+        `e-mail Cortag: aviso de cancelamento mais velho que o gravado é ignorado: ${JSON.stringify(res.body)}`);
+      // o mesmo item duas vezes no e-mail (gravação em lote): vale a última linha, sem erro de chave repetida
+      const htmlRepetido = htmlCanc.replace('</tbody>', linhaCanc('3663', 'PEOCA', '00679001', '60226', 'ESTILETE', '', 'Abaixo R$ 300,00', '6', '80,00')
+        + linhaCanc('3663', 'PEOCA', '00679001', '60226', 'ESTILETE', '', 'Abaixo R$ 300,00', '12', '160,00') + '</tbody>');
+      res = await enviarMensagem(assuntoCanc, 'texto puro', { ...deThamiris, html: htmlRepetido, mensagemId: 'canc-repetido' });
+      const doRepetido = mockDb.__getAvisosCancelamento().filter(a => a.nr_pedido === '679001');
+      assert(res.status === 200 && res.body.resultado.novos === 1 && doRepetido.length === 1 && Number(doRepetido[0].quantidade) === 12,
+        `e-mail Cortag: item repetido no e-mail de cancelamento grava uma linha, com a última quantidade: ${JSON.stringify([res.body, doRepetido])}`);
+    }
     res = await req('GET', '/api/pedidos-oficiais/9512');
     const avisos9512 = res.body.avisos_cancelamento || [];
     res = await req('GET', '/api/clientes/sync');

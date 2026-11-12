@@ -250,20 +250,29 @@ async function query(sql, params = []) {
     return { rows: [] };
   }
   if (s.includes('/* IMPORTACAO-EMAIL:CANCELAMENTO-ANTES */')) {
-    const a = avisosCancelamento.find(x => x.nr_pedido === params[0] && x.codigo_sku === params[1]);
-    return { rows: a ? [{ data_aviso: a.data_aviso }] : [] };
+    const [nrs, skus] = params;
+    return { rows: avisosCancelamento.filter(x => nrs.some((nr, i) => x.nr_pedido === nr && x.codigo_sku === skus[i]))
+      .map(a => ({ nr_pedido: a.nr_pedido, codigo_sku: a.codigo_sku, data_aviso: a.data_aviso })) };
   }
   if (s.includes('/* IMPORTACAO-EMAIL:CANCELAMENTO */')) {
-    const [nr, sku, cod, nome, descricao, oc, motivo, minimo, quantidade, valor, dataAviso, remetente, recebido] = params;
-    const atual = avisosCancelamento.find(x => x.nr_pedido === nr && x.codigo_sku === sku);
-    const novo = { nr_pedido: nr, codigo_sku: sku, cliente_codigo_oficial: cod, cliente_nome: nome, descricao, ordem_compra: oc,
-      motivo, minimo, quantidade, valor, data_aviso: dataAviso, remetente, recebido_em: recebido };
-    if (!atual) avisosCancelamento.push(novo);
-    else if (dataAviso >= atual.data_aviso) {
-      Object.assign(atual, { ...novo, cliente_codigo_oficial: cod || atual.cliente_codigo_oficial, cliente_nome: nome || atual.cliente_nome,
-        recebido_em: new Date(recebido) > new Date(atual.recebido_em) ? recebido : atual.recebido_em });
-    }
+    const [nrs, skus, cods, nomes, descricoes, ocs, motivos, minimos, quantidades, valores, dataAviso, remetente, recebido] = params;
+    // como o Postgres: a mesma chave duas vezes no mesmo INSERT ... ON CONFLICT DO UPDATE é erro
+    if (new Set(nrs.map((nr, i) => nr + '\n' + skus[i])).size !== nrs.length) throw new Error('ON CONFLICT DO UPDATE command cannot affect row a second time');
+    nrs.forEach((nr, i) => {
+      const sku = skus[i], cod = cods[i], nome = nomes[i];
+      const atual = avisosCancelamento.find(x => x.nr_pedido === nr && x.codigo_sku === sku);
+      const novo = { nr_pedido: nr, codigo_sku: sku, cliente_codigo_oficial: cod, cliente_nome: nome, descricao: descricoes[i], ordem_compra: ocs[i],
+        motivo: motivos[i], minimo: minimos[i], quantidade: quantidades[i], valor: valores[i], data_aviso: dataAviso, remetente, recebido_em: recebido };
+      if (!atual) avisosCancelamento.push(novo);
+      else if (dataAviso >= atual.data_aviso) {
+        Object.assign(atual, { ...novo, cliente_codigo_oficial: cod || atual.cliente_codigo_oficial, cliente_nome: nome || atual.cliente_nome,
+          recebido_em: new Date(recebido) > new Date(atual.recebido_em) ? recebido : atual.recebido_em });
+      }
+    });
     return { rows: [] };
+  }
+  if (s.includes('/* IMPORTACAO-EMAIL:CLIENTES-POR-CODIGO */')) {
+    return { rows: clientes.filter(c => c.codigo_oficial && params[0].includes(c.codigo_oficial)).map(c => ({ codigo_oficial: c.codigo_oficial, nome: c.nome })) };
   }
   if (s.includes('/* PEDIDOS-OFICIAIS:CANCELAMENTOS */')) {
     return { rows: avisosCancelamentoAtivos().filter(a => a.cliente_codigo_oficial === params[0]).map(a => ({ aviso: camposAviso(a) })) };
