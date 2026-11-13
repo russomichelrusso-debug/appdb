@@ -354,6 +354,12 @@ async function query(sql, params = []) {
   }
   // previsão de estoque (routes/previsaoEstoque.js)
   if (s === 'SELECT * FROM PREVISAO_ESTOQUE') return { rows: previsaoEstoque.map(l => ({ ...l })) };
+  if (s.startsWith('SELECT MAX(ATUALIZADO_EM) AS ULTIMA_ATUALIZACAO') && s.includes('FROM PEDIDOS_OFICIAIS_ITENS')) {
+    const datas = pedidosOficiaisItens.map(i => i.atualizado_em).filter(Boolean).sort();
+    return { rows: [{ ultima_atualizacao: datas.length ? datas[datas.length - 1] : null, total_linhas: String(pedidosOficiaisItens.length),
+      total_carteira: String(pedidosOficiaisItens.filter(i => i.status === 'carteira').length),
+      total_faturado: String(pedidosOficiaisItens.filter(i => i.status === 'faturado').length) }] };
+  }
   if (s.startsWith('DELETE FROM PREVISAO_ESTOQUE')) { previsaoEstoque = []; return { rows: [] }; }
   if (s.includes('INSERT INTO PREVISAO_ESTOQUE')) {
     const [cods, disp, cart, compra, prev, saldo] = params;
