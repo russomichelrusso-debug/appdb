@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool, registrarImportacao } = require('../db');
 const { avisarImportacao, formatarDataBr } = require('./lib/novidades');
-const { nomesDosProdutos, esquecerTabela } = require('./lib/cacheTabela');
+const { nomesDosProdutos, esquecerTabela, lerComCache } = require('./lib/cacheTabela');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
 const { sqlAvisoCancelamentoAtivo, sqlCamposAviso } = require('./lib/cancelamentoSaldo');
 const { codigoBase } = require('./lib/skuNormalizacao');
@@ -22,13 +22,15 @@ const { SQL_HOJE_BR } = require('./lib/comprasApp');
 // um id de cliente).
 router.get('/status', async (req, res) => {
   try {
-    const result = await pool.query(
+    // Todo aparelho pede ao abrir o app, e é uma varredura de pedidos_oficiais_itens (52 mil linhas): no log
+    // [lenta] de 12/11/2026 levava 1,5-3,3 s numa consulta só. Só muda quando a tabela muda.
+    const rows = await lerComCache('pedidos-oficiais:status', 'pedidos_oficiais_itens',
       `SELECT MAX(atualizado_em) AS ultima_atualizacao, COUNT(*) AS total_linhas,
               COUNT(*) FILTER (WHERE status = 'carteira') AS total_carteira,
               COUNT(*) FILTER (WHERE status = 'faturado') AS total_faturado
        FROM pedidos_oficiais_itens`
     );
-    const row = result.rows[0];
+    const row = rows[0] || {};
     res.json({
       ultima_atualizacao: row.ultima_atualizacao,
       total_linhas: Number(row.total_linhas),

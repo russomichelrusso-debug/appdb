@@ -6026,6 +6026,22 @@ async function main() {
         '/api/recompra/12/adiar', '/api/novidades'].every(c => grupoDaRota(c) === null)
       && carteira && cliente && carteira !== cliente;
     assert(classificados, 'limite de rotas pesadas: rotas da carteira, de um cliente e livres classificadas certo');
+    // status do relatório oficial: todo aparelho pede ao abrir; a varredura sai do cache enquanto a tabela não muda
+    {
+      const contar = () => mockDb.__queryLog.filter(q => /MAX\(atualizado_em\) AS ultima_atualizacao/i.test(q.sql)).length;
+      mockDb.__fixarVersaoTabelas('status-oficial-1');
+      const antes = contar();
+      const s1 = await req('GET', '/api/pedidos-oficiais/status');
+      const s2 = await req('GET', '/api/pedidos-oficiais/status');
+      const naMesmaVersao = contar() - antes;
+      mockDb.__fixarVersaoTabelas('status-oficial-2');
+      const s3 = await req('GET', '/api/pedidos-oficiais/status');
+      const comTabelaMudada = contar() - antes;
+      mockDb.__fixarVersaoTabelas(null);
+      assert(s1.status === 200 && s2.status === 200 && s3.status === 200 && typeof s1.body.total_linhas === 'number'
+        && JSON.stringify(s1.body) === JSON.stringify(s2.body) && naMesmaVersao === 1 && comTabelaMudada === 2,
+        `status do relatório oficial: 2ª abertura sai do cache e a tabela mudada lê de novo (${JSON.stringify(s1.body)}, ${naMesmaVersao}/${comTabelaMudada} varreduras)`);
+    }
 
     const tokenAntes = authToken;
     const novaSessao = async (email) => {
