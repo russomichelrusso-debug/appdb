@@ -435,12 +435,26 @@ router.post('/mesclar', async (req, res) => {
          AND (r.tipo = 'nao_reativar' OR r.ate > m.ate)`,
       [manter_id, remover_id]
     );
-    for (const tabela of ['recompra_adiamentos', 'reativacao_adiamentos', 'reativacao_alvos']) {
-      await client.query(
+    // Ficha de CNPJ e posição pelo endereço são do CNPJ; a foto do ERP e o Sem Compra, do código
+    // oficial: só passam quando o mantido fica com o CNPJ/código do removido (senão seriam de
+    // outra empresa). Sem isso o CASCADE apagava e o card ficava sem "Oficial do ERP", regime,
+    // devedor contumaz e Waze até a próxima planilha ou a rodada da madrugada (auditoria 11/2026).
+    const digitos = (d) => String(d || '').replace(/\D/g, '');
+    const herdaCnpj = !!removerInfo.documento && (!manterInfo.documento || digitos(manterInfo.documento) === digitos(removerInfo.documento));
+    const herdaCodigo = !!removerInfo.codigo_oficial && (!manterInfo.codigo_oficial || manterInfo.codigo_oficial === removerInfo.codigo_oficial);
+    const movidos = new Set();
+    for (const tabela of ['recompra_adiamentos', 'reativacao_adiamentos', 'reativacao_alvos',
+      ...(herdaCnpj ? ['cliente_cnpj_ficha', 'cliente_geocodificacao'] : []),
+      ...(herdaCodigo ? ['cliente_classificatorio_erp'] : [])]) {
+      const r = await client.query(
         `/* mesclar:${tabela} */ UPDATE ${tabela} SET cliente_id = $1
          WHERE cliente_id = $2 AND NOT EXISTS (SELECT 1 FROM ${tabela} WHERE cliente_id = $1)`,
         [manter_id, remover_id]
       );
+      if (r.rowCount > 0) movidos.add(tabela);
+    }
+    if (herdaCodigo) {
+      await client.query('/* mesclar:clientes_sem_compra */ UPDATE clientes_sem_compra SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
     }
     // Apaga o duplicado ANTES de completar os campos do mantido - documento e
     // codigo_oficial têm índice único, então só dá pra copiar o valor do
@@ -478,6 +492,8 @@ router.post('/mesclar', async (req, res) => {
     if (!manterInfo.classificatorio_pic && novoPic) camposCompletados.push('PIC');
     if (manterInfo.classificatorio_vl_acordo == null && novoVlAcordo != null) camposCompletados.push('valor de acordo');
     if (usaClassificatorioDoRemovido) camposCompletados.push('classificatório');
+    if (movidos.has('cliente_cnpj_ficha')) camposCompletados.push('ficha de CNPJ');
+    if (movidos.has('cliente_classificatorio_erp')) camposCompletados.push('oficial do ERP');
 
     await client.query(
       `UPDATE clientes SET

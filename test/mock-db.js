@@ -1393,6 +1393,18 @@ async function query(sql, params = []) {
     if (!lista.some(a => Number(a.cliente_id) === manter)) lista.forEach(a => { if (Number(a.cliente_id) === remover) a.cliente_id = manter; });
     return { rows: [] };
   }
+  if (s.includes('/* MESCLAR:CLIENTE_CNPJ_FICHA */') || s.includes('/* MESCLAR:CLIENTE_GEOCODIFICACAO */') || s.includes('/* MESCLAR:CLIENTE_CLASSIFICATORIO_ERP */')) {
+    const mapa = s.includes('CNPJ_FICHA') ? clienteCnpjFicha : s.includes('GEOCODIFICACAO') ? clienteGeocodificacao : classificatorioErp;
+    const [manter, remover] = params.map(Number);
+    if (mapa[manter] || !mapa[remover]) return { rows: [], rowCount: 0 };
+    mapa[manter] = { ...mapa[remover], cliente_id: manter };
+    delete mapa[remover];
+    return { rows: [], rowCount: 1 };
+  }
+  if (s.includes('/* MESCLAR:CLIENTES_SEM_COMPRA */')) {
+    clientesSemCompra.forEach(c => { if (Number(c.cliente_id) === Number(params[1])) c.cliente_id = Number(params[0]); });
+    return { rows: [] };
+  }
   if (s.includes('/* MESCLAR:CONTATOS */')) {
     const c = clientes.find(x => Number(x.id) === Number(params[0]));
     if (c) {
@@ -1412,6 +1424,8 @@ async function query(sql, params = []) {
     recompraAdiamentos = recompraAdiamentos.filter(a => Number(a.cliente_id) !== idRemover);
     reativacaoAdiamentos = reativacaoAdiamentos.filter(a => Number(a.cliente_id) !== idRemover);
     reativacaoAlvos = reativacaoAlvos.filter(a => Number(a.cliente_id) !== idRemover);
+    delete clienteCnpjFicha[idRemover]; delete clienteGeocodificacao[idRemover]; delete classificatorioErp[idRemover];
+    clientesSemCompra = clientesSemCompra.filter(c => Number(c.cliente_id) !== idRemover);
     return { rows: [] };
   }
   if (s.startsWith('UPDATE CLIENTES SET') && s.includes('DOCUMENTO = $2')) {
@@ -2767,6 +2781,8 @@ module.exports = {
   __getPedidos: () => pedidos,
   __getPedidosOficiaisItens: () => pedidosOficiaisItens,
   __getRecompraAdiamentos: () => recompraAdiamentos,
+  __getFichasCnpj: () => clienteCnpjFicha,
+  __getClassificatorioErp: () => classificatorioErp,
   __getOcorrencias: () => ocorrencias,
   __getNovidades: () => novidades,
   __getProdutoFotos: () => produtoFotos,
