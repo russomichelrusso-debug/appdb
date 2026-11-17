@@ -123,4 +123,19 @@ async function acharOuCriarCliente(client, { cliente_id, nome, documento, codigo
   throw new Error(`Corrida ao criar cliente "${nome}" - não encontrei o registro depois do conflito.`);
 }
 
-module.exports = { acharOuCriarCliente, acharClientePorNome, limparNomeCliente };
+// Vendedor pelo nome digitado no app (pedido e levantamento) - era uma cópia em cada rota.
+async function acharOuCriarVendedor(client, nomeVendedor) {
+  if (!nomeVendedor) return null;
+  const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
+  if (existing.rows.length > 0) return existing.rows[0].id;
+  const result = await client.query(
+    'INSERT INTO vendedores (nome) VALUES ($1) ON CONFLICT (nome) DO NOTHING RETURNING id',
+    [nomeVendedor]
+  );
+  if (result.rows.length > 0) return result.rows[0].id;
+  // corrida: outro pedido/levantamento criou o mesmo vendedor entre o SELECT e o INSERT.
+  const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
+  return depois.rows[0].id;
+}
+
+module.exports = { acharOuCriarCliente, acharClientePorNome, limparNomeCliente, acharOuCriarVendedor };

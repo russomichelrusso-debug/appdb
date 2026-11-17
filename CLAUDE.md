@@ -1936,7 +1936,7 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   IPI/ST detalhados como dá destaque visual ao preço final com imposto. Vale lembrar disso antes
   de propor de novo simplificar esse PDF.
 - Existem arquivos avulsos na raiz do repo que já foram tentativas/preparos que não viraram fluxo
-  permanente do app — `mudancas.patch` (diff antigo não aplicado) e `produtos_sem_ean13.csv`
+  permanente do app — `produtos_sem_ean13.csv` (o `mudancas.patch`, diff antigo não aplicado, foi apagado em 11/2026)
   (lista de SKUs sem EAN cadastrado, usada manualmente em algum momento pra backfill). Não tratar
   como documentação viva; se forem retomados, vale integrar como rotina real (ex.: relatório no
   Admin) em vez de arquivo solto.

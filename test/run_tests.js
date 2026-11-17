@@ -615,6 +615,11 @@ async function main() {
   res = await req('GET', `/api/levantamentos/${levantamentoIdSalvo}/itens`);
   assert(res.status === 200 && res.body.length === 1 && res.body[0].codigo_sku === '60863' && Number(res.body[0].quantidade_contada) === 12, 'itens de um levantamento salvo podem ser recuperados do servidor');
   assert(typeof res.body[0].quantidade_contada === 'string', 'quantidade_contada vem como string (NUMERIC do Postgres) - front precisa converter com Number(), nunca somar direto');
+  // id que o Number() aceita mas o Postgres não ("1e3", "0x10", " 5"): 400 antes da consulta (era 500)
+  {
+    const estranhos = await Promise.all(['1e3', '0x10', '%205', '-1', '1.5'].map(id => req('GET', `/api/levantamentos/${id}/itens`)));
+    assert(estranhos.every(r => r.status === 400), `id fora do formato de inteiro responde 400: ${JSON.stringify(estranhos.map(r => r.status))}`);
+  }
 
   // 12b2) "Abrir levantamento" em qualquer aparelho: lista da equipe (30 dias)
   // com cliente e vendedor; a quantidade de pedido do item vai pro servidor

@@ -1,24 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
-const { acharOuCriarCliente } = require('../clientMatcher');
+const { acharOuCriarCliente, acharOuCriarVendedor } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { acharOuCriarProdutosPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
 
 router.param('id', validarIdInteiro);
-async function acharOuCriarVendedor(client, nomeVendedor) {
-  if (!nomeVendedor) return null;
-  const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
-  if (existing.rows.length > 0) return existing.rows[0].id;
-  const result = await client.query(
-    'INSERT INTO vendedores (nome) VALUES ($1) ON CONFLICT (nome) DO NOTHING RETURNING id',
-    [nomeVendedor]
-  );
-  if (result.rows.length > 0) return result.rows[0].id;
-  // corrida: outro levantamento criou o mesmo vendedor entre o SELECT e o INSERT.
-  const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
-  return depois.rows[0].id;
-}
 // Localização da loja - só leitura de GPS boa o bastante (até 100 m) vira a
 // posição do cliente; a atual só é trocada por uma igual ou mais precisa, ou
 // se tiver mais de 180 dias (loja pode ter mudado de endereço).
