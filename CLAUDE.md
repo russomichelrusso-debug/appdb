@@ -172,7 +172,8 @@ Pegadinhas de ambiente:
   última compra do CNPJ + soma da matriz + conciliação): mesma resposta conferida num Postgres real, 1,4 s → 0,57 s com 200 ms por
   consulta. Cada abertura usa até 4 conexões ao mesmo tempo. Rota nova com várias consultas independentes: juntar assim.
   O `GET /api/pedidos-oficiais/status` (todo aparelho, a cada abertura) varria `pedidos_oficiais_itens` inteira numa consulta de
-  1,5–3,3 s: agora sai do `lerComCache`.
+  1,5–3,3 s: agora sai do `lerComCache`. O `GET /api/clientes/sync` (todo aparelho, a cada 5 min) fazia contas do Salesforce,
+  campanha dos cortadores e a carteira (cache) uma depois da outra (1–3,7 s): agora as três saem juntas.
 - **Itens do pedido e do levantamento gravados de uma vez** (11/2026, lote 6 da auditoria; log `[lenta]`: levantamento salvo em
   38 s, pedido em 8–14 s): cada consulta custa ~1 s de ida e volta Render (Oregon) ↔ Supabase (São Paulo), e eram ~2 por item
   (achar o produto + INSERT). Agora `acharOuCriarProdutosPorSku` (`routes/lib/produtoPorSku.js`) acha todos os códigos num SELECT
