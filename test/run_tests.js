@@ -5762,8 +5762,14 @@ async function main() {
     mockDb.__getRecompraAdiamentos().push({ cliente_id: 99701, ate: '2026-01-01', usuario_id: null }); // vencido: perde pro do duplicado
     mockDb.__getReativacaoAlvos().push({ cliente_id: 99702, desde: '2026-10-18', proprietario: 'Rodrigo', ultima_compra_antes: null });
     mockDb.__getReativacaoAlvos().push({ cliente_id: 99701, desde: '2026-10-01', proprietario: 'Marina', ultima_compra_antes: null });
+    // ficha de CNPJ é do CNPJ (o mantido fica com o do duplicado: passa); a foto do ERP é do código (o mantido fica com o dele: não passa)
+    mockDb.__getFichasCnpj()[99702] = { cliente_id: 99702, razao_social: 'DUPLICADO LTDA', nome_fantasia: 'LOJA MESCLA' };
+    mockDb.__getClassificatorioErp()[99702] = { cliente_id: 99702, gestor: 'GESTOR DO DUPLICADO' };
     res = await req('POST', '/api/clientes/mesclar', { manter_id: 99701, remover_id: 99702, confirmar_codigo_oficial_diferente: true });
     const mantido = cliente(99701);
+    assert(mockDb.__getFichasCnpj()[99701] && mockDb.__getFichasCnpj()[99701].nome_fantasia === 'LOJA MESCLA' && !mockDb.__getFichasCnpj()[99702]
+      && !mockDb.__getClassificatorioErp()[99701] && res.body.camposCompletados.includes('ficha de CNPJ') && !res.body.camposCompletados.includes('oficial do ERP'),
+      `mescla: a ficha de CNPJ do duplicado passa pro mantido que fica com o CNPJ dele; a foto do ERP de outro código não: ${JSON.stringify(res.body.camposCompletados)}`);
     assert(mockDb.__getOcorrencias().some(o => o.id === 990001 && o.cliente_id === 99701)
       && mockDb.__getRecompraAdiamentos().filter(a => a.cliente_id === 99701).map(a => a.ate).join() === '2099-01-01',
       'mescla: ocorrência aberta e "Já falei" do duplicado passam pro mantido (o vencido do mantido não segura)');
