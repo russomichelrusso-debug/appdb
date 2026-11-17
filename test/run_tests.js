@@ -4581,19 +4581,27 @@ async function main() {
     {
       const guardados = mockDb.__getUsuarios().splice(0);
       const adminEmailAntes = process.env.ADMIN_EMAIL;
-      delete process.env.ADMIN_EMAIL;
-      authToken = '';
-      googleFalso = (t) => ({ 'tok-estranho': { sub: 'sub-estranho', email: 'estranho@example.com', nome: 'Quem Chegou Primeiro' },
-        'tok-dono': { sub: 'sub-dono', email: 'dono@example.com', nome: 'Dono' } }[t] || null);
-      const semVariavel = await req('POST', '/api/auth/google', { id_token: 'tok-estranho' });
-      const criadosSem = mockDb.__getUsuarios().length;
-      process.env.ADMIN_EMAIL = ' Dono@Example.com ';
-      const outroEmail = await req('POST', '/api/auth/google', { id_token: 'tok-estranho' });
-      const dono = await req('POST', '/api/auth/google', { id_token: 'tok-dono' });
-      const criados = mockDb.__getUsuarios().splice(0);
-      mockDb.__getUsuarios().push(...guardados);
-      if (adminEmailAntes === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = adminEmailAntes;
-      authToken = tokenAdmin;
+      let semVariavel, criadosSem, outroEmail, dono, criados = [];
+      try {
+        delete process.env.ADMIN_EMAIL;
+        authToken = '';
+        googleFalso = (t) => ({ 'tok-estranho': { sub: 'sub-estranho', email: 'estranho@example.com', nome: 'Quem Chegou Primeiro' },
+          'tok-dono': { sub: 'sub-dono', email: 'dono@example.com', nome: 'Dono' } }[t] || null);
+        semVariavel = await req('POST', '/api/auth/google', { id_token: 'tok-estranho' });
+        criadosSem = mockDb.__getUsuarios().length;
+        process.env.ADMIN_EMAIL = ' Dono@Example.com ';
+        outroEmail = await req('POST', '/api/auth/google', { id_token: 'tok-estranho' });
+        dono = await req('POST', '/api/auth/google', { id_token: 'tok-dono' });
+      } finally {
+        // volta tudo mesmo com erro no meio (senão os testes seguintes falham em cascata)
+        criados = mockDb.__getUsuarios().splice(0);
+        const ids = new Set(criados.map(u => u.id));
+        const sessoes = mockDb.__getSessoes();
+        for (let i = sessoes.length - 1; i >= 0; i--) if (ids.has(sessoes[i].usuario_id)) sessoes.splice(i, 1);
+        mockDb.__getUsuarios().push(...guardados);
+        if (adminEmailAntes === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = adminEmailAntes;
+        authToken = tokenAdmin;
+      }
       assert(semVariavel.status === 403 && /ADMIN_EMAIL/.test(semVariavel.body.erro) && criadosSem === 0
         && outroEmail.status === 403 && dono.status === 200 && dono.body.is_admin === true
         && criados.length === 1 && criados[0].email === 'dono@example.com',

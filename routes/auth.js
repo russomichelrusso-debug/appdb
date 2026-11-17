@@ -18,8 +18,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '587215783588-g9nrt4mq8
 const DURACAO_SESSAO_DIAS = 90;
 
 // Login único, via "Entrar com Google" (ID token do Google Identity Services).
-// Se ainda não existe NENHUM usuário cadastrado, essa conta vira o primeiro
-// admin automaticamente (substitui o antigo /setup de usuário/senha). Depois
+// Se ainda não existe NENHUM usuário cadastrado, a conta do e-mail de ADMIN_EMAIL
+// vira o primeiro admin (substitui o antigo /setup de usuário/senha; sem a
+// variável, banco vazio não aceita login). Depois
 // que já existe alguém, só entra quem tiver esse e-mail cadastrado antes por
 // um admin (POST /usuarios) - continua não sendo auto-cadastro livre.
 router.post('/google', async (req, res) => {

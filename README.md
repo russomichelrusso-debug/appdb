@@ -105,7 +105,7 @@ Não é usuário/senha. O fluxo:
 - O botão "Entrar com Google" no frontend usa Google Identity Services (`google.accounts.id`) e devolve um **ID token**.
 - O frontend manda esse ID token para `POST /api/auth/google`.
 - O backend verifica o token com o Google:
-  - Se é o **primeiro usuário** do sistema, vira admin automaticamente.
+  - Se é o **primeiro usuário** do sistema, vira admin automaticamente — só a conta do e-mail de `ADMIN_EMAIL` (sem a variável, banco vazio não aceita login).
   - Caso contrário, só entra se o e-mail já foi cadastrado antes por um admin (`POST /api/auth/usuarios`, que pede só nome + e-mail).
 - A sessão dura 90 dias, com token opaco guardado na tabela `sessoes`.
 - Todas as rotas em `/api/*` (exceto login) exigem esse token via middleware `requireAuth`.
