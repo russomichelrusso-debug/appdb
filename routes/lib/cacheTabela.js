@@ -55,12 +55,14 @@ async function versaoDasTabelas(tabelas) {
 // Linhas de `sql`, do cache enquanto nenhuma das `tabelas` (nome ou lista) que
 // ele lê mudar. `chave` separa consultas diferentes; `params` (ex.: o dia de
 // hoje) entram na versão: parâmetro diferente = lê de novo e troca a guardada.
-async function lerComCache(chave, tabelas, sql, params) {
+// `extraVersao` (opcional) entra só na versão, não na consulta: ex. a hora de hoje pra
+// consulta com now() no SQL ser relida ao menos uma vez por hora.
+async function lerComCache(chave, tabelas, sql, params, extraVersao) {
   const lista = Array.isArray(tabelas) ? tabelas : [tabelas];
   let versao = null;
   try {
     const v = await versaoDasTabelas(lista);
-    if (v != null) versao = params && params.length ? `${v}|${JSON.stringify(params)}` : v;
+    if (v != null) versao = `${v}|${params && params.length ? JSON.stringify(params) : ''}|${extraVersao || ''}`;
   } catch (e) {
     console.error(`Cache de ${lista.join(', ')}: não consegui ler a versão, lendo direto.`, e.message);
   }

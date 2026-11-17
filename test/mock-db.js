@@ -54,7 +54,8 @@ let versaoTabelas = null;
 // Tabelas lidas com cache (lerComCache): tabela fora da lista = sem versão, lê direto.
 const TABELAS_COM_CACHE = ['catalogo_precos', 'produtos', 'fichas_tecnicas', 'fichas_site', 'codigos_produto',
   'produto_vetores', 'pedidos_oficiais_itens', 'titulos_avista_pendentes', 'pedidos', 'pedido_itens',
-  'reativacao_alvos', 'clientes', 'previsao_estoque', 'contas_salesforce'];
+  'reativacao_alvos', 'clientes', 'previsao_estoque', 'contas_salesforce',
+  'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'import_log'];
 let versaoTabelasContador = 0;
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
