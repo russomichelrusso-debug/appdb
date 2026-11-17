@@ -82,14 +82,16 @@ router.get('/', async (req, res) => {
 // da campanha de cortadores manuais valendo (routes/lib/campanhaCortadores.js).
 router.get('/sync', async (req, res) => {
   try {
-    const outros = await clientesDeOutroVendedor();
+    // As três leituras não dependem uma da outra: saem juntas (em série, o log [lenta] de 12/11/2026
+    // mostrava 1-3,7 s por sync, a cada 5 min em todo aparelho aberto).
+    const outrosP = clientesDeOutroVendedor();
     // campanha dos cortadores manuais (5% no preço fixo na 1ª compra): falha aqui não derruba o sync
-    const cortadores = await clientesComDescontoCortadores(pool).catch(e => { console.error('campanha cortadores:', e.message); return new Map(); });
+    const cortadoresP = clientesComDescontoCortadores(pool).catch(e => { console.error('campanha cortadores:', e.message); return new Map(); });
     // Todo aparelho chama a cada 5 min (e ao abrir e ao voltar a rede): a carteira inteira saía do
     // banco toda vez (egress do Supabase, auditoria 11/2026). Do cache enquanto as tabelas não mudam;
     // a hora de Brasília na versão relê ao menos 1x/hora (bloqueio e aviso vencem pelo now()).
     const hora = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).slice(0, 13);
-    const linhas = await lerComCache('clientes:sync',
+    const linhasP = lerComCache('clientes:sync',
       ['clientes', 'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'pedidos_oficiais_itens', 'import_log'],
       `/* clientes:sync */ SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
@@ -124,6 +126,7 @@ router.get('/sync', async (req, res) => {
        LEFT JOIN cliente_geocodificacao g ON g.cliente_id = c.id AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}
        ORDER BY c.nome`, [], hora
     );
+    const [outros, cortadores, linhas] = await Promise.all([outrosP, cortadoresP, linhasP]);
     // conta ativa de outro vendedor (Salesforce): fica na busca, sai de Perto de mim/Rota
     // (cópia: as linhas do cache são compartilhadas entre requisições)
     const clientes = linhas.map(l => {
