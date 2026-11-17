@@ -1,7 +1,7 @@
 const express = require('express');
 const { limparNomeCliente } = require('../clientMatcher');
 const router = express.Router();
-const { esquecerTabela } = require('./lib/cacheTabela');
+const { esquecerTabela, lerComCache } = require('./lib/cacheTabela');
 const { pool, registrarImportacao } = require('../db');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlBloqueioAtivo } = require('./lib/pedidosBloqueados');
@@ -13,6 +13,13 @@ const { ordenarClientesPorBusca } = require('./lib/buscaCliente');
 const { clientesComDescontoCortadores } = require('./lib/campanhaCortadores');
 
 router.param('id', validarIdInteiro);
+// Gravou em cliente: o /sync (em cache) não pode devolver o valor antigo a quem acabou de
+// gravar - o app confirma WhatsApp/contatos/nome do arquivo pela resposta e o /sync logo
+// depois sobrescrevia a cópia (os contadores do Postgres chegam com até ~10 s de atraso)
+router.use((req, res, next) => {
+  if (req.method !== 'GET') res.on('finish', () => { if (res.statusCode < 400) esquecerTabela('clientes'); });
+  next();
+});
 
 // Formata CNPJ (14 dígitos) ou CPF (11 dígitos) com a pontuação padrão -
 // mesma regra usada no formulário de cliente novo (index.html). Aplicada
@@ -78,8 +85,13 @@ router.get('/sync', async (req, res) => {
     const outros = await clientesDeOutroVendedor();
     // campanha dos cortadores manuais (5% no preço fixo na 1ª compra): falha aqui não derruba o sync
     const cortadores = await clientesComDescontoCortadores(pool).catch(e => { console.error('campanha cortadores:', e.message); return new Map(); });
-    const result = await pool.query(
-      `SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
+    // Todo aparelho chama a cada 5 min (e ao abrir e ao voltar a rede): a carteira inteira saía do
+    // banco toda vez (egress do Supabase, auditoria 11/2026). Do cache enquanto as tabelas não mudam;
+    // a hora de Brasília na versão relê ao menos 1x/hora (bloqueio e aviso vencem pelo now()).
+    const hora = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).slice(0, 13);
+    const linhas = await lerComCache('clientes:sync',
+      ['clientes', 'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'pedidos_oficiais_itens', 'import_log'],
+      `/* clientes:sync */ SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
               c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em, f.telefone AS telefone_ficha,
               c.telefone_comercial, c.email_comercial, c.email_nfe, c.contatos_em, f.email AS email_ficha, -- "Contatos" do card
@@ -110,16 +122,21 @@ router.get('/sync', async (req, res) => {
        FROM clientes c
        LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id
        LEFT JOIN cliente_geocodificacao g ON g.cliente_id = c.id AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}
-       ORDER BY c.nome`
+       ORDER BY c.nome`, [], hora
     );
     // conta ativa de outro vendedor (Salesforce): fica na busca, sai de Perto de mim/Rota
-    for (const c of result.rows) {
+    // (cópia: as linhas do cache são compartilhadas entre requisições)
+    const clientes = linhas.map(l => {
+      const c = { ...l };
       const dono = outros.get(String(c.id));
       if (dono) c.outro_vendedor = dono;
       const cort = c.codigo_oficial ? cortadores.get(String(c.codigo_oficial)) : null;
       if (cort) c.desconto_cortadores = cort;
-    }
-    res.json({ clientes: result.rows, atualizadoEm: new Date().toISOString() });
+      return c;
+    });
+    // corpo sem hora (o app não usava o atualizadoEm): carteira igual = mesmo ETag e 304 sem corpo
+    res.set('Cache-Control', 'private, no-cache');
+    res.json({ clientes });
   } catch (e) {
     console.error(e);
     res.status(500).json({ erro: 'Erro ao sincronizar clientes.' });

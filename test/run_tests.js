@@ -3528,6 +3528,31 @@ async function main() {
       `catálogo de preços: catálogo mudou = ETag novo e o aparelho com a versão velha recebe o corpo inteiro (${c3b.status})`);
     assert(c3.status === 200 && c3.body.produtos.length === 2 && leituras(LE_CATALOGO) === n1 + 1,
       `catálogo de preços: versão da tabela mudou, lê do banco de novo: ${JSON.stringify(c3.body.produtos)}`);
+    // /api/clientes/sync (auditoria 11/2026: todo aparelho a cada 5 min): do cache com as tabelas
+    // paradas, sem hora no corpo, e 304 pro aparelho que já tem a carteira
+    // (com o outro usuário: o /sync conta no limite de leituras pesadas por minuto, e o resto da suíte usa o do admin)
+    {
+      const LE_SYNC = /\/\* clientes:sync \*\//;
+      const tokenAdmin = authToken;
+      authToken = tokenOutro;
+      const s1 = await req('GET', '/api/clientes/sync');
+      const ns1 = leituras(LE_SYNC);
+      const s2 = await req('GET', '/api/clientes/sync', null, { 'If-None-Match': s1.headers.etag });
+      // cliente renomeado (a versão da tabela muda junto): lê de novo e o aparelho recebe o corpo novo
+      const renomeado = mockDb.__getClientes()[0];
+      const nomeAntes = renomeado.nome;
+      renomeado.nome = nomeAntes + ' (RENOMEADO)';
+      mockDb.__fixarVersaoTabelas(2.5);
+      const s3 = await req('GET', '/api/clientes/sync', null, { 'If-None-Match': s1.headers.etag });
+      renomeado.nome = nomeAntes;
+      mockDb.__fixarVersaoTabelas(2);
+      authToken = tokenAdmin;
+      assert(s1.status === 200 && Array.isArray(s1.body.clientes) && s1.body.clientes.length > 0 && !('atualizadoEm' in s1.body)
+        && s2.status === 304 && leituras(LE_SYNC) === ns1 + 1,
+        `clientes/sync: 2ª leitura do cache e 304 com a carteira igual (${s1.status}, ${s2.status}, ${leituras(LE_SYNC) - ns1} leituras a mais)`);
+      assert(s3.status === 200 && s3.body.clientes.some(c => c.nome === nomeAntes + ' (RENOMEADO)'),
+        `clientes/sync: tabela mudou, lê de novo e manda a carteira nova (${s3.status})`);
+    }
     // importação esquece o cache na hora (os contadores do Postgres chegam com atraso)
     res = await req('POST', '/api/catalogo-precos/importar', { arquivoBase64: listaPrecos(['CAT05', 'CAT06', 'CAT07'], 50).toString('base64') });
     const c4 = await req('GET', '/api/catalogo-precos');
