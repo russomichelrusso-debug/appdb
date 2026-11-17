@@ -4,7 +4,8 @@
 // do Postgres (que vazaria detalhe da query num erro 500 - ver S8 no plano
 // de revisão de segurança).
 function validarIdInteiro(req, res, next, valor) {
-  if (!Number.isInteger(Number(valor))) {
+  // só dígitos: "1e3" e "0x10" passavam no Number.isInteger e o Postgres respondia erro (500)
+  if (!/^\d{1,9}$/.test(String(valor))) {
     return res.status(400).json({ erro: 'Id inválido.' });
   }
   next();

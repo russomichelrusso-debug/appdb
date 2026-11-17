@@ -214,4 +214,4 @@ Marque cada item com `[x]` quando for corrigido.
 ## Observações gerais
 
 - Os testes (`node test/run_tests.js`) precisam de `npm install` antes de rodar. Vale rodá-los depois de cada fase.
-- Os arquivos `mudancas.patch` e `produtos_sem_ean13.csv` na raiz parecem sobras. Avaliar se devem continuar versionados.
+- Os arquivos `mudancas.patch` e `produtos_sem_ean13.csv` na raiz parecem sobras. Avaliar se devem continuar versionados. (`mudancas.patch` apagado em 11/2026.)

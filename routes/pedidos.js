@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../db');
 const { esquecerTabela } = require('./lib/cacheTabela');
-const { acharOuCriarCliente } = require('../clientMatcher');
+const { acharOuCriarCliente, acharOuCriarVendedor } = require('../clientMatcher');
 const { validarIdInteiro } = require('../middleware/validarId');
 const { sqlDiaDoPedido } = require('./lib/comprasApp');
 const { acharOuCriarProdutosPorSku, ErroPermanente, mensagemParaApp } = require('./lib/produtoPorSku');
@@ -75,19 +75,6 @@ async function compararComGravado(client, pedido, itens, contexto, versao, horaM
   return versaoMaisVelha(versao, pedido.versao_app) ? 'antiga' : 'aplicar';
 }
 
-async function acharOuCriarVendedor(client, nomeVendedor) {
-  if (!nomeVendedor) return null;
-  const existing = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
-  if (existing.rows.length > 0) return existing.rows[0].id;
-  const result = await client.query(
-    'INSERT INTO vendedores (nome) VALUES ($1) ON CONFLICT (nome) DO NOTHING RETURNING id',
-    [nomeVendedor]
-  );
-  if (result.rows.length > 0) return result.rows[0].id;
-  // corrida: outro pedido criou o mesmo vendedor entre o SELECT e o INSERT.
-  const depois = await client.query('SELECT id FROM vendedores WHERE nome = $1', [nomeVendedor]);
-  return depois.rows[0].id;
-}
 // "Como o orçamento estava montado" (estado, canal, descontos, preços
 // editados - ver contextoDoOrcamento no index.html), guardado junto do pedido
 // do app pra ele reabrir com os mesmos preços. Só objeto simples e pequeno;
