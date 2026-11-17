@@ -4577,6 +4577,29 @@ async function main() {
     assert(reativa.status === 200 && reativa.body.ativo === true && login2.status === 200 && comNovaSessao.status === 200,
       `reativar usuário: volta a entrar pelo Google: ${JSON.stringify([reativa.status, login2.status, comNovaSessao.status])}`);
 
+    // banco novo (sem usuários): sem ADMIN_EMAIL ninguém vira admin; com ela, só esse e-mail
+    {
+      const guardados = mockDb.__getUsuarios().splice(0);
+      const adminEmailAntes = process.env.ADMIN_EMAIL;
+      delete process.env.ADMIN_EMAIL;
+      authToken = '';
+      googleFalso = (t) => ({ 'tok-estranho': { sub: 'sub-estranho', email: 'estranho@example.com', nome: 'Quem Chegou Primeiro' },
+        'tok-dono': { sub: 'sub-dono', email: 'dono@example.com', nome: 'Dono' } }[t] || null);
+      const semVariavel = await req('POST', '/api/auth/google', { id_token: 'tok-estranho' });
+      const criadosSem = mockDb.__getUsuarios().length;
+      process.env.ADMIN_EMAIL = ' Dono@Example.com ';
+      const outroEmail = await req('POST', '/api/auth/google', { id_token: 'tok-estranho' });
+      const dono = await req('POST', '/api/auth/google', { id_token: 'tok-dono' });
+      const criados = mockDb.__getUsuarios().splice(0);
+      mockDb.__getUsuarios().push(...guardados);
+      if (adminEmailAntes === undefined) delete process.env.ADMIN_EMAIL; else process.env.ADMIN_EMAIL = adminEmailAntes;
+      authToken = tokenAdmin;
+      assert(semVariavel.status === 403 && /ADMIN_EMAIL/.test(semVariavel.body.erro) && criadosSem === 0
+        && outroEmail.status === 403 && dono.status === 200 && dono.body.is_admin === true
+        && criados.length === 1 && criados[0].email === 'dono@example.com',
+        `primeiro admin: sem ADMIN_EMAIL o banco vazio recusa todo login; com ela só esse e-mail vira admin: ${JSON.stringify([semVariavel.status, outroEmail.status, dono.status, criados.map(u => u.email)])}`);
+    }
+
     // travas: não desativa a si mesmo; outro admin desativa (e a sessão dele cai na hora).
     // A trava do "último admin ativo" só pega corrida (quem pede é sempre outro admin ativo).
     const proprio = await req('PATCH', `/api/auth/usuarios/${admin.id}`, { ativo: false });

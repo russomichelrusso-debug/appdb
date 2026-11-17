@@ -47,8 +47,15 @@ router.post('/google', async (req, res) => {
     const totalUsuarios = await client.query('SELECT COUNT(*) FROM usuarios');
     let usuario;
     if (Number(totalUsuarios.rows[0].count) === 0) {
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (adminEmail && adminEmail.toLowerCase().trim() !== google.email) {
+      // Sem ADMIN_EMAIL, banco novo (a v2, por exemplo) não tem dono: quem abrisse a URL
+      // primeiro virava admin. Agora o primeiro admin só entra com a variável definida.
+      const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+      if (!adminEmail) {
+        await client.query('ROLLBACK');
+        console.error('Login recusado: banco sem usuários e ADMIN_EMAIL não definida no servidor.');
+        return res.status(403).json({ erro: 'Nenhum administrador cadastrado ainda — defina ADMIN_EMAIL no servidor com o e-mail do primeiro administrador.' });
+      }
+      if (adminEmail !== google.email) {
         await client.query('ROLLBACK');
         return res.status(403).json({ erro: 'Esse e-mail do Google não está cadastrado — peça pra um administrador te cadastrar antes.' });
       }

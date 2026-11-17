@@ -75,7 +75,7 @@ Variáveis de ambiente:
 | `PREENCHIMENTO_CNPJ_DESLIGADO` | Não | `1` desliga o preenchimento automático das fichas de CNPJ que faltam (ver rota `/api/cnpj-preenchimento/status`). |
 | `GEOCODIFICACAO_DESLIGADA` | Não | `1` desliga a posição aproximada das lojas pelo endereço da ficha (ver rota `/api/geocodificacao/status`). |
 | `GOOGLE_CLIENT_ID` | Não | Client ID do Google usado no login (há um valor fixo no código como padrão). |
-| `ADMIN_EMAIL` | Não | Se definida, só esse e-mail pode virar o **primeiro** usuário (admin) num banco sem usuários. Sem ela, quem logar primeiro vira admin. |
+| `ADMIN_EMAIL` | Só em banco novo | E-mail do **primeiro** usuário (admin) num banco sem usuários. Sem ela, banco vazio não aceita nenhum login (antes, quem logasse primeiro virava admin). Depois do primeiro admin não é mais usada. |
 | `ALLOWED_ORIGINS` | Não | Origens liberadas no CORS, separadas por vírgula (ex.: `https://usuario.github.io`). Sem ela, a API aceita qualquer origem. |
 | `LOG_REQUISICAO_LENTA_MS` | Não | Requisição que passa disso (ms) vira uma linha `[lenta]` no log do Render, com o endereço sem dado de cliente (`middleware/requisicaoLenta.js`). Padrão 1000; `0` desliga. |
 | `SESSAO_CACHE_MS` | Não | Quanto tempo (ms) o servidor guarda na memória a sessão já conferida, sem consultar o banco de novo. Padrão 60000; `0` desliga. Logout e desativar/excluir usuário valem na hora. |
