@@ -286,9 +286,11 @@ function calcularRitmoTrimestral({ tipo, pic, vlAcordo, trimestres, anoReferenci
   // contar como falta total da cota.
   const faturadoPorTrimestre = new Map();
   for (const t of historico) {
+    // date_trunc chega como meia-noite UTC (o banco roda em UTC): lida no fuso local
+    // (servidor em Brasília) virava o dia anterior e o trimestre caía no ano/trimestre de antes
     const d = new Date(t.trimestre);
-    if (d.getFullYear() !== anoCorrente) continue;
-    faturadoPorTrimestre.set(Math.floor(d.getMonth() / 3), t.faturado);
+    if (d.getUTCFullYear() !== anoCorrente) continue;
+    faturadoPorTrimestre.set(Math.floor(d.getUTCMonth() / 3), t.faturado);
   }
   let deficitAcumulado = 0;
   for (let idx = 0; idx < trimestreAtualIdx; idx++) {
