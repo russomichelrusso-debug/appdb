@@ -3860,7 +3860,8 @@ async function main() {
     const [hA, hM] = hojeBr.split('-').map(Number);
     const mesAtras = (n) => { const t = hA * 12 + (hM - 1) - n; return { a: Math.floor(t / 12), m: (t % 12) + 1 }; };
     const mesISO = (n) => { const { a, m } = mesAtras(n); return `${a}-${String(m).padStart(2, '0')}`; };
-    const mesData = (n) => { const { a, m } = mesAtras(n); return new Date(Date.UTC(a, m - 1, 1)); };
+    // data local: o SheetJS grava a hora local da célula (com Date.UTC, no fuso de Brasília o dia 1º virava o último do mês anterior)
+    const mesData = (n) => { const { a, m } = mesAtras(n); return new Date(a, m - 1, 1); };
     const br = (iso) => iso.split('-').reverse().join('/');
     const inicioPeriodo = `${mesISO(12)}-01`;
     const cab = ['Matriz', 'Cod', 'Razao Social', 'Grupo Cliente', 'Meses sem Compra', 'Mes Ultima Compra', '12 Meses - Faturamento Cliente',
