@@ -118,8 +118,10 @@ Pegadinhas de ambiente:
   vale em banco novo: em 10/2026 `levantamento_itens.quantidade_pedido` faltava em produção (todo levantamento
   dava "Erro ao gravar levantamento") e o `UNIQUE` de `vendedores.nome` também (pedido/levantamento com nome de
   vendedor novo dava 42P10 no `ON CONFLICT (nome)`). O pool (`db.js`) tem `max` 10 (`PG_POOL_MAX`), espera de conexão de
-  20 s, conexão ociosa aberta 10 min (`PG_CONEXAO_OCIOSA_MS`; era 30 s e quase toda requisição abria conexão nova até São
-  Paulo, ~1,6 s até no `GET /api/novidades` - log `[lenta]` de 11/2026), keep-alive e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
+  20 s, conexão ociosa aberta 10 min por padrão (`PG_CONEXAO_OCIOSA_MS`; era 30 s e quase toda requisição abria conexão nova até São
+  Paulo, ~1,6 s até no `GET /api/novidades` - log `[lenta]` de 11/2026; **no Render está em 2 h desde 12/11/2026**, pedido do usuário:
+  com 10 min, a abertura do app depois de uma pausa pagava ~1,5 s de conexão nova; com 2 h, só a 1ª abertura do dia e a depois de um
+  deploy pagam, e não houve erro de conexão derrubada pelo pooler), keep-alive e `statement_timeout` de 60 s; no SIGTERM do deploy o `server.js` termina as requisições em
   andamento (até 25 s) e fecha o pool.
 - **Egress do Supabase** (10/2026, aviso de cota estourada do plano grátis, 5,5 GB/mês): todo dado que sai do banco pro
   Render conta. Leitura de tabela inteira que todo aparelho faz ao abrir (catálogo de preços ~1,25 MB, fichas, códigos,
@@ -169,6 +171,8 @@ Pegadinhas de ambiente:
   consultas saem em 3 rodadas com `Promise.all` (cliente; faturamento + trimestres + objetivos + foto do ERP; entrada do objetivo +
   última compra do CNPJ + soma da matriz + conciliação): mesma resposta conferida num Postgres real, 1,4 s → 0,57 s com 200 ms por
   consulta. Cada abertura usa até 4 conexões ao mesmo tempo. Rota nova com várias consultas independentes: juntar assim.
+  O `GET /api/pedidos-oficiais/status` (todo aparelho, a cada abertura) varria `pedidos_oficiais_itens` inteira numa consulta de
+  1,5–3,3 s: agora sai do `lerComCache`.
 - **Itens do pedido e do levantamento gravados de uma vez** (11/2026, lote 6 da auditoria; log `[lenta]`: levantamento salvo em
   38 s, pedido em 8–14 s): cada consulta custa ~1 s de ida e volta Render (Oregon) ↔ Supabase (São Paulo), e eram ~2 por item
   (achar o produto + INSERT). Agora `acharOuCriarProdutosPorSku` (`routes/lib/produtoPorSku.js`) acha todos os códigos num SELECT
