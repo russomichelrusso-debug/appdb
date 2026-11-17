@@ -18,8 +18,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '587215783588-g9nrt4mq8
 const DURACAO_SESSAO_DIAS = 90;
 
 // Login único, via "Entrar com Google" (ID token do Google Identity Services).
-// Se ainda não existe NENHUM usuário cadastrado, essa conta vira o primeiro
-// admin automaticamente (substitui o antigo /setup de usuário/senha). Depois
+// Se ainda não existe NENHUM usuário cadastrado, a conta do e-mail de ADMIN_EMAIL
+// vira o primeiro admin (substitui o antigo /setup de usuário/senha; sem a
+// variável, banco vazio não aceita login). Depois
 // que já existe alguém, só entra quem tiver esse e-mail cadastrado antes por
 // um admin (POST /usuarios) - continua não sendo auto-cadastro livre.
 router.post('/google', async (req, res) => {
@@ -47,8 +48,15 @@ router.post('/google', async (req, res) => {
     const totalUsuarios = await client.query('SELECT COUNT(*) FROM usuarios');
     let usuario;
     if (Number(totalUsuarios.rows[0].count) === 0) {
-      const adminEmail = process.env.ADMIN_EMAIL;
-      if (adminEmail && adminEmail.toLowerCase().trim() !== google.email) {
+      // Sem ADMIN_EMAIL, banco novo (a v2, por exemplo) não tem dono: quem abrisse a URL
+      // primeiro virava admin. Agora o primeiro admin só entra com a variável definida.
+      const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase().trim();
+      if (!adminEmail) {
+        await client.query('ROLLBACK');
+        console.error('Login recusado: banco sem usuários e ADMIN_EMAIL não definida no servidor.');
+        return res.status(403).json({ erro: 'Nenhum administrador cadastrado ainda — defina ADMIN_EMAIL no servidor com o e-mail do primeiro administrador.' });
+      }
+      if (adminEmail !== google.email) {
         await client.query('ROLLBACK');
         return res.status(403).json({ erro: 'Esse e-mail do Google não está cadastrado — peça pra um administrador te cadastrar antes.' });
       }
