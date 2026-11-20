@@ -27460,7 +27460,7 @@
         pacb = {
           clienteId: cliente.id, razao: cliente.nome || local.nome || '',
           codigo: local.codigo_oficial || cliente.codigo_oficial || '',
-          classificatorio: local.classificatorio_tipo || cliente.classificatorio_tipo || '',
+          classificatorio: local.classificatorio_tipo || cliente.classificatorio_tipo || local.classificatorio_salesforce || '',
           passo: 1, qtd: { 62522: 0, 62521: 0 }, data: hojeLocalISO(),
           // o gestor do próprio cliente (planilha Classificatório) vale mais que o último digitado
           responsavel: (comprador && comprador.nome) || '', regional: local.gestor || regional,
