@@ -35,6 +35,8 @@ let nextPushId = 1;
 let recompraAdiamentos = []; // routes/recompra.js ("Já falei")
 let ocorrencias = []; // ocorrencias_pos_venda (routes/ocorrencias.js)
 let nextOcorrenciaId = 1;
+let acordosPacb = []; // acordos_pacb (routes/acordosPacb.js)
+let nextAcordoPacbId = 1;
 let clientesSemCompra = []; // routes/reativacao.js (foto do Relatório de Clientes Sem Compra)
 let reativacaoAdiamentos = []; // routes/reativacao.js ("Já falei"/"Não reativar")
 let contasSalesforce = []; // routes/contasSalesforce.js (foto do relatório "Todas Contas")
@@ -55,7 +57,8 @@ let versaoTabelas = null;
 const TABELAS_COM_CACHE = ['catalogo_precos', 'produtos', 'fichas_tecnicas', 'fichas_site', 'codigos_produto',
   'produto_vetores', 'pedidos_oficiais_itens', 'titulos_avista_pendentes', 'pedidos', 'pedido_itens',
   'reativacao_alvos', 'clientes', 'previsao_estoque', 'contas_salesforce',
-  'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'import_log'];
+  'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'import_log', 'acordos_pacb',
+  'cliente_classificatorio_erp'];
 let versaoTabelasContador = 0;
 let nextId = { clientes: 1, vendedores: 1, produtos: 3, pedidos: 1, pedido_itens: 1, levantamentos: 1, levantamento_itens: 1, usuarios: 1, sessoes: 1 };
 
@@ -84,6 +87,8 @@ function reset() {
   recompraAdiamentos = [];
   ocorrencias = [];
   nextOcorrenciaId = 1;
+  acordosPacb = [];
+  nextAcordoPacbId = 1;
   clientesSemCompra = [];
   reativacaoAdiamentos = [];
   contasSalesforce = [];
@@ -293,6 +298,21 @@ async function query(sql, params = []) {
       ocorrencias.push({ id: nextOcorrenciaId++, cliente_id: clienteId, nr_pedido: nr, nota_fiscal: nf, tipo, resumo, enviado_em: enviado,
         resolvida_em: null, usuario_id: usuarioId, id_envio: idEnvio });
     }
+    return { rows: [] };
+  }
+  if (s.includes('/* ACORDOS-PACB:GRAVAR */')) {
+    const [clienteId, data, q62522, q62521, valor, responsavel, usuarioId, idEnvio] = params;
+    if (!acordosPacb.some(a => a.id_envio === idEnvio)) {
+      acordosPacb.push({ id: nextAcordoPacbId++, cliente_id: clienteId, data_acordo: data, qtd_62522: q62522, qtd_62521: q62521,
+        valor: String(valor), responsavel, usuario_id: usuarioId, id_envio: idEnvio });
+    }
+    return { rows: [] };
+  }
+  if (s.includes('/* ACORDOS-PACB:POR-ENVIO */')) {
+    return { rows: acordosPacb.filter(a => a.id_envio === params[0]).map(a => { const { usuario_id, ...r } = a; return r; }) };
+  }
+  if (s.includes('/* MESCLAR:ACORDOS-PACB */')) {
+    acordosPacb.forEach(a => { if (Number(a.cliente_id) === Number(params[1])) a.cliente_id = Number(params[0]); });
     return { rows: [] };
   }
   if (s.includes('/* OCORRENCIAS:POR-ENVIO */')) {
@@ -1353,6 +1373,20 @@ async function query(sql, params = []) {
           localizacao_nivel: vale ? g.nivel : null,
         };
       })(),
+      gestor: (classificatorioErp[c.id] && classificatorioErp[c.id].gestor) || null,
+      // último acordo PACB + faturado de fato do código do cliente nos 6 meses dele
+      acordo_pacb: (() => {
+        const a = acordosPacb.filter(x => Number(x.cliente_id) === Number(c.id))
+          .sort((x, y) => String(y.data_acordo).localeCompare(String(x.data_acordo)) || y.id - x.id)[0];
+        if (!a) return null;
+        const fim = new Date(a.data_acordo + 'T00:00:00Z');
+        fim.setUTCMonth(fim.getUTCMonth() + 6);
+        const ate = fim.toISOString().slice(0, 10);
+        const faturado = pedidosOficiaisItens.filter(it => c.codigo_oficial && it.cliente_codigo_oficial === c.codigo_oficial
+          && it.data_faturamento >= a.data_acordo && it.data_faturamento <= ate && faturadoDeFato(it))
+          .reduce((s, it) => s + Number(it.valor || 0), 0);
+        return { data: a.data_acordo, ate, valor: Number(a.valor), qtd_62522: a.qtd_62522, qtd_62521: a.qtd_62521, faturado };
+      })(),
       bloqueados: (() => {
         const l = bloqueiosAtivos().filter(b => c.codigo_oficial && b.cliente_codigo_oficial === c.codigo_oficial)
           .map(b => ({ nr_pedido: b.nr_pedido, motivo: b.motivo, recebido_em: b.recebido_em }));
@@ -1428,6 +1462,7 @@ async function query(sql, params = []) {
     clientes = clientes.filter(c => Number(c.id) !== idRemover);
     // ON DELETE CASCADE do schema.sql
     ocorrencias = ocorrencias.filter(o => Number(o.cliente_id) !== idRemover);
+    acordosPacb = acordosPacb.filter(a => Number(a.cliente_id) !== idRemover);
     recompraAdiamentos = recompraAdiamentos.filter(a => Number(a.cliente_id) !== idRemover);
     reativacaoAdiamentos = reativacaoAdiamentos.filter(a => Number(a.cliente_id) !== idRemover);
     reativacaoAlvos = reativacaoAlvos.filter(a => Number(a.cliente_id) !== idRemover);
@@ -2791,6 +2826,7 @@ module.exports = {
   __getFichasCnpj: () => clienteCnpjFicha,
   __getClassificatorioErp: () => classificatorioErp,
   __getOcorrencias: () => ocorrencias,
+  __getAcordosPacb: () => acordosPacb,
   __getNovidades: () => novidades,
   __getProdutoFotos: () => produtoFotos,
   __getProdutoVetores: () => produtoVetores,

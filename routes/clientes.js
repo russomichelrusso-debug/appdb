@@ -11,6 +11,7 @@ const { clientesDeOutroVendedor } = require('./lib/contasSalesforce');
 const { normalizarTelefoneBr, normalizarEmails } = require('./lib/contatosCliente');
 const { ordenarClientesPorBusca } = require('./lib/buscaCliente');
 const { clientesComDescontoCortadores } = require('./lib/campanhaCortadores');
+const { sqlFaturadoDeFato } = require('./lib/faturadoDeFato');
 
 router.param('id', validarIdInteiro);
 // Gravou em cliente: o /sync (em cache) não pode devolver o valor antigo a quem acabou de
@@ -92,7 +93,8 @@ router.get('/sync', async (req, res) => {
     // a hora de Brasília na versão relê ao menos 1x/hora (bloqueio e aviso vencem pelo now()).
     const hora = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).slice(0, 13);
     const linhasP = lerComCache('clientes:sync',
-      ['clientes', 'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'pedidos_oficiais_itens', 'import_log'],
+      ['clientes', 'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'pedidos_oficiais_itens', 'import_log',
+        'acordos_pacb', 'titulos_avista_pendentes', 'cliente_classificatorio_erp'],
       `/* clientes:sync */ SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
               c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em, f.telefone AS telefone_ficha,
@@ -113,6 +115,15 @@ router.get('/sync', async (req, res) => {
                 'numero', f.numero, 'municipio', f.municipio, 'uf', f.uf
               ) END AS endereco,
               g.latitude AS latitude_aprox, g.longitude AS longitude_aprox, g.nivel AS localizacao_nivel,
+              erp.gestor, -- Regional de Vendas (planilha Classificatório): já vem preenchida no acordo PACB
+              -- último acordo PACB (routes/acordosPacb.js) com o faturado de fato do CNPJ nos 6 meses dele
+              (SELECT json_build_object('data', a.data_acordo::text, 'ate', (a.data_acordo + interval '6 months')::date::text,
+                 'valor', a.valor, 'qtd_62522', a.qtd_62522, 'qtd_62521', a.qtd_62521,
+                 'faturado', coalesce((SELECT sum(poi.valor) FROM pedidos_oficiais_itens poi
+                    WHERE c.codigo_oficial IS NOT NULL AND poi.cliente_codigo_oficial = c.codigo_oficial
+                      AND poi.data_faturamento >= a.data_acordo AND poi.data_faturamento <= a.data_acordo + interval '6 months' -- "vale até" inclui o último dia
+                      AND ${sqlFaturadoDeFato('poi')}), 0))
+               FROM acordos_pacb a WHERE a.cliente_id = c.id ORDER BY a.data_acordo DESC, a.id DESC LIMIT 1) AS acordo_pacb,
               -- pedidos bloqueados ainda valendo (selo no card do cliente, sem internet)
               (SELECT json_agg(json_build_object('nr_pedido', pb.nr_pedido, 'motivo', pb.motivo, 'recebido_em', pb.recebido_em) ORDER BY pb.recebido_em DESC)
                FROM pedidos_bloqueados pb
@@ -124,6 +135,7 @@ router.get('/sync', async (req, res) => {
        FROM clientes c
        LEFT JOIN cliente_cnpj_ficha f ON f.cliente_id = c.id
        LEFT JOIN cliente_geocodificacao g ON g.cliente_id = c.id AND g.latitude IS NOT NULL AND g.endereco = ${sqlChaveEndereco('f')}
+       LEFT JOIN cliente_classificatorio_erp erp ON erp.cliente_id = c.id
        ORDER BY c.nome`, [], hora
     );
     const [outros, cortadores, linhas] = await Promise.all([outrosP, cortadoresP, linhasP]);
@@ -442,6 +454,7 @@ router.post('/mesclar', async (req, res) => {
     // aberta no Pós-Vendas, o "Já falei" da Recompra e do Para reativar e o alvo do
     // placar Recuperados. As três últimas são uma linha por cliente: a do mantido vale.
     await client.query('/* mesclar:ocorrencias */ UPDATE ocorrencias_pos_venda SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
+    await client.query('/* mesclar:acordos-pacb */ UPDATE acordos_pacb SET cliente_id = $1 WHERE cliente_id = $2', [manter_id, remover_id]);
     // ...menos quando a do mantido já perdeu pra do removido (as vencidas nunca são apagadas):
     // "Já falei" que vale até mais tarde, ou "Não reativar" contra um "Já falei".
     await client.query(

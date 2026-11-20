@@ -3663,6 +3663,7 @@
 
     .clienteCard.recolhido .clienteProgresso,
     .clienteCard.recolhido .clienteCortadores,
+    .clienteCard.recolhido .clientePacb,
     .clienteCard.recolhido .clienteReativar,
     .clienteCard.recolhido .clienteVisita,
     .clienteCard.recolhido .clienteWhats,
@@ -3730,6 +3731,65 @@
 
     .clienteCortadores.hidden {
       display: none;
+    }
+
+    /* acompanhamento do acordo PACB (expositores): faturado × valor no prazo de 6 meses */
+    .clientePacb {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .clientePacb.hidden,
+    #precosClientPacb.hidden,
+    #levClientPacb.hidden {
+      display: none;
+    }
+
+    .clientePacb .pacbTopo {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .clientePacb .pacbValor {
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .clientePacb small {
+      display: block;
+      color: var(--gray);
+    }
+
+    .pacbBarra {
+      position: relative;
+      height: 8px;
+      margin: 8px 0 6px;
+      border-radius: 4px;
+      background: var(--fill);
+      overflow: hidden;
+    }
+
+    .pacbBarra span {
+      position: absolute;
+      inset: 0 auto 0 0;
+      border-radius: 4px;
+      background: var(--red);
+    }
+
+    .clientePacb .pacbAlerta {
+      color: var(--warning);
+      font-weight: 600;
+    }
+
+    .clientePacb .pacbOk {
+      color: var(--success);
+      font-weight: 600;
     }
 
     /* saldo em carteira com aviso de cancelamento (e-mail das assistentes
@@ -5325,11 +5385,180 @@
       min-height: 44px;
     }
 
-    #ocorrenciaModal {
+    #ocorrenciaModal,
+    #pacbModal {
       padding: 12px;
     }
 
-    #ocorrenciaModal .ocCard {
+    /* acordo PACB: a janela usa o mesmo esqueleto da ocorrência (ocTopo/ocCorpo/ocRodape) */
+    #pacbModal .ocPassos {
+      grid-template-columns: repeat(3, 1fr);
+    }
+
+    .pacbBloco {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: var(--r-sm);
+      background: var(--fill);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .pacbBloco b {
+      font-weight: 700;
+    }
+
+    .pacbExpositor {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+    }
+
+    .pacbExpositor.marcado {
+      border: 2px solid var(--red);
+    }
+
+    .pacbExpositor .pacbExpNome {
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .pacbExpositor .pacbExpNome small {
+      display: block;
+      font-weight: 400;
+      color: var(--gray);
+    }
+
+    .pacbExpositor button {
+      width: 44px;
+      height: 44px;
+      border-radius: 22px;
+      border: 1px solid var(--hairline);
+      background: var(--white);
+      color: var(--ink);
+      font-size: 20px;
+    }
+
+    .pacbExpositor button:disabled {
+      opacity: .35;
+    }
+
+    .pacbExpositor .pacbQtd {
+      width: 22px;
+      text-align: center;
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .pacbTotal {
+      margin: 4px 0 16px;
+      padding: 12px 14px;
+      border-radius: var(--r-sm);
+      background: #18181B; /* escuro nos dois temas (--ink clareia no tema escuro) */
+      color: #FFFFFF;
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .pacbTotal b {
+      display: block;
+      font-size: 24px;
+      font-weight: 800;
+    }
+
+    .pacbAssinaturaArea {
+      position: relative;
+      margin-bottom: 10px;
+    }
+
+    /* fundo branco nos dois temas: a assinatura vai pro PDF como está */
+    .pacbAssinaturaArea canvas {
+      display: block;
+      width: 100%;
+      height: 220px;
+      border: 2px dashed var(--hairline);
+      border-radius: var(--r-md);
+      background: #FFFFFF;
+      touch-action: none;
+    }
+
+    .pacbAssinaturaArea .pacbLinha {
+      position: absolute;
+      left: 22px;
+      right: 22px;
+      bottom: 44px;
+      border-top: 1px solid #A1A1AA;
+      pointer-events: none;
+    }
+
+    .pacbAssinaturaArea .pacbDica {
+      position: absolute;
+      left: 22px;
+      bottom: 16px;
+      font-size: 12px;
+      color: #52525B;
+      pointer-events: none;
+    }
+
+    .pacbAssinaturaArea .pacbLimpar {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 18px;
+      border: 1px solid #D4D4D8;
+      background: #FFFFFF;
+      color: #18181B;
+      font-size: 13px;
+    }
+
+    .pacbAssinaturaSalva {
+      display: block;
+      width: 100%;
+      max-height: 140px;
+      object-fit: contain;
+      margin-bottom: 10px;
+      border-radius: var(--r-sm);
+      background: #FFFFFF;
+    }
+
+    .minimodal-card label.pacbConcordo {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      min-height: 44px;
+      margin: 0;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.4;
+      color: var(--ink);
+    }
+
+    .minimodal-card label.pacbConcordo input {
+      width: 22px;
+      height: 22px;
+      margin: 0;
+      padding: 0;
+      flex: none;
+      accent-color: var(--red);
+    }
+
+    .pacbEnviar {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 6px;
+    }
+
+    #ocorrenciaModal .ocCard,
+    #pacbModal .ocCard {
       max-width: 520px;
       height: calc(100vh - 24px);
       height: calc(100dvh - 24px);
@@ -12971,6 +13200,7 @@
           <div class="clienteInadimplente hidden" id="precosClientInadimplente"></div>
           <div class="clienteReativar hidden" id="precosClientReativar"></div>
           <div class="clienteVisita hidden" id="precosClientVisita"></div>
+          <div class="clientePacb hidden" id="precosClientPacb"></div>
           <button type="button" class="clienteWhats" id="precosClientWhats"
             aria-label="Contatos do cliente: telefone e e-mails da empresa e o comprador (o orçamento em texto vai direto pro WhatsApp dele)"></button>
           <div class="clienteAcoes">
@@ -12990,6 +13220,9 @@
             <button type="button" class="clienteAcao" id="precosProdutosClienteBtn" aria-label="Histórico: produtos que esse cliente já comprou (Curva ABC)"
               title="Produtos que esse cliente já comprou (Curva ABC)">
               <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg></span>Histórico</button>
+            <button type="button" class="clienteAcao" id="precosPacbBtn" aria-label="Acordo PACB: preencher e assinar o formulário dos expositores"
+              title="Acordo PACB dos expositores perfurados">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="15" rx="1" /><path d="M4 21h16" /><path d="M9 7h.01M12 7h.01M15 7h.01M9 11h.01M12 11h.01M15 11h.01" /></svg></span>PACB</button>
           </div>
         </div>
       </div>
@@ -13132,6 +13365,7 @@
           <div class="clienteInadimplente hidden" id="levClientInadimplente"></div>
           <div class="clienteReativar hidden" id="levClientReativar"></div>
           <div class="clienteVisita hidden" id="levClientVisita"></div>
+          <div class="clientePacb hidden" id="levClientPacb"></div>
           <button type="button" class="clienteWhats" id="levClientWhats"
             aria-label="Contatos do cliente: telefone e e-mails da empresa e o comprador (o orçamento em texto vai direto pro WhatsApp dele)"></button>
           <div class="clienteAcoes">
@@ -13148,6 +13382,9 @@
             <button type="button" class="clienteAcao" id="levProdutosClienteBtn" aria-label="Histórico: produtos que esse cliente já comprou (Curva ABC)"
               title="Produtos que esse cliente já comprou (Curva ABC)">
               <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v18h18" /><path d="M7 15l4-4 3 3 5-6" /></svg></span>Histórico</button>
+            <button type="button" class="clienteAcao" id="levPacbBtn" aria-label="Acordo PACB: preencher e assinar o formulário dos expositores"
+              title="Acordo PACB dos expositores perfurados">
+              <span class="clienteAcaoIc"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="3" width="12" height="15" rx="1" /><path d="M4 21h16" /><path d="M9 7h.01M12 7h.01M15 7h.01M9 11h.01M12 11h.01M15 11h.01" /></svg></span>PACB</button>
           </div>
         </div>
       </div>
@@ -13875,6 +14112,21 @@
     </div>
 
     <!-- Ocorrência no Pós-Vendas: assistente em 4 passos + revisão (initOcorrencia) -->
+    <div class="minimodal hidden" id="pacbModal">
+      <div class="minimodal-card ocCard" role="dialog" aria-modal="true" aria-labelledby="pacbTituloModal">
+        <div class="ocTopo">
+          <div class="ocTopoLinha">
+            <h3 id="pacbTituloModal">Acordo PACB 2026</h3>
+            <button type="button" class="ocFechar" id="pacbFecharBtn" aria-label="Fechar o acordo">✕</button>
+          </div>
+          <div class="ocPassos" id="pacbPassos"></div>
+          <p class="ocSub" id="pacbSub"></p>
+        </div>
+        <div class="ocCorpo" id="pacbCorpo"></div>
+        <div class="ocRodape minimodal-btnrow" id="pacbRodape"></div>
+      </div>
+    </div>
+
     <div class="minimodal hidden" id="ocorrenciaModal">
       <div class="minimodal-card ocCard" role="dialog" aria-modal="true" aria-labelledby="ocTituloModal">
         <div class="ocTopo">
@@ -14647,6 +14899,8 @@
         'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js': 'sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H',
         'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js': 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk',
         'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js': 'sha384-vuyrTV5nkscLp1knFvt+FIHfKKzmROBq5reruhMRslauj54mW+l2B8b6szMN6lCL',
+        // acordo PACB: preenche o PDF oficial (modelos/pacb-2026-expositores.pdf) no aparelho
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js': 'sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI',
         'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js': 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB',
         'https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js': 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT',
         'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.min.mjs': 'sha384-QCvhu/UPp22U/TNLVbQNONL82ES2yY717GAiqP9VVu37Y7+m9VPKvadGx9XlFvcp',
@@ -18772,6 +19026,7 @@
         atualizarReativarClienteBar(prefixo, cliente);
         atualizarInadimplenciaClienteBar(prefixo, cliente);
         atualizarVisitaClienteBar(prefixo, cliente);
+        atualizarPacbClienteBar(prefixo, cliente);
         atualizarWhatsClienteBar(prefixo, cliente);
       }
       // Faixa vermelha só quando o CNPJ está na lista de devedores contumazes da
@@ -19903,6 +20158,8 @@
         document.getElementById('levSelectClientBtn').addEventListener('click', () => selectLevClient('lev'));
         document.getElementById('levTrocarClientBtn').addEventListener('click', () => selectLevClient('lev'));
         document.getElementById('levProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
+        initAcordoPacb();
+        document.getElementById('levPacbBtn').addEventListener('click', () => abrirAcordoPacb(state.levCliente));
         document.getElementById('levFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('levWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));
         document.getElementById('levClientWhats').addEventListener('click', () => abrirWhatsComprador(state.levCliente));
@@ -19944,6 +20201,7 @@
         document.getElementById('precosTrocarClientBtn').addEventListener('click', () => selectLevClient('precos'));
         initRecolherCliente();
         document.getElementById('precosProdutosClienteBtn').addEventListener('click', () => abrirProdutosComprados(state.levCliente));
+        document.getElementById('precosPacbBtn').addEventListener('click', () => abrirAcordoPacb(state.levCliente));
         document.getElementById('precosFichaClienteBtn').addEventListener('click', () => abrirFichaCnpjCliente(state.levCliente));
         document.getElementById('precosWazeClienteBtn').addEventListener('click', () => abrirWazeCliente(state.levCliente));
         document.getElementById('precosClientWhats').addEventListener('click', () => abrirWhatsComprador(state.levCliente));
@@ -27092,6 +27350,497 @@
         }
         return [...porCodigo.values()];
       }
+      // ---------------- Acordo PACB (expositores perfurados) ----------------
+      // Formulário oficial "PACB 2026" preenchido e assinado na loja: o vendedor
+      // escolhe os expositores, o responsável da loja assina com o dedo, o
+      // representante usa a assinatura guardada no aparelho e o PDF oficial
+      // (modelos/pacb-2026-expositores.pdf) sai TODO preenchido, só sem a
+      // assinatura da Regional, pelo compartilhar (WhatsApp/e-mail do gerente).
+      // Decisões do usuário (11/2026, mockups "Cortag · Acordo PACB no app"):
+      // sem lembrete de "falta o gerente" no card; o card mostra o acompanhamento
+      // (valor, prazo de 6 meses, quanto faturou e quanto falta). Funciona sem
+      // internet: o PDF é feito no aparelho e o acordo vai pela fila.
+      const PACB_VALOR_EXPOSITOR = 7500;
+      const PACB_EXPOSITORES_MAX = 2;
+      const PACB_MODELO_URL = 'modelos/pacb-2026-expositores.pdf';
+      const PDFLIB_CDN = 'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+      const PACB_EXPOSITORES = [
+        { cod: '62522', nome: 'Perfurado produtos Cortag' },
+        { cod: '62521', nome: 'Perfurado com apoio p/ cortadores' },
+      ];
+      const PACB_ASSINATURA_LS_KEY = 'cortagAssinaturaRep_v1'; // {email, png}: a do representante, por aparelho
+      const PACB_REGIONAL_LS_KEY = 'cortagPacbRegional_v1'; // último nome digitado da Regional
+      const PACB_LOCAIS_LS_KEY = 'cortagAcordosPacbLocais_v1'; // acordos ainda não vindos no /sync
+      let pdfLibPromise = null;
+      function carregarPdfLib() {
+        if (window.PDFLib) return Promise.resolve();
+        if (!pdfLibPromise) {
+          pdfLibPromise = new Promise((resolve, reject) => {
+            const s = scriptDaCdn(PDFLIB_CDN);
+            s.onload = () => resolve();
+            s.onerror = () => reject(new Error('load-error'));
+            document.head.appendChild(s);
+          }).catch(e => { pdfLibPromise = null; throw e; }); // sem internet na 1ª vez: tenta de novo depois
+        }
+        return pdfLibPromise;
+      }
+      // Prazo do acordo: "Faturamento nos próximos 6 meses" (o servidor conta igual, + interval '6 months')
+      function pacbAte(iso) {
+        const d = new Date(`${iso}T00:00:00Z`);
+        const dia = d.getUTCDate();
+        d.setUTCMonth(d.getUTCMonth() + 6);
+        if (d.getUTCDate() !== dia) d.setUTCDate(0); // 31/08 + 6 meses = 28/02, como o Postgres
+        return d.toISOString().slice(0, 10);
+      }
+      function diasEntreISO(de, ate) {
+        return Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86400000);
+      }
+      function lerAssinaturaRep() {
+        try {
+          const v = JSON.parse(localStorage.getItem(PACB_ASSINATURA_LS_KEY) || 'null');
+          const email = state.currentUser && state.currentUser.email;
+          return v && v.png && (!email || v.email === email) ? v : null;
+        } catch (e) { return null; }
+      }
+      // Área de assinatura: canvas com o dedo/caneta. A imagem sai recortada no
+      // traço (o PDF tem 2 cm de altura pra ela: com a margem do canvas sairia minúscula).
+      function ligarAreaAssinatura(canvas, aoMudar) {
+        const dpr = window.devicePixelRatio || 1;
+        const r = canvas.getBoundingClientRect();
+        canvas.width = Math.round(r.width * dpr);
+        canvas.height = Math.round(r.height * dpr);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        ctx.lineWidth = 2.6;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = ctx.fillStyle = '#1E3A8A';
+        const pad = { vazio: true };
+        let ultimo = null;
+        const pos = (e) => { const b = canvas.getBoundingClientRect(); return [e.clientX - b.left, e.clientY - b.top]; };
+        canvas.onpointerdown = (e) => {
+          e.preventDefault();
+          try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
+          ultimo = pos(e);
+          ctx.beginPath(); ctx.arc(ultimo[0], ultimo[1], 1.3, 0, Math.PI * 2); ctx.fill();
+          if (pad.vazio) { pad.vazio = false; aoMudar(); }
+        };
+        canvas.onpointermove = (e) => {
+          if (!ultimo) return;
+          const p = pos(e);
+          ctx.beginPath(); ctx.moveTo(ultimo[0], ultimo[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+          ultimo = p;
+        };
+        canvas.onpointerup = canvas.onpointercancel = () => { ultimo = null; };
+        pad.limpar = () => { ctx.clearRect(0, 0, canvas.width, canvas.height); pad.vazio = true; aoMudar(); };
+        pad.png = () => {
+          const { width: w, height: h } = canvas;
+          const px = ctx.getImageData(0, 0, w, h).data;
+          let x0 = w, y0 = h, x1 = -1, y1 = -1;
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+            if (px[(y * w + x) * 4 + 3] > 0) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+          }
+          if (x1 < 0) return null;
+          const m = Math.round(6 * dpr);
+          x0 = Math.max(0, x0 - m); y0 = Math.max(0, y0 - m); x1 = Math.min(w - 1, x1 + m); y1 = Math.min(h - 1, y1 + m);
+          const c = document.createElement('canvas');
+          c.width = x1 - x0 + 1; c.height = y1 - y0 + 1;
+          c.getContext('2d').drawImage(canvas, x0, y0, c.width, c.height, 0, 0, c.width, c.height);
+          return c.toDataURL('image/png');
+        };
+        return pad;
+      }
+
+      let pacb = null;
+      let pacbPad = null;
+      function abrirAcordoPacb(cliente) {
+        if (!cliente) return;
+        const local = loadClientesLocais().find(c => String(c.id) === String(cliente.id)) || {};
+        const comprador = whatsCompradorDoCliente(cliente);
+        let regional = '';
+        try { regional = localStorage.getItem(PACB_REGIONAL_LS_KEY) || ''; } catch (e) { }
+        pacb = {
+          clienteId: cliente.id, razao: cliente.nome || local.nome || '',
+          codigo: local.codigo_oficial || cliente.codigo_oficial || '',
+          classificatorio: local.classificatorio_tipo || cliente.classificatorio_tipo || '',
+          passo: 1, qtd: { 62522: 0, 62521: 0 }, data: hojeLocalISO(),
+          responsavel: (comprador && comprador.nome) || '', regional: regional || local.gestor || '',
+          concordo: false, assCliente: null, horaCliente: null, assRep: null, horaRep: null, guardarRep: true, redesenhar: false,
+          local: null, arquivo: null, idEnvio: novoIdEnvio(),
+        };
+        lerLocalDoAcordo();
+        document.getElementById('pacbModal').classList.remove('hidden');
+        renderPacb();
+      }
+      // Local da assinatura no registro do PDF: só se o GPS já foi permitido (não pergunta nada)
+      async function lerLocalDoAcordo() {
+        const alvo = pacb;
+        try {
+          if (!('geolocation' in navigator) || !navigator.permissions
+            || (await navigator.permissions.query({ name: 'geolocation' })).state !== 'granted') return;
+        } catch (e) { return; }
+        navigator.geolocation.getCurrentPosition(
+          (p) => { if (pacb === alvo) alvo.local = `${p.coords.latitude.toFixed(4)}, ${p.coords.longitude.toFixed(4)}`; },
+          () => { }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 });
+      }
+      async function fecharAcordoPacb(perguntar) {
+        if (perguntar && pacb && pacb.passo > 1 && pacb.passo < 4
+          && !await askConfirm('Descartar este acordo? As assinaturas feitas até aqui se perdem.', 'Descartar', { cancelarLabel: 'Continuar' })) return;
+        document.getElementById('pacbModal').classList.add('hidden');
+        pacb = null;
+        pacbPad = null;
+      }
+      function pacbTotalExpositores() {
+        return pacb.qtd[62522] + pacb.qtd[62521];
+      }
+      function pacbPodeAvancar() {
+        if (pacb.passo === 1) return pacbTotalExpositores() > 0 && !!pacb.responsavel.trim() && !!pacb.regional.trim() && !!pacb.data;
+        if (pacb.passo === 2) return !!pacbPad && !pacbPad.vazio && pacb.concordo;
+        if (pacb.passo === 3) return (!pacb.redesenhar && !!lerAssinaturaRep()) || (!!pacbPad && !pacbPad.vazio);
+        return false;
+      }
+      function atualizarBotaoPacb() {
+        const b = document.querySelector('#pacbRodape [data-pacb-avancar]');
+        if (b) b.disabled = !pacbPodeAvancar();
+      }
+      function renderPacb() {
+        const p = pacb.passo;
+        const total = pacbTotalExpositores();
+        const valor = total * PACB_VALOR_EXPOSITOR;
+        const ate = pacbAte(pacb.data);
+        document.getElementById('pacbPassos').innerHTML = [1, 2, 3].map(n => `<span class="${n <= p ? 'feito' : ''}"></span>`).join('');
+        document.getElementById('pacbSub').textContent = p === 1 ? `${pacb.razao} · passo 1 de 3`
+          : p === 2 ? 'Passo 2 de 3 · entregue o celular ao cliente' : p === 3 ? 'Passo 3 de 3 · representante' : pacb.razao;
+        let corpo = '';
+        let rodape = '';
+        if (p === 1) {
+          corpo = `<div class="pacbBloco"><b>${escapeHtml(pacb.razao)}</b><br>Cód. ERP ${escapeHtml(pacb.codigo || 'sem código')} · ${escapeHtml(pacb.classificatorio || 'sem classificatório')}
+              ${pacb.codigo ? '' : '<div style="margin-top:6px;color:var(--warning);font-weight:600;">Sem código do ERP: o PDF sai, mas o acompanhamento no card não vai contar o faturado dele.</div>'}</div>
+            <div class="ocTitulo" style="margin-bottom:8px;">Expositores <small style="font-weight:400;color:var(--gray);">· até ${PACB_EXPOSITORES_MAX} por CNPJ</small></div>
+            ${PACB_EXPOSITORES.map(e => {
+              const q = pacb.qtd[e.cod];
+              return `<div class="pacbExpositor${q ? ' marcado' : ''}">
+                <div class="pacbExpNome">${e.nome}<small>${e.cod} · ${brl(PACB_VALOR_EXPOSITOR)}</small></div>
+                <button type="button" data-pacb-qtd="${e.cod}" data-delta="-1" aria-label="Menos um ${e.cod}"${q <= 0 ? ' disabled' : ''}>−</button>
+                <span class="pacbQtd">${q}</span>
+                <button type="button" data-pacb-qtd="${e.cod}" data-delta="1" aria-label="Mais um ${e.cod}"${total >= PACB_EXPOSITORES_MAX ? ' disabled' : ''}>+</button>
+              </div>`;
+            }).join('')}
+            <div class="pacbTotal">Valor do acordo<b>${brl(valor)}</b>Faturamento líquido (sem IPI e ST) de ${formatDateBr(pacb.data)} até ${formatDateBr(ate)}</div>
+            <label for="pacbData">Data do acordo</label>
+            <input type="date" id="pacbData" data-pacb-campo="data" value="${escapeHtml(pacb.data)}" max="${hojeLocalISO()}">
+            <label for="pacbResp">Responsável na loja</label>
+            <input type="text" id="pacbResp" data-pacb-campo="responsavel" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.responsavel)}">
+            <label for="pacbRegional">Regional de Vendas Cortag</label>
+            <input type="text" id="pacbRegional" data-pacb-campo="regional" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.regional)}">`;
+          rodape = '<button type="button" data-pacb-fechar>Cancelar</button><button type="button" data-pacb-avancar>Ir pras assinaturas</button>';
+        } else if (p === 2) {
+          corpo = `<div class="pacbBloco">Você está assinando o <b>Plano de Ambientação Cortag 2026</b>: ${total} expositor${total > 1 ? 'es' : ''},
+              compromisso de <b>${brl(valor)}</b> em compras (faturamento líquido) até <b>${formatDateBr(ate)}</b>.
+              <details style="margin-top:6px;"><summary style="font-weight:600;cursor:pointer;">Ver as condições</summary>
+                <ul style="margin:6px 0 0;padding-left:18px;font-size:13px;">
+                  <li>O programa pode ser encerrado ou retificado pela Cortag com até 30 dias de aviso prévio.</li>
+                  <li>O acordo vale depois do aceite da Cortag e substitui qualquer acordo anterior.</li>
+                  <li>Sem o valor no prazo, o cliente fica bloqueado pra promoções e campanhas futuras.</li>
+                  <li>A Cortag pode retirar o expositor se o acordo não for cumprido ou se ele for usado com outros fornecedores.</li>
+                  <li>Enviar uma foto do expositor instalado.</li>
+                </ul>
+              </details></div>
+            <div class="ocTitulo" style="margin-bottom:6px;">${escapeHtml(pacb.responsavel)} · responsável pela loja</div>
+            <div class="pacbAssinaturaArea">
+              <canvas id="pacbCanvas" role="img" aria-label="Área de assinatura do cliente: assine com o dedo"></canvas>
+              <div class="pacbLinha"></div><div class="pacbDica">Assine com o dedo acima da linha</div>
+              <button type="button" class="pacbLimpar" data-pacb-limpar>Limpar</button>
+            </div>
+            <label class="pacbConcordo"><input type="checkbox" id="pacbConcordo"${pacb.concordo ? ' checked' : ''}> Li e concordo com as condições do PACB 2026.</label>`;
+          rodape = '<button type="button" data-pacb-voltar>Voltar</button><button type="button" data-pacb-avancar>Confirmar assinatura</button>';
+        } else if (p === 3) {
+          const salva = !pacb.redesenhar && lerAssinaturaRep();
+          const nome = (state.currentUser && state.currentUser.nome) || 'Representante';
+          corpo = `<div class="pacbBloco" style="background:var(--success-bg);color:var(--success);">✓ ${escapeHtml(pacb.responsavel)} assinou às ${escapeHtml(pacb.horaCliente || '')}</div>
+            <div class="ocTitulo" style="margin-bottom:6px;">${escapeHtml(nome)} · representante comercial</div>
+            ${salva ? `<img class="pacbAssinaturaSalva" src="${salva.png}" alt="Sua assinatura guardada neste aparelho">
+              <button type="button" class="restoreBtn" data-pacb-redesenhar style="width:100%;">Assinar de novo</button>`
+              : `<div class="pacbAssinaturaArea">
+                  <canvas id="pacbCanvas" role="img" aria-label="Área da sua assinatura: assine com o dedo"></canvas>
+                  <div class="pacbLinha"></div><div class="pacbDica">Assine com o dedo acima da linha</div>
+                  <button type="button" class="pacbLimpar" data-pacb-limpar>Limpar</button>
+                </div>
+                <label class="pacbConcordo"><input type="checkbox" id="pacbGuardarRep"${pacb.guardarRep ? ' checked' : ''}> Guardar minha assinatura neste aparelho pros próximos acordos.</label>`}
+            <div class="pacbBloco" style="margin-top:14px;">A Regional de Vendas assina depois: o PDF sai com tudo preenchido e só a assinatura dela em branco.</div>`;
+          rodape = `<button type="button" data-pacb-voltar>Voltar</button><button type="button" data-pacb-avancar>${salva ? 'Usar minha assinatura' : 'Assinar e gerar o PDF'}</button>`;
+        } else {
+          const podeCompartilhar = !!(pacb.arquivo && navigator.canShare && navigator.canShare({ files: [pacb.arquivo] }));
+          corpo = !pacb.arquivo ? '<div class="pacbBloco">Gerando o PDF do acordo…</div>'
+            : `<div class="pacbBloco">✓ <b>Cliente</b> · ${escapeHtml(pacb.responsavel)} · ${escapeHtml(pacb.horaCliente)}<br>
+                ✓ <b>Representante</b> · ${escapeHtml(pacb.horaRep)}<br>
+                <span style="color:var(--warning);font-weight:600;">Regional · assina no PDF</span></div>
+              <div class="pacbBloco"><b>${escapeHtml(pacb.arquivo.name)}</b><br>Formulário oficial preenchido. Só falta a assinatura da Regional.</div>
+              <div class="pacbEnviar">
+                ${podeCompartilhar ? '<button type="button" class="ocEnviar" data-pacb-enviar="share">Enviar o PDF (WhatsApp, e-mail…)</button>' : ''}
+                <button type="button" class="restoreBtn" data-pacb-enviar="baixar">Salvar no aparelho</button>
+              </div>
+              ${podeCompartilhar ? '' : '<p class="ocDica">Este navegador não compartilha arquivos: salve o PDF e anexe no WhatsApp (📎 › Documento) ou no e-mail.</p>'}`;
+          rodape = '<button type="button" data-pacb-fechar>Fechar</button>';
+        }
+        document.getElementById('pacbCorpo').innerHTML = corpo;
+        document.getElementById('pacbRodape').innerHTML = rodape;
+        const canvas = document.getElementById('pacbCanvas');
+        pacbPad = canvas ? ligarAreaAssinatura(canvas, atualizarBotaoPacb) : null;
+        atualizarBotaoPacb();
+      }
+      async function avancarPacb() {
+        if (!pacbPodeAvancar()) return;
+        const hora = () => new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        if (pacb.passo === 1) {
+          try { localStorage.setItem(PACB_REGIONAL_LS_KEY, pacb.regional.trim()); } catch (e) { }
+          pacb.passo = 2;
+          renderPacb();
+          document.getElementById('pacbCorpo').scrollTop = 0;
+          return;
+        }
+        if (pacb.passo === 2) {
+          pacb.assCliente = pacbPad.png();
+          pacb.horaCliente = hora();
+          pacb.passo = 3;
+          renderPacb();
+          return;
+        }
+        // passo 3: assinatura do representante -> PDF + acordo gravado
+        if (pacbPad && !pacbPad.vazio) {
+          pacb.assRep = pacbPad.png();
+          if (pacb.guardarRep) {
+            try { localStorage.setItem(PACB_ASSINATURA_LS_KEY, JSON.stringify({ email: (state.currentUser && state.currentUser.email) || '', png: pacb.assRep })); } catch (e) { }
+          }
+        } else {
+          pacb.assRep = lerAssinaturaRep().png;
+        }
+        pacb.horaRep = hora();
+        pacb.passo = 4;
+        renderPacb();
+        const alvo = pacb;
+        try {
+          alvo.arquivo = await gerarPdfAcordoPacb(alvo);
+        } catch (e) {
+          console.error(e);
+          if (pacb !== alvo) return;
+          alvo.passo = 3;
+          renderPacb();
+          showToast(e.message === 'load-error' || e.message === 'modelo'
+            ? 'Não deu pra montar o PDF: o formulário ainda não está neste aparelho. Abra o app com internet uma vez e tente de novo.'
+            : 'Não deu pra montar o PDF do acordo: ' + e.message, 'erro');
+          return;
+        }
+        if (pacb !== alvo) return;
+        renderPacb();
+        gravarAcordoPacb(alvo);
+      }
+      async function gerarPdfAcordoPacb(a) {
+        await carregarPdfLib();
+        let modelo;
+        try {
+          const r = await fetch(PACB_MODELO_URL);
+          if (!r.ok) throw new Error();
+          modelo = await r.arrayBuffer();
+        } catch (e) { throw new Error('modelo'); }
+        const dataBr = formatDateBr(a.data);
+        const hoje = formatDateBr(hojeLocalISO());
+        const representante = (state.currentUser && state.currentUser.nome) || '';
+        const dados = {
+          razao: a.razao, codigo: a.codigo, classificatorio: a.classificatorio, data: dataBr,
+          q62522: a.qtd[62522], q62521: a.qtd[62521],
+          valor: (pacbTotalExpositores() * PACB_VALOR_EXPOSITOR).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+          responsavel: a.responsavel.trim(), representante, regional: a.regional.trim(), dataAssinatura: hoje,
+        };
+        // código de verificação: impressão digital dos dados + assinaturas (qualquer mudança dá outro código)
+        const bytes = new TextEncoder().encode(JSON.stringify(dados) + a.assCliente + a.assRep + a.idEnvio);
+        const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
+        const codigo = hex.slice(0, 16).match(/.{4}/g).join('-');
+        dados.registro = [
+          `Assinado eletronicamente no app Cortag Revolution Tools em ${hoje} - cliente ${a.horaCliente}, representante ${a.horaRep}${a.local ? ` - local ${a.local}` : ''}`,
+          `Código de verificação ${codigo} - falta só a assinatura da Regional de Vendas`,
+        ];
+        const pdf = await preencherPdfPacb(modelo, { ...dados, assCliente: a.assCliente, assRepresentante: a.assRep });
+        const nomeArq = `PACB-${(a.razao.split(/\s+/)[0] || 'Cliente').normalize('NFD').replace(/[^A-Za-z0-9]/g, '')}-${hojeLocalISO().split('-').reverse().map(s => s.slice(-2)).join('')}.pdf`;
+        return new File([pdf], nomeArq, { type: 'application/pdf' });
+      }
+      // Escreve no PDF oficial: posições medidas no arquivo (pontos, origem embaixo à esquerda).
+      // Formulário novo da Cortag = medir de novo (as caixas mudam de lugar).
+      async function preencherPdfPacb(modelo, a) {
+        const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
+        const doc = await PDFDocument.load(modelo);
+        const pg = doc.getPage(0);
+        const fonte = await doc.embedFont(StandardFonts.Helvetica);
+        const negrito = await doc.embedFont(StandardFonts.HelveticaBold);
+        const azul = rgb(0.08, 0.2, 0.55);
+        // a Helvetica do PDF só tem Latin-1: travessão vira hífen e o resto (emoji) sai
+        const limpo = (s) => String(s == null ? '' : s).normalize('NFC').replace(/[–—]/g, '-').replace(/[^\x20-\x7E -ÿ]/g, '');
+        const escrever = (s, x, y, max, tam = 10, f = fonte) => {
+          const t = limpo(s);
+          while (tam > 6 && f.widthOfTextAtSize(t, tam) > max) tam -= 0.5;
+          pg.drawText(t, { x, y, size: tam, font: f, color: azul });
+        };
+        escrever(a.razao, 118, 652, 430);
+        escrever(a.codigo, 184, 635, 360);
+        escrever(a.classificatorio, 236, 618, 310);
+        pg.drawRectangle({ x: 448, y: 564, width: 82, height: 15, color: rgb(1, 1, 1) }); // cobre o "___/___/___"
+        escrever(a.data, 455, 568, 80, 11, negrito);
+        if (a.q62522 > 0) escrever('X', 276.3, 521, 20, 12, negrito);
+        if (a.q62521 > 0) escrever('X', 336.8, 501.3, 20, 12, negrito);
+        if (a.q62522 > 1) escrever('x2', 292, 522, 30, 9, negrito);
+        if (a.q62521 > 1) escrever('x2', 352, 502, 30, 9, negrito);
+        escrever(a.valor, 460, 522, 88, 12, negrito);
+        const assinar = async (png, yBase) => {
+          const img = await doc.embedPng(png);
+          const k = Math.min(124 / img.width, 24 / img.height);
+          const w = img.width * k, h = img.height * k;
+          pg.drawImage(img, { x: 342 + (124 - w) / 2, y: yBase + (25 - h) / 2, width: w, height: h });
+        };
+        escrever(a.responsavel, 35, 380, 248, 9);
+        await assinar(a.assCliente, 377);
+        escrever(a.dataAssinatura, 501, 392, 50, 9);
+        escrever(a.representante, 35, 350, 248, 9);
+        await assinar(a.assRepresentante, 347.5);
+        escrever(a.dataAssinatura, 501, 365, 50, 9);
+        escrever(a.regional, 35, 320, 248, 9); // a assinatura da Regional fica em branco: ela assina no PDF
+        escrever(a.dataAssinatura, 501, 335, 50, 9);
+        a.registro.forEach((linha, i) => escrever(linha, 20, 18 - i * 8, 430, 6)); // embaixo à esquerda (o logo fica à direita)
+        return doc.save();
+      }
+      // Acordo pro acompanhamento do card: cópia no aparelho na hora (aparece
+      // sem internet) e POST pela fila com o id_envio (reenvio não duplica).
+      async function gravarAcordoPacb(a) {
+        const payload = {
+          cliente_id: a.clienteId, data_acordo: a.data, qtd_62522: a.qtd[62522], qtd_62521: a.qtd[62521],
+          responsavel: a.responsavel.trim(), id_envio: a.idEnvio,
+        };
+        const local = {
+          cliente_id: a.clienteId, data: a.data, ate: pacbAte(a.data), valor: pacbTotalExpositores() * PACB_VALOR_EXPOSITOR,
+          qtd_62522: a.qtd[62522], qtd_62521: a.qtd[62521], faturado: 0, id_envio: a.idEnvio, criado: Date.now(),
+        };
+        gravarListaLS(PACB_LOCAIS_LS_KEY, [...lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => x.criado > Date.now() - 30 * 86400000), local]);
+        if (state.levCliente && String(state.levCliente.id) === String(a.clienteId)) {
+          atualizarPacbClienteBar('precos', state.levCliente);
+          atualizarPacbClienteBar('lev', state.levCliente);
+        }
+        const filaInfo = { tipo: 'acordo-pacb', descricao: `Acordo PACB ${a.razao}` };
+        const options = { method: 'POST', body: JSON.stringify(payload) };
+        try {
+          await apiFetch('/api/acordos-pacb', options, filaInfo);
+        } catch (e) {
+          if (e.recusado) {
+            // recusa de verdade: a cópia local sai, senão o card mostraria um acordo que o servidor não tem
+            gravarListaLS(PACB_LOCAIS_LS_KEY, lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => x.id_envio !== a.idEnvio));
+            if (state.levCliente && String(state.levCliente.id) === String(a.clienteId)) {
+              atualizarPacbClienteBar('precos', state.levCliente);
+              atualizarPacbClienteBar('lev', state.levCliente);
+            }
+            showToast('O acordo não foi gravado pro acompanhamento: ' + e.message, 'erro');
+          } else {
+            // servidor fora do ar/acordando (5xx): a fila tenta de novo com o mesmo id_envio
+            const fila = loadSyncQueue();
+            fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path: '/api/acordos-pacb', options, criadoEm: Date.now(), ...filaInfo });
+            saveSyncQueueList(fila);
+          }
+        }
+      }
+      async function enviarPdfPacb(como) {
+        if (!pacb || !pacb.arquivo) return;
+        const total = pacbTotalExpositores();
+        if (como === 'share') {
+          try {
+            await navigator.share({
+              files: [pacb.arquivo], title: 'Acordo PACB 2026',
+              text: `Acordo PACB 2026 · ${pacb.razao} · ${total} expositor${total > 1 ? 'es' : ''} · ${brl(total * PACB_VALOR_EXPOSITOR)}. Falta só a assinatura da Regional.`,
+            });
+          } catch (e) {
+            if (e && e.name !== 'AbortError') showToast('Não deu pra compartilhar: salve o PDF e anexe no WhatsApp ou no e-mail', 'erro');
+          }
+          return;
+        }
+        baixarBlob(pacb.arquivo, pacb.arquivo.name);
+      }
+      let pacbIniciado = false;
+      function initAcordoPacb() {
+        if (pacbIniciado) return;
+        pacbIniciado = true;
+        const modal = document.getElementById('pacbModal');
+        document.getElementById('pacbFecharBtn').addEventListener('click', () => fecharAcordoPacb(true));
+        modal.addEventListener('click', (e) => {
+          const b = e.target.closest('button');
+          if (!b || !pacb) return;
+          if (b.dataset.pacbQtd) {
+            const cod = b.dataset.pacbQtd;
+            const novo = pacb.qtd[cod] + Number(b.dataset.delta);
+            if (novo >= 0 && pacbTotalExpositores() - pacb.qtd[cod] + novo <= PACB_EXPOSITORES_MAX) pacb.qtd[cod] = novo;
+            renderPacb();
+          } else if (b.dataset.pacbAvancar != null) avancarPacb();
+          else if (b.dataset.pacbVoltar != null) { pacb.passo -= 1; pacb.redesenhar = false; renderPacb(); }
+          else if (b.dataset.pacbFechar != null) fecharAcordoPacb(pacb.passo < 4);
+          else if (b.dataset.pacbLimpar != null) { if (pacbPad) pacbPad.limpar(); }
+          else if (b.dataset.pacbRedesenhar != null) { pacb.redesenhar = true; renderPacb(); }
+          else if (b.dataset.pacbEnviar) enviarPdfPacb(b.dataset.pacbEnviar);
+        });
+        modal.addEventListener('input', (e) => {
+          if (!pacb) return;
+          const campo = e.target.dataset.pacbCampo;
+          if (campo === 'responsavel' || campo === 'regional') { pacb[campo] = e.target.value; atualizarBotaoPacb(); }
+        });
+        modal.addEventListener('change', (e) => {
+          if (!pacb) return;
+          if (e.target.dataset.pacbCampo === 'data') {
+            const v = e.target.value;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(v) && v <= hojeLocalISO()) pacb.data = v;
+            renderPacb();
+          } else if (e.target.id === 'pacbConcordo') { pacb.concordo = e.target.checked; atualizarBotaoPacb(); }
+          else if (e.target.id === 'pacbGuardarRep') pacb.guardarRep = e.target.checked;
+        });
+      }
+      // Último acordo do cliente: o do /sync (com o faturado) ou, enquanto o
+      // servidor não devolve, o gravado neste aparelho (faturado 0).
+      function acordoPacbDoCliente(cliente) {
+        if (!cliente) return null;
+        const id = String(cliente.id);
+        const doSync = (loadClientesLocais().find(c => String(c.id) === id) || {}).acordo_pacb || null;
+        const local = lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => String(x.cliente_id) === id)
+          .sort((x, y) => String(y.data).localeCompare(String(x.data)) || y.criado - x.criado)[0] || null;
+        if (local && (!doSync || local.data > doSync.data)) return local;
+        return doSync;
+      }
+      // Ritmo linear desde a data do acordo (decisão do usuário): atrás quando o
+      // faturado está abaixo da fração do prazo que já passou. Em dia = nada.
+      function ritmoDoAcordoPacb(a, hoje) {
+        const total = diasEntreISO(a.data, a.ate);
+        const passados = Math.min(total, Math.max(0, diasEntreISO(a.data, hoje)));
+        const esperado = (Number(a.valor) || 0) * passados / (total || 1);
+        return (Number(a.faturado) || 0) < esperado ? { texto: 'Atrás do ritmo pra fechar no prazo', atrasado: true } : null;
+      }
+      // Acompanhamento no card do cliente (Pedido/Levantamento): valor, prazo,
+      // faturado (de fato, do código do cliente) e quanto falta. Some 30 dias
+      // depois do fim do prazo.
+      function atualizarPacbClienteBar(prefixo, cliente) {
+        const el = document.getElementById(prefixo + 'ClientPacb');
+        if (!el) return;
+        const a = acordoPacbDoCliente(cliente);
+        const hoje = hojeLocalISO();
+        const mostra = !!a && hoje <= somarDiasISO(a.ate, 30);
+        el.classList.toggle('hidden', !mostra);
+        if (!mostra) { el.innerHTML = ''; return; }
+        const valor = Number(a.valor) || 0;
+        const fat = Number(a.faturado) || 0;
+        const falta = Math.max(0, valor - fat);
+        const n = (Number(a.qtd_62522) || 0) + (Number(a.qtd_62521) || 0);
+        const dias = diasEntreISO(hoje, a.ate);
+        const ritmo = falta > 0 && dias >= 0 ? ritmoDoAcordoPacb(a, hoje) : null;
+        el.innerHTML = `<div class="pacbTopo"><b>Acordo PACB · ${n} expositor${n > 1 ? 'es' : ''}</b><span class="pacbValor">${brl(valor)}</span></div>
+          <small>Assinado em ${formatDateBr(a.data)} · vale até ${formatDateBr(a.ate)} · faturamento líquido</small>
+          <div class="pacbBarra"><span style="width:${valor ? Math.min(100, fat / valor * 100).toFixed(1) : 0}%"></span></div>
+          ${falta <= 0 ? '<span class="pacbOk">✓ PACB completo</span>'
+            : dias < 0 ? `<span class="pacbAlerta">Prazo encerrado em ${formatDateBr(a.ate)}: faltaram ${brl(falta)}</span>`
+            : `Faltam <b>${brl(falta)}</b> pro acordo`}
+          ${ritmo ? `<div class="${ritmo.atrasado ? 'pacbAlerta' : 'pacbOk'}">${escapeHtml(ritmo.texto)}</div>` : ''}`;
+      }
+
       async function abrirOcorrencia(cliente, nrPedido, itens) {
         if (!cliente) return;
         const chave = `${cliente.id}|${nrPedido}`;
@@ -37952,6 +38701,8 @@
         try { await catalogoBancoOp('readwrite', s => s.clear()); } catch (e) { } // nem a cópia do catálogo de preços
         // o telefone antigo do aparelho (só o número) não sobe pro cadastro de quem entrar depois
         try { localStorage.removeItem(VENDEDOR_TEL_LS_KEY); } catch (e) { }
+        // nem a assinatura do representante (acordo PACB) nem os acordos ainda não enviados
+        try { localStorage.removeItem(PACB_ASSINATURA_LS_KEY); localStorage.removeItem(PACB_LOCAIS_LS_KEY); } catch (e) { }
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }

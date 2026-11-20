@@ -26,7 +26,9 @@
 // v7 (10/2026): tela de abertura nova com logo-abertura.png (precisa estar no cache pra abrir sem internet).
 // v8 (11/2026): ícones do aviso no celular (badge-96.png e icon-notificacao-192.png, o "C" da Cortag).
 // v9 (11/2026): reconhecedor-worker.js (o reconhecedor por foto roda num worker; precisa abrir sem internet).
-const CACHE_VERSION = 'cortag-sw-v9';
+// v10 (11/2026): modelos/pacb-2026-expositores.pdf (formulário do acordo PACB, preenchido sem internet).
+// Trocar o PDF do formulário = subir a versão (ele é servido do cache primeiro, como os ícones).
+const CACHE_VERSION = 'cortag-sw-v10';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.
@@ -41,6 +43,7 @@ const STATIC_ASSETS = [
   './logo-abertura.png',
   './badge-96.png',
   './icon-notificacao-192.png',
+  './modelos/pacb-2026-expositores.pdf',
 ];
 
 // O app e as páginas separadas, guardados já na instalação: o SW é registrado
@@ -85,11 +88,14 @@ const LIBS_PRECACHE = [
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js',
   'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js',
+  // acordo PACB: assinado na loja, muitas vezes sem internet
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js',
 ];
 const LIBS = new Map([
   ['https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js', 'sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H'],
   ['https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', 'sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk'],
   ['https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js', 'sha384-vuyrTV5nkscLp1knFvt+FIHfKKzmROBq5reruhMRslauj54mW+l2B8b6szMN6lCL'],
+  ['https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', 'sha384-weMABwrltA6jWR8DDe9Jp5blk+tZQh7ugpCsF3JwSA53WZM9/14PjS5LAJNHNjAI'],
   ['https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js', 'sha384-BzBxP10ZE72aitqj5UMmUsbKFliP/DZqA8Wq+BNNhlIJDGoEd1tpkMYXOg9+n6sB'],
   ['https://cdn.jsdelivr.net/npm/@e965/xlsx@0.20.3/dist/xlsx.full.min.js', 'sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT'],
   ['https://cdnjs.cloudflare.com/ajax/libs/pdf.js/6.4.299/pdf.min.mjs', 'sha384-QCvhu/UPp22U/TNLVbQNONL82ES2yY717GAiqP9VVu37Y7+m9VPKvadGx9XlFvcp'],

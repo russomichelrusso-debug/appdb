@@ -3275,6 +3275,41 @@ async function main() {
       `ocorrência: marcar resolvida/reabrir, 404 sem a ocorrência, 422 sem o campo: ${JSON.stringify([resolvida.body, reaberta.body, naoExiste.status, semCampo.status])}`);
   }
 
+  // 29c) Acordo PACB (routes/acordosPacb.js): grava pelo id_envio (reenvio não
+  // duplica), valor = R$ 7.500 por expositor (até 2), e o /sync manda o último
+  // acordo com o faturado de fato do código do cliente nos 6 meses dele.
+  {
+    const dia = (n) => new Date(Date.now() + n * 86400000).toISOString().slice(0, 10);
+    mockDb.__getClientes().push({ id: 9450, nome: 'LOJA DO ACORDO PACB', documento: '99988877000450', codigo_oficial: 'PACB450' });
+    const itens = mockDb.__getPedidosOficiaisItens();
+    itens.push(
+      { nr_pedido: 'AC1', codigo_sku: '60863', cliente_codigo_oficial: 'PACB450', quantidade: 1, valor: 1200, data_faturamento: dia(-5), status: 'faturado', nota_fiscal: 'NF-AC1' },
+      { nr_pedido: 'AC2', codigo_sku: '60863', cliente_codigo_oficial: 'PACB450', quantidade: 1, valor: 900, data_faturamento: dia(-40), status: 'faturado', nota_fiscal: 'NF-AC2' },
+      { nr_pedido: 'AC3', codigo_sku: '60863', cliente_codigo_oficial: 'PACB450', quantidade: 1, valor: 700, data_faturamento: null, status: 'carteira' });
+    const base = { cliente_id: 9450, data_acordo: dia(-10), qtd_62522: 1, qtd_62521: 1, responsavel: 'Marcos Silva', id_envio: 'pacb-teste-0001' };
+    const r1 = await req('POST', '/api/acordos-pacb', base);
+    const r2 = await req('POST', '/api/acordos-pacb', { ...base, qtd_62521: 0 });
+    const tres = await req('POST', '/api/acordos-pacb', { ...base, qtd_62522: 2, id_envio: 'pacb-teste-0002' });
+    const nenhum = await req('POST', '/api/acordos-pacb', { ...base, qtd_62522: 0, qtd_62521: 0, id_envio: 'pacb-teste-0003' });
+    const futuro = await req('POST', '/api/acordos-pacb', { ...base, data_acordo: dia(5), id_envio: 'pacb-teste-0004' });
+    const semCliente = await req('POST', '/api/acordos-pacb', { ...base, cliente_id: 99999, id_envio: 'pacb-teste-0005' });
+    // com o outro usuário: o /sync conta no limite de leituras pesadas por minuto do admin
+    const tokenAdmin = authToken;
+    authToken = tokenOutro;
+    const sync = await req('GET', '/api/clientes/sync');
+    authToken = tokenAdmin;
+    const c = sync.body.clientes.find(x => Number(x.id) === 9450);
+    const a = c && c.acordo_pacb;
+    assert(r1.status === 200 && Number(r1.body.valor) === 15000 && r2.status === 200 && r2.body.id === r1.body.id
+      && tres.status === 422 && nenhum.status === 422 && futuro.status === 422 && semCliente.status === 404
+      && mockDb.__getAcordosPacb().length === 1
+      && a && a.data === base.data_acordo && Number(a.valor) === 15000 && Number(a.faturado) === 1200 && a.ate > a.data,
+      `acordo PACB: grava, reenvio não duplica, 3 expositores/nenhum/data futura 422, cliente que não existe 404, /sync com o faturado do período: ${JSON.stringify([r1.status, r1.body, r2.body, tres.status, nenhum.status, futuro.status, semCliente.status, a])}`);
+    itens.splice(itens.findIndex(i => i.nr_pedido === 'AC1'), 3);
+    mockDb.__getClientes().splice(mockDb.__getClientes().findIndex(x => x.id === 9450), 1);
+    mockDb.__getAcordosPacb().length = 0;
+  }
+
   // 30) Avisos de importação (routes/lib/novidades.js + routes/novidades.js)
   const nov = require('../routes/lib/novidades');
   {
