@@ -94,7 +94,7 @@ router.get('/sync', async (req, res) => {
     const hora = new Date().toLocaleString('sv-SE', { timeZone: 'America/Sao_Paulo' }).slice(0, 13);
     const linhasP = lerComCache('clientes:sync',
       ['clientes', 'cliente_cnpj_ficha', 'cliente_geocodificacao', 'pedidos_bloqueados', 'avisos_cancelamento_saldo', 'pedidos_oficiais_itens', 'import_log',
-        'acordos_pacb', 'titulos_avista_pendentes', 'cliente_classificatorio_erp'],
+        'acordos_pacb', 'titulos_avista_pendentes', 'cliente_classificatorio_erp', 'contas_salesforce'],
       `/* clientes:sync */ SELECT c.id, c.nome, c.documento, c.codigo_oficial, c.nome_arquivo, c.nome_arquivo_em,
               c.classificatorio_tipo, c.classificatorio_desconto, -- preço da oferta pro comprador (aba Produtos), sem internet
               c.whatsapp_comprador, c.whatsapp_comprador_nome, c.whatsapp_comprador_em, f.telefone AS telefone_ficha,
@@ -116,6 +116,9 @@ router.get('/sync', async (req, res) => {
               ) END AS endereco,
               g.latitude AS latitude_aprox, g.longitude AS longitude_aprox, g.nivel AS localizacao_nivel,
               erp.gestor, -- Regional de Vendas (planilha Classificatório): já vem preenchida no acordo PACB
+              -- "Classificatório Atual (SalesForce)" do PACB quando o cadastro não tem (RUSSO'S = 'Representante')
+              (SELECT sf.classificatorio FROM contas_salesforce sf WHERE sf.cliente_id = c.id
+               ORDER BY (sf.codigo_oficial = c.codigo_oficial) DESC NULLS LAST LIMIT 1) AS classificatorio_salesforce,
               -- último acordo PACB (routes/acordosPacb.js) com o faturado de fato do CNPJ nos 6 meses dele
               (SELECT json_build_object('data', a.data_acordo::text, 'ate', (a.data_acordo + interval '6 months')::date::text,
                  'valor', a.valor, 'qtd_62522', a.qtd_62522, 'qtd_62521', a.qtd_62521,
