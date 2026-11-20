@@ -62,4 +62,3 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
-module.exports.VALOR_POR_EXPOSITOR = VALOR_POR_EXPOSITOR;

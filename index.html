@@ -24080,6 +24080,7 @@
         fantasiaLocalPorId = null;
         outroVendedorPorId = null;
         descontoCortadoresPorId = null;
+        acordoPacbPorId = null;
         try { localStorage.setItem(CLIENTES_LOCAIS_LS_KEY, JSON.stringify({ clientes, updatedAt: Date.now() })); }
         catch (e) { console.warn('Não foi possível salvar a cópia local de clientes:', e); }
       }
@@ -27392,9 +27393,6 @@
         if (d.getUTCDate() !== dia) d.setUTCDate(0); // 31/08 + 6 meses = 28/02, como o Postgres
         return d.toISOString().slice(0, 10);
       }
-      function diasEntreISO(de, ate) {
-        return Math.round((Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86400000);
-      }
       function lerAssinaturaRep() {
         try {
           const v = JSON.parse(localStorage.getItem(PACB_ASSINATURA_LS_KEY) || 'null');
@@ -27490,9 +27488,15 @@
         pacb = null;
         pacbPad = null;
       }
-      function pacbTotalExpositores() {
-        return pacb.qtd[62522] + pacb.qtd[62521];
+      // do acordo recebido: o PDF e a gravação rodam depois de um await, com outro `pacb` possível
+      function pacbTotalExpositores(a = pacb) {
+        return a.qtd[62522] + a.qtd[62521];
       }
+      const pacbAreaAssinatura = (rotulo) => `<div class="pacbAssinaturaArea">
+          <canvas id="pacbCanvas" role="img" aria-label="${rotulo}"></canvas>
+          <div class="pacbLinha"></div><div class="pacbDica">Assine com o dedo acima da linha</div>
+          <button type="button" class="pacbLimpar" data-pacb-limpar>Limpar</button>
+        </div>`;
       function pacbPodeAvancar() {
         if (pacb.passo === 1) return pacbTotalExpositores() > 0 && !!pacb.responsavel.trim() && !!pacb.regional.trim() && !!pacb.data;
         if (pacb.passo === 2) return !!pacbPad && !pacbPad.vazio && pacb.concordo;
@@ -27547,11 +27551,7 @@
                 </ul>
               </details></div>
             <div class="ocTitulo" style="margin-bottom:6px;">${escapeHtml(pacb.responsavel)} · responsável pela loja</div>
-            <div class="pacbAssinaturaArea">
-              <canvas id="pacbCanvas" role="img" aria-label="Área de assinatura do cliente: assine com o dedo"></canvas>
-              <div class="pacbLinha"></div><div class="pacbDica">Assine com o dedo acima da linha</div>
-              <button type="button" class="pacbLimpar" data-pacb-limpar>Limpar</button>
-            </div>
+            ${pacbAreaAssinatura('Área de assinatura do cliente: assine com o dedo')}
             <label class="pacbConcordo"><input type="checkbox" id="pacbConcordo"${pacb.concordo ? ' checked' : ''}> Li e concordo com as condições do PACB 2026.</label>`;
           rodape = '<button type="button" data-pacb-voltar>Voltar</button><button type="button" data-pacb-avancar>Confirmar assinatura</button>';
         } else if (p === 3) {
@@ -27561,16 +27561,12 @@
             <div class="ocTitulo" style="margin-bottom:6px;">${escapeHtml(nome)} · representante comercial</div>
             ${salva ? `<img class="pacbAssinaturaSalva" src="${salva.png}" alt="Sua assinatura guardada neste aparelho">
               <button type="button" class="restoreBtn" data-pacb-redesenhar style="width:100%;">Assinar de novo</button>`
-              : `<div class="pacbAssinaturaArea">
-                  <canvas id="pacbCanvas" role="img" aria-label="Área da sua assinatura: assine com o dedo"></canvas>
-                  <div class="pacbLinha"></div><div class="pacbDica">Assine com o dedo acima da linha</div>
-                  <button type="button" class="pacbLimpar" data-pacb-limpar>Limpar</button>
-                </div>
+              : `${pacbAreaAssinatura('Área da sua assinatura: assine com o dedo')}
                 <label class="pacbConcordo"><input type="checkbox" id="pacbGuardarRep"${pacb.guardarRep ? ' checked' : ''}> Guardar minha assinatura neste aparelho pros próximos acordos.</label>`}
             <div class="pacbBloco" style="margin-top:14px;">A Regional de Vendas assina depois: o PDF sai com tudo preenchido e só a assinatura dela em branco.</div>`;
           rodape = `<button type="button" data-pacb-voltar>Voltar</button><button type="button" data-pacb-avancar>${salva ? 'Usar minha assinatura' : 'Assinar e gerar o PDF'}</button>`;
         } else {
-          const podeCompartilhar = !!(pacb.arquivo && navigator.canShare && navigator.canShare({ files: [pacb.arquivo] }));
+          const podeCompartilhar = !!pacb.arquivo && podeCompartilharArquivo(pacb.arquivo);
           corpo = !pacb.arquivo ? '<div class="pacbBloco">Gerando o PDF do acordo…</div>'
             : `<div class="pacbBloco">✓ <b>Cliente</b> · ${escapeHtml(pacb.responsavel)} · ${escapeHtml(pacb.horaCliente)}<br>
                 ✓ <b>Representante</b> · ${escapeHtml(pacb.horaRep)}<br>
@@ -27649,7 +27645,7 @@
         const dados = {
           razao: a.razao, codigo: a.codigo, classificatorio: a.classificatorio, data: dataBr,
           q62522: a.qtd[62522], q62521: a.qtd[62521],
-          valor: (pacbTotalExpositores() * PACB_VALOR_EXPOSITOR).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
+          valor: (pacbTotalExpositores(a) * PACB_VALOR_EXPOSITOR).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
           responsavel: a.responsavel.trim(), representante, regional: a.regional.trim(), dataAssinatura: hoje,
         };
         // código de verificação: impressão digital dos dados + assinaturas (qualquer mudança dá outro código)
@@ -27715,33 +27711,34 @@
           responsavel: a.responsavel.trim(), id_envio: a.idEnvio,
         };
         const local = {
-          cliente_id: a.clienteId, data: a.data, ate: pacbAte(a.data), valor: pacbTotalExpositores() * PACB_VALOR_EXPOSITOR,
+          cliente_id: a.clienteId, data: a.data, ate: pacbAte(a.data), valor: pacbTotalExpositores(a) * PACB_VALOR_EXPOSITOR,
           qtd_62522: a.qtd[62522], qtd_62521: a.qtd[62521], faturado: 0, id_envio: a.idEnvio, criado: Date.now(),
         };
-        gravarListaLS(PACB_LOCAIS_LS_KEY, [...lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => x.criado > Date.now() - 30 * 86400000), local]);
-        if (state.levCliente && String(state.levCliente.id) === String(a.clienteId)) {
+        const repintar = () => {
+          if (!state.levCliente || String(state.levCliente.id) !== String(a.clienteId)) return;
           atualizarPacbClienteBar('precos', state.levCliente);
           atualizarPacbClienteBar('lev', state.levCliente);
-        }
+        };
+        gravarListaLS(PACB_LOCAIS_LS_KEY, [...lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => x.criado > Date.now() - 30 * 86400000), local]);
+        repintar();
         const filaInfo = { tipo: 'acordo-pacb', descricao: `Acordo PACB ${a.razao}` };
         const options = { method: 'POST', body: JSON.stringify(payload) };
         try {
           await apiFetch('/api/acordos-pacb', options, filaInfo);
         } catch (e) {
+          let guardado = false;
           if (e.recusado) {
             // recusa de verdade: a cópia local sai, senão o card mostraria um acordo que o servidor não tem
             gravarListaLS(PACB_LOCAIS_LS_KEY, lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => x.id_envio !== a.idEnvio));
-            if (state.levCliente && String(state.levCliente.id) === String(a.clienteId)) {
-              atualizarPacbClienteBar('precos', state.levCliente);
-              atualizarPacbClienteBar('lev', state.levCliente);
-            }
-            showToast('O acordo não foi gravado pro acompanhamento: ' + e.message, 'erro');
-          } else {
-            // servidor fora do ar/acordando (5xx): a fila tenta de novo com o mesmo id_envio
+            repintar();
+          } else if (!e.semEspacoNaFila && (e.status || 0) >= 500) {
+            // servidor fora do ar/acordando: a fila tenta de novo com o mesmo id_envio
             const fila = loadSyncQueue();
             fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path: '/api/acordos-pacb', options, criadoEm: Date.now(), ...filaInfo });
-            saveSyncQueueList(fila);
+            guardado = saveSyncQueueList(fila);
           }
+          // o PDF já saiu; só o acompanhamento no card fica sem o acordo
+          if (!guardado) showToast('O acordo não foi gravado pro acompanhamento: ' + e.message, 'erro');
         }
       }
       async function enviarPdfPacb(como) {
@@ -27754,7 +27751,8 @@
               text: `Acordo PACB 2026 · ${pacb.razao} · ${total} expositor${total > 1 ? 'es' : ''} · ${brl(total * PACB_VALOR_EXPOSITOR)}. Falta só a assinatura da Regional.`,
             });
           } catch (e) {
-            if (e && e.name !== 'AbortError') showToast('Não deu pra compartilhar: salve o PDF e anexe no WhatsApp ou no e-mail', 'erro');
+            // toque expirado/recusado: baixa, como os outros PDFs do app (shareOrDownloadBlob)
+            if (e && e.name !== 'AbortError') { baixarBlob(pacb.arquivo, pacb.arquivo.name); showToast('PDF salvo no aparelho: anexe no WhatsApp ou no e-mail'); }
           }
           return;
         }
@@ -27798,10 +27796,13 @@
       }
       // Último acordo do cliente: o do /sync (com o faturado) ou, enquanto o
       // servidor não devolve, o gravado neste aparelho (faturado 0).
+      // por id, refeito quando a cópia de clientes muda (saveClientesLocais): o card redesenha a cada troca de cliente
+      let acordoPacbPorId = null;
       function acordoPacbDoCliente(cliente) {
         if (!cliente) return null;
         const id = String(cliente.id);
-        const doSync = (loadClientesLocais().find(c => String(c.id) === id) || {}).acordo_pacb || null;
+        if (!acordoPacbPorId) acordoPacbPorId = new Map(loadClientesLocais().filter(c => c.acordo_pacb).map(c => [String(c.id), c.acordo_pacb]));
+        const doSync = acordoPacbPorId.get(id) || null;
         const local = lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => String(x.cliente_id) === id)
           .sort((x, y) => String(y.data).localeCompare(String(x.data)) || y.criado - x.criado)[0] || null;
         if (local && (!doSync || local.data > doSync.data)) return local;
@@ -27809,11 +27810,10 @@
       }
       // Ritmo linear desde a data do acordo (decisão do usuário): atrás quando o
       // faturado está abaixo da fração do prazo que já passou. Em dia = nada.
-      function ritmoDoAcordoPacb(a, hoje) {
+      function acordoPacbAtrasado(a, hoje) {
         const total = diasEntreISO(a.data, a.ate);
         const passados = Math.min(total, Math.max(0, diasEntreISO(a.data, hoje)));
-        const esperado = (Number(a.valor) || 0) * passados / (total || 1);
-        return (Number(a.faturado) || 0) < esperado ? { texto: 'Atrás do ritmo pra fechar no prazo', atrasado: true } : null;
+        return (Number(a.faturado) || 0) < (Number(a.valor) || 0) * passados / (total || 1);
       }
       // Acompanhamento no card do cliente (Pedido/Levantamento): valor, prazo,
       // faturado (de fato, do código do cliente) e quanto falta. Some 30 dias
@@ -27831,14 +27831,14 @@
         const falta = Math.max(0, valor - fat);
         const n = (Number(a.qtd_62522) || 0) + (Number(a.qtd_62521) || 0);
         const dias = diasEntreISO(hoje, a.ate);
-        const ritmo = falta > 0 && dias >= 0 ? ritmoDoAcordoPacb(a, hoje) : null;
+        const atrasado = falta > 0 && dias >= 0 && acordoPacbAtrasado(a, hoje);
         el.innerHTML = `<div class="pacbTopo"><b>Acordo PACB · ${n} expositor${n > 1 ? 'es' : ''}</b><span class="pacbValor">${brl(valor)}</span></div>
           <small>Assinado em ${formatDateBr(a.data)} · vale até ${formatDateBr(a.ate)} · faturamento líquido</small>
           <div class="pacbBarra"><span style="width:${valor ? Math.min(100, fat / valor * 100).toFixed(1) : 0}%"></span></div>
           ${falta <= 0 ? '<span class="pacbOk">✓ PACB completo</span>'
             : dias < 0 ? `<span class="pacbAlerta">Prazo encerrado em ${formatDateBr(a.ate)}: faltaram ${brl(falta)}</span>`
             : `Faltam <b>${brl(falta)}</b> pro acordo`}
-          ${ritmo ? `<div class="${ritmo.atrasado ? 'pacbAlerta' : 'pacbOk'}">${escapeHtml(ritmo.texto)}</div>` : ''}`;
+          ${atrasado ? '<div class="pacbAlerta">Atrás do ritmo pra fechar no prazo</div>' : ''}`;
       }
 
       async function abrirOcorrencia(cliente, nrPedido, itens) {
