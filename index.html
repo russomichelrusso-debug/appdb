@@ -5557,6 +5557,31 @@
       margin-top: 6px;
     }
 
+    /* botão secundário dentro do bloco cinza (Importar/Mandar pro cliente): fundo de cartão pra não sumir */
+    .pacbBloco .restoreBtn {
+      background: var(--white);
+    }
+
+    /* PACB à distância: foto do papel assinado, com os 4 cantos da folha pra arrastar */
+    .pacbFotoArea canvas {
+      display: block;
+      width: 100%;
+      border-radius: var(--r-md);
+      background: #18181B;
+      touch-action: none;
+    }
+
+    .pacbPrevia {
+      display: block;
+      width: 100%;
+      max-height: 46vh;
+      object-fit: contain;
+      margin-bottom: 8px;
+      border: 1px solid var(--hairline);
+      border-radius: var(--r-sm);
+      background: #FFFFFF;
+    }
+
     #ocorrenciaModal .ocCard,
     #pacbModal .ocCard {
       max-width: 520px;
@@ -14124,6 +14149,7 @@
         </div>
         <div class="ocCorpo" id="pacbCorpo"></div>
         <div class="ocRodape minimodal-btnrow" id="pacbRodape"></div>
+        <input type="file" id="pacbImportarInput" accept="application/pdf,image/*" hidden>
       </div>
     </div>
 
@@ -27372,6 +27398,9 @@
       const PACB_ASSINATURA_LS_KEY = 'cortagAssinaturaRep_v1'; // {email, png}: a do representante, por aparelho
       const PACB_REGIONAL_LS_KEY = 'cortagPacbRegional_v1'; // último nome digitado da Regional
       const PACB_LOCAIS_LS_KEY = 'cortagAcordosPacbLocais_v1'; // acordos ainda não vindos no /sync
+      // acordo por telefone: PDF mandado pro cliente assinar, esperando voltar (só neste aparelho, sem faixa no card)
+      const PACB_AGUARDANDO_LS_KEY = 'cortagPacbAguardando_v1';
+      const PACB_PAGINA = [595.32, 841.92]; // A4 do modelo, em pontos: a foto endireitada sai nessa proporção
       let pdfLibPromise = null;
       function carregarPdfLib() {
         if (window.PDFLib) return Promise.resolve();
@@ -27467,7 +27496,14 @@
           representante: (state.currentUser && state.currentUser.nome) || '',
           concordo: false, assCliente: null, horaCliente: null, assRep: null, horaRep: null, guardarRep: true, redesenhar: false,
           local: null, arquivo: null, idEnvio: novoIdEnvio(),
+          enviadoEm: null, base: null, foto: null, // acordo à distância: o que voltou assinado (PDF ou foto endireitada)
         };
+        // mandado pro cliente e ainda não importado: abre com os mesmos dados (e o mesmo id_envio)
+        const esperando = lerListaLS(PACB_AGUARDANDO_LS_KEY).find(x => String(x.clienteId) === String(cliente.id));
+        if (esperando) {
+          ['data', 'responsavel', 'representante', 'regional', 'idEnvio', 'enviadoEm'].forEach(k => { pacb[k] = esperando[k]; });
+          pacb.qtd = { ...esperando.qtd };
+        }
         lerLocalDoAcordo();
         document.getElementById('pacbModal').classList.remove('hidden');
         renderPacb();
@@ -27508,14 +27544,19 @@
       function atualizarBotaoPacb() {
         const b = document.querySelector('#pacbRodape [data-pacb-avancar]');
         if (b) b.disabled = !pacbPodeAvancar();
+        // mandar/importar à distância: só com o passo 1 completo (o PDF sai com esses dados)
+        if (pacb.passo === 1) document.querySelectorAll('#pacbCorpo [data-pacb-precisa]').forEach(x => { x.disabled = !pacbPodeAvancar(); });
       }
       function renderPacb() {
         const p = pacb.passo;
         const total = pacbTotalExpositores();
         const valor = total * PACB_VALOR_EXPOSITOR;
         const ate = pacbAte(pacb.data);
-        document.getElementById('pacbPassos').innerHTML = [1, 2, 3].map(n => `<span class="${n <= p ? 'feito' : ''}"></span>`).join('');
+        const pn = typeof p === 'number' ? p : 1; // 'cliente' (PDF pro cliente) e 'foto' (cantos) ficam no passo 1
+        document.getElementById('pacbPassos').innerHTML = [1, 2, 3].map(n => `<span class="${n <= pn ? 'feito' : ''}"></span>`).join('');
         document.getElementById('pacbSub').textContent = p === 1 ? `${pacb.razao} · passo 1 de 3`
+          : p === 'cliente' ? `${pacb.razao} · pro cliente assinar`
+          : p === 'foto' ? 'Foto do papel assinado · marque os cantos da folha'
           : p === 2 ? 'Passo 2 de 3 · entregue o celular ao cliente' : p === 3 ? 'Passo 3 de 3 · representante' : pacb.razao;
         let corpo = '';
         let rodape = '';
@@ -27540,8 +27581,36 @@
             <label for="pacbRep">Representante comercial</label>
             <input type="text" id="pacbRep" data-pacb-campo="representante" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.representante)}">
             <label for="pacbRegional">Regional de Vendas Cortag</label>
-            <input type="text" id="pacbRegional" data-pacb-campo="regional" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.regional)}">`;
-          rodape = '<button type="button" data-pacb-fechar>Cancelar</button><button type="button" data-pacb-avancar>Ir pras assinaturas</button>';
+            <input type="text" id="pacbRegional" data-pacb-campo="regional" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.regional)}">
+            <div class="pacbBloco" style="margin-top:14px;">
+              ${pacb.enviadoEm
+                ? `<b>Mandado pro cliente assinar em ${formatDateBr(pacb.enviadoEm)}.</b> Quando voltar assinado, importe o PDF ou a foto do papel e assine.`
+                : '<b>Acordo por telefone?</b> Mande o PDF pro cliente assinar. Quando voltar (PDF assinado ou foto do papel), importe e assine.'}
+              <div class="pacbEnviar">
+                <button type="button" class="restoreBtn" data-pacb-importar data-pacb-precisa>Importar o assinado pelo cliente</button>
+                <button type="button" class="restoreBtn" data-pacb-remoto data-pacb-precisa>${pacb.enviadoEm ? 'Mandar o PDF de novo' : 'Mandar o PDF pro cliente assinar'}</button>
+                ${pacb.enviadoEm ? '<button type="button" class="restoreBtn" data-pacb-descartar-envio style="color:var(--gray);">Descartar o envio</button>' : ''}
+              </div>
+            </div>`;
+          rodape = '<button type="button" data-pacb-fechar>Cancelar</button><button type="button" data-pacb-avancar>Assinar aqui na loja</button>';
+        } else if (p === 'cliente') {
+          const podeCompartilhar = !!pacb.arquivo && podeCompartilharArquivo(pacb.arquivo);
+          corpo = !pacb.arquivo ? '<div class="pacbBloco">Gerando o PDF pro cliente…</div>'
+            : `<div class="pacbBloco"><b>${escapeHtml(pacb.arquivo.name)}</b><br>Tudo preenchido, sem assinaturas. O cliente assina no campo dele
+                (no próprio PDF ou impresso) e devolve.</div>
+              <div class="pacbEnviar">
+                ${podeCompartilhar ? '<button type="button" class="ocEnviar" data-pacb-enviar="share">Enviar pro cliente (WhatsApp, e-mail…)</button>' : ''}
+                <button type="button" class="restoreBtn" data-pacb-enviar="baixar">Salvar no aparelho</button>
+              </div>
+              ${podeCompartilhar ? '' : '<p class="ocDica">Este navegador não compartilha arquivos: salve o PDF e anexe no WhatsApp (📎 › Documento) ou no e-mail.</p>'}
+              <div class="pacbBloco" style="margin-top:14px;">Quando voltar assinado, toque em <b>PACB</b> no card deste cliente ›
+                <b>Importar o assinado pelo cliente</b>. Se ele mandar foto do papel, peça a folha inteira, de cima e com luz.</div>`;
+          rodape = '<button type="button" data-pacb-fechar>Fechar</button>';
+        } else if (p === 'foto') {
+          corpo = `<div class="pacbBloco">Arraste os 4 pontos até os <b>cantos da folha</b>. O app endireita a foto e ela vira a página do PDF,
+              com a sua assinatura no lugar certo.</div>
+            <div class="pacbFotoArea"><canvas id="pacbFotoCanvas" role="img" aria-label="Foto da folha assinada: arraste os 4 pontos até os cantos da folha"></canvas></div>`;
+          rodape = '<button type="button" data-pacb-voltar>Voltar</button><button type="button" data-pacb-endireitar>Endireitar a folha</button>';
         } else if (p === 2) {
           corpo = `<div class="pacbBloco">Você está assinando o <b>Plano de Ambientação Cortag 2026</b>: ${total} expositor${total > 1 ? 'es' : ''},
               compromisso de <b>${brl(valor)}</b> em compras (faturamento líquido) até <b>${formatDateBr(ate)}</b>.
@@ -27561,7 +27630,10 @@
         } else if (p === 3) {
           const salva = !pacb.redesenhar && lerAssinaturaRep();
           const nome = pacb.representante.trim();
-          corpo = `<div class="pacbBloco" style="background:var(--success-bg);color:var(--success);">✓ ${escapeHtml(pacb.responsavel)} assinou às ${escapeHtml(pacb.horaCliente || '')}</div>
+          corpo = `${!pacb.base ? `<div class="pacbBloco" style="background:var(--success-bg);color:var(--success);">✓ ${escapeHtml(pacb.responsavel)} assinou às ${escapeHtml(pacb.horaCliente || '')}</div>`
+              : pacb.base.tipo === 'foto' ? `<img class="pacbPrevia" src="${pacb.base.url}" alt="Folha assinada pelo cliente, já endireitada">
+                <button type="button" class="restoreBtn" data-pacb-cantos style="width:100%;margin-bottom:12px;">Marcar os cantos de novo</button>`
+              : `<div class="pacbBloco" style="background:var(--success-bg);color:var(--success);">✓ PDF assinado pelo cliente · ${escapeHtml(pacb.base.nome)}</div>`}
             <div class="ocTitulo" style="margin-bottom:6px;">${escapeHtml(nome)} · representante comercial</div>
             ${salva ? `<img class="pacbAssinaturaSalva" src="${salva.png}" alt="Sua assinatura guardada neste aparelho">
               <button type="button" class="restoreBtn" data-pacb-redesenhar style="width:100%;">Assinar de novo</button>`
@@ -27572,7 +27644,7 @@
         } else {
           const podeCompartilhar = !!pacb.arquivo && podeCompartilharArquivo(pacb.arquivo);
           corpo = !pacb.arquivo ? '<div class="pacbBloco">Gerando o PDF do acordo…</div>'
-            : `<div class="pacbBloco">✓ <b>Cliente</b> · ${escapeHtml(pacb.responsavel)} · ${escapeHtml(pacb.horaCliente)}<br>
+            : `<div class="pacbBloco">✓ <b>Cliente</b> · ${escapeHtml(pacb.responsavel)} · ${pacb.base ? (pacb.base.tipo === 'foto' ? 'foto do papel' : 'PDF assinado') : escapeHtml(pacb.horaCliente)}<br>
                 ✓ <b>Representante</b> · ${escapeHtml(pacb.horaRep)}<br>
                 <span style="color:var(--warning);font-weight:600;">Regional · assina no PDF</span></div>
               <div class="pacbBloco"><b>${escapeHtml(pacb.arquivo.name)}</b><br>Formulário oficial preenchido. Só falta a assinatura da Regional.</div>
@@ -27587,6 +27659,8 @@
         document.getElementById('pacbRodape').innerHTML = rodape;
         const canvas = document.getElementById('pacbCanvas');
         pacbPad = canvas ? ligarAreaAssinatura(canvas, atualizarBotaoPacb) : null;
+        const fotoCanvas = document.getElementById('pacbFotoCanvas');
+        if (fotoCanvas) ligarEditorCantos(fotoCanvas, pacb.foto);
         atualizarBotaoPacb();
       }
       async function avancarPacb() {
@@ -27620,7 +27694,7 @@
         renderPacb();
         const alvo = pacb;
         try {
-          alvo.arquivo = await gerarPdfAcordoPacb(alvo);
+          alvo.arquivo = await (alvo.base ? gerarPdfImportadoPacb(alvo) : gerarPdfAcordoPacb(alvo));
         } catch (e) {
           console.error(e);
           if (pacb !== alvo) return;
@@ -27633,79 +27707,349 @@
         }
         // assinado pelos dois: grava mesmo se a janela foi fechada durante a geração
         gravarAcordoPacb(alvo);
+        if (alvo.base) gravarListaLS(PACB_AGUARDANDO_LS_KEY, lerListaLS(PACB_AGUARDANDO_LS_KEY).filter(x => x.idEnvio !== alvo.idEnvio));
         if (pacb === alvo) renderPacb();
       }
-      async function gerarPdfAcordoPacb(a) {
+      async function modeloPacb() {
         await carregarPdfLib();
-        let modelo;
         try {
           const r = await fetch(PACB_MODELO_URL);
           if (!r.ok) throw new Error();
-          modelo = await r.arrayBuffer();
+          return await r.arrayBuffer();
         } catch (e) { throw new Error('modelo'); }
-        const dataBr = formatDateBr(a.data);
-        const hoje = formatDateBr(hojeLocalISO());
-        const representante = a.representante.trim();
-        const dados = {
-          razao: a.razao, codigo: a.codigo, classificatorio: a.classificatorio, data: dataBr,
+      }
+      const nomeArquivoPacb = (a, prefixo = 'PACB') => `${prefixo}-${(a.razao.split(/\s+/)[0] || 'Cliente').normalize('NFD').replace(/[^A-Za-z0-9]/g, '')}-${hojeLocalISO().split('-').reverse().map(s => s.slice(-2)).join('')}.pdf`;
+      function dadosDoAcordoPacb(a) {
+        return {
+          razao: a.razao, codigo: a.codigo, classificatorio: a.classificatorio, data: formatDateBr(a.data),
           q62522: a.qtd[62522], q62521: a.qtd[62521],
           valor: (pacbTotalExpositores(a) * PACB_VALOR_EXPOSITOR).toLocaleString('pt-BR', { minimumFractionDigits: 2 }),
-          responsavel: a.responsavel.trim(), representante, regional: a.regional.trim(), dataAssinatura: hoje,
+          responsavel: a.responsavel.trim(), representante: a.representante.trim(), regional: a.regional.trim(),
         };
-        // código de verificação: impressão digital dos dados + assinaturas (qualquer mudança dá outro código)
-        const bytes = new TextEncoder().encode(JSON.stringify(dados) + a.assCliente + a.assRep + a.idEnvio);
+      }
+      // código de verificação: impressão digital dos dados + assinaturas (qualquer mudança dá outro código)
+      async function codigoVerificacaoPacb(...partes) {
+        const bytes = new TextEncoder().encode(partes.join('|'));
         const hex = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-        const codigo = hex.slice(0, 16).match(/.{4}/g).join('-');
+        return hex.slice(0, 16).match(/.{4}/g).join('-');
+      }
+      async function gerarPdfAcordoPacb(a) {
+        const modelo = await modeloPacb();
+        const hoje = formatDateBr(hojeLocalISO());
+        const dados = { ...dadosDoAcordoPacb(a), dataCliente: hoje, dataRep: hoje, dataRegional: hoje };
+        const codigo = await codigoVerificacaoPacb(JSON.stringify(dados), a.assCliente, a.assRep, a.idEnvio);
         dados.registro = [
           `Assinado eletronicamente no app Cortag Revolution Tools em ${hoje} - cliente ${a.horaCliente}, representante ${a.horaRep}${a.local ? ` - local ${a.local}` : ''}`,
           `Código de verificação ${codigo} - falta só a assinatura da Regional de Vendas`,
         ];
         const pdf = await preencherPdfPacb(modelo, { ...dados, assCliente: a.assCliente, assRepresentante: a.assRep });
-        const nomeArq = `PACB-${(a.razao.split(/\s+/)[0] || 'Cliente').normalize('NFD').replace(/[^A-Za-z0-9]/g, '')}-${hojeLocalISO().split('-').reverse().map(s => s.slice(-2)).join('')}.pdf`;
-        return new File([pdf], nomeArq, { type: 'application/pdf' });
+        return new File([pdf], nomeArquivoPacb(a), { type: 'application/pdf' });
       }
-      // Escreve no PDF oficial: posições medidas no arquivo (pontos, origem embaixo à esquerda).
-      // Formulário novo da Cortag = medir de novo (as caixas mudam de lugar).
-      async function preencherPdfPacb(modelo, a) {
-        const { PDFDocument, StandardFonts, rgb } = window.PDFLib;
-        const doc = await PDFDocument.load(modelo);
-        const pg = doc.getPage(0);
+      // Acordo por telefone: o mesmo formulário preenchido, sem nenhuma assinatura nem data de assinatura
+      async function gerarPdfPraClientePacb(a) {
+        const modelo = await modeloPacb();
+        const pdf = await preencherPdfPacb(modelo, {
+          ...dadosDoAcordoPacb(a),
+          registro: [`Preenchido no app Cortag Revolution Tools em ${formatDateBr(hojeLocalISO())} - assine no campo do cliente e devolva ao representante (PDF ou foto da folha)`],
+        });
+        return new File([pdf], nomeArquivoPacb(a, 'PACB-assinar'), { type: 'application/pdf' });
+      }
+      // O que o cliente devolveu (PDF assinado ou a foto da folha já endireitada) + a assinatura do
+      // representante por cima, no mesmo lugar do formulário. Vai pro gerente como o da loja.
+      async function gerarPdfImportadoPacb(a) {
+        await carregarPdfLib();
+        const { PDFDocument } = window.PDFLib;
+        let doc, pg;
+        if (a.base.tipo === 'pdf') {
+          doc = await PDFDocument.load(a.base.bytes, { ignoreEncryption: true });
+          // shortcut: página girada (/Rotate) não é tratada; o PDF do app e os assinados em app de PDF não giram
+          pg = doc.getPage(0);
+        } else {
+          doc = await PDFDocument.create();
+          pg = doc.addPage(PACB_PAGINA);
+          const img = await doc.embedJpg(a.base.bytes);
+          pg.drawImage(img, { x: 0, y: 0, width: PACB_PAGINA[0], height: PACB_PAGINA[1] });
+        }
+        const hoje = formatDateBr(hojeLocalISO());
+        const digestoBase = [...new Uint8Array(await crypto.subtle.digest('SHA-256', a.base.bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+        const codigo = await codigoVerificacaoPacb(JSON.stringify(dadosDoAcordoPacb(a)), digestoBase, a.assRep, a.idEnvio);
+        const { escrever, assinar, registro } = await escritorPacb(doc, pg);
+        await assinar(a.assRep, 347.5);
+        escrever(hoje, 501, 365, 50, 9);
+        escrever(hoje, 501, 335, 50, 9);
+        registro([
+          `Mandado ao cliente pelo app${a.enviadoEm ? ` em ${formatDateBr(a.enviadoEm)}` : ''}, devolvido assinado ${a.base.tipo === 'foto' ? 'em foto do papel' : 'em PDF'} - representante assinou no app em ${hoje} ${a.horaRep}`,
+          `Código de verificação ${codigo} - falta só a assinatura da Regional de Vendas`,
+        ], true);
+        return new File([await doc.save()], nomeArquivoPacb(a), { type: 'application/pdf' });
+      }
+      // Escreve numa página do formulário: posições medidas no modelo (pontos, origem embaixo à
+      // esquerda). Página de outro tamanho (PDF devolvido em Carta, impressão) recebe as mesmas
+      // posições na proporção. Formulário novo da Cortag = medir de novo (as caixas mudam de lugar).
+      async function escritorPacb(doc, pg) {
+        const { StandardFonts, rgb } = window.PDFLib;
         const fonte = await doc.embedFont(StandardFonts.Helvetica);
         const negrito = await doc.embedFont(StandardFonts.HelveticaBold);
         const azul = rgb(0.08, 0.2, 0.55);
+        const { width, height } = pg.getSize();
+        const sx = width / PACB_PAGINA[0], sy = height / PACB_PAGINA[1], st = Math.min(sx, sy);
         // a Helvetica do PDF só tem Latin-1: travessão vira hífen e o resto (emoji) sai
         const limpo = (s) => String(s == null ? '' : s).normalize('NFC').replace(/[–—]/g, '-').replace(/[^\x20-\x7E -ÿ]/g, '');
         const escrever = (s, x, y, max, tam = 10, f = fonte) => {
           const t = limpo(s);
+          if (!t) return;
           while (tam > 6 && f.widthOfTextAtSize(t, tam) > max) tam -= 0.5;
-          pg.drawText(t, { x, y, size: tam, font: f, color: azul });
+          pg.drawText(t, { x: x * sx, y: y * sy, size: tam * st, font: f, color: azul });
         };
+        const branco = (x, y, w, h) => pg.drawRectangle({ x: x * sx, y: y * sy, width: w * sx, height: h * sy, color: rgb(1, 1, 1) });
+        const assinar = async (png, yBase) => {
+          const img = await doc.embedPng(png);
+          const k = Math.min(124 / img.width, 24 / img.height);
+          const w = img.width * k, h = img.height * k;
+          pg.drawImage(img, { x: (342 + (124 - w) / 2) * sx, y: (yBase + (25 - h) / 2) * sy, width: w * sx, height: h * sy });
+        };
+        // embaixo à esquerda (o logo fica à direita); por cima do que voltou, cobre o recado do PDF mandado ao cliente
+        const registro = (linhas, cobrir) => {
+          if (cobrir) branco(16, 4, 440, 22);
+          linhas.forEach((linha, i) => escrever(linha, 20, 18 - i * 8, 430, 6));
+        };
+        return { escrever, assinar, registro, branco, negrito };
+      }
+      async function preencherPdfPacb(modelo, a) {
+        const doc = await window.PDFLib.PDFDocument.load(modelo);
+        const pg = doc.getPage(0);
+        const { escrever, assinar, registro, branco, negrito } = await escritorPacb(doc, pg);
         escrever(a.razao, 118, 652, 430);
         escrever(a.codigo, 184, 635, 360);
         escrever(a.classificatorio, 236, 618, 310);
-        pg.drawRectangle({ x: 448, y: 564, width: 82, height: 15, color: rgb(1, 1, 1) }); // cobre o "___/___/___"
+        branco(448, 564, 82, 15); // cobre o "___/___/___"
         escrever(a.data, 455, 568, 80, 11, negrito);
         if (a.q62522 > 0) escrever('X', 276.3, 521, 20, 12, negrito);
         if (a.q62521 > 0) escrever('X', 336.8, 501.3, 20, 12, negrito);
         if (a.q62522 > 1) escrever('x2', 292, 522, 30, 9, negrito);
         if (a.q62521 > 1) escrever('x2', 352, 502, 30, 9, negrito);
         escrever(a.valor, 460, 522, 88, 12, negrito);
-        const assinar = async (png, yBase) => {
-          const img = await doc.embedPng(png);
-          const k = Math.min(124 / img.width, 24 / img.height);
-          const w = img.width * k, h = img.height * k;
-          pg.drawImage(img, { x: 342 + (124 - w) / 2, y: yBase + (25 - h) / 2, width: w, height: h });
-        };
         escrever(a.responsavel, 35, 380, 248, 9);
-        await assinar(a.assCliente, 377);
-        escrever(a.dataAssinatura, 501, 392, 50, 9);
+        if (a.assCliente) await assinar(a.assCliente, 377);
+        escrever(a.dataCliente, 501, 392, 50, 9);
         escrever(a.representante, 35, 350, 248, 9);
-        await assinar(a.assRepresentante, 347.5);
-        escrever(a.dataAssinatura, 501, 365, 50, 9);
+        if (a.assRepresentante) await assinar(a.assRepresentante, 347.5);
+        escrever(a.dataRep, 501, 365, 50, 9);
         escrever(a.regional, 35, 320, 248, 9); // a assinatura da Regional fica em branco: ela assina no PDF
-        escrever(a.dataAssinatura, 501, 335, 50, 9);
-        a.registro.forEach((linha, i) => escrever(linha, 20, 18 - i * 8, 430, 6)); // embaixo à esquerda (o logo fica à direita)
+        escrever(a.dataRegional, 501, 335, 50, 9);
+        registro(a.registro);
         return doc.save();
+      }
+      // ---- PACB à distância (acordo por telefone) ----
+      // Decisões do usuário (11/2026): a foto do papel é endireitada pelos 4 cantos da folha (a
+      // assinatura do representante cai no lugar certo da própria folha); nada no card do cliente
+      // (o que espera fica só neste aparelho, achado pelo botão PACB); a data do acordo é a do envio.
+      async function mandarProClientePacb() {
+        if (!pacbPodeAvancar()) return;
+        try { localStorage.setItem(PACB_REGIONAL_LS_KEY, pacb.regional.trim()); } catch (e) { }
+        const alvo = pacb;
+        alvo.passo = 'cliente';
+        alvo.arquivo = null;
+        renderPacb();
+        try {
+          alvo.arquivo = await gerarPdfPraClientePacb(alvo);
+        } catch (e) {
+          console.error(e);
+          if (pacb !== alvo) return;
+          alvo.passo = 1;
+          renderPacb();
+          showToast(e.message === 'load-error' || e.message === 'modelo'
+            ? 'Não deu pra montar o PDF: o formulário ainda não está neste aparelho. Abra o app com internet uma vez e tente de novo.'
+            : 'Não deu pra montar o PDF do acordo: ' + e.message, 'erro');
+          return;
+        }
+        // fica esperando neste aparelho (mesmo id_envio): abrir o PACB do cliente de novo já vem preenchido
+        alvo.enviadoEm = hojeLocalISO();
+        const esperando = { clienteId: alvo.clienteId, data: alvo.data, qtd: { ...alvo.qtd }, responsavel: alvo.responsavel, representante: alvo.representante,
+          regional: alvo.regional, idEnvio: alvo.idEnvio, enviadoEm: alvo.enviadoEm, criado: Date.now() };
+        gravarListaLS(PACB_AGUARDANDO_LS_KEY, [...lerListaLS(PACB_AGUARDANDO_LS_KEY)
+          .filter(x => String(x.clienteId) !== String(alvo.clienteId) && x.criado > Date.now() - 120 * 86400000), esperando]);
+        if (pacb === alvo) renderPacb();
+      }
+      async function descartarEnvioPacb() {
+        if (!await askConfirm('Descartar o PDF mandado pro cliente? Se ele devolver assinado depois, dá pra importar preenchendo o acordo de novo.', 'Descartar', { cancelarLabel: 'Manter' })) return;
+        if (!pacb) return;
+        gravarListaLS(PACB_AGUARDANDO_LS_KEY, lerListaLS(PACB_AGUARDANDO_LS_KEY).filter(x => x.idEnvio !== pacb.idEnvio));
+        pacb.enviadoEm = null;
+        pacb.idEnvio = novoIdEnvio();
+        renderPacb();
+      }
+      async function importarAssinadoPacb(file) {
+        if (!pacb || !file) return;
+        const alvo = pacb;
+        const ehPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
+        if (ehPdf) {
+          try {
+            await carregarPdfLib();
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            const doc = await window.PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+            if (!doc.getPageCount()) throw new Error('vazio');
+            if (pacb !== alvo) return;
+            alvo.base = { tipo: 'pdf', bytes, nome: file.name };
+          } catch (e) {
+            console.error(e);
+            showToast(e.message === 'load-error' ? 'Sem internet pra abrir PDF neste aparelho ainda. Tente de novo com sinal.'
+              : 'Não deu pra abrir esse PDF. Peça ao cliente pra mandar de novo ou uma foto da folha.', 'erro');
+            return;
+          }
+          alvo.passo = 3;
+          renderPacb();
+          return;
+        }
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        try {
+          img.src = url;
+          await img.decode(); // o <img> já aplica a rotação da câmera (EXIF)
+        } catch (e) {
+          URL.revokeObjectURL(url);
+          showToast('Não deu pra abrir essa imagem. Mande uma foto em JPG ou PNG, ou o PDF.', 'erro');
+          return;
+        }
+        // até 2400 px no lado maior: a página sai em ~150 dpi, mais que isso só gasta memória
+        const k = Math.min(1, 2400 / Math.max(img.naturalWidth, img.naturalHeight));
+        const c = document.createElement('canvas');
+        c.width = Math.round(img.naturalWidth * k);
+        c.height = Math.round(img.naturalHeight * k);
+        c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        if (pacb !== alvo) return;
+        const mx = c.width * 0.06, my = c.height * 0.06;
+        // shortcut: os cantos começam perto das bordas da foto, sem achar a folha sozinho; detectar se arrastar incomodar
+        alvo.foto = { canvas: c, cantos: [[mx, my], [c.width - mx, my], [c.width - mx, c.height - my], [mx, c.height - my]] };
+        alvo.passo = 'foto';
+        renderPacb();
+      }
+      // Os 4 cantos da folha na foto (sup. esq., sup. dir., inf. dir., inf. esq.) pra arrastar com o
+      // dedo; enquanto arrasta, uma lupa no alto mostra onde a ponta está (o dedo cobre o canto).
+      function ligarEditorCantos(canvas, foto) {
+        const src = foto.canvas;
+        const largura = canvas.getBoundingClientRect().width;
+        const esc = Math.min(largura / src.width, (window.innerHeight * 0.55) / src.height);
+        const w = src.width * esc, h = src.height * esc;
+        const dpr = window.devicePixelRatio || 1;
+        canvas.style.width = w + 'px';
+        canvas.style.height = h + 'px';
+        canvas.style.margin = '0 auto';
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+        const ctx = canvas.getContext('2d');
+        let ativo = -1;
+        const desenhar = () => {
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.drawImage(src, 0, 0, w, h);
+          const pts = foto.cantos.map(([x, y]) => [x * esc, y * esc]);
+          ctx.beginPath();
+          pts.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+          ctx.closePath();
+          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#EF4444';
+          ctx.stroke();
+          pts.forEach(([x, y], i) => {
+            ctx.beginPath(); ctx.arc(x, y, i === ativo ? 14 : 11, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(239,68,68,0.35)'; ctx.fill();
+            ctx.lineWidth = 2; ctx.strokeStyle = '#FFFFFF'; ctx.stroke();
+          });
+          if (ativo < 0) return;
+          // lupa 2,5x no alto, do lado oposto ao ponto
+          const [px, py] = foto.cantos[ativo];
+          const r = 46, cx = pts[ativo][0] < w / 2 ? w - r - 8 : r + 8, cy = r + 8, z = 2.5 * esc;
+          ctx.save();
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.clip();
+          ctx.fillStyle = '#18181B'; ctx.fillRect(cx - r, cy - r, 2 * r, 2 * r);
+          ctx.drawImage(src, px - r / z, py - r / z, 2 * r / z, 2 * r / z, cx - r, cy - r, 2 * r, 2 * r);
+          ctx.strokeStyle = '#EF4444'; ctx.lineWidth = 1.5;
+          ctx.beginPath(); ctx.moveTo(cx - 10, cy); ctx.lineTo(cx + 10, cy); ctx.moveTo(cx, cy - 10); ctx.lineTo(cx, cy + 10); ctx.stroke();
+          ctx.restore();
+          ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.strokeStyle = '#FFFFFF'; ctx.lineWidth = 2; ctx.stroke();
+        };
+        const pos = (e) => { const b = canvas.getBoundingClientRect(); return [(e.clientX - b.left) / esc, (e.clientY - b.top) / esc]; };
+        const dist = (c, x, y) => Math.hypot(c[0] - x, c[1] - y);
+        canvas.onpointerdown = (e) => {
+          e.preventDefault();
+          const [x, y] = pos(e);
+          // o canto mais perto do toque (a folha pode encher a foto: sem raio mínimo)
+          ativo = foto.cantos.reduce((m, c, i) => (dist(c, x, y) < dist(foto.cantos[m], x, y) ? i : m), 0);
+          try { canvas.setPointerCapture(e.pointerId); } catch (err) { }
+          desenhar();
+        };
+        canvas.onpointermove = (e) => {
+          if (ativo < 0) return;
+          const [x, y] = pos(e);
+          foto.cantos[ativo] = [Math.max(0, Math.min(src.width, x)), Math.max(0, Math.min(src.height, y))];
+          desenhar();
+        };
+        canvas.onpointerup = canvas.onpointercancel = () => { ativo = -1; desenhar(); };
+        desenhar();
+      }
+      // Homografia que leva o retângulo da página (destino) pro quadrilátero da folha na foto:
+      // u = (a·x + b·y + c) / (g·x + h·y + 1), v = (d·x + e·y + f) / (g·x + h·y + 1), 8 incógnitas.
+      function homografiaPacb(destino, origem) {
+        const A = [];
+        destino.forEach(([x, y], i) => {
+          const [u, v] = origem[i];
+          A.push([x, y, 1, 0, 0, 0, -x * u, -y * u, u]);
+          A.push([0, 0, 0, x, y, 1, -x * v, -y * v, v]);
+        });
+        for (let c = 0; c < 8; c++) { // Gauss-Jordan com pivô parcial
+          let p = c;
+          for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+          [A[c], A[p]] = [A[p], A[c]];
+          if (Math.abs(A[c][c]) < 1e-9) return null; // 3 cantos em linha: não é uma folha
+          for (let r = 0; r < 8; r++) {
+            if (r === c) continue;
+            const f = A[r][c] / A[c][c];
+            for (let k = c; k < 9; k++) A[r][k] -= f * A[c][k];
+          }
+        }
+        return A.map((linha, i) => linha[8] / linha[i]);
+      }
+      // A folha endireitada no tamanho do formulário (~150 dpi), cada ponto lido da foto (bilinear)
+      async function endireitarFolhaPacb(foto) {
+        const W = 1240, H = Math.round(W * PACB_PAGINA[1] / PACB_PAGINA[0]);
+        const hm = homografiaPacb([[0, 0], [W, 0], [W, H], [0, H]], foto.cantos);
+        if (!hm || hm.some(n => !Number.isFinite(n))) return null;
+        const [a, b, c, d, e, f, g, h] = hm;
+        const sw = foto.canvas.width, sh = foto.canvas.height;
+        const px = foto.canvas.getContext('2d').getImageData(0, 0, sw, sh).data;
+        const out = new ImageData(W, H);
+        const o = out.data;
+        for (let y = 0; y < H; y++) {
+          const yc = y + 0.5;
+          for (let x = 0; x < W; x++) {
+            const xc = x + 0.5;
+            const den = g * xc + h * yc + 1;
+            const u = Math.min(sw - 1.001, Math.max(0, (a * xc + b * yc + c) / den - 0.5));
+            const v = Math.min(sh - 1.001, Math.max(0, (d * xc + e * yc + f) / den - 0.5));
+            const x0 = u | 0, y0 = v | 0, fx = u - x0, fy = v - y0;
+            const i00 = (y0 * sw + x0) * 4, i10 = i00 + 4, i01 = i00 + sw * 4, i11 = i01 + 4;
+            const j = (y * W + x) * 4;
+            for (let k = 0; k < 3; k++) {
+              o[j + k] = (px[i00 + k] * (1 - fx) + px[i10 + k] * fx) * (1 - fy) + (px[i01 + k] * (1 - fx) + px[i11 + k] * fx) * fy;
+            }
+            o[j + 3] = 255;
+          }
+        }
+        const cv = document.createElement('canvas');
+        cv.width = W; cv.height = H;
+        cv.getContext('2d').putImageData(out, 0, 0);
+        const blob = await new Promise(r => cv.toBlob(r, 'image/jpeg', 0.85));
+        return blob ? { tipo: 'foto', bytes: new Uint8Array(await blob.arrayBuffer()), url: URL.createObjectURL(blob) } : null;
+      }
+      async function confirmarCantosPacb() {
+        const alvo = pacb;
+        const base = await endireitarFolhaPacb(alvo.foto);
+        if (pacb !== alvo) return;
+        if (!base) { showToast('Esses pontos não formam uma folha: arraste cada um até um canto da folha.', 'erro'); return; }
+        if (alvo.base && alvo.base.url) URL.revokeObjectURL(alvo.base.url);
+        alvo.base = base;
+        alvo.passo = 3;
+        renderPacb();
       }
       // Acordo pro acompanhamento do card: cópia no aparelho na hora (aparece
       // sem internet) e POST pela fila com o id_envio (reenvio não duplica).
@@ -27748,11 +28092,14 @@
       async function enviarPdfPacb(como) {
         if (!pacb || !pacb.arquivo) return;
         const total = pacbTotalExpositores();
+        const resumo = `${total} expositor${total > 1 ? 'es' : ''} · ${brl(total * PACB_VALOR_EXPOSITOR)}`;
         if (como === 'share') {
           try {
             await navigator.share({
               files: [pacb.arquivo], title: 'Acordo PACB 2026',
-              text: `Acordo PACB 2026 · ${pacb.razao} · ${total} expositor${total > 1 ? 'es' : ''} · ${brl(total * PACB_VALOR_EXPOSITOR)}. Falta só a assinatura da Regional.`,
+              text: pacb.passo === 'cliente'
+                ? `Segue o acordo PACB 2026 (${resumo}) pra assinar no campo do responsável. Pode assinar no próprio PDF ou imprimir, assinar e me mandar uma foto da folha inteira.`
+                : `Acordo PACB 2026 · ${pacb.razao} · ${resumo}. Falta só a assinatura da Regional.`,
             });
           } catch (e) {
             // toque expirado/recusado: baixa, como os outros PDFs do app (shareOrDownloadBlob)
@@ -27777,7 +28124,16 @@
             if (novo >= 0 && pacbTotalExpositores() - pacb.qtd[cod] + novo <= PACB_EXPOSITORES_MAX) pacb.qtd[cod] = novo;
             renderPacb();
           } else if (b.dataset.pacbAvancar != null) avancarPacb();
-          else if (b.dataset.pacbVoltar != null) { pacb.passo -= 1; pacb.redesenhar = false; renderPacb(); }
+          else if (b.dataset.pacbVoltar != null) {
+            // o que veio de fora volta pro passo 1 (lá se importa de novo); na loja, um passo atrás
+            if (pacb.base || pacb.passo === 'foto') { pacb.passo = 1; pacb.base = null; pacb.foto = null; } else pacb.passo -= 1;
+            pacb.redesenhar = false;
+            renderPacb();
+          } else if (b.dataset.pacbRemoto != null) mandarProClientePacb();
+          else if (b.dataset.pacbImportar != null) { const inp = document.getElementById('pacbImportarInput'); inp.value = ''; inp.click(); }
+          else if (b.dataset.pacbDescartarEnvio != null) descartarEnvioPacb();
+          else if (b.dataset.pacbEndireitar != null) confirmarCantosPacb();
+          else if (b.dataset.pacbCantos != null) { pacb.passo = 'foto'; renderPacb(); }
           else if (b.dataset.pacbFechar != null) fecharAcordoPacb(pacb.passo < 4);
           else if (b.dataset.pacbLimpar != null) { if (pacbPad) pacbPad.limpar(); }
           else if (b.dataset.pacbRedesenhar != null) { pacb.redesenhar = true; renderPacb(); }
@@ -27796,6 +28152,7 @@
             renderPacb();
           } else if (e.target.id === 'pacbConcordo') { pacb.concordo = e.target.checked; atualizarBotaoPacb(); }
           else if (e.target.id === 'pacbGuardarRep') pacb.guardarRep = e.target.checked;
+          else if (e.target.id === 'pacbImportarInput') importarAssinadoPacb(e.target.files && e.target.files[0]);
         });
       }
       // Último acordo do cliente: o do /sync (com o faturado) ou, enquanto o
@@ -38707,7 +39064,7 @@
         // o telefone antigo do aparelho (só o número) não sobe pro cadastro de quem entrar depois
         try { localStorage.removeItem(VENDEDOR_TEL_LS_KEY); } catch (e) { }
         // nem a assinatura do representante (acordo PACB) nem os acordos ainda não enviados
-        try { localStorage.removeItem(PACB_ASSINATURA_LS_KEY); localStorage.removeItem(PACB_LOCAIS_LS_KEY); } catch (e) { }
+        try { [PACB_ASSINATURA_LS_KEY, PACB_LOCAIS_LS_KEY, PACB_AGUARDANDO_LS_KEY].forEach(k => localStorage.removeItem(k)); } catch (e) { }
         await apiLogout();
         clearStoredToken();
         try { if (window.google?.accounts?.id) google.accounts.id.disableAutoSelect(); } catch (e) { }
