@@ -1946,6 +1946,16 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   acordo** (`ritmoDoAcordoPacb`); some 30 dias depois do prazo. Acordo feito sem internet aparece na hora (`cortagAcordosPacbLocais_v1`).
   Fora desta versão: assinar com o celular deitado (o app trava em pé no celular) e a foto do expositor instalado. Testado no app local
   (Chromium, tela de celular); o compartilhar do arquivo **não foi testado num celular de verdade**.
+  Classificatório no PDF: o do cadastro e, vazio, o do Salesforce (`classificatorio_salesforce` no `/sync`; RUSSO'S = "Representante").
+  - **Acordo por telefone** (11/2026, pedido do usuário; decisões: foto **endireitada pelos 4 cantos**, **nada no card**, data = a do
+    envio): no passo 1, "Mandar o PDF pro cliente assinar" gera o formulário preenchido sem assinatura nem data de assinatura
+    (`gerarPdfPraClientePacb`) e guarda no aparelho o que espera (`cortagPacbAguardando_v1`, mesmo `id_envio`; abrir o PACB do cliente
+    de novo vem preenchido). "Importar o assinado pelo cliente" aceita o **PDF** (a assinatura do representante vai por cima, posições
+    na proporção da página: `escritorPacb`) ou a **foto do papel**: o vendedor arrasta os 4 cantos da folha (lupa no alto), o app
+    endireita por homografia (`homografiaPacb`/`endireitarFolhaPacb`, A4 ~150 dpi) e a foto vira a página, com a assinatura no lugar
+    certo do formulário. O registro embaixo é trocado ("devolvido assinado em foto do papel/PDF", código de verificação com o hash do
+    que voltou). O acordo só é gravado (acompanhamento no card) depois que o representante assina. Testado no app local com foto
+    simulada (folha girada/inclinada) e PDF; **não testado com foto real de celular** (papel curvo, impressão com margem reduzida).
 
 ## O que já tentamos e não deu certo
 
