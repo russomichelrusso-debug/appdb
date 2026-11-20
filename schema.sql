@@ -823,6 +823,25 @@ CREATE TABLE IF NOT EXISTS ocorrencias_pos_venda (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ocorrencias_id_envio ON ocorrencias_pos_venda (id_envio);
 CREATE INDEX IF NOT EXISTS idx_ocorrencias_cliente ON ocorrencias_pos_venda (cliente_id);
 
+-- Acordo PACB 2026 (expositores perfurados, routes/acordosPacb.js): o formulário é
+-- assinado no celular e o PDF vai pro gerente pelo compartilhar; aqui fica o acordo
+-- pro acompanhamento no card do cliente (faturado de fato nos 6 meses × valor, no
+-- /api/clientes/sync). `id_envio` (gerado no aparelho) = reenvio da fila não duplica.
+CREATE TABLE IF NOT EXISTS acordos_pacb (
+  id SERIAL PRIMARY KEY,
+  cliente_id INTEGER NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
+  data_acordo DATE NOT NULL,
+  qtd_62522 INTEGER NOT NULL DEFAULT 0,
+  qtd_62521 INTEGER NOT NULL DEFAULT 0,
+  valor NUMERIC NOT NULL,
+  responsavel TEXT,
+  usuario_id INTEGER REFERENCES usuarios(id) ON DELETE SET NULL,
+  id_envio TEXT,
+  criado_em TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_acordos_pacb_id_envio ON acordos_pacb (id_envio);
+CREATE INDEX IF NOT EXISTS idx_acordos_pacb_cliente ON acordos_pacb (cliente_id);
+
 -- RLS em TODAS as tabelas do schema (verificador do Supabase: rls_disabled_in_public).
 -- Mesmo motivo do bloco de levantamento_rascunhos acima: fecha o acesso pela API
 -- REST pública do Supabase (PostgREST, roles anon/authenticated); sem política =
@@ -858,3 +877,4 @@ ALTER TABLE titulos_inadimplentes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produto_fotos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE produto_vetores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ocorrencias_pos_venda ENABLE ROW LEVEL SECURITY;
+ALTER TABLE acordos_pacb ENABLE ROW LEVEL SECURITY;

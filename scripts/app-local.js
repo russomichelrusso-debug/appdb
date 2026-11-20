@@ -110,6 +110,7 @@ async function semear() {
 const TIPOS = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json',
   '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.ico': 'image/x-icon',
+  '.pdf': 'application/pdf', // formulário do acordo PACB (modelos/)
 };
 
 const PAGINA_ENTRAR = `<!doctype html><meta charset="utf-8"><title>Entrando…</title><script>
@@ -135,8 +136,9 @@ function servirArquivo(req, res) {
   }
   const arquivo = path.join(raiz, caminho === '/' ? 'index.html' : caminho);
   const tipo = TIPOS[path.extname(arquivo)];
-  // só arquivos da raiz do repo com extensão conhecida (nada de node_modules, .git, ..)
-  if (!tipo || path.dirname(arquivo) !== raiz || !fs.existsSync(arquivo)) {
+  // só arquivos da raiz do repo (e de modelos/) com extensão conhecida (nada de node_modules, .git, ..)
+  const pasta = path.dirname(arquivo);
+  if (!tipo || (pasta !== raiz && pasta !== path.join(raiz, 'modelos')) || !fs.existsSync(arquivo)) {
     res.writeHead(404); return res.end('não encontrado');
   }
   res.writeHead(200, { 'Content-Type': tipo, 'Cache-Control': 'no-store' });

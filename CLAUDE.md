@@ -1929,6 +1929,24 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   no `<head>` aponta pra raiz do app (1ª pasta do caminho no github.io, `/` fora dele) — endereço relativo novo nela funciona.
   Não entra no `sw.js` (sem internet a navegação cai na cópia da página pedida, não aqui).
 
+- **Acordo PACB 2026 (expositores perfurados)** (11/2026, mockups "Cortag · Acordo PACB no app"; formulário da Cortag "PACB 2026 -
+  Expositores Perfurados": R$ 7.500 por expositor 62522/62521, até 2 por CNPJ, compromisso de faturamento líquido em 6 meses).
+  Botão **"PACB"** nas ações do card do cliente (Pedido e Levantamento) abre `#pacbModal` (`abrirAcordoPacb`, `index.html`): 1) dados
+  já preenchidos (razão social, código do ERP, classificatório, data, responsável = comprador dos Contatos, Regional = `gestor` da
+  planilha Classificatório que agora vem no `/sync`, ou a última digitada) e o vendedor só escolhe os expositores; 2) o cliente assina
+  com o dedo + "Li e concordo"; 3) o representante assina (guardada no aparelho, `cortagAssinaturaRep_v1`, sai no logout); 4) o
+  **PDF oficial** (`modelos/pacb-2026-expositores.pdf`, no `STATIC_ASSETS` do `sw.js` v10) é preenchido no aparelho com o
+  **pdf-lib 1.17.1** (SRI, `LIBS_PRECACHE`) por coordenada (`preencherPdfPacb`, posições medidas no arquivo: formulário novo = medir de
+  novo) e sai pelo compartilhar. Decisões do usuário: **tudo preenchido, só a assinatura da Regional em branco** (o gerente assina no
+  PDF e manda pra empresa, fora do app); **sem lembrete de "falta o gerente"** no card. O acordo vai pra `acordos_pacb`
+  (`POST /api/acordos-pacb`, `routes/acordosPacb.js`, fila offline com `id_envio`; entra na mescla de clientes) e o `/sync` manda
+  `acordo_pacb` = o último, com o **faturado de fato do código do cliente** entre a data e +6 meses (mesmo `valor` do relatório oficial
+  que o classificatório usa: não conferido se vem sem IPI/ST). Faixa `.clientePacb` no card (`atualizarPacbClienteBar`): valor,
+  assinado em / vale até, barra, "Faltam R$ X pro acordo" ou "✓ PACB completo", "Atrás do ritmo" pelo ritmo **linear desde a data do
+  acordo** (`ritmoDoAcordoPacb`); some 30 dias depois do prazo. Acordo feito sem internet aparece na hora (`cortagAcordosPacbLocais_v1`).
+  Fora desta versão: assinar com o celular deitado (o app trava em pé no celular) e a foto do expositor instalado. Testado no app local
+  (Chromium, tela de celular); o compartilhar do arquivo **não foi testado num celular de verdade**.
+
 ## O que já tentamos e não deu certo
 
 - **Simplificar o PDF do orçamento removendo o detalhe de IPI/ST** (colunas e linhas de imposto

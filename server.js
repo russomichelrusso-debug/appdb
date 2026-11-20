@@ -28,6 +28,7 @@ const clientesClassificatorioRoutes = require('./routes/clientesClassificatorio'
 const produtosPromocionaisRoutes = require('./routes/produtosPromocionais');
 const recompraRoutes = require('./routes/recompra');
 const ocorrenciasRoutes = require('./routes/ocorrencias');
+const acordosPacbRoutes = require('./routes/acordosPacb');
 const reativacaoRoutes = require('./routes/reativacao');
 const visitasRoutes = require('./routes/visitas');
 const inadimplenciaRoutes = require('./routes/inadimplencia');
@@ -185,6 +186,7 @@ app.use('/api/catalogo-precos', requireAuth, limiteRotasPesadas, catalogoPrecosR
 app.use('/api/produtos-promocionais', requireAuth, limiteRotasPesadas, produtosPromocionaisRoutes);
 app.use('/api/recompra', requireAuth, limiteRotasPesadas, recompraRoutes);
 app.use('/api/ocorrencias', requireAuth, limiteRotasPesadas, ocorrenciasRoutes); // ocorrência no Pós-Vendas (selo no pedido)
+app.use('/api/acordos-pacb', requireAuth, limiteRotasPesadas, acordosPacbRoutes); // acordo PACB (expositores) assinado no app
 app.use('/api/reativacao', requireAuth, limiteRotasPesadas, reativacaoRoutes);
 app.use('/api/visitas', requireAuth, limiteRotasPesadas, visitasRoutes);
 app.use('/api/inadimplencia', requireAuth, limiteRotasPesadas, inadimplenciaRoutes);
