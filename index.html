@@ -27462,7 +27462,9 @@
           codigo: local.codigo_oficial || cliente.codigo_oficial || '',
           classificatorio: local.classificatorio_tipo || cliente.classificatorio_tipo || '',
           passo: 1, qtd: { 62522: 0, 62521: 0 }, data: hojeLocalISO(),
-          responsavel: (comprador && comprador.nome) || '', regional: regional || local.gestor || '',
+          // o gestor do próprio cliente (planilha Classificatório) vale mais que o último digitado
+          responsavel: (comprador && comprador.nome) || '', regional: local.gestor || regional,
+          representante: (state.currentUser && state.currentUser.nome) || '',
           concordo: false, assCliente: null, horaCliente: null, assRep: null, horaRep: null, guardarRep: true, redesenhar: false,
           local: null, arquivo: null, idEnvio: novoIdEnvio(),
         };
@@ -27498,7 +27500,7 @@
           <button type="button" class="pacbLimpar" data-pacb-limpar>Limpar</button>
         </div>`;
       function pacbPodeAvancar() {
-        if (pacb.passo === 1) return pacbTotalExpositores() > 0 && !!pacb.responsavel.trim() && !!pacb.regional.trim() && !!pacb.data;
+        if (pacb.passo === 1) return pacbTotalExpositores() > 0 && !!pacb.responsavel.trim() && !!pacb.representante.trim() && !!pacb.regional.trim() && !!pacb.data;
         if (pacb.passo === 2) return !!pacbPad && !pacbPad.vazio && pacb.concordo;
         if (pacb.passo === 3) return (!pacb.redesenhar && !!lerAssinaturaRep()) || (!!pacbPad && !pacbPad.vazio);
         return false;
@@ -27535,6 +27537,8 @@
             <input type="date" id="pacbData" data-pacb-campo="data" value="${escapeHtml(pacb.data)}" max="${hojeLocalISO()}">
             <label for="pacbResp">Responsável na loja</label>
             <input type="text" id="pacbResp" data-pacb-campo="responsavel" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.responsavel)}">
+            <label for="pacbRep">Representante comercial</label>
+            <input type="text" id="pacbRep" data-pacb-campo="representante" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.representante)}">
             <label for="pacbRegional">Regional de Vendas Cortag</label>
             <input type="text" id="pacbRegional" data-pacb-campo="regional" maxlength="100" autocomplete="off" value="${escapeHtml(pacb.regional)}">`;
           rodape = '<button type="button" data-pacb-fechar>Cancelar</button><button type="button" data-pacb-avancar>Ir pras assinaturas</button>';
@@ -27556,7 +27560,7 @@
           rodape = '<button type="button" data-pacb-voltar>Voltar</button><button type="button" data-pacb-avancar>Confirmar assinatura</button>';
         } else if (p === 3) {
           const salva = !pacb.redesenhar && lerAssinaturaRep();
-          const nome = (state.currentUser && state.currentUser.nome) || 'Representante';
+          const nome = pacb.representante.trim();
           corpo = `<div class="pacbBloco" style="background:var(--success-bg);color:var(--success);">✓ ${escapeHtml(pacb.responsavel)} assinou às ${escapeHtml(pacb.horaCliente || '')}</div>
             <div class="ocTitulo" style="margin-bottom:6px;">${escapeHtml(nome)} · representante comercial</div>
             ${salva ? `<img class="pacbAssinaturaSalva" src="${salva.png}" alt="Sua assinatura guardada neste aparelho">
@@ -27627,9 +27631,9 @@
             : 'Não deu pra montar o PDF do acordo: ' + e.message, 'erro');
           return;
         }
-        if (pacb !== alvo) return;
-        renderPacb();
+        // assinado pelos dois: grava mesmo se a janela foi fechada durante a geração
         gravarAcordoPacb(alvo);
+        if (pacb === alvo) renderPacb();
       }
       async function gerarPdfAcordoPacb(a) {
         await carregarPdfLib();
@@ -27641,7 +27645,7 @@
         } catch (e) { throw new Error('modelo'); }
         const dataBr = formatDateBr(a.data);
         const hoje = formatDateBr(hojeLocalISO());
-        const representante = (state.currentUser && state.currentUser.nome) || '';
+        const representante = a.representante.trim();
         const dados = {
           razao: a.razao, codigo: a.codigo, classificatorio: a.classificatorio, data: dataBr,
           q62522: a.qtd[62522], q62521: a.qtd[62521],
@@ -27731,8 +27735,8 @@
             // recusa de verdade: a cópia local sai, senão o card mostraria um acordo que o servidor não tem
             gravarListaLS(PACB_LOCAIS_LS_KEY, lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => x.id_envio !== a.idEnvio));
             repintar();
-          } else if (!e.semEspacoNaFila && (e.status || 0) >= 500) {
-            // servidor fora do ar/acordando: a fila tenta de novo com o mesmo id_envio
+          } else if (!e.semEspacoNaFila) {
+            // servidor fora do ar/acordando, limite por minuto, falha passageira (400): a fila tenta de novo com o mesmo id_envio
             const fila = loadSyncQueue();
             fila.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2), path: '/api/acordos-pacb', options, criadoEm: Date.now(), ...filaInfo });
             guardado = saveSyncQueueList(fila);
@@ -27782,7 +27786,7 @@
         modal.addEventListener('input', (e) => {
           if (!pacb) return;
           const campo = e.target.dataset.pacbCampo;
-          if (campo === 'responsavel' || campo === 'regional') { pacb[campo] = e.target.value; atualizarBotaoPacb(); }
+          if (campo === 'responsavel' || campo === 'representante' || campo === 'regional') { pacb[campo] = e.target.value; atualizarBotaoPacb(); }
         });
         modal.addEventListener('change', (e) => {
           if (!pacb) return;
@@ -27803,7 +27807,8 @@
         const id = String(cliente.id);
         if (!acordoPacbPorId) acordoPacbPorId = new Map(loadClientesLocais().filter(c => c.acordo_pacb).map(c => [String(c.id), c.acordo_pacb]));
         const doSync = acordoPacbPorId.get(id) || null;
-        const local = lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => String(x.cliente_id) === id)
+        // cópia de mais de 30 dias que o /sync nunca trouxe = o servidor recusou (fila): não mostra
+        const local = lerListaLS(PACB_LOCAIS_LS_KEY).filter(x => String(x.cliente_id) === id && x.criado > Date.now() - 30 * 86400000)
           .sort((x, y) => String(y.data).localeCompare(String(x.data)) || y.criado - x.criado)[0] || null;
         if (local && (!doSync || local.data > doSync.data)) return local;
         return doSync;
