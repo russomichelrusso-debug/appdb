@@ -27520,8 +27520,9 @@
           () => { }, { enableHighAccuracy: true, timeout: 8000, maximumAge: 120000 });
       }
       async function fecharAcordoPacb(perguntar) {
-        if (perguntar && pacb && pacb.passo > 1 && pacb.passo < 4
+        if (perguntar && pacb && ((pacb.passo > 1 && pacb.passo < 4) || pacb.passo === 'foto')
           && !await askConfirm('Descartar este acordo? As assinaturas feitas até aqui se perdem.', 'Descartar', { cancelarLabel: 'Continuar' })) return;
+        soltarBasePacb(pacb);
         document.getElementById('pacbModal').classList.add('hidden');
         pacb = null;
         pacbPad = null;
@@ -27707,7 +27708,10 @@
         }
         // assinado pelos dois: grava mesmo se a janela foi fechada durante a geração
         gravarAcordoPacb(alvo);
-        if (alvo.base) gravarListaLS(PACB_AGUARDANDO_LS_KEY, lerListaLS(PACB_AGUARDANDO_LS_KEY).filter(x => x.idEnvio !== alvo.idEnvio));
+        // fechado (na loja ou importado): o "esperando" sai, senão o mesmo id_envio voltaria num acordo novo e o servidor o descartaria
+        gravarListaLS(PACB_AGUARDANDO_LS_KEY, lerListaLS(PACB_AGUARDANDO_LS_KEY)
+          .filter(x => x.idEnvio !== alvo.idEnvio && String(x.clienteId) !== String(alvo.clienteId)));
+        if (alvo.base && alvo.base.url) { URL.revokeObjectURL(alvo.base.url); alvo.base.url = null; } // o passo 4 ainda lê o tipo
         if (pacb === alvo) renderPacb();
       }
       async function modeloPacb() {
@@ -27863,13 +27867,20 @@
             : 'Não deu pra montar o PDF do acordo: ' + e.message, 'erro');
           return;
         }
-        // fica esperando neste aparelho (mesmo id_envio): abrir o PACB do cliente de novo já vem preenchido
+        if (pacb === alvo) renderPacb();
+      }
+      // Só depois de mandar/salvar de verdade: fica esperando neste aparelho (mesmo id_envio) e abrir o
+      // PACB do cliente de novo já vem preenchido. Guarda data e expositores pra conferir na importação.
+      function marcarMandadoPacb(alvo) {
         alvo.enviadoEm = hojeLocalISO();
         const esperando = { clienteId: alvo.clienteId, data: alvo.data, qtd: { ...alvo.qtd }, responsavel: alvo.responsavel, representante: alvo.representante,
           regional: alvo.regional, idEnvio: alvo.idEnvio, enviadoEm: alvo.enviadoEm, criado: Date.now() };
         gravarListaLS(PACB_AGUARDANDO_LS_KEY, [...lerListaLS(PACB_AGUARDANDO_LS_KEY)
           .filter(x => String(x.clienteId) !== String(alvo.clienteId) && x.criado > Date.now() - 120 * 86400000), esperando]);
-        if (pacb === alvo) renderPacb();
+      }
+      function soltarBasePacb(a) {
+        if (a && a.base && a.base.url) URL.revokeObjectURL(a.base.url);
+        if (a) { a.base = null; a.foto = null; }
       }
       async function descartarEnvioPacb() {
         if (!await askConfirm('Descartar o PDF mandado pro cliente? Se ele devolver assinado depois, dá pra importar preenchendo o acordo de novo.', 'Descartar', { cancelarLabel: 'Manter' })) return;
@@ -27882,6 +27893,12 @@
       async function importarAssinadoPacb(file) {
         if (!pacb || !file) return;
         const alvo = pacb;
+        // o papel assinado diz o que foi mandado: mudou expositores/data depois = mandar de novo antes
+        const mandado = alvo.enviadoEm && lerListaLS(PACB_AGUARDANDO_LS_KEY).find(x => x.idEnvio === alvo.idEnvio);
+        if (mandado && (mandado.data !== alvo.data || mandado.qtd[62522] !== alvo.qtd[62522] || mandado.qtd[62521] !== alvo.qtd[62521])) {
+          showToast('Você mudou os expositores ou a data depois de mandar: o papel do cliente está diferente. Toque em "Mandar o PDF de novo".', 'erro');
+          return;
+        }
         const ehPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name);
         if (ehPdf) {
           try {
@@ -27889,6 +27906,9 @@
             const bytes = new Uint8Array(await file.arrayBuffer());
             const doc = await window.PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
             if (!doc.getPageCount()) throw new Error('vazio');
+            // assinatura digital (gov.br, certificado) ou senha: regravar o PDF invalida/corrompe
+            const especial = doc.isEncrypted || /\/ByteRange|\/Type\s*\/Sig\b/.test(new TextDecoder('latin1').decode(bytes));
+            if (especial && !await askConfirm('Esse PDF tem assinatura digital ou senha. Assinando por cima, a assinatura digital do cliente deixa de valer: mande também o PDF original dele ao gerente, ou peça uma foto da folha.', 'Assinar mesmo assim', { cancelarLabel: 'Cancelar' })) return;
             if (pacb !== alvo) return;
             alvo.base = { tipo: 'pdf', bytes, nome: file.name };
           } catch (e) {
@@ -28101,13 +28121,19 @@
                 ? `Segue o acordo PACB 2026 (${resumo}) pra assinar no campo do responsável. Pode assinar no próprio PDF ou imprimir, assinar e me mandar uma foto da folha inteira.`
                 : `Acordo PACB 2026 · ${pacb.razao} · ${resumo}. Falta só a assinatura da Regional.`,
             });
+            if (pacb.passo === 'cliente') marcarMandadoPacb(pacb);
           } catch (e) {
             // toque expirado/recusado: baixa, como os outros PDFs do app (shareOrDownloadBlob)
-            if (e && e.name !== 'AbortError') { baixarBlob(pacb.arquivo, pacb.arquivo.name); showToast('PDF salvo no aparelho: anexe no WhatsApp ou no e-mail'); }
+            if (e && e.name !== 'AbortError') {
+              baixarBlob(pacb.arquivo, pacb.arquivo.name);
+              showToast('PDF salvo no aparelho: anexe no WhatsApp ou no e-mail');
+              if (pacb.passo === 'cliente') marcarMandadoPacb(pacb);
+            }
           }
           return;
         }
         baixarBlob(pacb.arquivo, pacb.arquivo.name);
+        if (pacb.passo === 'cliente') marcarMandadoPacb(pacb);
       }
       let pacbIniciado = false;
       function initAcordoPacb() {
@@ -28126,7 +28152,7 @@
           } else if (b.dataset.pacbAvancar != null) avancarPacb();
           else if (b.dataset.pacbVoltar != null) {
             // o que veio de fora volta pro passo 1 (lá se importa de novo); na loja, um passo atrás
-            if (pacb.base || pacb.passo === 'foto') { pacb.passo = 1; pacb.base = null; pacb.foto = null; } else pacb.passo -= 1;
+            if (pacb.base || pacb.passo === 'foto') { pacb.passo = 1; soltarBasePacb(pacb); } else pacb.passo -= 1;
             pacb.redesenhar = false;
             renderPacb();
           } else if (b.dataset.pacbRemoto != null) mandarProClientePacb();
