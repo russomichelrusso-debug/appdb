@@ -15992,6 +15992,7 @@
       function linhasDaListaCliente(texto, modoPdf) {
         const brutas = String(texto || '').split(/\r?\n/)
           .map(l => l.replace(PREFIXO_WHATSAPP_LISTA, '').replace(/^\s*(\[\s*\]|[-*•·>–—☐□]+)\s*/, '').trim()).filter(Boolean);
+        if (modoPdf && brutas.some(l => CABECALHO_ORCAMENTO_APP.test(normalize(l)))) return linhasDoOrcamentoDoApp(brutas);
         const numeradas = brutas.map(l => (l.match(/^(\d{1,3})\s*[).\-–]\s+\S/) || [])[1]).filter(Boolean).map(Number);
         const emSequencia = numeradas.length >= 2 && numeradas.every((n, i) => n === i + 1);
         const linhas = [];
@@ -16010,6 +16011,36 @@
           if (item) linhas.push(item);
         }
         return linhas;
+      }
+      // Orçamento em PDF feito pelo próprio app (generateQuotePDF, "Item Descrição Qtd. Un. R$ Venda ..."), devolvido
+      // pelo cliente (11/2026, relato do usuário: "não interpreta o próprio PDF gerado pelo app"). O cabeçalho não
+      // casava com o de pedido (a quantidade vem depois da descrição) e cada pedaço do nome que quebra de linha virava
+      // um item ("MADEIRA 110mm (*)", o "Imp." do cabeçalho, o recado do ICMS-ST). Aqui: a linha com o código Cortag na
+      // 1ª coluna e "N Un" é o item (o código acha o produto); a linha sem código logo depois é o resto do nome;
+      // o resto do documento (emitente, quadro do cliente, totais, avisos) fica de fora.
+      const CABECALHO_ORCAMENTO_APP = /^item descricao qtd\b.*\bun\b.*\bvenda\b/;
+      const LINHA_ORCAMENTO_APP = /^([A-Za-z]{0,2}\d{4,7})\s+(.+?)\s+(\d{1,6})\s+Un\s+[\d.,]+/;
+      function linhasDoOrcamentoDoApp(brutas) {
+        const itens = [];
+        let naTabela = false, ultimo = null;
+        const semMarca = (t) => t.replace(/\s*\(\*+\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+        for (const l of brutas) {
+          const n = normalize(l).trim();
+          if (CABECALHO_ORCAMENTO_APP.test(n)) { naTabela = true; ultimo = null; continue; } // repete em cada página
+          if (!naTabela) continue;
+          if (/^(numero de produtos|r\$ total)\b/.test(n)) { naTabela = false; ultimo = null; continue; }
+          const m = l.match(LINHA_ORCAMENTO_APP);
+          if (m) {
+            const desc = semMarca(m[2]), qtd = +m[3];
+            ultimo = { texto: desc, termo: termoDasPalavrasLista(palavrasDaLinhaLista(desc)), qtd: qtd > 0 ? qtd : null, unidade: null, talvez: false, codigos: [m[1].toUpperCase()] };
+            itens.push(ultimo);
+          } else if (ultimo) {
+            // nome que quebrou de linha: só junta o texto (o produto sai pelo código)
+            ultimo.texto = semMarca(ultimo.texto + ' ' + l);
+            ultimo.termo = termoDasPalavrasLista(palavrasDaLinhaLista(ultimo.texto));
+          }
+        }
+        return itens;
       }
       // Cabeçalho da tabela do pedido/orçamento do cliente ("Qtde Código Ref. Produto Marca"): diz
       // em que coluna está a quantidade e onde começa a descrição. As colunas antes dela são número
