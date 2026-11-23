@@ -14133,7 +14133,7 @@
       </div>
       <input type="file" id="lcFotoInput" accept="image/*" multiple style="display:none" aria-hidden="true" tabindex="-1">
       <input type="file" id="lcEtiquetaInput" accept="image/*" capture="environment" style="display:none" aria-hidden="true" tabindex="-1">
-      <input type="file" id="lcPdfInput" accept="application/pdf,.pdf,.csv,text/csv,text/comma-separated-values" style="display:none" aria-hidden="true" tabindex="-1">
+      <input type="file" id="lcPdfInput" accept="application/pdf,.pdf,.csv,text/csv,text/comma-separated-values,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none" aria-hidden="true" tabindex="-1">
     </div>
 
     <!-- Ocorrência no Pós-Vendas: assistente em 4 passos + revisão (initOcorrencia) -->
@@ -16065,20 +16065,33 @@
         if (!brutas.length) return [];
         const conta = (c) => (brutas[0].match(new RegExp(c === '\t' ? '\t' : '\\' + c, 'g')) || []).length;
         const sep = [';', '\t', ','].sort((a, b) => conta(b) - conta(a))[0];
-        const linhas = brutas.map(l => camposDoCsvLista(l, sep));
-        const cab = linhas[0].map(c => normalize(c).trim());
-        const col = (re, fora) => cab.findIndex(c => re.test(c) && !(fora && fora.test(c)));
-        let cCod = col(/\b(cod|codigo|sku)\b/); // "Ref." costuma ser o código do próprio cliente: não é código Cortag
-        const cQtd = col(/\b(qtd|qtde|qt|quant|quantidade)\b/);
-        const cDesc = col(/\b(descricao|produto|nome|discriminacao)\b/, /\b(cod|codigo)\b/);
-        if (cCod < 0 && cDesc < 0) cCod = col(/^item$/);
-        if (cCod < 0 && cDesc < 0) return linhasDaListaCliente(linhas.map(c => c.join(' ')).join('\n'));
+        return linhasDaPlanilhaLista(brutas.map(l => camposDoCsvLista(l, sep)));
+      }
+      // Linhas de planilha (CSV ou Excel, uma lista de células por linha) -> itens. O cabeçalho é a 1ª das 15
+      // primeiras linhas com coluna de código ou de descrição (planilha de cliente costuma ter título e dados da
+      // loja em cima); as linhas de total no fim ficam de fora.
+      function linhasDaPlanilhaLista(linhas) {
+        linhas = linhas.map(c => c.map(v => String(v == null ? '' : v).trim())).filter(c => c.some(Boolean));
+        if (!linhas.length) return [];
+        let iCab = -1, cCod = -1, cQtd = -1, cDesc = -1;
+        for (let i = 0; i < Math.min(15, linhas.length) && iCab < 0; i++) {
+          const cab = linhas[i].map(c => normalize(c).trim());
+          if (cab.filter(Boolean).length < 2) continue;
+          const col = (re, fora) => cab.findIndex(c => re.test(c) && !(fora && fora.test(c)));
+          let cod = col(/\b(cod|codigo|sku)\b/); // "Ref." costuma ser o código do próprio cliente: não é código Cortag
+          const desc = col(/\b(descricao|produto|nome|discriminacao)\b/, /\b(cod|codigo)\b/);
+          if (cod < 0 && desc < 0) cod = col(/^item$/);
+          if (cod < 0 && desc < 0) continue;
+          iCab = i; cCod = cod; cDesc = desc; cQtd = col(/\b(qtd|qtde|qt|quant|quantidade)\b/);
+        }
+        if (iCab < 0) return linhasDaListaCliente(linhas.map(c => c.filter(Boolean).join(' ')).join('\n'));
         const numero = (v) => { const t = String(v || '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'); const n = Number(t); return n > 0 ? Math.round(n) : null; };
         const itens = [];
-        for (const c of linhas.slice(1)) {
+        for (const c of linhas.slice(iCab + 1)) {
           const cod = cCod >= 0 ? String(c[cCod] || '').replace(/\s+/g, '') : '';
           const desc = cDesc >= 0 ? String(c[cDesc] || '').trim() : '';
           if (!cod && !desc) continue;
+          if (!cod && /^(sub)?total\b|^valor total|^numero de produtos/.test(normalize(desc))) continue;
           const qtd = cQtd >= 0 ? numero(c[cQtd]) : null;
           const codigos = /^[A-Za-z]{0,2}\d{4,7}$|^\d{8,14}$/.test(cod) ? [cod.toUpperCase()] : [];
           let item = desc ? linhaComQuantidadeLista(desc, qtd, null) : null;
@@ -36823,7 +36836,7 @@
           linhas.push(l);
         }
         if (!linhas.length) {
-          showToast(`Não achei produto do catálogo ${origem === 'pdf' ? 'nesse PDF' : origem === 'csv' ? 'nesse CSV' : 'nessa lista'}.`, 'erro');
+          showToast(`Não achei produto do catálogo ${origem === 'pdf' ? 'nesse PDF' : origem === 'csv' ? 'nesse CSV' : origem === 'excel' ? 'nessa planilha' : 'nessa lista'}.`, 'erro');
           lc = { ...(lc || {}), fase: 'entrada', abortar: null };
           renderListaCliente();
           return;
@@ -37179,6 +37192,29 @@
           showToast('Não deu pra abrir essa imagem.', 'erro');
           // etiqueta não volta pra tela da lista (Colar texto/PDF): o modo e o destino dela seguiriam ligados
           if (lc) { lc = lc.modo === 'etiqueta' ? { ...lc, fase: 'erroLeitura', erro: 'Não deu pra abrir essa foto. Tire outra.', imagens: null } : { ...lc, fase: 'entrada' }; renderListaCliente(); }
+        }
+      }
+      const ehExcelLista = (f) => /\.(xlsx|xls)$/i.test((f && f.name) || '') || /spreadsheetml|ms-excel/i.test((f && f.type) || '');
+      // Excel: a aba que der mais itens (planilha do cliente, orçamento salvo em .xlsx). O SheetJS vem da CDN na 1ª
+      // vez e o sw.js guarda (LIBS): depois abre sem internet
+      async function lcExcelEscolhido(arquivo) {
+        if (!arquivo || !lc) return;
+        const g = lcGeracao;
+        try {
+          const XLSX = await loadSheetJs();
+          const wb = XLSX.read(await arquivo.arrayBuffer(), { type: 'array' });
+          if (lcVelha(g)) return;
+          let itens = [];
+          for (const nome of wb.SheetNames) {
+            const linhas = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: false, defval: '' });
+            const daAba = linhasDaPlanilhaLista(linhas);
+            if (daAba.length > itens.length) itens = daAba;
+          }
+          if (!itens.length) { showToast('Não achei linhas de produto nessa planilha.', 'erro'); return; }
+          await conferirItensDaLista(itens, 'excel', { pistas: { cnpjs: [] } });
+        } catch (e) {
+          if (lcVelha(g)) return;
+          showToast(e && e.message === 'load-error' ? 'Sem internet pra abrir a 1ª planilha — tente com sinal.' : 'Não deu pra abrir essa planilha.', 'erro');
         }
       }
       const ehCsvLista = (f) => /\.(csv|txt)$/i.test((f && f.name) || '') || /csv|text\/plain/i.test((f && f.type) || '');
@@ -38353,7 +38389,7 @@
       function dicaCompartilharLista() {
         if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) return 'No iPhone: no WhatsApp, segure a mensagem › Copiar (ou salve a foto/PDF) e use os botões acima.';
         const instalado = window.matchMedia && matchMedia('(display-mode: standalone)').matches;
-        return instalado ? 'Atalho: no WhatsApp, segure a mensagem, foto, PDF ou CSV › Compartilhar › Cortag.'
+        return instalado ? 'Atalho: no WhatsApp, segure a mensagem, foto, PDF, CSV ou planilha › Compartilhar › Cortag.'
           : 'Com o app instalado, dá pra mandar direto do WhatsApp: segure a mensagem › Compartilhar › Cortag.';
       }
       const totalDaListaCliente = (incl) => incl.reduce((s, l) => { const p = productByCod(l.cod); return s + (p ? precoUnitarioSemImpostos(p) * l.qtd : 0); }, 0);
@@ -38376,11 +38412,11 @@
         if (lc.fase === 'entrada') {
           titulo.textContent = 'Colar lista do cliente';
           sub.textContent = state.levCliente ? state.levCliente.nome : '';
-          corpo.innerHTML = `<p class="lcDica">Texto, foto do orçamento, PDF, CSV ou falado, do jeito que o cliente mandou. O app acha cada produto e você confere antes de entrar no orçamento.</p>
+          corpo.innerHTML = `<p class="lcDica">Texto, foto do orçamento, PDF, CSV, Excel ou falado, do jeito que o cliente mandou. O app acha cada produto e você confere antes de entrar no orçamento.</p>
             <div class="lcFontes">
               <button type="button" class="lcFonte" id="lcColarBtn"><span aria-hidden="true">📋</span>Colar texto</button>
               <button type="button" class="lcFonte" id="lcFotoBtn"><span aria-hidden="true">📷</span>Foto ou print</button>
-              <button type="button" class="lcFonte" id="lcPdfBtn"><span aria-hidden="true">📄</span>PDF ou CSV</button>
+              <button type="button" class="lcFonte" id="lcPdfBtn"><span aria-hidden="true">📄</span>PDF, CSV ou Excel</button>
               ${SpeechRecognitionCtor ? '<button type="button" class="lcFonte" id="lcFalarBtn"><span aria-hidden="true">🎤</span>Falar a lista</button>' : ''}
             </div>
             <label class="lcRotulo" for="lcTexto">Mensagem do cliente</label>
@@ -38478,7 +38514,7 @@
         titulo.textContent = etiqueta ? 'Conferir etiqueta' : praLev ? 'Conferir falas' : falada ? 'Conferir lista falada' : 'Conferir lista';
         const ls = lc.linhas;
         sub.textContent = lc.rotulo || (etiqueta ? `${ls.length} produto${ls.length === 1 ? '' : 's'} lido${ls.length === 1 ? '' : 's'} na foto${praLev ? ' · soma no estoque' : ''}`
-          : `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'csv' ? 'do CSV' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`);
+          : `${ls.length} linha${ls.length === 1 ? '' : 's'} ${lc.origem === 'pdf' ? 'do PDF' : lc.origem === 'csv' ? 'do CSV' : lc.origem === 'excel' ? 'da planilha' : lc.origem === 'foto' ? 'da foto' : 'da mensagem'}${lc.ignoradas ? ` · ${lc.ignoradas} sem produto ignorada${lc.ignoradas > 1 ? 's' : ''}` : ''}`);
         const escolher = [], nao = [], ajustadas = [], prontas = [];
         ls.forEach((l, i) => {
           if (l.estado === 'escolher') escolher.push(i);
@@ -38582,7 +38618,9 @@
         const pdf = arquivos.find(a => /pdf/i.test(a.tipo) || /\.pdf$/i.test(a.nome || ''));
         const imagens = arquivos.filter(a => /^image\//i.test(a.tipo));
         const csv = arquivos.find(a => /csv/i.test(a.tipo) || /\.csv$/i.test(a.nome || ''));
+        const excel = arquivos.find(a => ehExcelLista({ name: a.nome, type: a.tipo }));
         if (pdf) lcPdfEscolhido(pdf.blob);
+        else if (excel) lcExcelEscolhido(new File([excel.blob], excel.nome || 'lista.xlsx', { type: excel.tipo }));
         else if (csv) lcCsvEscolhido(new File([csv.blob], csv.nome || 'lista.csv', { type: 'text/csv' }));
         else if (imagens.length) lcFotosEscolhidas(imagens.map(a => a.blob));
         else if (reg.texto) {
@@ -38626,7 +38664,7 @@
           renderListaCliente();
         });
         fotoInput.addEventListener('change', () => { const f = fotoInput.files; if (f && f.length) lcFotosEscolhidas(f); fotoInput.value = ''; });
-        pdfInput.addEventListener('change', () => { const f = pdfInput.files && pdfInput.files[0]; if (f) (ehCsvLista(f) ? lcCsvEscolhido : lcPdfEscolhido)(f); pdfInput.value = ''; });
+        pdfInput.addEventListener('change', () => { const f = pdfInput.files && pdfInput.files[0]; if (f) (ehExcelLista(f) ? lcExcelEscolhido : ehCsvLista(f) ? lcCsvEscolhido : lcPdfEscolhido)(f); pdfInput.value = ''; });
         modal.addEventListener('click', async (e) => {
           if (!lc) return;
           const t = e.target.closest('button, [data-lc-fechar]');

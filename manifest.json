@@ -45,7 +45,11 @@
             ".pdf",
             "text/csv",
             "text/comma-separated-values",
-            ".csv"
+            ".csv",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            ".xlsx",
+            ".xls"
           ]
         }
       ]
