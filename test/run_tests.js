@@ -5069,6 +5069,24 @@ async function main() {
           && resApp[1] === 'P62164|1|CORTADOR ELETRICO ZAPP 1250 TITAN - 220V' && resApp[2] === '61362|12|CORTADOR HD 150'
           && ctxL.produtoDaLinhaLista(doApp[0], { porCodigo }).produto.c === '60864',
           `lista do cliente: PDF do orçamento do app lido pelo código e quantidade de cada linha: ${JSON.stringify(resApp)}`);
+        // CSV (11/2026): o do app ("Código do Item;Quantidade;Preço") pelo código, e planilha do cliente pelas colunas
+        const csvApp = ctxL.linhasDoCsvLista('\uFEFFCódigo do Item;Quantidade;Preço\r\n60864;5;41,63\r\nP62164;1;8676,86\r\n');
+        const csvCli = ctxL.linhasDoCsvLista('Ref,Descrição,Qtde,Valor\n3893,"COLHER PEDREIRO 8"" OVAL",12,"1.234,50"\n,CORTADOR HD 150,"1.000",10');
+        const csvSem = ctxL.linhasDoCsvLista('cortador hd 150;3');
+        const resCsv = [...csvApp, ...csvCli, ...csvSem].map(l => [l.codigos.join(','), l.qtd, l.texto].join('|'));
+        assert(resCsv.length === 5 && resCsv[0] === '60864|5|60864' && resCsv[1] === 'P62164|1|P62164'
+          && ctxL.produtoDaLinhaLista(csvApp[0], { porCodigo }).produto.c === '60864'
+          && csvCli[0].qtd === 12 && !csvCli[0].codigos.includes('3893') && /COLHER PEDREIRO 8" OVAL/.test(csvCli[0].texto) && csvCli[1].qtd === 1000
+          && csvSem[0].qtd === 3 && ctxL.produtoDaLinhaLista(csvSem[0], { porCodigo }).produto.c === '61362',
+          `lista do cliente: CSV do app pelo código e CSV do cliente pelas colunas (preço fora): ${JSON.stringify(resCsv)}`);
+        // Excel (linhas de células): título e dados da loja em cima do cabeçalho, linha de total no fim
+        const plan = ctxL.linhasDaPlanilhaLista([['PEDIDO DE COMPRA'], ['Loja: J C Comercio', '', 'Data: 23/11/2026'], [],
+          ['Item', 'Código', 'Descrição', 'Qtd', 'Valor'], ['1', '60864', 'LAMINA SERRA 24 DENTES', '5', '41,63'],
+          ['2', '', 'cortador hd 150', '2', '217,42'], ['', '', 'Total', '7', '425,99']]);
+        const resPlan = plan.map(l => [l.codigos.join(','), l.qtd, l.texto].join('|'));
+        assert(resPlan.length === 2 && resPlan[0] === '60864|5|LAMINA SERRA 24 DENTES' && plan[1].qtd === 2
+          && ctxL.produtoDaLinhaLista(plan[1], { porCodigo }).produto.c === '61362',
+          `lista do cliente: planilha com título em cima acha o cabeçalho e deixa o total de fora: ${JSON.stringify(resPlan)}`);
         const cods = ctxL.linhasDaListaCliente('Colher pedreiro 60162\nbatedor P60876\n60876 batedor argamassa 4');
         assert(cods.map(l => l.qtd).join(',') === ',,4' && cods[1].codigos.join() === 'P60876' && cods[2].termo === 'batedor argamassa',
           `lista do cliente: código não é quantidade nem palavra da busca: ${JSON.stringify(cods.map(l => [l.termo, l.qtd]))}`);

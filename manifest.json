@@ -42,7 +42,14 @@
           "accept": [
             "image/*",
             "application/pdf",
-            ".pdf"
+            ".pdf",
+            "text/csv",
+            "text/comma-separated-values",
+            ".csv",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-excel",
+            ".xlsx",
+            ".xls"
           ]
         }
       ]
