@@ -38220,8 +38220,12 @@
         return achados.map(p => `<button type="button" class="lcOpcao" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}">${escapeHtml(p.n)}<small>${escapeHtml(p.c)}</small></button>`).join('');
       }
       function htmlLinhaEscolher(i, l) {
-        const rotulos = rotulosDistintosLista(l.opcoes);
-        const opcoes = l.opcoes.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${lc.comprados.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
+        // escolhido pela "Buscar outro produto" (fora das opções da leitura): entra marcado na frente. Sem isso o
+        // produto ficava escolhido mas nenhuma opção marcada, e parecia que o toque não tinha pegado (11/2026)
+        const escolhido = l.cod && !l.opcoes.some(p => p.c === l.cod) ? productByCod(l.cod) : null;
+        const lista = escolhido ? [escolhido, ...l.opcoes] : l.opcoes;
+        const rotulos = rotulosDistintosLista(lista);
+        const opcoes = lista.map((p, k) => `<button type="button" class="lcOpcao${l.cod === p.c ? ' sel' : ''}" data-lc-op="${i}" data-cod="${escapeHtml(p.c)}" title="${escapeHtml(p.n)}" aria-pressed="${l.cod === p.c}">${escapeHtml(rotulos[k])}${lc.comprados.has(p.c) ? '<em>já compra</em>' : ''}</button>`).join('');
         return `<div class="lcLinha${l.fora ? ' fora' : ''}">
           <div class="lcTopoLinha"><span class="lcOriginal">${ouviDaLinha(l)}“${escapeHtml(l.item.texto)}”${campoDaLinhaLista(l)}</span>${htmlRefalarLinha(i)}${l.cod && !l.fora ? htmlStepperLista(i, l) : `<b>${l.item.qtd != null && !l.medida ? escapeHtml(String(l.item.qtd)) + (l.item.unidade ? ' ' + l.item.unidade : '') : ''}</b>`}</div>
           <div class="lcOpcoes">${opcoes}</div>
