@@ -28,7 +28,8 @@
 // v9 (11/2026): reconhecedor-worker.js (o reconhecedor por foto roda num worker; precisa abrir sem internet).
 // v10 (11/2026): modelos/pacb-2026-expositores.pdf (formulário do acordo PACB, preenchido sem internet).
 // Trocar o PDF do formulário = subir a versão (ele é servido do cache primeiro, como os ícones).
-const CACHE_VERSION = 'cortag-sw-v10';
+// v11 (11/2026): manifest aceita CSV no Compartilhar (lista do cliente lê o CSV do orçamento/pedido).
+const CACHE_VERSION = 'cortag-sw-v11';
 // Página/script do app com sinal fraco: espera a rede só até aqui e abre com a
 // cópia guardada (a rede termina em segundo plano e atualiza a cópia). Antes
 // esperava até o navegador desistir - o app demorava a abrir dentro da loja.

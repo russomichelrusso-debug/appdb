@@ -42,7 +42,10 @@
           "accept": [
             "image/*",
             "application/pdf",
-            ".pdf"
+            ".pdf",
+            "text/csv",
+            "text/comma-separated-values",
+            ".csv"
           ]
         }
       ]
