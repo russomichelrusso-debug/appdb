@@ -5056,6 +5056,19 @@ async function main() {
         assert(vaz.map(l => l.qtd + l.unidade).join(',') === '6un,6un,2cx,12un' && !/1477|7356/.test(vaz.map(l => l.termo).join()),
           `lista do cliente: "UN 6,00" do PDF é a quantidade: ${JSON.stringify(vaz.map(l => [l.termo, l.qtd, l.unidade]))}`);
         // código do produto na linha nunca vira quantidade (achado do revisor-cortag: "colher 60162" ia com 60162 un.)
+        // orçamento em PDF do próprio app (generateQuotePDF), devolvido pelo cliente (11/2026): o nome que quebra de linha
+        // não vira item, nem o "Imp." do cabeçalho, o quadro do cliente, os totais ou o recado do ICMS-ST
+        const doApp = ctxL.linhasDaListaCliente(['Orçamento', 'Cliente J C COMERCIO DE MATS', 'CNPJ 12.345.678/0001-90 Cond. Pagto. 28 dias',
+          'Item Descrição Qtd. Un. R$ Venda R$ Total R$ IPI R$ ST R$ Unit. c/ R$ Total c/ Imp.', 'Imp.',
+          '60864 LAMINA DE SERRA CIRCULAR P/ 5 Un 41,63 208,15 0,00 0,00 41,63 208,15', 'MADEIRA 24 DENTES Ø 110 mm (*)',
+          'P62164 CORTADOR ELETRICO ZAPP 1250 1 Un 8.676,86 8.676,86 0,00 0,00 8.676,86 8.676,86', 'TITAN - 220V',
+          '61362 CORTADOR HD 150 12 Un 217,42 2.609,04 0,00 0,00 217,42 2.609,04',
+          'Número de Produtos 3', 'R$ Total 11.494,05', 'ICMS-ST no Paraná', 'já estão sem ICMS-ST. O ICMS destacado na nota da'].join('\n'), true);
+        const resApp = doApp.map(l => [l.codigos.join(','), l.qtd, l.texto].join('|'));
+        assert(resApp.length === 3 && resApp[0] === '60864|5|LAMINA DE SERRA CIRCULAR P/ MADEIRA 24 DENTES Ø 110 mm'
+          && resApp[1] === 'P62164|1|CORTADOR ELETRICO ZAPP 1250 TITAN - 220V' && resApp[2] === '61362|12|CORTADOR HD 150'
+          && ctxL.produtoDaLinhaLista(doApp[0], { porCodigo }).produto.c === '60864',
+          `lista do cliente: PDF do orçamento do app lido pelo código e quantidade de cada linha: ${JSON.stringify(resApp)}`);
         const cods = ctxL.linhasDaListaCliente('Colher pedreiro 60162\nbatedor P60876\n60876 batedor argamassa 4');
         assert(cods.map(l => l.qtd).join(',') === ',,4' && cods[1].codigos.join() === 'P60876' && cods[2].termo === 'batedor argamassa',
           `lista do cliente: código não é quantidade nem palavra da busca: ${JSON.stringify(cods.map(l => [l.termo, l.qtd]))}`);
