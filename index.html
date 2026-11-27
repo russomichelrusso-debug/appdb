@@ -28410,6 +28410,22 @@
         const t = tipoOcorrencia(oc.tipo) || {};
         return ANEXOS_OCORRENCIA.filter(a => a.mostra(t)).flatMap(a => (oc.anexos[a.v] || []));
       }
+      // Computador (mouse): o compartilhar do Windows/Mac não oferece o Gmail da web
+      // e o e-mail não saía (11/2026). Lá a revisão abre o Gmail já preenchido numa
+      // aba nova e baixa os anexos pra arrastar pro e-mail.
+      function ocNoComputador() { return window.matchMedia('(hover: hover) and (pointer: fine)').matches; }
+      function baixarAnexosOcorrencia() {
+        const t = tipoOcorrencia(oc.tipo) || {};
+        const lista = ANEXOS_OCORRENCIA.filter(a => a.mostra(t)).flatMap(a => (oc.anexos[a.v] || []).map((f, i, todos) => {
+          const ext = (/\.([A-Za-z0-9]{2,5})$/.exec(f.name || '') || [])[1] || (f.type === 'application/pdf' ? 'pdf' : 'jpg');
+          const nome = a.nome.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+          return { f, nome: `NF${oc.dados.nf}-${nome}${todos.length > 1 ? '-' + (i + 1) : ''}.${ext.toLowerCase()}` };
+        }));
+        if (!lista.length) return;
+        // um por vez: o Chrome pergunta uma vez se o site pode baixar vários arquivos
+        lista.forEach((x, i) => setTimeout(() => baixarBlob(x.f, x.nome), i * 400));
+        showToast(`${lista.length} arquivo${lista.length === 1 ? '' : 's'} na pasta Downloads: arraste pro e-mail do Gmail`);
+      }
       function assuntoOcorrencia() {
         const t = tipoOcorrencia(oc.tipo);
         return ['Ocorrência', `NF ${oc.dados.nf}`, oc.dados.cliente, t && t.nome].filter(Boolean).join(' · ');
@@ -28530,6 +28546,7 @@
           const arquivos = arquivosOcorrencia();
           const mb = arquivos.reduce((s, f) => s + (f.size || 0), 0) / 1048576;
           const podeArquivos = arquivos.length > 0 && !!(navigator.canShare && navigator.canShare({ files: arquivos }));
+          const pc = ocNoComputador();
           corpo = `${oc.enviadoEm ? `<div class="ocAviso info">Marcada como enviada em ${new Date(oc.enviadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}. Se o e-mail não chegou em "Enviados" do Gmail, envie de novo: o pedido não ganha outra ocorrência.</div>` : ''}
             <label for="ocPara">Para (e-mail da assistente)</label>
             <div class="ocLinhaCampo"><input type="email" id="ocPara" data-oc-campo="para" inputmode="email" autocomplete="off" value="${escapeHtml(para)}" placeholder="nome@cortag.com"><button type="button" class="restoreBtn compacto" data-oc-copiar="para">Copiar</button></div>
@@ -28541,12 +28558,18 @@
             <div class="ocTitulo">Anexos · ${arquivos.length} arquivo${arquivos.length === 1 ? '' : 's'}${mb >= 0.1 ? ` · ${mb.toFixed(1).replace('.', ',')} MB` : ''}</div>
             ${mb > 25 ? '<div class="ocAviso">Passa de 25 MB: o Gmail manda as fotos maiores como link do Google Drive.</div>' : ''}
             ${faltam.length ? `<div class="ocAviso">Faltam: ${escapeHtml(faltam.join(', '))}. Dá pra enviar assim mesmo.</div>` : '<div class="ocAviso ok">✓ Checklist do Pós-Vendas completo</div>'}
+            ${pc ? `<div class="ocEnvio">
+              <button type="button" class="ocEnviar" data-oc-enviar="gmail">Abrir no Gmail</button>
+              ${arquivos.length ? `<button type="button" class="restoreBtn" data-oc-baixar>Baixar ${arquivos.length === 1 ? 'o anexo' : `os ${arquivos.length} anexos`}</button>` : ''}
+              <button type="button" class="restoreBtn" data-oc-enviar="mailto">Outro app de e-mail</button>
+            </div>
+            <p class="ocDica">O Gmail abre numa aba nova com o destinatário, o assunto e o texto.${arquivos.length ? ' Baixe os anexos e arraste da pasta Downloads pro e-mail.' : ''} Envie e confira em "Enviados" antes de responder "Enviei".</p>` : `
             ${arquivos.length && !podeArquivos ? '<div class="ocAviso info">Este navegador não compartilha arquivos: use "Abrir e-mail" e anexe as fotos pelo app de e-mail.</div>' : ''}
             <div class="ocEnvio">
               ${podeArquivos || !arquivos.length ? `<button type="button" class="ocEnviar" data-oc-enviar="share">${arquivos.length ? 'Enviar com as fotos (compartilhar › Gmail)' : 'Enviar (compartilhar › Gmail)'}</button>` : ''}
               <button type="button" class="restoreBtn" data-oc-enviar="mailto">Só o texto (abrir e-mail)</button>
             </div>
-            <p class="ocDica">No compartilhar, escolha o Gmail. O e-mail da assistente é copiado ao tocar: cole no "Para".</p>`;
+            <p class="ocDica">No compartilhar, escolha o Gmail. O e-mail da assistente é copiado ao tocar: cole no "Para".</p>`}`;
         }
         document.getElementById('ocCorpo').innerHTML = corpo;
         document.getElementById('ocCorpo').scrollTop = 0;
@@ -28584,7 +28607,7 @@
         window.addEventListener('focus', voltou);
         // No compartilhar a pergunta espera o app ser escolhido (`escolheu`): com o
         // tempo fixo ela aparecia por baixo da folha de compartilhar, antes do envio.
-        const timer = opcoes.aposCompartilhar ? null : setTimeout(() => { if (!pendente.saiu) perguntar(); }, 3000);
+        const timer = opcoes.semTempo ? null : setTimeout(() => { if (!pendente.saiu) perguntar(); }, 3000);
         const cancelar = () => { limpar(); if (ocEnvioPendente === pendente) ocEnvioPendente = null; };
         cancelar.escolheu = () => {
           pendente.saiu = true;
@@ -28635,6 +28658,17 @@
         const para = (oc.para || '').trim();
         try { if (para) localStorage.setItem(OC_PARA_LS_KEY, para); } catch (e) { }
         gravarRascunhoOcorrencia();
+        if (como === 'gmail') {
+          const url = 'https://mail.google.com/mail/?view=cm&fs=1&to=' + encodeURIComponent(para)
+            + '&su=' + encodeURIComponent(assuntoOcorrencia()) + '&body=' + encodeURIComponent(textoOcorrencia());
+          const aba = window.open(url, '_blank', 'noopener');
+          // noopener devolve null mesmo abrindo: a pergunta vem ao voltar pra esta aba
+          perguntarSeEnviouOcorrencia(registro, { semTempo: true });
+          if (aba === null && document.visibilityState === 'visible') setTimeout(() => {
+            if (document.visibilityState === 'visible' && document.hasFocus()) showToast('Se o Gmail não abriu, libere pop-ups deste site no navegador', 'erro');
+          }, 1500);
+          return;
+        }
         if (como === 'mailto') {
           perguntarSeEnviouOcorrencia(registro);
           const params = 'subject=' + encodeURIComponent(assuntoOcorrencia()) + '&body=' + encodeURIComponent(textoOcorrencia());
@@ -28647,7 +28681,7 @@
         const dados = { title: assuntoOcorrencia(), text: textoOcorrencia() };
         if (arquivos.length) dados.files = arquivos;
         if (!navigator.share) { showToast('Este navegador não abre o compartilhar — use "Só o texto"', 'erro'); return; }
-        const cancelar = perguntarSeEnviouOcorrencia(registro, { aposCompartilhar: true });
+        const cancelar = perguntarSeEnviouOcorrencia(registro, { semTempo: true });
         navigator.share(dados).then(() => { cancelar.escolheu(); if (para) showToast('E-mail da assistente copiado: cole no "Para"'); })
           .catch(e => {
             cancelar();
@@ -28714,6 +28748,7 @@
             copiarTexto(textoOcorrencia().split('\n\nTipo de ocorrência')[0].replace(/^.*\n\n/, ''), 'Dados');
             return;
           } else if (b.dataset.ocEnviar) { enviarOcorrencia(b.dataset.ocEnviar); return; }
+          else if (b.dataset.ocBaixar != null) { baixarAnexosOcorrencia(); return; }
           else if (b.dataset.ocDescartar != null) {
             if (!await askConfirm(oc.enviadoEm ? 'Apagar do aparelho a cópia desta ocorrência e as fotos? O registro no pedido continua.' : 'Descartar esta ocorrência e as fotos dela?', oc.enviadoEm ? 'Apagar' : 'Descartar', { perigo: true })) return;
             const chave = oc.chave;
