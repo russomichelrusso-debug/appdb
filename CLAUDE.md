@@ -758,6 +758,17 @@ no `git add`, mas **o upload pelo site do GitHub passa por cima dele**.
   como `ocorrencias`) **todos os vendedores veem** e só é gravado quando o vendedor responde **"Enviei"** ao voltar pro app (mesmo
   jeito do "Pedir aumento"); pela fila offline com `id_envio` (enviada sem internet fica em `cortagOcorrenciasLocais_v1` até o
   servidor devolver). **"Marcar resolvida"** guarda só a data ("resolvida em DD/MM", some depois de 120 dias; "reabrir" desfaz).
+  - **"Enviei" sem o e-mail ter saído** (PR #403, 11/2026, caso real: o vendedor respondeu "Enviei", o Gmail não enviou e o app
+    já tinha apagado o rascunho com as fotos): o rascunho **fica no aparelho** depois do "Enviei" (`cortagOcorrenciaEnviadas_v1`), o
+    botão vira **"Reenviar ocorrência"** e a revisão avisa "marcada como enviada em DD/MM". Todo envio do mesmo rascunho usa o mesmo
+    `id_envio` (`oc.idEnvio`; o servidor faz `ON CONFLICT DO NOTHING`, sem 2º selo) e rascunho novo adota o `id_envio` da ocorrência
+    ainda aberta da mesma NF (`adotarOcorrenciaAberta`, refeito ao trocar a NF). A cópia sai ao marcar resolvida (aqui ou, vista no
+    servidor, por outro vendedor), em "Apagar do aparelho" ou no logout. No compartilhar a pergunta "Enviou?" só vem depois de escolher
+    o app (`semTempo`: o tempo fixo de 3 s a punha por baixo da folha de compartilhar) e pede pra conferir em "Enviados".
+  - **No computador** (PR #404, `ocNoComputador` = `hover: hover` e `pointer: fine`): o compartilhar do Windows não oferece o Gmail da
+    web e o e-mail não saía. A revisão troca o compartilhar por **"Abrir no Gmail"** (`mail.google.com/mail/?view=cm` numa aba nova,
+    com destinatário, assunto e texto), **"Baixar os anexos"** (`NF<nº>-<espaço>.ext`, um por vez, pra arrastar pro e-mail) e "Outro
+    app de e-mail" (mailto). A pergunta vem ao voltar pra aba do app; aba que não abriu = aviso de pop-up bloqueado. Celular sem mudança.
 
 - **Reabrir pedido salvo pra alterar** (10/2026): o cliente pedia pra mudar quantidade ou incluir
   produto num pedido já fechado e o vendedor fechava outro (vários pedidos do mesmo cliente, mais um
