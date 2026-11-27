@@ -27407,6 +27407,11 @@
       let oc = null; // ocorrência aberta no modal
       let ocSalvarTimer = null;
       const ocPedidosDoCard = new Map(); // nr_pedido -> itens, do último card de pedidos oficiais desenhado
+      const ocOcorrenciasDoCard = new Map(); // nr_pedido -> ocorrências (servidor + locais) do mesmo card
+      // Rascunhos já marcados "Enviei": ficam no aparelho (com as fotos) pra
+      // reenviar se o e-mail não saiu (11/2026: o Gmail não enviou e o rascunho
+      // já tinha sido apagado). Saem ao marcar resolvida ou "Apagar do aparelho".
+      const OC_ENVIADAS_LS_KEY = 'cortagOcorrenciaEnviadas_v1';
       function tipoOcorrencia(v) { return TIPOS_OCORRENCIA.find(t => t.v === v) || null; }
       function lerListaLS(chave) {
         try { const v = JSON.parse(localStorage.getItem(chave)); return Array.isArray(v) ? v : []; } catch (e) { return []; }
@@ -27451,11 +27456,12 @@
       }
       async function apagarRascunhoOcorrencia(chave) {
         gravarListaLS(OC_RASCUNHOS_LS_KEY, lerListaLS(OC_RASCUNHOS_LS_KEY).filter(c => c !== chave));
+        gravarListaLS(OC_ENVIADAS_LS_KEY, lerListaLS(OC_ENVIADAS_LS_KEY).filter(c => c !== chave));
         try { await ocBancoOp('readwrite', s => s.delete(chave)); } catch (e) { }
       }
       // logout: fotos e dados do cliente não ficam no aparelho de quem saiu
       async function apagarOcorrenciasDoAparelho() {
-        try { localStorage.removeItem(OC_RASCUNHOS_LS_KEY); localStorage.removeItem(OC_LOCAIS_LS_KEY); } catch (e) { }
+        try { localStorage.removeItem(OC_RASCUNHOS_LS_KEY); localStorage.removeItem(OC_LOCAIS_LS_KEY); localStorage.removeItem(OC_ENVIADAS_LS_KEY); } catch (e) { }
         try { await ocBancoOp('readwrite', s => s.clear()); } catch (e) { }
       }
       // Itens de uma NF do pedido (um por código, quantidade somada)
@@ -28322,7 +28328,7 @@
           ${atrasado ? '<div class="pacbAlerta">Atrás do ritmo pra fechar no prazo</div>' : ''}`;
       }
 
-      async function abrirOcorrencia(cliente, nrPedido, itens) {
+      async function abrirOcorrencia(cliente, nrPedido, itens, ocorrencias) {
         if (!cliente) return;
         const chave = `${cliente.id}|${nrPedido}`;
         const notas = [...new Set(itens.filter(it => it.status === 'faturado' && it.nota_fiscal).map(it => String(it.nota_fiscal)))];
@@ -28348,6 +28354,11 @@
           };
         }
         if (!oc.notas.includes(oc.dados.nf)) oc.dados.nf = oc.notas[0];
+        // Já há ocorrência aberta dessa NF no pedido (o rascunho foi apagado ou é
+        // outro aparelho): o reenvio usa o mesmo id_envio e não cria outro selo.
+        oc.abertas = (ocorrencias || []).filter(o => !o.resolvida_em && o.id_envio)
+          .map(o => ({ nf: String(o.nota_fiscal), id_envio: o.id_envio, enviado_em: o.enviado_em }));
+        adotarOcorrenciaAberta();
         // Vazio = sem valor: rascunho gravado antes do padrão do Pós-Vendas tem para: ''.
         if (!oc.para) {
           let ultimo = null;
@@ -28356,6 +28367,13 @@
         }
         document.getElementById('ocorrenciaModal').classList.remove('hidden');
         renderOcorrencia();
+      }
+      // rascunho ainda sem envio daqui: vale o id_envio da ocorrência aberta da NF escolhida
+      function adotarOcorrenciaAberta() {
+        if (oc.idEnvio && !oc.idAdotado) return;
+        const aberta = (oc.abertas || []).find(o => o.nf === String(oc.dados.nf));
+        if (aberta) { oc.idEnvio = aberta.id_envio; oc.enviadoEm = aberta.enviado_em; oc.idAdotado = true; }
+        else { delete oc.idEnvio; delete oc.enviadoEm; delete oc.idAdotado; }
       }
       function fecharOcorrencia() {
         if (oc) { clearTimeout(ocSalvarTimer); gravarRascunhoOcorrencia(); }
@@ -28452,7 +28470,7 @@
             ${ocCampo('ocDado_transportadora', 'Transportadora', d.transportadora)}
             ${ocCampo('ocDado_nfDevolucao', 'Nota fiscal de devolução (se houver)', d.nfDevolucao, ' inputmode="numeric"')}
             <div class="ocLinhaAcoes"><button type="button" class="restoreBtn compacto" data-oc-copiar-dados>Copiar dados</button>
-            <button type="button" class="ocLink" data-oc-descartar>Descartar ocorrência</button></div>`;
+            <button type="button" class="ocLink" data-oc-descartar>${oc.enviadoEm ? 'Apagar do aparelho' : 'Descartar ocorrência'}</button></div>`;
         } else if (passo === 2) {
           corpo = `<div class="ocTitulo">O que aconteceu?</div>
             <div class="ocTipos">${TIPOS_OCORRENCIA.map(x => `<label class="ocTipo${oc.tipo === x.v ? ' marcado' : ''}">
@@ -28512,7 +28530,8 @@
           const arquivos = arquivosOcorrencia();
           const mb = arquivos.reduce((s, f) => s + (f.size || 0), 0) / 1048576;
           const podeArquivos = arquivos.length > 0 && !!(navigator.canShare && navigator.canShare({ files: arquivos }));
-          corpo = `<label for="ocPara">Para (e-mail da assistente)</label>
+          corpo = `${oc.enviadoEm ? `<div class="ocAviso info">Marcada como enviada em ${new Date(oc.enviadoEm).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}. Se o e-mail não chegou em "Enviados" do Gmail, envie de novo: o pedido não ganha outra ocorrência.</div>` : ''}
+            <label for="ocPara">Para (e-mail da assistente)</label>
             <div class="ocLinhaCampo"><input type="email" id="ocPara" data-oc-campo="para" inputmode="email" autocomplete="off" value="${escapeHtml(para)}" placeholder="nome@cortag.com"><button type="button" class="restoreBtn compacto" data-oc-copiar="para">Copiar</button></div>
             <div class="ocFrases ocParaAtalho${ehParaPosVendas(para) ? ' hidden' : ''}" id="ocParaAtalho"><button type="button" data-oc-para="${OC_POSVENDAS_EMAIL}">Pós-Vendas · ${OC_POSVENDAS_EMAIL}</button></div>
             <label for="ocAssunto">Assunto</label>
@@ -28541,7 +28560,7 @@
       // compartilhar/mailto não diz se o e-mail saiu. Mesmo jeito do "Pedir
       // aumento" (perguntarSeEnviouEmail).
       let ocEnvioPendente = null;
-      function perguntarSeEnviouOcorrencia(registro) {
+      function perguntarSeEnviouOcorrencia(registro, opcoes = {}) {
         const pendente = { registro, saiu: false };
         ocEnvioPendente = pendente;
         const saiu = () => { pendente.saiu = true; };
@@ -28557,19 +28576,34 @@
           limpar();
           if (ocEnvioPendente !== pendente) return;
           ocEnvioPendente = null;
-          const enviou = await askConfirm(`Você enviou a ocorrência da NF ${registro.nota_fiscal}?`, 'Enviei', { cancelarLabel: 'Ainda não' });
+          const enviou = await askConfirm(`Você enviou a ocorrência da NF ${registro.nota_fiscal}? Confira se o e-mail está em "Enviados" (não na Caixa de saída nem em Rascunhos).`, 'Enviei', { cancelarLabel: 'Ainda não' });
           if (enviou) registrarOcorrenciaEnviada(registro);
         }
         document.addEventListener('visibilitychange', aoMudar);
         window.addEventListener('blur', saiu);
         window.addEventListener('focus', voltou);
-        const timer = setTimeout(() => { if (!pendente.saiu) perguntar(); }, 3000);
-        return () => { limpar(); if (ocEnvioPendente === pendente) ocEnvioPendente = null; };
+        // No compartilhar a pergunta espera o app ser escolhido (`escolheu`): com o
+        // tempo fixo ela aparecia por baixo da folha de compartilhar, antes do envio.
+        const timer = opcoes.aposCompartilhar ? null : setTimeout(() => { if (!pendente.saiu) perguntar(); }, 3000);
+        const cancelar = () => { limpar(); if (ocEnvioPendente === pendente) ocEnvioPendente = null; };
+        cancelar.escolheu = () => {
+          pendente.saiu = true;
+          setTimeout(() => { if (document.visibilityState === 'visible' && ocEnvioPendente === pendente) perguntar(); }, 1500);
+        };
+        return cancelar;
       }
       async function registrarOcorrenciaEnviada(registro) {
-        gravarListaLS(OC_LOCAIS_LS_KEY, [...lerListaLS(OC_LOCAIS_LS_KEY), registro]);
-        await apagarRascunhoOcorrencia(registro.chave);
-        if (oc && oc.chave === registro.chave) { oc = null; fecharOcorrencia(); }
+        gravarListaLS(OC_LOCAIS_LS_KEY, [...lerListaLS(OC_LOCAIS_LS_KEY).filter(o => o.id_envio !== registro.id_envio), registro]);
+        // o rascunho (com as fotos) fica pra reenviar se o e-mail não saiu
+        const enviadas = lerListaLS(OC_ENVIADAS_LS_KEY);
+        if (!enviadas.includes(registro.chave)) gravarListaLS(OC_ENVIADAS_LS_KEY, [...enviadas, registro.chave]);
+        if (oc && oc.chave === registro.chave) { oc.enviadoEm = oc.enviadoEm || registro.hora_toque; delete oc.idAdotado; fecharOcorrencia(); }
+        else {
+          const rascunho = await lerRascunhoOcorrencia(registro.chave);
+          if (rascunho && !rascunho.enviadoEm) {
+            try { await ocBancoOp('readwrite', s => s.put({ ...rascunho, enviadoEm: registro.hora_toque })); } catch (e) { }
+          }
+        }
         const { chave, ...payload } = registro;
         const filaInfo = { tipo: 'ocorrencia', descricao: `Ocorrência NF ${registro.nota_fiscal}` };
         const options = { method: 'POST', body: JSON.stringify(payload) };
@@ -28596,7 +28630,7 @@
           resumo: (tipoOcorrencia(oc.tipo || 'outros').itens ? ocItensEscolhidos().map(it => `${it.afetada}× ${it.codigo} ${it.nome}`).join(' · ') : '').slice(0, 300),
           // hora do toque + enviado_em (carimbado pelo apiFetch a cada envio): o
           // servidor desconta a espera na fila (routes/ocorrencias.js)
-          id_envio: novoIdEnvio(), hora_toque: new Date().toISOString(), enviado_em: new Date().toISOString(),
+          id_envio: oc.idEnvio || (oc.idEnvio = novoIdEnvio()), hora_toque: new Date().toISOString(), enviado_em: new Date().toISOString(),
         };
         const para = (oc.para || '').trim();
         try { if (para) localStorage.setItem(OC_PARA_LS_KEY, para); } catch (e) { }
@@ -28613,8 +28647,8 @@
         const dados = { title: assuntoOcorrencia(), text: textoOcorrencia() };
         if (arquivos.length) dados.files = arquivos;
         if (!navigator.share) { showToast('Este navegador não abre o compartilhar — use "Só o texto"', 'erro'); return; }
-        const cancelar = perguntarSeEnviouOcorrencia(registro);
-        navigator.share(dados).then(() => { if (para) showToast('E-mail da assistente copiado: cole no "Para"'); })
+        const cancelar = perguntarSeEnviouOcorrencia(registro, { aposCompartilhar: true });
+        navigator.share(dados).then(() => { cancelar.escolheu(); if (para) showToast('E-mail da assistente copiado: cole no "Para"'); })
           .catch(e => {
             cancelar();
             if (e && e.name !== 'AbortError') showToast('Não foi possível compartilhar: ' + (e.message || e), 'erro');
@@ -28645,7 +28679,7 @@
         corpo.addEventListener('change', (e) => {
           if (!oc) return;
           const el = e.target;
-          if (el.dataset.ocDado === 'nf') { oc.dados.nf = el.value; oc.itens = {}; renderOcorrencia(); }
+          if (el.dataset.ocDado === 'nf') { oc.dados.nf = el.value; oc.itens = {}; adotarOcorrenciaAberta(); renderOcorrencia(); }
           else if (el.dataset.ocTipo != null) { oc.tipo = el.value; renderOcorrencia(); }
           else if (el.dataset.ocItem) {
             const it = (oc.itensPorNf[oc.dados.nf] || []).find(x => x.codigo === el.dataset.ocItem);
@@ -28681,7 +28715,7 @@
             return;
           } else if (b.dataset.ocEnviar) { enviarOcorrencia(b.dataset.ocEnviar); return; }
           else if (b.dataset.ocDescartar != null) {
-            if (!await askConfirm('Descartar esta ocorrência e as fotos dela?', 'Descartar', { perigo: true })) return;
+            if (!await askConfirm(oc.enviadoEm ? 'Apagar do aparelho a cópia desta ocorrência e as fotos? O registro no pedido continua.' : 'Descartar esta ocorrência e as fotos dela?', oc.enviadoEm ? 'Apagar' : 'Descartar', { perigo: true })) return;
             const chave = oc.chave;
             oc = null;
             await apagarRascunhoOcorrencia(chave);
@@ -28712,6 +28746,11 @@
           if (r.path !== '/api/ocorrencias') continue;
           try { ids.add(JSON.parse(r.options.body).id_envio); } catch (e) { }
         }
+        const enviadas = lerListaLS(OC_ENVIADAS_LS_KEY);
+        for (const o of (doServidor || [])) {
+          const chave = `${clienteId}|${o.nr_pedido}`;
+          if (o.resolvida_em && enviadas.includes(chave)) apagarRascunhoOcorrencia(chave);
+        }
         const locais = lerListaLS(OC_LOCAIS_LS_KEY);
         const pendentes = locais.filter(o => !ids.has(o.id_envio));
         if (pendentes.length !== locais.length) gravarListaLS(OC_LOCAIS_LS_KEY, pendentes);
@@ -28727,16 +28766,18 @@
           }
           const quem = o.usuario ? ` por ${escapeHtml(String(o.usuario).split(' ')[0])}` : '';
           const acao = o.id ? `<button type="button" class="restoreBtn compacto" data-ocorr-resolver="${o.id}">Marcar resolvida</button>` : '<span class="ocPendente">registrando…</span>';
-          return `<div class="hcOcorrencia">⚠ Ocorrência aberta · ${escapeHtml(tipo)} · NF ${escapeHtml(String(o.nota_fiscal))} · enviada ${dia(o.enviado_em)}${quem}${o.resumo ? `<br><small>${escapeHtml(o.resumo)}</small>` : ''}<br>${acao}</div>`;
+          return `<div class="hcOcorrencia" data-ocorr-nr="${escapeHtml(String(o.nr_pedido))}">⚠ Ocorrência aberta · ${escapeHtml(tipo)} · NF ${escapeHtml(String(o.nota_fiscal))} · enviada ${dia(o.enviado_em)}${quem}${o.resumo ? `<br><small>${escapeHtml(o.resumo)}</small>` : ''}<br>${acao}</div>`;
         }).join('');
       }
       function botaoOcorrencia(cliente, nrPedido) {
-        const rascunho = cliente && lerListaLS(OC_RASCUNHOS_LS_KEY).includes(`${cliente.id}|${nrPedido}`);
-        return `<button type="button" class="restoreBtn compacto hcOcorrBtn" data-ocorr-pedido="${escapeHtml(String(nrPedido))}">${rascunho ? 'Continuar ocorrência (rascunho)' : 'Abrir ocorrência'}</button>`;
+        const chave = cliente ? `${cliente.id}|${nrPedido}` : '';
+        const rascunho = cliente && lerListaLS(OC_RASCUNHOS_LS_KEY).includes(chave);
+        const enviada = rascunho && lerListaLS(OC_ENVIADAS_LS_KEY).includes(chave);
+        return `<button type="button" class="restoreBtn compacto hcOcorrBtn" data-ocorr-pedido="${escapeHtml(String(nrPedido))}">${enviada ? 'Reenviar ocorrência' : rascunho ? 'Continuar ocorrência (rascunho)' : 'Abrir ocorrência'}</button>`;
       }
       function ligarOcorrenciasDoCard(content, cliente) {
         content.querySelectorAll('[data-ocorr-pedido]').forEach(btn => btn.addEventListener('click', () =>
-          abrirOcorrencia(cliente, btn.dataset.ocorrPedido, ocPedidosDoCard.get(btn.dataset.ocorrPedido) || [])));
+          abrirOcorrencia(cliente, btn.dataset.ocorrPedido, ocPedidosDoCard.get(btn.dataset.ocorrPedido) || [], ocOcorrenciasDoCard.get(btn.dataset.ocorrPedido) || [])));
         content.querySelectorAll('[data-ocorr-resolver], [data-ocorr-reabrir]').forEach(btn => btn.addEventListener('click', async () => {
           const resolver = btn.dataset.ocorrResolver != null;
           const id = resolver ? btn.dataset.ocorrResolver : btn.dataset.ocorrReabrir;
@@ -28746,6 +28787,8 @@
             const r = await apiFetch(`/api/ocorrencias/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ resolvida: resolver }) },
               { tipo: 'ocorrencia-resolver', descricao: resolver ? 'Ocorrência resolvida' : 'Ocorrência reaberta' });
             if (r && r.__filaOffline) showToast('Sem internet: fica salvo e muda no pedido quando a conexão voltar');
+            const nr = btn.closest('[data-ocorr-nr]');
+            if (resolver && nr) await apagarRascunhoOcorrencia(`${cliente.id}|${nr.dataset.ocorrNr}`);
           } catch (e) { showToast(e.message, 'erro'); }
           loadClienteDetailView();
         }));
@@ -31701,6 +31744,8 @@
               const soTitulos = [...titulosPorNf.entries()].filter(([nf]) => !nfsNosPedidos.has(nf));
               ocPedidosDoCard.clear();
               for (const [nr, its] of porPedido) ocPedidosDoCard.set(String(nr), its);
+              ocOcorrenciasDoCard.clear();
+              for (const [nr, lista] of ocorrenciasPorPedido) ocOcorrenciasDoCard.set(nr, lista);
               content.innerHTML = soCancelamentos.map(renderPedidoSoCancelamento).join('') + soBloqueados.map(b => renderPedidoSoBloqueado(b, cancelamentosPorPedido.get(String(b.nr_pedido)))).join('')
                 + soTitulos.map(([nf, ts]) => renderTituloSoPendente(nf, ts)).join('')
                 + soPendentes.map(p => renderPedidoSoPendente(p, bloqueadosPorPedido.get(String(p.nr_pedido)), cancelamentosPorPedido.get(String(p.nr_pedido)))).join('') + Array.from(porPedido.entries())
